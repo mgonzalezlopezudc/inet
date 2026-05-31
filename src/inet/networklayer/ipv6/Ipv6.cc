@@ -432,12 +432,8 @@ void Ipv6::datagramLocalOut(Packet *packet, const NetworkInterface *destIE, Ipv6
 {
     const auto& ipv6Header = packet->peekAtFront<Ipv6Header>();
     // route packet
-    if (destIE != nullptr) {
-        if (!ipv6Header->getDestAddress().isMulticast())
-            fragmentPostRouting(packet, destIE, MacAddress::BROADCAST_ADDRESS, true);
-        else
-            fragmentPostRouting(packet, destIE, ipv6Header->getDestAddress().mapToMulticastMacAddress(), true);
-    }
+    if (destIE != nullptr)
+        fragmentPostRouting(packet, destIE, MacAddress::BROADCAST_ADDRESS, true); // FIXME what MAC address to use?
     else if (!ipv6Header->getDestAddress().isMulticast())
         routePacket(packet, destIE, nullptr, requestedNextHopAddress, true);
     else
@@ -674,53 +670,44 @@ void Ipv6::routeMulticastPacket(Packet *packet, const NetworkInterface *destIE, 
         return;
     }
 
-    // find the multicast route for (source, group); if there is none, give a multicast
-    // routing protocol (e.g. PIM) a chance to create one, then look up again
-    Ipv6MulticastRoute *route = rt->findBestMatchingMulticastRoute(srcAddr, destAddr);
-    if (!route) {
-        EV_WARN << "Multicast route does not exist, trying to add.\n";
-        emit(ipv6NewMulticastSignal, ipv6Header.get(), const_cast<NetworkInterface *>(fromIE));
-        route = rt->findBestMatchingMulticastRoute(srcAddr, destAddr);
-        if (!route) {
-            EV_ERROR << "No multicast route, packet dropped.\n";
-            numUnroutable++;
-            PacketDropDetails details;
-            details.setReason(NO_ROUTE_FOUND);
-            emit(packetDroppedSignal, packet, &details);
-            delete packet;
-            return;
-        }
+        // hop counter decrement: only if datagram arrived from network, and will be
+        // sent out to the network (hoplimit check will be done just before sending
+        // out datagram)
+        packet->trim();
+        ipv6Header = nullptr;
+        const auto& newIpv6Header = removeNetworkProtocolHeader<Ipv6Header>(packet);
+        newIpv6Header->setHopLimit(ipv6Header->getHopLimit() - 1);
+        insertNetworkProtocolHeader(packet, Protocol::ipv6, newIpv6Header);
+        ipv6Header = newIpv6Header;
     }
 
-    // Reverse Path Forwarding: the datagram must arrive on the route's parent
-    // (upstream) interface; otherwise drop it (and notify, e.g. for PIM assert handling)
-    if (route->getInInterface() && fromIE != route->getInInterface()->getInterface()) {
-        EV_ERROR << "Multicast datagram did not arrive on the RPF interface, packet dropped.\n";
-        emit(ipv6DataOnNonrpfSignal, ipv6Header.get(), const_cast<NetworkInterface *>(fromIE));
-        numDropped++;
-        PacketDropDetails details;
-        emit(packetDroppedSignal, packet, &details);
-        delete packet;
-        return;
+    // for now, we just send it out on every interface except on which it came. FIXME better!!!
+    EV_INFO << "sending out datagram on every interface (except incoming one)\n";
+    for (int i = 0; i < ift->getNumInterfaces(); i++) {
+        NetworkInterface *ie = ift->getInterface(i);
+        if (fromIE != ie && !ie->isLoopback())
+            fragmentPostRouting(packet->dup(), ie, MacAddress::BROADCAST_ADDRESS, fromHL);
     }
-    emit(ipv6DataOnRpfSignal, ipv6Header.get(), const_cast<NetworkInterface *>(fromIE)); // forwarding hook
+    delete packet;
 
-    // decrement the hop limit before forwarding
-    packet->trim();
-    ipv6Header = nullptr;
-    auto newIpv6Header = removeNetworkProtocolHeader<Ipv6Header>(packet);
-    newIpv6Header->setHopLimit(newIpv6Header->getHopLimit() - 1);
-    insertNetworkProtocolHeader(packet, Protocol::ipv6, newIpv6Header);
-    ipv6Header = newIpv6Header;
+/* FIXME implement handling of multicast
 
-    if (ipv6Header->getHopLimit() <= 0) {
-        // RFC 4443: no ICMPv6 error is generated for a multicast packet
-        EV_INFO << "multicast datagram hopLimit reached zero, dropping\n";
-        numDropped++;
-        PacketDropDetails details;
-        details.setReason(HOP_LIMIT_REACHED);
-        emit(packetDroppedSignal, packet, &details);
-        delete packet;
+    According to Gopi: "multicast routing table" should map
+       srcAddr+multicastDestAddr to a set of next hops (interface+nexthopAddr)
+    Where srcAddr is the multicast server, and destAddr sort of narrows it down to a given stream
+
+    // FIXME multicast-->tunneling link (present in original IPSuite) missing from here
+
+    // DVMRP: process datagram only if sent locally or arrived on the shortest
+    // route (provided routing table already contains srcAddr); otherwise
+    // discard and continue.
+    int inputGateIndex = datagram->getArrivalGate() ? datagram->getArrivalGate()->getIndex() : -1;
+    int shortestPathInputGateIndex = rt->outputGateIndexNo(datagram->getSrcAddress());
+    if (inputGateIndex!=-1 && shortestPathInputGateIndex!=-1 && inputGateIndex!=shortestPathInputGateIndex)
+    {
+        // FIXME count dropped
+        EV << "Packet dropped.\n";
+        delete datagram;
         return;
     }
 
