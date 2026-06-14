@@ -1,0 +1,97 @@
+%description:
+Test HeDlSchedulerEqualSizedRUs scheduling logic via calculateHeRus and direct
+RuAllocation construction, verifying equal-bandwidth partitioning, station count
+capping, and single-STA edge cases.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/common/Units.h"
+#include <algorithm>
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+/**
+ * Schedule equal-sized RUs for at most maxStations candidates.
+ * This mirrors the logic of HeDlSchedulerEqualSizedRUs::schedule() so we can
+ * test it without NED/SimpleModule instantiation.
+ */
+std::vector<IIeee80211HeDlScheduler::RuAllocation>
+scheduleEqualRUs(const std::vector<MacAddress>& candidates, Hz center, Hz bw, int maxStations)
+{
+    int numSelected = std::min((int)candidates.size(), maxStations);
+    std::vector<Ieee80211HeRu> rus = calculateHeRus(center, bw, numSelected);
+    std::vector<IIeee80211HeDlScheduler::RuAllocation> result;
+    for (int i = 0; i < numSelected; ++i) {
+        IIeee80211HeDlScheduler::RuAllocation alloc;
+        alloc.staAddress = candidates[i];
+        alloc.ru = rus[i];
+        result.push_back(alloc);
+    }
+    return result;
+}
+
+%activity:
+Hz center(5.18e9);
+Hz bw(20e6);
+
+// --- Test 1: 3 candidates, maxStations=4 → 3 equal RUs ---
+{
+    std::vector<MacAddress> cands = {
+        MacAddress("AA:BB:CC:DD:EE:01"),
+        MacAddress("AA:BB:CC:DD:EE:02"),
+        MacAddress("AA:BB:CC:DD:EE:03")
+    };
+    auto allocs = scheduleEqualRUs(cands, center, bw, 4);
+    ASSERT(allocs.size() == 3);
+    Hz ruBw = bw / 3;
+    Hz covered = Hz(0);
+    for (const auto& a : allocs) { covered += a.ru.bandwidth; }
+    ASSERT(covered == bw);
+    for (int i = 0; i < 3; ++i) ASSERT(allocs[i].ru.bandwidth == ruBw);
+    EV << "Test 1 PASS: 3 STAs scheduled, each RU bw=" << allocs[0].ru.bandwidth.get() << " Hz\n";
+}
+
+// --- Test 2: 1 candidate, maxStations=4 → 1 RU spanning full channel ---
+{
+    std::vector<MacAddress> cands = { MacAddress("AA:BB:CC:DD:EE:01") };
+    auto allocs = scheduleEqualRUs(cands, center, bw, 4);
+    ASSERT(allocs.size() == 1);
+    ASSERT(allocs[0].ru.bandwidth == bw);
+    ASSERT(allocs[0].ru.centerFrequency == center);
+    ASSERT(allocs[0].staAddress == MacAddress("AA:BB:CC:DD:EE:01"));
+    EV << "Test 2 PASS: 1 STA, single RU bw=" << allocs[0].ru.bandwidth.get() << " Hz\n";
+}
+
+// --- Test 3: 5 candidates, maxStations=4 → exactly 4 RUs (cap enforced) ---
+{
+    std::vector<MacAddress> cands = {
+        MacAddress("AA:BB:CC:DD:EE:01"),
+        MacAddress("AA:BB:CC:DD:EE:02"),
+        MacAddress("AA:BB:CC:DD:EE:03"),
+        MacAddress("AA:BB:CC:DD:EE:04"),
+        MacAddress("AA:BB:CC:DD:EE:05")
+    };
+    auto allocs = scheduleEqualRUs(cands, center, bw, 4);
+    ASSERT(allocs.size() == 4);
+    Hz ruBw = bw / 4;
+    for (const auto& a : allocs) ASSERT(a.ru.bandwidth == ruBw);
+    // 5th STA must NOT appear in allocations
+    for (const auto& a : allocs)
+        ASSERT(a.staAddress != MacAddress("AA:BB:CC:DD:EE:05"));
+    EV << "Test 3 PASS: 5 STAs capped to 4 RUs, each bw=" << allocs[0].ru.bandwidth.get() << " Hz\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Test 1 PASS: 3 STAs scheduled, each RU bw=6.66667e+06 Hz
+Test 2 PASS: 1 STA, single RU bw=2e+07 Hz
+Test 3 PASS: 5 STAs capped to 4 RUs, each bw=5e+06 Hz
+.
