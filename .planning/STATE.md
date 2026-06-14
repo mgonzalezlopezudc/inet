@@ -3,10 +3,10 @@ gsd_state_version: '1.0'
 status: planning
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 12
-  completed_plans: 6
-  percent: 50
+  completed_plans: 8
+  percent: 66
 ---
 
 # Project State
@@ -16,16 +16,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-14)
 
 **Core value:** Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling and transmission under the 802.11ax standard, prioritizing robust queuing integration and realistic abstract PHY layer sub-channel behavior.
-**Current focus:** Phase 4: Multi-User Reception at STAs
+**Current focus:** Phase 5: Sequential Block Acknowledgments
 
 ## Current Position
 
-Phase: 4 of 6 (Multi-User Reception at STAs)
+Phase: 5 of 6 (Sequential Block Acknowledgments)
 Plan: 1 of 2 in current phase
 Status: Ready to plan
-Last activity: 2026-06-14 — Completed Phase 3 (AP MAC DL OFDMA Scheduler Foundation).
+Last activity: 2026-06-14 — Completed Phase 4 (Multi-User Reception at STAs).
 
-Progress: [█████░░░░░] 50%
+Progress: [███████░░░] 66%
 
 ## Performance Metrics
 
@@ -41,7 +41,7 @@ Progress: [█████░░░░░] 50%
 | 1. High Efficiency (HE) Mode Enablement | 2 | 2 | - |
 | 2. PHY Resource Unit (RU) Sub-channel Representation | 2 | 2 | - |
 | 3. AP MAC DL OFDMA Scheduler Foundation | 2 | 2 | - |
-| 4. Multi-User Reception at STAs | 2 | 0 | - |
+| 4. Multi-User Reception at STAs | 2 | 2 | - |
 | 5. Sequential Block Acknowledgments | 2 | 0 | - |
 | 6. System Integration and Verification | 2 | 0 | - |
 
@@ -75,6 +75,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-06-14 18:12
-Stopped at: Completed Phase 3 (AP MAC DL OFDMA Scheduler Foundation) and verified scheduler unit tests.
+Last session: 2026-06-14 19:10
+Stopped at: Completed Phase 4 (Multi-User Reception at STAs) and verified receiver unit tests.
 Resume file: None
