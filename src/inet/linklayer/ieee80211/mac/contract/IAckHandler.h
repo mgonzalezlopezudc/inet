@@ -8,10 +8,10 @@
 #ifndef __INET_IACKHANDLER_H
 #define __INET_IACKHANDLER_H
 
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+
 namespace inet {
 namespace ieee80211 {
-
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
 class INET_API IAckHandler
 {
