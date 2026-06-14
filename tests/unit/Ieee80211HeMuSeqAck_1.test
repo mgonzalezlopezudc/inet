@@ -1,0 +1,226 @@
+%description:
+Test 802.11ax DL OFDMA sequential Block Ack steps, timeouts, and individual retry logic in HeDlMuTxOpFs.
+
+%includes:
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+simple MockRateSelection
+{
+    @class(MockRateSelection);
+}
+
+module MockCallback
+{
+    parameters:
+        @class(MockCallback);
+    submodules:
+        rateSelection: MockRateSelection;
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mockHcf: MockCallback;
+        pendingQueue: PacketQueue;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+class MockRateSelection : public cSimpleModule, public IQosRateSelection
+{
+  public:
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override { return nullptr; }
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { return nullptr; }
+    virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override {
+        auto ms = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+        return ms->getMode(0);
+    }
+    virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override { return nullptr; }
+};
+
+Define_Module(MockRateSelection);
+
+class MockAckHandler : public IAckHandler
+{
+  public:
+    virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
+    virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
+    virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override {}
+};
+
+class MockScheduler : public IIeee80211HeDlScheduler
+{
+  public:
+    virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidateStations, Hz centerFrequency, Hz bandwidth) override {
+        std::vector<RuAllocation> allocs;
+        RuAllocation a1;
+        a1.staAddress = MacAddress("00:11:22:33:44:55");
+        a1.ru.index = 0;
+        allocs.push_back(a1);
+
+        RuAllocation a2;
+        a2.staAddress = MacAddress("66:77:88:99:AA:BB");
+        a2.ru.index = 1;
+        allocs.push_back(a2);
+        return allocs;
+    }
+};
+
+class MockInProgressFrames : public InProgressFrames
+{
+  public:
+    void addFrame(Packet *pkt) { inProgressFrames.push_back(pkt); }
+};
+
+class MockCallback : public cSimpleModule, public IFrameSequenceHandler::ICallback
+{
+  public:
+    int numFailedCalls = 0;
+    virtual void transmitFrame(Packet *packet, simtime_t ifs) override {
+        EV << "Callback: Transmitting " << packet->getName() << " with ifs " << ifs << "\n";
+    }
+    virtual void scheduleStartRxTimer(simtime_t timeout) override {
+        EV << "Callback: StartRxTimer scheduled with timeout " << timeout << "\n";
+    }
+    virtual void originatorProcessTransmittedFrame(Packet *packet) override {
+        EV << "Callback: ProcessTransmittedFrame " << packet->getName() << "\n";
+    }
+    virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override {
+        EV << "Callback: ProcessReceivedFrame " << (receivedPacket ? receivedPacket->getName() : "nullptr") << "\n";
+    }
+    virtual void originatorProcessFailedFrame(Packet *failedPacket) override {
+        EV << "Callback: ProcessFailedFrame " << failedPacket->getName() << "\n";
+        numFailedCalls++;
+    }
+    virtual void originatorProcessRtsProtectionFailed(Packet *packet) override {}
+    virtual void frameSequenceFinished() override {
+        EV << "Callback: FrameSequenceFinished\n";
+    }
+};
+
+Define_Module(MockCallback);
+
+%activity:
+auto mockHcf = check_and_cast<MockCallback *>(getParentModule()->getSubmodule("mockHcf"));
+auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
+
+// Create two packets for candidate STAs
+MacAddress sta1("00:11:22:33:44:55");
+MacAddress sta2("66:77:88:99:AA:BB");
+
+Packet *p1 = new Packet("data-sta1");
+auto hdr1 = makeShared<Ieee80211DataHeader>();
+hdr1->setReceiverAddress(sta1);
+hdr1->setType(ST_DATA);
+hdr1->setAckPolicy(BLOCK_ACK);
+p1->insertAtFront(hdr1);
+pendingQueue->enqueuePacket(p1);
+
+Packet *p2 = new Packet("data-sta2");
+auto hdr2 = makeShared<Ieee80211DataHeader>();
+hdr2->setReceiverAddress(sta2);
+hdr2->setType(ST_DATA);
+hdr2->setAckPolicy(BLOCK_ACK);
+p2->insertAtFront(hdr2);
+pendingQueue->enqueuePacket(p2);
+
+auto modeSet = physicallayer::Ieee80211ModeSet::getModeSet("ax");
+auto scheduler = new MockScheduler();
+auto ackHandler = new MockAckHandler();
+
+std::vector<MacAddress> candidates = {sta1, sta2};
+HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, candidates, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, ackHandler, mockHcf);
+
+MockInProgressFrames *inProgress = new MockInProgressFrames();
+FrameSequenceContext *context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), inProgress, nullptr, nullptr, nullptr, nullptr);
+
+fs->startSequence(context, 0);
+
+// --- Step 0: Transmit ---
+IFrameSequenceStep *step0 = fs->prepareStep(context);
+ASSERT(step0->getType() == IFrameSequenceStep::Type::TRANSMIT);
+EV << "Step 0 prepared: Transmit container frame.\n";
+context->addStep(step0);
+fs->completeStep(context);
+
+// Add mock packets inside inProgress to simulate buildMuContainerPacket and ackHandler registration
+Packet *txPkt1 = new Packet("in-progress-sta1");
+auto txHdr1 = makeShared<Ieee80211DataHeader>();
+txHdr1->setReceiverAddress(sta1);
+txPkt1->insertAtFront(txHdr1);
+inProgress->addFrame(txPkt1);
+
+Packet *txPkt2 = new Packet("in-progress-sta2");
+auto txHdr2 = makeShared<Ieee80211DataHeader>();
+txHdr2->setReceiverAddress(sta2);
+txPkt2->insertAtFront(txHdr2);
+inProgress->addFrame(txPkt2);
+
+// --- Step 1: Expect Block Ack from STA 1 ---
+IFrameSequenceStep *step1 = fs->prepareStep(context);
+ASSERT(step1->getType() == IFrameSequenceStep::Type::RECEIVE);
+auto rxStep1 = check_and_cast<IReceiveStep*>(step1);
+EV << "Step 1 prepared: Expect Block Ack with timeout.\n";
+context->addStep(step1);
+
+// Simulate successful Block Ack reception from STA 1
+Packet *ack1 = new Packet("BasicBlockAck");
+auto ackHdr1 = makeShared<Ieee80211BasicBlockAck>();
+ackHdr1->setReceiverAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
+ack1->insertAtFront(ackHdr1);
+rxStep1->setFrameToReceive(ack1);
+
+fs->completeStep(context);
+
+// --- Step 2: Expect Block Ack from STA 2 ---
+IFrameSequenceStep *step2 = fs->prepareStep(context);
+ASSERT(step2->getType() == IFrameSequenceStep::Type::RECEIVE);
+auto rxStep2 = check_and_cast<IReceiveStep*>(step2);
+EV << "Step 2 prepared: Expect Block Ack with timeout.\n";
+context->addStep(step2);
+
+// Simulate timeout (no frame received)
+rxStep2->setFrameToReceive(nullptr);
+
+fs->completeStep(context);
+
+// --- Step 3: Finish ---
+IFrameSequenceStep *step3 = fs->prepareStep(context);
+ASSERT(step3 == nullptr);
+EV << "Sequence completed successfully.\n";
+
+EV << "Failed calls count: " << mockHcf->numFailedCalls << "\n";
+
+delete scheduler;
+delete ackHandler;
+delete fs;
+delete context;
+delete txPkt1;
+delete txPkt2;
+
+%contains: stdout
+Step 0 prepared: Transmit container frame.
+Step 1 prepared: Expect Block Ack with timeout.
+Step 2 prepared: Expect Block Ack with timeout.
+HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
+Callback: ProcessFailedFrame in-progress-sta2
+Sequence completed successfully.
+Failed calls count: 1
