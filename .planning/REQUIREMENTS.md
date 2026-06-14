@@ -73,8 +73,8 @@ Explicitly excluded. Documented to prevent scope creep.
 | SCHED-03 | Phase 3 | Validated |
 | SCHED-04 | Phase 4 | Validated |
 | PHY-03 | Phase 4 | Validated |
-| ACK-01 | Phase 5 | Pending |
-| ACK-02 | Phase 5 | Pending |
+| ACK-01 | Phase 5 | Validated |
+| ACK-02 | Phase 5 | Validated |
 | TEST-01 | Phase 6 | Pending |
 | TEST-02 | Phase 6 | Pending |
 
