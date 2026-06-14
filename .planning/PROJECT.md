@@ -19,6 +19,7 @@ Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling a
 - ✓ Implement an abstract physical layer Resource Unit (RU) model representing RUs as sub-channels with independent bandwidth, path loss, noise, and reception calculations — Phase 2
 - ✓ Implement a DL OFDMA MAC scheduler at the Access Point (AP) — Phase 3
 - ✓ Support dynamic queue-based RU scheduling: when an Access Category (AC) wins a TXOP, schedule packets from that winning AC's queue destined to up to N different stations (STAs) — Phase 3
+- ✓ Support parsing of HE MU SIG-B allocations and filtering/decoding assigned RU payload at destination STAs — Phase 4
 
 ### Active
 

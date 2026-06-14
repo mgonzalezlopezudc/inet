@@ -80,6 +80,7 @@ class INET_API Protocol
     static const Protocol ieee80211Mgmt;
     static const Protocol ieee80211OfdmPhy;
     static const Protocol ieee80211VhtPhy;
+    static const Protocol ieee80211HePhy;
     static const Protocol ieee802154;
     static const Protocol ieee8021ae;
     static const Protocol ieee8021qCTag;
