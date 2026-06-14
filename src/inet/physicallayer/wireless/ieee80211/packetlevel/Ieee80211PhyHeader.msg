@@ -8,6 +8,7 @@ import inet.common.INETDefs;
 import inet.common.packet.chunk.Chunk;
 import inet.common.checksum.ChecksumMode;
 import inet.linklayer.common.FcsMode;
+import inet.linklayer.common.MacAddress;
 
 namespace inet::physicallayer;
 
@@ -147,4 +148,19 @@ class Ieee80211VhtPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 {
+}
+
+//
+// IEEE 802.11 22. High Efficiency (HE) Multi-User (MU)
+//
+struct Ieee80211HeMuRuAllocationInfo
+{
+    int ruIndex;
+    MacAddress staAddress;
+}
+
+class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
+{
+    int ruIndex;
+    Ieee80211HeMuRuAllocationInfo allocations[];
 }

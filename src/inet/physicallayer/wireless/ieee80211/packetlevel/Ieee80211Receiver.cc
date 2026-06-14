@@ -10,6 +10,10 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Protocol.h"
 
 namespace inet {
 
@@ -47,16 +51,46 @@ std::ostream& Ieee80211Receiver::printToStream(std::ostream& stream, int level, 
     return FlatReceiverBase::printToStream(stream, level);
 }
 
+bool Ieee80211Receiver::isAssignedHeMuRu(const ITransmission *transmission) const
+{
+    auto packet = transmission->getPacket();
+    if (packet != nullptr && packet->findTag<PacketProtocolTag>() != nullptr) {
+        auto protocol = packet->getTag<PacketProtocolTag>()->getProtocol();
+        if (protocol == &Protocol::ieee80211HePhy) {
+            auto phyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(packet->peekAtFront<Ieee80211PhyHeader>());
+            if (phyHeader != nullptr) {
+                auto networkInterface = getContainingNicModule(this);
+                auto myMacAddress = networkInterface->getMacAddress();
+                int ruIndex = phyHeader->getRuIndex();
+                bool assigned = false;
+                for (unsigned int i = 0; i < phyHeader->getAllocationsArraySize(); ++i) {
+                    const auto& alloc = phyHeader->getAllocations(i);
+                    if (alloc.staAddress == myMacAddress) {
+                        if (alloc.ruIndex == ruIndex) {
+                            assigned = true;
+                        }
+                        break;
+                    }
+                }
+                return assigned;
+            }
+        }
+    }
+    return true;
+}
+
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
-    return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) && NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
+    return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
+           isAssignedHeMuRu(transmission) && NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
 }
 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
-    return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) && getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
+    return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
+           isAssignedHeMuRu(ieee80211Transmission) && getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
 }
 
 const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const

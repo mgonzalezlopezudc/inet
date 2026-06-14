@@ -9,7 +9,7 @@ This roadmap lays out the development phases to implement Downlink OFDMA support
 - [x] **Phase 1: High Efficiency (HE) Mode Enablement** - Define 802.11ax HE timing parameters, slot times, and MCS tables.
 - [x] **Phase 2: PHY Resource Unit (RU) Sub-channel Representation** - Partition the channel bandwidth into abstract RU frequency sub-channels.
 - [x] **Phase 3: AP MAC DL OFDMA Scheduler Foundation** - Implement user/RU mapping and packet aggregation in the AP MAC scheduler.
-- [ ] **Phase 4: Multi-User Reception at STAs** - Support parsing of SIG-B user metadata and payload extraction on assigned RUs at STAs.
+- [x] **Phase 4: Multi-User Reception at STAs** - Support parsing of SIG-B user metadata and payload extraction on assigned RUs at STAs.
 - [ ] **Phase 5: Sequential Block Acknowledgments** - Implement collision-free sequential Block Ack sequences separated by SIFS spacing.
 - [ ] **Phase 6: System Integration and Verification** - Provide a complete DL OFDMA example simulation and automated regression tests.
 
@@ -69,8 +69,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 04-01: Define HE MU PPDU header layout and SIG-B allocation fields.
-- [ ] 04-02: Update the receiver (`Rx`) logic at STAs to filter and decode assigned RU sub-channels.
+- [x] 04-01: Define HE MU PPDU header layout and SIG-B allocation fields.
+- [x] 04-02: Update the receiver (`Rx`) logic at STAs to filter and decode assigned RU sub-channels.
 
 ### Phase 5: Sequential Block Acknowledgments
 **Goal**: Coordinate sequential Block Ack responses from STAs with proper SIFS spacing to prevent collisions.
@@ -110,6 +110,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 1. High Efficiency (HE) Mode Enablement | 2/2 | Complete | 2026-06-14 |
 | 2. PHY Resource Unit (RU) Sub-channel Representation | 2/2 | Complete | 2026-06-14 |
 | 3. AP MAC DL OFDMA Scheduler Foundation | 2/2 | Complete | 2026-06-14 |
-| 4. Multi-User Reception at STAs | 0/2 | Not started | - |
+| 4. Multi-User Reception at STAs | 2/2 | Complete | 2026-06-14 |
 | 5. Sequential Block Acknowledgments | 0/2 | Not started | - |
 | 6. System Integration and Verification | 0/2 | Not started | - |

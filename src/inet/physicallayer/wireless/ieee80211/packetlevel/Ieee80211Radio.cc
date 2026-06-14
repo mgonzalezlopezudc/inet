@@ -262,6 +262,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         protocol = &Protocol::ieee80211HtPhy;
     else if (dynamic_cast<Ieee80211VhtPhyHeader *>(phyHeader.get()))
         protocol = &Protocol::ieee80211VhtPhy;
+    else if (dynamic_cast<Ieee80211HeMuPhyHeader *>(phyHeader.get()))
+        protocol = &Protocol::ieee80211HePhy;
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY header type.");
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(protocol);
@@ -299,6 +301,8 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::popIeee80211PhyHeaderAtFront
         return packet->popAtFront<Ieee80211HtPhyHeader>(length, flags);
     else if (id == Protocol::ieee80211VhtPhy.getId())
         return packet->popAtFront<Ieee80211VhtPhyHeader>(length, flags);
+    else if (id == Protocol::ieee80211HePhy.getId())
+        return packet->popAtFront<Ieee80211HeMuPhyHeader>(length, flags);
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY protocol.");
 }
@@ -322,6 +326,8 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::peekIeee80211PhyHeaderAtFron
         return packet->peekAtFront<Ieee80211HtPhyHeader>(length, flags);
     else if (id == Protocol::ieee80211VhtPhy.getId())
         return packet->peekAtFront<Ieee80211VhtPhyHeader>(length, flags);
+    else if (id == Protocol::ieee80211HePhy.getId())
+        return packet->peekAtFront<Ieee80211HeMuPhyHeader>(length, flags);
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY protocol.");
 }

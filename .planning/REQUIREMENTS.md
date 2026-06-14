@@ -9,22 +9,22 @@ Requirements for the initial release. Each maps to roadmap phases.
 
 ### High Efficiency (HE) Mode Enablement
 
-- [ ] **MODE-01**: Access Point (AP) and Station (STA) MAC modules support the `"ax"` modeSet parameter in NED configuration.
-- [ ] **MODE-02**: `Ieee80211ModeSet` registers HE-specific timing parameters (SIFS = 16µs, Slot Time = 9µs, CWmin = 15, CWmax = 1023).
-- [ ] **MODE-03**: Support standard 802.11ax MCS values (MCS 0 to 11) for 20 MHz channels under the new HE mode.
+- [x] **MODE-01**: Access Point (AP) and Station (STA) MAC modules support the `"ax"` modeSet parameter in NED configuration.
+- [x] **MODE-02**: `Ieee80211ModeSet` registers HE-specific timing parameters (SIFS = 16µs, Slot Time = 9µs, CWmin = 15, CWmax = 1023).
+- [x] **MODE-03**: Support standard 802.11ax MCS values (MCS 0 to 11) for 20 MHz channels under the new HE mode.
 
 ### MAC Layer Multi-User (MU) Scheduling
 
-- [ ] **SCHED-01**: Implement a DL OFDMA MAC scheduler class in the AP to handle Resource Unit (RU) user mappings.
-- [ ] **SCHED-02**: When an Access Category (AC) wins channel access, the scheduler extracts packets from that winning AC's queue.
-- [ ] **SCHED-03**: The scheduler groups extracted packets by destination address, selecting up to N distinct destination STAs for concurrent transmission.
-- [ ] **SCHED-04**: Build a multi-user C++ physical frame metadata structure containing the assigned RU mapping (HE-SIG-B emulation).
+- [x] **SCHED-01**: Implement a DL OFDMA MAC scheduler class in the AP to handle Resource Unit (RU) user mappings.
+- [x] **SCHED-02**: When an Access Category (AC) wins channel access, the scheduler extracts packets from that winning AC's queue.
+- [x] **SCHED-03**: The scheduler groups extracted packets by destination address, selecting up to N distinct destination STAs for concurrent transmission.
+- [x] **SCHED-04**: Build a multi-user C++ physical frame metadata structure containing the assigned RU mapping (HE-SIG-B emulation).
 
 ### PHY Layer Resource Unit (RU) Sub-channels
 
-- [ ] **PHY-01**: Represent Resource Units (RUs) as independent parallel frequency sub-channels on the radio medium.
-- [ ] **PHY-02**: Compute path loss, noise, and signal-to-noise ratio (SNR) independently for each STA's assigned RU sub-channel.
-- [ ] **PHY-03**: Destination STAs decode only the C++ physical frame chunks belonging to their assigned RU sub-channel, ignoring other concurrent RU transmissions.
+- [x] **PHY-01**: Represent Resource Units (RUs) as independent parallel frequency sub-channels on the radio medium.
+- [x] **PHY-02**: Compute path loss, noise, and signal-to-noise ratio (SNR) independently for each STA's assigned RU sub-channel.
+- [x] **PHY-03**: Destination STAs decode only the C++ physical frame chunks belonging to their assigned RU sub-channel, ignoring other concurrent RU transmissions.
 
 ### Multi-User Acknowledgments
 
@@ -63,16 +63,16 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MODE-01 | Phase 1 | Pending |
-| MODE-02 | Phase 1 | Pending |
-| MODE-03 | Phase 1 | Pending |
-| PHY-01 | Phase 2 | Pending |
-| PHY-02 | Phase 2 | Pending |
-| SCHED-01 | Phase 3 | Pending |
-| SCHED-02 | Phase 3 | Pending |
-| SCHED-03 | Phase 3 | Pending |
-| SCHED-04 | Phase 4 | Pending |
-| PHY-03 | Phase 4 | Pending |
+| MODE-01 | Phase 1 | Validated |
+| MODE-02 | Phase 1 | Validated |
+| MODE-03 | Phase 1 | Validated |
+| PHY-01 | Phase 2 | Validated |
+| PHY-02 | Phase 2 | Validated |
+| SCHED-01 | Phase 3 | Validated |
+| SCHED-02 | Phase 3 | Validated |
+| SCHED-03 | Phase 3 | Validated |
+| SCHED-04 | Phase 4 | Validated |
+| PHY-03 | Phase 4 | Validated |
 | ACK-01 | Phase 5 | Pending |
 | ACK-02 | Phase 5 | Pending |
 | TEST-01 | Phase 6 | Pending |

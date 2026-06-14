@@ -11,6 +11,10 @@
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/signal/WirelessSignal.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Protocol.h"
 
 namespace inet {
 namespace physicallayer {
@@ -52,9 +56,23 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
                 ruPower
             );
 
+            auto subPacket = alloc.packet->dup();
+            auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+            phyHeader->setChunkLength(b(48));
+            phyHeader->setRuIndex(ruIndex);
+            for (const auto& a : allocations) {
+                Ieee80211HeMuRuAllocationInfo info;
+                info.ruIndex = a.ruIndex;
+                const auto& macHdr = a.packet->peekAtFront<ieee80211::Ieee80211MacHeader>();
+                info.staAddress = macHdr->getReceiverAddress();
+                phyHeader->appendAllocations(info);
+            }
+            subPacket->insertAtFront(phyHeader);
+            subPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
             auto ruTransmission = new Ieee80211Transmission(
                 transmitterRadio,
-                alloc.packet,
+                subPacket,
                 transmission->getStartTime(),
                 transmission->getEndTime(),
                 transmission->getPreambleDuration(),
@@ -89,6 +107,8 @@ void Ieee80211RadioMedium::removeTransmission(const ITransmission *transmission)
     auto it = muSubTransmissions.find(transmission);
     if (it != muSubTransmissions.end()) {
         for (auto subTransmission : it->second) {
+            auto pkt = subTransmission->getPacket();
+            delete const_cast<Packet *>(pkt);
             RadioMedium::removeTransmission(subTransmission);
         }
         muSubTransmissions.erase(it);

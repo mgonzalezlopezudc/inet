@@ -25,6 +25,9 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     const Ieee80211Channel *channel = nullptr;
 
   protected:
+    virtual bool isAssignedHeMuRu(const ITransmission *transmission) const;
+
+  protected:
     virtual void initialize(int stage) override;
 
     virtual bool computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const override;

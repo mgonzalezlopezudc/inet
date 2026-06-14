@@ -1,0 +1,252 @@
+%description:
+Test HE MU reception filtering at Ieee80211Receiver. Verifies that a station only
+decodes its assigned RU sub-channel transmission and discards other parallel transmissions.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/packet/Packet.h"
+
+%file: TestNetwork.ned
+
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.mobility.static.StationaryMobility;
+
+module DummyReceiverModule extends Ieee80211Receiver
+{
+    parameters:
+        @class(DummyReceiverModule);
+}
+
+module MockNic
+{
+    parameters:
+        @class(MockNicModule);
+    submodules:
+        radio: Ieee80211ScalarRadio {
+            receiver.typename = "DummyReceiverModule";
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.receiver.typename = "DummyReceiverModule"
+**.nic*.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.receiver.energyDetection = -100dBm
+**.receiver.sensitivity = -90dBm
+**.receiver.centerFrequency = 5.18GHz
+**.receiver.bandwidth = 20MHz
+**.receiver.modulation = "BPSK"
+**.receiver.snirThreshold = 4dB
+**.receiver.opMode = "ax"
+**.receiver.bandName = "5 GHz"
+**.receiver.channelNumber = 36
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+class MockIeee80211Transmission : public Ieee80211Transmission
+{
+  public:
+    MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode, const Ieee80211Channel *channel)
+        : Ieee80211Transmission(
+            transmitter,
+            packet,
+            0.0, 0.0, // startTime, endTime
+            0.0, 0.0, 0.0, // preamble, header, data duration
+            Coord(), Coord(), // start, end position
+            Quaternion(), Quaternion(), // start, end orientation
+            nullptr, nullptr, nullptr, nullptr, nullptr, // models
+            mode, channel
+        ) {}
+};
+
+class DummyReceiverModule : public Ieee80211Receiver {
+  public:
+    // Expose the protected isAssignedHeMuRu for testing
+    bool checkAssigned(const ITransmission *transmission) const {
+        return isAssignedHeMuRu(transmission);
+    }
+};
+
+class MockNicModule : public NetworkInterface {
+  protected:
+    virtual void initialize(int stage) override {
+        // Minimal setup to prevent dynamic registrations
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(DummyReceiverModule);
+Define_Module(MockNicModule);
+
+%activity:
+
+// Get dynamic module type for MockNic
+cModuleType *nicType = cModuleType::find("MockNic");
+if (!nicType) {
+    throw cRuntimeError("Could not find MockNic module type");
+}
+
+// Instantiate two NIC modules to act as two different stations
+cModule *nic1 = nicType->create("nic1", getSystemModule());
+nic1->buildInside();
+auto netIface1 = check_and_cast<MockNicModule *>(nic1);
+netIface1->setMacAddress(MacAddress("00:11:22:33:44:55"));
+nic1->callInitialize();
+
+cModule *nic2 = nicType->create("nic2", getSystemModule());
+nic2->buildInside();
+auto netIface2 = check_and_cast<MockNicModule *>(nic2);
+netIface2->setMacAddress(MacAddress("66:77:88:99:AA:BB"));
+nic2->callInitialize();
+
+// Retrieve the receiver submodules from both NICs and cast them to our DummyReceiverModule
+auto rxModule1 = check_and_cast<DummyReceiverModule *>(nic1->getSubmodule("radio")->getSubmodule("receiver"));
+auto rxModule2 = check_and_cast<DummyReceiverModule *>(nic2->getSubmodule("radio")->getSubmodule("receiver"));
+
+auto radio1 = check_and_cast<IRadio *>(nic1->getSubmodule("radio"));
+
+// Retrieve mode and channel for mock transmissions
+auto modeSet = Ieee80211ModeSet::getModeSet("ax");
+auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto channel = new Ieee80211Channel(nullptr, 1);
+
+// Construct HE MU allocations tag simulating the SIG-B layout
+// Allocation: STA1 on RU 0, STA2 on RU 1
+std::vector<Ieee80211HeMuRuAllocationInfo> allocations;
+Ieee80211HeMuRuAllocationInfo alloc1;
+alloc1.ruIndex = 0;
+alloc1.staAddress = MacAddress("00:11:22:33:44:55");
+allocations.push_back(alloc1);
+
+Ieee80211HeMuRuAllocationInfo alloc2;
+alloc2.ruIndex = 1;
+alloc2.staAddress = MacAddress("66:77:88:99:AA:BB");
+allocations.push_back(alloc2);
+
+// --- Test 1: Sub-transmission on RU 0 ---
+{
+    auto packet = new Packet("ru0-packet");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    phyHeader->setChunkLength(b(48));
+    phyHeader->setRuIndex(0);
+    for (const auto& a : allocations) {
+        phyHeader->appendAllocations(a);
+    }
+    packet->insertAtFront(phyHeader);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+
+    // rxModule1 (STA1) is assigned to RU 0 -> should be TRUE
+    bool possible1 = rxModule1->checkAssigned(trans);
+    EV << "STA1 on RU0 sub-transmission: " << (possible1 ? "PASS" : "FAIL") << "\n";
+
+    // rxModule2 (STA2) is assigned to RU 1, not RU 0 -> should be FALSE
+    bool possible2 = rxModule2->checkAssigned(trans);
+    EV << "STA2 on RU0 sub-transmission: " << (!possible2 ? "PASS" : "FAIL") << "\n";
+
+    delete trans;
+    delete packet;
+}
+
+// --- Test 2: Sub-transmission on RU 1 ---
+{
+    auto packet = new Packet("ru1-packet");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    phyHeader->setChunkLength(b(48));
+    phyHeader->setRuIndex(1);
+    for (const auto& a : allocations) {
+        phyHeader->appendAllocations(a);
+    }
+    packet->insertAtFront(phyHeader);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+
+    // rxModule1 (STA1) is assigned to RU 0, not RU 1 -> should be FALSE
+    bool possible1 = rxModule1->checkAssigned(trans);
+    EV << "STA1 on RU1 sub-transmission: " << (!possible1 ? "PASS" : "FAIL") << "\n";
+
+    // rxModule2 (STA2) is assigned to RU 1 -> should be TRUE
+    bool possible2 = rxModule2->checkAssigned(trans);
+    EV << "STA2 on RU1 sub-transmission: " << (possible2 ? "PASS" : "FAIL") << "\n";
+
+    delete trans;
+    delete packet;
+}
+
+// --- Test 3: Sub-transmission on RU 2 (neither STA is assigned) ---
+{
+    auto packet = new Packet("ru2-packet");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    phyHeader->setChunkLength(b(48));
+    phyHeader->setRuIndex(2);
+    for (const auto& a : allocations) {
+        phyHeader->appendAllocations(a);
+    }
+    packet->insertAtFront(phyHeader);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+
+    // Both should be FALSE
+    bool possible1 = rxModule1->checkAssigned(trans);
+    bool possible2 = rxModule2->checkAssigned(trans);
+    EV << "STA1 on RU2 sub-transmission: " << (!possible1 ? "PASS" : "FAIL") << "\n";
+    EV << "STA2 on RU2 sub-transmission: " << (!possible2 ? "PASS" : "FAIL") << "\n";
+
+    delete trans;
+    delete packet;
+}
+
+// Cleanup Channel
+delete channel;
+
+EV << ".\n";
+
+%contains: stdout
+STA1 on RU0 sub-transmission: PASS
+STA2 on RU0 sub-transmission: PASS
+STA1 on RU1 sub-transmission: PASS
+STA2 on RU1 sub-transmission: PASS
+STA1 on RU2 sub-transmission: PASS
+STA2 on RU2 sub-transmission: PASS
+.
