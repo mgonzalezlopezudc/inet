@@ -10,7 +10,7 @@ This roadmap lays out the development phases to implement Downlink OFDMA support
 - [x] **Phase 2: PHY Resource Unit (RU) Sub-channel Representation** - Partition the channel bandwidth into abstract RU frequency sub-channels.
 - [x] **Phase 3: AP MAC DL OFDMA Scheduler Foundation** - Implement user/RU mapping and packet aggregation in the AP MAC scheduler.
 - [x] **Phase 4: Multi-User Reception at STAs** - Support parsing of SIG-B user metadata and payload extraction on assigned RUs at STAs.
-- [ ] **Phase 5: Sequential Block Acknowledgments** - Implement collision-free sequential Block Ack sequences separated by SIFS spacing.
+- [x] **Phase 5: Sequential Block Acknowledgments** - Implement collision-free sequential Block Ack sequences separated by SIFS spacing.
 - [ ] **Phase 6: System Integration and Verification** - Provide a complete DL OFDMA example simulation and automated regression tests.
 
 ## Phase Details
@@ -83,8 +83,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 05-01: Implement sequential Ack timing offset calculations at receiving STAs.
-- [ ] 05-02: Add MAC recovery and retry handling for sequential Block Acks at the AP.
+- [x] 05-01: Implement sequential Ack timing offset calculations at receiving STAs.
+- [x] 05-02: Add MAC recovery and retry handling for sequential Block Acks at the AP.
 
 ### Phase 6: System Integration and Verification
 **Goal**: Finalize test coverage and provide a working example simulation of DL OFDMA.
@@ -111,5 +111,5 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 2. PHY Resource Unit (RU) Sub-channel Representation | 2/2 | Complete | 2026-06-14 |
 | 3. AP MAC DL OFDMA Scheduler Foundation | 2/2 | Complete | 2026-06-14 |
 | 4. Multi-User Reception at STAs | 2/2 | Complete | 2026-06-14 |
-| 5. Sequential Block Acknowledgments | 0/2 | Not started | - |
+| 5. Sequential Block Acknowledgments | 2/2 | Complete | 2026-06-14 |
 | 6. System Integration and Verification | 0/2 | Not started | - |
