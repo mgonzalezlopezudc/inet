@@ -20,7 +20,7 @@
 ./bin/inet_run_all_tests           # Run the entire test suite
 ```
 
-### Running a Single Unit Test Manually
+## Running a Single Unit Test
 
 If you need to compile and execute a single unit test (e.g., `tests/unit/Ieee80211HeMode_1.test`), follow these steps:
 

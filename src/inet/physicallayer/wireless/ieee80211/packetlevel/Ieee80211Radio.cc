@@ -275,6 +275,19 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
     const auto& phyHeader = popIeee80211PhyHeaderAtFront(packet, b(-1), Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED);
     if (phyHeader->isIncorrect() || phyHeader->isIncomplete() || phyHeader->isImproperlyRepresented() || !verifyFcs(phyHeader))
         packet->setBitError(true);
+
+    if (auto heMuPhyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+        auto tag = packet->addTagIfAbsent<Ieee80211HeMuRxTag>();
+        tag->setRuIndex(heMuPhyHeader->getRuIndex());
+        for (unsigned int i = 0; i < heMuPhyHeader->getAllocationsArraySize(); ++i) {
+            const auto& alloc = heMuPhyHeader->getAllocations(i);
+            Ieee80211HeMuRxAllocationInfo info;
+            info.ruIndex = alloc.ruIndex;
+            info.staAddress = alloc.staAddress;
+            tag->appendAllocations(info);
+        }
+    }
+
     auto tailLength = dynamic_cast<const Ieee80211OfdmMode *>(mode) ? b(6) : b(0);
     auto paddingLength = mode->getDataMode()->getPaddingLength(B(phyHeader->getLengthField()));
     if (tailLength + paddingLength != b(0))

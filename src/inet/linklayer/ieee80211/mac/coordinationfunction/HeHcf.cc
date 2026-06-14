@@ -10,6 +10,7 @@
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
 namespace inet {
@@ -22,6 +23,8 @@ void HeHcf::initialize(int stage)
     Hcf::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         dlScheduler = check_and_cast<IIeee80211HeDlScheduler *>(getSubmodule("dlScheduler"));
+        delete frameSequenceHandler;
+        frameSequenceHandler = new HeFrameSequenceHandler();
     }
 }
 
@@ -58,7 +61,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
                     << " STAs — starting HeDlMuTxOpFs." << endl;
             frameSequenceHandler->startFrameSequence(
                     new HeDlMuTxOpFs(dlScheduler, candidates, modeSet,
-                                     pendingQueue, edcaf->getAckHandler()),
+                                     pendingQueue, edcaf->getAckHandler(), this),
                     buildContext(ac), this);
             emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
             return;
