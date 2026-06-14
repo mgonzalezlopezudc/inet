@@ -1,0 +1,48 @@
+%description:
+Test IEEE 802.11ax timing parameters and MCS table bitrates
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211AxMode.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+const Ieee80211ModeSet *modeSet = Ieee80211ModeSet::getModeSet("ax");
+if (!modeSet) {
+    EV << "FAILED: modeSet 'ax' not found\n";
+    return;
+}
+
+EV << "ModeSet name: " << modeSet->getName() << "\n";
+EV << "Slot time: " << modeSet->getSlotTime() << "\n";
+EV << "SIFS time: " << modeSet->getSifsTime() << "\n";
+EV << "Number of modes: " << modeSet->getNumModes() << "\n";
+
+// Verify specific modes
+const IIeee80211Mode *mode0 = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+EV << "Mode 0 (MCS 0 Nss=1): netBitrate=" << mode0->getDataMode()->getNetBitrate()
+   << " grossBitrate=" << mode0->getDataMode()->getGrossBitrate() << "\n";
+
+const IIeee80211Mode *mode17 = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(17);
+EV << "Mode 17 (MCS 11 Nss=1): netBitrate=" << mode17->getDataMode()->getNetBitrate()
+   << " grossBitrate=" << mode17->getDataMode()->getGrossBitrate() << "\n";
+
+const IIeee80211Mode *mode23 = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(23);
+EV << "Mode 23 (MCS 11 Nss=2): netBitrate=" << mode23->getDataMode()->getNetBitrate()
+   << " grossBitrate=" << mode23->getDataMode()->getGrossBitrate() << "\n";
+
+EV << ".\n";
+
+%contains: stdout
+ModeSet name: ax
+Slot time: 0.000009
+SIFS time: 0.000016
+Number of modes: 24
+Mode 0 (MCS 0 Nss=1): netBitrate=7.3125 Mbps grossBitrate=14.625 Mbps
+Mode 17 (MCS 11 Nss=1): netBitrate=121.875 Mbps grossBitrate=146.25 Mbps
+Mode 23 (MCS 11 Nss=2): netBitrate=243.75 Mbps grossBitrate=292.5 Mbps
+.
