@@ -7,7 +7,7 @@ This roadmap lays out the development phases to implement Downlink OFDMA support
 ## Phases
 
 - [x] **Phase 1: High Efficiency (HE) Mode Enablement** - Define 802.11ax HE timing parameters, slot times, and MCS tables.
-- [ ] **Phase 2: PHY Resource Unit (RU) Sub-channel Representation** - Partition the channel bandwidth into abstract RU frequency sub-channels.
+- [x] **Phase 2: PHY Resource Unit (RU) Sub-channel Representation** - Partition the channel bandwidth into abstract RU frequency sub-channels.
 - [ ] **Phase 3: AP MAC DL OFDMA Scheduler Foundation** - Implement user/RU mapping and packet aggregation in the AP MAC scheduler.
 - [ ] **Phase 4: Multi-User Reception at STAs** - Support parsing of SIG-B user metadata and payload extraction on assigned RUs at STAs.
 - [ ] **Phase 5: Sequential Block Acknowledgments** - Implement collision-free sequential Block Ack sequences separated by SIFS spacing.
@@ -41,8 +41,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 02-01: Define RU sub-channel structures and frequency partitioning rules.
-- [ ] 02-02: Integrate sub-channel noise and path loss calculation on the radio medium.
+- [x] 02-01: Define RU sub-channel structures and frequency partitioning rules.
+- [x] 02-02: Integrate sub-channel noise and path loss calculation on the radio medium.
 
 ### Phase 3: AP MAC DL OFDMA Scheduler Foundation
 **Goal**: Implement the multi-user scheduling logic at the AP to aggregate packets from the winning EDCAF queue.
@@ -108,7 +108,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. High Efficiency (HE) Mode Enablement | 2/2 | Complete | 2026-06-14 |
-| 2. PHY Resource Unit (RU) Sub-channel Representation | 0/2 | Not started | - |
+| 2. PHY Resource Unit (RU) Sub-channel Representation | 2/2 | Complete | 2026-06-14 |
 | 3. AP MAC DL OFDMA Scheduler Foundation | 0/2 | Not started | - |
 | 4. Multi-User Reception at STAs | 0/2 | Not started | - |
 | 5. Sequential Block Acknowledgments | 0/2 | Not started | - |

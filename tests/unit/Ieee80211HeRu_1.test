@@ -1,0 +1,60 @@
+%description:
+Test IEEE 802.11 HE Resource Unit (RU) calculation and multi-user packet tags
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/common/packet/Packet.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+Hz centerFrequency(5.18e9);
+Hz bandwidth(20e6);
+
+// Test RU partitioning: 4 RUs on a 20MHz channel
+std::vector<Ieee80211HeRu> rus = calculateHeRus(centerFrequency, bandwidth, 4);
+EV << "Number of RUs: " << rus.size() << "\n";
+for (const auto& ru : rus) {
+    EV << "RU " << ru.index << ": center=" << ru.centerFrequency.get()
+       << " Hz, bandwidth=" << ru.bandwidth.get() << " Hz\n";
+}
+
+// Test Ieee80211HeMuTag
+auto tag = new Ieee80211HeMuTag();
+auto pkt1 = new Packet("pkt1");
+auto pkt2 = new Packet("pkt2");
+tag->addAllocation(0, pkt1);
+tag->addAllocation(2, pkt2);
+
+EV << "Allocations in tag: " << tag->getAllocations().size() << "\n";
+EV << "Alloc 0: RU " << tag->getAllocations()[0].ruIndex << ", name=" << tag->getAllocations()[0].packet->getName() << "\n";
+EV << "Alloc 1: RU " << tag->getAllocations()[1].ruIndex << ", name=" << tag->getAllocations()[1].packet->getName() << "\n";
+
+// Test duplicate tag
+auto dupTag = tag->dup();
+EV << "Dup Allocations in tag: " << dupTag->getAllocations().size() << "\n";
+EV << "Dup Alloc 0: RU " << dupTag->getAllocations()[0].ruIndex << ", name=" << dupTag->getAllocations()[0].packet->getName() << "\n";
+EV << "Dup Alloc 1: RU " << dupTag->getAllocations()[1].ruIndex << ", name=" << dupTag->getAllocations()[1].packet->getName() << "\n";
+
+delete tag;
+delete dupTag;
+
+EV << ".\n";
+
+%contains: stdout
+Number of RUs: 4
+RU 0: center=5.1725e+09 Hz, bandwidth=5e+06 Hz
+RU 1: center=5.1775e+09 Hz, bandwidth=5e+06 Hz
+RU 2: center=5.1825e+09 Hz, bandwidth=5e+06 Hz
+RU 3: center=5.1875e+09 Hz, bandwidth=5e+06 Hz
+Allocations in tag: 2
+Alloc 0: RU 0, name=pkt1
+Alloc 1: RU 2, name=pkt2
+Dup Allocations in tag: 2
+Dup Alloc 0: RU 0, name=pkt1
+Dup Alloc 1: RU 2, name=pkt2
+.

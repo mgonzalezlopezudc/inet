@@ -48,8 +48,12 @@ bool DimensionalReceiverAnalogModel::computeIsReceptionPossible(const IListening
 
     const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     const DimensionalReceptionAnalogModel *analogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
-    if (bandListening->getCenterFrequency() != analogModel->getCenterFrequency() || bandListening->getBandwidth() < analogModel->getBandwidth()) {
-        EV_DEBUG << "Computing whether reception is possible: listening and reception bands are different -> reception is impossible" << endl;
+    Hz rxMin = bandListening->getCenterFrequency() - bandListening->getBandwidth() / 2;
+    Hz rxMax = bandListening->getCenterFrequency() + bandListening->getBandwidth() / 2;
+    Hz txMin = analogModel->getCenterFrequency() - analogModel->getBandwidth() / 2;
+    Hz txMax = analogModel->getCenterFrequency() + analogModel->getBandwidth() / 2;
+    if (!((txMin.get() >= rxMin.get() - 100.0) && (txMax.get() <= rxMax.get() + 100.0))) {
+        EV_DEBUG << "Computing whether reception is possible: reception band is not within listening band -> reception is impossible" << endl;
         return false;
     }
     else {
