@@ -20,6 +20,46 @@
 ./bin/inet_run_all_tests           # Run the entire test suite
 ```
 
+### Running a Single Unit Test Manually
+
+If you need to compile and execute a single unit test (e.g., `tests/unit/Ieee80211HeMode_1.test`), follow these steps:
+
+1. **Set up the environment:**
+   Make sure the OMNeT++ environment is sourced and `PYTHONPATH` includes the OMNeT++ python tools:
+   ```bash
+   source setenv
+   export PYTHONPATH=/home/user/omnetpp-6.4.0/python:$PYTHONPATH
+   ```
+
+2. **Generate the test sources:**
+   Generate the C++ source files from the `.test` specification:
+   ```bash
+   cd tests/unit
+   opp_test gen -v <TestName>.test
+   ```
+   This creates a directory `work/<TestName>/` containing `test.cc` and `test.ned`.
+
+3. **Generate the Makefile:**
+   Navigate into the generated directory and run `opp_makemake` to link against the INET libraries:
+   ```bash
+   cd work/<TestName>
+   opp_makemake -f --deep -lINET_dbg -L../../../../src -ltest_dbg -L../../lib -I../../../../src -I../../lib
+   ```
+   *(Note: Remove `-ltest_dbg -L../../lib -I../../lib` if the test does not depend on auxiliary unit test libraries).*
+
+4. **Compile the test binary:**
+   Build the executable:
+   ```bash
+   make MODE=debug -j$(nproc)
+   ```
+
+5. **Run the test case:**
+   Return to `tests/unit/` and execute the test via `opp_test run`, pointing to the built binary and specifying the correct NED path:
+   ```bash
+   cd ../..
+   opp_test run -v -p ../../../out/clang-debug/tests/unit/work/<TestName>/inet_dbg <TestName>.test -a "--check-signals=false -lINET -n ../../../../src:.:../../lib"
+   ```
+
 ## Test File Organization
 
 **Unit Tests (`tests/unit/`):**
