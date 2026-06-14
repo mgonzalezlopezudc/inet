@@ -65,9 +65,8 @@ W ScalarMediumAnalogModel::computeReceptionPower(const IRadio *receiverRadio, co
     return transmissionPower * gain;
 }
 
-void ScalarMediumAnalogModel::addReception(const IReception *reception, simtime_t& noiseStartTime, simtime_t& noiseEndTime, std::map<simtime_t, W>& powerChanges) const
+static void addReceptionWithPower(const IReception *reception, W power, simtime_t& noiseStartTime, simtime_t& noiseEndTime, std::map<simtime_t, W>& powerChanges)
 {
-    W power = check_and_cast<const ScalarReceptionAnalogModel *>(reception->getAnalogModel())->getPower();
     simtime_t startTime = reception->getStartTime();
     simtime_t endTime = reception->getEndTime();
     std::map<simtime_t, W>::iterator itStartTime = powerChanges.find(startTime);
@@ -86,7 +85,7 @@ void ScalarMediumAnalogModel::addReception(const IReception *reception, simtime_
         noiseEndTime = reception->getEndTime();
 }
 
-void ScalarMediumAnalogModel::addNoise(const ScalarNoise *noise, simtime_t& noiseStartTime, simtime_t& noiseEndTime, std::map<simtime_t, W>& powerChanges) const
+static void addNoiseWithScale(const ScalarNoise *noise, double scale, simtime_t& noiseStartTime, simtime_t& noiseEndTime, std::map<simtime_t, W>& powerChanges)
 {
     const auto& noisePowerFunction = noise->getPower();
     math::Point<simtime_t> startPoint(noise->getStartTime());
@@ -96,21 +95,33 @@ void ScalarMediumAnalogModel::addNoise(const ScalarNoise *noise, simtime_t& nois
         auto lower = std::get<0>(i1.getLower());
         auto upper = std::get<0>(i1.getUpper());
         auto fc = check_and_cast<const math::ConstantFunction<W, math::Domain<simtime_t>> *>(f);
+        W scaledPower = fc->getConstantValue() * scale;
         std::map<simtime_t, W>::iterator it = powerChanges.find(lower);
         if (it != powerChanges.end())
-            it->second += fc->getConstantValue();
+            it->second += scaledPower;
         else
-            powerChanges.insert(std::pair<simtime_t, W>(lower, fc->getConstantValue()));
+            powerChanges.insert(std::pair<simtime_t, W>(lower, scaledPower));
         std::map<simtime_t, W>::iterator jt = powerChanges.find(upper);
         if (jt != powerChanges.end())
-            jt->second -= fc->getConstantValue();
+            jt->second -= scaledPower;
         else
-            powerChanges.insert(std::pair<simtime_t, W>(upper, -fc->getConstantValue()));
+            powerChanges.insert(std::pair<simtime_t, W>(upper, -scaledPower));
     });
     if (noise->getStartTime() < noiseStartTime)
         noiseStartTime = noise->getStartTime();
     if (noise->getEndTime() > noiseEndTime)
         noiseEndTime = noise->getEndTime();
+}
+
+void ScalarMediumAnalogModel::addReception(const IReception *reception, simtime_t& noiseStartTime, simtime_t& noiseEndTime, std::map<simtime_t, W>& powerChanges) const
+{
+    W power = check_and_cast<const ScalarReceptionAnalogModel *>(reception->getAnalogModel())->getPower();
+    addReceptionWithPower(reception, power, noiseStartTime, noiseEndTime, powerChanges);
+}
+
+void ScalarMediumAnalogModel::addNoise(const ScalarNoise *noise, simtime_t& noiseStartTime, simtime_t& noiseEndTime, std::map<simtime_t, W>& powerChanges) const
+{
+    addNoiseWithScale(noise, 1.0, noiseStartTime, noiseEndTime, powerChanges);
 }
 
 const INoise *ScalarMediumAnalogModel::computeNoise(const IListening *listening, const IInterference *interference) const
@@ -129,17 +140,47 @@ const INoise *ScalarMediumAnalogModel::computeNoise(const IListening *listening,
         auto receptionAnalogModel = check_and_cast<const ScalarReceptionAnalogModel *>(signalAnalogModel);
         Hz signalCenterFrequency = receptionAnalogModel->getCenterFrequency();
         Hz signalBandwidth = receptionAnalogModel->getBandwidth();
-        if (commonCenterFrequency == signalCenterFrequency && commonBandwidth >= signalBandwidth)
+        if (commonCenterFrequency == signalCenterFrequency && commonBandwidth >= signalBandwidth) {
             addReception(reception, noiseStartTime, noiseEndTime, powerChanges);
-        else if (!ignorePartialInterference && areOverlappingBands(commonCenterFrequency, commonBandwidth, signalCenterFrequency, signalBandwidth))
-            throw cRuntimeError("Partially interfering signals are not supported by ScalarMediumAnalogModel, enable ignorePartialInterference to avoid this error!");
+        }
+        else if (areOverlappingBands(commonCenterFrequency, commonBandwidth, signalCenterFrequency, signalBandwidth)) {
+            if (!ignorePartialInterference) {
+                Hz rxMin = commonCenterFrequency - commonBandwidth / 2;
+                Hz rxMax = commonCenterFrequency + commonBandwidth / 2;
+                Hz txMin = signalCenterFrequency - signalBandwidth / 2;
+                Hz txMax = signalCenterFrequency + signalBandwidth / 2;
+                Hz overlapMin = rxMin > txMin ? rxMin : txMin;
+                Hz overlapMax = rxMax < txMax ? rxMax : txMax;
+                Hz overlapBandwidth = overlapMax > overlapMin ? (overlapMax - overlapMin) : Hz(0);
+                
+                if (overlapBandwidth > Hz(0)) {
+                    W power = receptionAnalogModel->getPower() * (overlapBandwidth.get() / signalBandwidth.get());
+                    addReceptionWithPower(reception, power, noiseStartTime, noiseEndTime, powerChanges);
+                }
+            }
+        }
     }
     const ScalarNoise *scalarBackgroundNoise = dynamic_cast<const ScalarNoise *>(interference->getBackgroundNoise());
     if (scalarBackgroundNoise) {
-        if (commonCenterFrequency == scalarBackgroundNoise->getCenterFrequency() && commonBandwidth >= scalarBackgroundNoise->getBandwidth())
+        if (commonCenterFrequency == scalarBackgroundNoise->getCenterFrequency() && commonBandwidth >= scalarBackgroundNoise->getBandwidth()) {
             addNoise(scalarBackgroundNoise, noiseStartTime, noiseEndTime, powerChanges);
-        else if (!ignorePartialInterference && areOverlappingBands(commonCenterFrequency, commonBandwidth, scalarBackgroundNoise->getCenterFrequency(), scalarBackgroundNoise->getBandwidth()))
-            throw cRuntimeError("Partially interfering background noise is not supported by ScalarMediumAnalogModel, enable ignorePartialInterference to avoid this error!");
+        }
+        else if (areOverlappingBands(commonCenterFrequency, commonBandwidth, scalarBackgroundNoise->getCenterFrequency(), scalarBackgroundNoise->getBandwidth())) {
+            if (!ignorePartialInterference) {
+                Hz rxMin = commonCenterFrequency - commonBandwidth / 2;
+                Hz rxMax = commonCenterFrequency + commonBandwidth / 2;
+                Hz txMin = scalarBackgroundNoise->getCenterFrequency() - scalarBackgroundNoise->getBandwidth() / 2;
+                Hz txMax = scalarBackgroundNoise->getCenterFrequency() + scalarBackgroundNoise->getBandwidth() / 2;
+                Hz overlapMin = rxMin > txMin ? rxMin : txMin;
+                Hz overlapMax = rxMax < txMax ? rxMax : txMax;
+                Hz overlapBandwidth = overlapMax > overlapMin ? (overlapMax - overlapMin) : Hz(0);
+                
+                if (overlapBandwidth > Hz(0)) {
+                    double scale = overlapBandwidth.get() / scalarBackgroundNoise->getBandwidth().get();
+                    addNoiseWithScale(scalarBackgroundNoise, scale, noiseStartTime, noiseEndTime, powerChanges);
+                }
+            }
+        }
     }
     EV_TRACE << "Noise power begin " << endl;
     W power = W(0);
