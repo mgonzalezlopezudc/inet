@@ -6,7 +6,7 @@ This roadmap lays out the development phases to implement Downlink OFDMA support
 
 ## Phases
 
-- [ ] **Phase 1: High Efficiency (HE) Mode Enablement** - Define 802.11ax HE timing parameters, slot times, and MCS tables.
+- [x] **Phase 1: High Efficiency (HE) Mode Enablement** - Define 802.11ax HE timing parameters, slot times, and MCS tables.
 - [ ] **Phase 2: PHY Resource Unit (RU) Sub-channel Representation** - Partition the channel bandwidth into abstract RU frequency sub-channels.
 - [ ] **Phase 3: AP MAC DL OFDMA Scheduler Foundation** - Implement user/RU mapping and packet aggregation in the AP MAC scheduler.
 - [ ] **Phase 4: Multi-User Reception at STAs** - Support parsing of SIG-B user metadata and payload extraction on assigned RUs at STAs.
@@ -27,8 +27,8 @@ This roadmap lays out the development phases to implement Downlink OFDMA support
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Update NED parameter definitions and C++ parsing for `"ax"` modeSet.
-- [ ] 01-02: Implement HE timing parameters and HE MCS tables in `Ieee80211ModeSet` and `Ieee80211AxMode` logic.
+- [x] 01-01: Update NED parameter definitions and C++ parsing for `"ax"` modeSet.
+- [x] 01-02: Implement HE timing parameters and HE MCS tables in `Ieee80211ModeSet` and `Ieee80211AxMode` logic.
 
 ### Phase 2: PHY Resource Unit (RU) Sub-channel Representation
 **Goal**: Partition the channel bandwidth into abstract parallel RU frequency sub-channels on the radio medium.
@@ -107,7 +107,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. High Efficiency (HE) Mode Enablement | 0/2 | Not started | - |
+| 1. High Efficiency (HE) Mode Enablement | 2/2 | Complete | 2026-06-14 |
 | 2. PHY Resource Unit (RU) Sub-channel Representation | 0/2 | Not started | - |
 | 3. AP MAC DL OFDMA Scheduler Foundation | 0/2 | Not started | - |
 | 4. Multi-User Reception at STAs | 0/2 | Not started | - |

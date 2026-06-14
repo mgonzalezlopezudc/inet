@@ -17,6 +17,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211IrMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211AxMode.h"
 
 namespace inet {
 
@@ -453,7 +454,35 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
         { false, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs7BW160MHzNss8, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT) },
         { false, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs8BW160MHzNss8, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT) },
         { false, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs9BW160MHzNss8, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT) },
-}),}; });
+    }),
+    Ieee80211ModeSet("ax", {
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs0BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs1BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs2BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs3BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs4BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs5BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs6BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs7BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs8BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs9BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs10BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { true, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs11BW20MHzNss1, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs0BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs1BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs2BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs3BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs4BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs5BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs6BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs7BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs8BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs9BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs10BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+        { false, Ieee80211AxCompliantModes::getCompliantMode(&Ieee80211AxmcsTable::axMcs11BW20MHzNss2, Ieee80211AxMode::BAND_5GHZ, Ieee80211AxPreambleMode::HE_PREAMBLE_SU, Ieee80211AxModeBase::AX_GUARD_INTERVAL_LONG) },
+    })
+}; });
 
 Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> entries) :
     name(name),
