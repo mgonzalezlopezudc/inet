@@ -15,13 +15,13 @@ Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling a
 - ✓ Existing L2 IEEE 802.11 stack support, including 802.11a/b/g/p/n/ac physical and MAC layers — existing codebase
 - ✓ Single-user channel access coordination functions (DCF and EDCA/HCF) — existing codebase
 - ✓ Queueing system with compound pending queues per Access Category (AC) — existing codebase
+- ✓ Define IEEE 802.11ax (HE) physical modes and MCS tables in `Ieee80211ModeSet` and related files to enable the `"ax"` modeSet — Phase 1
+- ✓ Implement an abstract physical layer Resource Unit (RU) model representing RUs as sub-channels with independent bandwidth, path loss, noise, and reception calculations — Phase 2
+- ✓ Implement a DL OFDMA MAC scheduler at the Access Point (AP) — Phase 3
+- ✓ Support dynamic queue-based RU scheduling: when an Access Category (AC) wins a TXOP, schedule packets from that winning AC's queue destined to up to N different stations (STAs) — Phase 3
 
 ### Active
 
-- [ ] Define IEEE 802.11ax (HE) physical modes and MCS tables in `Ieee80211ModeSet` and related files to enable the `"ax"` modeSet.
-- [ ] Implement a DL OFDMA MAC scheduler at the Access Point (AP).
-- [ ] Support dynamic queue-based RU scheduling: when an Access Category (AC) wins a TXOP, schedule packets from that winning AC's queue destined to up to N different stations (STAs).
-- [ ] Implement an abstract physical layer Resource Unit (RU) model representing RUs as sub-channels with independent bandwidth, path loss, noise, and reception calculations.
 - [ ] Support sequential multi-user acknowledgment (sequential Block Ack responses from the receiving STAs).
 - [ ] Verify the DL OFDMA implementation with automated test runs and a new example simulation configuration.
 
