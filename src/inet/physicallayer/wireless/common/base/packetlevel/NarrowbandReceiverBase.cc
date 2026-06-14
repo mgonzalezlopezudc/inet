@@ -55,7 +55,11 @@ bool NarrowbandReceiverBase::computeIsReceptionPossible(const IListening *listen
 {
     // TODO check if modulation matches?
     auto narrowbandTransmission = check_and_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
-    return centerFrequency == narrowbandTransmission->getCenterFrequency() && bandwidth >= narrowbandTransmission->getBandwidth();
+    Hz rxMin = centerFrequency - bandwidth / 2;
+    Hz rxMax = centerFrequency + bandwidth / 2;
+    Hz txMin = narrowbandTransmission->getCenterFrequency() - narrowbandTransmission->getBandwidth() / 2;
+    Hz txMax = narrowbandTransmission->getCenterFrequency() + narrowbandTransmission->getBandwidth() / 2;
+    return (txMin.get() >= rxMin.get() - 100.0) && (txMax.get() <= rxMax.get() + 100.0);
 }
 
 // TODO this is not purely functional, see interface comment
@@ -63,8 +67,12 @@ bool NarrowbandReceiverBase::computeIsReceptionPossible(const IListening *listen
 {
     const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     auto narrowbandReception = check_and_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel());
-    if (bandListening->getCenterFrequency() != narrowbandReception->getCenterFrequency() || bandListening->getBandwidth() < narrowbandReception->getBandwidth()) {
-        EV_DEBUG << "Computing whether reception is possible: listening and reception bands are different -> reception is impossible" << endl;
+    Hz rxMin = bandListening->getCenterFrequency() - bandListening->getBandwidth() / 2;
+    Hz rxMax = bandListening->getCenterFrequency() + bandListening->getBandwidth() / 2;
+    Hz txMin = narrowbandReception->getCenterFrequency() - narrowbandReception->getBandwidth() / 2;
+    Hz txMax = narrowbandReception->getCenterFrequency() + narrowbandReception->getBandwidth() / 2;
+    if (!((txMin.get() >= rxMin.get() - 100.0) && (txMax.get() <= rxMax.get() + 100.0))) {
+        EV_DEBUG << "Computing whether reception is possible: reception band is not within listening band -> reception is impossible" << endl;
         return false;
     }
     else
