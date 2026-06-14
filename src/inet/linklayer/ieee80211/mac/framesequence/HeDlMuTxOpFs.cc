@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
@@ -21,12 +22,14 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                              const std::vector<MacAddress>& candidates,
                              Ieee80211ModeSet *modeSet,
                              queueing::IPacketQueue *pendingQueue,
-                             IAckHandler *ackHandler)
+                             IAckHandler *ackHandler,
+                             IFrameSequenceHandler::ICallback *callback)
     : dlScheduler(dlScheduler),
       candidates(candidates),
       modeSet(modeSet),
       pendingQueue(pendingQueue),
-      ackHandler(ackHandler)
+      ackHandler(ackHandler),
+      callback(callback)
 {
 }
 
@@ -38,6 +41,7 @@ void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
+    activeAllocations.clear();
     // Determine channel bandwidth and center frequency from the modeSet's first HE mode.
     Hz channelBandwidth = Hz(20e6);       // default: 20 MHz
     Hz channelCenterFrequency = Hz(5.18e9); // default: 5 GHz band, ch36
@@ -89,6 +93,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
         // Remove from pending queue and notify the ack handler.
         pendingQueue->removePacket(staPacket);
+        staPacket->removeFromOwnershipTree();
         if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
                 staPacket->peekAtFront<Ieee80211MacHeader>())) {
             ackHandler->frameGotInProgress(dataOrMgmtHdr);
@@ -96,6 +101,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
         // Store a duplicate in the tag (tag owns the copy).
         muTag->addAllocation(alloc.ru.index, staPacket->dup());
+        ActiveAllocation activeAlloc;
+        activeAlloc.staAddress = alloc.staAddress;
+        activeAlloc.ruIndex = alloc.ru.index;
+        activeAllocations.push_back(activeAlloc);
         delete staPacket;
     }
 
@@ -109,26 +118,68 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
 IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
 {
-    switch (step) {
-        case 0: {
-            containerPacket = buildMuContainerPacket(context);
-            return new TransmitStep(containerPacket, context->getIfs());
-        }
-        case 1:
-            return nullptr; // sequence done — no ACK expected at this phase
-        default:
-            throw cRuntimeError("HeDlMuTxOpFs: unknown step %d", step);
+    int numActive = activeAllocations.size();
+    if (step == 0) {
+        containerPacket = buildMuContainerPacket(context);
+        return new TransmitStep(containerPacket, context->getIfs());
+    }
+    else if (step >= 1 && step <= numActive) {
+        auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+        auto hcfModule = dynamic_cast<cModule *>(callback);
+        auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
+        auto responseMode = rateSelection->computeResponseBlockAckFrameMode(containerPacket, dummyReq);
+        simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+        simtime_t timeout = modeSet->getSifsTime() + blockAckDuration + modeSet->getSlotTime();
+        return new ReceiveStep(timeout);
+    }
+    else if (step == numActive + 1) {
+        return nullptr; // sequence done
+    }
+    else {
+        throw cRuntimeError("HeDlMuTxOpFs: unknown step %d", step);
     }
 }
 
 bool HeDlMuTxOpFs::completeStep(FrameSequenceContext *context)
 {
-    switch (step) {
-        case 0:
-            step++;
-            return true;
-        default:
-            throw cRuntimeError("HeDlMuTxOpFs: unknown step %d", step);
+    int numActive = activeAllocations.size();
+    if (step == 0) {
+        step++;
+        return true;
+    }
+    else if (step >= 1 && step <= numActive) {
+        int idx = step - 1;
+        auto targetSta = activeAllocations[idx].staAddress;
+        auto receiveStep = check_and_cast<IReceiveStep *>(context->getStep(firstStep + step));
+        auto receivedPacket = receiveStep->getReceivedFrame();
+
+        if (receivedPacket != nullptr) {
+            receiveStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+        }
+        else {
+            receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
+            Packet *failedPacket = nullptr;
+            auto inProgress = context->getInProgressFrames();
+            int n = inProgress->getLength();
+            for (int i = 0; i < n; ++i) {
+                Packet *pkt = inProgress->getFrames(i);
+                const auto& hdr = pkt->peekAtFront<Ieee80211MacHeader>();
+                if (hdr->getReceiverAddress() == targetSta) {
+                    failedPacket = pkt;
+                    break;
+                }
+            }
+            if (failedPacket != nullptr) {
+                EV_WARN << "HeDlMuTxOpFs: sequential BlockAck timeout for STA " << targetSta
+                        << ", triggering failure recovery." << endl;
+                callback->originatorProcessFailedFrame(failedPacket);
+            }
+        }
+        step++;
+        return true;
+    }
+    else {
+        throw cRuntimeError("HeDlMuTxOpFs: unknown step %d", step);
     }
 }
 
