@@ -1,9 +1,9 @@
 %description:
-Test IEEE 802.11ax timing parameters and MCS table bitrates
+Test IEEE 802.11he timing parameters and MCS table bitrates
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211AxMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 
 %global:
 
