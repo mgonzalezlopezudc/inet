@@ -20,10 +20,10 @@ Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling a
 - ✓ Implement a DL OFDMA MAC scheduler at the Access Point (AP) — Phase 3
 - ✓ Support dynamic queue-based RU scheduling: when an Access Category (AC) wins a TXOP, schedule packets from that winning AC's queue destined to up to N different stations (STAs) — Phase 3
 - ✓ Support parsing of HE MU SIG-B allocations and filtering/decoding assigned RU payload at destination STAs — Phase 4
+- ✓ Support sequential multi-user acknowledgment (sequential Block Ack responses from the receiving STAs) — Phase 5
 
 ### Active
 
-- [ ] Support sequential multi-user acknowledgment (sequential Block Ack responses from the receiving STAs).
 - [ ] Verify the DL OFDMA implementation with automated test runs and a new example simulation configuration.
 
 ### Out of Scope
