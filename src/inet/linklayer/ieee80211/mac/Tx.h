@@ -39,6 +39,7 @@ class INET_API Tx : public SimpleModule, public ITx
     Tx() {}
     ~Tx();
 
+    virtual bool isBusy() const override;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ITx::ICallback *txCallback) override;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ITx::ICallback *txCallback) override;
     virtual void radioTransmissionFinished() override;

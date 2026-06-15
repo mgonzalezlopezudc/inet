@@ -110,6 +110,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void refreshDisplay() const override;
 
     virtual void startFrameSequence(AccessCategory ac);
+    void resumeContention();
     void handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs);
 
     void sendUp(const std::vector<Packet *>& completeFrames);
@@ -165,6 +166,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual ~Hcf();
 
     IOriginatorMacDataService *getOriginatorMacDataService() const { return originatorDataService; }
+    IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const { return originatorBlockAckAgreementHandler; }
 
     // ICoordinationFunction
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
