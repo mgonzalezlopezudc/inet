@@ -164,6 +164,8 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
   public:
     virtual ~Hcf();
 
+    IOriginatorMacDataService *getOriginatorMacDataService() const { return originatorDataService; }
+
     // ICoordinationFunction
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
     virtual void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;

@@ -80,8 +80,14 @@ void QosAckHandler::processFailedFrame(const Ptr<const Ieee80211DataOrMgmtHeader
             ackStatuses[id] = Status::NORMAL_ACK_NOT_ARRIVED;
         else if (status == Status::WAITING_FOR_BLOCK_ACK)
             ackStatuses[id] = Status::BLOCK_ACK_NOT_ARRIVED;
-        else
-            throw cRuntimeError("Invalid ACK status");
+        else {
+            throw cRuntimeError("Invalid ACK status: packet=%s, receiver=%s, TID=%d, seq=%d, status=%d",
+                               dataHeader->getName(),
+                               dataHeader->getReceiverAddress().str().c_str(),
+                               dataHeader->getTid(),
+                               dataHeader->getSequenceNumber().get(),
+                               (int)status);
+        }
     }
     else {
         ASSERT(getMgmtOrNonQoSAckStatus(dataOrMgmtHeader) == Status::WAITING_FOR_NORMAL_ACK);
@@ -246,6 +252,16 @@ bool QosAckHandler::isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader
     else
         return false;
 }
+
+void QosAckHandler::transitionToWaitingForBlockAck(const Ptr<const Ieee80211DataHeader>& header)
+{
+    auto id = std::make_pair(header->getReceiverAddress(), std::make_pair(header->getTid(), SequenceControlField(header->getSequenceNumber().get(), header->getFragmentNumber())));
+    auto it = ackStatuses.find(id);
+    if (it != ackStatuses.end() && it->second == Status::BLOCK_ACK_NOT_YET_REQUESTED) {
+        it->second = Status::WAITING_FOR_BLOCK_ACK;
+    }
+}
+
 
 void QosAckHandler::frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {

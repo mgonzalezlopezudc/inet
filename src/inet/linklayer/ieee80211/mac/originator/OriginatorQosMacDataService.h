@@ -42,7 +42,6 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
   protected:
     virtual void initialize() override;
 
-    virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header);
     virtual std::vector<Packet *> *fragmentIfNeeded(Packet *frame);
     virtual Packet *aMsduAggregateIfNeeded(queueing::IPacketQueue *pendingQueue);
     virtual Packet *aMpduAggregateIfNeeded(std::vector<Packet *> *fragments);
@@ -50,6 +49,7 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
   public:
     virtual ~OriginatorQosMacDataService();
 
+    virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header);
     virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *pendingQueue) override;
 };
 

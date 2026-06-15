@@ -14,10 +14,34 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/common/ProtocolTag_m.h"
-#include "inet/common/Protocol.h"
+#include "inet/common/packet/chunk/SequenceChunk.h"
+#include "inet/common/packet/chunk/SliceChunk.h"
+#include "inet/common/packet/chunk/cPacketChunk.h"
 
 namespace inet {
 namespace physicallayer {
+
+static Ptr<Chunk> cloneChunkDeep(const Ptr<const Chunk>& chunk)
+{
+    if (chunk == nullptr)
+        return nullptr;
+    if (auto cPktChunk = dynamicPtrCast<const cPacketChunk>(chunk)) {
+        return cPktChunk->dupShared();
+    }
+    else if (auto seqChunk = dynamicPtrCast<const SequenceChunk>(chunk)) {
+        auto newSeq = makeShared<SequenceChunk>();
+        for (const auto& child : seqChunk->getChunks()) {
+            newSeq->insertAtBack(cloneChunkDeep(child));
+        }
+        return newSeq;
+    }
+    else if (auto sliceChunk = dynamicPtrCast<const SliceChunk>(chunk)) {
+        auto clonedInner = cloneChunkDeep(sliceChunk->getChunk());
+        auto newSlice = makeShared<SliceChunk>(clonedInner, sliceChunk->getOffset(), sliceChunk->getChunkLength());
+        return newSlice;
+    }
+    return constPtrCast<Chunk>(chunk);
+}
 
 Define_Module(Ieee80211RadioMedium);
 
@@ -57,6 +81,14 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
             );
 
             auto subPacket = alloc.packet->dup();
+            auto frontOffset = subPacket->getFrontOffset();
+            auto backOffset = subPacket->getBackOffset();
+            auto clonedContent = cloneChunkDeep(subPacket->peekAll());
+            subPacket->eraseAll();
+            subPacket->insertAll(clonedContent);
+            subPacket->setFrontOffset(frontOffset);
+            subPacket->setBackOffset(backOffset);
+            take(subPacket);
             auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
             phyHeader->setChunkLength(b(48));
             phyHeader->setRuIndex(ruIndex);
@@ -129,6 +161,44 @@ void Ieee80211RadioMedium::sendToRadio(IRadio *transmitter, const IRadio *receiv
     }
     else {
         RadioMedium::sendToRadio(transmitter, receiver, signal);
+    }
+}
+
+Ieee80211RadioMedium::~Ieee80211RadioMedium()
+{
+    for (const auto& pair : muSubTransmissions) {
+        for (auto subTransmission : pair.second) {
+            auto pkt = subTransmission->getPacket();
+            delete const_cast<Packet *>(pkt);
+        }
+    }
+}
+
+void Ieee80211RadioMedium::initialize(int stage)
+{
+    RadioMedium::initialize(stage);
+    if (stage == INITSTAGE_LOCAL) {
+        subscribe(IRadioMedium::signalRemovedSignal, this);
+    }
+}
+
+void Ieee80211RadioMedium::receiveSignal(cComponent *source, simsignal_t signal, cObject *value, cObject *details)
+{
+    if (signal == IRadioMedium::signalRemovedSignal) {
+        auto transmission = dynamic_cast<const ITransmission *>(value);
+        if (transmission != nullptr) {
+            auto it = muSubTransmissions.find(transmission);
+            if (it != muSubTransmissions.end()) {
+                for (auto subTransmission : it->second) {
+                    auto pkt = subTransmission->getPacket();
+                    delete const_cast<Packet *>(pkt);
+                }
+                muSubTransmissions.erase(it);
+            }
+        }
+    }
+    else {
+        RadioMedium::receiveSignal(source, signal, value, details);
     }
 }
 

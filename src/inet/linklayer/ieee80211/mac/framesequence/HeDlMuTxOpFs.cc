@@ -12,6 +12,8 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -91,21 +93,31 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             continue;
         }
 
-        // Remove from pending queue and notify the ack handler.
+        // Remove from pending queue, assign sequence number, and notify the ack handler.
         pendingQueue->removePacket(staPacket);
-        staPacket->removeFromOwnershipTree();
-        if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
-                staPacket->peekAtFront<Ieee80211MacHeader>())) {
-            ackHandler->frameGotInProgress(dataOrMgmtHdr);
+        auto macHdr = staPacket->peekAtFront<Ieee80211MacHeader>();
+        if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(macHdr)) {
+            auto dataOrMgmtHdrWritable = staPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
+            auto heHcf = dynamic_cast<HeHcf *>(callback);
+            if (heHcf != nullptr && !dataOrMgmtHdrWritable->getRetry()) {
+                auto originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(heHcf->getOriginatorMacDataService());
+                originatorQosDataService->assignSequenceNumber(dataOrMgmtHdrWritable);
+            }
+            staPacket->insertAtFront(dataOrMgmtHdrWritable);
+
+            ackHandler->frameGotInProgress(dataOrMgmtHdrWritable);
         }
 
         // Store a duplicate in the tag (tag owns the copy).
-        muTag->addAllocation(alloc.ru.index, staPacket->dup());
+        Packet *dupPkt = staPacket->dup();
+        muTag->addAllocation(alloc.ru.index, dupPkt);
         ActiveAllocation activeAlloc;
         activeAlloc.staAddress = alloc.staAddress;
         activeAlloc.ruIndex = alloc.ru.index;
         activeAllocations.push_back(activeAlloc);
-        delete staPacket;
+
+        // Add to inProgressFrames!
+        context->getInProgressFrames()->addInProgressFrame(staPacket);
     }
 
     if (muTag->getAllocations().empty())
@@ -121,7 +133,7 @@ IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
     int numActive = activeAllocations.size();
     if (step == 0) {
         containerPacket = buildMuContainerPacket(context);
-        return new TransmitStep(containerPacket, context->getIfs());
+        return new TransmitStep(containerPacket, context->getIfs(), true);
     }
     else if (step >= 1 && step <= numActive) {
         auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
@@ -153,26 +165,30 @@ bool HeDlMuTxOpFs::completeStep(FrameSequenceContext *context)
         auto receiveStep = check_and_cast<IReceiveStep *>(context->getStep(firstStep + step));
         auto receivedPacket = receiveStep->getReceivedFrame();
 
+        Packet *transmittedPacket = nullptr;
+        auto inProgress = context->getInProgressFrames();
+        int n = inProgress->getLength();
+        for (int i = 0; i < n; ++i) {
+            Packet *pkt = inProgress->getFrames(i);
+            const auto& hdr = pkt->peekAtFront<Ieee80211MacHeader>();
+            if (hdr->getReceiverAddress() == targetSta) {
+                transmittedPacket = pkt;
+                break;
+            }
+        }
+
         if (receivedPacket != nullptr) {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+            if (transmittedPacket != nullptr) {
+                callback->originatorProcessReceivedFrame(receivedPacket, transmittedPacket);
+            }
         }
         else {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
-            Packet *failedPacket = nullptr;
-            auto inProgress = context->getInProgressFrames();
-            int n = inProgress->getLength();
-            for (int i = 0; i < n; ++i) {
-                Packet *pkt = inProgress->getFrames(i);
-                const auto& hdr = pkt->peekAtFront<Ieee80211MacHeader>();
-                if (hdr->getReceiverAddress() == targetSta) {
-                    failedPacket = pkt;
-                    break;
-                }
-            }
-            if (failedPacket != nullptr) {
+            if (transmittedPacket != nullptr) {
                 EV_WARN << "HeDlMuTxOpFs: sequential BlockAck timeout for STA " << targetSta
                         << ", triggering failure recovery." << endl;
-                callback->originatorProcessFailedFrame(failedPacket);
+                callback->originatorProcessFailedFrame(transmittedPacket);
             }
         }
         step++;

@@ -12,6 +12,12 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRecoveryProcedure.h"
+#include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+
+
 
 namespace inet {
 namespace ieee80211 {
@@ -55,6 +61,19 @@ void HeHcf::startFrameSequence(AccessCategory ac)
     if (isHeMode) {
         auto edcaf = edca->getEdcaf(ac);
         auto pendingQueue = edcaf->getPendingQueue();
+        auto inProgress = edcaf->getInProgressFrames();
+        if (inProgress->getLength() > 0) {
+            EV_INFO << "HeHcf: Pushing " << inProgress->getLength()
+                    << " abandoned in-progress frames back to pendingQueue before starting MU sequence." << endl;
+            std::vector<Packet *> framesToRequeue;
+            for (int i = 0; i < inProgress->getLength(); ++i) {
+                framesToRequeue.push_back(inProgress->getFrames(i));
+            }
+            for (auto frame : framesToRequeue) {
+                inProgress->removeInProgressFrame(frame);
+                pendingQueue->pushPacket(frame, nullptr);
+            }
+        }
         auto candidates = collectCandidateStations(pendingQueue);
         if (candidates.size() >= 2) {
             EV_INFO << "HeHcf: MU-OFDMA opportunity detected for " << candidates.size()
@@ -71,5 +90,94 @@ void HeHcf::startFrameSequence(AccessCategory ac)
     Hcf::startFrameSequence(ac);
 }
 
+void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
+{
+    Enter_Method("originatorProcessTransmittedFrame");
+    auto muTag = packet->findTag<physicallayer::Ieee80211HeMuTag>();
+    if (muTag != nullptr) {
+        auto edcaf = edca->getChannelOwner();
+        if (edcaf) {
+            AccessCategory ac = edcaf->getAccessCategory();
+            // Process each individual scheduled frame as transmitted
+            for (const auto& alloc : muTag->getAllocations()) {
+                Packet *staPacket = alloc.packet;
+                auto header = staPacket->peekAtFront<Ieee80211MacHeader>();
+                if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+                    originatorProcessTransmittedDataFrame(staPacket, dataHeader, ac);
+                    edcaf->getAckHandler()->transitionToWaitingForBlockAck(dataHeader);
+                }
+                else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(header)) {
+                    originatorProcessTransmittedManagementFrame(mgmtHeader, ac);
+                }
+            }
+        }
+    }
+    else {
+        Hcf::originatorProcessTransmittedFrame(packet);
+    }
+}
+
+void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
+{
+    Enter_Method("originatorProcessFailedFrame");
+    EV_WARN << "HeHcf: originatorProcessFailedFrame for packet " << failedPacket->getName()
+            << " type = " << (failedPacket->peekAtFront<Ieee80211MacHeader>() != nullptr ? (int)failedPacket->peekAtFront<Ieee80211MacHeader>()->getType() : -1) << endl;
+    if (dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence()) != nullptr) {
+        auto failedHeader = failedPacket->peekAtFront<Ieee80211MacHeader>();
+        auto edcaf = edca->getChannelOwner();
+        if (edcaf) {
+            bool retryLimitReached = false;
+            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(failedHeader)) {
+                edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(failedPacket, dataHeader);
+                retryLimitReached = edcaf->getRecoveryProcedure()->isRetryLimitReached(failedPacket, dataHeader);
+                if (dataAndMgmtRateControl) {
+                    int retryCount = edcaf->getRecoveryProcedure()->getRetryCount(failedPacket, dataHeader);
+                    dataAndMgmtRateControl->frameTransmitted(failedPacket, retryCount, false, retryLimitReached);
+                }
+                edcaf->getAckHandler()->processFailedFrame(dataHeader);
+            }
+            else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(failedHeader)) {
+                edca->getMgmtAndNonQoSRecoveryProcedure()->dataOrMgmtFrameTransmissionFailed(failedPacket, mgmtHeader, edcaf->getStationRetryCounters());
+                retryLimitReached = edca->getMgmtAndNonQoSRecoveryProcedure()->isRetryLimitReached(failedPacket, mgmtHeader);
+                if (dataAndMgmtRateControl) {
+                    int retryCount = edca->getMgmtAndNonQoSRecoveryProcedure()->getRetryCount(failedPacket, mgmtHeader);
+                    dataAndMgmtRateControl->frameTransmitted(failedPacket, retryCount, false, retryLimitReached);
+                }
+                edcaf->getAckHandler()->processFailedFrame(mgmtHeader);
+            }
+            else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(failedHeader)) {
+                edcaf->getAckHandler()->processFailedBlockAckReq(blockAckReq);
+                return;
+            }
+
+            if (retryLimitReached) {
+                if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(failedHeader))
+                    edcaf->getRecoveryProcedure()->retryLimitReached(failedPacket, dataHeader);
+                else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(failedHeader))
+                    edca->getMgmtAndNonQoSRecoveryProcedure()->retryLimitReached(failedPacket, mgmtHeader);
+                edcaf->getInProgressFrames()->dropFrame(failedPacket);
+                edcaf->getAckHandler()->dropFrame(dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(failedHeader));
+            }
+            else {
+                EV_INFO << "Retrying frame in MU-OFDMA: " << failedPacket->getName() << ", re-queuing.\n";
+                auto h = failedPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
+                h->setRetry(true);
+                failedPacket->insertAtFront(h);
+                
+                // Remove from inProgressFrames
+                edcaf->getInProgressFrames()->removeInProgressFrame(failedPacket);
+                
+                // Re-enqueue into pendingQueue
+                auto pendingQueue = edcaf->getPendingQueue();
+                pendingQueue->pushPacket(failedPacket, nullptr);
+            }
+        }
+    }
+    else {
+        Hcf::originatorProcessFailedFrame(failedPacket);
+    }
+}
+
 } // namespace ieee80211
 } // namespace inet
+

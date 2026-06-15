@@ -50,6 +50,10 @@ class INET_API HeHcf : public Hcf
      * queued and HE mode is active; otherwise delegates to Hcf::startFrameSequence().
      */
     virtual void startFrameSequence(AccessCategory ac) override;
+
+  public:
+    virtual void originatorProcessTransmittedFrame(Packet *packet) override;
+    virtual void originatorProcessFailedFrame(Packet *packet) override;
 };
 
 } // namespace ieee80211

@@ -56,12 +56,12 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
     const IIeee80211Mode *findMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
     const IIeee80211Mode *getMode(bps bitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
     const IIeee80211Mode *getMode(bps minBitrate, bps maxBitrate, Hz bandwidth = Hz(NaN), int numSpatialStreams = -1) const;
-    const IIeee80211Mode *getSlowestMode() const;
-    const IIeee80211Mode *getFastestMode() const;
+    const IIeee80211Mode *getSlowestMode(Hz bandwidth = Hz(NaN)) const;
+    const IIeee80211Mode *getFastestMode(Hz bandwidth = Hz(NaN)) const;
     const IIeee80211Mode *getSlowerMode(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getFasterMode(const IIeee80211Mode *mode) const;
-    const IIeee80211Mode *getSlowestMandatoryMode() const;
-    const IIeee80211Mode *getFastestMandatoryMode() const;
+    const IIeee80211Mode *getSlowestMandatoryMode(Hz bandwidth = Hz(NaN)) const;
+    const IIeee80211Mode *getFastestMandatoryMode(Hz bandwidth = Hz(NaN)) const;
     const IIeee80211Mode *getSlowerMandatoryMode(const IIeee80211Mode *mode) const;
     const IIeee80211Mode *getFasterMandatoryMode(const IIeee80211Mode *mode) const;
 

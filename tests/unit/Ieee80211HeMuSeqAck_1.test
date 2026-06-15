@@ -161,19 +161,6 @@ EV << "Step 0 prepared: Transmit container frame.\n";
 context->addStep(step0);
 fs->completeStep(context);
 
-// Add mock packets inside inProgress to simulate buildMuContainerPacket and ackHandler registration
-Packet *txPkt1 = new Packet("in-progress-sta1");
-auto txHdr1 = makeShared<Ieee80211DataHeader>();
-txHdr1->setReceiverAddress(sta1);
-txPkt1->insertAtFront(txHdr1);
-inProgress->addFrame(txPkt1);
-
-Packet *txPkt2 = new Packet("in-progress-sta2");
-auto txHdr2 = makeShared<Ieee80211DataHeader>();
-txHdr2->setReceiverAddress(sta2);
-txPkt2->insertAtFront(txHdr2);
-inProgress->addFrame(txPkt2);
-
 // --- Step 1: Expect Block Ack from STA 1 ---
 IFrameSequenceStep *step1 = fs->prepareStep(context);
 ASSERT(step1->getType() == IFrameSequenceStep::Type::RECEIVE);
@@ -213,14 +200,14 @@ delete scheduler;
 delete ackHandler;
 delete fs;
 delete context;
-delete txPkt1;
-delete txPkt2;
+delete inProgress;
 
 %contains: stdout
 Step 0 prepared: Transmit container frame.
 Step 1 prepared: Expect Block Ack with timeout.
+Callback: ProcessReceivedFrame BasicBlockAck
 Step 2 prepared: Expect Block Ack with timeout.
 HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
-Callback: ProcessFailedFrame in-progress-sta2
+Callback: ProcessFailedFrame data-sta2
 Sequence completed successfully.
 Failed calls count: 1

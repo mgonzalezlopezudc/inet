@@ -135,21 +135,37 @@ class INET_API Ieee80211Hemcs
     const unsigned int mcsIndex;
     const Ieee80211OfdmModulation *stream1Modulation = nullptr;
     const Ieee80211OfdmModulation *stream2Modulation = nullptr;
+    const Ieee80211OfdmModulation *stream3Modulation = nullptr;
+    const Ieee80211OfdmModulation *stream4Modulation = nullptr;
+    const Ieee80211OfdmModulation *stream5Modulation = nullptr;
+    const Ieee80211OfdmModulation *stream6Modulation = nullptr;
+    const Ieee80211OfdmModulation *stream7Modulation = nullptr;
+    const Ieee80211OfdmModulation *stream8Modulation = nullptr;
     const Ieee80211VhtCode *code;
     const Hz bandwidth;
 
   public:
     Ieee80211Hemcs(unsigned int mcsIndex, const ApskModulationBase *stream1SubcarrierModulation, const Ieee80211ConvolutionalCode* convolutionalCode, Hz bandwidth);
     Ieee80211Hemcs(unsigned int mcsIndex, const ApskModulationBase *stream1SubcarrierModulation, const ApskModulationBase *stream2SubcarrierModulation, const Ieee80211ConvolutionalCode* convolutionalCode, Hz bandwidth);
+    Ieee80211Hemcs(unsigned int mcsIndex, const ApskModulationBase *stream1SubcarrierModulation, const Ieee80211ConvolutionalCode* convolutionalCode, Hz bandwidth, int nss);
     virtual ~Ieee80211Hemcs();
 
     const Ieee80211VhtCode *getCode() const { return code; }
     unsigned int getMcsIndex() const { return mcsIndex; }
     virtual const Ieee80211OfdmModulation *getModulation() const { return stream1Modulation; }
     virtual const Ieee80211OfdmModulation *getStreamExtension1Modulation() const { return stream2Modulation; }
+    virtual const Ieee80211OfdmModulation *getStreamExtension2Modulation() const { return stream3Modulation; }
+    virtual const Ieee80211OfdmModulation *getStreamExtension3Modulation() const { return stream4Modulation; }
+    virtual const Ieee80211OfdmModulation *getStreamExtension4Modulation() const { return stream5Modulation; }
+    virtual const Ieee80211OfdmModulation *getStreamExtension5Modulation() const { return stream6Modulation; }
+    virtual const Ieee80211OfdmModulation *getStreamExtension6Modulation() const { return stream7Modulation; }
+    virtual const Ieee80211OfdmModulation *getStreamExtension7Modulation() const { return stream8Modulation; }
     virtual Hz getBandwidth() const { return bandwidth; }
     virtual unsigned int getNumNss() const {
-        return (stream1Modulation ? 1 : 0) + (stream2Modulation ? 1 : 0);
+        return (stream1Modulation ? 1 : 0) + (stream2Modulation ? 1 : 0) +
+               (stream3Modulation ? 1 : 0) + (stream4Modulation ? 1 : 0) +
+               (stream5Modulation ? 1 : 0) + (stream6Modulation ? 1 : 0) +
+               (stream7Modulation ? 1 : 0) + (stream8Modulation ? 1 : 0);
     }
 };
 
@@ -226,8 +242,8 @@ class INET_API Ieee80211HeMode : public Ieee80211ModeBase
 };
 
 class INET_API Ieee80211HemcsTable
-{
-  public:
+{  public:
+    // BW=20MHz, NSS=1
     static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss1;
     static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss1;
     static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss1;
@@ -240,7 +256,7 @@ class INET_API Ieee80211HemcsTable
     static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss1;
     static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss1;
     static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss1;
-
+    // BW=20MHz, NSS=2
     static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss2;
     static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss2;
     static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss2;
@@ -253,6 +269,396 @@ class INET_API Ieee80211HemcsTable
     static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss2;
     static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss2;
     static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss2;
+    // BW=20MHz, NSS=3
+    static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs3BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs4BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs5BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs6BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs7BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs8BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss3;
+    // BW=20MHz, NSS=4
+    static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs3BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs4BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs5BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs6BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs7BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs8BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss4;
+    // BW=20MHz, NSS=5
+    static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs3BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs4BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs5BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs6BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs7BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs8BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss5;
+    // BW=20MHz, NSS=6
+    static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs3BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs4BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs5BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs6BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs7BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs8BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss6;
+    // BW=20MHz, NSS=7
+    static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs3BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs4BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs5BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs6BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs7BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs8BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss7;
+    // BW=20MHz, NSS=8
+    static const DI<Ieee80211Hemcs> heMcs0BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs1BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs2BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs3BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs4BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs5BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs6BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs7BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs8BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs9BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs10BW20MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs11BW20MHzNss8;
+    // BW=40MHz, NSS=1
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss1;
+    // BW=40MHz, NSS=2
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss2;
+    // BW=40MHz, NSS=3
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss3;
+    // BW=40MHz, NSS=4
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss4;
+    // BW=40MHz, NSS=5
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss5;
+    // BW=40MHz, NSS=6
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss6;
+    // BW=40MHz, NSS=7
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss7;
+    // BW=40MHz, NSS=8
+    static const DI<Ieee80211Hemcs> heMcs0BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs1BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs2BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs3BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs4BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs5BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs6BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs7BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs8BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs9BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs10BW40MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs11BW40MHzNss8;
+    // BW=80MHz, NSS=1
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss1;
+    // BW=80MHz, NSS=2
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss2;
+    // BW=80MHz, NSS=3
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss3;
+    // BW=80MHz, NSS=4
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss4;
+    // BW=80MHz, NSS=5
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss5;
+    // BW=80MHz, NSS=6
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss6;
+    // BW=80MHz, NSS=7
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss7;
+    // BW=80MHz, NSS=8
+    static const DI<Ieee80211Hemcs> heMcs0BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs1BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs2BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs3BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs4BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs5BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs6BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs7BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs8BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs9BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs10BW80MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs11BW80MHzNss8;
+    // BW=160MHz, NSS=1
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss1;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss1;
+    // BW=160MHz, NSS=2
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss2;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss2;
+    // BW=160MHz, NSS=3
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss3;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss3;
+    // BW=160MHz, NSS=4
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss4;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss4;
+    // BW=160MHz, NSS=5
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss5;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss5;
+    // BW=160MHz, NSS=6
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss6;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss6;
+    // BW=160MHz, NSS=7
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss7;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss7;
+    // BW=160MHz, NSS=8
+    static const DI<Ieee80211Hemcs> heMcs0BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs1BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs2BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs3BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs4BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs5BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs6BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs7BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs8BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs9BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs10BW160MHzNss8;
+    static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss8;
 };
 
 class INET_API Ieee80211HeCompliantModes

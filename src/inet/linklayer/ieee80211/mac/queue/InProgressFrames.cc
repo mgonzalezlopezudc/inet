@@ -126,6 +126,27 @@ void InProgressFrames::dropFrame(Packet *packet)
     emit(packetDequeuedSignal, packet);
 }
 
+void InProgressFrames::addInProgressFrame(Packet *packet)
+{
+    if (getParentModule() != nullptr) {
+        take(packet);
+    }
+    inProgressFrames.push_back(packet);
+    packet->setArrivalTime(simTime());
+    if (getParentModule() != nullptr) {
+        emit(packetEnqueuedSignal, packet);
+    }
+}
+
+void InProgressFrames::removeInProgressFrame(Packet *packet)
+{
+    inProgressFrames.erase(std::remove(inProgressFrames.begin(), inProgressFrames.end(), packet), inProgressFrames.end());
+    if (getParentModule() != nullptr) {
+        emit(packetDequeuedSignal, packet);
+    }
+}
+
+
 void InProgressFrames::dropFrames(std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> seqAndFragNums)
 {
     for (auto it = inProgressFrames.begin(); it != inProgressFrames.end();) {
