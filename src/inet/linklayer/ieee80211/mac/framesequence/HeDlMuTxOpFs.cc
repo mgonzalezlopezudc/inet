@@ -79,8 +79,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     // 1. Calculate the total sequential ACK sequence duration
     simtime_t totalDuration = simtime_t::ZERO;
-    auto hcf = check_and_cast<Hcf *>(callback);
-    auto originatorBAHandler = hcf->getOriginatorBlockAckAgreementHandler();
+    auto hcf = dynamic_cast<Hcf *>(callback);
+    auto originatorBAHandler = hcf ? hcf->getOriginatorBlockAckAgreementHandler() : nullptr;
     auto hcfModule = check_and_cast<cModule *>(callback);
     auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
 
@@ -209,8 +209,8 @@ IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
     }
     else if (step >= 1 && step <= numActive) {
         auto hcfModule = check_and_cast<cModule *>(callback);
-        auto hcf = check_and_cast<Hcf *>(callback);
-        auto originatorBAHandler = hcf->getOriginatorBlockAckAgreementHandler();
+        auto hcf = dynamic_cast<Hcf *>(callback);
+        auto originatorBAHandler = hcf ? hcf->getOriginatorBlockAckAgreementHandler() : nullptr;
         auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
 
         auto targetSta = activeAllocations[step - 1].staAddress;

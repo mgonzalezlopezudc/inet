@@ -22,6 +22,7 @@ Register_Serializer(Ieee80211OfdmPhyHeader, Ieee80211OfdmPhyHeaderSerializer);
 Register_Serializer(Ieee80211ErpOfdmPhyHeader, Ieee80211ErpOfdmPhyHeaderSerializer);
 Register_Serializer(Ieee80211HtPhyHeader, Ieee80211HtPhyHeaderSerializer);
 Register_Serializer(Ieee80211VhtPhyHeader, Ieee80211VhtPhyHeaderSerializer);
+Register_Serializer(Ieee80211HeMuPhyHeader, Ieee80211HeMuPhyHeaderSerializer);
 
 /**
  * FHSS
@@ -185,6 +186,37 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
 {
     auto vhtPhyHeader = makeShared<Ieee80211VhtPhyHeader>();
     return vhtPhyHeader;
+}
+
+/**
+ * HE MU
+ */
+void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
+{
+    auto heMuPhyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(chunk);
+    stream.writeByte(heMuPhyHeader->getRuIndex());
+    unsigned int numAllocations = heMuPhyHeader->getAllocationsArraySize();
+    stream.writeByte(numAllocations);
+    for (unsigned int i = 0; i < numAllocations; ++i) {
+        const auto& alloc = heMuPhyHeader->getAllocations(i);
+        stream.writeByte(alloc.ruIndex);
+        stream.writeMacAddress(alloc.staAddress);
+    }
+}
+
+const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
+{
+    auto heMuPhyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    heMuPhyHeader->setRuIndex(stream.readByte());
+    unsigned int numAllocations = stream.readByte();
+    heMuPhyHeader->setAllocationsArraySize(numAllocations);
+    for (unsigned int i = 0; i < numAllocations; ++i) {
+        Ieee80211HeMuRuAllocationInfo info;
+        info.ruIndex = stream.readByte();
+        info.staAddress = stream.readMacAddress();
+        heMuPhyHeader->setAllocations(i, info);
+    }
+    return heMuPhyHeader;
 }
 
 } // namespace physicallayer
