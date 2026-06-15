@@ -118,6 +118,19 @@ class INET_API Ieee80211VhtPhyHeaderSerializer : public FieldsChunkSerializer
     Ieee80211VhtPhyHeaderSerializer() : FieldsChunkSerializer() {}
 };
 
+/**
+ * Converts between Ieee80211HeMuPhyHeader and binary network byte order IEEE 802.11 HE MU PHY header.
+ */
+class INET_API Ieee80211HeMuPhyHeaderSerializer : public FieldsChunkSerializer
+{
+  protected:
+    virtual void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const override;
+    virtual const Ptr<Chunk> deserialize(MemoryInputStream& stream) const override;
+
+  public:
+    Ieee80211HeMuPhyHeaderSerializer() : FieldsChunkSerializer() {}
+};
+
 } // namespace physicallayer
 
 } // namespace inet
