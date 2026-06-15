@@ -22,6 +22,7 @@ Register_Protocol_Printer(&Protocol::ieee80211OfdmPhy, Ieee80211PhyProtocolPrint
 Register_Protocol_Printer(&Protocol::ieee80211ErpOfdmPhy, Ieee80211PhyProtocolPrinter);
 Register_Protocol_Printer(&Protocol::ieee80211HtPhy, Ieee80211PhyProtocolPrinter);
 Register_Protocol_Printer(&Protocol::ieee80211VhtPhy, Ieee80211PhyProtocolPrinter);
+Register_Protocol_Printer(&Protocol::ieee80211HePhy, Ieee80211PhyProtocolPrinter);
 
 void Ieee80211PhyProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol *protocol, const cMessagePrinter::Options *options, Context& context) const
 {

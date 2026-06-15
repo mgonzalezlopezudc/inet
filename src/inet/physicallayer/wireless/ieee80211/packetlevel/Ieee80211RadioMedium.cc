@@ -88,6 +88,11 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
             subPacket->insertAll(clonedContent);
             subPacket->setFrontOffset(frontOffset);
             subPacket->setBackOffset(backOffset);
+            if (subPacket->getDataLength() >= B(4)) {
+                auto macTrailer = subPacket->removeAtBack<ieee80211::Ieee80211MacTrailer>(B(4));
+                macTrailer->setFcsMode(FCS_DECLARED_CORRECT);
+                subPacket->insertAtBack(macTrailer);
+            }
             take(subPacket);
             auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
             phyHeader->setChunkLength(b(48));
@@ -223,6 +228,23 @@ bool Ieee80211RadioMedium::isInterferingTransmission(const ITransmission *transm
     // A main HE MU transmission does not cause interference directly (its sub-transmissions do)
     if (transmission->getPacket() != nullptr && transmission->getPacket()->findTag<Ieee80211HeMuTag>() != nullptr)
         return false;
+
+    // Sub-transmissions of the same MU transmission do not interfere with each other
+    auto desiredTransmission = reception->getTransmission();
+    for (const auto& pair : muSubTransmissions) {
+        bool transmissionIsSub = false;
+        bool desiredIsSub = false;
+        for (auto sub : pair.second) {
+            if (sub == transmission)
+                transmissionIsSub = true;
+            if (sub == desiredTransmission)
+                desiredIsSub = true;
+        }
+        if (transmissionIsSub && desiredIsSub) {
+            return false;
+        }
+    }
+
     return RadioMedium::isInterferingTransmission(transmission, reception);
 }
 

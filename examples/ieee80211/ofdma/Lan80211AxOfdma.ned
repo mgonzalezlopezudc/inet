@@ -38,7 +38,7 @@ network Lan80211AxOfdma
             wlan[*].agent.typename = "";
         }
         ap: AccessPoint {
-            @display("p=250,200;r=,,#707070");
+            @display("p=250,250;r=,,#707070");
             wlan[*].mgmt.typename = "Ieee80211MgmtApSimplified";
         }
         server: StandardHost {

@@ -25,6 +25,13 @@ class INET_API Ieee80211HeMuTag : public TagBase
     std::vector<Ieee80211HeMuRuAllocation> allocations;
 
   public:
+    void dropOwnership(Packet *packet) {
+        if (packet != nullptr) {
+            packet->removeFromOwnershipTree();
+        }
+    }
+
+  public:
     Ieee80211HeMuTag() {}
     virtual ~Ieee80211HeMuTag() {
         for (auto& alloc : allocations) {
@@ -33,8 +40,16 @@ class INET_API Ieee80211HeMuTag : public TagBase
     }
 
     const std::vector<Ieee80211HeMuRuAllocation>& getAllocations() const { return allocations; }
-    void addAllocation(int ruIndex, Packet *packet) { allocations.push_back({ruIndex, packet}); }
-    void setAllocations(const std::vector<Ieee80211HeMuRuAllocation>& allocs) { allocations = allocs; }
+    void addAllocation(int ruIndex, Packet *packet) {
+        dropOwnership(packet);
+        allocations.push_back({ruIndex, packet});
+    }
+    void setAllocations(const std::vector<Ieee80211HeMuRuAllocation>& allocs) {
+        allocations = allocs;
+        for (auto& alloc : allocations) {
+            dropOwnership(alloc.packet);
+        }
+    }
 
     virtual Ieee80211HeMuTag *dup() const override {
         auto tag = new Ieee80211HeMuTag();
@@ -43,6 +58,7 @@ class INET_API Ieee80211HeMuTag : public TagBase
             Packet *dupPkt = nullptr;
             if (alloc.packet) {
                 dupPkt = alloc.packet->dup();
+                tag->dropOwnership(dupPkt);
             }
             dupAllocs.push_back({alloc.ruIndex, dupPkt});
         }
