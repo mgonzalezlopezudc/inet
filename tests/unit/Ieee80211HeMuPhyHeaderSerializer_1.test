@@ -1,0 +1,80 @@
+%description:
+Test serialization and deserialization of Ieee80211HeMuPhyHeader.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+
+// Create original HeMuPhyHeader
+auto origHeader = makeShared<Ieee80211HeMuPhyHeader>();
+origHeader->setRuIndex(5);
+
+Ieee80211HeMuRuAllocationInfo alloc1;
+alloc1.ruIndex = 2;
+alloc1.staAddress = MacAddress("00:11:22:33:44:55");
+origHeader->appendAllocations(alloc1);
+
+Ieee80211HeMuRuAllocationInfo alloc2;
+alloc2.ruIndex = 4;
+alloc2.staAddress = MacAddress("66:77:88:99:AA:BB");
+origHeader->appendAllocations(alloc2);
+
+// Set length: 16 bits for ruIndex/numAllocations + 2 allocations * 56 bits = 128 bits = 16 bytes
+origHeader->setChunkLength(b(16 + origHeader->getAllocationsArraySize() * 56));
+
+EV << "Original Header:\n";
+EV << "ruIndex = " << origHeader->getRuIndex() << "\n";
+EV << "allocations count = " << origHeader->getAllocationsArraySize() << "\n";
+for (unsigned int i = 0; i < origHeader->getAllocationsArraySize(); ++i) {
+    EV << "  alloc[" << i << "]: ruIndex=" << origHeader->getAllocations(i).ruIndex
+       << ", address=" << origHeader->getAllocations(i).staAddress.str() << "\n";
+}
+
+// Put in a packet
+auto pk = new Packet("test-packet");
+pk->insertAtFront(origHeader);
+
+// Serialize packet to raw bytes
+auto bytes = pk->peekDataAsBytes();
+EV << "Serialized to " << bytes->getChunkLength().get<B>() << " bytes\n";
+
+// Put bytes back in a new packet
+auto pk2 = new Packet("recv-packet");
+pk2->insertAtFront(bytes);
+
+// Deserialize header
+auto recvHeader = pk2->popAtFront<Ieee80211HeMuPhyHeader>();
+
+EV << "Deserialized Header:\n";
+EV << "ruIndex = " << recvHeader->getRuIndex() << "\n";
+EV << "allocations count = " << recvHeader->getAllocationsArraySize() << "\n";
+for (unsigned int i = 0; i < recvHeader->getAllocationsArraySize(); ++i) {
+    EV << "  alloc[" << i << "]: ruIndex=" << recvHeader->getAllocations(i).ruIndex
+       << ", address=" << recvHeader->getAllocations(i).staAddress.str() << "\n";
+}
+
+delete pk;
+delete pk2;
+EV << ".\n";
+
+%contains: stdout
+Original Header:
+ruIndex = 5
+allocations count = 2
+  alloc[0]: ruIndex=2, address=00-11-22-33-44-55
+  alloc[1]: ruIndex=4, address=66-77-88-99-AA-BB
+Serialized to 16 bytes
+Deserialized Header:
+ruIndex = 5
+allocations count = 2
+  alloc[0]: ruIndex=2, address=00-11-22-33-44-55
+  alloc[1]: ruIndex=4, address=66-77-88-99-AA-BB
+.
