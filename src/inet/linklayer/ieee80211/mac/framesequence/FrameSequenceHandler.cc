@@ -123,7 +123,14 @@ void FrameSequenceHandler::finishFrameSequenceStep()
             }
             case IFrameSequenceStep::Type::RECEIVE: {
                 auto receiveStep = static_cast<IReceiveStep *>(lastStep);
-                auto transmitStep = check_and_cast<ITransmitStep *>(context->getStepBeforeLast());
+                ITransmitStep *transmitStep = nullptr;
+                for (int i = context->getNumSteps() - 2; i >= 0; --i) {
+                    if (context->getStep(i)->getType() == IFrameSequenceStep::Type::TRANSMIT) {
+                        transmitStep = check_and_cast<ITransmitStep *>(context->getStep(i));
+                        break;
+                    }
+                }
+                ASSERT(transmitStep != nullptr);
                 callback->originatorProcessReceivedFrame(receiveStep->getReceivedFrame(), transmitStep->getFrameToTransmit());
                 break;
             }
@@ -151,7 +158,19 @@ void FrameSequenceHandler::abortFrameSequence()
     EV_INFO << "Frame sequence aborted.\n";
     auto inProgressFrames = context->getInProgressFrames();
     auto step = context->getLastStep();
-    auto failedTxStep = check_and_cast<ITransmitStep *>(dynamic_cast<IReceiveStep *>(step) ? context->getStepBeforeLast() : step);
+    ITransmitStep *failedTxStep = nullptr;
+    if (step->getType() == IFrameSequenceStep::Type::TRANSMIT) {
+        failedTxStep = check_and_cast<ITransmitStep *>(step);
+    }
+    else {
+        for (int i = context->getNumSteps() - 2; i >= 0; --i) {
+            if (context->getStep(i)->getType() == IFrameSequenceStep::Type::TRANSMIT) {
+                failedTxStep = check_and_cast<ITransmitStep *>(context->getStep(i));
+                break;
+            }
+        }
+    }
+    ASSERT(failedTxStep != nullptr);
     auto frameToTransmit = failedTxStep->getFrameToTransmit();
     auto header = frameToTransmit->peekAtFront<Ieee80211MacHeader>();
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))

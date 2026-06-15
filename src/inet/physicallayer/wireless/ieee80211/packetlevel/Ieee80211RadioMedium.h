@@ -28,6 +28,9 @@ class INET_API Ieee80211RadioMedium : public RadioMedium
 
   public:
     virtual void sendToRadio(IRadio *transmitter, const IRadio *receiver, const IWirelessSignal *signal) override;
+    virtual void initialize(int stage) override;
+    virtual void receiveSignal(cComponent *source, simsignal_t signal, cObject *value, cObject *details) override;
+    virtual ~Ieee80211RadioMedium();
 };
 
 } // namespace physicallayer

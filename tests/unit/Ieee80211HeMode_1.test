@@ -23,15 +23,15 @@ EV << "SIFS time: " << modeSet->getSifsTime() << "\n";
 EV << "Number of modes: " << modeSet->getNumModes() << "\n";
 
 // Verify specific modes
-const IIeee80211Mode *mode0 = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+const IIeee80211Mode *mode0 = modeSet->getMode(bps(7.3125e6), MHz(20), 1);
 EV << "Mode 0 (MCS 0 Nss=1): netBitrate=" << mode0->getDataMode()->getNetBitrate()
    << " grossBitrate=" << mode0->getDataMode()->getGrossBitrate() << "\n";
 
-const IIeee80211Mode *mode17 = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(17);
+const IIeee80211Mode *mode17 = modeSet->getMode(bps(121.875e6), MHz(20), 1);
 EV << "Mode 17 (MCS 11 Nss=1): netBitrate=" << mode17->getDataMode()->getNetBitrate()
    << " grossBitrate=" << mode17->getDataMode()->getGrossBitrate() << "\n";
 
-const IIeee80211Mode *mode23 = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(23);
+const IIeee80211Mode *mode23 = modeSet->getMode(bps(243.75e6), MHz(20), 2);
 EV << "Mode 23 (MCS 11 Nss=2): netBitrate=" << mode23->getDataMode()->getNetBitrate()
    << " grossBitrate=" << mode23->getDataMode()->getGrossBitrate() << "\n";
 
@@ -41,7 +41,7 @@ EV << ".\n";
 ModeSet name: ax
 Slot time: 0.000009
 SIFS time: 0.000016
-Number of modes: 24
+Number of modes: 384
 Mode 0 (MCS 0 Nss=1): netBitrate=7.3125 Mbps grossBitrate=14.625 Mbps
 Mode 17 (MCS 11 Nss=1): netBitrate=121.875 Mbps grossBitrate=146.25 Mbps
 Mode 23 (MCS 11 Nss=2): netBitrate=243.75 Mbps grossBitrate=292.5 Mbps

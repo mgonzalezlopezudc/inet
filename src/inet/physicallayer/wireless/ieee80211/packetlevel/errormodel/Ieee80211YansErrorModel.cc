@@ -22,6 +22,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 
 namespace inet {
 
@@ -223,6 +224,15 @@ double Ieee80211YansErrorModel::getHeaderSuccessRate(const IIeee80211Mode *mode,
                                                         vhtMode->getHeaderMode()->getBandwidth(),
                                                         snr);
     }
+    else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode)) {
+        int chunkLength = bitLength;
+        successRate = getOFDMAndERPOFDMChunkSuccessRate(heMode->getHeaderMode()->getModulation()->getSubcarrierModulation(),
+                                                        heMode->getHeaderMode()->getCode()->getForwardErrorCorrection(),
+                                                        chunkLength,
+                                                        heMode->getHeaderMode()->getGrossBitrate(),
+                                                        heMode->getHeaderMode()->getBandwidth(),
+                                                        snr);
+    }
     else if (auto dsssMode = dynamic_cast<const Ieee80211DsssMode *>(mode))
         successRate = getDSSSAndHrDSSSChunkSuccessRate(dsssMode->getHeaderMode()->getNetBitrate(), bitLength, snr);
     else if (auto hrDsssMode = dynamic_cast<const Ieee80211HrDsssMode *>(mode))
@@ -260,6 +270,13 @@ double Ieee80211YansErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, u
                                                         bitLength,
                                                         vhtMode->getDataMode()->getGrossBitrate(),
                                                         vhtMode->getDataMode()->getBandwidth(),
+                                                        snr);
+    else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode))
+        successRate = getOFDMAndERPOFDMChunkSuccessRate(heMode->getDataMode()->getModulation()->getSubcarrierModulation(),
+                                                        heMode->getDataMode()->getCode()->getForwardErrorCorrection(),
+                                                        bitLength,
+                                                        heMode->getDataMode()->getGrossBitrate(),
+                                                        heMode->getDataMode()->getBandwidth(),
                                                         snr);
     else if (auto dsssMode = dynamic_cast<const Ieee80211DsssMode *>(mode))
         successRate = getDSSSAndHrDSSSChunkSuccessRate(dsssMode->getDataMode()->getNetBitrate(), bitLength, snr);

@@ -65,6 +65,8 @@ class INET_API QosAckHandler : public SimpleModule, public IAckHandler
     virtual void dropFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader);
     virtual void dropFrames(std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> seqAndFragNums);
 
+    virtual void transitionToWaitingForBlockAck(const Ptr<const Ieee80211DataHeader>& header);
+
     virtual Status getQoSDataAckStatus(const Ptr<const Ieee80211DataHeader>& header);
     virtual Status getMgmtOrNonQoSAckStatus(const Ptr<const Ieee80211DataOrMgmtHeader>& header);
 

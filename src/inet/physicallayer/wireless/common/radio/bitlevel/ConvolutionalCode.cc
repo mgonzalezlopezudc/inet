@@ -48,6 +48,12 @@ int ConvolutionalCode::getEncodedLength(int decodedLength) const
 
 int ConvolutionalCode::getDecodedLength(int encodedLength) const
 {
+    if (encodedLength % codeRatePuncturingN != 0) {
+        std::cerr << "CRASH DIAGNOSTIC: encodedLength=" << encodedLength
+                  << ", codeRatePuncturingN=" << codeRatePuncturingN
+                  << ", codeRatePuncturingK=" << codeRatePuncturingK
+                  << ", mode=" << (mode ? mode : "null") << std::endl;
+    }
     ASSERT(encodedLength % codeRatePuncturingN == 0);
     return encodedLength * codeRatePuncturingK / codeRatePuncturingN;
 }
