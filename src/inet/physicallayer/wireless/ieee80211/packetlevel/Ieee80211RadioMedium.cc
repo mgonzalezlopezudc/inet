@@ -95,7 +95,6 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
             }
             take(subPacket);
             auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-            phyHeader->setChunkLength(b(48));
             phyHeader->setRuIndex(ruIndex);
             for (const auto& a : allocations) {
                 Ieee80211HeMuRuAllocationInfo info;
@@ -104,6 +103,7 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
                 info.staAddress = macHdr->getReceiverAddress();
                 phyHeader->appendAllocations(info);
             }
+            phyHeader->setChunkLength(b(16 + phyHeader->getAllocationsArraySize() * 56));
             subPacket->insertAtFront(phyHeader);
             subPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
