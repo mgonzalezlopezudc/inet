@@ -11,7 +11,7 @@ This roadmap lays out the development phases to implement Downlink OFDMA support
 - [x] **Phase 3: AP MAC DL OFDMA Scheduler Foundation** - Implement user/RU mapping and packet aggregation in the AP MAC scheduler.
 - [x] **Phase 4: Multi-User Reception at STAs** - Support parsing of SIG-B user metadata and payload extraction on assigned RUs at STAs.
 - [x] **Phase 5: Sequential Block Acknowledgments** - Implement collision-free sequential Block Ack sequences separated by SIFS spacing.
-- [ ] **Phase 6: System Integration and Verification** - Provide a complete DL OFDMA example simulation and automated regression tests.
+- [x] **Phase 6: System Integration and Verification** - Provide a complete DL OFDMA example simulation and automated regression tests.
 
 ## Phase Details
 
@@ -97,8 +97,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 06-01: Build and configure a DL OFDMA simulation example in `examples/ieee80211/ofdma/`.
-- [ ] 06-02: Implement and run automated unit tests in `tests/` to verify correctness.
+- [x] 06-01: Build and configure a DL OFDMA simulation example in `examples/ieee80211/ofdma/`.
+- [x] 06-02: Implement and run automated unit tests in `tests/` to verify correctness.
 
 ## Progress
 
@@ -112,4 +112,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6
 | 3. AP MAC DL OFDMA Scheduler Foundation | 2/2 | Complete | 2026-06-14 |
 | 4. Multi-User Reception at STAs | 2/2 | Complete | 2026-06-14 |
 | 5. Sequential Block Acknowledgments | 2/2 | Complete | 2026-06-14 |
-| 6. System Integration and Verification | 0/2 | Not started | - |
+| 6. System Integration and Verification | 2/2 | Complete | 2026-06-15 |
