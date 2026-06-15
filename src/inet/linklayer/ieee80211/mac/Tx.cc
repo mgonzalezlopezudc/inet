@@ -39,6 +39,11 @@ void Tx::initialize(int stage)
     }
 }
 
+bool Tx::isBusy() const
+{
+    return txCallback != nullptr || transmitting || (endIfsTimer != nullptr && endIfsTimer->isScheduled());
+}
+
 void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ITx::ICallback *txCallback)
 {
     transmitFrame(packet, header, SIMTIME_ZERO, txCallback);

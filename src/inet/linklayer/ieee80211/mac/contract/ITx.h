@@ -31,6 +31,8 @@ class INET_API ITx
   public:
     virtual ~ITx() {}
 
+    virtual bool isBusy() const = 0;
+
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ICallback *callback) = 0;
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ICallback *callback) = 0;
     virtual void radioTransmissionFinished() = 0;
