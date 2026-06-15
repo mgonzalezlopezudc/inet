@@ -14,6 +14,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -41,7 +42,25 @@ void RateSelection::initialize(int stage)
         responseAckFrameMode = (responseAckFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(responseAckFrameBitrate));
         double responseCtsFrameBitrate = par("responseCtsFrameBitrate");
         responseCtsFrameMode = (responseCtsFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(responseCtsFrameBitrate));
-        fastestMandatoryMode = modeSet->getFastestMandatoryMode();
+        cModule *nic = getContainingNicModule(this);
+        cModule *radio = nic ? nic->getSubmodule("radio") : nullptr;
+        cModule *transmitter = radio ? radio->getSubmodule("transmitter") : nullptr;
+        Hz bandBw = Hz(NaN);
+        std::string bandName = "";
+        if (transmitter && transmitter->hasPar("bandName")) {
+            bandName = transmitter->par("bandName").stringValue();
+        } else if (radio && radio->hasPar("bandName")) {
+            bandName = radio->par("bandName").stringValue();
+        }
+        if (!bandName.empty()) {
+            auto band = Ieee80211CompliantBands::getBand(bandName.c_str());
+            if (band)
+                bandBw = band->getSpacing();
+        }
+        if (std::isnan(bandBw.get()) && transmitter && transmitter->hasPar("bandwidth")) {
+            bandBw = Hz(transmitter->par("bandwidth").doubleValue());
+        }
+        fastestMandatoryMode = modeSet->getFastestMandatoryMode(bandBw);
 //        WATCH(dataOrMgmtRateControl);
 
 //        WATCH(*((cObject**)&fastestMandatoryMode));
@@ -152,7 +171,25 @@ void RateSelection::receiveSignal(cComponent *source, simsignal_t signalID, cObj
 
     if (signalID == modesetChangedSignal) {
         modeSet = check_and_cast<Ieee80211ModeSet *>(obj);
-        fastestMandatoryMode = modeSet->getFastestMandatoryMode();
+        cModule *nic = getContainingNicModule(this);
+        cModule *radio = nic ? nic->getSubmodule("radio") : nullptr;
+        cModule *transmitter = radio ? radio->getSubmodule("transmitter") : nullptr;
+        Hz bandBw = Hz(NaN);
+        std::string bandName = "";
+        if (transmitter && transmitter->hasPar("bandName")) {
+            bandName = transmitter->par("bandName").stringValue();
+        } else if (radio && radio->hasPar("bandName")) {
+            bandName = radio->par("bandName").stringValue();
+        }
+        if (!bandName.empty()) {
+            auto band = Ieee80211CompliantBands::getBand(bandName.c_str());
+            if (band)
+                bandBw = band->getSpacing();
+        }
+        if (std::isnan(bandBw.get()) && transmitter && transmitter->hasPar("bandwidth")) {
+            bandBw = Hz(transmitter->par("bandwidth").doubleValue());
+        }
+        fastestMandatoryMode = modeSet->getFastestMandatoryMode(bandBw);
     }
 }
 

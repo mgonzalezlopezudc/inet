@@ -40,7 +40,11 @@ class INET_API Ieee80211HeMuTag : public TagBase
         auto tag = new Ieee80211HeMuTag();
         std::vector<Ieee80211HeMuRuAllocation> dupAllocs;
         for (const auto& alloc : allocations) {
-            dupAllocs.push_back({alloc.ruIndex, alloc.packet ? alloc.packet->dup() : nullptr});
+            Packet *dupPkt = nullptr;
+            if (alloc.packet) {
+                dupPkt = alloc.packet->dup();
+            }
+            dupAllocs.push_back({alloc.ruIndex, dupPkt});
         }
         tag->setAllocations(dupAllocs);
         return tag;

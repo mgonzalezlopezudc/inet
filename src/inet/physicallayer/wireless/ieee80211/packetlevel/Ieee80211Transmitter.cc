@@ -36,7 +36,7 @@ void Ieee80211Transmitter::initialize(int stage)
         setModeSet(*opMode ? Ieee80211ModeSet::getModeSet(opMode) : nullptr);
         const char *bandName = par("bandName");
         setBand(*bandName != '\0' ? Ieee80211CompliantBands::getBand(bandName) : nullptr);
-        setMode(modeSet != nullptr ? (bitrate != bps(-1) ? modeSet->getMode(bitrate, bandwidth) : modeSet->getFastestMode()) : nullptr);
+        setMode(modeSet != nullptr ? (bitrate != bps(-1) ? modeSet->getMode(bitrate, band ? band->getSpacing() : bandwidth) : modeSet->getFastestMode(band ? band->getSpacing() : bandwidth)) : nullptr);
         int channelNumber = par("channelNumber");
         if (channelNumber != -1)
             setChannelNumber(channelNumber);
@@ -54,7 +54,7 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
         transmissionMode = modeReq->getMode();
     }
     else if (modeSet != nullptr && bitrateReq != nullptr)
-        transmissionMode = modeSet->getMode(bitrateReq->getDataBitrate());
+        transmissionMode = modeSet->getMode(bitrateReq->getDataBitrate(), band ? band->getSpacing() : bandwidth);
     else
         transmissionMode = mode;
     if (transmissionMode == nullptr)
@@ -77,7 +77,7 @@ void Ieee80211Transmitter::setModeSet(const Ieee80211ModeSet *modeSet)
     if (this->modeSet != modeSet) {
         this->modeSet = modeSet;
         if (mode != nullptr)
-            mode = modeSet != nullptr ? modeSet->getMode(mode->getDataMode()->getNetBitrate()) : nullptr;
+            mode = modeSet != nullptr ? modeSet->getMode(mode->getDataMode()->getNetBitrate(), band ? band->getSpacing() : bandwidth) : nullptr;
     }
 }
 

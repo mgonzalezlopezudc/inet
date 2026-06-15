@@ -314,44 +314,76 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
     }
 
     if (wasHeMu && myAllocationIndex != -1) {
-        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            if (dataHeader->getType() == ST_DATA_WITH_QOS && recipientBlockAckAgreementHandler) {
-                recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, this);
-                auto agreement = recipientBlockAckAgreementHandler->getAgreement(dataHeader->getTid(), dataHeader->getTransmitterAddress());
-                if (agreement) {
-                    auto blockAck = makeShared<Ieee80211BasicBlockAck>();
-                    auto startingSequenceNumber = agreement->getStartingSequenceNumber();
-                    for (int i = 0; i < 64; i++) {
-                        BitVector& bitmap = blockAck->getBlockAckBitmapForUpdate(i);
-                        for (FragmentNumber fragNum = 0; fragNum < 16; fragNum++) {
-                            bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, fragNum);
-                            bitmap.setBit(fragNum, ackState);
+        bool responseSent = false;
+        auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header);
+        if (dataOrMgmtHeader != nullptr) {
+            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader)) {
+                if (dataHeader->getType() == ST_DATA_WITH_QOS && recipientBlockAckAgreementHandler) {
+                    recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, this);
+                    auto agreement = recipientBlockAckAgreementHandler->getAgreement(dataHeader->getTid(), dataHeader->getTransmitterAddress());
+                    if (agreement) {
+                        auto blockAck = makeShared<Ieee80211BasicBlockAck>();
+                        auto startingSequenceNumber = agreement->getStartingSequenceNumber();
+                        for (int i = 0; i < 64; i++) {
+                            BitVector& bitmap = blockAck->getBlockAckBitmapForUpdate(i);
+                            for (FragmentNumber fragNum = 0; fragNum < 16; fragNum++) {
+                                bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, fragNum);
+                                bitmap.setBit(fragNum, ackState);
+                            }
                         }
+                        blockAck->setReceiverAddress(dataHeader->getTransmitterAddress());
+                        blockAck->setCompressedBitmap(false);
+                        blockAck->setStartingSequenceNumber(startingSequenceNumber);
+                        blockAck->setTidInfo(dataHeader->getTid());
+
+                        auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+                        auto responseMode = rateSelection->computeResponseBlockAckFrameMode(packet, dummyReq);
+                        simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+                        simtime_t ifs = (myAllocationIndex + 1) * modeSet->getSifsTime() + myAllocationIndex * blockAckDuration;
+
+                        simtime_t duration = dataHeader->getDurationField() - ifs - blockAckDuration;
+                        if (duration < 0) duration = 0;
+                        blockAck->setDurationField(duration);
+
+                        auto blockAckPacket = new Packet("BasicBlockAck", blockAck);
+                        blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
+                        setFrameMode(blockAckPacket, blockAck, responseMode);
+
+                        EV_INFO << "HeHcf: STA sequential BlockAck scheduled: index = " << myAllocationIndex
+                                << ", delay = " << ifs << ", duration = " << blockAckDuration << endl;
+
+                        tx->transmitFrame(blockAckPacket, blockAck, ifs, this);
+                        delete blockAckPacket;
+                        responseSent = true;
                     }
-                    blockAck->setReceiverAddress(dataHeader->getTransmitterAddress());
-                    blockAck->setCompressedBitmap(false);
-                    blockAck->setStartingSequenceNumber(startingSequenceNumber);
-                    blockAck->setTidInfo(dataHeader->getTid());
-
-                    auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-                    auto responseMode = rateSelection->computeResponseBlockAckFrameMode(packet, dummyReq);
-                    simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-                    simtime_t ifs = (myAllocationIndex + 1) * modeSet->getSifsTime() + myAllocationIndex * blockAckDuration;
-
-                    simtime_t duration = dataHeader->getDurationField() - ifs - blockAckDuration;
-                    if (duration < 0) duration = 0;
-                    blockAck->setDurationField(duration);
-
-                    auto blockAckPacket = new Packet("BasicBlockAck", blockAck);
-                    blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
-                    setFrameMode(blockAckPacket, blockAck, responseMode);
-
-                    EV_INFO << "HeHcf: STA sequential BlockAck scheduled: index = " << myAllocationIndex
-                            << ", delay = " << ifs << ", duration = " << blockAckDuration << endl;
-
-                    tx->transmitFrame(blockAckPacket, blockAck, ifs, this);
-                    delete blockAckPacket;
                 }
+            }
+
+            if (!responseSent) {
+                auto ack = makeShared<Ieee80211AckFrame>();
+                ack->setReceiverAddress(dataOrMgmtHeader->getTransmitterAddress());
+
+                auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+                auto responseMode = rateSelection->computeResponseBlockAckFrameMode(packet, dummyReq);
+                simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+                simtime_t ifs = (myAllocationIndex + 1) * modeSet->getSifsTime() + myAllocationIndex * blockAckDuration;
+
+                auto ackMode = rateSelection->computeResponseAckFrameMode(packet, dataOrMgmtHeader);
+                simtime_t ackDuration = ackMode->getDuration(LENGTH_ACK);
+
+                simtime_t duration = dataOrMgmtHeader->getDurationField() - ifs - ackDuration;
+                if (duration < 0) duration = 0;
+                ack->setDurationField(duration);
+
+                auto ackPacket = new Packet("WlanAck", ack);
+                ackPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
+                setFrameMode(ackPacket, ack, ackMode);
+
+                EV_INFO << "HeHcf: STA sequential Ack scheduled: index = " << myAllocationIndex
+                        << ", delay = " << ifs << ", duration = " << ackDuration << endl;
+
+                tx->transmitFrame(ackPacket, ack, ifs, this);
+                delete ackPacket;
             }
         }
     }
