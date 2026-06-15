@@ -15,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -147,6 +148,7 @@ void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
 void Hcf::scheduleStartRxTimer(simtime_t timeout)
 {
     Enter_Method("scheduleStartRxTimer");
+    cancelEvent(startRxTimer);
     scheduleAfter(timeout, startRxTimer);
 }
 
@@ -198,6 +200,12 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
     Enter_Method("channelGranted");
     auto edcaf = check_and_cast<Edcaf *>(channelAccess);
     if (edcaf) {
+        if (tx->isBusy()) {
+            EV_WARN << "Channel access granted to the " << printAccessCategory(edcaf->getAccessCategory())
+                    << " queue while tx is busy (e.g. pending sequential Ack). Releasing channel.\n";
+            edcaf->releaseChannel(this);
+            return;
+        }
         AccessCategory ac = edcaf->getAccessCategory();
         EV_DETAIL << "Channel access granted to the " << printAccessCategory(ac) << " queue" << std::endl;
         edcaf->getTxopProcedure()->startTxop(ac);
@@ -224,6 +232,20 @@ void Hcf::startFrameSequence(AccessCategory ac)
 {
     frameSequenceHandler->startFrameSequence(new HcfFs(), buildContext(ac), this);
     emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
+}
+
+void Hcf::resumeContention()
+{
+    for (int i = 0; i < 4; ++i) {
+        AccessCategory ac = (AccessCategory)i;
+        if (hasFrameToTransmit(ac)) {
+            auto edcaf = edca->getEdcaf(ac);
+            if (edcaf && !edcaf->isOwning()) {
+                EV_DETAIL << "Resuming contention for access category " << printAccessCategory(ac) << std::endl;
+                edca->requestChannelAccess(ac, this);
+            }
+        }
+    }
 }
 
 void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
@@ -636,6 +658,8 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
 {
     if (receivedPacket == nullptr)
         return;
+    if (lastTransmittedPacket != nullptr && lastTransmittedPacket->findTag<Ieee80211HeMuTag>() != nullptr)
+        return;
     Enter_Method("originatorProcessReceivedFrame");
     EV_INFO << "Processing received frame " << receivedPacket->getName() << " as originator in frame sequence.\n";
     emit(packetReceivedFromPeerSignal, receivedPacket);
@@ -657,7 +681,16 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
 
 void Hcf::originatorProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac)
 {
-    throw cRuntimeError("Unknown management frame");
+    if (auto addbaResp = dynamicPtrCast<const Ieee80211AddbaResponse>(header)) {
+        if (originatorBlockAckAgreementHandler) {
+            originatorBlockAckAgreementHandler->processReceivedAddbaResp(addbaResp, originatorBlockAckAgreementPolicy, this);
+            auto agreement = originatorBlockAckAgreementHandler->getAgreement(addbaResp->getTransmitterAddress(), addbaResp->getTid());
+            emit(blockAckAgreementAddedSignal, agreement);
+        }
+    }
+    else {
+        throw cRuntimeError("Unknown management frame");
+    }
 }
 
 void Hcf::originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *lastTransmittedPacket, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac)
@@ -763,13 +796,15 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packet);
         EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
         if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
-            auto pendingPacket = channelOwner->getInProgressFrames()->getPendingFrameFor(packet);
-            const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
-            auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, txop, recipientAckPolicy);
-            auto header = packet->removeAtFront<Ieee80211MacHeader>();
-            header->setDurationField(duration);
-            EV_DEBUG << "Duration for " << packet->getName() << " is set to " << duration << " s.\n";
-            packet->insertAtFront(header);
+            if (packet->findTag<Ieee80211HeMuTag>() == nullptr) {
+                auto pendingPacket = channelOwner->getInProgressFrames()->getPendingFrameFor(packet);
+                const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
+                auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, txop, recipientAckPolicy);
+                auto header = packet->removeAtFront<Ieee80211MacHeader>();
+                header->setDurationField(duration);
+                EV_DEBUG << "Duration for " << packet->getName() << " is set to " << duration << " s.\n";
+                packet->insertAtFront(header);
+            }
         }
         else if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::MULTIPLE_PROTECTION)
             throw cRuntimeError("Multiple protection is unsupported");
@@ -814,6 +849,7 @@ void Hcf::recipientProcessTransmittedControlResponseFrame(Packet *packet, const 
         recipientAckProcedure->processTransmittedAck(ackFrame);
     else
         throw cRuntimeError("Unknown control response frame");
+    resumeContention();
 }
 
 void Hcf::processMgmtFrame(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader)
