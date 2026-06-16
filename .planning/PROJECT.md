@@ -1,45 +1,41 @@
-# 802.11ax DL OFDMA Support
+# 802.11ax DL MU OFDMA Correctness
 
 ## What This Is
 
-This project implements Downlink Orthogonal Frequency Division Multiple Access (DL OFDMA) support for the IEEE 802.11ax (High Efficiency, HE) standard in the INET Framework. It introduces physical layer Resource Unit (RU) abstractions as independent sub-channels and a dynamic queue-based MAC scheduler at the Access Point (AP) to transmit multi-user frames concurrently to multiple associated stations.
+This project focuses on verifying and ensuring the functional and physical correctness of the Downlink Multi-User Orthogonal Frequency Division Multiple Access (DL MU OFDMA) implementation in the INET Framework. It validates that standard-compliant IEEE 802.11ax frame sequences, block acknowledgment timings, and physical layer Resource Unit (RU) signal reception/noise calculations are accurately executed and collision-free.
 
 ## Core Value
 
-Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling and transmission under the 802.11ax standard, prioritizing robust queuing integration and realistic abstract PHY layer sub-channel behavior.
+Ensure high-fidelity, standard-compliant packet-level simulation of 802.11ax DL MU OFDMA scheduling, transmission, and reception by verifying both protocol state machines and physical sub-channel behavior.
 
 ## Requirements
 
 ### Validated
 
-- ✓ Existing L2 IEEE 802.11 stack support, including 802.11a/b/g/p/n/ac physical and MAC layers — existing codebase
-- ✓ Single-user channel access coordination functions (DCF and EDCA/HCF) — existing codebase
-- ✓ Queueing system with compound pending queues per Access Category (AC) — existing codebase
-- ✓ Define IEEE 802.11ax (HE) physical modes and MCS tables in `Ieee80211ModeSet` and related files to enable the `"ax"` modeSet — Phase 1
-- ✓ Implement an abstract physical layer Resource Unit (RU) model representing RUs as sub-channels with independent bandwidth, path loss, noise, and reception calculations — Phase 2
-- ✓ Implement a DL OFDMA MAC scheduler at the Access Point (AP) — Phase 3
-- ✓ Support dynamic queue-based RU scheduling: when an Access Category (AC) wins a TXOP, schedule packets from that winning AC's queue destined to up to N different stations (STAs) — Phase 3
-- ✓ Support parsing of HE MU SIG-B allocations and filtering/decoding assigned RU payload at destination STAs — Phase 4
-- ✓ Support sequential multi-user acknowledgment (sequential Block Ack responses from the receiving STAs) — Phase 5
-- ✓ Verify the DL OFDMA implementation with automated test runs and a new example simulation configuration — Phase 6
+- ✓ Existing IEEE 802.11ax DL OFDMA MAC and PHY layers — existing codebase
+- ✓ Abstract Resource Unit (RU) sub-channel band representation — existing codebase
+- ✓ Queue-based multi-user packet scheduling at the Access Point (AP) — existing codebase
+- ✓ HE MU PPDU structure with SIG-B allocation parsing at destination STAs — existing codebase
+- ✓ Sequential Block Ack transmission after DL MU PPDU — existing codebase
 
 ### Active
 
-*(none)*
+- [ ] Ensure ADDBA handshake is correctly performed and maintained for all target STAs before sending any DL MU PPDUs.
+- [ ] Verify SIFS spacing, BAR transmission, and sequential Block Ack timing offsets to prevent channel collisions and guarantee compliance.
+- [ ] Verify that channel noise, path loss, and bit/packet error rate calculations are computed correctly and independently for each RU sub-channel band.
+- [ ] Implement and run automated unit/integration tests to verify correct MAC frame sequences and PHY sub-channel calculations.
 
 ### Out of Scope
 
-- Uplink OFDMA (UL OFDMA) — Excluded to simplify coordination complexity and focus on downlink multi-user scheduling.
-- Multi-User Block Ack Requests (MU-BAR) — Excluded in favor of standard sequential Block Acks to reduce frame formatting overhead and protocol complexity.
-- Per-STA EDCA queuing system — Keep the current aggregate AC queue system to maintain compatibility with existing INET queuing modules.
-- Detailed subcarrier-level fading/interference simulation — Excluded in favor of abstract sub-channels (RUs) for simulation performance and styling consistency.
+- Uplink OFDMA (UL OFDMA) — Excluded to focus on validating the stability and correctness of downlink multi-user scheduling.
+- Multi-User Block Ack Requests (MU-BAR) — Excluded in favor of standard sequential Block Acks to keep implementation scope focused.
+- Detailed subcarrier-level fading/interference simulation — Keep abstract parallel RU sub-channels as the physical representation.
 
 ## Context
 
 - The INET Framework uses modular simple C++ components and NED compound modules for layering.
-- The 802.11 MAC implementation is heavily decomposed, utilizing coordination functions (like `Hcf`), channel access modules (like `Edcaf`), and data services (like `OriginatorQosMacDataService`).
-- Packets are passed as `inet::Packet` objects containing dynamic headers.
 - As of June 2026, Downlink OFDMA support is fully integrated with complete PHY-level Resource Unit partitioning, dynamic multi-user MAC scheduling, SIG-B reception filtering, and collision-free sequential Block Ack sequences.
+- This project will verify, audit, and fix any correctness issues, timing drift, or physical calculations in these existing components.
 
 ## Constraints
 
@@ -51,10 +47,7 @@ Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling a
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Downlink OFDMA only with sequential Ack | Simplifies multi-user coordination and avoids complex trigger-frame handshake logic. | — Adopted |
-| Abstract RU sub-channel model | Represents resource partition effectively without the massive computational overhead of subcarrier-level modeling. | — Adopted |
-| Winning AC queue aggregation only | Aligns with standard EDCA TXOP ownership rules and avoids inter-AC scheduling complexity. | — Adopted |
-| Aggregate AC queues (current system) | Reuses the existing queue implementation instead of refactoring it to a per-STA queue system. | — Adopted |
+| Validate both MAC and PHY | Standard frame sequences and physical RU calculations are tightly coupled and both must be correct for valid simulation. | — Pending |
 
 ## Evolution
 
@@ -67,11 +60,11 @@ This document evolves at phase transitions and milestone boundaries.
 4. Decisions to log? → Add to Key Decisions
 5. "What This Is" still accurate? → Update if drifted
 
-**After each milestone** (via `/gsd:complete-milestone`):
+**After each milestone** (via `/gsd-complete-milestone`):
 1. Full review of all sections
 2. Core Value check — still the right priority?
 3. Audit Out of Scope — reasons still valid?
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-16 after Phase 6 completion*
+*Last updated: 2026-06-16 after initialization*
