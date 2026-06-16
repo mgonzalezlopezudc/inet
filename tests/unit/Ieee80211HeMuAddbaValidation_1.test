@@ -4,9 +4,12 @@ Test strict active ADDBA validation before packets enter an HE MU OFDMA containe
 %includes:
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementPolicy.h"
+#include "inet/linklayer/ieee80211/mac/contract/IProcedureCallback.h"
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
@@ -140,6 +143,41 @@ class MockOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreeme
         auto agreement = getAgreement(receiverAddr, tid);
         return agreement != nullptr && agreement->getIsAddbaResponseReceived();
     }
+};
+
+class MockOriginatorBlockAckAgreementPolicy : public IOriginatorBlockAckAgreementPolicy
+{
+    public:
+        simtime_t addbaFailureTimeout = SimTime(1, SIMTIME_S);
+
+        virtual bool isAddbaReqNeeded(Packet *packet, const Ptr<const Ieee80211DataHeader>& header) override { return true; }
+        virtual bool isAddbaReqAccepted(const Ptr<const Ieee80211AddbaResponse>& addbaResp, OriginatorBlockAckAgreement *agreement) override { return true; }
+        virtual bool isDelbaAccepted(const Ptr<const Ieee80211Delba>& delba) override { return true; }
+        virtual bool isMsduSupported() const override { return true; }
+        virtual simtime_t computeAddbaFailureTimeout() const override { return addbaFailureTimeout; }
+        virtual simtime_t getBlockAckTimeoutValue() const override { return SimTime::ZERO; }
+        virtual bool isDelayedAckPolicySupported() const override { return false; }
+        virtual int getMaximumAllowedBufferSize() const override { return 64; }
+};
+
+class MockProcedureCallback : public IProcedureCallback
+{
+    public:
+        OriginatorBlockAckAgreementHandler *handler = nullptr;
+        int addbaReqCount = 0;
+
+        explicit MockProcedureCallback(OriginatorBlockAckAgreementHandler *handler) : handler(handler) {}
+
+        virtual void transmitControlResponseFrame(Packet *responsePacket, const Ptr<const Ieee80211MacHeader>& responseHeader, Packet *receivedPacket, const Ptr<const Ieee80211MacHeader>& receivedHeader) override {}
+
+        virtual void processMgmtFrame(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader) override {
+                if (auto addbaReq = dynamicPtrCast<const Ieee80211AddbaRequest>(mgmtHeader)) {
+                        addbaReqCount++;
+                        if (handler != nullptr)
+                                handler->processTransmittedAddbaReq(addbaReq);
+                }
+                delete mgmtPacket;
+        }
 };
 
 class MockCallback : public cSimpleModule, public IFrameSequenceHandler::ICallback
@@ -314,6 +352,34 @@ Tid tid = 5;
     EV << "Null BA handler and non-QoS packets remained pending.\n";
 }
 
+// Test 4: bounded AddbaReq retry bursts (3 attempts) and addbaFailureTimeout cooldown resumption.
+{
+    OriginatorBlockAckAgreementHandler retryHandler;
+    MockOriginatorBlockAckAgreementPolicy retryPolicy;
+    retryPolicy.addbaFailureTimeout = SimTime(1, SIMTIME_S);
+    MockProcedureCallback retryCallback(&retryHandler);
+
+    auto retryPacket = makeDataPacket("retry-sta1", sta1, tid, true);
+    auto retryHeader = retryPacket->peekAtFront<Ieee80211DataHeader>();
+
+    getSimulation()->setSimTime(SimTime::ZERO);
+    retryHandler.processTransmittedDataFrame(retryPacket, retryHeader, &retryPolicy, &retryCallback);
+    retryHandler.processTransmittedDataFrame(retryPacket, retryHeader, &retryPolicy, &retryCallback);
+    retryHandler.processTransmittedDataFrame(retryPacket, retryHeader, &retryPolicy, &retryCallback);
+    retryHandler.processTransmittedDataFrame(retryPacket, retryHeader, &retryPolicy, &retryCallback);
+
+    auto agreement = retryHandler.getAgreement(sta1, tid);
+    requireCondition(agreement != nullptr, "expected agreement after first AddbaReq");
+    requireCondition(retryCallback.addbaReqCount == 3, "bounded AddbaReq burst should stop at 3 before cooldown");
+
+    getSimulation()->setSimTime(SimTime(2, SIMTIME_S));
+    retryHandler.processTransmittedDataFrame(retryPacket, retryHeader, &retryPolicy, &retryCallback);
+    requireCondition(retryCallback.addbaReqCount == 4, "post-cooldown AddbaReq retry should resume without teardown");
+
+    EV << "MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while AddbaReq retries are bounded by addbaFailureTimeout and processTransmittedDataFrame; AC_VO classification remains in Hcf management processing.\n";
+    delete retryPacket;
+}
+
 clearPendingQueue(pendingQueue);
 
 %contains: stdout
@@ -327,3 +393,6 @@ Missing agreement and wrong TID packets remained pending.
 
 %contains: stdout
 Null BA handler and non-QoS packets remained pending.
+
+%contains: stdout
+MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while AddbaReq retries are bounded by addbaFailureTimeout and processTransmittedDataFrame; AC_VO classification remains in Hcf management processing.
