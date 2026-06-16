@@ -10,6 +10,7 @@
 |-------------------|------|-----------|----------------|---------------|
 | `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc` | controller | event-driven | `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc` | exact |
 | `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h` | controller interface | event-driven | `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h` | exact |
+| `src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc` | controller | ADDBA response handling -> `resumeContention()`; `processMgmtFrame()` -> AC_VO management classification | Shared Patterns: Management Frame AC_VO Classification; SU Fallback Transmission and ADDBA Trigger; Agreement Lifecycle and ADDBA Background Initiation | strong |
 | `src/inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.cc` | controller | event-driven, queue mutation | `src/inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.cc` | exact |
 | `src/inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h` | controller interface | event-driven | `src/inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h` | exact |
 | `src/inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h` | shared utility | active agreement predicate | Shared Patterns: Active Originator Block Ack Agreement; RESEARCH.md Pattern 1 | research-derived |
