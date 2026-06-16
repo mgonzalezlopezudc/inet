@@ -130,6 +130,33 @@ void OriginatorBlockAckAgreementHandler::processTransmittedDataFrame(Packet *pac
         auto addbaPacket = new Packet("AddbaReq", addbaReq);
         callback->processMgmtFrame(addbaPacket, addbaReq);
     }
+    else if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement != nullptr && !agreement->getIsAddbaResponseReceived()) {
+        const int totalAttempts = agreement->getNumSentBaPolicyFrames();
+        const int attemptsInCurrentBurst = totalAttempts % 3;
+        const simtime_t retryDeadline = agreement->getExpirationTime();
+        const bool hasRetryDeadline = retryDeadline >= SIMTIME_ZERO;
+        const bool cooldownElapsed = hasRetryDeadline && simTime() >= retryDeadline;
+        const bool allowRetry = totalAttempts < 3 || attemptsInCurrentBurst != 0 || cooldownElapsed;
+
+        if (!allowRetry) {
+            EV_DETAIL << "Suppressing AddbaReq before cooldown expiry for receiver="
+                      << dataHeader->getReceiverAddress() << " tid=" << dataHeader->getTid()
+                      << " attempts=" << totalAttempts << " retryDeadline=" << retryDeadline << "\n";
+            return;
+        }
+
+        if (cooldownElapsed && totalAttempts >= 3 && attemptsInCurrentBurst == 0) {
+            EV_INFO << "Cooldown elapsed; allowing next ADDBA retry burst for receiver="
+                    << dataHeader->getReceiverAddress() << " tid=" << dataHeader->getTid()
+                    << " attempts=" << totalAttempts << "\n";
+        }
+
+        auto addbaReq = buildAddbaRequest(dataHeader->getReceiverAddress(), dataHeader->getTid(), dataHeader->getSequenceNumber() + 1, blockAckAgreementPolicy);
+        agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
+        agreement->calculateExpirationTime();
+        auto addbaPacket = new Packet("AddbaReq", addbaReq);
+        callback->processMgmtFrame(addbaPacket, addbaReq);
+    }
 }
 
 void OriginatorBlockAckAgreementHandler::processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IBlockAckAgreementHandlerCallback *callback)
@@ -155,8 +182,12 @@ void OriginatorBlockAckAgreementHandler::updateAgreement(OriginatorBlockAckAgree
 void OriginatorBlockAckAgreementHandler::processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq)
 {
     auto agreement = getAgreement(addbaReq->getReceiverAddress(), addbaReq->getTid());
-    if (agreement)
+    if (agreement) {
         agreement->setIsAddbaRequestSent(true);
+        agreement->baPolicyFrameSent();
+        if (!agreement->getIsAddbaResponseReceived())
+            agreement->calculateExpirationTime();
+    }
     else
         throw cRuntimeError("Block Ack Agreement should have already been added");
 }
