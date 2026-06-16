@@ -9,7 +9,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### MAC Protocol & ADDBA Validation
 
-- [ ] **MAC-01**: AP MAC Coordination function checks if an active Block Ack agreement with a received ADDBA Response exists for all destination STAs before scheduling multi-user OFDMA transmissions.
+- [x] **MAC-01**: AP MAC Coordination function checks if an active Block Ack agreement with a received ADDBA Response exists for all destination STAs before scheduling multi-user OFDMA transmissions.
 - [ ] **MAC-02**: AP MAC Coordination function falls back to standard single-user EDCA transmission for STAs that do not have an active Block Ack agreement.
 
 ### MAC Timing & Spacing Verification
@@ -51,7 +51,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAC-01 | Phase 1 | Pending |
+| MAC-01 | Phase 1 | Complete |
 | MAC-02 | Phase 1 | Pending |
 | TIM-01 | Phase 2 | Pending |
 | TIM-02 | Phase 2 | Pending |
@@ -61,6 +61,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TST-02 | Phase 4 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 8 total
 - Mapped to phases: 8
 - Unmapped: 0 ✓
