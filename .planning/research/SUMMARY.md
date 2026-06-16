@@ -1,26 +1,84 @@
-# 802.11ax DL OFDMA Research Summary
+# Project Research Summary
 
-## Core Stack
+**Project:** 802.11ax DL MU OFDMA Correctness
+**Domain:** Wireless Simulation / IEEE 802.11ax
+**Researched:** 2026-06-16
+**Confidence:** HIGH
 
-- **Platform**: OMNeT++ 6.3.0 + INET Framework
-- **Language**: C++17, NED, and MSG
-- **Build**: GNU Make with `opp_makemake`
+## Executive Summary
 
-## Table Stakes Features (v1)
+This research establishes the verification and correction strategies for the Downlink Multi-User OFDMA (DL MU OFDMA) implementation in the INET Framework. The current implementation supports core functions such as parallel RU scheduling and sequential Block Acks, but lacks strict guards and timing/physical validation checks required for standard compliance.
 
-1. **802.11ax Mode**: Enable `"ax"` modeSet and HE timing parameters.
-2. **AP DL OFDMA Scheduler**: Selects multi-STA packets from the winning AC queue.
-3. **PHY RU Model**: Treats Resource Units as independent parallel sub-channels on the radio medium.
-4. **Sequential Ack**: Schedules back-to-back Block Ack responses from the STAs.
+The recommended approach focuses on auditing three key areas: ADDBA negotiation guards at the MAC layer, SIFS-spaced sequential Block Ack timing calculations, and independent path loss/SNR calculations at the PHY layer. By resolving these concerns, we ensure high-fidelity, standard-compliant wireless simulations.
 
-## Core Architectural Layout
+## Key Findings
 
-- **MAC**: `Ieee80211Mac` intercepts TXOPs. The DL OFDMA Scheduler aggregates frames and builds an HE MU frame.
-- **PHY**: `Ieee80211AxMode` defines HE parameters. The radio medium isolates RU sub-channels during signal reception.
-- **STA MAC**: Extracts the MPDU corresponding to its assigned RU, then sends Block Ack in sequence.
+### Recommended Stack
 
-## Critical Watch-Outs
+We recommend adhering to the standard INET simulation environment:
+- **Core technologies:**
+  - OMNeT++ 6.3.0: Event loop and discrete-event scheduling engine.
+  - C++17: Implementation of protocol state machines and calculations.
+  - NED & MSG: Module connectivity and message definition layouts.
 
-- Perform CCA on the full primary channel bandwidth, not on individual RUs.
-- Ensure strict timing offsets (SIFS) for sequential multi-user Block Ack sequences to avoid collisions.
-- Prepend L-SIG legacy preamble to allow backward-compatible NAV settings for legacy nodes.
+### Expected Features
+
+**Must have (table stakes):**
+- Strict ADDBA handshake verification before OFDMA scheduling.
+- Precise SIFS timing and offset calculations to prevent channel collisions.
+- Correct independent attenuation and noise figures per RU.
+
+**Defer (v2+):**
+- Multi-User Block Ack Requests (MU-BAR) and Uplink OFDMA.
+
+### Architecture Approach
+
+The architecture relies on the interaction between:
+1. `HeHcf`: coordination function driving TXOP access.
+2. `HeDlSchedulerEqualSizedRUs`: scheduling algorithms mapping queues to RUs.
+3. `HeDlMuTxOpFs`: frame sequence handler coordinating BARs and Block Acks.
+4. `Ieee80211Radio`: physical layer handling sub-channel power levels.
+
+### Critical Pitfalls
+
+1. **Missing ADDBA agreement check:** AP schedules packets to STAs before the Block Ack session is established.
+2. **Timing drift in sequential Block Acks:** Incorrect spacing calculations leading to channel collisions.
+3. **Path loss leakage:** Sub-channels using the main channel's center frequency for SNR calculations.
+
+## Implications for Roadmap
+
+Based on research, suggested phase structure:
+
+### Phase 1: ADDBA Validation & Handshake Correctness
+**Rationale:** Standard-compliant OFDMA requires Block Ack agreements. This phase ensures agreements are validated before scheduling.
+**Delivers:** Strict ADDBA status check guards in the scheduler and frame sequence.
+**Avoids:** Scheduling failures and dropped frames due to missing agreements.
+
+### Phase 2: Sequential Block Ack Spacing & Timing Verification
+**Rationale:** SIFS timing must be respected to prevent wireless packet collisions.
+**Delivers:** Dynamic duration and spacing calculations based on computed rate modes.
+**Avoids:** Collision on the channel during block ack replies.
+
+### Phase 3: Physical Layer RU Behavior & Attenuation Auditing
+**Rationale:** RUs behave as independent sub-channels. Frequency-selective path loss and noise must be correctly separated.
+**Delivers:** Audited and corrected attenuation calculations in `Ieee80211Radio`.
+**Avoids:** SNR calculations bleeding across adjacent RU sub-channels.
+
+### Phase 4: Automated Testing & Example Verification
+**Rationale:** Regression tests are needed to lock in correctness.
+**Delivers:** Unit test coverage and validation scenarios checking MAC and PHY statistics.
+
+## Confidence Assessment
+
+| Area | Confidence | Notes |
+|------|------------|-------|
+| Stack | HIGH | OMNeT++ 6.3.0 is a stable and standard platform. |
+| Features | HIGH | Table stakes map directly to the 802.11ax standard requirements. |
+| Architecture | HIGH | INET's modular coordinate function/frame sequence structure is well-defined. |
+| Pitfalls | HIGH | Pitfalls represent direct failure modes seen in network simulations. |
+
+**Overall confidence:** HIGH
+
+---
+*Research completed: 2026-06-16*
+*Ready for roadmap: yes*
