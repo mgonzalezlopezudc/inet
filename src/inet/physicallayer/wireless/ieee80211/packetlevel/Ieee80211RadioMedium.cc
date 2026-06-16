@@ -26,18 +26,22 @@ static Ptr<Chunk> cloneChunkDeep(const Ptr<const Chunk>& chunk)
     if (chunk == nullptr)
         return nullptr;
     if (auto cPktChunk = dynamicPtrCast<const cPacketChunk>(chunk)) {
-        return cPktChunk->dupShared();
+        auto cloned = cPktChunk->dupShared();
+        cloned->markImmutable();
+        return cloned;
     }
     else if (auto seqChunk = dynamicPtrCast<const SequenceChunk>(chunk)) {
         auto newSeq = makeShared<SequenceChunk>();
         for (const auto& child : seqChunk->getChunks()) {
             newSeq->insertAtBack(cloneChunkDeep(child));
         }
+        newSeq->markImmutable();
         return newSeq;
     }
     else if (auto sliceChunk = dynamicPtrCast<const SliceChunk>(chunk)) {
         auto clonedInner = cloneChunkDeep(sliceChunk->getChunk());
         auto newSlice = makeShared<SliceChunk>(clonedInner, sliceChunk->getOffset(), sliceChunk->getChunkLength());
+        newSlice->markImmutable();
         return newSlice;
     }
     return constPtrCast<Chunk>(chunk);
@@ -103,6 +107,7 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
                 info.staAddress = macHdr->getReceiverAddress();
                 phyHeader->appendAllocations(info);
             }
+            phyHeader->setLengthField(B(subPacket->getDataLength()));
             phyHeader->setChunkLength(b(16 + phyHeader->getAllocationsArraySize() * 56));
             subPacket->insertAtFront(phyHeader);
             subPacket->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
