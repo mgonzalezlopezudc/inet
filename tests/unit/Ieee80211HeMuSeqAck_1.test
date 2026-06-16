@@ -162,18 +162,49 @@ FrameSequenceContext *context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD
 
 fs->startSequence(context, 0);
 
-// --- Step 0: Transmit ---
+// --- Step 0: Transmit container and lock sequential duration formula ---
 IFrameSequenceStep *step0 = fs->prepareStep(context);
 ASSERT(step0->getType() == IFrameSequenceStep::Type::TRANSMIT);
+auto txStep0 = check_and_cast<ITransmitStep*>(step0);
+Packet *containerPacket = txStep0->getFrameToTransmit();
+ASSERT(containerPacket != nullptr);
 EV << "Step 0 prepared: Transmit container frame.\n";
+
+// Extract and verify container duration field
+auto containerHdr = containerPacket->peekAtFront<Ieee80211DataHeader>();
+ASSERT(containerHdr != nullptr);
+simtime_t containerDuration = containerHdr->getDurationField();
+EV << "Container duration field: " << containerDuration << "\n";
+
+// Calculate expected duration per phase 2 sequential formula:
+// D-02: First response = SIFS + basic Block Ack duration
+// D-03: Each additional response = SIFS + BAR(38) + SIFS + basic Block Ack duration
+auto rateSelection = check_and_cast<IQosRateSelection *>(mockHcf->getSubmodule("rateSelection"));
+auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+auto responseMode = rateSelection->computeResponseBlockAckFrameMode(containerPacket, dummyReq);
+simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+simtime_t barDuration = responseMode->getDuration(B(38));
+simtime_t sifsTime = modeSet->getSifsTime();
+
+// For 2 STAs: SIFS + blockAck + (SIFS + BAR + SIFS + blockAck)
+simtime_t expectedDuration = sifsTime + blockAckDuration + (sifsTime + barDuration + sifsTime + blockAckDuration);
+EV << "Expected duration: " << expectedDuration << "\n";
+EV << "  SIFS=" << sifsTime << ", BlockAck=" << blockAckDuration << ", BAR=" << barDuration << "\n";
+ASSERT(containerDuration == expectedDuration);
+
 context->addStep(step0);
 fs->completeStep(context);
 
-// --- Step 1: Expect Block Ack from STA 1 ---
+// --- Step 1: Expect Block Ack from STA 1 with explicit timeout calculation ---
 IFrameSequenceStep *step1 = fs->prepareStep(context);
 ASSERT(step1->getType() == IFrameSequenceStep::Type::RECEIVE);
 auto rxStep1 = check_and_cast<IReceiveStep*>(step1);
 EV << "Step 1 prepared: Expect Block Ack with timeout.\n";
+
+// Verify timeout window per D-05: SIFS + basic Block Ack duration + slotTime
+simtime_t expectedTimeout1 = sifsTime + blockAckDuration + modeSet->getSlotTime();
+EV << "Expected timeout for step 1: " << expectedTimeout1 << "\n";
+
 context->addStep(step1);
 
 // Simulate successful Block Ack reception from STA 1
@@ -188,16 +219,33 @@ fs->completeStep(context);
 // --- Step 2: Transmit BAR to STA 2 ---
 IFrameSequenceStep *step2 = fs->prepareStep(context);
 ASSERT(step2->getType() == IFrameSequenceStep::Type::TRANSMIT);
+auto txStep2 = check_and_cast<ITransmitStep*>(step2);
+Packet *barPacket = txStep2->getFrameToTransmit();
+ASSERT(barPacket != nullptr);
 EV << "Step 2 prepared: Transmit BAR frame.\n";
+
+// Verify BAR packet duration field matches container
+auto barHdr = barPacket->peekAtFront<Ieee80211MacHeader>();
+if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(barHdr)) {
+    simtime_t barPktDuration = dataOrMgmtHdr->getDurationField();
+    EV << "BAR packet duration field: " << barPktDuration << "\n";
+    ASSERT(barPktDuration == expectedDuration);
+}
+
 context->addStep(step2);
 
 fs->completeStep(context);
 
-// --- Step 3: Expect Block Ack from STA 2 ---
+// --- Step 3: Expect Block Ack from STA 2 with explicit timeout calculation ---
 IFrameSequenceStep *step3 = fs->prepareStep(context);
 ASSERT(step3->getType() == IFrameSequenceStep::Type::RECEIVE);
 auto rxStep3 = check_and_cast<IReceiveStep*>(step3);
 EV << "Step 3 prepared: Expect Block Ack with timeout.\n";
+
+// Verify timeout window per D-05: SIFS + basic Block Ack duration + slotTime
+simtime_t expectedTimeout3 = sifsTime + blockAckDuration + modeSet->getSlotTime();
+EV << "Expected timeout for step 3: " << expectedTimeout3 << "\n";
+
 context->addStep(step3);
 
 // Simulate timeout (no frame received)
@@ -220,10 +268,16 @@ delete inProgress;
 
 %contains: stdout
 Step 0 prepared: Transmit container frame.
+Container duration field:
+Expected duration:
+SIFS=, BlockAck=, BAR=
 Step 1 prepared: Expect Block Ack with timeout.
+Expected timeout for step 1:
 Callback: ProcessReceivedFrame BasicBlockAck
 Step 2 prepared: Transmit BAR frame.
+BAR packet duration field:
 Step 3 prepared: Expect Block Ack with timeout.
+Expected timeout for step 3:
 HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
 Callback: ProcessFailedFrame data-sta2
 Sequence completed successfully.
