@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
@@ -16,7 +17,6 @@
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
-#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 
 namespace inet {
@@ -48,6 +48,12 @@ void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
     activeAllocations.clear();
+    struct SelectedAllocation {
+        IIeee80211HeDlScheduler::RuAllocation allocation;
+        Packet *packet = nullptr;
+        Ptr<const Ieee80211DataHeader> dataHeader;
+    };
+
     // Determine channel bandwidth and center frequency from the modeSet's first HE mode.
     Hz channelBandwidth = Hz(20e6);       // default: 20 MHz
     Hz channelCenterFrequency = Hz(5.18e9); // default: 5 GHz band, ch36
@@ -80,7 +86,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // 1. Calculate the total sequential ACK sequence duration
     simtime_t totalDuration = simtime_t::ZERO;
     auto hcf = dynamic_cast<Hcf *>(callback);
-    auto originatorBAHandler = hcf ? hcf->getOriginatorBlockAckAgreementHandler() : nullptr;
+    auto qosContext = context->getQoSContext();
+    auto originatorBAHandler = qosContext != nullptr ? qosContext->blockAckAgreementHandler : nullptr;
+    if (originatorBAHandler == nullptr && hcf != nullptr)
+        originatorBAHandler = hcf->getOriginatorBlockAckAgreementHandler();
     auto hcfModule = check_and_cast<cModule *>(callback);
     auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
 
@@ -88,7 +97,28 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto containerMode = rateSelection->computeMode(container, containerHdr, nullptr);
     RateSelection::setFrameMode(container, containerHdr, containerMode);
 
+    auto warnIneligible = [] (Packet *packet, const MacAddress& receiverAddress, Tid tid, int ruIndex, const char *reason) {
+        EV_WARN << "HeDlMuTxOpFs: skipping MU-ineligible packet "
+                << (packet == nullptr ? "<none>" : packet->getName())
+                << " for receiver " << receiverAddress
+                << ", TID " << (int)tid
+                << ", RU " << ruIndex
+                << ": " << reason << endl;
+    };
+
+    auto getIneligibilityReason = [] (IOriginatorBlockAckAgreementHandler *handler, const MacAddress& receiverAddress, Tid tid) -> const char * {
+        if (handler == nullptr)
+            return "null originator Block Ack agreement handler";
+        auto agreement = handler->getAgreement(receiverAddress, tid);
+        if (agreement == nullptr)
+            return "missing originator Block Ack agreement";
+        if (!agreement->getIsAddbaResponseReceived())
+            return "ADDBA response not received";
+        return nullptr;
+    };
+
     std::vector<Packet *> selectedPackets;
+    std::vector<SelectedAllocation> selectedAllocations;
     for (size_t idx = 0; idx < allocations.size(); ++idx) {
         const auto& alloc = allocations[idx];
         Packet *staPacket = nullptr;
@@ -103,50 +133,59 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 }
             }
         }
-        if (staPacket != nullptr) {
-            selectedPackets.push_back(staPacket);
-
-            bool hasBlockAckAgreement = false;
-            auto macHdr = staPacket->peekAtFront<Ieee80211MacHeader>();
-            if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(macHdr)) {
-                // Set the frame mode on the sub-packet first so response mode calculations don't fail due to missing mode
-                auto staMode = rateSelection->computeMode(staPacket, dataOrMgmtHdr, nullptr);
-                RateSelection::setFrameMode(staPacket, dataOrMgmtHdr, staMode);
-
-                if (auto dataHdr = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHdr)) {
-                    if (dataHdr->getType() == ST_DATA_WITH_QOS && originatorBAHandler != nullptr) {
-                        auto agreement = originatorBAHandler->getAgreement(alloc.staAddress, dataHdr->getTid());
-                        if (agreement != nullptr && agreement->getIsAddbaResponseReceived()) {
-                            hasBlockAckAgreement = true;
-                        }
-                    }
-                }
-            }
-
-            simtime_t responseDuration = simtime_t::ZERO;
-            simtime_t barDuration = simtime_t::ZERO;
-            if (hasBlockAckAgreement) {
-                auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-                auto responseMode = rateSelection->computeResponseBlockAckFrameMode(container, dummyReq);
-                responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-                if (idx >= 1) {
-                    barDuration = responseMode->getDuration(B(38));
-                }
-            }
-            else {
-                if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(macHdr)) {
-                    auto responseMode = rateSelection->computeResponseAckFrameMode(staPacket, dataOrMgmtHdr);
-                    responseDuration = responseMode->getDuration(LENGTH_ACK);
-                }
-            }
-
-            if (idx >= 1 && hasBlockAckAgreement) {
-                totalDuration += modeSet->getSifsTime() + barDuration + modeSet->getSifsTime() + responseDuration;
-            }
-            else {
-                totalDuration += modeSet->getSifsTime() + responseDuration;
-            }
+        if (staPacket == nullptr) {
+            warnIneligible(nullptr, alloc.staAddress, -1, alloc.ru.index, "no queued packet for scheduled receiver");
+            continue;
         }
+
+        selectedPackets.push_back(staPacket);
+        auto macHdr = staPacket->peekAtFront<Ieee80211MacHeader>();
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(macHdr);
+        if (dataHeader == nullptr) {
+            warnIneligible(staPacket, alloc.staAddress, -1, alloc.ru.index, "packet is not a data frame");
+            continue;
+        }
+        if (dataHeader->getType() != ST_DATA_WITH_QOS) {
+            warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index, "packet is not QoS data");
+            continue;
+        }
+        if (dataHeader->getReceiverAddress() != alloc.staAddress) {
+            warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index, "packet receiver does not match scheduler allocation");
+            continue;
+        }
+        if (!hasActiveOriginatorBlockAckAgreement(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
+            warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index,
+                    getIneligibilityReason(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid()));
+            continue;
+        }
+
+        SelectedAllocation selectedAllocation;
+        selectedAllocation.allocation = alloc;
+        selectedAllocation.packet = staPacket;
+        selectedAllocation.dataHeader = dataHeader;
+        selectedAllocations.push_back(selectedAllocation);
+    }
+
+    if (selectedAllocations.size() < 2) {
+        EV_WARN << "HeDlMuTxOpFs: aborting HE MU PPDU assembly because only "
+                << selectedAllocations.size() << " active Block Ack allocations remain before queue mutation." << endl;
+        delete container;
+        throw cRuntimeError("HeDlMuTxOpFs: fewer than two active Block Ack allocations for MU-OFDMA transmission");
+    }
+
+    auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+    auto responseMode = rateSelection->computeResponseBlockAckFrameMode(container, dummyReq);
+    for (size_t idx = 0; idx < selectedAllocations.size(); ++idx) {
+        simtime_t responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+        simtime_t barDuration = idx >= 1 ? responseMode->getDuration(B(38)) : simtime_t::ZERO;
+        if (idx >= 1)
+            totalDuration += modeSet->getSifsTime() + barDuration + modeSet->getSifsTime() + responseDuration;
+        else
+            totalDuration += modeSet->getSifsTime() + responseDuration;
+
+        auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(selectedAllocations[idx].dataHeader);
+        auto staMode = rateSelection->computeMode(selectedAllocations[idx].packet, dataOrMgmtHdr, nullptr);
+        RateSelection::setFrameMode(selectedAllocations[idx].packet, dataOrMgmtHdr, staMode);
     }
 
     // Set the totalDuration on the container header to protect the sequential responses
@@ -154,22 +193,38 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     container->insertAtBack(containerHdr);
     container->insertAtBack(makeShared<Ieee80211MacTrailer>());
 
-    // 2. Build the final MU container packet and assign duration/sequence numbers to sub-packets
-    for (const auto& alloc : allocations) {
-        // Find the first queued packet destined for this STA.
-        Packet *staPacket = nullptr;
-        int n = pendingQueue->getNumPackets();
-        for (int i = 0; i < n; ++i) {
-            Packet *pkt = pendingQueue->getPacket(i);
-            const auto& hdr = pkt->peekAtFront<Ieee80211MacHeader>();
-            if (hdr->getReceiverAddress() == alloc.staAddress) {
-                staPacket = pkt;
-                break;
-            }
+    std::vector<SelectedAllocation> finalAllocations;
+    for (const auto& selectedAllocation : selectedAllocations) {
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(selectedAllocation.packet->peekAtFront<Ieee80211MacHeader>());
+        if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS ||
+                dataHeader->getReceiverAddress() != selectedAllocation.allocation.staAddress ||
+                !hasActiveOriginatorBlockAckAgreement(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
+            Tid tid = dataHeader == nullptr ? -1 : dataHeader->getTid();
+            auto receiverAddress = dataHeader == nullptr ? selectedAllocation.allocation.staAddress : dataHeader->getReceiverAddress();
+            warnIneligible(selectedAllocation.packet, receiverAddress, tid, selectedAllocation.allocation.ru.index,
+                    "failed final validation before queue removal");
+            continue;
         }
-        if (staPacket == nullptr) {
-            EV_WARN << "HeDlMuTxOpFs: no queued packet for STA " << alloc.staAddress
-                    << ", skipping RU " << alloc.ru.index << endl;
+        finalAllocations.push_back(selectedAllocation);
+    }
+
+    if (finalAllocations.size() < 2) {
+        EV_WARN << "HeDlMuTxOpFs: aborting HE MU PPDU assembly because only "
+                << finalAllocations.size() << " active Block Ack allocations remain after final validation." << endl;
+        delete container;
+        throw cRuntimeError("HeDlMuTxOpFs: fewer than two active Block Ack allocations after final validation");
+    }
+
+    // 2. Build the final MU container packet and assign duration/sequence numbers to sub-packets.
+    for (const auto& selectedAllocation : finalAllocations) {
+        const auto& alloc = selectedAllocation.allocation;
+        Packet *staPacket = selectedAllocation.packet;
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(staPacket->peekAtFront<Ieee80211MacHeader>());
+        if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS ||
+                !hasActiveOriginatorBlockAckAgreement(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
+            Tid tid = dataHeader == nullptr ? -1 : dataHeader->getTid();
+            auto receiverAddress = dataHeader == nullptr ? alloc.staAddress : dataHeader->getReceiverAddress();
+            warnIneligible(staPacket, receiverAddress, tid, alloc.ru.index, "failed final validation before tag allocation");
             continue;
         }
 
@@ -195,6 +250,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         muTag->addAllocation(alloc.ru.index, dupPkt);
         ActiveAllocation activeAlloc;
         activeAlloc.staAddress = alloc.staAddress;
+        activeAlloc.tid = dataHeader->getTid();
         activeAlloc.ruIndex = alloc.ru.index;
         activeAllocations.push_back(activeAlloc);
 
@@ -202,8 +258,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         context->getInProgressFrames()->addInProgressFrame(staPacket);
     }
 
-    if (muTag->getAllocations().empty())
-        throw cRuntimeError("HeDlMuTxOpFs: no packets assembled for MU-OFDMA transmission");
+    if (muTag->getAllocations().size() < 2)
+        throw cRuntimeError("HeDlMuTxOpFs: fewer than two packets assembled for MU-OFDMA transmission");
 
     EV_INFO << "HeDlMuTxOpFs: assembled HE MU PPDU with "
             << muTag->getAllocations().size() << " RU allocations. Total sequential duration = " << totalDuration << endl;
@@ -232,27 +288,10 @@ IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
             }
         }
 
-        bool hasBlockAckAgreement = false;
-        if (transmittedPacket != nullptr) {
-            auto macHdr = transmittedPacket->peekAtFront<Ieee80211MacHeader>();
-            if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(macHdr)) {
-                if (auto dataHdr = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHdr)) {
-                    auto hcf = dynamic_cast<Hcf *>(callback);
-                    auto originatorBAHandler = hcf ? hcf->getOriginatorBlockAckAgreementHandler() : nullptr;
-                    if (dataHdr->getType() == ST_DATA_WITH_QOS && originatorBAHandler != nullptr) {
-                        auto agreement = originatorBAHandler->getAgreement(targetSta, dataHdr->getTid());
-                        if (agreement != nullptr && agreement->getIsAddbaResponseReceived()) {
-                            hasBlockAckAgreement = true;
-                        }
-                    }
-                }
-            }
-        }
-
         if (step % 2 == 0) {
             auto qosContext = context->getQoSContext();
             auto receiverAddr = targetSta;
-            Tid tid = 0;
+            Tid tid = activeAllocations[idx].tid;
             SequenceNumberCyclic startingSequenceNumber;
             if (transmittedPacket != nullptr) {
                 auto macHdr = transmittedPacket->peekAtFront<Ieee80211MacHeader>();
@@ -282,23 +321,9 @@ IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
             simtime_t responseDuration = simtime_t::ZERO;
             auto txStep = check_and_cast<ITransmitStep *>(context->getLastStep());
             auto lastTransmittedPacket = txStep->getFrameToTransmit();
-            if (hasBlockAckAgreement) {
-                auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-                auto responseMode = rateSelection->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
-                responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-            }
-            else if (transmittedPacket != nullptr) {
-                auto macHdr = transmittedPacket->peekAtFront<Ieee80211MacHeader>();
-                if (auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(macHdr)) {
-                    auto responseMode = rateSelection->computeResponseAckFrameMode(transmittedPacket, dataOrMgmtHdr);
-                    responseDuration = responseMode->getDuration(LENGTH_ACK);
-                }
-            }
-            else {
-                auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-                auto responseMode = rateSelection->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
-                responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-            }
+            auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+            auto responseMode = rateSelection->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
+            responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
 
             simtime_t timeout = modeSet->getSifsTime() + responseDuration + modeSet->getSlotTime();
             return new ReceiveStep(timeout);

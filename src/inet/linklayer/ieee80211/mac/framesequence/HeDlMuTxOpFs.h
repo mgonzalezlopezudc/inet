@@ -35,6 +35,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
   protected:
     struct ActiveAllocation {
         MacAddress staAddress;
+        Tid tid = 0;
         int ruIndex;
     };
 
