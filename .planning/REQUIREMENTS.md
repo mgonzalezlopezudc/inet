@@ -51,19 +51,19 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAC-01 | Pending | Pending |
-| MAC-02 | Pending | Pending |
-| TIM-01 | Pending | Pending |
-| TIM-02 | Pending | Pending |
-| PHY-01 | Pending | Pending |
-| PHY-02 | Pending | Pending |
-| TST-01 | Pending | Pending |
-| TST-02 | Pending | Pending |
+| MAC-01 | Phase 1 | Pending |
+| MAC-02 | Phase 1 | Pending |
+| TIM-01 | Phase 2 | Pending |
+| TIM-02 | Phase 2 | Pending |
+| PHY-01 | Phase 3 | Pending |
+| PHY-02 | Phase 3 | Pending |
+| TST-01 | Phase 4 | Pending |
+| TST-02 | Phase 4 | Pending |
 
 **Coverage:**
 - v1 requirements: 8 total
-- Mapped to phases: 0
-- Unmapped: 8 ⚠️
+- Mapped to phases: 8
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-06-16*

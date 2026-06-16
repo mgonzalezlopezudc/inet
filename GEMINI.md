@@ -2,11 +2,11 @@
 
 ## Project
 
-**802.11ax DL OFDMA Support**
+**802.11ax DL MU OFDMA Correctness**
 
-This project implements Downlink Orthogonal Frequency Division Multiple Access (DL OFDMA) support for the IEEE 802.11ax (High Efficiency, HE) standard in the INET Framework. It introduces physical layer Resource Unit (RU) abstractions as independent sub-channels and a dynamic queue-based MAC scheduler at the Access Point (AP) to transmit multi-user frames concurrently to multiple associated stations.
+This project focuses on verifying and ensuring the functional and physical correctness of the Downlink Multi-User Orthogonal Frequency Division Multiple Access (DL MU OFDMA) implementation in the INET Framework. It validates that standard-compliant IEEE 802.11ax frame sequences, block acknowledgment timings, and physical layer Resource Unit (RU) signal reception/noise calculations are accurately executed and collision-free.
 
-**Core Value:** Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling and transmission under the 802.11ax standard, prioritizing robust queuing integration and realistic abstract PHY layer sub-channel behavior.
+**Core Value:** Ensure high-fidelity, standard-compliant packet-level simulation of 802.11ax DL MU OFDMA scheduling, transmission, and reception by verifying both protocol state machines and physical sub-channel behavior.
 
 ### Constraints
 
@@ -134,11 +134,11 @@ This project implements Downlink Orthogonal Frequency Division Multiple Access (
 - Depends on: Link Layer interfaces.
 - Used by: Transport layer protocols.
 - Purpose: Link transmission and media access control.
-- Contains: Ethernet, PPP, and IEEE 802.11 MAC/LLC implementations.
+- Contains: Ethernet, PPP, and IEEE 802.11 MAC/LLC implementations. Integrates the 802.11ax DL OFDMA scheduler (`IIeee80211HeDlScheduler`) at the AP and the multi-user TXOP frame sequence handler (`HeFrameSequenceHandler`) for managing downlink multi-user frame transmissions and subsequent sequential BlockAck sequences.
 - Depends on: Physical layer interface.
 - Used by: Network layer protocols.
-- Purpose: Physical signal transmission and antenna propagation.
-- Contains: Transmitter, receiver, propagation model, and radio medium.
+- Purpose: Physical signal transmission, antenna propagation, and reception.
+- Contains: Transmitter, receiver, propagation model, and radio medium. Integrates the HE mode representation (`Ieee80211HeMode`), HE MU PHY header serialization, and the Resource Unit (`Ieee80211HeRu`) model where the radio medium (`Ieee80211RadioMedium`) treats independent RUs as parallel, interference-isolated sub-channels.
 - Depends on: Common utility classes.
 - Used by: Link layer protocols.
 
@@ -156,6 +156,8 @@ This project implements Downlink Orthogonal Frequency Division Multiple Access (
 - Examples: Extends `cPacket` using a dynamic chunk system (`inet::FieldsChunk`).
 - Purpose: Triggers state changes like Start, Stop, or Crash across submodules.
 - Examples: `LifecycleOperation` handled in `handleStartOperation` and `handleStopOperation`.
+- Purpose: Represents a Resource Unit partition in 802.11ax (HE), defining sub-channel bandwidth, center frequency, and subcarrier range.
+- Purpose: Interface for Downlink OFDMA MAC schedulers at the AP.
 
 ## Entry Points
 
@@ -173,7 +175,7 @@ This project implements Downlink Orthogonal Frequency Division Multiple Access (
 
 ## Project Skills
 
-No project skills found. Add skills to any of: `.claude/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
+No project skills found. Add skills to any of: `.agent/skills/`, `.agents/skills/`, `.cursor/skills/`, `.github/skills/`, or `.codex/skills/` with a `SKILL.md` index file.
 <!-- GSD:skills-end -->
 
 <!-- GSD:workflow-start source:GSD defaults -->

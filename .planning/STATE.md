@@ -1,36 +1,36 @@
 ---
 gsd_state_version: '1.0'
-status: complete
+status: planning
 progress:
-  total_phases: 6
-  completed_phases: 6
-  total_plans: 12
-  completed_plans: 12
-  percent: 100
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 8
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-06-14)
+See: .planning/PROJECT.md (updated 2026-06-16)
 
-**Core value:** Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling and transmission under the 802.11ax standard, prioritizing robust queuing integration and realistic abstract PHY layer sub-channel behavior.
-**Current focus:** Completed
+**Core value:** Ensure high-fidelity, standard-compliant packet-level simulation of 802.11ax DL MU OFDMA scheduling, transmission, and reception by verifying both protocol state machines and physical sub-channel behavior.
+**Current focus:** Phase 1: ADDBA Validation & Handshake Correctness
 
 ## Current Position
 
-Phase: 6 of 6 (System Integration and Verification)
-Plan: 2 of 2 in current phase
-Status: Complete
-Last activity: 2026-06-15 — Completed Phase 6 (System Integration and Verification), finalizing tests and example simulation.
+Phase: 1 of 4 (ADDBA Validation & Handshake Correctness)
+Plan: 0 of 2 in current phase
+Status: Ready to plan
+Last activity: 2026-06-16 — Project initialized
 
-Progress: [██████████] 100%
+Progress: [░░░░░░░░░░] 0%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 6
+- Total plans completed: 0
 - Average duration: 0 min
 - Total execution time: 0.0 hours
 
@@ -38,16 +38,16 @@ Progress: [██████████] 100%
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 1. High Efficiency (HE) Mode Enablement | 2 | 2 | - |
-| 2. PHY Resource Unit (RU) Sub-channel Representation | 2 | 2 | - |
-| 3. AP MAC DL OFDMA Scheduler Foundation | 2 | 2 | - |
-| 4. Multi-User Reception at STAs | 2 | 2 | - |
-| 5. Sequential Block Acknowledgments | 2 | 2 | - |
-| 6. System Integration and Verification | 2 | 2 | - |
+| 1. ADDBA Validation | 0 | 0 min | 0 min |
+| 2. Timing Verification | 0 | 0 min | 0 min |
+| 3. PHY RU Auditing | 0 | 0 min | 0 min |
+| 4. Testing & Verification | 0 | 0 min | 0 min |
 
 **Recent Trend:**
-- Last 5 plans: -
+- Last 5 plans: None
 - Trend: Stable
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
@@ -55,7 +55,8 @@ Progress: [██████████] 100%
 
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
-- Phase 1: Keep aggregate AC queues and use sequential Ack for DL OFDMA.
+
+- [Init]: Standardized on Vertical MVP structure to validate each protocol slice independently.
 
 ### Pending Todos
 
@@ -71,10 +72,10 @@ Items acknowledged and carried forward from previous milestone close:
 
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
-| *(none)* | | | |
+| *(none)* |      |        |             |
 
 ## Session Continuity
 
-Last session: 2026-06-15 12:10
-Stopped at: Completed Phase 6 and final code shipping.
+Last session: 2026-06-16 13:20
+Stopped at: Project initialized, roadmap and state files created.
 Resume file: None
