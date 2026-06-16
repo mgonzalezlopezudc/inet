@@ -1,52 +1,92 @@
-# 802.11ax DL OFDMA Architecture Research
+# Architecture Research
 
-## Component Boundaries
+**Domain:** Wireless Simulation / IEEE 802.11ax DL MU OFDMA Correctness
+**Researched:** 2026-06-16
+**Confidence:** HIGH
 
-### MAC Layer (AP Side)
-- **`Ieee80211Mac` / `Hcf`**: Intercepts winning EDCA channel access opportunities.
-- **DL OFDMA Scheduler**: A new scheduling component at the AP that:
-  1. Identifies the winning Access Category (AC).
-  2. Scans the winning AC's `pendingQueue` for packets addressed to different active stations (STAs).
-  3. Selects up to N packets (where N is the number of available RUs).
-  4. Generates an HE Multi-User (MU) physical frame metadata structure detailing RU allocations.
-- **`Tx` component**: Formats and transmits the multi-user frame down to the physical layer.
+## Standard Architecture
 
-### PHY Layer
-- **HE PHY Mode (`Ieee80211AxMode`)**: Extends `Ieee80211ModeBase` to supply HE slot times, IFS times, and MCS tables.
-- **RU Sub-channel Medium**:
-  - The physical transmitter divides the allocated bandwidth into RUs based on the scheduler's allocations.
-  - The radio medium delivers the signal to the receiving STAs.
-  - Each destination STA only decodes the signal from its assigned Resource Unit (RU) sub-channel, performing independent path loss, SNR, and bit/packet success rate calculations.
-
-### MAC Layer (STA Side)
-- **`Rx` component**: Processes the incoming frame, checks the HE-SIG-B allocation metadata, and extracts the MPDU addressed to this specific STA.
-- **Ack / BlockAck Procedure**: Triggers a sequential transmission of Block Acks back to the AP.
-
-## Data Flow Diagram
+### System Overview
 
 ```
-[ AP MAC Queue (Winning AC) ]
-              │
-              ▼ (extract multi-STA packets)
-     [ DL OFDMA Scheduler ]
-              │
-              ▼ (assign RUs & build HE MU frame)
-      [ AP PHY / Radio ] ─── (transmit on RUs in parallel) ───┐
-                                                               │
-     ┌─────────────────────────┬───────────────────────────────┘
-     ▼                         ▼
-[ STA-A PHY (RU 1) ]      [ STA-B PHY (RU 2) ]
-     │                         │
-     ▼                         ▼
-[ STA-A MAC (decapsulate) ] [ STA-B MAC (decapsulate) ]
-     │                         │
-     ▼ (send sequential Ack)   ▼ (send sequential Ack after SIFS)
-[ STA-A TX BlockAck ]     [ STA-B TX BlockAck ]
+┌─────────────────────────────────────────────────────────────┐
+│                       MAC Layer (L2)                        │
+├─────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐   ┌───────────────┐   ┌───────────────┐   │
+│  │   HeHcf      ├───►  Edcaf        ├───► HeDlScheduler │   │
+│  │ (Coordination│   │(ChannelAccess)│   │ (RU Scheduler)│   │
+│  └──────┬───────┘   └───────────────┘   └───────────────┘   │
+│         │                                                   │
+│  ┌──────▼───────┐                                           │
+│  │HeDlMuTxOpFs  │                                           │
+│  │ (Frame Seq)  │                                           │
+│  └──────┬───────┘                                           │
+├─────────┼───────────────────────────────────────────────────┤
+│         │             PHY Layer (L1)                        │
+├─────────┼───────────────────────────────────────────────────┤
+│  ┌──────▼───────┐   ┌───────────────────────────┐           │
+│  │Ieee80211Radio├───►   Resource Units (RUs)    │           │
+│  │(Transmitter) │   │ (Independent sub-channels)│           │
+│  └──────────────┘   └───────────────────────────┘           │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Build Order Implications
-1. **HE Mode definition**: Define `Ieee80211AxMode` and support `ax` modeSet.
-2. **HE PHY Header & Preamble**: Represent HE MU PPDU headers and SIG fields.
-3. **AP DL OFDMA Scheduler**: C++ class implementing multi-user packet aggregation.
-4. **PHY Layer RU Reception**: Handle multi-user parallel reception and independent sub-channel noise calculations.
-5. **Sequential Block Ack**: Support sequential MAC acknowledgment sequences.
+### Component Responsibilities
+
+| Component | Responsibility | Typical Implementation |
+|-----------|----------------|------------------------|
+| `HeHcf` | Coordinates MAC transmission/reception, wins TXOPs, and triggers multi-user sequences. | C++ simple module (`HeHcf.cc`) connected to MAC layer gates. |
+| `HeDlSchedulerEqualSizedRUs` | Inspects pending queues, matches packets to STAs, and assigns them to available Resource Units. | C++ class implementing `IIeee80211HeDlScheduler` interface. |
+| `HeDlMuTxOpFs` | Manages the step-by-step transmission of the HE-MU PPDU container, subsequent BARs, and reception of sequential Block Acks. | C++ class inheriting from `IFrameSequence` interface. |
+| `Ieee80211Radio` | Converts packets into wave signals and performs independent attenuation/SNR calculations per sub-channel band. | C++ simple module with transmitter/receiver submodules. |
+
+## Architectural Patterns
+
+### Pattern 1: Multi-User Frame Container
+**What:** Packets destined to multiple STAs are enclosed within a container packet (`HE-MU-PPDU`) carrying an `Ieee80211HeMuTag`.
+**When to use:** Used by `HeDlMuTxOpFs` to send multi-user frames concurrently.
+**Trade-offs:** Avoids duplicating standard preamble fields but requires the receiver's physical layer to filter allocations.
+
+### Pattern 2: Interface-Driven Scheduling
+**What:** The MAC coordination function (`HeHcf`) delegates RU allocation to an implementation of `IIeee80211HeDlScheduler`.
+**When to use:** Allows switching scheduling algorithms (e.g. equal-sized RUs vs proportional fair) without modifying frame sequence code.
+
+## Data Flow
+
+### Request Flow
+
+```
+[Winning AC wins TXOP]
+          │
+[HeHcf triggers scheduler] ──► [HeDlScheduler assigns RUs]
+          │
+[HeDlMuTxOpFs builds container PPDU with allocations]
+          │
+[Ieee80211Radio transmits container over sub-channels]
+```
+
+### Sequential Ack Flow
+
+```
+[AP transmits HE-MU-PPDU] ──► [STAs receive on assigned RUs]
+          │
+[AP schedules BAR 1] ──► [STA 1 responds with BlockAck]
+          │
+[AP schedules BAR 2] ──► [STA 2 responds with BlockAck]
+```
+
+## Anti-Patterns
+
+### Anti-Pattern 1: Direct Queue Modification in Scheduler
+**What people do:** The scheduler pops packets directly from `IPacketQueue`.
+**Why it's wrong:** If the transmission sequence fails or is aborted before transmission, packets are lost.
+**Do this instead:** The scheduler only *inspects* queues. Packets are removed only when the transmission sequence starts.
+
+### Anti-Pattern 2: Dynamic Casts in Event Loop
+**What people do:** Using raw C-style or `dynamic_cast` to cast packets/headers.
+**Why it's wrong:** Causes segmentation faults when casting fails due to unexpected frames.
+**Do this instead:** Always use OMNeT++'s `check_and_cast<T*>()` which halts with a descriptive stack trace.
+
+---
+*Architecture research for: 802.11ax DL MU OFDMA correctness*
+*Researched: 2026-06-16*
