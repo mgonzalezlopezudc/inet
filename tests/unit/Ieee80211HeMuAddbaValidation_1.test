@@ -1,0 +1,329 @@
+%description:
+Test strict active ADDBA validation before packets enter an HE MU OFDMA container.
+
+%includes:
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+simple MockRateSelection
+{
+    @class(MockRateSelection);
+}
+
+module MockCallback
+{
+    parameters:
+        @class(MockCallback);
+    submodules:
+        rateSelection: MockRateSelection;
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mockHcf: MockCallback;
+        pendingQueue: PacketQueue;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+class MockRateSelection : public cSimpleModule, public IQosRateSelection
+{
+  public:
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override { return nullptr; }
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override {
+        auto ms = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+        return ms->getMode(0);
+    }
+    virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override {
+        auto ms = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+        return ms->getMode(0);
+    }
+    virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override {
+        auto ms = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+        return ms->getMode(0);
+    }
+};
+
+Define_Module(MockRateSelection);
+
+class MockAckHandler : public IAckHandler
+{
+  public:
+    int inProgressCount = 0;
+    virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
+    virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
+    virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { inProgressCount++; }
+};
+
+class MockScheduler : public IIeee80211HeDlScheduler
+{
+  public:
+    std::vector<MacAddress> scheduledStations;
+
+    MockScheduler(const std::vector<MacAddress>& scheduledStations) : scheduledStations(scheduledStations) {}
+
+    virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidateStations, Hz centerFrequency, Hz bandwidth) override {
+        std::vector<RuAllocation> allocs;
+        for (size_t i = 0; i < scheduledStations.size(); i++) {
+            RuAllocation alloc;
+            alloc.staAddress = scheduledStations[i];
+            alloc.ru.index = i;
+            allocs.push_back(alloc);
+        }
+        return allocs;
+    }
+};
+
+class MockInProgressFrames : public InProgressFrames
+{
+  public:
+    virtual ~MockInProgressFrames() {
+        inProgressFrames.clear();
+    }
+};
+
+class MockOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreementHandler
+{
+  public:
+    std::vector<OriginatorBlockAckAgreement *> agreements;
+
+    virtual ~MockOriginatorBlockAckAgreementHandler() {
+        for (auto agreement : agreements)
+            delete agreement;
+    }
+
+    OriginatorBlockAckAgreement *addAgreement(const MacAddress& receiver, Tid tid, bool active) {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid, SequenceNumberCyclic(0), 64, false, false);
+        agreement->setIsAddbaResponseReceived(active);
+        agreements.push_back(agreement);
+        return agreement;
+    }
+
+    virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck, IBlockAckAgreementHandlerCallback *callback) override {}
+    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq) override {}
+    virtual void processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override {}
+    virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IBlockAckAgreementHandlerCallback *callback) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy) override {}
+    virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>& delba) override {}
+    virtual void blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback) override {}
+
+    virtual OriginatorBlockAckAgreement *getAgreement(MacAddress receiverAddr, Tid tid) override {
+        for (auto agreement : agreements) {
+            if (agreement->getReceiverAddr() == receiverAddr && agreement->getTid() == tid)
+                return agreement;
+        }
+        return nullptr;
+    }
+
+    bool hasReceivedAddbaResponse(MacAddress receiverAddr, Tid tid) {
+        auto agreement = getAgreement(receiverAddr, tid);
+        return agreement != nullptr && agreement->getIsAddbaResponseReceived();
+    }
+};
+
+class MockCallback : public cSimpleModule, public IFrameSequenceHandler::ICallback
+{
+  public:
+    virtual void transmitFrame(Packet *packet, simtime_t ifs) override {}
+    virtual void scheduleStartRxTimer(simtime_t timeout) override {}
+    virtual void originatorProcessTransmittedFrame(Packet *packet) override {}
+    virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override {}
+    virtual void originatorProcessFailedFrame(Packet *failedPacket) override {}
+    virtual void originatorProcessRtsProtectionFailed(Packet *packet) override {}
+    virtual void frameSequenceFinished() override {}
+};
+
+Define_Module(MockCallback);
+
+static void clearPendingQueue(queueing::IPacketQueue *pendingQueue)
+{
+    while (pendingQueue->getNumPackets() > 0) {
+        auto packet = pendingQueue->getPacket(0);
+        pendingQueue->removePacket(packet);
+        delete packet;
+    }
+}
+
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid tid, bool qos)
+{
+    Packet *packet = new Packet(name);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setReceiverAddress(receiver);
+    header->setType(qos ? ST_DATA_WITH_QOS : ST_DATA);
+    header->setTid(tid);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setSequenceNumber(SequenceNumberCyclic(tid));
+    packet->insertAtFront(header);
+    return packet;
+}
+
+static bool isPacketQueued(queueing::IPacketQueue *pendingQueue, const char *name)
+{
+    for (int i = 0; i < pendingQueue->getNumPackets(); i++) {
+        if (!strcmp(pendingQueue->getPacket(i)->getName(), name))
+            return true;
+    }
+    return false;
+}
+
+static void requireCondition(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
+static Packet *runFirstTransmitStep(queueing::IPacketQueue *pendingQueue, MockCallback *callback, const std::vector<MacAddress>& scheduledStations, IOriginatorBlockAckAgreementHandler *baHandler)
+{
+    auto modeSet = physicallayer::Ieee80211ModeSet::getModeSet("ax");
+    auto scheduler = new MockScheduler(scheduledStations);
+    auto ackHandler = new MockAckHandler();
+    auto inProgress = new MockInProgressFrames();
+    auto qosContext = new QoSContext(nullptr, nullptr, baHandler, nullptr);
+    auto context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), inProgress, nullptr, nullptr, nullptr, qosContext);
+    HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, scheduledStations, const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), pendingQueue, ackHandler, callback);
+
+    fs->startSequence(context, 0);
+    auto step0 = check_and_cast<ITransmitStep *>(fs->prepareStep(context));
+    auto container = step0->getFrameToTransmit()->dup();
+
+    delete step0;
+    delete fs;
+    delete context;
+    delete inProgress;
+    delete ackHandler;
+    delete scheduler;
+
+    return container;
+}
+
+static void expectMuAllocationCount(Packet *container, size_t expectedCount)
+{
+    auto muTag = container->findTag<physicallayer::Ieee80211HeMuTag>();
+    requireCondition(muTag != nullptr, "HE MU tag missing from container");
+    if (muTag->getAllocations().size() != expectedCount)
+        throw cRuntimeError("Expected %zu HE MU allocations, got %zu", expectedCount, muTag->getAllocations().size());
+}
+
+%activity:
+auto mockHcf = check_and_cast<MockCallback *>(getParentModule()->getSubmodule("mockHcf"));
+auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
+
+MacAddress sta1("00:11:22:33:44:55");
+MacAddress sta2("66:77:88:99:AA:BB");
+MacAddress sta3("02:00:00:00:00:03");
+MacAddress sta4("02:00:00:00:00:04");
+Tid tid = 5;
+
+// Test 1: active receiver/TID agreements produce a transmit step with two HE MU allocations.
+{
+    clearPendingQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("active-sta1", sta1, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("active-sta2", sta2, tid, true));
+
+    MockOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid, true);
+    baHandler.addAgreement(sta2, tid, true);
+    requireCondition(baHandler.hasReceivedAddbaResponse(sta1, tid), "active fixture agreement was not marked active");
+
+    Packet *container = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &baHandler);
+    expectMuAllocationCount(container, 2);
+    requireCondition(pendingQueue->getNumPackets() == 0, "active ADDBA packets should be removed from the pending queue");
+    EV << "Active ADDBA agreements admitted two QoS packets.\n";
+    delete container;
+}
+
+// Test 2: an existing but inactive agreement is not admitted; the packet stays pending.
+{
+    clearPendingQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("valid-sta1", sta1, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("valid-sta2", sta2, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("inactive-sta3", sta3, tid, true));
+
+    MockOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid, true);
+    baHandler.addAgreement(sta2, tid, true);
+    baHandler.addAgreement(sta3, tid, false);
+
+    Packet *container = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2, sta3}, &baHandler);
+    expectMuAllocationCount(container, 2);
+    requireCondition(pendingQueue->getNumPackets() == 1, "inactive ADDBA packet should remain pending");
+    requireCondition(isPacketQueued(pendingQueue, "inactive-sta3"), "inactive ADDBA packet was removed from the pending queue");
+    EV << "Inactive ADDBA agreement packet remained pending.\n";
+    delete container;
+}
+
+// Test 3: missing agreement, null BA handler, non-QoS data, and wrong TID are ineligible.
+{
+    clearPendingQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("valid-sta1", sta1, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("valid-sta2", sta2, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("missing-agreement-sta3", sta3, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("wrong-tid-sta4", sta4, tid + 1, true));
+
+    MockOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid, true);
+    baHandler.addAgreement(sta2, tid, true);
+    baHandler.addAgreement(sta4, tid, true);
+
+    Packet *container = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2, sta3, sta4}, &baHandler);
+    expectMuAllocationCount(container, 2);
+    requireCondition(pendingQueue->getNumPackets() == 2, "missing agreement and wrong TID packets should remain pending");
+    requireCondition(isPacketQueued(pendingQueue, "missing-agreement-sta3"), "missing agreement packet was removed from the pending queue");
+    requireCondition(isPacketQueued(pendingQueue, "wrong-tid-sta4"), "wrong TID packet was removed from the pending queue");
+    EV << "Missing agreement and wrong TID packets remained pending.\n";
+    delete container;
+
+    clearPendingQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("non-qos-sta1", sta1, tid, false));
+    pendingQueue->enqueuePacket(makeDataPacket("null-handler-sta2", sta2, tid, true));
+
+    bool abortedWithoutMutation = false;
+    try {
+        Packet *invalidContainer = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, nullptr);
+        delete invalidContainer;
+    }
+    catch (cRuntimeError& e) {
+        abortedWithoutMutation = true;
+        EV << "Null handler/non-QoS preflight aborted: " << e.what() << "\n";
+    }
+    requireCondition(abortedWithoutMutation, "null BA handler and non-QoS preflight should abort before mutation");
+    requireCondition(pendingQueue->getNumPackets() == 2, "null BA handler and non-QoS packets should remain pending");
+    requireCondition(isPacketQueued(pendingQueue, "non-qos-sta1"), "non-QoS packet was removed from the pending queue");
+    requireCondition(isPacketQueued(pendingQueue, "null-handler-sta2"), "null-handler packet was removed from the pending queue");
+    EV << "Null BA handler and non-QoS packets remained pending.\n";
+}
+
+clearPendingQueue(pendingQueue);
+
+%contains: stdout
+Active ADDBA agreements admitted two QoS packets.
+
+%contains: stdout
+Inactive ADDBA agreement packet remained pending.
+
+%contains: stdout
+Missing agreement and wrong TID packets remained pending.
+
+%contains: stdout
+Null BA handler and non-QoS packets remained pending.
