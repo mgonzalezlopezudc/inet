@@ -1,53 +1,40 @@
-# Requirements: 802.11ax DL OFDMA Support
+# Requirements: 802.11ax DL MU OFDMA Correctness
 
-**Defined:** 2026-06-14
-**Core Value:** Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling and transmission under the 802.11ax standard, prioritizing robust queuing integration and realistic abstract PHY layer sub-channel behavior.
+**Defined:** 2026-06-16
+**Core Value:** Ensure high-fidelity, standard-compliant packet-level simulation of 802.11ax DL MU OFDMA scheduling, transmission, and reception by verifying both protocol state machines and physical sub-channel behavior.
 
 ## v1 Requirements
 
-Requirements for the initial release. Each maps to roadmap phases.
+Requirements for initial release. Each maps to roadmap phases.
 
-### High Efficiency (HE) Mode Enablement
+### MAC Protocol & ADDBA Validation
 
-- [x] **MODE-01**: Access Point (AP) and Station (STA) MAC modules support the `"ax"` modeSet parameter in NED configuration.
-- [x] **MODE-02**: `Ieee80211ModeSet` registers HE-specific timing parameters (SIFS = 16µs, Slot Time = 9µs, CWmin = 15, CWmax = 1023).
-- [x] **MODE-03**: Support standard 802.11ax MCS values (MCS 0 to 11) for 20 MHz channels under the new HE mode.
+- [ ] **MAC-01**: AP MAC Coordination function checks if an active Block Ack agreement with a received ADDBA Response exists for all destination STAs before scheduling multi-user OFDMA transmissions.
+- [ ] **MAC-02**: AP MAC Coordination function falls back to standard single-user EDCA transmission for STAs that do not have an active Block Ack agreement.
 
-### MAC Layer Multi-User (MU) Scheduling
+### MAC Timing & Spacing Verification
 
-- [x] **SCHED-01**: Implement a DL OFDMA MAC scheduler class in the AP to handle Resource Unit (RU) user mappings.
-- [x] **SCHED-02**: When an Access Category (AC) wins channel access, the scheduler extracts packets from that winning AC's queue.
-- [x] **SCHED-03**: The scheduler groups extracted packets by destination address, selecting up to N distinct destination STAs for concurrent transmission.
-- [x] **SCHED-04**: Build a multi-user C++ physical frame metadata structure containing the assigned RU mapping (HE-SIG-B emulation).
+- [ ] **TIM-01**: AP calculates the precise duration field value of the multi-user container packet to fully cover the expected sequential BAR and Block Ack responses.
+- [ ] **TIM-02**: Spacing between consecutive Block Ack responses from receiving STAs is exactly SIFS, avoiding any overlapping transmissions.
 
-### PHY Layer Resource Unit (RU) Sub-channels
+### Physical Layer RU Behavior Auditing
 
-- [x] **PHY-01**: Represent Resource Units (RUs) as independent parallel frequency sub-channels on the radio medium.
-- [x] **PHY-02**: Compute path loss, noise, and signal-to-noise ratio (SNR) independently for each STA's assigned RU sub-channel.
-- [x] **PHY-03**: Destination STAs decode only the C++ physical frame chunks belonging to their assigned RU sub-channel, ignoring other concurrent RU transmissions.
+- [ ] **PHY-01**: Signals on separate Resource Units (RUs) are attenuated and received based on frequency-selective path loss of their corresponding sub-channel band, rather than the main channel.
+- [ ] **PHY-02**: Channel noise is calculated independently per RU sub-channel band.
 
-### Multi-User Acknowledgments
+### Automated Testing & Verification
 
-- [x] **ACK-01**: Receiving STAs construct Block Ack responses after successfully decoding their assigned RU payload.
-- [x] **ACK-02**: Implement sequential Block Ack transmissions back to the AP, separated by SIFS timing intervals, to prevent collision on the channel.
-
-### Verification and Testing
-
-- [x] **TEST-01**: Create a set of automated test cases in the INET test suite validating correct DL OFDMA packet reception and sequential acknowledgment sequence.
-- [x] **TEST-02**: Provide an example simulation scenario in the `examples/` directory configuring an AP and multiple STAs using the 802.11ax DL OFDMA MAC scheduler.
+- [ ] **TST-01**: Implement automated unit/integration tests that verify protocol frame sequences (ADDBA checks, BARs, sequential BAs) under varying traffic loads.
+- [ ] **TST-02**: Provide a validation simulation example and assert stats match standard-compliant timings and zero collisions.
 
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Uplink OFDMA
+### MAC Enhancements
 
-- **UL-01**: Multi-user Uplink transmission coordinated by AP trigger frames.
-- **UL-02**: Trigger frame generation and parsing in MAC.
-
-### Multi-User Block Ack Requests (MU-BAR)
-
-- **MBAR-01**: Support multi-user Block Ack Request frame formatting to request sequential block acknowledgments in a single frame.
+- **MAC-03**: Dynamic MCS adaptation based on individual RU path loss feedback.
+- **MAC-04**: Multi-User Block Ack Request (MU-BAR) frame support.
 
 ## Out of Scope
 
@@ -55,34 +42,29 @@ Explicitly excluded. Documented to prevent scope creep.
 
 | Feature | Reason |
 |---------|--------|
-| Per-STA EDCA queuing | Aggregate queue per AC is kept to maintain compatibility and minimize restructuring overhead. |
-| Subcarrier-level fading/interference | Excluded in favor of abstract sub-channels (RUs) to preserve simulation performance. |
-| Trigger-based random access | Excluded as it is only applicable for Uplink OFDMA. |
+| Uplink OFDMA (UL OFDMA) | Focus is on validating downlink multi-user scheduling and reception. |
+| Subcarrier-level fading/interference model | Excluded for simulation execution speed, using abstract flat-fading parallel sub-channels instead. |
 
 ## Traceability
 
+Which phases cover which requirements. Updated during roadmap creation.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MODE-01 | Phase 1 | Validated |
-| MODE-02 | Phase 1 | Validated |
-| MODE-03 | Phase 1 | Validated |
-| PHY-01 | Phase 2 | Validated |
-| PHY-02 | Phase 2 | Validated |
-| SCHED-01 | Phase 3 | Validated |
-| SCHED-02 | Phase 3 | Validated |
-| SCHED-03 | Phase 3 | Validated |
-| SCHED-04 | Phase 4 | Validated |
-| PHY-03 | Phase 4 | Validated |
-| ACK-01 | Phase 5 | Validated |
-| ACK-02 | Phase 5 | Validated |
-| TEST-01 | Phase 6 | Validated |
-| TEST-02 | Phase 6 | Validated |
+| MAC-01 | Pending | Pending |
+| MAC-02 | Pending | Pending |
+| TIM-01 | Pending | Pending |
+| TIM-02 | Pending | Pending |
+| PHY-01 | Pending | Pending |
+| PHY-02 | Pending | Pending |
+| TST-01 | Pending | Pending |
+| TST-02 | Pending | Pending |
 
 **Coverage:**
-- v1 requirements: 14 total
-- Mapped to phases: 14
-- Unmapped: 0 ✓
+- v1 requirements: 8 total
+- Mapped to phases: 0
+- Unmapped: 8 ⚠️
 
 ---
-*Requirements defined: 2026-06-14*
-*Last updated: 2026-06-16 after Phase 6 verification*
+*Requirements defined: 2026-06-16*
+*Last updated: 2026-06-16 after initial definition*
