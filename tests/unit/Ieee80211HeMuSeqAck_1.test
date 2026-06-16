@@ -137,6 +137,7 @@ auto hdr1 = makeShared<Ieee80211DataHeader>();
 hdr1->setReceiverAddress(sta1);
 hdr1->setType(ST_DATA);
 hdr1->setAckPolicy(BLOCK_ACK);
+hdr1->setSequenceNumber(SequenceNumberCyclic(0));
 p1->insertAtFront(hdr1);
 pendingQueue->enqueuePacket(p1);
 
@@ -145,6 +146,7 @@ auto hdr2 = makeShared<Ieee80211DataHeader>();
 hdr2->setReceiverAddress(sta2);
 hdr2->setType(ST_DATA);
 hdr2->setAckPolicy(BLOCK_ACK);
+hdr2->setSequenceNumber(SequenceNumberCyclic(1));
 p2->insertAtFront(hdr2);
 pendingQueue->enqueuePacket(p2);
 
@@ -183,21 +185,29 @@ rxStep1->setFrameToReceive(ack1);
 
 fs->completeStep(context);
 
-// --- Step 2: Expect Block Ack from STA 2 ---
+// --- Step 2: Transmit BAR to STA 2 ---
 IFrameSequenceStep *step2 = fs->prepareStep(context);
-ASSERT(step2->getType() == IFrameSequenceStep::Type::RECEIVE);
-auto rxStep2 = check_and_cast<IReceiveStep*>(step2);
-EV << "Step 2 prepared: Expect Block Ack with timeout.\n";
+ASSERT(step2->getType() == IFrameSequenceStep::Type::TRANSMIT);
+EV << "Step 2 prepared: Transmit BAR frame.\n";
 context->addStep(step2);
-
-// Simulate timeout (no frame received)
-rxStep2->setFrameToReceive(nullptr);
 
 fs->completeStep(context);
 
-// --- Step 3: Finish ---
+// --- Step 3: Expect Block Ack from STA 2 ---
 IFrameSequenceStep *step3 = fs->prepareStep(context);
-ASSERT(step3 == nullptr);
+ASSERT(step3->getType() == IFrameSequenceStep::Type::RECEIVE);
+auto rxStep3 = check_and_cast<IReceiveStep*>(step3);
+EV << "Step 3 prepared: Expect Block Ack with timeout.\n";
+context->addStep(step3);
+
+// Simulate timeout (no frame received)
+rxStep3->setFrameToReceive(nullptr);
+
+fs->completeStep(context);
+
+// --- Step 4: Finish ---
+IFrameSequenceStep *step4 = fs->prepareStep(context);
+ASSERT(step4 == nullptr);
 EV << "Sequence completed successfully.\n";
 
 EV << "Failed calls count: " << mockHcf->numFailedCalls << "\n";
@@ -212,7 +222,8 @@ delete inProgress;
 Step 0 prepared: Transmit container frame.
 Step 1 prepared: Expect Block Ack with timeout.
 Callback: ProcessReceivedFrame BasicBlockAck
-Step 2 prepared: Expect Block Ack with timeout.
+Step 2 prepared: Transmit BAR frame.
+Step 3 prepared: Expect Block Ack with timeout.
 HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
 Callback: ProcessFailedFrame data-sta2
 Sequence completed successfully.
