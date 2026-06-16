@@ -1,6 +1,6 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-06-14
+**Analysis Date:** 2026-06-16
 
 ## Tech Debt
 
@@ -33,5 +33,5 @@
 
 ---
 
-*Concerns audit: 2026-06-14*
+*Concerns audit: 2026-06-16*
 *Update as issues are fixed or new ones discovered*

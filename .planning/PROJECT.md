@@ -21,10 +21,11 @@ Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling a
 - ✓ Support dynamic queue-based RU scheduling: when an Access Category (AC) wins a TXOP, schedule packets from that winning AC's queue destined to up to N different stations (STAs) — Phase 3
 - ✓ Support parsing of HE MU SIG-B allocations and filtering/decoding assigned RU payload at destination STAs — Phase 4
 - ✓ Support sequential multi-user acknowledgment (sequential Block Ack responses from the receiving STAs) — Phase 5
+- ✓ Verify the DL OFDMA implementation with automated test runs and a new example simulation configuration — Phase 6
 
 ### Active
 
-- [ ] Verify the DL OFDMA implementation with automated test runs and a new example simulation configuration.
+*(none)*
 
 ### Out of Scope
 
@@ -38,6 +39,7 @@ Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling a
 - The INET Framework uses modular simple C++ components and NED compound modules for layering.
 - The 802.11 MAC implementation is heavily decomposed, utilizing coordination functions (like `Hcf`), channel access modules (like `Edcaf`), and data services (like `OriginatorQosMacDataService`).
 - Packets are passed as `inet::Packet` objects containing dynamic headers.
+- As of June 2026, Downlink OFDMA support is fully integrated with complete PHY-level Resource Unit partitioning, dynamic multi-user MAC scheduling, SIG-B reception filtering, and collision-free sequential Block Ack sequences.
 
 ## Constraints
 
@@ -49,10 +51,10 @@ Enable high-fidelity packet-level simulation of multi-user DL OFDMA scheduling a
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Downlink OFDMA only with sequential Ack | Simplifies multi-user coordination and avoids complex trigger-frame handshake logic. | — Pending |
-| Abstract RU sub-channel model | Represents resource partition effectively without the massive computational overhead of subcarrier-level modeling. | — Pending |
-| Winning AC queue aggregation only | Aligns with standard EDCA TXOP ownership rules and avoids inter-AC scheduling complexity. | — Pending |
-| Aggregate AC queues (current system) | Reuses the existing queue implementation instead of refactoring it to a per-STA queue system. | — Pending |
+| Downlink OFDMA only with sequential Ack | Simplifies multi-user coordination and avoids complex trigger-frame handshake logic. | — Adopted |
+| Abstract RU sub-channel model | Represents resource partition effectively without the massive computational overhead of subcarrier-level modeling. | — Adopted |
+| Winning AC queue aggregation only | Aligns with standard EDCA TXOP ownership rules and avoids inter-AC scheduling complexity. | — Adopted |
+| Aggregate AC queues (current system) | Reuses the existing queue implementation instead of refactoring it to a per-STA queue system. | — Adopted |
 
 ## Evolution
 
@@ -72,4 +74,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-14 after initialization*
+*Last updated: 2026-06-16 after Phase 6 completion*

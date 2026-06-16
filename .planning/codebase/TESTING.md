@@ -1,6 +1,6 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-06-14
+**Analysis Date:** 2026-06-16
 
 ## Test Framework
 
@@ -72,6 +72,13 @@ If you need to compile and execute a single unit test (e.g., `tests/unit/Ieee802
 **Unit Tests (`tests/unit/`):**
 - Placed under `tests/unit/` with `.test` extension.
 - File naming: PascalCase matching target component, followed by a sequence number (e.g., `MACAddress_1.test`).
+- **IEEE 802.11ax DL OFDMA Unit Tests:**
+  - `Ieee80211HeMode_1.test` - Verifies HE MCS tables and modes.
+  - `Ieee80211HeRu_1.test` - Verifies physical Resource Unit configurations and sub-channel indices.
+  - `HeDlScheduler_1.test` - Verifies equal-sized Resource Unit scheduling logic.
+  - `Ieee80211HeMuPhyHeaderSerializer_1.test` - Verifies serialization and dissector parsing of the HE MU PHY header.
+  - `Ieee80211HeMuRx_1.test` - Verifies multi-user reception, RU tag assignment, and station filtering.
+  - `Ieee80211HeMuSeqAck_1.test` - Verifies the sequential BlockAck request/response sequence after a DL MU transmission.
 
 **Structure of a `.test` file:**
 ```
@@ -103,5 +110,5 @@ If you need to compile and execute a single unit test (e.g., `tests/unit/Ieee802
 
 ---
 
-*Testing audit: 2026-06-14*
+*Testing audit: 2026-06-16*
 *Update after adding new test frameworks*

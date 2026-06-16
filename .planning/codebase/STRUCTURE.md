@@ -1,6 +1,6 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-06-14
+**Analysis Date:** 2026-06-16
 
 ## Directory Layout
 
@@ -44,8 +44,13 @@ inet/
 
 **`src/inet/linklayer`:**
 - Purpose: Data link layer configurations and framing.
-- Contains: Ethernet, wireless (802.11), and point-to-point (PPP) MAC protocols.
-- Key files: `ethernet/common/Ethernet.cc`, `ieee80211/mac/Ieee80211Mac.cc`.
+- Contains: Ethernet, wireless (802.11), and point-to-point (PPP) MAC protocols, including the new HE DL scheduler (`ieee80211/mac/scheduler/`) and sequential multi-user acknowledgment frame sequence handlers (`ieee80211/mac/framesequence/`).
+- Key files: `ethernet/common/Ethernet.cc`, `ieee80211/mac/Ieee80211Mac.cc`, `ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.cc`, `ieee80211/mac/framesequence/HeDlMuTxOpFs.cc`.
+
+**`src/inet/physicallayer`:**
+- Purpose: Physical layer propagation, transmitters, receivers, and radio mediums.
+- Contains: Analog models, transmitters, receivers, error models, and the updated multi-user sub-channel radio medium (`wireless/ieee80211/packetlevel/Ieee80211RadioMedium.cc`) representing Resource Units (RUs).
+- Key files: `wireless/ieee80211/mode/Ieee80211HeMode.cc`, `wireless/ieee80211/packetlevel/Ieee80211HeRu.h`.
 
 **`src/inet/node`:**
 - Purpose: Assembled hosts, routers, and network devices.
@@ -55,12 +60,12 @@ inet/
 **`examples/`:**
 - Purpose: Practical simulation testbeds.
 - Contains: `omnetpp.ini` simulation setups, custom local NED topologies.
-- Key files: `examples/inet/pingapp/omnetpp.ini`.
+- Key files: `examples/inet/pingapp/omnetpp.ini`, `examples/ieee80211/ofdma/omnetpp.ini`.
 
 **`tests/`:**
 - Purpose: Regression and correctness testing suite.
 - Contains: Unit `.test` files, regression fingerprint CSV lists, and Python scripts.
-- Subdirectories: `tests/unit/`, `tests/fingerprint/`, `tests/smoke/`.
+- Subdirectories: `tests/unit/` (with new DL OFDMA tests such as `HeDlScheduler_1.test`), `tests/fingerprint/`, `tests/smoke/`.
 
 ## Key File Locations
 
@@ -75,5 +80,5 @@ inet/
 
 ---
 
-*Structure analysis: 2026-06-14*
+*Structure analysis: 2026-06-16*
 *Update when directories are restructured*

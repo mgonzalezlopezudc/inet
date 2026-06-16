@@ -28,13 +28,13 @@ Requirements for the initial release. Each maps to roadmap phases.
 
 ### Multi-User Acknowledgments
 
-- [ ] **ACK-01**: Receiving STAs construct Block Ack responses after successfully decoding their assigned RU payload.
-- [ ] **ACK-02**: Implement sequential Block Ack transmissions back to the AP, separated by SIFS timing intervals, to prevent collision on the channel.
+- [x] **ACK-01**: Receiving STAs construct Block Ack responses after successfully decoding their assigned RU payload.
+- [x] **ACK-02**: Implement sequential Block Ack transmissions back to the AP, separated by SIFS timing intervals, to prevent collision on the channel.
 
 ### Verification and Testing
 
-- [ ] **TEST-01**: Create a set of automated test cases in the INET test suite validating correct DL OFDMA packet reception and sequential acknowledgment sequence.
-- [ ] **TEST-02**: Provide an example simulation scenario in the `examples/` directory configuring an AP and multiple STAs using the 802.11ax DL OFDMA MAC scheduler.
+- [x] **TEST-01**: Create a set of automated test cases in the INET test suite validating correct DL OFDMA packet reception and sequential acknowledgment sequence.
+- [x] **TEST-02**: Provide an example simulation scenario in the `examples/` directory configuring an AP and multiple STAs using the 802.11ax DL OFDMA MAC scheduler.
 
 ## v2 Requirements
 
@@ -75,8 +75,8 @@ Explicitly excluded. Documented to prevent scope creep.
 | PHY-03 | Phase 4 | Validated |
 | ACK-01 | Phase 5 | Validated |
 | ACK-02 | Phase 5 | Validated |
-| TEST-01 | Phase 6 | Pending |
-| TEST-02 | Phase 6 | Pending |
+| TEST-01 | Phase 6 | Validated |
+| TEST-02 | Phase 6 | Validated |
 
 **Coverage:**
 - v1 requirements: 14 total
@@ -85,4 +85,4 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ---
 *Requirements defined: 2026-06-14*
-*Last updated: 2026-06-14 after initial definition*
+*Last updated: 2026-06-16 after Phase 6 verification*
