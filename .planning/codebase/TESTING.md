@@ -4,6 +4,13 @@
 
 ## Test Framework
 
+**Always set up the environment before running any test:**
+   Make sure the OMNeT++ environment is sourced and `PYTHONPATH` includes the OMNeT++ python tools:
+   ```bash
+   source setenv
+   export PYTHONPATH=/home/user/omnetpp-6.4.0/python:$PYTHONPATH
+   ```
+
 **Runner:**
 - **OMNeT++ opp_test:** Runs unit tests by reading `.test` files, compiling their contents into small transient simulation executables, running them, and validating output.
 - **Python test suite:** Orchestrates executing unit, smoke, speed, statistical, and fingerprint tests.
