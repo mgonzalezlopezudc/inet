@@ -63,12 +63,11 @@ Plans:
   1. Sub-channel noise is computed independently per RU band.
   2. Frequency-selective path loss is correctly applied per sub-channel.
 
-**Plans**: 2 plans
+**Plans**: 1 plan
 
 Plans:
 
-- [ ] 03-01: Audit path loss and noise calculation formulas in `Ieee80211Radio`.
-- [ ] 03-02: Map sub-channel indexes correctly in `Ieee80211HeMuTag`.
+- [ ] 03-01: Audit RU geometry, per-RU attenuation, and noise isolation in `Ieee80211RadioMedium` with dedicated RU regression tests.
 
 ### Phase 4: Automated Testing & Example Verification
 
