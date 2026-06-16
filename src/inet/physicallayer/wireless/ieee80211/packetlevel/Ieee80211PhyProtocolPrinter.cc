@@ -26,7 +26,12 @@ Register_Protocol_Printer(&Protocol::ieee80211HePhy, Ieee80211PhyProtocolPrinter
 
 void Ieee80211PhyProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol *protocol, const cMessagePrinter::Options *options, Context& context) const
 {
-    context.infoColumn << "(IEEE 802.11 Phy) " << chunk;
+    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(chunk)) {
+        context.infoColumn << "HE MU PHY, RU index " << heMuHeader->getRuIndex();
+    }
+    else {
+        context.infoColumn << "(IEEE 802.11 Phy) " << chunk;
+    }
 }
 
 } // namespace physicallayer
