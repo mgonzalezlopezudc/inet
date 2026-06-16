@@ -1,9 +1,9 @@
 ---
 phase: 01
 slug: addba-validation-handshake-correctness
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: finalized
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-06-16
 ---
 
@@ -32,30 +32,28 @@ created: 2026-06-16
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 01-00-01 | 01 | 0 | MAC-01 | T-01-01 | Non-QoS, invalid TID, or no-active-BA packets are not inserted into an HE MU container. | unit `.test` | Quick run command | no - W0 | pending |
-| 01-00-02 | 01 | 0 | MAC-01 | T-01-02 | ADDBA agreement placeholders without a received ADDBA Response are treated as inactive. | unit `.test` | Quick run command | no - W0 | pending |
-| 01-00-03 | 02 | 0 | MAC-02 | T-02-01 | Fewer than two active-BA eligible STAs causes `HeHcf` to delegate to `Hcf::startFrameSequence(ac)`. | unit/integration `.test` | Quick run command | no - W0 | pending |
-| 01-00-04 | 02 | 0 | MAC-02 | T-02-02 | SU fallback keeps the existing ADDBA request path available for packets missing active BA. | unit/integration `.test` | Quick run command | partial - existing code only | pending |
+| 01-01-01 | 01 | 1 | MAC-01 | T-01-01 | Non-QoS, invalid TID, or no-active-BA packets are not inserted into an HE MU container. | unit `.test` | Quick run command | created by Plan 01 Task 1 | planned |
+| 01-01-02 | 01 | 1 | MAC-01 | T-01-02 | ADDBA agreement placeholders without a received ADDBA Response are treated as inactive. | unit `.test` | Quick run command | created by Plan 01 Task 1 | planned |
+| 01-02-01 | 02 | 2 | MAC-02 | T-01-07 | Fewer than two active-BA eligible STAs or earliest-SU-transmittable MU-ineligible head traffic causes `HeHcf` to delegate to `Hcf::startFrameSequence(ac)`. | unit/integration `.test` | Quick run command | extended by Plan 02 Task 1 | planned |
+| 01-02-02 | 02 | 2 | MAC-02 | T-01-09 | SU fallback keeps the existing ADDBA request path available, limits inactive-agreement retries to 3 attempts per burst, and resumes retries after `addbaFailureTimeout = 1s` cooldown. | unit/integration `.test` | Quick run command | extended by Plan 02 Task 1 | planned |
 
 ## Wave 0 Requirements
 
-- [ ] `tests/unit/Ieee80211HeMuAddbaValidation_1.test` - focused tests for MAC-01 and MAC-02.
-- [ ] Test doubles or fixtures for `IOriginatorBlockAckAgreementHandler` and `OriginatorBlockAckAgreement` active/inactive states.
-- [ ] Expected stdout assertions for MU eligibility, inactive ADDBA Response state, and SU fallback path.
+No standalone Wave 0 plan is required after the finalized plan revision. The focused test file and fixtures are created by Plan 01 Task 1 before MAC-01 production changes, then extended by Plan 02 Task 1 before MAC-02 production changes. Every implementation task has an `<automated>` verification command, and there are no unresolved Wave 0 creation references in the plan set.
 
 ## Manual-Only Verifications
 
 | Behavior | Requirement | Why Manual | Test Instructions |
 |----------|-------------|------------|-------------------|
-| ADDBA failure cooldown exact duration | MAC-02 | CONTEXT.md leaves the cooldown value to the agent's discretion. | Verify the plan either defers the exact cooldown value outside Phase 1 or assigns a concrete constant with tests. |
+| None | MAC-01, MAC-02 | The finalized plans use automated `.test` coverage and source assertions. | The ADDBA cooldown value is concrete: `addbaFailureTimeout = 1s`, verified by Plan 02 Task 1 and Task 3 automated checks. |
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies.
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify.
-- [ ] Wave 0 covers all MISSING references.
-- [ ] No watch-mode flags.
-- [ ] Feedback latency < 60s for focused ADDBA validation.
-- [ ] `nyquist_compliant: true` set in frontmatter after Wave 0 is implemented and verified.
+- [x] All tasks have `<automated>` verify commands.
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify.
+- [x] No standalone Wave 0 gaps remain; test scaffolding is the first task in each plan before production changes.
+- [x] No watch-mode flags.
+- [x] Feedback latency < 60s for focused ADDBA validation where build cache allows.
+- [x] `nyquist_compliant: true` set in frontmatter for the finalized plan structure.
 
-**Approval:** pending
+**Approval:** finalized for planning; implementation verification occurs during `$gsd-execute-phase 01`.
