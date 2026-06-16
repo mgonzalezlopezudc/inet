@@ -42,6 +42,16 @@ bash -lc 'tests/validation/ieee80211/he_mu_command_contract.sh'
 
 The command exits non-zero on missing prerequisites, failed unit tests, failed simulation execution, missing scalar evidence, no Block Ack agreement evidence, or any EDCA collision count above zero.
 
+## Phase 4 Broad Gate
+
+The Phase 4 broad gate is the roadmap-level compile/pass gate for automated tests under `tests/`: the repository-wide automated test lane after the standard environment bootstrap.
+
+```bash
+bash -lc 'source /home/user/omnetpp-6.4.0/setenv -f && source setenv -q && bin/inet_run_all_tests -m release'
+```
+
+Run this broad gate after the focused `TST-01` and `TST-02` validation contracts when validating Phase 4 as a whole.
+
 ## Phase Boundary
 
 This contract completes `TST-01` for Phase 04 plan 04-01. `TST-02` example-level scalar assertions and broader validation scenario hardening are planned in `04-02`.
