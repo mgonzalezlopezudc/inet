@@ -31,9 +31,9 @@ assert_positive_scalar()
     local result_file="$2"
 
     awk -v scalar_name="$scalar_name" '
-        $1 == "scalar" && $4 == scalar_name {
+        $1 == "scalar" && $3 == scalar_name {
             found = 1
-            if ($5 + 0 > 0)
+            if ($4 + 0 > 0)
                 positive = 1
         }
         END {
@@ -51,9 +51,9 @@ assert_zero_scalar()
     local result_file="$2"
 
     awk -v scalar_name="$scalar_name" '
-        $1 == "scalar" && $4 == scalar_name {
+        $1 == "scalar" && $3 == scalar_name {
             found = 1
-            if ($5 + 0 != 0)
+            if ($4 + 0 != 0)
                 nonzero = 1
         }
         END {
@@ -82,17 +82,21 @@ run_ofdma_load()
 
 cd "$REPO_ROOT"
 
-require_file "/home/user/omnetpp-6.4.0/setenv"
-require_file "setenv"
-require_executable "bin/inet_run_unit_tests"
-require_file "tests/unit/Ieee80211HeMuAddbaValidation_1.test"
-require_file "tests/unit/Ieee80211HeMuSeqAck_1.test"
+test -f /home/user/omnetpp-6.4.0/setenv || fail "required file is missing: /home/user/omnetpp-6.4.0/setenv"
+test -f setenv || fail "required file is missing: setenv"
+test -x bin/inet_run_unit_tests || fail "required executable is missing or not executable: bin/inet_run_unit_tests"
+test -f tests/unit/Ieee80211HeMuAddbaValidation_1.test || fail "required file is missing: tests/unit/Ieee80211HeMuAddbaValidation_1.test"
+test -f tests/unit/Ieee80211HeMuSeqAck_1.test || fail "required file is missing: tests/unit/Ieee80211HeMuSeqAck_1.test"
 require_file "examples/ieee80211/ofdma/omnetpp.ini"
 
+export IN_NIX_SHELL="${IN_NIX_SHELL:-}"
+
+set +u
 # shellcheck disable=SC1090
 source /home/user/omnetpp-6.4.0/setenv -f
 # shellcheck disable=SC1091
 source setenv -q
+set -u
 
 bin/inet_run_unit_tests -m release -f Ieee80211HeMuAddbaValidation_1.test
 bin/inet_run_unit_tests -m release -f Ieee80211HeMuSeqAck_1.test
