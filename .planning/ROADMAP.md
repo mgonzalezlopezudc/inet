@@ -28,7 +28,7 @@ This roadmap defines the verification and development phases to ensure standard-
 Plans:
 **Wave 1**
 
-- [ ] 01-01-PLAN.md - Strict active Block Ack admission for `HeDlMuTxOpFs` container creation.
+- [x] 01-01-PLAN.md - Strict active Block Ack admission for `HeDlMuTxOpFs` container creation.
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -95,7 +95,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ADDBA Validation | 0/2 | Not started | - |
+| 1. ADDBA Validation | 1/2 | In Progress | - |
 | 2. Timing Verification | 0/2 | Not started | - |
 | 3. PHY RU Auditing | 0/2 | Not started | - |
 | 4. Testing & Verification | 0/2 | Not started | - |
