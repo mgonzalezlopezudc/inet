@@ -71,7 +71,7 @@ require_file "/home/user/omnetpp-6.4.0/setenv"
 require_file "setenv"
 require_executable "bin/inet_run_unit_tests"
 require_file "tests/unit/Ieee80211HeMuSeqAck_1.test"
-require_file "examples/ieee80211/ofdma/omnetpp.ini"
+test -f examples/ieee80211/ofdma/omnetpp.ini || fail "required file is missing: examples/ieee80211/ofdma/omnetpp.ini"
 
 export IN_NIX_SHELL="${IN_NIX_SHELL:-}"
 
@@ -81,6 +81,8 @@ source /home/user/omnetpp-6.4.0/setenv -f
 # shellcheck disable=SC1091
 source setenv -q
 set -u
+
+command -v inet >/dev/null || fail "required command is missing from PATH after environment bootstrap: inet"
 
 bin/inet_run_unit_tests -m release -f Ieee80211HeMuSeqAck_1.test
 run_ofdma_example
