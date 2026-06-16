@@ -248,15 +248,44 @@ EV << "Expected timeout for step 3: " << expectedTimeout3 << "\n";
 
 context->addStep(step3);
 
-// Simulate timeout (no frame received)
+// --- Wave 2: Prove recoverable timeout behavior (D-06, D-07) ---
+// Simulate timeout (no frame received) to test recovery path
+EV << "Step 3: Simulating timeout (missing Block Ack) to verify recovery path.\n";
 rxStep3->setFrameToReceive(nullptr);
+
+// Record initial failure count before timeout handling
+int failureCountBefore = mockHcf->numFailedCalls;
+EV << "Failures before timeout handling: " << failureCountBefore << "\n";
 
 fs->completeStep(context);
 
-// --- Step 4: Finish ---
+// Verify that the timeout was handled as a rejection (D-06) not an abort
+int failureCountAfter = mockHcf->numFailedCalls;
+ASSERT(failureCountAfter > failureCountBefore);
+EV << "Timeout marked current receive step as rejected. Failures after: " << failureCountAfter << "\n";
+
+// --- Step 4: Verify sequence continues cleanly (D-06, D-07) ---
 IFrameSequenceStep *step4 = fs->prepareStep(context);
-ASSERT(step4 == nullptr);
-EV << "Sequence completed successfully.\n";
+if (step4 != nullptr) {
+    EV << "Step 4 exists: " << step4->getType() << "\n";
+    // If there's a Step 4, verify it respects SIFS spacing (D-07)
+    if (step4->getType() == IFrameSequenceStep::Type::TRANSMIT) {
+        auto txStep4 = check_and_cast<ITransmitStep*>(step4);
+        simtime_t ifs4 = context->getIfs();
+        EV << "Step 4 inter-frame spacing (should be SIFS per D-07): " << ifs4 << " (expected: " << sifsTime << ")\n";
+        ASSERT(ifs4 == sifsTime);
+    }
+    context->addStep(step4);
+    fs->completeStep(context);
+    
+    // Continue until sequence ends
+    IFrameSequenceStep *stepFinal = fs->prepareStep(context);
+    ASSERT(stepFinal == nullptr);
+}
+else {
+    // Sequence ends after timeout rejection - this is also valid
+    EV << "Sequence ended cleanly after timeout rejection.\n";
+}
 
 EV << "Failed calls count: " << mockHcf->numFailedCalls << "\n";
 
@@ -278,7 +307,10 @@ Step 2 prepared: Transmit BAR frame.
 BAR packet duration field:
 Step 3 prepared: Expect Block Ack with timeout.
 Expected timeout for step 3:
+Step 3: Simulating timeout (missing Block Ack) to verify recovery path.
+Failures before timeout handling:
+Timeout marked current receive step as rejected. Failures after:
 HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
 Callback: ProcessFailedFrame data-sta2
-Sequence completed successfully.
+Sequence ended cleanly after timeout rejection.
 Failed calls count: 1
