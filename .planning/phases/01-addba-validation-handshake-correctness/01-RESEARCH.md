@@ -275,17 +275,15 @@ if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS ||
 | A1 | Ineligible packets can starve if MU opportunities continue for other eligible STAs. | Common Pitfalls | Planner may under-specify SU fallback triggering and satisfy packet skipping but not timely fallback. |
 | A2 | A bounded fairness or head-packet fallback rule is acceptable to satisfy MAC-02. | Common Pitfalls | User may prefer fallback only when fewer than two eligible MU STAs exist. |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Fallback trigger when eligible MU traffic coexists with ineligible traffic**
    - What we know: `HeHcf` starts MU whenever at least two candidates are returned. [VERIFIED: codebase grep `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc:98`]
-   - What's unclear: Whether MAC-02 requires immediate SU service for the first ineligible pending packet even when a valid MU opportunity exists. [ASSUMED]
-   - Recommendation: Planner should add an explicit task decision: either fallback when fewer than two eligible STAs remain, or fallback when the pending queue's earliest unicast QoS packet lacks active BA. [ASSUMED]
+   - Resolution selected by plans: Use earliest-SU-transmittable fallback. If the pending queue's earliest SU-transmittable packet is not unicast `ST_DATA_WITH_QOS` with an active receiver/TID Block Ack agreement, the current TXOP delegates to `Hcf::startFrameSequence(ac)` so that packet gets standard single-user service and the existing ADDBA path remains active. Eligible STAs still receive MU service when the earliest SU-transmittable packet is MU-eligible and at least two active-BA candidates exist; later eligible traffic remains available for subsequent MU service. [RESOLVED: `.planning/phases/01-addba-validation-handshake-correctness/01-02-PLAN.md` Task 2]
 
 2. **ADDBA failure retry/cooldown implementation**
    - What we know: Context locks retry limit at 3 and says cooldown is discretionary; `computeAddbaFailureTimeout()` is currently unimplemented. [VERIFIED: context `.planning/phases/01-addba-validation-handshake-correctness/01-CONTEXT.md`; VERIFIED: codebase grep `src/inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementPolicy.cc:32`]
-   - What's unclear: The exact cooldown duration. [VERIFIED: context `.planning/phases/01-addba-validation-handshake-correctness/01-CONTEXT.md`]
-   - Recommendation: Use the smallest scoped implementation that prevents repeated ADDBA enqueue for the same receiver/TID after failure, with a documented default cooldown parameter if a NED parameter already exists or a local constant if not. [ASSUMED]
+   - Resolution selected by plans: Add `addbaFailureTimeout = 1s` as a concrete NED parameter and implement D-02 as a cooldown-based retry cycle. Failed or timed-out ADDBA setup uses bounded bursts of up to 3 attempts; after the burst, retries are suppressed until `addbaFailureTimeout` elapses, then another retry may be enqueued for the same receiver/TID without tearing down or recreating the inactive agreement. [RESOLVED: `.planning/phases/01-addba-validation-handshake-correctness/01-02-PLAN.md` Task 3]
 
 ## Environment Availability
 
