@@ -16,6 +16,9 @@
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+
 
 
 
@@ -37,6 +40,7 @@ void HeHcf::initialize(int stage)
 std::vector<MacAddress> HeHcf::collectCandidateStations(queueing::IPacketQueue *queue) const
 {
     std::vector<MacAddress> candidates;
+    std::vector<MacAddress> seenDestinations;
     int n = queue->getNumPackets();
     for (int i = 0; i < n; ++i) {
         Packet *pkt = queue->getPacket(i);
@@ -45,11 +49,28 @@ std::vector<MacAddress> HeHcf::collectCandidateStations(queueing::IPacketQueue *
         if (dest.isMulticast() || dest.isBroadcast())
             continue;
         bool seen = false;
-        for (const auto& c : candidates) {
+        for (const auto& c : seenDestinations) {
             if (c == dest) { seen = true; break; }
         }
-        if (!seen)
+        if (seen)
+            continue;
+        seenDestinations.push_back(dest);
+
+        bool isAddbaHandshakePerformed = false;
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+            if (dataHeader->getType() == ST_DATA_WITH_QOS) {
+                auto baHandler = getOriginatorBlockAckAgreementHandler();
+                if (baHandler != nullptr) {
+                    auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
+                    if (agreement != nullptr && agreement->getIsAddbaResponseReceived()) {
+                        isAddbaHandshakePerformed = true;
+                    }
+                }
+            }
+        }
+        if (isAddbaHandshakePerformed) {
             candidates.push_back(dest);
+        }
     }
     return candidates;
 }
