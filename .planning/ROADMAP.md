@@ -7,8 +7,8 @@ This roadmap defines the verification and development phases to ensure standard-
 ## Phases
 
 - [ ] **Phase 1: ADDBA Validation & Handshake Correctness** - Ensure AP refuses OFDMA when agreements are missing.
-- [ ] **Phase 2: Sequential Block Ack Spacing & Timing Verification** - Verify precise SIFS spacing and duration calculations.
-- [ ] **Phase 3: PHY Layer RU Behavior & Attenuation Auditing** - Audit path loss and independent sub-channel calculations.
+- [x] **Phase 2: Sequential Block Ack Spacing & Timing Verification** - Verify precise SIFS spacing and duration calculations.
+- [x] **Phase 3: PHY Layer RU Behavior & Attenuation Auditing** - Audit path loss and independent sub-channel calculations.
 - [ ] **Phase 4: Automated Testing & Example Verification** - Run simulation validation scenarios and unit tests.
 
 ## Phase Details
@@ -49,8 +49,8 @@ Plans:
 
 Plans:
 
-- [ ] 02-01: Implement dynamic duration calculations using `IQosRateSelection` in `HeDlMuTxOpFs`.
-- [ ] 02-02: Verify sequential Block Ack transmission offsets at STAs.
+- [x] 02-01: Implement dynamic duration calculations using `IQosRateSelection` in `HeDlMuTxOpFs`.
+- [x] 02-02: Verify sequential Block Ack transmission offsets at STAs.
 
 ### Phase 3: PHY Layer RU Behavior & Attenuation Auditing
 
@@ -84,7 +84,7 @@ Plans:
 
 Plans:
 
-- [ ] 04-01: Create unit and integration test scripts.
+- [x] 04-01: Create unit and integration test scripts.
 - [ ] 04-02: Build and run validation scenarios in `examples/`.
 
 ## Progress
@@ -95,6 +95,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. ADDBA Validation | 2/2 | Completed | 2026-06-16 |
-| 2. Timing Verification | 0/2 | Not started | - |
-| 3. PHY RU Auditing | 0/2 | Not started | - |
-| 4. Testing & Verification | 0/2 | Not started | - |
+| 2. Timing Verification | 2/2 | Completed | 2026-06-17 |
+| 3. PHY RU Auditing | 1/1 | Completed | 2026-06-17 |
+| 4. Testing & Verification | 1/2 | In Progress|  |

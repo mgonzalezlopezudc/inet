@@ -24,7 +24,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Automated Testing & Verification
 
-- [ ] **TST-01**: Implement automated unit/integration tests that verify protocol frame sequences (ADDBA checks, BARs, sequential BAs) under varying traffic loads.
+- [x] **TST-01**: Implement automated unit/integration tests that verify protocol frame sequences (ADDBA checks, BARs, sequential BAs) under varying traffic loads.
 - [ ] **TST-02**: Provide a validation simulation example and assert stats match standard-compliant timings and zero collisions.
 
 ## v2 Requirements
@@ -57,7 +57,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | TIM-02 | Phase 2 | Pending |
 | PHY-01 | Phase 3 | Pending |
 | PHY-02 | Phase 3 | Pending |
-| TST-01 | Phase 4 | Pending |
+| TST-01 | Phase 4 | Complete |
 | TST-02 | Phase 4 | Pending |
 
 **Coverage:**
