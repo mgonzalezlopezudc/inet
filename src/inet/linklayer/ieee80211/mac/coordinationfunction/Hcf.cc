@@ -456,6 +456,7 @@ void Hcf::recipientProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtH
             originatorBlockAckAgreementHandler->processReceivedAddbaResp(addbaResp, originatorBlockAckAgreementPolicy, this);
             auto agreement = originatorBlockAckAgreementHandler->getAgreement(addbaResp->getTransmitterAddress(), addbaResp->getTid());
             emit(blockAckAgreementAddedSignal, agreement);
+            resumeContention();
         }
         else if (auto delba = dynamicPtrCast<const Ieee80211Delba>(header)) {
             if (delba->getInitiator()) {
@@ -686,6 +687,7 @@ void Hcf::originatorProcessReceivedManagementFrame(const Ptr<const Ieee80211Mgmt
             originatorBlockAckAgreementHandler->processReceivedAddbaResp(addbaResp, originatorBlockAckAgreementPolicy, this);
             auto agreement = originatorBlockAckAgreementHandler->getAgreement(addbaResp->getTransmitterAddress(), addbaResp->getTid());
             emit(blockAckAgreementAddedSignal, agreement);
+            resumeContention();
         }
     }
     else {

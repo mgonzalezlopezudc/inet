@@ -24,15 +24,14 @@ void OriginatorBlockAckAgreementPolicy::initialize(int stage)
         aMsduSupported = par("aMsduSupported");
         maximumAllowedBufferSize = par("maximumAllowedBufferSize");
         blockAckTimeoutValue = par("blockAckTimeoutValue");
-        // TODO addbaFailureTimeout = par("addbaFailureTimeout");
+        addbaFailureTimeout = par("addbaFailureTimeout");
         WATCH(blockAckReqThreshold);
     }
 }
 
 simtime_t OriginatorBlockAckAgreementPolicy::computeAddbaFailureTimeout() const
 {
-    // TODO ADDBAFailureTimeout -- 6.3.29.2.2 Semantics of the service primitive
-    throw cRuntimeError("Unimplemented");
+    return addbaFailureTimeout;
 }
 
 bool OriginatorBlockAckAgreementPolicy::isAddbaReqNeeded(Packet *packet, const Ptr<const Ieee80211DataHeader>& header)

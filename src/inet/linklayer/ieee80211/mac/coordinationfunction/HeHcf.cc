@@ -6,6 +6,7 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
+#include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
@@ -19,8 +20,29 @@
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 
+namespace {
 
+inet::Ptr<const inet::ieee80211::Ieee80211DataHeader> getEligibleHoLDataHeader(inet::queueing::IPacketQueue *queue)
+{
+    int n = queue->getNumPackets();
+    for (int i = 0; i < n; ++i) {
+        inet::Packet *pkt = queue->getPacket(i);
+        const auto& header = pkt->peekAtFront<inet::ieee80211::Ieee80211MacHeader>();
+        auto dataHeader = inet::dynamicPtrCast<const inet::ieee80211::Ieee80211DataHeader>(header);
+        if (dataHeader != nullptr && !dataHeader->getReceiverAddress().isMulticast() && !dataHeader->getReceiverAddress().isBroadcast())
+            return dataHeader;
+    }
+    return inet::Ptr<const inet::ieee80211::Ieee80211DataHeader>();
+}
 
+bool isMuEligibleDataHeader(const inet::Ptr<const inet::ieee80211::Ieee80211DataHeader>& dataHeader, inet::ieee80211::IOriginatorBlockAckAgreementHandler *baHandler)
+{
+    return dataHeader != nullptr &&
+           dataHeader->getType() == inet::ieee80211::ST_DATA_WITH_QOS &&
+           inet::ieee80211::hasActiveOriginatorBlockAckAgreement(baHandler, dataHeader->getReceiverAddress(), dataHeader->getTid());
+}
+
+} // namespace
 
 namespace inet {
 namespace ieee80211 {
@@ -41,6 +63,7 @@ std::vector<MacAddress> HeHcf::collectCandidateStations(queueing::IPacketQueue *
 {
     std::vector<MacAddress> candidates;
     std::vector<MacAddress> seenDestinations;
+    auto baHandler = getOriginatorBlockAckAgreementHandler();
     int n = queue->getNumPackets();
     for (int i = 0; i < n; ++i) {
         Packet *pkt = queue->getPacket(i);
@@ -56,20 +79,9 @@ std::vector<MacAddress> HeHcf::collectCandidateStations(queueing::IPacketQueue *
             continue;
         seenDestinations.push_back(dest);
 
-        bool isAddbaHandshakePerformed = false;
         if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            if (dataHeader->getType() == ST_DATA_WITH_QOS) {
-                auto baHandler = getOriginatorBlockAckAgreementHandler();
-                if (baHandler != nullptr) {
-                    auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
-                    if (agreement != nullptr && agreement->getIsAddbaResponseReceived()) {
-                        isAddbaHandshakePerformed = true;
-                    }
-                }
-            }
-        }
-        if (isAddbaHandshakePerformed) {
-            candidates.push_back(dest);
+            if (isMuEligibleDataHeader(dataHeader, baHandler))
+                candidates.push_back(dest);
         }
     }
     return candidates;
@@ -94,6 +106,17 @@ void HeHcf::startFrameSequence(AccessCategory ac)
                 inProgress->removeInProgressFrame(frame);
                 pendingQueue->pushPacket(frame, nullptr);
             }
+        }
+        auto headDataHeader = getEligibleHoLDataHeader(pendingQueue);
+        auto baHandler = getOriginatorBlockAckAgreementHandler();
+        if (!isMuEligibleDataHeader(headDataHeader, baHandler)) {
+            if (headDataHeader != nullptr) {
+                EV_INFO << "HeHcf: earliest SU-transmittable packet "
+                        << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
+                        << " is MU-ineligible, falling back to Hcf::startFrameSequence(ac)." << endl;
+            }
+            Hcf::startFrameSequence(ac);
+            return;
         }
         auto candidates = collectCandidateStations(pendingQueue);
         if (candidates.size() >= 2) {

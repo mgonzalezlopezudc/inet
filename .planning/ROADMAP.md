@@ -32,7 +32,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 01-02-PLAN.md - FIFO single-user fallback, ADDBA retry cooldown, and prompt contention after agreements.
+- [x] 01-02-PLAN.md - FIFO single-user fallback, ADDBA retry cooldown, and prompt contention after agreements.
 
 ### Phase 2: Sequential Block Ack Spacing & Timing Verification
 
@@ -95,7 +95,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. ADDBA Validation | 1/2 | In Progress | - |
+| 1. ADDBA Validation | 2/2 | Completed | 2026-06-16 |
 | 2. Timing Verification | 0/2 | Not started | - |
 | 3. PHY RU Auditing | 0/2 | Not started | - |
 | 4. Testing & Verification | 0/2 | Not started | - |
