@@ -24,8 +24,8 @@ This roadmap defines the verification and development phases to ensure standard-
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01: Implement Block Ack agreement checks in `HeDlMuTxOpFs` container creation.
-- [ ] 01-02: Implement single-user fallback logic for STAs lacking active agreements.
+- [ ] 01-01-PLAN.md - Strict active Block Ack admission for `HeDlMuTxOpFs` container creation.
+- [ ] 01-02-PLAN.md - FIFO single-user fallback, ADDBA retry cooldown, and prompt contention after agreements.
 
 ### Phase 2: Sequential Block Ack Spacing & Timing Verification
 **Goal**: Enforce correct SIFS-spaced sequential block ack scheduling and duration calculations.
