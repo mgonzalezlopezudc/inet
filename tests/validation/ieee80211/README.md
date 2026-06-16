@@ -52,6 +52,26 @@ bash -lc 'source /home/user/omnetpp-6.4.0/setenv -f && source setenv -q && bin/i
 
 Run this broad gate after the focused `TST-01` and `TST-02` validation contracts when validating Phase 4 as a whole.
 
+## TST-02 OFDMA Example Validation
+
+Phase 04 plan 04-02 owns the `TST-02` example-level validation contract. Run it from the repository root:
+
+```bash
+tests/validation/ieee80211/ofdma_example_validation.sh
+```
+
+The script bootstraps the OMNeT++ and INET environments, runs the deterministic sequential Block Ack timing oracle, then executes the pinned OFDMA example:
+
+```bash
+bin/inet_run_unit_tests -m release -f Ieee80211HeMuSeqAck_1.test
+cd examples/ieee80211/ofdma
+inet -u Cmdenv -f omnetpp.ini -c General -r 0
+```
+
+Expected output is a passing `Ieee80211HeMuSeqAck_1.test`, an OFDMA `General` run that reaches the 2s simulation limit, and a fresh `examples/ieee80211/ofdma/results/General-#0.sca` artifact. Timing compliance is gated by `Ieee80211HeMuSeqAck_1.test`; the example-level timing proxy is asserted with `config sim-time-limit 2.0s`; collision compliance is gated by every `edcaCollisionDetected:count == 0`.
+
+The command exits non-zero on missing prerequisites, failed unit timing oracle, failed simulation execution, missing `General-#0.sca`, missing `config sim-time-limit 2.0s`, missing `edcaCollisionDetected:count`, or any non-zero collision count.
+
 ## Phase Boundary
 
-This contract completes `TST-01` for Phase 04 plan 04-01. `TST-02` example-level scalar assertions and broader validation scenario hardening are planned in `04-02`.
+The `TST-01` command contract was completed in Phase 04 plan 04-01. The `TST-02` OFDMA example scalar assertion contract is completed in `04-02`.
