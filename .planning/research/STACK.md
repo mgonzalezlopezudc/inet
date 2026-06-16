@@ -1,24 +1,68 @@
-# 802.11ax DL OFDMA Stack Research
+# Stack Research
 
-## Core Technologies
+**Domain:** Wireless Simulation / IEEE 802.11ax
+**Researched:** 2026-06-16
+**Confidence:** HIGH
 
-- **Simulation Platform**: OMNeT++ 6.3.0.
-- **Framework**: INET Framework (L2 MAC/L1 PHY model).
-- **Language**: C++17 (for simulation logic), NED (for topology), and MSG (for frame structures).
-- **Build System**: GNU Make with `opp_makemake`.
+## Recommended Stack
 
-## Key Dependencies and Libraries
+### Core Technologies
 
-- **OMNeT++ Core Library (`sim_std`)**: Offers event-loop execution, simple modules, packet management (`cPacket`), and statistics tracking.
-- **INET Common Utilities**: Handles physical signal representations, spectrum analysis, path loss, and noise calculation.
-- **C++ Standard Template Library (STL)**: Utilized for scheduler queues, user mappings, and mapping functions.
+| Technology | Version | Purpose | Why Recommended |
+|------------|---------|---------|-----------------|
+| OMNeT++ | 6.3.0 | Discrete event simulation engine | Native framework, provides event loop, scheduling, and standard libraries. |
+| C++ | C++17 | Protocol logic and mathematical models | High performance, strict type safety, standard in OMNeT++ 6.x. |
+| NED | - | Network description topology | Declarative syntax for connecting modules and setting parameters. |
+| MSG | - | Message/packet definitions | Automatically generates C++ serialization/deserialization classes. |
 
-## Rationale for Tech Stack Choices
+### Supporting Libraries
 
-- **C++17**: Ensures high performance during discrete-event simulations, allowing fine-grained calculations of transmission timings and signal-to-noise ratios.
-- **NED Module System**: Provides clean module decoupling, permitting the DL OFDMA scheduler to be plugged in or replaced dynamically without recompiling the core MAC.
-- **OMNeT++ Message Compiler (`opp_msgc`)**: Compiles `.msg` packet formats directly to C++ headers and source files, ensuring serialization safety and introspection support.
+| Library | Version | Purpose | When to Use |
+|---------|---------|---------|-------------|
+| INET Framework | 4.x | Networking protocols library | Base library for L2 MAC and PHY layer wireless simulations. |
 
-## Confidence Levels
-- **OMNeT++ 6.3.0 + INET Compatibility**: High. The framework has stable interfaces for MAC and PHY layer models.
-- **Abstract RU modeling via independent sub-channels**: High. Fits naturally into INET's spectrum and sub-channel abstractions.
+### Development Tools
+
+| Tool | Purpose | Notes |
+|------|---------|-------|
+| opp_makemake | Makefile generation | Generates platform-specific Makefiles. |
+| opp_run / inet_dbg | Simulation execution | Native execution binary with debugging capabilities. |
+| opp_test | Unit/Integration testing | Compiles and executes `.test` files in unit testing. |
+
+## Alternatives Considered
+
+| Recommended | Alternative | When to Use Alternative |
+|-------------|-------------|-------------------------|
+| OMNeT++ 6.3.0 | ns-3 | If simulating larger-scale non-INET protocol suites or when C++ scripting is preferred over NED. |
+
+## What NOT to Use
+
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| raw dynamic_cast | Can crash simulation with segmentation fault on check failure | `check_and_cast<T*>()` for safe casting with runtime errors |
+| std::cout | Bypasses OMNeT++ logging filters and Qtenv GUI log view | `EV` logging streams (e.g. `EV_INFO`, `EV_WARN`) |
+
+## Stack Patterns by Variant
+
+**If debugging protocol sequence:**
+- Use Qtenv (graphical interface)
+- Because it allows step-by-step event debugging and inspection of packet fields.
+
+**If executing test suites/regression run:**
+- Use Cmdenv (command-line execution)
+- Because it has no graphical overhead and runs significantly faster.
+
+## Version Compatibility
+
+| Package A | Compatible With | Notes |
+|-----------|-----------------|-------|
+| OMNeT++ 6.3.0 | gcc/clang with C++17 support | Required for building the INET shared library. |
+
+## Sources
+
+- [IEEE 802.11ax-2020 Standard] — Standard specifications for HE timing, MU PPDU structure, and BlockAck procedures.
+- [INET Framework Developer Guide] — Guidelines on module design, packet tagging, and event flow.
+
+---
+*Stack research for: 802.11ax DL MU OFDMA correctness*
+*Researched: 2026-06-16*
