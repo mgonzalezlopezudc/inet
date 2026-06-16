@@ -65,15 +65,30 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
         int numRUs = allocations.size();
         auto rus = calculateHeRus(centerFreq, totalBandwidth, numRUs);
 
+        // Validate derived RUs match allocations count
+        if ((int)rus.size() != numRUs) {
+            throw cRuntimeError("RU count mismatch: derived %d RUs but tag has %d allocations",
+                (int)rus.size(), numRUs);
+        }
+
+        EV_DEBUG << "HE MU transmission: " << numRUs << " RUs on " << totalBandwidth.get() / 1e6 << " MHz channel "
+                 << "at " << centerFreq.get() / 1e9 << " GHz, total power " << totalPower.get() << " W\n";
+
         std::vector<const ITransmission *> subTransmissions;
+        W accumulatedPower = W(0);
 
         for (const auto& alloc : allocations) {
             int ruIndex = alloc.ruIndex;
             if (ruIndex < 0 || ruIndex >= (int)rus.size())
-                throw cRuntimeError("Invalid RU index %d", ruIndex);
+                throw cRuntimeError("Invalid RU index %d out of range [0, %d)", ruIndex, (int)rus.size());
+            
             const auto& ru = rus[ruIndex];
 
             W ruPower = totalPower * (ru.bandwidth.get() / totalBandwidth.get());
+            accumulatedPower = accumulatedPower + ruPower;
+
+            EV_DEBUG << "  RU[" << ruIndex << "]: centerFreq=" << ru.centerFrequency.get() / 1e9 << " GHz, "
+                     << "bandwidth=" << ru.bandwidth.get() / 1e6 << " MHz, power=" << ruPower.get() << " W\n";
 
             auto ruAnalogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
                 transmission->getPreambleDuration(),
@@ -138,6 +153,16 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
         muSubTransmissions[transmission] = subTransmissions;
         // Keep the main transmission registered on the medium for compatibility/logical tracking
         RadioMedium::addTransmission(transmitterRadio, transmission);
+
+        // Audit power conservation: accumulated RU power should match total power
+        double powerRatio = accumulatedPower.get() / totalPower.get();
+        if (powerRatio < 0.99 || powerRatio > 1.01) {
+            EV_WARN << "Power conservation drift detected: accumulated " << accumulatedPower.get() << " W "
+                    << "vs. total " << totalPower.get() << " W (ratio: " << powerRatio << ")\n";
+        } else {
+            EV_DEBUG << "Power conservation check passed: accumulated " << accumulatedPower.get() << " W "
+                     << "matches total " << totalPower.get() << " W\n";
+        }
     }
     else {
         RadioMedium::addTransmission(transmitterRadio, transmission);
