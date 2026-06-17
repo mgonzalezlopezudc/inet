@@ -272,6 +272,10 @@ EV << "Step 2 prepared: Transmit BAR frame.\n";
 auto barHdr = barPacket->peekAtFront<Ieee80211MacHeader>();
 simtime_t barPktDuration = barHdr->getDurationField();
 EV << "BAR packet duration field: " << barPktDuration << "\n";
+simtime_t expectedBarDuration = sifsTime + blockAckDuration;
+EV << "Expected BAR packet duration field: " << expectedBarDuration << "\n";
+ASSERT(barPktDuration >= SIMTIME_ZERO);
+ASSERT(barPktDuration == expectedBarDuration);
 
 context->addStep(step2);
 
@@ -347,7 +351,8 @@ Step 1 prepared: Expect Block Ack with timeout.
 Expected timeout for step 1: 0.000237
 Callback: ProcessReceivedFrame BasicBlockAck
 Step 2 prepared: Transmit BAR frame.
-BAR packet duration field: -1
+BAR packet duration field: 0.000228
+Expected BAR packet duration field: 0.000228
 Step 3 prepared: Expect Block Ack with timeout.
 Expected timeout for step 3: 0.000237
 Step 3: Simulating timeout (missing Block Ack) to verify recovery path.
