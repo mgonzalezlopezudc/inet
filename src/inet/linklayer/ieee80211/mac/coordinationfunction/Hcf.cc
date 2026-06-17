@@ -34,8 +34,9 @@ static bool isHeMuContainerPacket(Packet *packet)
     if (packet == nullptr || !packet->hasAtFront<Ieee80211MacHeader>())
         return false;
     auto header = packet->peekAtFront<Ieee80211MacHeader>();
-    return packet->getDataLength() > header->getChunkLength() &&
-           packet->hasDataAt<Ieee80211HeMuRuPayloadHeader>(header->getChunkLength());
+    auto payloadOffset = header->getChunkLength();
+    return packet->getDataLength() > payloadOffset &&
+           dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(packet->peekDataAt(payloadOffset)) != nullptr;
 }
 
 void Hcf::initialize(int stage)
