@@ -26,6 +26,7 @@ class INET_API TransmissionBase : public virtual ITransmission, public cObject
     const IRadioMedium *radioMedium;
     const int transmitterRadioId;
     Ptr<const IAntennaGain> transmitterGain;
+    const Protocol *packetProtocol = nullptr;
     const Packet *packet;
 
     const simtime_t startTime;
@@ -57,6 +58,7 @@ class INET_API TransmissionBase : public virtual ITransmission, public cObject
     virtual int getTransmitterRadioId() const override { return transmitterRadioId; }
     virtual const IAntennaGain *getTransmitterAntennaGain() const override { return transmitterGain.get(); }
     virtual const IRadioMedium *getMedium() const override { return radioMedium; }
+    virtual const Protocol *getPacketProtocol() const override { return packetProtocol; }
     virtual const Packet *getPacket() const override { return packetModel != nullptr ? packetModel->getPacket() : packet; }
 
     virtual const simtime_t getStartTime() const override { return startTime; }
@@ -95,4 +97,3 @@ class INET_API TransmissionBase : public virtual ITransmission, public cObject
 } // namespace inet
 
 #endif
-

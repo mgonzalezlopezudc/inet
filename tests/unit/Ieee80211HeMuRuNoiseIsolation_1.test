@@ -7,7 +7,7 @@ independent noise and SNIR evaluation, and same-MU sub-transmissions do not inte
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmitterAnalogModel.h"
@@ -164,81 +164,79 @@ int numRUs = 2;
 std::vector<Ieee80211HeRu> rus = calculateHeRus(centerFreq, bandwidth, numRUs);
 EV << "Generated " << rus.size() << " RUs on " << (bandwidth.get() / 1e6) << " MHz channel\n";
 
-// Create two HE MU packets: RU 0 for rxNic1, RU 1 for rxNic2
-auto pkt1 = new Packet("MuSubPkt1_ForRxNic1");
-pkt1->insertAtBack(makeShared<ByteCountChunk>(B(100)));
-
-auto pkt2 = new Packet("MuSubPkt2_ForRxNic2");
-pkt2->insertAtBack(makeShared<ByteCountChunk>(B(100)));
-
-// Create main container packet for HE MU transmission
+// Create main HE-MU PPDU packet for transmission
 auto containerPkt = new Packet("MuContainer_FromTx");
-auto heMuTag = containerPkt->addTag<Ieee80211HeMuTag>();
-heMuTag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), pkt1);  // RU 0 -> rxNic1
-heMuTag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), pkt2);  // RU 1 -> rxNic2
+auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ru.index;
+    user.staId = computeHeMuStaId(staAddress);
+    phyHeader->appendUsers(user);
+};
+auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
+    auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
+    payloadHeader->setRuIndex(ru.index);
+    payloadHeader->setStaId(computeHeMuStaId(staAddress));
+    payloadHeader->setMpduLength(B(100));
+    containerPkt->insertAtBack(payloadHeader);
+    containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+};
+appendUser(rus[0], MacAddress("00:11:22:33:44:55"));
+appendUser(rus[1], MacAddress("66:77:88:99:AA:BB"));
+phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 41));
+containerPkt->insertAtBack(phyHeader);
+appendPayload(rus[0], MacAddress("00:11:22:33:44:55"));
+appendPayload(rus[1], MacAddress("66:77:88:99:AA:BB"));
 containerPkt->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
-containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(200)));
 
 // Create mock transmission
 auto mockTransmission = new MockIeee80211Transmission(txRadio, containerPkt, mode, channel);
 
 EV << "PHY-02: Testing simultaneous HE MU sub-transmissions to different receivers\n";
 
-// Verify that the transmission carries the HE MU tag
-auto foundTag = containerPkt->findTag<Ieee80211HeMuTag>();
-if (!foundTag) {
-    throw cRuntimeError("PHY-02 FAILED: HE MU tag not found on transmission packet");
-}
-if (foundTag->getAllocations().size() != (size_t)numRUs) {
-    throw cRuntimeError("PHY-02 FAILED: Tag allocation count %zu does not match RU count %d",
-                       foundTag->getAllocations().size(), numRUs);
-}
-EV << "PHY-02 CHECK PASS: HE MU tag present with " << foundTag->getAllocations().size() << " allocations\n";
+// Verify that the transmission carries HE-MU user info in the PHY header
+auto foundHeader = containerPkt->peekAtFront<Ieee80211HeMuPhyHeader>();
+if (foundHeader->getUsersArraySize() != (size_t)numRUs)
+    throw cRuntimeError("PHY-02 FAILED: HE-MU user count %zu does not match RU count %d", foundHeader->getUsersArraySize(), numRUs);
+EV << "PHY-02 CHECK PASS: HE-MU PHY header present with " << foundHeader->getUsersArraySize() << " users\n";
 
 // Verify that each allocation has distinct RU index
 std::set<int> ruIndices;
-for (size_t i = 0; i < foundTag->getAllocations().size(); i++) {
-    const auto& alloc = foundTag->getAllocations()[i];
-    if (ruIndices.count(alloc.ru.index) > 0) {
-        throw cRuntimeError("PHY-02 FAILED: Duplicate RU index %d in allocations", alloc.ru.index);
+for (unsigned int i = 0; i < foundHeader->getUsersArraySize(); i++) {
+    const auto& user = foundHeader->getUsers(i);
+    if (ruIndices.count(user.ruIndex) > 0) {
+        throw cRuntimeError("PHY-02 FAILED: Duplicate RU index %d in users", user.ruIndex);
     }
-    ruIndices.insert(alloc.ru.index);
+    ruIndices.insert(user.ruIndex);
     
-    if (alloc.ru.index < 0 || alloc.ru.index >= numRUs) {
-        throw cRuntimeError("PHY-02 FAILED: Allocation %zu has invalid RU index %d",
-                           i, alloc.ru.index);
+    if (user.ruIndex < 0 || user.ruIndex >= numRUs) {
+        throw cRuntimeError("PHY-02 FAILED: User %u has invalid RU index %d",
+                           i, user.ruIndex);
     }
 }
-EV << "PHY-02 CHECK PASS: All allocations have distinct RU indices\n";
+EV << "PHY-02 CHECK PASS: All HE-MU users have distinct RU indices\n";
 
-// Verify allocation count matches RU count (no missing or extra allocations)
+// Verify user count matches RU count (no missing or extra allocations)
 if (ruIndices.size() != (size_t)numRUs) {
     throw cRuntimeError("PHY-02 FAILED: Found %zu unique RU indices but expected %d",
                        ruIndices.size(), numRUs);
 }
-EV << "PHY-02 CHECK PASS: Allocation set covers all RUs (no gaps)\n";
+EV << "PHY-02 CHECK PASS: HE-MU user set covers all RUs (no gaps)\n";
 
-// Verify each RU has associated packet (required for noise isolation)
-for (const auto& alloc : foundTag->getAllocations()) {
-    if (!alloc.packet) {
-        throw cRuntimeError("PHY-02 FAILED: RU %d allocation has no packet", alloc.ru.index);
-    }
-}
-EV << "PHY-02 CHECK PASS: Each RU allocation has associated packet\n";
-
-// Simulate receiver assignment verification
-// In a real scenario, the receiver's isAssignedHeMuRu() would check if its MAC address
-// matches the allocation. For this test, we verify the allocation structure is correct.
 bool hasAllocationForRu0 = false;
 bool hasAllocationForRu1 = false;
-for (const auto& alloc : foundTag->getAllocations()) {
-    if (alloc.ru.index == 0) hasAllocationForRu0 = true;
-    if (alloc.ru.index == 1) hasAllocationForRu1 = true;
+for (unsigned int i = 0; i < foundHeader->getUsersArraySize(); i++) {
+    const auto& user = foundHeader->getUsers(i);
+    if (user.ruIndex == 0) hasAllocationForRu0 = true;
+    if (user.ruIndex == 1) hasAllocationForRu1 = true;
 }
 if (!hasAllocationForRu0 || !hasAllocationForRu1) {
-    throw cRuntimeError("PHY-02 FAILED: Not all RUs have allocations for noise isolation");
+    throw cRuntimeError("PHY-02 FAILED: Not all RUs have HE-MU users for noise isolation");
 }
-EV << "PHY-02 CHECK PASS: Noise isolation verified - all RUs have independent allocations\n";
+if (!check_and_cast<DummyReceiverModule *>(rxNic1->getSubmodule("radio")->getSubmodule("receiver"))->checkAssigned(mockTransmission) ||
+        !check_and_cast<DummyReceiverModule *>(rxNic2->getSubmodule("radio")->getSubmodule("receiver"))->checkAssigned(mockTransmission))
+    throw cRuntimeError("PHY-02 FAILED: receivers did not match their HE-MU STA-ID assignments");
+EV << "PHY-02 CHECK PASS: Noise isolation verified - all RUs have independent HE-MU users\n";
 
 // Summary
 EV << "PHY-02 regression test PASSED: Per-RU noise independence verified\n";

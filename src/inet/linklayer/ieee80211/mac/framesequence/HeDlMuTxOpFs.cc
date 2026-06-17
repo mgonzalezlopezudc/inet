@@ -12,7 +12,8 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
@@ -72,7 +73,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     if (allocations.empty())
         throw cRuntimeError("HeDlMuTxOpFs: scheduler returned empty RU allocation");
 
-    // Assemble the container packet and populate Ieee80211HeMuTag.
+    // Assemble the HE MU PPDU container packet.
     auto container = new Packet("HE-MU-PPDU");
 
     // Standard QoS data header — broadcast receiver signals HE MU frame.
@@ -80,8 +81,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     containerHdr->setType(ST_DATA_WITH_QOS);
     containerHdr->setChunkLength(b(288)); // minimal 802.11 QoS data header size
-
-    auto muTag = container->addTag<Ieee80211HeMuTag>();
 
     // 1. Calculate the total sequential ACK sequence duration
     simtime_t totalDuration = simtime_t::ZERO;
@@ -191,7 +190,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // Set the totalDuration on the container header to protect the sequential responses
     containerHdr->setDurationField(totalDuration);
     container->insertAtBack(containerHdr);
-    container->insertAtBack(makeShared<Ieee80211MacTrailer>());
 
     std::vector<SelectedAllocation> finalAllocations;
     for (const auto& selectedAllocation : selectedAllocations) {
@@ -247,24 +245,31 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             ackHandler->frameGotInProgress(dataOrMgmtHdrWritable);
         }
 
-        // Store a duplicate in the tag (tag owns the copy).
-        Packet *dupPkt = staPacket->dup();
-        muTag->addAllocation(alloc.ru, alloc.staAddress, dupPkt);
+        auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
+        payloadHeader->setRuIndex(alloc.ru.index);
+        payloadHeader->setStaId(computeHeMuStaId(alloc.staAddress));
+        payloadHeader->setMpduLength(B(staPacket->getByteLength()));
+        container->insertAtBack(payloadHeader);
+        container->insertAtBack(staPacket->peekData());
+
         ActiveAllocation activeAlloc;
         activeAlloc.staAddress = alloc.staAddress;
         activeAlloc.tid = dataHeader->getTid();
         activeAlloc.ruIndex = alloc.ru.index;
+        activeAlloc.packet = staPacket;
         activeAllocations.push_back(activeAlloc);
 
         // Add to inProgressFrames!
         context->getInProgressFrames()->addInProgressFrame(staPacket);
     }
 
-    if (muTag->getAllocations().size() < 2)
+    container->insertAtBack(makeShared<Ieee80211MacTrailer>());
+
+    if (activeAllocations.size() < 2)
         throw cRuntimeError("HeDlMuTxOpFs: fewer than two packets assembled for MU-OFDMA transmission");
 
     EV_INFO << "HeDlMuTxOpFs: assembled HE MU PPDU with "
-            << muTag->getAllocations().size() << " RU allocations. Total sequential duration = " << totalDuration << endl;
+            << activeAllocations.size() << " RU allocations. Total sequential duration = " << totalDuration << endl;
     return container;
 }
 

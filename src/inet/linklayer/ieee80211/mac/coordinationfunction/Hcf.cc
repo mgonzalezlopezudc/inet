@@ -15,7 +15,8 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -27,6 +28,15 @@ simsignal_t Hcf::blockAckAgreementAddedSignal = cComponent::registerSignal("bloc
 simsignal_t Hcf::blockAckAgreementDeletedSignal = cComponent::registerSignal("blockAckAgreementDeleted");
 
 Define_Module(Hcf);
+
+static bool isHeMuContainerPacket(Packet *packet)
+{
+    if (packet == nullptr || !packet->hasAtFront<Ieee80211MacHeader>())
+        return false;
+    auto header = packet->peekAtFront<Ieee80211MacHeader>();
+    return packet->getDataLength() > header->getChunkLength() &&
+           packet->hasDataAt<Ieee80211HeMuRuPayloadHeader>(header->getChunkLength());
+}
 
 void Hcf::initialize(int stage)
 {
@@ -327,8 +337,9 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
     int myAllocationIndex = -1;
     if (auto heMuRxTag = packet->findTag<Ieee80211HeMuRxTag>()) {
         wasHeMu = true;
+        auto myStaId = computeHeMuStaId(mac->getAddress());
         for (unsigned int i = 0; i < heMuRxTag->getAllocationsArraySize(); ++i) {
-            if (heMuRxTag->getAllocations(i).staAddress == mac->getAddress()) {
+            if (heMuRxTag->getAllocations(i).staId == myStaId) {
                 myAllocationIndex = i;
                 break;
             }
@@ -665,7 +676,7 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
 {
     if (receivedPacket == nullptr)
         return;
-    if (lastTransmittedPacket != nullptr && lastTransmittedPacket->findTag<Ieee80211HeMuTag>() != nullptr)
+    if (isHeMuContainerPacket(lastTransmittedPacket))
         return;
     Enter_Method("originatorProcessReceivedFrame");
     EV_INFO << "Processing received frame " << receivedPacket->getName() << " as originator in frame sequence.\n";
@@ -804,7 +815,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packet);
         EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
         if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
-            if (packet->findTag<Ieee80211HeMuTag>() == nullptr) {
+            if (!isHeMuContainerPacket(packet)) {
                 auto pendingPacket = channelOwner->getInProgressFrames()->getPendingFrameFor(packet);
                 const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
                 auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, txop, recipientAckPolicy);

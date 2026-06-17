@@ -15,7 +15,7 @@ Test strict active ADDBA validation before packets enter an HE MU OFDMA containe
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
 %file: TestNetwork.ned
@@ -273,10 +273,20 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
 
 static void expectMuAllocationCount(Packet *container, size_t expectedCount)
 {
-    auto muTag = container->findTag<physicallayer::Ieee80211HeMuTag>();
-    requireCondition(muTag != nullptr, "HE MU tag missing from container");
-    if (muTag->getAllocations().size() != expectedCount)
-        throw cRuntimeError("Expected %zu HE MU allocations, got %zu", expectedCount, muTag->getAllocations().size());
+    auto packetCopy = container->dup();
+    packetCopy->popAtFront<Ieee80211MacHeader>();
+    size_t count = 0;
+    while (packetCopy->getDataLength() > b(0)) {
+        auto payloadHeader = dynamicPtrCast<const physicallayer::Ieee80211HeMuRuPayloadHeader>(packetCopy->peekAtFront());
+        if (payloadHeader == nullptr)
+            break;
+        packetCopy->popAtFront<physicallayer::Ieee80211HeMuRuPayloadHeader>();
+        packetCopy->popAtFront(payloadHeader->getMpduLength());
+        count++;
+    }
+    delete packetCopy;
+    if (count != expectedCount)
+        throw cRuntimeError("Expected %zu HE MU RU payload sections, got %zu", expectedCount, count);
 }
 
 %activity:

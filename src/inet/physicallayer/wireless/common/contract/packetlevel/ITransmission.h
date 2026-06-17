@@ -9,6 +9,7 @@
 #define __INET_ITRANSMISSION_H
 
 #include "inet/common/IPrintableObject.h"
+#include "inet/common/Protocol.h"
 #include "inet/common/Units.h"
 #include "inet/common/geometry/common/Coord.h"
 #include "inet/common/geometry/common/Quaternion.h"
@@ -68,6 +69,13 @@ class INET_API ITransmission : public virtual IPrintableObject
      * never return nullptr.
      */
     virtual const IRadioMedium *getMedium() const = 0;
+
+    /**
+     * Returns the local protocol metadata that was associated with the packet
+     * when the transmission was created. This is simulation metadata and not
+     * transmitted packet content.
+     */
+    virtual const Protocol *getPacketProtocol() const = 0;
 
     /**
      * Returns the packet corresponding to this transmission. This function
@@ -157,4 +165,3 @@ class INET_API ITransmission : public virtual IPrintableObject
 } // namespace inet
 
 #endif
-

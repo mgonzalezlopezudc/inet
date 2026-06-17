@@ -133,7 +133,8 @@ Packet *ReceiverBase::computeReceivedPacket(const ISnir *snir, bool isReceptionS
     auto transmittedPacket = snir->getReception()->getTransmission()->getPacket();
     auto receivedPacket = transmittedPacket->dup();
     receivedPacket->clearTags();
-    receivedPacket->addTag<PacketProtocolTag>()->setProtocol(transmittedPacket->getTag<PacketProtocolTag>()->getProtocol());
+    if (auto protocol = snir->getReception()->getTransmission()->getPacketProtocol())
+        receivedPacket->addTag<PacketProtocolTag>()->setProtocol(protocol);
     if (!isReceptionSuccessful)
         receivedPacket->setBitError(true);
     return receivedPacket;
@@ -141,4 +142,3 @@ Packet *ReceiverBase::computeReceivedPacket(const ISnir *snir, bool isReceptionS
 
 } // namespace physicallayer
 } // namespace inet
-

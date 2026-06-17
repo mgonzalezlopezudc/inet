@@ -8,14 +8,13 @@ import inet.common.INETDefs;
 import inet.common.TagBase;
 import inet.physicallayer.wireless.ieee80211.mode.IIeee80211Mode;
 import inet.physicallayer.wireless.ieee80211.mode.Ieee80211Channel;
-import inet.linklayer.common.MacAddress;
 
 namespace inet::physicallayer;
 
 struct Ieee80211HeMuRxAllocationInfo
 {
     int ruIndex;
-    MacAddress staAddress;
+    uint16_t staId;
 }
 
 class Ieee80211HeMuRxTag extends TagBase

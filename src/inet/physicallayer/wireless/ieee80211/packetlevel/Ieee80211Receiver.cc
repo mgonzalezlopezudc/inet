@@ -10,7 +10,7 @@
 #include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
@@ -25,7 +25,7 @@
 #include "inet/physicallayer/wireless/common/base/packetlevel/NarrowbandNoiseBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
 namespace inet {
 
@@ -33,24 +33,25 @@ namespace physicallayer {
 
 Define_Module(Ieee80211Receiver);
 
-static const Ieee80211HeMuRuAllocation *findAllocationForReceiver(const Ieee80211HeMuTag *tag, const MacAddress& receiverAddress)
+static Ptr<const Ieee80211HeMuPhyHeader> peekHeMuPhyHeader(const ITransmission *transmission)
 {
-    if (tag == nullptr)
-        return nullptr;
-    for (const auto& allocation : tag->getAllocations())
-        if (allocation.staAddress == receiverAddress)
-            return &allocation;
-    return nullptr;
+    auto packet = transmission->getPacket();
+    return transmission->getPacketProtocol() == &Protocol::ieee80211HePhy && packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>()
+            ? packet->peekAtFront<Ieee80211HeMuPhyHeader>()
+            : nullptr;
 }
 
-static void appendHeMuAllocations(const Ptr<Ieee80211HeMuPhyHeader>& phyHeader, const std::vector<Ieee80211HeMuRuAllocation>& allocations)
+static bool containsHeMuUser(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, uint16_t staId)
 {
-    for (const auto& allocation : allocations) {
-        Ieee80211HeMuRuAllocationInfo info;
-        info.ruIndex = allocation.ru.index;
-        info.staAddress = allocation.staAddress;
-        phyHeader->appendAllocations(info);
-    }
+    for (unsigned int i = 0; i < phyHeader->getUsersArraySize(); ++i)
+        if (phyHeader->getUsers(i).staId == staId)
+            return true;
+    return false;
+}
+
+static Ptr<Ieee80211HeMuPhyHeader> copyHeMuPhyHeader(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader)
+{
+    return staticPtrCast<Ieee80211HeMuPhyHeader>(phyHeader->dupShared());
 }
 
 static void addReceptionIndications(Packet *packet, const IReception *reception, const IInterference *interference, const ISnir *snir)
@@ -94,26 +95,43 @@ static bool isReceptionSuccessful(const std::vector<const IReceptionDecision *> 
     return successful;
 }
 
-static Packet *buildHeMuPhyPacket(Packet *macPacket, const Ieee80211HeMuTag *tag, const IReception *reception)
+static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
 {
-    auto packet = macPacket->dup();
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    appendHeMuAllocations(phyHeader, tag->getAllocations());
-    phyHeader->setLengthField(B(packet->getDataLength()));
-    phyHeader->setChunkLength(b(8 + phyHeader->getAllocationsArraySize() * 56));
-    packet->insertAtFront(phyHeader);
+    auto packetCopy = transmittedPacket->dup();
+    packetCopy->popAtFront<Ieee80211HeMuPhyHeader>();
+    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>();
+    while (packetCopy->getDataLength() > b(0) && packetCopy->hasAtFront<Ieee80211HeMuRuPayloadHeader>()) {
+        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
+        if (payloadHeader->getStaId() == staId) {
+            auto mpdu = new Packet(transmittedPacket->getName());
+            mpdu->insertAtBack(packetCopy->popAtFront(payloadHeader->getMpduLength()));
+            delete packetCopy;
+            return mpdu;
+        }
+        packetCopy->popAtFront(payloadHeader->getMpduLength());
+    }
+    delete packetCopy;
+    return nullptr;
+}
+
+static Packet *buildHeMuPhyPacket(const Packet *transmittedPacket, const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, uint16_t staId)
+{
+    auto packet = extractHeMuMpdu(transmittedPacket, staId);
+    if (packet == nullptr)
+        return nullptr;
+    auto phyHeaderCopy = copyHeMuPhyHeader(phyHeader);
+    phyHeaderCopy->setLengthField(B(packet->getDataLength()));
+    packet->insertAtFront(phyHeaderCopy);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
     return packet;
 }
 
-static Packet *buildLegacyHeMuPreambleIndication(const Ieee80211HeMuTag *tag, const IReception *reception)
+static Packet *buildLegacyHeMuPreambleIndication(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, const IReception *reception)
 {
     auto packet = new Packet("HE-MU-Legacy-Preamble");
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    appendHeMuAllocations(phyHeader, tag->getAllocations());
-    phyHeader->setLengthField(B(0));
-    phyHeader->setChunkLength(b(8 + phyHeader->getAllocationsArraySize() * 56));
-    packet->insertAtFront(phyHeader);
+    auto phyHeaderCopy = copyHeMuPhyHeader(phyHeader);
+    phyHeaderCopy->setLengthField(B(0));
+    packet->insertAtFront(phyHeaderCopy);
     packet->addTagIfAbsent<Ieee80211HeMuLegacyPreambleInd>()->setDurationField(reception->getTransmission()->getDuration());
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
     return packet;
@@ -151,22 +169,19 @@ std::ostream& Ieee80211Receiver::printToStream(std::ostream& stream, int level, 
 
 bool Ieee80211Receiver::isAssignedHeMuRu(const ITransmission *transmission) const
 {
-    auto packet = transmission->getPacket();
-    auto heMuTag = packet != nullptr ? packet->findTag<Ieee80211HeMuTag>() : nullptr;
-    if (heMuTag == nullptr)
+    auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
+    if (heMuPhyHeader == nullptr)
         return true;
     auto networkInterface = getContainingNicModule(this);
-    auto myMacAddress = networkInterface->getMacAddress();
-    return findAllocationForReceiver(heMuTag.get(), myMacAddress) != nullptr;
+    return containsHeMuUser(heMuPhyHeader, computeHeMuStaId(networkInterface->getMacAddress()));
 }
 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
-    auto packet = transmission->getPacket();
-    auto heMuTag = packet != nullptr ? packet->findTag<Ieee80211HeMuTag>() : nullptr;
-    if (heMuTag != nullptr)
-        return ieee80211Transmission && !heMuTag->getAllocations().empty() &&
+    auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
+    if (heMuPhyHeader != nullptr)
+        return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
                NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
     return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
            NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
@@ -175,10 +190,9 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
-    auto packet = reception->getTransmission()->getPacket();
-    auto heMuTag = packet != nullptr ? packet->findTag<Ieee80211HeMuTag>() : nullptr;
-    if (heMuTag != nullptr)
-        return ieee80211Transmission && !heMuTag->getAllocations().empty() &&
+    auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    if (heMuPhyHeader != nullptr)
+        return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
                getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
     return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
            getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
@@ -188,14 +202,15 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
 {
     auto transmission = check_and_cast<const Ieee80211Transmission *>(reception->getTransmission());
     auto transmittedPacket = transmission->getPacket();
-    auto heMuTag = transmittedPacket != nullptr ? transmittedPacket->findTag<Ieee80211HeMuTag>() : nullptr;
-    if (heMuTag != nullptr) {
+    auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
+    if (heMuPhyHeader != nullptr) {
         auto networkInterface = getContainingNicModule(this);
-        auto myMacAddress = networkInterface->getMacAddress();
-        auto allocation = findAllocationForReceiver(heMuTag.get(), myMacAddress);
-        auto packet = allocation != nullptr && modeSet->containsMode(transmission->getMode())
-                ? buildHeMuPhyPacket(allocation->packet, heMuTag.get(), reception)
-                : buildLegacyHeMuPreambleIndication(heMuTag.get(), reception);
+        auto myStaId = computeHeMuStaId(networkInterface->getMacAddress());
+        auto packet = containsHeMuUser(heMuPhyHeader, myStaId) && modeSet->containsMode(transmission->getMode())
+                ? buildHeMuPhyPacket(transmittedPacket, heMuPhyHeader, myStaId)
+                : buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
+        if (packet == nullptr)
+            packet = buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
         if (!isReceptionSuccessful(decisions))
             packet->setBitError(true);
         addReceptionIndications(packet, reception, interference, snir);
