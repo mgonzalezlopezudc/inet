@@ -1,0 +1,261 @@
+%description:
+Test HE MU recipient BlockAck gating. Only the first scheduled STA responds
+immediately to HE MU QoS data; later STAs wait for the AP's BAR.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckProcedure.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%file: TestNetwork.ned
+module MockMac
+{
+    parameters:
+        @class(MockMac);
+}
+
+module TestHcf
+{
+    parameters:
+        @class(TestHcf);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mac: MockMac;
+        hcf: TestHcf;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+class MockMac : public Ieee80211Mac
+{
+  public:
+    MacAddress address = MacAddress("10:20:30:40:50:60");
+
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+    virtual const MacAddress& getAddress() const override { return address; }
+    virtual void sendUpFrame(Packet *frame) override { delete frame; }
+};
+
+Define_Module(MockMac);
+
+class MockTx : public ITx
+{
+  public:
+    int transmitCount = 0;
+    std::string lastPacketName;
+    simtime_t lastIfs = -1;
+
+    virtual bool isBusy() const override { return false; }
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ICallback *callback) override {
+        transmitFrame(packet, header, SIMTIME_ZERO, callback);
+    }
+    virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, simtime_t ifs, ICallback *callback) override {
+        transmitCount++;
+        lastPacketName = packet->getName();
+        lastIfs = ifs;
+        packet->removeFromOwnershipTree();
+        EV << "TX " << transmitCount << ": " << lastPacketName << " ifs=" << ifs << "\n";
+    }
+    virtual void radioTransmissionFinished() override {}
+};
+
+class MockRateSelection : public IQosRateSelection
+{
+  public:
+    virtual const physicallayer::IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override { return nullptr; }
+    virtual const physicallayer::IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override {
+        auto modeSet = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+        return modeSet->getMode(0);
+    }
+    virtual const physicallayer::IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override {
+        auto modeSet = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+        return modeSet->getMode(0);
+    }
+    virtual const physicallayer::IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override {
+        auto modeSet = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+        return modeSet->getMode(0);
+    }
+};
+
+class MockRecipientAckPolicy : public IRecipientQosAckPolicy
+{
+  public:
+    virtual bool isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override {
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header))
+            return dataHeader->getAckPolicy() == NORMAL_ACK && !dataHeader->getReceiverAddress().isMulticast();
+        return !header->getReceiverAddress().isMulticast();
+    }
+    virtual bool isBlockAckNeeded(const Ptr<const Ieee80211BlockAckReq>& blockAckReq, RecipientBlockAckAgreement *agreement) const override {
+        return agreement != nullptr;
+    }
+    virtual simtime_t computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override {
+        return SIMTIME_ZERO;
+    }
+    virtual simtime_t computeBasicBlockAckDurationField(Packet *packet, const Ptr<const Ieee80211BasicBlockAckReq>& basicBlockAckReq) const override {
+        return SIMTIME_ZERO;
+    }
+};
+
+class MockRecipientDataService : public IRecipientQosMacDataService
+{
+  public:
+    virtual std::vector<Packet *> dataFrameReceived(Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler) override {
+        delete dataPacket;
+        return {};
+    }
+    virtual std::vector<Packet *> controlFrameReceived(Packet *controlPacket, const Ptr<const Ieee80211MacHeader>& controlHeader, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler) override {
+        return {};
+    }
+    virtual std::vector<Packet *> managementFrameReceived(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader) override {
+        delete mgmtPacket;
+        return {};
+    }
+};
+
+class MockRecipientBlockAckAgreementHandler : public IRecipientBlockAckAgreementHandler
+{
+  public:
+    MacAddress originator;
+    Tid tid = 0;
+    RecipientBlockAckAgreement *agreement = nullptr;
+    int qosFrameReceivedCount = 0;
+
+    MockRecipientBlockAckAgreementHandler(const MacAddress& originator, Tid tid) : originator(originator), tid(tid) {
+        agreement = new RecipientBlockAckAgreement(originator, tid, SequenceNumberCyclic(0), 64, SIMTIME_ZERO);
+    }
+    virtual ~MockRecipientBlockAckAgreementHandler() { delete agreement; }
+
+    virtual void processTransmittedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IBlockAckAgreementHandlerCallback *callback) override {}
+    virtual void processReceivedAddbaRequest(const Ptr<const Ieee80211AddbaRequest>& addbaRequest, IRecipientBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba, IRecipientBlockAckAgreementPolicy *blockAckAgreementPolicy) override {}
+    virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>& delba) override {}
+    virtual void qosFrameReceived(const Ptr<const Ieee80211DataHeader>& qosHeader, IBlockAckAgreementHandlerCallback *callback) override {
+        qosFrameReceivedCount++;
+        agreement->blockAckPolicyFrameReceived(qosHeader);
+    }
+    virtual void blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback) override {}
+
+    virtual RecipientBlockAckAgreement *getAgreement(Tid tid, MacAddress originatorAddr) override {
+        return tid == this->tid && originatorAddr == originator ? agreement : nullptr;
+    }
+};
+
+class TestHcf : public Hcf
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+
+    void setup(MockMac *mockMac, MockTx *mockTx, MockRateSelection *mockRateSelection, MockRecipientAckPolicy *mockAckPolicy,
+            MockRecipientDataService *mockDataService, MockRecipientBlockAckAgreementHandler *mockAgreementHandler) {
+        mac = mockMac;
+        tx = mockTx;
+        rateSelection = mockRateSelection;
+        recipientAckPolicy = mockAckPolicy;
+        recipientDataService = mockDataService;
+        recipientBlockAckAgreementHandler = mockAgreementHandler;
+        recipientBlockAckProcedure = new RecipientBlockAckProcedure();
+        modeSet = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
+    }
+
+    void receiveData(Packet *packet) {
+        auto header = packet->peekAtFront<Ieee80211MacHeader>();
+        recipientProcessReceivedFrame(packet, header);
+    }
+
+    void receiveControl(Packet *packet) {
+        auto header = packet->peekAtFront<Ieee80211MacHeader>();
+        recipientProcessReceivedControlFrame(packet, header);
+    }
+};
+
+Define_Module(TestHcf);
+
+static Packet *makeHeMuDataPacket(const char *name, const MacAddress& receiver, const MacAddress& transmitter, Tid tid, int myAllocationIndex)
+{
+    auto packet = new Packet(name);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(transmitter);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setTid(tid);
+    header->setSequenceNumber(SequenceNumberCyclic(myAllocationIndex));
+    header->setDurationField(SimTime(1, SIMTIME_MS));
+    packet->insertAtFront(header);
+
+    auto tag = packet->addTag<physicallayer::Ieee80211HeMuRxTag>();
+    for (int i = 0; i < 2; i++) {
+        physicallayer::Ieee80211HeMuRxAllocationInfo allocation;
+        allocation.ruIndex = i;
+        allocation.staAddress = i == myAllocationIndex ? receiver : MacAddress("AA:BB:CC:DD:EE:FF");
+        tag->appendAllocations(allocation);
+    }
+    tag->setRuIndex(myAllocationIndex);
+    return packet;
+}
+
+static Packet *makeBarPacket(const MacAddress& receiver, const MacAddress& transmitter, Tid tid)
+{
+    auto blockAckReq = makeShared<Ieee80211BasicBlockAckReq>();
+    blockAckReq->setReceiverAddress(receiver);
+    blockAckReq->setTransmitterAddress(transmitter);
+    blockAckReq->setTidInfo(tid);
+    blockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(0));
+    blockAckReq->setDurationField(SimTime(1, SIMTIME_MS));
+    return new Packet("BasicBlockAckReq", blockAckReq);
+}
+
+%activity:
+auto hcf = check_and_cast<TestHcf *>(getParentModule()->getSubmodule("hcf"));
+auto mac = check_and_cast<MockMac *>(getParentModule()->getSubmodule("mac"));
+
+MacAddress ap("10:20:30:40:50:60");
+MacAddress sta("00:11:22:33:44:55");
+Tid tid = 5;
+mac->address = sta;
+
+MockTx tx;
+MockRateSelection rateSelection;
+MockRecipientAckPolicy ackPolicy;
+MockRecipientDataService dataService;
+auto agreementHandler = new MockRecipientBlockAckAgreementHandler(ap, tid);
+hcf->setup(mac, &tx, &rateSelection, &ackPolicy, &dataService, agreementHandler);
+
+hcf->receiveData(makeHeMuDataPacket("he-mu-data-sta0", sta, ap, tid, 0));
+ASSERT(tx.transmitCount == 1);
+ASSERT(tx.lastPacketName == "BasicBlockAck");
+EV << "STA0 immediate BlockAck count: " << tx.transmitCount << "\n";
+
+hcf->receiveData(makeHeMuDataPacket("he-mu-data-sta1", sta, ap, tid, 1));
+ASSERT(tx.transmitCount == 1);
+EV << "STA1 immediate BlockAck count after data: " << tx.transmitCount << "\n";
+ASSERT(agreementHandler->qosFrameReceivedCount == 2);
+EV << "QoS BlockAck record updates: " << agreementHandler->qosFrameReceivedCount << "\n";
+
+auto barPacket = makeBarPacket(sta, ap, tid);
+hcf->receiveControl(barPacket);
+ASSERT(tx.transmitCount == 2);
+ASSERT(tx.lastPacketName == "BasicBlockAck");
+EV << "STA1 BlockAck count after BAR: " << tx.transmitCount << "\n";
+delete barPacket;
+
+%contains: stdout
+STA1 immediate BlockAck count after data: 1
+QoS BlockAck record updates: 2
+TX 2: BasicBlockAck ifs=0.000016
+STA1 BlockAck count after BAR: 2
