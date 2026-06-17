@@ -15,7 +15,6 @@ using namespace inet::physicallayer;
 
 // Create original HeMuPhyHeader
 auto origHeader = makeShared<Ieee80211HeMuPhyHeader>();
-origHeader->setRuIndex(5);
 
 Ieee80211HeMuRuAllocationInfo alloc1;
 alloc1.ruIndex = 2;
@@ -27,11 +26,10 @@ alloc2.ruIndex = 4;
 alloc2.staAddress = MacAddress("66:77:88:99:AA:BB");
 origHeader->appendAllocations(alloc2);
 
-// Set length: 16 bits for ruIndex/numAllocations + 2 allocations * 56 bits = 128 bits = 16 bytes
-origHeader->setChunkLength(b(16 + origHeader->getAllocationsArraySize() * 56));
+// Set length: 8 bits for numAllocations + 2 allocations * 56 bits = 120 bits = 15 bytes
+origHeader->setChunkLength(b(8 + origHeader->getAllocationsArraySize() * 56));
 
 EV << "Original Header:\n";
-EV << "ruIndex = " << origHeader->getRuIndex() << "\n";
 EV << "allocations count = " << origHeader->getAllocationsArraySize() << "\n";
 for (unsigned int i = 0; i < origHeader->getAllocationsArraySize(); ++i) {
     EV << "  alloc[" << i << "]: ruIndex=" << origHeader->getAllocations(i).ruIndex
@@ -54,7 +52,6 @@ pk2->insertAtFront(bytes);
 auto recvHeader = pk2->popAtFront<Ieee80211HeMuPhyHeader>();
 
 EV << "Deserialized Header:\n";
-EV << "ruIndex = " << recvHeader->getRuIndex() << "\n";
 EV << "allocations count = " << recvHeader->getAllocationsArraySize() << "\n";
 for (unsigned int i = 0; i < recvHeader->getAllocationsArraySize(); ++i) {
     EV << "  alloc[" << i << "]: ruIndex=" << recvHeader->getAllocations(i).ruIndex
@@ -67,13 +64,11 @@ EV << ".\n";
 
 %contains: stdout
 Original Header:
-ruIndex = 5
 allocations count = 2
   alloc[0]: ruIndex=2, address=00-11-22-33-44-55
   alloc[1]: ruIndex=4, address=66-77-88-99-AA-BB
-Serialized to 16 bytes
+Serialized to 15 bytes
 Deserialized Header:
-ruIndex = 5
 allocations count = 2
   alloc[0]: ruIndex=2, address=00-11-22-33-44-55
   alloc[1]: ruIndex=4, address=66-77-88-99-AA-BB

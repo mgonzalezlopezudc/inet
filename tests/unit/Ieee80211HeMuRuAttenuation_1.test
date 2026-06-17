@@ -191,8 +191,8 @@ pkt2->insertAtBack(makeShared<ByteCountChunk>(B(100)));
 // Create main container packet for HE MU transmission
 auto containerPkt = new Packet("MuContainer");
 auto heMuTag = containerPkt->addTag<Ieee80211HeMuTag>();
-heMuTag->addAllocation(0, pkt1);  // RU 0 for station 1
-heMuTag->addAllocation(1, pkt2);  // RU 1 for station 2
+heMuTag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), pkt1);  // RU 0 for station 1
+heMuTag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), pkt2);  // RU 1 for station 2
 containerPkt->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(200)));
 
@@ -213,9 +213,9 @@ EV << "PHY-01 CHECK PASS: HE MU tag present with correct allocation count\n";
 // Verify allocation list carries RU indices and packets
 for (size_t i = 0; i < foundTag->getAllocations().size(); i++) {
     const auto& alloc = foundTag->getAllocations()[i];
-    if (alloc.ruIndex < 0 || alloc.ruIndex >= numRUs) {
+    if (alloc.ru.index < 0 || alloc.ru.index >= numRUs) {
         throw cRuntimeError("PHY-01 FAILED: Allocation %zu has invalid RU index %d",
-                           i, alloc.ruIndex);
+                           i, alloc.ru.index);
     }
     if (!alloc.packet) {
         throw cRuntimeError("PHY-01 FAILED: Allocation %zu has null packet", i);

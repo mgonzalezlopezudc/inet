@@ -1,17 +1,15 @@
 %description:
-Test that Ieee80211RadioMedium turns an HE MU container into per-RU sub-transmissions
-and preserves the receiver-visible PHY metadata.
+Test that Ieee80211RadioMedium keeps an HE MU OFDMA PPDU as one transmission
+while computing assigned receiver reception on the selected RU.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IScalarSignalAnalogModel.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -86,18 +84,7 @@ class InspectableRadioMedium : public Ieee80211RadioMedium
   public:
     void testAddTransmission(const IRadio *transmitter, const ITransmission *transmission) { addTransmission(transmitter, transmission); }
     void testRemoveTransmission(const ITransmission *transmission) { removeTransmission(transmission); }
-    bool testIsPotentialReceiver(const IRadio *receiver, const ITransmission *transmission) const { return isPotentialReceiver(receiver, transmission); }
-    bool testIsInterferingTransmission(const ITransmission *transmission, const IReception *reception) const { return isInterferingTransmission(transmission, reception); }
-    int getSubTransmissionCount(const ITransmission *transmission) const {
-        auto it = muSubTransmissions.find(transmission);
-        return it == muSubTransmissions.end() ? 0 : it->second.size();
-    }
-    const ITransmission *getSubTransmission(const ITransmission *transmission, int index) const {
-        auto it = muSubTransmissions.find(transmission);
-        if (it == muSubTransmissions.end())
-            throw cRuntimeError("No sub-transmissions for inspected transmission");
-        return it->second.at(index);
-    }
+    const IReception *testComputeReception(const IRadio *receiver, const ITransmission *transmission) const { return computeReception(receiver, transmission); }
 };
 
 class MockNicModule : public NetworkInterface
@@ -110,41 +97,6 @@ class MockNicModule : public NetworkInterface
         }
     }
     virtual int numInitStages() const override { return 1; }
-};
-
-class MockReception : public IReception
-{
-  protected:
-    const IRadio *receiver = nullptr;
-    const ITransmission *transmission = nullptr;
-    Coord position;
-    Quaternion orientation;
-
-  public:
-    MockReception(const IRadio *receiver, const ITransmission *transmission) : receiver(receiver), transmission(transmission) {}
-    virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override { return stream << "MockReception"; }
-    virtual const IRadio *getReceiverRadio() const override { return receiver; }
-    virtual const ITransmission *getTransmission() const override { return transmission; }
-    virtual const simtime_t getStartTime() const override { return transmission->getStartTime(); }
-    virtual const simtime_t getEndTime() const override { return transmission->getEndTime(); }
-    virtual const simtime_t getStartTime(IRadioSignal::SignalPart part) const override { return transmission->getStartTime(part); }
-    virtual const simtime_t getEndTime(IRadioSignal::SignalPart part) const override { return transmission->getEndTime(part); }
-    virtual const simtime_t getPreambleStartTime() const override { return transmission->getPreambleStartTime(); }
-    virtual const simtime_t getPreambleEndTime() const override { return transmission->getPreambleEndTime(); }
-    virtual const simtime_t getHeaderStartTime() const override { return transmission->getHeaderStartTime(); }
-    virtual const simtime_t getHeaderEndTime() const override { return transmission->getHeaderEndTime(); }
-    virtual const simtime_t getDataStartTime() const override { return transmission->getDataStartTime(); }
-    virtual const simtime_t getDataEndTime() const override { return transmission->getDataEndTime(); }
-    virtual const simtime_t getDuration() const override { return transmission->getDuration(); }
-    virtual const simtime_t getDuration(IRadioSignal::SignalPart part) const override { return transmission->getDuration(part); }
-    virtual const simtime_t getPreambleDuration() const override { return transmission->getPreambleDuration(); }
-    virtual const simtime_t getHeaderDuration() const override { return transmission->getHeaderDuration(); }
-    virtual const simtime_t getDataDuration() const override { return transmission->getDataDuration(); }
-    virtual const Coord& getStartPosition() const override { return position; }
-    virtual const Coord& getEndPosition() const override { return position; }
-    virtual const Quaternion& getStartOrientation() const override { return orientation; }
-    virtual const Quaternion& getEndOrientation() const override { return orientation; }
-    virtual const IReceptionAnalogModel *getAnalogModel() const override { return nullptr; }
 };
 
 Define_Module(InspectableRadioMedium);
@@ -193,6 +145,9 @@ auto modeSet = Ieee80211ModeSet::getModeSet("ax");
 auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
 auto band = Ieee80211CompliantBands::getBand("5 GHz");
 auto channel = new Ieee80211Channel(band, 0);
+Hz centerFreq = channel->getCenterFrequency();
+Hz bandwidth = mode->getDataMode()->getBandwidth();
+auto rus = calculateHeRus(centerFreq, bandwidth, 3);
 
 MacAddress sta1("00:11:22:33:44:55");
 MacAddress sta2("66:77:88:99:AA:BB");
@@ -200,10 +155,19 @@ MacAddress sta3("02:00:00:00:00:03");
 
 auto container = new Packet("HE-MU-PPDU");
 auto heMuTag = container->addTag<Ieee80211HeMuTag>();
-heMuTag->addAllocation(0, makeDataPacket("ru0-data", sta1));
-heMuTag->addAllocation(1, makeDataPacket("ru1-data", sta2));
-heMuTag->addAllocation(2, makeDataPacket("ru2-data", sta3));
+heMuTag->addAllocation(rus[0], sta1, makeDataPacket("ru0-data", sta1));
+heMuTag->addAllocation(rus[1], sta2, makeDataPacket("ru1-data", sta2));
+heMuTag->addAllocation(rus[2], sta3, makeDataPacket("ru2-data", sta3));
 container->insertAtBack(makeShared<ByteCountChunk>(B(32)));
+
+auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
+auto analogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
+        SimTime(100, SIMTIME_US),
+        SimTime(100, SIMTIME_US),
+        SimTime(800, SIMTIME_US),
+        centerFreq,
+        bandwidth,
+        flatTransmitter->getPower());
 
 auto transmission = new Ieee80211Transmission(
         txRadio,
@@ -216,59 +180,34 @@ auto transmission = new Ieee80211Transmission(
         Coord(), Coord(),
         Quaternion(), Quaternion(),
         nullptr, nullptr, nullptr, nullptr,
-        nullptr,
+        analogModel,
         mode,
         channel);
 
 medium->testAddTransmission(txRadio, transmission);
-ASSERT(medium->getSubTransmissionCount(transmission) == 3);
-ASSERT(!medium->testIsPotentialReceiver(rxRadio, transmission));
+ASSERT(medium->getCommunicationCache()->getNumTransmissions() == 1);
 
-auto totalPower = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter())->getPower();
-W accumulatedPower = W(0);
-std::set<int> ruIndices;
-std::vector<const ITransmission *> subTransmissions;
+auto aggregateAnalog = check_and_cast<const IScalarSignalAnalogModel *>(transmission->getAnalogModel());
+ASSERT(aggregateAnalog->getCenterFrequency() == centerFreq);
+ASSERT(aggregateAnalog->getBandwidth() == bandwidth);
 
-for (int i = 0; i < 3; i++) {
-    auto subTransmission = medium->getSubTransmission(transmission, i);
-    subTransmissions.push_back(subTransmission);
-    auto subPacket = subTransmission->getPacket();
-    ASSERT(subPacket != nullptr);
-    ASSERT(subPacket->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ieee80211HePhy);
+auto reception = medium->testComputeReception(rxRadio, transmission);
+auto ruReceptionAnalog = check_and_cast<const IScalarSignalAnalogModel *>(reception->getAnalogModel());
+ASSERT(ruReceptionAnalog->getCenterFrequency() == rus[0].centerFrequency);
+ASSERT(ruReceptionAnalog->getBandwidth() == rus[0].bandwidth);
+ASSERT(ruReceptionAnalog->getPower() < aggregateAnalog->getPower());
 
-    auto phyHeader = subPacket->peekAtFront<Ieee80211HeMuPhyHeader>();
-    ASSERT(phyHeader != nullptr);
-    ASSERT(phyHeader->getRuIndex() == i);
-    ASSERT(phyHeader->getAllocationsArraySize() == 3);
-    ASSERT(phyHeader->getAllocations(i).ruIndex == i);
-    ASSERT(ruIndices.insert(phyHeader->getRuIndex()).second);
-
-    auto trailer = subPacket->peekAtBack<Ieee80211MacTrailer>(B(4));
-    ASSERT(trailer->getFcsMode() == FCS_DECLARED_CORRECT);
-
-    auto scalarAnalog = dynamic_cast<const IScalarSignalAnalogModel *>(subTransmission->getAnalogModel());
-    ASSERT(scalarAnalog != nullptr);
-    accumulatedPower = accumulatedPower + scalarAnalog->getPower();
-}
-
-ASSERT(ruIndices.size() == 3);
-ASSERT(std::abs(accumulatedPower.get() - totalPower.get()) < totalPower.get() * 0.01);
-
-MockReception siblingReception(rxRadio, subTransmissions[1]);
-ASSERT(!medium->testIsInterferingTransmission(subTransmissions[0], &siblingReception));
-
+delete reception;
 medium->testRemoveTransmission(transmission);
 delete channel;
 txNic->deleteModule();
 rxNic->deleteModule();
 
-EV << "Ieee80211RadioMedium split HE MU container into 3 RU sub-transmissions.\n";
-EV << "Sub-transmissions carried HE MU PHY headers, full allocation maps, declared-correct FCS, and conserved scalar power.\n";
-EV << "Main MU container was not a physical receiver candidate and sibling RUs did not interfere.\n";
+EV << "Ieee80211RadioMedium kept HE MU OFDMA as one PPDU transmission.\n";
+EV << "Assigned receiver reception used the selected RU center frequency and bandwidth.\n";
 EV << ".\n";
 
 %contains: stdout
-Ieee80211RadioMedium split HE MU container into 3 RU sub-transmissions.
-Sub-transmissions carried HE MU PHY headers, full allocation maps, declared-correct FCS, and conserved scalar power.
-Main MU container was not a physical receiver candidate and sibling RUs did not interfere.
+Ieee80211RadioMedium kept HE MU OFDMA as one PPDU transmission.
+Assigned receiver reception used the selected RU center frequency and bandwidth.
 .

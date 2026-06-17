@@ -8,7 +8,9 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 
 #include "inet/common/packet/chunk/BitCountChunk.h"
+#include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssOfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
@@ -19,6 +21,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -233,8 +236,19 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
 {
     auto ieee80211Transmitter = check_and_cast<const Ieee80211Transmitter *>(transmitter);
     auto mode = ieee80211Transmitter->computeTransmissionMode(packet);
-    auto phyHeader = mode->getHeaderMode()->createHeader();
-    phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
+    auto heMuTag = packet->findTag<Ieee80211HeMuTag>();
+    auto phyHeader = heMuTag != nullptr ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
+    if (auto heMuPhyHeader = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader)) {
+        for (const auto& allocation : heMuTag->getAllocations()) {
+            Ieee80211HeMuRuAllocationInfo info;
+            info.ruIndex = allocation.ru.index;
+            info.staAddress = allocation.staAddress;
+            heMuPhyHeader->appendAllocations(info);
+        }
+        phyHeader->setChunkLength(b(8 + heMuPhyHeader->getAllocationsArraySize() * 56));
+    }
+    else
+        phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
     phyHeader->setLengthField(B(packet->getDataLength()));
     insertFcs(phyHeader);
     packet->insertAtFront(phyHeader);
@@ -278,13 +292,17 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
 
     if (auto heMuPhyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
         auto tag = packet->addTagIfAbsent<Ieee80211HeMuRxTag>();
-        tag->setRuIndex(heMuPhyHeader->getRuIndex());
+        tag->setRuIndex(-1);
+        auto networkInterface = getContainingNicModule(this);
+        auto myMacAddress = networkInterface->getMacAddress();
         for (unsigned int i = 0; i < heMuPhyHeader->getAllocationsArraySize(); ++i) {
             const auto& alloc = heMuPhyHeader->getAllocations(i);
             Ieee80211HeMuRxAllocationInfo info;
             info.ruIndex = alloc.ruIndex;
             info.staAddress = alloc.staAddress;
             tag->appendAllocations(info);
+            if (alloc.staAddress == myMacAddress)
+                tag->setRuIndex(alloc.ruIndex);
         }
     }
 
@@ -348,4 +366,3 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::peekIeee80211PhyHeaderAtFron
 } // namespace physicallayer
 
 } // namespace inet
-

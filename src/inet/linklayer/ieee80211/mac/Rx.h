@@ -58,6 +58,7 @@ class INET_API Rx : public SimpleModule, public IRx
     virtual void receivedSignalPartChanged(physicallayer::IRadioSignal::SignalPart part) override;
     virtual bool lowerFrameReceived(Packet *packet) override;
     virtual void frameTransmitted(simtime_t durationField) override;
+    virtual void legacySignalReceived(simtime_t durationField) override;
     virtual void registerContention(IContention *contention) override;
 };
 
@@ -65,4 +66,3 @@ class INET_API Rx : public SimpleModule, public IRx
 } // namespace inet
 
 #endif
-

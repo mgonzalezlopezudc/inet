@@ -36,6 +36,7 @@ class INET_API IRx
     // from Contention
     virtual bool isMediumFree() const = 0;
     virtual void frameTransmitted(simtime_t durationField) = 0;
+    virtual void legacySignalReceived(simtime_t durationField) = 0;
 
     // from Coordination functions
     virtual void registerContention(IContention *contention) = 0;
@@ -51,4 +52,3 @@ class INET_API IRx
 } // namespace inet
 
 #endif
-

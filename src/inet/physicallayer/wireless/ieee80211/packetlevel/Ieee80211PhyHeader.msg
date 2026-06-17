@@ -161,6 +161,5 @@ struct Ieee80211HeMuRuAllocationInfo
 
 class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 {
-    int ruIndex;
     Ieee80211HeMuRuAllocationInfo allocations[];
 }

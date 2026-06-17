@@ -249,7 +249,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
         // Store a duplicate in the tag (tag owns the copy).
         Packet *dupPkt = staPacket->dup();
-        muTag->addAllocation(alloc.ru.index, dupPkt);
+        muTag->addAllocation(alloc.ru, alloc.staAddress, dupPkt);
         ActiveAllocation activeAlloc;
         activeAlloc.staAddress = alloc.staAddress;
         activeAlloc.tid = dataHeader->getTid();

@@ -27,18 +27,18 @@ for (const auto& ru : rus) {
 auto tag = new Ieee80211HeMuTag();
 auto pkt1 = new Packet("pkt1");
 auto pkt2 = new Packet("pkt2");
-tag->addAllocation(0, pkt1);
-tag->addAllocation(2, pkt2);
+tag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), pkt1);
+tag->addAllocation(rus[2], MacAddress("66:77:88:99:AA:BB"), pkt2);
 
 EV << "Allocations in tag: " << tag->getAllocations().size() << "\n";
-EV << "Alloc 0: RU " << tag->getAllocations()[0].ruIndex << ", name=" << tag->getAllocations()[0].packet->getName() << "\n";
-EV << "Alloc 1: RU " << tag->getAllocations()[1].ruIndex << ", name=" << tag->getAllocations()[1].packet->getName() << "\n";
+EV << "Alloc 0: RU " << tag->getAllocations()[0].ru.index << ", name=" << tag->getAllocations()[0].packet->getName() << "\n";
+EV << "Alloc 1: RU " << tag->getAllocations()[1].ru.index << ", name=" << tag->getAllocations()[1].packet->getName() << "\n";
 
 // Test duplicate tag
 auto dupTag = tag->dup();
 EV << "Dup Allocations in tag: " << dupTag->getAllocations().size() << "\n";
-EV << "Dup Alloc 0: RU " << dupTag->getAllocations()[0].ruIndex << ", name=" << dupTag->getAllocations()[0].packet->getName() << "\n";
-EV << "Dup Alloc 1: RU " << dupTag->getAllocations()[1].ruIndex << ", name=" << dupTag->getAllocations()[1].packet->getName() << "\n";
+EV << "Dup Alloc 0: RU " << dupTag->getAllocations()[0].ru.index << ", name=" << dupTag->getAllocations()[0].packet->getName() << "\n";
+EV << "Dup Alloc 1: RU " << dupTag->getAllocations()[1].ru.index << ", name=" << dupTag->getAllocations()[1].packet->getName() << "\n";
 
 delete tag;
 delete dupTag;

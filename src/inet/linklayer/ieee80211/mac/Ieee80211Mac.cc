@@ -183,6 +183,11 @@ void Ieee80211Mac::handleUpperPacket(Packet *packet)
 
 void Ieee80211Mac::handleLowerPacket(Packet *packet)
 {
+    if (auto legacyPreambleInd = packet->findTag<Ieee80211HeMuLegacyPreambleInd>()) {
+        rx->legacySignalReceived(legacyPreambleInd->getDurationField());
+        delete packet;
+        return;
+    }
     if (rx->lowerFrameReceived(packet)) {
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         processLowerFrame(packet, header);
@@ -418,4 +423,3 @@ void Ieee80211Mac::handleCrashOperation(LifecycleOperation *operation)
 
 } // namespace ieee80211
 } // namespace inet
-
