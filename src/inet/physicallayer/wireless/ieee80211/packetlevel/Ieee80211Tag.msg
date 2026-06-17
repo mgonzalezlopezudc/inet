@@ -24,6 +24,11 @@ class Ieee80211HeMuRxTag extends TagBase
     Ieee80211HeMuRxAllocationInfo allocations[];
 }
 
+class Ieee80211HeMuLegacyPreambleInd extends TagBase
+{
+    simtime_t durationField;
+}
+
 
 //
 // This is an abstract base class that should not be directly added as a tag.
