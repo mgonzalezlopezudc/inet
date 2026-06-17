@@ -47,6 +47,9 @@ class INET_API MediumCanvasVisualizer : public MediumVisualizerBase
     double signalWaveLength = NaN;
     double signalWaveWidth = NaN;
     double signalWaveFadingAnimationSpeedFactor = NaN;
+    bool displayHeMuSignalDetails = true;
+    int heMuSignalLabelMaxUsers = 4;
+    bool displayHeMuSignalPhyFields = true;
     bool displayCommunicationHeat = false;
     int communicationHeatMapSize = 100;
     //@}

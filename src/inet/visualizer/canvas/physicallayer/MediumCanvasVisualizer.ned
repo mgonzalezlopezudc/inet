@@ -35,6 +35,9 @@ simple MediumCanvasVisualizer extends MediumVisualizerBase like IMediumVisualize
         double signalWaveLength @unit(m) = default(50m); // Distance between moving circles representing waves, value must be in the range (0, +inf)
         double signalWaveWidth @unit(m) = default(10m); // Width of moving circles representing waves, value must be in the range (0, +inf)
         double signalWaveFadingAnimationSpeedFactor = default(1); // Value must be in the range [0, 1]
+    bool displayHeMuSignalDetails = default(true); // When enabled, HE MU transmission labels and tooltips include RU-user summaries
+    int heMuSignalLabelMaxUsers = default(4); // Maximum number of HE MU users shown in the signal label, value must be in the range [0, +inf)
+    bool displayHeMuSignalPhyFields = default(true); // When enabled, HE MU summaries include MCS/NSS/DCM in addition to RU and STA IDs
 
         bool displayCommunicationHeat = default(false); // When enabled the radio medium displays recent successful receptions as a heat map overlay
 
