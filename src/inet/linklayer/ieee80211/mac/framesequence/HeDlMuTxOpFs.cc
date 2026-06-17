@@ -238,6 +238,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 auto originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(heHcf->getOriginatorMacDataService());
                 originatorQosDataService->assignSequenceNumber(dataOrMgmtHdrWritable);
             }
+            if (auto dataHdrWritable = dynamicPtrCast<Ieee80211DataHeader>(dataOrMgmtHdrWritable))
+                dataHdrWritable->setAckPolicy(BLOCK_ACK);
             // Set the duration field to totalDuration
             dataOrMgmtHdrWritable->setDurationField(totalDuration);
             staPacket->insertAtFront(dataOrMgmtHdrWritable);
@@ -311,6 +313,15 @@ IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
                 basicBlockAckReq->setStartingSequenceNumber(startingSequenceNumber);
                 blockAckReq = basicBlockAckReq;
             }
+            auto hcfModule = check_and_cast<cModule *>(callback);
+            auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
+            auto responseMode = rateSelection->computeResponseBlockAckFrameMode(transmittedPacket != nullptr ? transmittedPacket : containerPacket, blockAckReq);
+            simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+            simtime_t barDuration = responseMode->getDuration(B(38));
+            simtime_t remainingDuration = modeSet->getSifsTime() + blockAckDuration;
+            for (int nextIdx = idx + 1; nextIdx < numActive; nextIdx++)
+                remainingDuration += modeSet->getSifsTime() + barDuration + modeSet->getSifsTime() + blockAckDuration;
+            blockAckReq->setDurationField(remainingDuration);
             auto blockAckPacket = new Packet("BasicBlockAckReq", blockAckReq);
             blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
             return new TransmitStep(blockAckPacket, context->getIfs(), true);
