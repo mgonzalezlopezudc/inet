@@ -17,13 +17,14 @@ Ensure high-fidelity, standard-compliant packet-level simulation of 802.11ax DL 
 - ✓ Queue-based multi-user packet scheduling at the Access Point (AP) — existing codebase
 - ✓ HE MU PPDU structure with SIG-B allocation parsing at destination STAs — existing codebase
 - ✓ Sequential Block Ack transmission after DL MU PPDU — existing codebase
+- ✓ Automated HE MU protocol sequence contracts for ADDBA, BAR, and sequential Block Ack behavior — validated in Phase 04
+- ✓ OFDMA example validation with timing-proxy and zero-collision scalar assertions — validated in Phase 04
 
 ### Active
 
 - [ ] Ensure ADDBA handshake is correctly performed and maintained for all target STAs before sending any DL MU PPDUs.
 - [ ] Verify SIFS spacing, BAR transmission, and sequential Block Ack timing offsets to prevent channel collisions and guarantee compliance.
 - [ ] Verify that channel noise, path loss, and bit/packet error rate calculations are computed correctly and independently for each RU sub-channel band.
-- [ ] Implement and run automated unit/integration tests to verify correct MAC frame sequences and PHY sub-channel calculations.
 
 ### Out of Scope
 
@@ -35,12 +36,13 @@ Ensure high-fidelity, standard-compliant packet-level simulation of 802.11ax DL 
 
 - The INET Framework uses modular simple C++ components and NED compound modules for layering.
 - As of June 2026, Downlink OFDMA support is fully integrated with complete PHY-level Resource Unit partitioning, dynamic multi-user MAC scheduling, SIG-B reception filtering, and collision-free sequential Block Ack sequences.
+- Phase 04 added executable validation contracts under `tests/validation/ieee80211/` for TST-01 and TST-02, plus a documented broad automated test gate using `bin/inet_run_all_tests -m release`.
 - This project will verify, audit, and fix any correctness issues, timing drift, or physical calculations in these existing components.
 
 ## Constraints
 
 - **Language**: C++17, NED, and MSG message definitions.
-- **Environment**: OMNeT++ 6.3.0 simulation engine.
+- **Environment**: OMNeT++ 6.4.0 simulation engine.
 - **Safety**: Safe casting must use `check_and_cast<T*>()`.
 
 ## Key Decisions
@@ -67,4 +69,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-06-16 after initialization*
+*Last updated: 2026-06-17 after Phase 04 verification*
