@@ -237,6 +237,42 @@ allocations.push_back(alloc2);
     delete packet;
 }
 
+// --- Test 4: HE MU PHY packet with an empty allocation map is rejected ---
+{
+    auto packet = new Packet("empty-allocation-packet");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    phyHeader->setChunkLength(b(16));
+    phyHeader->setRuIndex(0);
+    packet->insertAtFront(phyHeader);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+
+    bool possible1 = rxModule1->checkAssigned(trans);
+    bool possible2 = rxModule2->checkAssigned(trans);
+    EV << "STA1 empty HE MU allocation map: " << (!possible1 ? "PASS" : "FAIL") << "\n";
+    EV << "STA2 empty HE MU allocation map: " << (!possible2 ? "PASS" : "FAIL") << "\n";
+
+    delete trans;
+    delete packet;
+}
+
+// --- Test 5: Non-HE PHY packets are not filtered by HE RU assignment ---
+{
+    auto packet = new Packet("legacy-packet");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(32)));
+
+    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+
+    bool possible1 = rxModule1->checkAssigned(trans);
+    bool possible2 = rxModule2->checkAssigned(trans);
+    EV << "STA1 legacy packet without HE MU PHY tag: " << (possible1 ? "PASS" : "FAIL") << "\n";
+    EV << "STA2 legacy packet without HE MU PHY tag: " << (possible2 ? "PASS" : "FAIL") << "\n";
+
+    delete trans;
+    delete packet;
+}
+
 // Cleanup Channel
 delete channel;
 
@@ -249,4 +285,8 @@ STA1 on RU1 sub-transmission: PASS
 STA2 on RU1 sub-transmission: PASS
 STA1 on RU2 sub-transmission: PASS
 STA2 on RU2 sub-transmission: PASS
+STA1 empty HE MU allocation map: PASS
+STA2 empty HE MU allocation map: PASS
+STA1 legacy packet without HE MU PHY tag: PASS
+STA2 legacy packet without HE MU PHY tag: PASS
 .
