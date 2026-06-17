@@ -144,8 +144,7 @@ Packet *ErrorModelBase::computeCorruptedPacket(const ISnir *snir) const
     auto ber = computeBitErrorRate(snir, IRadioSignal::SIGNAL_PART_WHOLE);
     auto receivedPacket = computeCorruptedPacket(transmittedPacket, ber);
     receivedPacket->clearTags();
-    if (auto protocol = snir->getReception()->getTransmission()->getPacketProtocol())
-        receivedPacket->addTag<PacketProtocolTag>()->setProtocol(protocol);
+    receivedPacket->addTag<PacketProtocolTag>()->setProtocol(transmittedPacket->getTag<PacketProtocolTag>()->getProtocol());
     return receivedPacket;
 }
 
