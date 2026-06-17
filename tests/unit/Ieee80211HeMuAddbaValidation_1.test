@@ -231,7 +231,15 @@ static void requireCondition(bool condition, const char *message)
         throw cRuntimeError("%s", message);
 }
 
-static Packet *runFirstTransmitStep(queueing::IPacketQueue *pendingQueue, MockCallback *callback, const std::vector<MacAddress>& scheduledStations, IOriginatorBlockAckAgreementHandler *baHandler)
+struct FirstTransmitStepResult {
+    Packet *container = nullptr;
+    int ackHandlerInProgressCount = 0;
+    int inProgressLength = 0;
+    bool allInProgressUseBlockAck = true;
+    bool allInProgressHaveDuration = true;
+};
+
+static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pendingQueue, MockCallback *callback, const std::vector<MacAddress>& scheduledStations, IOriginatorBlockAckAgreementHandler *baHandler)
 {
     auto modeSet = physicallayer::Ieee80211ModeSet::getModeSet("ax");
     auto scheduler = new MockScheduler(scheduledStations);
@@ -243,7 +251,15 @@ static Packet *runFirstTransmitStep(queueing::IPacketQueue *pendingQueue, MockCa
 
     fs->startSequence(context, 0);
     auto step0 = check_and_cast<ITransmitStep *>(fs->prepareStep(context));
-    auto container = step0->getFrameToTransmit()->dup();
+    FirstTransmitStepResult result;
+    result.container = step0->getFrameToTransmit()->dup();
+    result.ackHandlerInProgressCount = ackHandler->inProgressCount;
+    result.inProgressLength = inProgress->getLength();
+    for (int i = 0; i < inProgress->getLength(); i++) {
+        auto header = inProgress->getFrames(i)->peekAtFront<Ieee80211DataHeader>();
+        result.allInProgressUseBlockAck = result.allInProgressUseBlockAck && header->getAckPolicy() == BLOCK_ACK;
+        result.allInProgressHaveDuration = result.allInProgressHaveDuration && header->getDurationField() > SIMTIME_ZERO;
+    }
 
     delete step0;
     delete fs;
@@ -252,7 +268,7 @@ static Packet *runFirstTransmitStep(queueing::IPacketQueue *pendingQueue, MockCa
     delete ackHandler;
     delete scheduler;
 
-    return container;
+    return result;
 }
 
 static void expectMuAllocationCount(Packet *container, size_t expectedCount)
@@ -284,11 +300,16 @@ Tid tid = 5;
     baHandler.addAgreement(sta2, tid, true);
     requireCondition(baHandler.hasReceivedAddbaResponse(sta1, tid), "active fixture agreement was not marked active");
 
-    Packet *container = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &baHandler);
-    expectMuAllocationCount(container, 2);
+    auto result = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &baHandler);
+    expectMuAllocationCount(result.container, 2);
     requireCondition(pendingQueue->getNumPackets() == 0, "active ADDBA packets should be removed from the pending queue");
+    requireCondition(result.ackHandlerInProgressCount == 2, "admitted packets must be reported to the ack handler");
+    requireCondition(result.inProgressLength == 2, "admitted packets must be moved into InProgressFrames");
+    requireCondition(result.allInProgressUseBlockAck, "admitted packets must be marked with BLOCK_ACK policy");
+    requireCondition(result.allInProgressHaveDuration, "admitted packets must receive a nonzero duration field");
     EV << "Active ADDBA agreements admitted two QoS packets.\n";
-    delete container;
+    EV << "Admitted packets moved to InProgressFrames with BLOCK_ACK and duration fields.\n";
+    delete result.container;
 }
 
 // Test 2: an existing but inactive agreement is not admitted; the packet stays pending.
@@ -303,12 +324,12 @@ Tid tid = 5;
     baHandler.addAgreement(sta2, tid, true);
     baHandler.addAgreement(sta3, tid, false);
 
-    Packet *container = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2, sta3}, &baHandler);
-    expectMuAllocationCount(container, 2);
+    auto result = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2, sta3}, &baHandler);
+    expectMuAllocationCount(result.container, 2);
     requireCondition(pendingQueue->getNumPackets() == 1, "inactive ADDBA packet should remain pending");
     requireCondition(isPacketQueued(pendingQueue, "inactive-sta3"), "inactive ADDBA packet was removed from the pending queue");
     EV << "Inactive ADDBA agreement packet remained pending.\n";
-    delete container;
+    delete result.container;
 }
 
 // Test 3: missing agreement, null BA handler, non-QoS data, and wrong TID are ineligible.
@@ -324,13 +345,33 @@ Tid tid = 5;
     baHandler.addAgreement(sta2, tid, true);
     baHandler.addAgreement(sta4, tid, true);
 
-    Packet *container = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2, sta3, sta4}, &baHandler);
-    expectMuAllocationCount(container, 2);
+    auto result = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2, sta3, sta4}, &baHandler);
+    expectMuAllocationCount(result.container, 2);
     requireCondition(pendingQueue->getNumPackets() == 2, "missing agreement and wrong TID packets should remain pending");
     requireCondition(isPacketQueued(pendingQueue, "missing-agreement-sta3"), "missing agreement packet was removed from the pending queue");
     requireCondition(isPacketQueued(pendingQueue, "wrong-tid-sta4"), "wrong TID packet was removed from the pending queue");
     EV << "Missing agreement and wrong TID packets remained pending.\n";
-    delete container;
+    delete result.container;
+
+    clearPendingQueue(pendingQueue);
+    auto broadcast = MacAddress::BROADCAST_ADDRESS;
+    auto multicast = MacAddress("01:00:5E:00:00:01");
+    pendingQueue->enqueuePacket(makeDataPacket("valid-sta1-with-mcast", sta1, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("valid-sta2-with-bcast", sta2, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("broadcast-qos", broadcast, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("multicast-qos", multicast, tid, true));
+
+    MockOriginatorBlockAckAgreementHandler multicastBaHandler;
+    multicastBaHandler.addAgreement(sta1, tid, true);
+    multicastBaHandler.addAgreement(sta2, tid, true);
+
+    auto multicastResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, broadcast, multicast, sta2, sta4}, &multicastBaHandler);
+    expectMuAllocationCount(multicastResult.container, 2);
+    requireCondition(pendingQueue->getNumPackets() == 2, "multicast/broadcast packets should remain pending");
+    requireCondition(isPacketQueued(pendingQueue, "broadcast-qos"), "broadcast packet was removed from the pending queue");
+    requireCondition(isPacketQueued(pendingQueue, "multicast-qos"), "multicast packet was removed from the pending queue");
+    EV << "Multicast, broadcast, and no-queued-packet scheduler allocations were skipped without mutation.\n";
+    delete multicastResult.container;
 
     clearPendingQueue(pendingQueue);
     pendingQueue->enqueuePacket(makeDataPacket("non-qos-sta1", sta1, tid, false));
@@ -338,8 +379,8 @@ Tid tid = 5;
 
     bool abortedWithoutMutation = false;
     try {
-        Packet *invalidContainer = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, nullptr);
-        delete invalidContainer;
+        auto invalidResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, nullptr);
+        delete invalidResult.container;
     }
     catch (cRuntimeError& e) {
         abortedWithoutMutation = true;
@@ -350,6 +391,28 @@ Tid tid = 5;
     requireCondition(isPacketQueued(pendingQueue, "non-qos-sta1"), "non-QoS packet was removed from the pending queue");
     requireCondition(isPacketQueued(pendingQueue, "null-handler-sta2"), "null-handler packet was removed from the pending queue");
     EV << "Null BA handler and non-QoS packets remained pending.\n";
+
+    clearPendingQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("only-active-sta1", sta1, tid, true));
+    pendingQueue->enqueuePacket(makeDataPacket("inactive-sta2-abort", sta2, tid, true));
+    MockOriginatorBlockAckAgreementHandler oneActiveHandler;
+    oneActiveHandler.addAgreement(sta1, tid, true);
+    oneActiveHandler.addAgreement(sta2, tid, false);
+
+    bool singleActiveAbortedWithoutMutation = false;
+    try {
+        auto invalidResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &oneActiveHandler);
+        delete invalidResult.container;
+    }
+    catch (cRuntimeError& e) {
+        singleActiveAbortedWithoutMutation = true;
+        EV << "Single active allocation preflight aborted: " << e.what() << "\n";
+    }
+    requireCondition(singleActiveAbortedWithoutMutation, "fewer than two active allocations should abort before mutation");
+    requireCondition(pendingQueue->getNumPackets() == 2, "single-active abort should not mutate pending queue");
+    requireCondition(isPacketQueued(pendingQueue, "only-active-sta1"), "single active packet was removed during abort");
+    requireCondition(isPacketQueued(pendingQueue, "inactive-sta2-abort"), "inactive packet was removed during abort");
+    EV << "Fewer than two active allocations aborted before queue mutation.\n";
 }
 
 // Test 4: bounded AddbaReq retry bursts (3 attempts) and addbaFailureTimeout cooldown resumption.
@@ -386,6 +449,9 @@ clearPendingQueue(pendingQueue);
 Active ADDBA agreements admitted two QoS packets.
 
 %contains: stdout
+Admitted packets moved to InProgressFrames with BLOCK_ACK and duration fields.
+
+%contains: stdout
 Inactive ADDBA agreement packet remained pending.
 
 %contains: stdout
@@ -393,6 +459,12 @@ Missing agreement and wrong TID packets remained pending.
 
 %contains: stdout
 Null BA handler and non-QoS packets remained pending.
+
+%contains: stdout
+Multicast, broadcast, and no-queued-packet scheduler allocations were skipped without mutation.
+
+%contains: stdout
+Fewer than two active allocations aborted before queue mutation.
 
 %contains: stdout
 MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while AddbaReq retries are bounded by addbaFailureTimeout and processTransmittedDataFrame; AC_VO classification remains in Hcf management processing.
