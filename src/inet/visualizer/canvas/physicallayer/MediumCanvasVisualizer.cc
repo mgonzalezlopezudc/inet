@@ -8,14 +8,20 @@
 #include "inet/visualizer/canvas/physicallayer/MediumCanvasVisualizer.h"
 
 #include <algorithm>
+#include <sstream>
 
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/Protocol.h"
 #include "inet/common/figures/LabeledIconFigure.h"
 #include "inet/common/figures/SignalFigure.h"
 
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
 #endif // INET_WITH_PHYSICALLAYERWIRELESSCOMMON
+
+#ifdef INET_WITH_IEEE80211
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#endif // INET_WITH_IEEE80211
 
 namespace inet {
 namespace visualizer {
@@ -25,6 +31,54 @@ Define_Module(MediumCanvasVisualizer);
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
 
 using namespace inet::physicallayer;
+
+#ifdef INET_WITH_IEEE80211
+static Ptr<const Ieee80211HeMuPhyHeader> peekHeMuPhyHeader(const ITransmission *transmission)
+{
+    auto packet = transmission->getPacket();
+    return transmission->getPacketProtocol() == &Protocol::ieee80211HePhy && packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>()
+            ? packet->peekAtFront<Ieee80211HeMuPhyHeader>()
+            : nullptr;
+}
+
+static std::string formatHeMuCompactSummary(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, int maxUsers, bool includePhyFields)
+{
+    std::ostringstream stream;
+    auto usersCount = phyHeader->getUsersArraySize();
+    stream << " HE-MU[U=" << usersCount << "]";
+    if (usersCount > 0)
+        stream << " ";
+    int shownUsers = std::min(maxUsers, static_cast<int>(usersCount));
+    for (int i = 0; i < shownUsers; i++) {
+        if (i != 0)
+            stream << ", ";
+        const auto& user = phyHeader->getUsers(i);
+        stream << "RU" << user.ruIndex << "->STA" << user.staId;
+        if (includePhyFields)
+            stream << "(MCS" << static_cast<int>(user.mcs) << "/NSS" << static_cast<int>(user.numberOfSpatialStreams) << "/DCM" << (user.dcm ? 1 : 0) << ")";
+    }
+    if (usersCount > static_cast<unsigned int>(shownUsers)) {
+        if (shownUsers > 0)
+            stream << ", ";
+        stream << "+" << (usersCount - shownUsers) << " more";
+    }
+    return stream.str();
+}
+
+static std::string formatHeMuDetailedSummary(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, bool includePhyFields)
+{
+    std::ostringstream stream;
+    auto usersCount = phyHeader->getUsersArraySize();
+    stream << "\nHE MU PHY users: " << usersCount;
+    for (size_t i = 0; i < usersCount; i++) {
+        const auto& user = phyHeader->getUsers(i);
+        stream << "\n  RU" << user.ruIndex << " -> STA" << user.staId;
+        if (includePhyFields)
+            stream << ", MCS" << static_cast<int>(user.mcs) << ", NSS" << static_cast<int>(user.numberOfSpatialStreams) << ", DCM" << (user.dcm ? 1 : 0);
+    }
+    return stream.str();
+}
+#endif // INET_WITH_IEEE80211
 
 void MediumCanvasVisualizer::initialize(int stage)
 {
@@ -48,6 +102,9 @@ void MediumCanvasVisualizer::initialize(int stage)
         signalWaveLength = par("signalWaveLength");
         signalWaveWidth = par("signalWaveWidth");
         signalWaveFadingAnimationSpeedFactor = par("signalWaveFadingAnimationSpeedFactor");
+        displayHeMuSignalDetails = par("displayHeMuSignalDetails");
+        heMuSignalLabelMaxUsers = par("heMuSignalLabelMaxUsers");
+        displayHeMuSignalPhyFields = par("displayHeMuSignalPhyFields");
         cCanvas *canvas = visualizationTargetModule->getCanvas();
         if (displaySignals) {
             signalLayer = new cGroupFigure("communication");
@@ -834,9 +891,20 @@ cGroupFigure *MediumCanvasVisualizer::createSignalFigure(const ITransmission *tr
     cFigure::Point position = canvasProjection->computeCanvasPoint(transmission->getStartPosition());
     cGroupFigure *groupFigure = new cGroupFigure("signal");
     cFigure::Color color = signalColorSet.getColor(transmission->getId());
+    std::string signalTooltip = "These rings represents a signal propagating through the medium";
+    std::string labelSuffix;
+#ifdef INET_WITH_IEEE80211
+    if (displayHeMuSignalDetails) {
+        auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
+        if (heMuPhyHeader != nullptr) {
+            labelSuffix = formatHeMuCompactSummary(heMuPhyHeader, heMuSignalLabelMaxUsers, displayHeMuSignalPhyFields);
+            signalTooltip += formatHeMuDetailedSummary(heMuPhyHeader, displayHeMuSignalPhyFields);
+        }
+    }
+#endif // INET_WITH_IEEE80211
     SignalFigure *signalFigure = new SignalFigure("bubble");
     signalFigure->setTags((std::string("propagating_signal ") + tags).c_str());
-    signalFigure->setTooltip("These rings represents a signal propagating through the medium");
+    signalFigure->setTooltip(signalTooltip.c_str());
     signalFigure->setAssociatedObject(const_cast<cObject *>(check_and_cast<const cObject *>(transmission)));
     signalFigure->setRingCount(signalRingCount);
     signalFigure->setRingSize(signalRingSize);
@@ -855,7 +923,9 @@ cGroupFigure *MediumCanvasVisualizer::createSignalFigure(const ITransmission *tr
     nameFigure->setTags((std::string("propagating_signal packet_name label ") + tags).c_str());
     auto packet = transmission->getPacket();
     if (packet != nullptr)
-        nameFigure->setText(packet->getName());
+        nameFigure->setText((std::string(packet->getName()) + labelSuffix).c_str());
+    else if (!labelSuffix.empty())
+        nameFigure->setText(labelSuffix.c_str());
     nameFigure->setColor(color);
     groupFigure->addFigure(nameFigure);
     return groupFigure;
