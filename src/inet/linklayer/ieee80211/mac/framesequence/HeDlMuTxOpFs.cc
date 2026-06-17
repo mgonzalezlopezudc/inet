@@ -11,6 +11,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/GenericFrameSequences.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
@@ -25,6 +26,278 @@ namespace ieee80211 {
 
 using namespace inet::physicallayer;
 
+class HeDlMuPpduFs : public IFrameSequence
+{
+  protected:
+    HeDlMuTxOpFs *owner = nullptr;
+    int step = -1;
+
+  public:
+    explicit HeDlMuPpduFs(HeDlMuTxOpFs *owner) : owner(owner) {}
+
+    virtual void startSequence(FrameSequenceContext *context, int firstStep) override { step = 0; }
+
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
+    {
+        switch (step) {
+            case 0:
+                owner->containerPacket = owner->buildMuContainerPacket(context);
+                return new TransmitStep(owner->containerPacket, context->getIfs(), true);
+            case 1:
+                return nullptr;
+            default:
+                throw cRuntimeError("HeDlMuPpduFs: unknown step %d", step);
+        }
+    }
+
+    virtual bool completeStep(FrameSequenceContext *context) override
+    {
+        switch (step) {
+            case 0:
+                step++;
+                return true;
+            default:
+                throw cRuntimeError("HeDlMuPpduFs: unknown step %d", step);
+        }
+    }
+
+    virtual std::string getHistory() const override { return "HE-MU-PPDU"; }
+};
+
+class HeDlMuPerStaBlockAckFs : public IFrameSequence
+{
+  protected:
+    HeDlMuTxOpFs *owner = nullptr;
+    int allocationIndex = -1;
+    int firstStep = -1;
+    int step = -1;
+
+  protected:
+    const HeDlMuTxOpFs::ActiveAllocation& getActiveAllocation() const
+    {
+        return owner->activeAllocations.at(allocationIndex);
+    }
+
+    IQosRateSelection *getRateSelection() const
+    {
+        auto hcfModule = check_and_cast<cModule *>(owner->callback);
+        return check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
+    }
+
+    Packet *findTransmittedPacket(FrameSequenceContext *context) const
+    {
+        const auto& targetSta = getActiveAllocation().staAddress;
+        auto inProgress = context->getInProgressFrames();
+        for (int i = 0; i < inProgress->getLength(); ++i) {
+            Packet *packet = inProgress->getFrames(i);
+            const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
+            if (header->getReceiverAddress() == targetSta)
+                return packet;
+        }
+        return nullptr;
+    }
+
+    Ptr<Ieee80211BlockAckReq> buildBlockAckReq(FrameSequenceContext *context, Packet *transmittedPacket) const
+    {
+        auto receiverAddress = getActiveAllocation().staAddress;
+        Tid tid = getActiveAllocation().tid;
+        SequenceNumberCyclic startingSequenceNumber;
+        if (transmittedPacket != nullptr) {
+            auto macHeader = transmittedPacket->peekAtFront<Ieee80211MacHeader>();
+            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(macHeader)) {
+                tid = dataHeader->getTid();
+                startingSequenceNumber = dataHeader->getSequenceNumber();
+            }
+        }
+
+        auto qosContext = context->getQoSContext();
+        if (qosContext != nullptr && qosContext->blockAckProcedure != nullptr)
+            return qosContext->blockAckProcedure->buildBasicBlockAckReqFrame(receiverAddress, tid, startingSequenceNumber);
+
+        auto blockAckReq = makeShared<Ieee80211BasicBlockAckReq>();
+        blockAckReq->setReceiverAddress(receiverAddress);
+        blockAckReq->setTidInfo(tid);
+        blockAckReq->setStartingSequenceNumber(startingSequenceNumber);
+        return blockAckReq;
+    }
+
+    simtime_t computeRemainingBarDuration(const IIeee80211Mode *responseMode) const
+    {
+        auto blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+        auto barDuration = responseMode->getDuration(B(38));
+        auto remainingDuration = owner->modeSet->getSifsTime() + blockAckDuration;
+        for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++)
+            remainingDuration += owner->modeSet->getSifsTime() + barDuration + owner->modeSet->getSifsTime() + blockAckDuration;
+        return remainingDuration;
+    }
+
+    simtime_t computeBlockAckTimeout(Packet *lastTransmittedPacket) const
+    {
+        auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+        auto responseMode = getRateSelection()->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
+        return owner->modeSet->getSifsTime() + responseMode->getDuration(LENGTH_BASIC_BLOCKACK) + owner->modeSet->getSlotTime();
+    }
+
+    IFrameSequenceStep *prepareBarStep(FrameSequenceContext *context)
+    {
+        auto transmittedPacket = findTransmittedPacket(context);
+        auto blockAckReq = buildBlockAckReq(context, transmittedPacket);
+        auto responseMode = getRateSelection()->computeResponseBlockAckFrameMode(
+                transmittedPacket != nullptr ? transmittedPacket : owner->containerPacket, blockAckReq);
+        blockAckReq->setDurationField(computeRemainingBarDuration(responseMode));
+        auto blockAckPacket = new Packet("BasicBlockAckReq", blockAckReq);
+        blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        return new TransmitStep(blockAckPacket, context->getIfs(), true);
+    }
+
+    IFrameSequenceStep *prepareBlockAckStep(FrameSequenceContext *context)
+    {
+        auto txStep = check_and_cast<ITransmitStep *>(context->getLastStep());
+        return new ReceiveStep(computeBlockAckTimeout(txStep->getFrameToTransmit()));
+    }
+
+    bool completeBlockAckStep(FrameSequenceContext *context)
+    {
+        auto receiveStep = check_and_cast<IReceiveStep *>(context->getStep(firstStep + step));
+        auto receivedPacket = receiveStep->getReceivedFrame();
+        auto transmittedPacket = findTransmittedPacket(context);
+        if (receivedPacket != nullptr)
+            receiveStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+        else {
+            receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
+            if (transmittedPacket != nullptr) {
+                EV_WARN << "HeDlMuTxOpFs: sequential BlockAck timeout for STA " << getActiveAllocation().staAddress
+                        << ", triggering failure recovery." << endl;
+                owner->callback->originatorProcessFailedFrame(transmittedPacket);
+            }
+        }
+        step++;
+        return true;
+    }
+
+  public:
+    HeDlMuPerStaBlockAckFs(HeDlMuTxOpFs *owner, int allocationIndex) :
+        owner(owner),
+        allocationIndex(allocationIndex)
+    {
+    }
+
+    virtual void startSequence(FrameSequenceContext *context, int firstStep) override
+    {
+        this->firstStep = firstStep;
+        step = 0;
+    }
+
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
+    {
+        if (allocationIndex == 0) {
+            switch (step) {
+                case 0:
+                    return prepareBlockAckStep(context);
+                case 1:
+                    return nullptr;
+                default:
+                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown first-allocation step %d", step);
+            }
+        }
+        else {
+            switch (step) {
+                case 0:
+                    return prepareBarStep(context);
+                case 1:
+                    return prepareBlockAckStep(context);
+                case 2:
+                    return nullptr;
+                default:
+                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
+            }
+        }
+    }
+
+    virtual bool completeStep(FrameSequenceContext *context) override
+    {
+        if (allocationIndex == 0) {
+            switch (step) {
+                case 0:
+                    return completeBlockAckStep(context);
+                default:
+                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown first-allocation step %d", step);
+            }
+        }
+        else {
+            switch (step) {
+                case 0:
+                    step++;
+                    return true;
+                case 1:
+                    return completeBlockAckStep(context);
+                default:
+                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
+            }
+        }
+    }
+
+    virtual std::string getHistory() const override { return allocationIndex == 0 ? "BLOCKACK" : "BLOCKACKREQ BLOCKACK"; }
+};
+
+class HeDlMuSequentialBlockAckFs : public IFrameSequence
+{
+  protected:
+    HeDlMuTxOpFs *owner = nullptr;
+    int firstStep = -1;
+    int step = -1;
+    int allocationIndex = -1;
+    HeDlMuPerStaBlockAckFs *currentSequence = nullptr;
+
+  protected:
+    void startCurrentSequence(FrameSequenceContext *context)
+    {
+        delete currentSequence;
+        currentSequence = new HeDlMuPerStaBlockAckFs(owner, allocationIndex);
+        currentSequence->startSequence(context, firstStep + step);
+    }
+
+  public:
+    explicit HeDlMuSequentialBlockAckFs(HeDlMuTxOpFs *owner) : owner(owner) {}
+
+    virtual ~HeDlMuSequentialBlockAckFs() { delete currentSequence; }
+
+    virtual void startSequence(FrameSequenceContext *context, int firstStep) override
+    {
+        this->firstStep = firstStep;
+        step = 0;
+        allocationIndex = 0;
+        delete currentSequence;
+        currentSequence = nullptr;
+        if (!owner->activeAllocations.empty())
+            startCurrentSequence(context);
+    }
+
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
+    {
+        while (allocationIndex < (int)owner->activeAllocations.size()) {
+            auto nextStep = currentSequence->prepareStep(context);
+            if (nextStep != nullptr)
+                return nextStep;
+            allocationIndex++;
+            if (allocationIndex < (int)owner->activeAllocations.size())
+                startCurrentSequence(context);
+        }
+        return nullptr;
+    }
+
+    virtual bool completeStep(FrameSequenceContext *context) override
+    {
+        step++;
+        return currentSequence->completeStep(context);
+    }
+
+    virtual std::string getHistory() const override
+    {
+        return currentSequence == nullptr ? "SEQ-BLOCKACK" : currentSequence->getHistory();
+    }
+};
+
 HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                              const std::vector<MacAddress>& candidates,
                              Ieee80211ModeSet *modeSet,
@@ -38,12 +311,19 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
       ackHandler(ackHandler),
       callback(callback)
 {
+    sequence = new SequentialFs({new HeDlMuPpduFs(this), new HeDlMuSequentialBlockAckFs(this)});
 }
 
 void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
     this->firstStep = firstStep;
     step = 0;
+    sequence->startSequence(context, firstStep);
+}
+
+HeDlMuTxOpFs::~HeDlMuTxOpFs()
+{
+    delete sequence;
 }
 
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
@@ -281,135 +561,18 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
 IFrameSequenceStep *HeDlMuTxOpFs::prepareStep(FrameSequenceContext *context)
 {
-    int numActive = activeAllocations.size();
-    if (step == 0) {
-        containerPacket = buildMuContainerPacket(context);
-        return new TransmitStep(containerPacket, context->getIfs(), true);
-    }
-    else if (step >= 1 && step < 2 * numActive) {
-        int idx = step / 2;
-        auto targetSta = activeAllocations[idx].staAddress;
-        Packet *transmittedPacket = nullptr;
-        auto inProgress = context->getInProgressFrames();
-        int n = inProgress->getLength();
-        for (int i = 0; i < n; ++i) {
-            Packet *pkt = inProgress->getFrames(i);
-            const auto& hdr = pkt->peekAtFront<Ieee80211MacHeader>();
-            if (hdr->getReceiverAddress() == targetSta) {
-                transmittedPacket = pkt;
-                break;
-            }
-        }
-
-        if (step % 2 == 0) {
-            auto qosContext = context->getQoSContext();
-            auto receiverAddr = targetSta;
-            Tid tid = activeAllocations[idx].tid;
-            SequenceNumberCyclic startingSequenceNumber;
-            if (transmittedPacket != nullptr) {
-                auto macHdr = transmittedPacket->peekAtFront<Ieee80211MacHeader>();
-                if (auto dataHdr = dynamicPtrCast<const Ieee80211DataHeader>(macHdr)) {
-                    tid = dataHdr->getTid();
-                    startingSequenceNumber = dataHdr->getSequenceNumber();
-                }
-            }
-            Ptr<Ieee80211BlockAckReq> blockAckReq;
-            if (qosContext != nullptr && qosContext->blockAckProcedure != nullptr) {
-                blockAckReq = qosContext->blockAckProcedure->buildBasicBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber);
-            }
-            else {
-                auto basicBlockAckReq = makeShared<Ieee80211BasicBlockAckReq>();
-                basicBlockAckReq->setReceiverAddress(receiverAddr);
-                basicBlockAckReq->setTidInfo(tid);
-                basicBlockAckReq->setStartingSequenceNumber(startingSequenceNumber);
-                blockAckReq = basicBlockAckReq;
-            }
-            auto hcfModule = check_and_cast<cModule *>(callback);
-            auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
-            auto responseMode = rateSelection->computeResponseBlockAckFrameMode(transmittedPacket != nullptr ? transmittedPacket : containerPacket, blockAckReq);
-            simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-            simtime_t barDuration = responseMode->getDuration(B(38));
-            simtime_t remainingDuration = modeSet->getSifsTime() + blockAckDuration;
-            for (int nextIdx = idx + 1; nextIdx < numActive; nextIdx++)
-                remainingDuration += modeSet->getSifsTime() + barDuration + modeSet->getSifsTime() + blockAckDuration;
-            blockAckReq->setDurationField(remainingDuration);
-            auto blockAckPacket = new Packet("BasicBlockAckReq", blockAckReq);
-            blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
-            return new TransmitStep(blockAckPacket, context->getIfs(), true);
-        }
-        else {
-            auto hcfModule = check_and_cast<cModule *>(callback);
-            auto rateSelection = check_and_cast<IQosRateSelection *>(hcfModule->getSubmodule("rateSelection"));
-            simtime_t responseDuration = simtime_t::ZERO;
-            auto txStep = check_and_cast<ITransmitStep *>(context->getLastStep());
-            auto lastTransmittedPacket = txStep->getFrameToTransmit();
-            auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-            auto responseMode = rateSelection->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
-            responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-
-            simtime_t timeout = modeSet->getSifsTime() + responseDuration + modeSet->getSlotTime();
-            return new ReceiveStep(timeout);
-        }
-    }
-    else if (step == 2 * numActive) {
-        return nullptr; // sequence done
-    }
-    else {
-        throw cRuntimeError("HeDlMuTxOpFs: unknown step %d", step);
-    }
+    return sequence->prepareStep(context);
 }
 
 bool HeDlMuTxOpFs::completeStep(FrameSequenceContext *context)
 {
-    int numActive = activeAllocations.size();
-    if (step == 0) {
-        step++;
-        return true;
-    }
-    else if (step >= 1 && step < 2 * numActive) {
-        if (step % 2 == 0) {
-            step++;
-            return true;
-        }
-        else {
-            int idx = step / 2;
-            auto targetSta = activeAllocations[idx].staAddress;
-            auto receiveStep = check_and_cast<IReceiveStep *>(context->getStep(firstStep + step));
-            auto receivedPacket = receiveStep->getReceivedFrame();
+    step++;
+    return sequence->completeStep(context);
+}
 
-            Packet *transmittedPacket = nullptr;
-            auto inProgress = context->getInProgressFrames();
-            int n = inProgress->getLength();
-            for (int i = 0; i < n; ++i) {
-                Packet *pkt = inProgress->getFrames(i);
-                const auto& hdr = pkt->peekAtFront<Ieee80211MacHeader>();
-                if (hdr->getReceiverAddress() == targetSta) {
-                    transmittedPacket = pkt;
-                    break;
-                }
-            }
-
-            if (receivedPacket != nullptr) {
-                receiveStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
-                if (transmittedPacket != nullptr) {
-                    callback->originatorProcessReceivedFrame(receivedPacket, transmittedPacket);
-                }
-            }
-            else {
-                receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
-                if (transmittedPacket != nullptr) {
-                    EV_WARN << "HeDlMuTxOpFs: sequential BlockAck timeout for STA " << targetSta
-                            << ", triggering failure recovery." << endl;
-                    callback->originatorProcessFailedFrame(transmittedPacket);
-                }
-            }
-            step++;
-            return true;
-        }
-    }
-    else {
-        throw cRuntimeError("HeDlMuTxOpFs: unknown step %d", step);
-    }
+std::string HeDlMuTxOpFs::getHistory() const
+{
+    return step == -1 ? "HE-DL-MU" : sequence->getHistory();
 }
 
 } // namespace ieee80211

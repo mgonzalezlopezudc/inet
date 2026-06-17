@@ -50,6 +50,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     queueing::IPacketQueue *pendingQueue = nullptr;
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
+    IFrameSequence *sequence = nullptr;
 
     std::vector<ActiveAllocation> activeAllocations;
 
@@ -60,6 +61,10 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     /** Build the MU container Packet from the scheduler allocation and pending queue. */
     Packet *buildMuContainerPacket(FrameSequenceContext *context);
 
+    friend class HeDlMuPpduFs;
+    friend class HeDlMuSequentialBlockAckFs;
+    friend class HeDlMuPerStaBlockAckFs;
+
   public:
     HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                  const std::vector<MacAddress>& candidates,
@@ -67,7 +72,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
                  queueing::IPacketQueue *pendingQueue,
                  IAckHandler *ackHandler,
                  IFrameSequenceHandler::ICallback *callback);
-    virtual ~HeDlMuTxOpFs() {}
+    virtual ~HeDlMuTxOpFs();
 
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
@@ -76,7 +81,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     virtual bool isContainerPacket(Packet *packet) const { return packet == containerPacket; }
     virtual const std::vector<ActiveAllocation>& getActiveAllocations() const { return activeAllocations; }
 
-    virtual std::string getHistory() const override { return "HE-DL-MU"; }
+    virtual std::string getHistory() const override;
 };
 
 } // namespace ieee80211

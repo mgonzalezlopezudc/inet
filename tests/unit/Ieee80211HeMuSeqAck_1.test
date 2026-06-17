@@ -8,6 +8,7 @@ Test 802.11ax DL OFDMA sequential Block Ack steps, timeouts, and individual retr
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
@@ -136,7 +137,9 @@ class MockOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreeme
 class MockCallback : public cSimpleModule, public IFrameSequenceHandler::ICallback
 {
   public:
+    int numReceivedCalls = 0;
     int numFailedCalls = 0;
+    int numFinishedCalls = 0;
     virtual void transmitFrame(Packet *packet, simtime_t ifs) override {
         EV << "Callback: Transmitting " << packet->getName() << " with ifs " << ifs << "\n";
     }
@@ -148,6 +151,8 @@ class MockCallback : public cSimpleModule, public IFrameSequenceHandler::ICallba
     }
     virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override {
         EV << "Callback: ProcessReceivedFrame " << (receivedPacket ? receivedPacket->getName() : "nullptr") << "\n";
+        if (receivedPacket != nullptr)
+            numReceivedCalls++;
     }
     virtual void originatorProcessFailedFrame(Packet *failedPacket) override {
         EV << "Callback: ProcessFailedFrame " << failedPacket->getName() << "\n";
@@ -156,10 +161,24 @@ class MockCallback : public cSimpleModule, public IFrameSequenceHandler::ICallba
     virtual void originatorProcessRtsProtectionFailed(Packet *packet) override {}
     virtual void frameSequenceFinished() override {
         EV << "Callback: FrameSequenceFinished\n";
+        numFinishedCalls++;
     }
 };
 
 Define_Module(MockCallback);
+
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid tid, bool qos)
+{
+    Packet *packet = new Packet(name);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setReceiverAddress(receiver);
+    header->setType(qos ? ST_DATA_WITH_QOS : ST_DATA);
+    header->setTid(tid);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setSequenceNumber(SequenceNumberCyclic(tid));
+    packet->insertAtFront(header);
+    return packet;
+}
 
 %activity:
 auto mockHcf = check_and_cast<MockCallback *>(getParentModule()->getSubmodule("mockHcf"));
@@ -366,6 +385,48 @@ delete fs;
 delete context;
 delete inProgress;
 
+// --- Handler-level callback ownership: successful BlockAck is handled by FrameSequenceHandler, timeout by HE sequence ---
+mockHcf->numReceivedCalls = 0;
+mockHcf->numFailedCalls = 0;
+mockHcf->numFinishedCalls = 0;
+
+pendingQueue->enqueuePacket(makeDataPacket("handler-sta1", sta1, tid, true));
+pendingQueue->enqueuePacket(makeDataPacket("handler-sta2", sta2, tid, true));
+
+auto handlerScheduler = new MockScheduler({sta1, sta2});
+auto handlerAckHandler = new MockAckHandler();
+auto handlerInProgress = new MockInProgressFrames();
+MockOriginatorBlockAckAgreementHandler handlerBaHandler;
+handlerBaHandler.addAgreement(sta1, tid);
+handlerBaHandler.addAgreement(sta2, tid);
+auto handlerQosContext = new QoSContext(nullptr, nullptr, &handlerBaHandler, nullptr);
+auto handlerContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), handlerInProgress, nullptr, nullptr, nullptr, handlerQosContext);
+HeFrameSequenceHandler handler;
+handler.startFrameSequence(
+        new HeDlMuTxOpFs(handlerScheduler, {sta1, sta2}, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, handlerAckHandler, mockHcf),
+        handlerContext, mockHcf);
+
+handler.transmissionComplete();
+Packet *handlerAck1 = new Packet("HandlerBasicBlockAck-Sta1");
+auto handlerAckHdr1 = makeShared<Ieee80211BasicBlockAck>();
+handlerAckHdr1->setReceiverAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
+handlerAck1->insertAtFront(handlerAckHdr1);
+handler.processResponse(handlerAck1);
+ASSERT(mockHcf->numReceivedCalls == 1);
+EV << "Handler-level first BlockAck callback count: " << mockHcf->numReceivedCalls << "\n";
+
+handler.transmissionComplete();
+int handlerFailuresBefore = mockHcf->numFailedCalls;
+handler.handleStartRxTimeout();
+ASSERT(mockHcf->numFailedCalls == handlerFailuresBefore + 1);
+ASSERT(mockHcf->numFinishedCalls == 1);
+EV << "Handler-level timeout failure callback count: " << mockHcf->numFailedCalls << "\n";
+EV << "Handler-level sequence finished count: " << mockHcf->numFinishedCalls << "\n";
+
+delete handlerScheduler;
+delete handlerAckHandler;
+delete handlerInProgress;
+
 %contains: stdout
 Step 0 prepared: Transmit container frame.
 Container duration field: 0.000884
@@ -375,7 +436,6 @@ SIFS=, BlockAck=, BAR=
 All three admitted packets moved to in-progress with Block Ack policy.
 Step 1 prepared: Expect Block Ack with timeout.
 Expected timeout for step 1: 0.000237
-Callback: ProcessReceivedFrame BasicBlockAck
 Step 2 prepared: Transmit BAR frame.
 BAR packet duration field: 0.000556
 Expected BAR packet duration field: 0.000556
@@ -387,6 +447,14 @@ HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering 
 Callback: ProcessFailedFrame data-sta2
 Timeout marked current receive step as rejected. Failures after: 1
 Step 4 continued with BAR to STA3 after STA2 timeout.
-Callback: ProcessReceivedFrame BasicBlockAck-Sta3
 Sequence ended cleanly after STA3 BlockAck.
 Failed calls count: 1
+
+%contains: stdout
+Handler-level first BlockAck callback count: 1
+
+%contains: stdout
+Handler-level timeout failure callback count: 1
+
+%contains: stdout
+Handler-level sequence finished count: 1
