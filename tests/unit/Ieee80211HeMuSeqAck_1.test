@@ -247,6 +247,7 @@ EV << "Step 1 prepared: Expect Block Ack with timeout.\n";
 // Verify timeout window per D-05: SIFS + basic Block Ack duration + slotTime
 simtime_t expectedTimeout1 = sifsTime + blockAckDuration + modeSet->getSlotTime();
 EV << "Expected timeout for step 1: " << expectedTimeout1 << "\n";
+ASSERT(rxStep1->getTimeout() == expectedTimeout1);
 
 context->addStep(step1);
 
@@ -285,6 +286,7 @@ EV << "Step 3 prepared: Expect Block Ack with timeout.\n";
 // Verify timeout window per D-05: SIFS + basic Block Ack duration + slotTime
 simtime_t expectedTimeout3 = sifsTime + blockAckDuration + modeSet->getSlotTime();
 EV << "Expected timeout for step 3: " << expectedTimeout3 << "\n";
+ASSERT(rxStep3->getTimeout() == expectedTimeout3);
 
 context->addStep(step3);
 
