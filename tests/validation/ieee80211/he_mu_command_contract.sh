@@ -69,6 +69,7 @@ run_ofdma_load()
 {
     local send_interval_override="$1"
 
+    rm -f "$OFDMA_RESULTS_FILE"
     echo "Running OFDMA General run 0 with ${send_interval_override}"
     (
         cd "$OFDMA_EXAMPLE_DIR"
