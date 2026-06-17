@@ -242,6 +242,12 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             dataOrMgmtHdrWritable->setDurationField(totalDuration);
             staPacket->insertAtFront(dataOrMgmtHdrWritable);
 
+            if (staPacket->getDataLength() >= B(4) && dynamicPtrCast<const Ieee80211MacTrailer>(staPacket->peekAtBack(B(4))) != nullptr) {
+                auto trailer = staPacket->removeAtBack<Ieee80211MacTrailer>(B(4));
+                trailer->setFcsMode(FCS_DECLARED_CORRECT);
+                staPacket->insertAtBack(trailer);
+            }
+
             ackHandler->frameGotInProgress(dataOrMgmtHdrWritable);
         }
 
