@@ -4,6 +4,7 @@ based on its own center frequency and bandwidth, not the aggregate channel.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
@@ -189,10 +190,9 @@ pkt2->insertAtBack(makeShared<ByteCountChunk>(B(100)));
 
 // Create main container packet for HE MU transmission
 auto containerPkt = new Packet("MuContainer");
-auto heMuTag = new Ieee80211HeMuTag();
+auto heMuTag = containerPkt->addTag<Ieee80211HeMuTag>();
 heMuTag->addAllocation(0, pkt1);  // RU 0 for station 1
 heMuTag->addAllocation(1, pkt2);  // RU 1 for station 2
-containerPkt->addTag(heMuTag);
 containerPkt->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(200)));
 
@@ -229,5 +229,5 @@ EV << ".\n";
 
 delete mockTransmission;
 delete channel;
-delete nic1;
-delete nic2;
+nic1->deleteModule();
+nic2->deleteModule();

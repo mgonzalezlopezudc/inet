@@ -69,25 +69,27 @@ Define_Module(MockRateSelection);
 class MockAckHandler : public IAckHandler
 {
   public:
+    int inProgressCount = 0;
     virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
-    virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override {}
+    virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { inProgressCount++; }
 };
 
 class MockScheduler : public IIeee80211HeDlScheduler
 {
   public:
+    std::vector<MacAddress> scheduledStations;
+
+    MockScheduler(const std::vector<MacAddress>& scheduledStations) : scheduledStations(scheduledStations) {}
+
     virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidateStations, Hz centerFrequency, Hz bandwidth) override {
         std::vector<RuAllocation> allocs;
-        RuAllocation a1;
-        a1.staAddress = MacAddress("00:11:22:33:44:55");
-        a1.ru.index = 0;
-        allocs.push_back(a1);
-
-        RuAllocation a2;
-        a2.staAddress = MacAddress("66:77:88:99:AA:BB");
-        a2.ru.index = 1;
-        allocs.push_back(a2);
+        for (size_t i = 0; i < scheduledStations.size(); i++) {
+            RuAllocation alloc;
+            alloc.staAddress = scheduledStations[i];
+            alloc.ru.index = i;
+            allocs.push_back(alloc);
+        }
         return allocs;
     }
 };
@@ -95,7 +97,7 @@ class MockScheduler : public IIeee80211HeDlScheduler
 class MockInProgressFrames : public InProgressFrames
 {
   public:
-    void addFrame(Packet *pkt) { inProgressFrames.push_back(pkt); }
+    virtual ~MockInProgressFrames() { inProgressFrames.clear(); }
 };
 
 class MockOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreementHandler
@@ -163,9 +165,10 @@ Define_Module(MockCallback);
 auto mockHcf = check_and_cast<MockCallback *>(getParentModule()->getSubmodule("mockHcf"));
 auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
 
-// Create two packets for candidate STAs
+// Create three packets for candidate STAs
 MacAddress sta1("00:11:22:33:44:55");
 MacAddress sta2("66:77:88:99:AA:BB");
+MacAddress sta3("02:00:00:00:00:03");
 Tid tid = 5;
 
 Packet *p1 = new Packet("data-sta1");
@@ -188,17 +191,28 @@ hdr2->setSequenceNumber(SequenceNumberCyclic(1));
 p2->insertAtFront(hdr2);
 pendingQueue->enqueuePacket(p2);
 
+Packet *p3 = new Packet("data-sta3");
+auto hdr3 = makeShared<Ieee80211DataHeader>();
+hdr3->setReceiverAddress(sta3);
+hdr3->setType(ST_DATA_WITH_QOS);
+hdr3->setTid(tid);
+hdr3->setAckPolicy(BLOCK_ACK);
+hdr3->setSequenceNumber(SequenceNumberCyclic(2));
+p3->insertAtFront(hdr3);
+pendingQueue->enqueuePacket(p3);
+
 auto modeSet = physicallayer::Ieee80211ModeSet::getModeSet("ax");
-auto scheduler = new MockScheduler();
+std::vector<MacAddress> candidates = {sta1, sta2, sta3};
+auto scheduler = new MockScheduler(candidates);
 auto ackHandler = new MockAckHandler();
 
-std::vector<MacAddress> candidates = {sta1, sta2};
 HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, candidates, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, ackHandler, mockHcf);
 
 MockInProgressFrames *inProgress = new MockInProgressFrames();
 MockOriginatorBlockAckAgreementHandler baHandler;
 baHandler.addAgreement(sta1, tid);
 baHandler.addAgreement(sta2, tid);
+baHandler.addAgreement(sta3, tid);
 auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
 FrameSequenceContext *context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), inProgress, nullptr, nullptr, nullptr, qosContext);
 
@@ -228,12 +242,15 @@ simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
 simtime_t barDuration = responseMode->getDuration(B(38));
 simtime_t sifsTime = modeSet->getSifsTime();
 
-// For 2 STAs: SIFS + blockAck + (SIFS + BAR + SIFS + blockAck)
-simtime_t expectedDuration = sifsTime + blockAckDuration + (sifsTime + barDuration + sifsTime + blockAckDuration);
+// For 3 STAs: SIFS + blockAck + 2 * (SIFS + BAR + SIFS + blockAck)
+simtime_t expectedDuration = sifsTime + blockAckDuration + 2 * (sifsTime + barDuration + sifsTime + blockAckDuration);
 EV << "Expected duration: " << expectedDuration << "\n";
 EV << "SIFS=, BlockAck=, BAR=\n";
 EV << "  SIFS=" << sifsTime << ", BlockAck=" << blockAckDuration << ", BAR=" << barDuration << "\n";
 ASSERT(containerDuration == expectedDuration);
+ASSERT(ackHandler->inProgressCount == 3);
+ASSERT(inProgress->getLength() == 3);
+EV << "All three admitted packets moved to in-progress with Block Ack policy.\n";
 
 context->addStep(step0);
 fs->completeStep(context);
@@ -272,10 +289,11 @@ EV << "Step 2 prepared: Transmit BAR frame.\n";
 auto barHdr = barPacket->peekAtFront<Ieee80211MacHeader>();
 simtime_t barPktDuration = barHdr->getDurationField();
 EV << "BAR packet duration field: " << barPktDuration << "\n";
-simtime_t expectedBarDuration = sifsTime + blockAckDuration;
-EV << "Expected BAR packet duration field: " << expectedBarDuration << "\n";
+simtime_t expectedMiddleBarDuration = sifsTime + blockAckDuration + (sifsTime + barDuration + sifsTime + blockAckDuration);
+simtime_t expectedFinalBarDuration = sifsTime + blockAckDuration;
+EV << "Expected BAR packet duration field: " << expectedMiddleBarDuration << "\n";
 ASSERT(barPktDuration >= SIMTIME_ZERO);
-ASSERT(barPktDuration == expectedBarDuration);
+ASSERT(barPktDuration == expectedMiddleBarDuration);
 
 context->addStep(step2);
 
@@ -294,9 +312,8 @@ ASSERT(rxStep3->getTimeout() == expectedTimeout3);
 
 context->addStep(step3);
 
-// --- Wave 2: Prove recoverable timeout behavior (D-06, D-07) ---
-// Simulate timeout (no frame received) to test recovery path
-EV << "Step 3: Simulating timeout (missing Block Ack) to verify recovery path.\n";
+// Simulate timeout (no frame received) to test recovery path.
+EV << "Step 3: Simulating timeout from STA2 to verify recovery path.\n";
 rxStep3->setFrameToReceive(nullptr);
 
 // Record initial failure count before timeout handling
@@ -310,28 +327,36 @@ int failureCountAfter = mockHcf->numFailedCalls;
 ASSERT(failureCountAfter > failureCountBefore);
 EV << "Timeout marked current receive step as rejected. Failures after: " << failureCountAfter << "\n";
 
-// --- Step 4: Verify sequence continues cleanly (D-06, D-07) ---
+// --- Step 4: Verify sequence continues with BAR to STA 3 (D-06, D-07) ---
 IFrameSequenceStep *step4 = fs->prepareStep(context);
-if (step4 != nullptr) {
-    EV << "Step 4 exists: " << static_cast<int>(step4->getType()) << "\n";
-    // If there's a Step 4, verify it respects SIFS spacing (D-07)
-    if (step4->getType() == IFrameSequenceStep::Type::TRANSMIT) {
-        auto txStep4 = check_and_cast<ITransmitStep*>(step4);
-        simtime_t ifs4 = context->getIfs();
-        EV << "Step 4 inter-frame spacing (should be SIFS per D-07): " << ifs4 << " (expected: " << sifsTime << ")\n";
-        ASSERT(ifs4 == sifsTime);
-    }
-    context->addStep(step4);
-    fs->completeStep(context);
-    
-    // Continue until sequence ends
-    IFrameSequenceStep *stepFinal = fs->prepareStep(context);
-    ASSERT(stepFinal == nullptr);
-}
-else {
-    // Sequence ends after timeout rejection - this is also valid
-    EV << "Sequence ended cleanly after timeout rejection.\n";
-}
+ASSERT(step4 != nullptr);
+ASSERT(step4->getType() == IFrameSequenceStep::Type::TRANSMIT);
+auto txStep4 = check_and_cast<ITransmitStep*>(step4);
+Packet *barPacket3 = txStep4->getFrameToTransmit();
+auto barHdr3 = barPacket3->peekAtFront<Ieee80211MacHeader>();
+ASSERT(barHdr3->getReceiverAddress() == sta3);
+ASSERT(barHdr3->getDurationField() == expectedFinalBarDuration);
+EV << "Step 4 continued with BAR to STA3 after STA2 timeout.\n";
+context->addStep(step4);
+fs->completeStep(context);
+
+// --- Step 5: STA 3 Block Ack succeeds and ends the sequence ---
+IFrameSequenceStep *step5 = fs->prepareStep(context);
+ASSERT(step5->getType() == IFrameSequenceStep::Type::RECEIVE);
+auto rxStep5 = check_and_cast<IReceiveStep*>(step5);
+ASSERT(rxStep5->getTimeout() == expectedTimeout3);
+context->addStep(step5);
+
+Packet *ack3 = new Packet("BasicBlockAck-Sta3");
+auto ackHdr3 = makeShared<Ieee80211BasicBlockAck>();
+ackHdr3->setReceiverAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
+ack3->insertAtFront(ackHdr3);
+rxStep5->setFrameToReceive(ack3);
+fs->completeStep(context);
+
+IFrameSequenceStep *stepFinal = fs->prepareStep(context);
+ASSERT(stepFinal == nullptr);
+EV << "Sequence ended cleanly after STA3 BlockAck.\n";
 
 EV << "Failed calls count: " << mockHcf->numFailedCalls << "\n";
 
@@ -343,22 +368,25 @@ delete inProgress;
 
 %contains: stdout
 Step 0 prepared: Transmit container frame.
-Container duration field: 0.000556
-Expected duration: 0.000556
+Container duration field: 0.000884
+Expected duration: 0.000884
 SIFS=, BlockAck=, BAR=
   SIFS=0.000016, BlockAck=0.000212, BAR=0.000084
+All three admitted packets moved to in-progress with Block Ack policy.
 Step 1 prepared: Expect Block Ack with timeout.
 Expected timeout for step 1: 0.000237
 Callback: ProcessReceivedFrame BasicBlockAck
 Step 2 prepared: Transmit BAR frame.
-BAR packet duration field: 0.000228
-Expected BAR packet duration field: 0.000228
+BAR packet duration field: 0.000556
+Expected BAR packet duration field: 0.000556
 Step 3 prepared: Expect Block Ack with timeout.
 Expected timeout for step 3: 0.000237
-Step 3: Simulating timeout (missing Block Ack) to verify recovery path.
+Step 3: Simulating timeout from STA2 to verify recovery path.
 Failures before timeout handling: 0
 HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
 Callback: ProcessFailedFrame data-sta2
 Timeout marked current receive step as rejected. Failures after: 1
-Sequence ended cleanly after timeout rejection.
+Step 4 continued with BAR to STA3 after STA2 timeout.
+Callback: ProcessReceivedFrame BasicBlockAck-Sta3
+Sequence ended cleanly after STA3 BlockAck.
 Failed calls count: 1
