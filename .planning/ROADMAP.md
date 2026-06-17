@@ -9,7 +9,7 @@ This roadmap defines the verification and development phases to ensure standard-
 - [ ] **Phase 1: ADDBA Validation & Handshake Correctness** - Ensure AP refuses OFDMA when agreements are missing.
 - [x] **Phase 2: Sequential Block Ack Spacing & Timing Verification** - Verify precise SIFS spacing and duration calculations.
 - [x] **Phase 3: PHY Layer RU Behavior & Attenuation Auditing** - Audit path loss and independent sub-channel calculations.
-- [ ] **Phase 4: Automated Testing & Example Verification** - Run simulation validation scenarios and unit tests.
+- [x] **Phase 4: Automated Testing & Example Verification** - Run simulation validation scenarios and unit tests. (completed 2026-06-17)
 
 ## Phase Details
 
@@ -85,7 +85,7 @@ Plans:
 Plans:
 
 - [x] 04-01: Create unit and integration test scripts.
-- [ ] 04-02: Build and run validation scenarios in `examples/`.
+- [x] 04-02: Build and run validation scenarios in `examples/`.
 
 ## Progress
 
@@ -97,4 +97,4 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | 1. ADDBA Validation | 2/2 | Completed | 2026-06-16 |
 | 2. Timing Verification | 2/2 | Completed | 2026-06-17 |
 | 3. PHY RU Auditing | 1/1 | Completed | 2026-06-17 |
-| 4. Testing & Verification | 1/2 | In Progress|  |
+| 4. Testing & Verification | 2/2 | Complete   | 2026-06-17 |
