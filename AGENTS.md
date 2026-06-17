@@ -1,5 +1,8 @@
 # Agent Knowledgebase
 
+## Compiling
+- Use "-j$(nproc)" when building.
+
 ## Running INET Unit Tests
 
 - Run test commands from the repository root.
