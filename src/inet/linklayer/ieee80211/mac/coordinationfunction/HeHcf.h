@@ -24,9 +24,9 @@ namespace ieee80211 {
  * the standard HcfFs frame sequence with HeDlMuTxOpFs, which:
  *   1. Calls the DL OFDMA scheduler to obtain per-STA RU assignments.
  *   2. Dequeues one packet per selected STA.
- *   3. Assembles a container Packet tagged with Ieee80211HeMuTag.
- *   4. Passes the container to the existing Tx pipeline (handled by Phase 2
- *      Ieee80211RadioMedium, which splits it into parallel sub-transmissions).
+ *   3. Assembles a container packet with explicit HE MU RU payload sections.
+ *   4. Passes the container to the existing Tx pipeline where the packet-level
+ *      PHY models the PPDU as a single transmission with per-RU reception.
  *
  * When fewer than two unique destination STAs are queued (or the modeSet is
  * not "ax"), HeHcf falls back transparently to the standard Hcf::startFrameSequence().

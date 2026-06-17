@@ -539,6 +539,7 @@ IWirelessSignal *RadioMedium::createTransmitterSignal(const IRadio *radio, Packe
         throw cRuntimeError("Maximum transmission duration is exceeded");
     signal->setDuration(duration);
     if (packet != nullptr) {
+        packet->clearTags();
         signal->setName(packet->getName());
         signal->encapsulate(packet);
     }
@@ -555,7 +556,6 @@ IWirelessSignal *RadioMedium::createReceiverSignal(const ITransmission *transmis
     if (transmitterPacket != nullptr) {
         auto receiverPacket = transmitterPacket->dup();
         receiverPacket->clearTags();
-        receiverPacket->addTag<PacketProtocolTag>()->setProtocol(transmitterPacket->getTag<PacketProtocolTag>()->getProtocol());
         signal->setName(receiverPacket->getName());
         signal->encapsulate(receiverPacket);
     }
@@ -785,4 +785,3 @@ void RadioMedium::receiveSignal(cComponent *source, simsignal_t signal, cObject 
 
 } // namespace physicallayer
 } // namespace inet
-

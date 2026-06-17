@@ -7,7 +7,7 @@ based on its own center frequency and bandwidth, not the aggregate channel.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmitterAnalogModel.h"
@@ -181,50 +181,51 @@ for (int i = 0; i < numRUs; i++) {
 }
 EV << "PHY-01 CHECK PASS: All RU bandwidths narrower than total channel\n";
 
-// Create two HE MU packets with RU tags
-auto pkt1 = new Packet("MuSubPkt1");
-pkt1->insertAtBack(makeShared<ByteCountChunk>(B(100)));
-
-auto pkt2 = new Packet("MuSubPkt2");
-pkt2->insertAtBack(makeShared<ByteCountChunk>(B(100)));
-
-// Create main container packet for HE MU transmission
+// Create main HE-MU PPDU packet for transmission
 auto containerPkt = new Packet("MuContainer");
-auto heMuTag = containerPkt->addTag<Ieee80211HeMuTag>();
-heMuTag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), pkt1);  // RU 0 for station 1
-heMuTag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), pkt2);  // RU 1 for station 2
+auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ru.index;
+    user.staId = computeHeMuStaId(staAddress);
+    phyHeader->appendUsers(user);
+};
+auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
+    auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
+    payloadHeader->setRuIndex(ru.index);
+    payloadHeader->setStaId(computeHeMuStaId(staAddress));
+    payloadHeader->setMpduLength(B(100));
+    containerPkt->insertAtBack(payloadHeader);
+    containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+};
+appendUser(rus[0], MacAddress("00:11:22:33:44:55"));
+appendUser(rus[1], MacAddress("66:77:88:99:AA:BB"));
+phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 41));
+containerPkt->insertAtBack(phyHeader);
+appendPayload(rus[0], MacAddress("00:11:22:33:44:55"));
+appendPayload(rus[1], MacAddress("66:77:88:99:AA:BB"));
 containerPkt->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
-containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(200)));
 
-// Create mock transmission with the tagged packet
+// Create mock transmission with the explicit HE-MU PPDU packet
 auto mockTransmission = new MockIeee80211Transmission(radio1, containerPkt, mode, channel);
 
-// Verify that the transmission carries the HE MU tag
-auto foundTag = containerPkt->findTag<Ieee80211HeMuTag>();
-if (!foundTag) {
-    throw cRuntimeError("PHY-01 FAILED: HE MU tag not found on transmission packet");
-}
-if (foundTag->getAllocations().size() != numRUs) {
-    throw cRuntimeError("PHY-01 FAILED: Tag allocation count %zu does not match RU count %d",
-                       foundTag->getAllocations().size(), numRUs);
-}
-EV << "PHY-01 CHECK PASS: HE MU tag present with correct allocation count\n";
-
-// Verify allocation list carries RU indices and packets
-for (size_t i = 0; i < foundTag->getAllocations().size(); i++) {
-    const auto& alloc = foundTag->getAllocations()[i];
-    if (alloc.ru.index < 0 || alloc.ru.index >= numRUs) {
-        throw cRuntimeError("PHY-01 FAILED: Allocation %zu has invalid RU index %d",
-                           i, alloc.ru.index);
-    }
-    if (!alloc.packet) {
-        throw cRuntimeError("PHY-01 FAILED: Allocation %zu has null packet", i);
+// Verify that the transmission carries HE-MU user info in the PHY header
+auto foundHeader = containerPkt->peekAtFront<Ieee80211HeMuPhyHeader>();
+if (foundHeader->getUsersArraySize() != numRUs)
+    throw cRuntimeError("PHY-01 FAILED: HE-MU user count %zu does not match RU count %d", foundHeader->getUsersArraySize(), numRUs);
+for (unsigned int i = 0; i < foundHeader->getUsersArraySize(); i++) {
+    const auto& user = foundHeader->getUsers(i);
+    if (user.ruIndex < 0 || user.ruIndex >= numRUs) {
+        throw cRuntimeError("PHY-01 FAILED: User %u has invalid RU index %d", i, user.ruIndex);
     }
 }
-EV << "PHY-01 CHECK PASS: All allocations have valid RU indices and packets\n";
+EV << "PHY-01 CHECK PASS: HE-MU PHY header carries valid RU user info\n";
+if (!rxModule1->checkAssigned(mockTransmission) || !rxModule2->checkAssigned(mockTransmission))
+    throw cRuntimeError("PHY-01 FAILED: receivers did not match their HE-MU STA-ID assignments");
+EV << "PHY-01 CHECK PASS: Receivers matched their HE-MU STA-ID assignments\n";
 
 // Summary
-EV << "PHY-01 regression test PASSED: RU-band-specific attenuation metadata validated\n";
+EV << "PHY-01 regression test PASSED: RU-band-specific attenuation PPDU validated\n";
 EV << ".\n";
 
 delete mockTransmission;

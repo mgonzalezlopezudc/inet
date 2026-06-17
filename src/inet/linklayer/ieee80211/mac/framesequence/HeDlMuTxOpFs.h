@@ -32,13 +32,15 @@ using namespace inet::units::values;
  */
 class INET_API HeDlMuTxOpFs : public IFrameSequence
 {
-  protected:
+  public:
     struct ActiveAllocation {
         MacAddress staAddress;
         Tid tid = 0;
         int ruIndex;
+        Packet *packet = nullptr;
     };
 
+  protected:
     int firstStep = -1;
     int step = -1;
 
@@ -70,6 +72,9 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
     virtual bool completeStep(FrameSequenceContext *context) override;
+
+    virtual bool isContainerPacket(Packet *packet) const { return packet == containerPacket; }
+    virtual const std::vector<ActiveAllocation>& getActiveAllocations() const { return activeAllocations; }
 
     virtual std::string getHistory() const override { return "HE-DL-MU"; }
 };

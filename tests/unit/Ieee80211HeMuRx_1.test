@@ -7,7 +7,7 @@ only the legacy-visible duration indication.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -16,6 +16,7 @@ only the legacy-visible duration indication.
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/ReceptionDecision.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReceptionResult.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/Protocol.h"
@@ -84,6 +85,7 @@ network = TestNetwork
 %global:
 
 using namespace inet;
+using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
 class MockIeee80211Transmission : public Ieee80211Transmission
@@ -141,6 +143,36 @@ class MockNicModule : public NetworkInterface {
 Define_Module(DummyReceiverModule);
 Define_Module(MockNicModule);
 
+static Packet *makeHeMuPacket(const char *name, const std::vector<std::pair<Ieee80211HeRu, MacAddress>>& users)
+{
+    auto packet = new Packet(name);
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    for (const auto& entry : users) {
+        Ieee80211HeMuUserInfo user;
+        user.ruIndex = entry.first.index;
+        user.staId = computeHeMuStaId(entry.second);
+        phyHeader->appendUsers(user);
+    }
+    phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 41));
+    packet->insertAtBack(phyHeader);
+    auto containerHeader = makeShared<Ieee80211DataHeader>();
+    containerHeader->setType(ST_DATA_WITH_QOS);
+    containerHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    containerHeader->setChunkLength(b(288));
+    packet->insertAtBack(containerHeader);
+    for (const auto& entry : users) {
+        auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
+        payloadHeader->setRuIndex(entry.first.index);
+        payloadHeader->setStaId(computeHeMuStaId(entry.second));
+        payloadHeader->setMpduLength(B(32));
+        packet->insertAtBack(payloadHeader);
+        packet->insertAtBack(makeShared<ByteCountChunk>(B(32)));
+    }
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    return packet;
+}
+
 %activity:
 
 // Get dynamic module type for MockNic
@@ -177,11 +209,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 3);
 
 // --- Test 1: Single PPDU with STA1 on RU 0 ---
 {
-    auto packet = new Packet("he-mu-ppdu");
-    auto tag = packet->addTag<Ieee80211HeMuTag>();
-    tag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), new Packet("sta1-data"));
-    tag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), new Packet("sta2-data"));
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    auto packet = makeHeMuPacket("he-mu-ppdu", {{rus[0], MacAddress("00:11:22:33:44:55")}, {rus[1], MacAddress("66:77:88:99:AA:BB")}});
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
 
@@ -197,10 +225,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 3);
 
 // --- Test 2: Single PPDU without STA1 allocation ---
 {
-    auto packet = new Packet("he-mu-ppdu-no-sta1");
-    auto tag = packet->addTag<Ieee80211HeMuTag>();
-    tag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), new Packet("sta2-data"));
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    auto packet = makeHeMuPacket("he-mu-ppdu-no-sta1", {{rus[1], MacAddress("66:77:88:99:AA:BB")}});
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
 
@@ -216,10 +241,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 3);
 
 // --- Test 3: Single PPDU assigned to neither STA ---
 {
-    auto packet = new Packet("he-mu-ppdu-other-sta");
-    auto tag = packet->addTag<Ieee80211HeMuTag>();
-    tag->addAllocation(rus[2], MacAddress("02:00:00:00:00:03"), new Packet("sta3-data"));
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    auto packet = makeHeMuPacket("he-mu-ppdu-other-sta", {{rus[2], MacAddress("02:00:00:00:00:03")}});
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
 
@@ -235,9 +257,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 3);
 
 // --- Test 4: HE MU PHY packet with an empty allocation map is rejected ---
 {
-    auto packet = new Packet("empty-allocation-packet");
-    packet->addTag<Ieee80211HeMuTag>();
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    auto packet = makeHeMuPacket("empty-allocation-packet", {});
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
 
@@ -270,10 +290,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 3);
 {
     rxModule1->setModeSet(Ieee80211ModeSet::getModeSet("g(erp)"));
 
-    auto packet = new Packet("he-mu-ppdu-for-legacy");
-    auto tag = packet->addTag<Ieee80211HeMuTag>();
-    tag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), new Packet("sta1-data"));
-    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    auto packet = makeHeMuPacket("he-mu-ppdu-for-legacy", {{rus[0], MacAddress("00:11:22:33:44:55")}});
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
     auto analogModel = new ScalarReceptionAnalogModel(

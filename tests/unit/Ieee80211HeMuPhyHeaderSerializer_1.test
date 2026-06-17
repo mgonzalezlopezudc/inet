@@ -16,24 +16,29 @@ using namespace inet::physicallayer;
 // Create original HeMuPhyHeader
 auto origHeader = makeShared<Ieee80211HeMuPhyHeader>();
 
-Ieee80211HeMuRuAllocationInfo alloc1;
-alloc1.ruIndex = 2;
-alloc1.staAddress = MacAddress("00:11:22:33:44:55");
-origHeader->appendAllocations(alloc1);
+Ieee80211HeMuUserInfo user1;
+user1.ruIndex = 2;
+user1.staId = 0x155;
+user1.mcs = 4;
+user1.numberOfSpatialStreams = 1;
+origHeader->appendUsers(user1);
 
-Ieee80211HeMuRuAllocationInfo alloc2;
-alloc2.ruIndex = 4;
-alloc2.staAddress = MacAddress("66:77:88:99:AA:BB");
-origHeader->appendAllocations(alloc2);
+Ieee80211HeMuUserInfo user2;
+user2.ruIndex = 4;
+user2.staId = 0x2aa;
+user2.mcs = 5;
+user2.numberOfSpatialStreams = 2;
+origHeader->appendUsers(user2);
 
-// Set length: 8 bits for numAllocations + 2 allocations * 56 bits = 120 bits = 15 bytes
-origHeader->setChunkLength(b(8 + origHeader->getAllocationsArraySize() * 56));
+origHeader->setChunkLength(b(16 + origHeader->getUsersArraySize() * 41));
 
 EV << "Original Header:\n";
-EV << "allocations count = " << origHeader->getAllocationsArraySize() << "\n";
-for (unsigned int i = 0; i < origHeader->getAllocationsArraySize(); ++i) {
-    EV << "  alloc[" << i << "]: ruIndex=" << origHeader->getAllocations(i).ruIndex
-       << ", address=" << origHeader->getAllocations(i).staAddress.str() << "\n";
+EV << "users count = " << origHeader->getUsersArraySize() << "\n";
+for (unsigned int i = 0; i < origHeader->getUsersArraySize(); ++i) {
+    EV << "  user[" << i << "]: ruIndex=" << origHeader->getUsers(i).ruIndex
+       << ", staId=" << origHeader->getUsers(i).staId
+       << ", mcs=" << (int)origHeader->getUsers(i).mcs
+       << ", nss=" << (int)origHeader->getUsers(i).numberOfSpatialStreams << "\n";
 }
 
 // Put in a packet
@@ -52,10 +57,12 @@ pk2->insertAtFront(bytes);
 auto recvHeader = pk2->popAtFront<Ieee80211HeMuPhyHeader>();
 
 EV << "Deserialized Header:\n";
-EV << "allocations count = " << recvHeader->getAllocationsArraySize() << "\n";
-for (unsigned int i = 0; i < recvHeader->getAllocationsArraySize(); ++i) {
-    EV << "  alloc[" << i << "]: ruIndex=" << recvHeader->getAllocations(i).ruIndex
-       << ", address=" << recvHeader->getAllocations(i).staAddress.str() << "\n";
+EV << "users count = " << recvHeader->getUsersArraySize() << "\n";
+for (unsigned int i = 0; i < recvHeader->getUsersArraySize(); ++i) {
+    EV << "  user[" << i << "]: ruIndex=" << recvHeader->getUsers(i).ruIndex
+       << ", staId=" << recvHeader->getUsers(i).staId
+       << ", mcs=" << (int)recvHeader->getUsers(i).mcs
+       << ", nss=" << (int)recvHeader->getUsers(i).numberOfSpatialStreams << "\n";
 }
 
 delete pk;
@@ -64,12 +71,12 @@ EV << ".\n";
 
 %contains: stdout
 Original Header:
-allocations count = 2
-  alloc[0]: ruIndex=2, address=00-11-22-33-44-55
-  alloc[1]: ruIndex=4, address=66-77-88-99-AA-BB
-Serialized to 15 bytes
+users count = 2
+  user[0]: ruIndex=2, staId=341, mcs=4, nss=1
+  user[1]: ruIndex=4, staId=682, mcs=5, nss=2
+Serialized to 13 bytes
 Deserialized Header:
-allocations count = 2
-  alloc[0]: ruIndex=2, address=00-11-22-33-44-55
-  alloc[1]: ruIndex=4, address=66-77-88-99-AA-BB
+users count = 2
+  user[0]: ruIndex=2, staId=341, mcs=4, nss=1
+  user[1]: ruIndex=4, staId=682, mcs=5, nss=2
 .

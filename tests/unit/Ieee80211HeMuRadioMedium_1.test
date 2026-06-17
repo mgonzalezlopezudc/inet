@@ -5,8 +5,9 @@ while computing assigned receiver reception on the selected RU.
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
@@ -154,11 +155,37 @@ MacAddress sta2("66:77:88:99:AA:BB");
 MacAddress sta3("02:00:00:00:00:03");
 
 auto container = new Packet("HE-MU-PPDU");
-auto heMuTag = container->addTag<Ieee80211HeMuTag>();
-heMuTag->addAllocation(rus[0], sta1, makeDataPacket("ru0-data", sta1));
-heMuTag->addAllocation(rus[1], sta2, makeDataPacket("ru1-data", sta2));
-heMuTag->addAllocation(rus[2], sta3, makeDataPacket("ru2-data", sta3));
-container->insertAtBack(makeShared<ByteCountChunk>(B(32)));
+auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& sta) {
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ru.index;
+    user.staId = computeHeMuStaId(sta);
+    phyHeader->appendUsers(user);
+};
+appendUser(rus[0], sta1);
+appendUser(rus[1], sta2);
+appendUser(rus[2], sta3);
+phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 41));
+container->insertAtBack(phyHeader);
+auto containerHdr = makeShared<Ieee80211DataHeader>();
+containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+containerHdr->setType(ST_DATA_WITH_QOS);
+containerHdr->setChunkLength(b(288));
+container->insertAtBack(containerHdr);
+auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& sta, const char *name) {
+    auto mpdu = makeDataPacket(name, sta);
+    auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
+    payloadHeader->setRuIndex(ru.index);
+    payloadHeader->setStaId(computeHeMuStaId(sta));
+    payloadHeader->setMpduLength(B(mpdu->getByteLength()));
+    container->insertAtBack(payloadHeader);
+    container->insertAtBack(mpdu->peekData());
+    delete mpdu;
+};
+appendPayload(rus[0], sta1, "ru0-data");
+appendPayload(rus[1], sta2, "ru1-data");
+appendPayload(rus[2], sta3, "ru2-data");
+container->insertAtBack(makeShared<Ieee80211MacTrailer>());
 
 auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
 auto analogModel = flatTransmitter->getAnalogModel()->createAnalogModel(

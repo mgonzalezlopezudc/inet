@@ -7,6 +7,7 @@
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/TransmissionBase.h"
 
+#include "inet/common/ProtocolTag_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
 
 namespace inet {
@@ -18,6 +19,7 @@ TransmissionBase::TransmissionBase(const IRadio *transmitterRadio, const Packet 
     radioMedium(transmitterRadio->getMedium()),
     transmitterRadioId(transmitterRadio->getId()),
     transmitterGain(transmitterRadio->getAntenna()->getGain()),
+    packetProtocol(packet != nullptr && packet->findTag<PacketProtocolTag>() != nullptr ? packet->getTag<PacketProtocolTag>()->getProtocol() : nullptr),
     packet(packet),
     startTime(startTime),
     endTime(endTime),
@@ -119,4 +121,3 @@ const simtime_t TransmissionBase::getDuration(IRadioSignal::SignalPart part) con
 } // namespace physicallayer
 
 } // namespace inet
-

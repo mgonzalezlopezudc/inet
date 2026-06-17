@@ -13,7 +13,6 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
@@ -137,13 +136,12 @@ void HeHcf::startFrameSequence(AccessCategory ac)
 void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
 {
     Enter_Method("originatorProcessTransmittedFrame");
-    auto muTag = packet->findTag<physicallayer::Ieee80211HeMuTag>();
-    if (muTag != nullptr) {
+    auto heMuTxop = dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence());
+    if (heMuTxop != nullptr && heMuTxop->isContainerPacket(packet)) {
         auto edcaf = edca->getChannelOwner();
         if (edcaf) {
             AccessCategory ac = edcaf->getAccessCategory();
-            // Process each individual scheduled frame as transmitted
-            for (const auto& alloc : muTag->getAllocations()) {
+            for (const auto& alloc : heMuTxop->getActiveAllocations()) {
                 Packet *staPacket = alloc.packet;
                 auto header = staPacket->peekAtFront<Ieee80211MacHeader>();
                 if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
@@ -224,4 +222,3 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 
 } // namespace ieee80211
 } // namespace inet
-

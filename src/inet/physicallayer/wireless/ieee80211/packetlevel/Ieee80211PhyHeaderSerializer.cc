@@ -194,29 +194,39 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
 void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto heMuPhyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(chunk);
-    unsigned int numAllocations = heMuPhyHeader->getAllocationsArraySize();
-    if (numAllocations > 255)
-        throw cRuntimeError("Too many HE MU RU allocations: %u", numAllocations);
-    stream.writeByte(numAllocations);
-    for (unsigned int i = 0; i < numAllocations; ++i) {
-        const auto& alloc = heMuPhyHeader->getAllocations(i);
-        if (alloc.ruIndex < 0 || alloc.ruIndex > 255)
-            throw cRuntimeError("Invalid HE MU RU index for serialization: %d", alloc.ruIndex);
-        stream.writeByte(alloc.ruIndex);
-        stream.writeMacAddress(alloc.staAddress);
+    unsigned int numUsers = heMuPhyHeader->getUsersArraySize();
+    if (numUsers > 255)
+        throw cRuntimeError("Too many HE MU users: %u", numUsers);
+    stream.writeByte(heMuPhyHeader->getBssColor());
+    stream.writeByte(numUsers);
+    for (unsigned int i = 0; i < numUsers; ++i) {
+        const auto& user = heMuPhyHeader->getUsers(i);
+        if (user.ruIndex < 0 || user.ruIndex > 255)
+            throw cRuntimeError("Invalid HE MU RU index for serialization: %d", user.ruIndex);
+        if (user.staId > 2047)
+            throw cRuntimeError("Invalid HE MU STA-ID for serialization: %u", user.staId);
+        stream.writeByte(user.ruIndex);
+        stream.writeUint16Be(user.staId);
+        stream.writeByte(user.mcs);
+        stream.writeByte(user.numberOfSpatialStreams);
+        stream.writeBit(user.dcm);
     }
 }
 
 const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto heMuPhyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    unsigned int numAllocations = stream.readByte();
-    heMuPhyHeader->setAllocationsArraySize(numAllocations);
-    for (unsigned int i = 0; i < numAllocations; ++i) {
-        Ieee80211HeMuRuAllocationInfo info;
+    heMuPhyHeader->setBssColor(stream.readByte());
+    unsigned int numUsers = stream.readByte();
+    heMuPhyHeader->setUsersArraySize(numUsers);
+    for (unsigned int i = 0; i < numUsers; ++i) {
+        Ieee80211HeMuUserInfo info;
         info.ruIndex = stream.readByte();
-        info.staAddress = stream.readMacAddress();
-        heMuPhyHeader->setAllocations(i, info);
+        info.staId = stream.readUint16Be();
+        info.mcs = stream.readByte();
+        info.numberOfSpatialStreams = stream.readByte();
+        info.dcm = stream.readBit();
+        heMuPhyHeader->setUsers(i, info);
     }
     return heMuPhyHeader;
 }
