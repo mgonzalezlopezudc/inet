@@ -9,13 +9,16 @@
 
 #include "inet/common/TagBase.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include <vector>
 
 namespace inet {
 namespace physicallayer {
 
 struct Ieee80211HeMuRuAllocation {
-    int ruIndex;
+    Ieee80211HeRu ru;
+    MacAddress staAddress;
     Packet *packet; // The packet destined for this RU
 };
 
@@ -40,9 +43,9 @@ class INET_API Ieee80211HeMuTag : public TagBase
     }
 
     const std::vector<Ieee80211HeMuRuAllocation>& getAllocations() const { return allocations; }
-    void addAllocation(int ruIndex, Packet *packet) {
+    void addAllocation(const Ieee80211HeRu& ru, const MacAddress& staAddress, Packet *packet) {
         dropOwnership(packet);
-        allocations.push_back({ruIndex, packet});
+        allocations.push_back({ru, staAddress, packet});
     }
     void setAllocations(const std::vector<Ieee80211HeMuRuAllocation>& allocs) {
         allocations = allocs;
@@ -60,7 +63,7 @@ class INET_API Ieee80211HeMuTag : public TagBase
                 dupPkt = alloc.packet->dup();
                 tag->dropOwnership(dupPkt);
             }
-            dupAllocs.push_back({alloc.ruIndex, dupPkt});
+            dupAllocs.push_back({alloc.ru, alloc.staAddress, dupPkt});
         }
         tag->setAllocations(dupAllocs);
         return tag;

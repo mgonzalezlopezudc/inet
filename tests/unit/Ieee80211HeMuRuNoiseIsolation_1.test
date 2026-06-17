@@ -174,8 +174,8 @@ pkt2->insertAtBack(makeShared<ByteCountChunk>(B(100)));
 // Create main container packet for HE MU transmission
 auto containerPkt = new Packet("MuContainer_FromTx");
 auto heMuTag = containerPkt->addTag<Ieee80211HeMuTag>();
-heMuTag->addAllocation(0, pkt1);  // RU 0 -> rxNic1
-heMuTag->addAllocation(1, pkt2);  // RU 1 -> rxNic2
+heMuTag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), pkt1);  // RU 0 -> rxNic1
+heMuTag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), pkt2);  // RU 1 -> rxNic2
 containerPkt->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(200)));
 
@@ -199,14 +199,14 @@ EV << "PHY-02 CHECK PASS: HE MU tag present with " << foundTag->getAllocations()
 std::set<int> ruIndices;
 for (size_t i = 0; i < foundTag->getAllocations().size(); i++) {
     const auto& alloc = foundTag->getAllocations()[i];
-    if (ruIndices.count(alloc.ruIndex) > 0) {
-        throw cRuntimeError("PHY-02 FAILED: Duplicate RU index %d in allocations", alloc.ruIndex);
+    if (ruIndices.count(alloc.ru.index) > 0) {
+        throw cRuntimeError("PHY-02 FAILED: Duplicate RU index %d in allocations", alloc.ru.index);
     }
-    ruIndices.insert(alloc.ruIndex);
+    ruIndices.insert(alloc.ru.index);
     
-    if (alloc.ruIndex < 0 || alloc.ruIndex >= numRUs) {
+    if (alloc.ru.index < 0 || alloc.ru.index >= numRUs) {
         throw cRuntimeError("PHY-02 FAILED: Allocation %zu has invalid RU index %d",
-                           i, alloc.ruIndex);
+                           i, alloc.ru.index);
     }
 }
 EV << "PHY-02 CHECK PASS: All allocations have distinct RU indices\n";
@@ -221,7 +221,7 @@ EV << "PHY-02 CHECK PASS: Allocation set covers all RUs (no gaps)\n";
 // Verify each RU has associated packet (required for noise isolation)
 for (const auto& alloc : foundTag->getAllocations()) {
     if (!alloc.packet) {
-        throw cRuntimeError("PHY-02 FAILED: RU %d allocation has no packet", alloc.ruIndex);
+        throw cRuntimeError("PHY-02 FAILED: RU %d allocation has no packet", alloc.ru.index);
     }
 }
 EV << "PHY-02 CHECK PASS: Each RU allocation has associated packet\n";
@@ -232,8 +232,8 @@ EV << "PHY-02 CHECK PASS: Each RU allocation has associated packet\n";
 bool hasAllocationForRu0 = false;
 bool hasAllocationForRu1 = false;
 for (const auto& alloc : foundTag->getAllocations()) {
-    if (alloc.ruIndex == 0) hasAllocationForRu0 = true;
-    if (alloc.ruIndex == 1) hasAllocationForRu1 = true;
+    if (alloc.ru.index == 0) hasAllocationForRu0 = true;
+    if (alloc.ru.index == 1) hasAllocationForRu1 = true;
 }
 if (!hasAllocationForRu0 || !hasAllocationForRu1) {
     throw cRuntimeError("PHY-02 FAILED: Not all RUs have allocations for noise isolation");
