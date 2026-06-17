@@ -10,6 +10,7 @@
 #include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssOfdmMode.h"
@@ -21,7 +22,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -34,6 +35,25 @@ namespace physicallayer {
 Define_Module(Ieee80211Radio);
 
 simsignal_t Ieee80211Radio::radioChannelChangedSignal = cComponent::registerSignal("radioChannelChanged");
+
+static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
+{
+    std::vector<Ieee80211HeMuUserInfo> users;
+    if (!packet->hasAtFront<ieee80211::Ieee80211MacHeader>())
+        return users;
+    auto packetCopy = packet->dup();
+    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>();
+    while (packetCopy->getDataLength() > b(0) && packetCopy->hasAtFront<Ieee80211HeMuRuPayloadHeader>()) {
+        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
+        Ieee80211HeMuUserInfo user;
+        user.ruIndex = payloadHeader->getRuIndex();
+        user.staId = payloadHeader->getStaId();
+        users.push_back(user);
+        packetCopy->popAtFront(payloadHeader->getMpduLength());
+    }
+    delete packetCopy;
+    return users;
+}
 
 Ieee80211Radio::Ieee80211Radio() :
     FlatRadioBase()
@@ -236,16 +256,12 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
 {
     auto ieee80211Transmitter = check_and_cast<const Ieee80211Transmitter *>(transmitter);
     auto mode = ieee80211Transmitter->computeTransmissionMode(packet);
-    auto heMuTag = packet->findTag<Ieee80211HeMuTag>();
-    auto phyHeader = heMuTag != nullptr ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
+    auto heMuUsers = collectHeMuUsers(packet);
+    auto phyHeader = !heMuUsers.empty() ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
     if (auto heMuPhyHeader = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader)) {
-        for (const auto& allocation : heMuTag->getAllocations()) {
-            Ieee80211HeMuRuAllocationInfo info;
-            info.ruIndex = allocation.ru.index;
-            info.staAddress = allocation.staAddress;
-            heMuPhyHeader->appendAllocations(info);
-        }
-        phyHeader->setChunkLength(b(8 + heMuPhyHeader->getAllocationsArraySize() * 56));
+        for (const auto& user : heMuUsers)
+            heMuPhyHeader->appendUsers(user);
+        phyHeader->setChunkLength(b(16 + heMuPhyHeader->getUsersArraySize() * 41));
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
@@ -294,15 +310,15 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         auto tag = packet->addTagIfAbsent<Ieee80211HeMuRxTag>();
         tag->setRuIndex(-1);
         auto networkInterface = getContainingNicModule(this);
-        auto myMacAddress = networkInterface->getMacAddress();
-        for (unsigned int i = 0; i < heMuPhyHeader->getAllocationsArraySize(); ++i) {
-            const auto& alloc = heMuPhyHeader->getAllocations(i);
+        auto myStaId = computeHeMuStaId(networkInterface->getMacAddress());
+        for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
+            const auto& user = heMuPhyHeader->getUsers(i);
             Ieee80211HeMuRxAllocationInfo info;
-            info.ruIndex = alloc.ruIndex;
-            info.staAddress = alloc.staAddress;
+            info.ruIndex = user.ruIndex;
+            info.staId = user.staId;
             tag->appendAllocations(info);
-            if (alloc.staAddress == myMacAddress)
-                tag->setRuIndex(alloc.ruIndex);
+            if (user.staId == myStaId)
+                tag->setRuIndex(user.ruIndex);
         }
     }
 
