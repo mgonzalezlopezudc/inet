@@ -337,13 +337,16 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
 
     if (wasHeMu && myAllocationIndex != -1) {
         bool responseSent = false;
+        bool isBlockAckPolicyData = false;
         auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header);
         if (dataOrMgmtHeader != nullptr) {
             if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader)) {
-                if (dataHeader->getType() == ST_DATA_WITH_QOS && recipientBlockAckAgreementHandler) {
-                    recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, this);
+                isBlockAckPolicyData = dataHeader->getType() == ST_DATA_WITH_QOS && dataHeader->getAckPolicy() == BLOCK_ACK;
+                if (isBlockAckPolicyData && recipientBlockAckAgreementHandler) {
                     auto agreement = recipientBlockAckAgreementHandler->getAgreement(dataHeader->getTid(), dataHeader->getTransmitterAddress());
-                    if (agreement) {
+                    if (agreement)
+                        recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, this);
+                    if (agreement && myAllocationIndex == 0) {
                         auto blockAck = makeShared<Ieee80211BasicBlockAck>();
                         auto startingSequenceNumber = agreement->getStartingSequenceNumber();
                         for (int i = 0; i < 64; i++) {
@@ -361,7 +364,7 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                         auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
                         auto responseMode = rateSelection->computeResponseBlockAckFrameMode(packet, dummyReq);
                         simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-                        simtime_t ifs = (myAllocationIndex + 1) * modeSet->getSifsTime() + myAllocationIndex * blockAckDuration;
+                        simtime_t ifs = modeSet->getSifsTime();
 
                         simtime_t duration = dataHeader->getDurationField() - ifs - blockAckDuration;
                         if (duration < 0) duration = 0;
@@ -378,10 +381,13 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                         delete blockAckPacket;
                         responseSent = true;
                     }
+                    else if (agreement) {
+                        EV_INFO << "HeHcf: STA waits for BAR before BlockAck: index = " << myAllocationIndex << endl;
+                    }
                 }
             }
 
-            if (!responseSent) {
+            if (!responseSent && !isBlockAckPolicyData && recipientAckPolicy->isAckNeeded(dataOrMgmtHeader)) {
                 auto ack = makeShared<Ieee80211AckFrame>();
                 ack->setReceiverAddress(dataOrMgmtHeader->getTransmitterAddress());
 
@@ -914,4 +920,3 @@ Hcf::~Hcf()
 
 } // namespace ieee80211
 } // namespace inet
-
