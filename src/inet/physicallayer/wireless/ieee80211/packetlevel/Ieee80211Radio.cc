@@ -43,8 +43,11 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         return users;
     auto packetCopy = packet->dup();
     packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>();
-    while (packetCopy->getDataLength() > b(0) && packetCopy->hasAtFront<Ieee80211HeMuRuPayloadHeader>()) {
-        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
+    while (packetCopy->getDataLength() > b(0)) {
+        auto payloadHeader = dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(packetCopy->peekAtFront());
+        if (payloadHeader == nullptr)
+            break;
+        packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
         Ieee80211HeMuUserInfo user;
         user.ruIndex = payloadHeader->getRuIndex();
         user.staId = payloadHeader->getStaId();
@@ -331,24 +334,25 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
 
 const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::popIeee80211PhyHeaderAtFront(Packet *packet, b length, int flags)
 {
-    int id = packet->getTag<PacketProtocolTag>()->getProtocol()->getId();
-    if (id == Protocol::ieee80211FhssPhy.getId())
+    auto protocolTag = packet->findTag<PacketProtocolTag>();
+    int id = protocolTag != nullptr && protocolTag->getProtocol() != nullptr ? protocolTag->getProtocol()->getId() : -1;
+    if (id == Protocol::ieee80211FhssPhy.getId() || dynamicPtrCast<const Ieee80211FhssPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211FhssPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211IrPhy.getId())
+    else if (id == Protocol::ieee80211IrPhy.getId() || dynamicPtrCast<const Ieee80211IrPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211IrPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211DsssPhy.getId())
+    else if (id == Protocol::ieee80211DsssPhy.getId() || dynamicPtrCast<const Ieee80211DsssPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211DsssPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211HrDsssPhy.getId())
+    else if (id == Protocol::ieee80211HrDsssPhy.getId() || dynamicPtrCast<const Ieee80211HrDsssPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211HrDsssPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211OfdmPhy.getId())
+    else if (id == Protocol::ieee80211OfdmPhy.getId() || dynamicPtrCast<const Ieee80211OfdmPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211OfdmPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211ErpOfdmPhy.getId())
+    else if (id == Protocol::ieee80211ErpOfdmPhy.getId() || dynamicPtrCast<const Ieee80211ErpOfdmPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211ErpOfdmPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211HtPhy.getId())
+    else if (id == Protocol::ieee80211HtPhy.getId() || dynamicPtrCast<const Ieee80211HtPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211HtPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211VhtPhy.getId())
+    else if (id == Protocol::ieee80211VhtPhy.getId() || dynamicPtrCast<const Ieee80211VhtPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211VhtPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211HePhy.getId())
+    else if (id == Protocol::ieee80211HePhy.getId() || dynamicPtrCast<const Ieee80211HeMuPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->popAtFront<Ieee80211HeMuPhyHeader>(length, flags);
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY protocol.");
@@ -356,24 +360,25 @@ const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::popIeee80211PhyHeaderAtFront
 
 const Ptr<const Ieee80211PhyHeader> Ieee80211Radio::peekIeee80211PhyHeaderAtFront(const Packet *packet, b length, int flags)
 {
-    int id = packet->getTag<PacketProtocolTag>()->getProtocol()->getId();
-    if (id == Protocol::ieee80211FhssPhy.getId())
+    auto protocolTag = const_cast<Packet *>(packet)->findTag<PacketProtocolTag>();
+    int id = protocolTag != nullptr && protocolTag->getProtocol() != nullptr ? protocolTag->getProtocol()->getId() : -1;
+    if (id == Protocol::ieee80211FhssPhy.getId() || dynamicPtrCast<const Ieee80211FhssPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211FhssPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211IrPhy.getId())
+    else if (id == Protocol::ieee80211IrPhy.getId() || dynamicPtrCast<const Ieee80211IrPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211IrPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211DsssPhy.getId())
+    else if (id == Protocol::ieee80211DsssPhy.getId() || dynamicPtrCast<const Ieee80211DsssPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211DsssPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211HrDsssPhy.getId())
+    else if (id == Protocol::ieee80211HrDsssPhy.getId() || dynamicPtrCast<const Ieee80211HrDsssPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211HrDsssPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211OfdmPhy.getId())
+    else if (id == Protocol::ieee80211OfdmPhy.getId() || dynamicPtrCast<const Ieee80211OfdmPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211OfdmPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211ErpOfdmPhy.getId())
+    else if (id == Protocol::ieee80211ErpOfdmPhy.getId() || dynamicPtrCast<const Ieee80211ErpOfdmPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211ErpOfdmPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211HtPhy.getId())
+    else if (id == Protocol::ieee80211HtPhy.getId() || dynamicPtrCast<const Ieee80211HtPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211HtPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211VhtPhy.getId())
+    else if (id == Protocol::ieee80211VhtPhy.getId() || dynamicPtrCast<const Ieee80211VhtPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211VhtPhyHeader>(length, flags);
-    else if (id == Protocol::ieee80211HePhy.getId())
+    else if (id == Protocol::ieee80211HePhy.getId() || dynamicPtrCast<const Ieee80211HeMuPhyHeader>(packet->peekAtFront()) != nullptr)
         return packet->peekAtFront<Ieee80211HeMuPhyHeader>(length, flags);
     else
         throw cRuntimeError("Invalid IEEE 802.11 PHY protocol.");
