@@ -123,6 +123,12 @@ void Rx::frameTransmitted(simtime_t durationField)
     setOrExtendNav(durationField);
 }
 
+void Rx::legacySignalReceived(simtime_t durationField)
+{
+    Enter_Method("legacySignalReceived");
+    setOrExtendNav(durationField);
+}
+
 bool Rx::isReceptionInProgress() const
 {
     return receptionState == IRadio::RECEPTION_STATE_RECEIVING &&
@@ -216,4 +222,3 @@ void Rx::registerContention(IContention *contention)
 
 } // namespace ieee80211
 } // namespace inet
-

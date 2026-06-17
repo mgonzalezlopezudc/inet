@@ -1,12 +1,21 @@
 %description:
 Test HE MU reception filtering at Ieee80211Receiver. Verifies that a station only
-decodes its assigned RU sub-channel transmission and discards other parallel transmissions.
+decodes its assigned RU from a single HE MU PPDU and that non-HE receivers get
+only the legacy-visible duration indication.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/ISnir.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/ReceptionDecision.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReceptionResult.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/Protocol.h"
@@ -95,10 +104,26 @@ class MockIeee80211Transmission : public Ieee80211Transmission
 
 class DummyReceiverModule : public Ieee80211Receiver {
   public:
-    // Expose the protected isAssignedHeMuRu for testing
     bool checkAssigned(const ITransmission *transmission) const {
         return isAssignedHeMuRu(transmission);
     }
+    const IReceptionResult *computeTestReceptionResult(const IReception *reception, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const {
+        return computeReceptionResult(nullptr, reception, nullptr, snir, decisions);
+    }
+};
+
+class DummySnir : public ISnir {
+  protected:
+    const IReception *reception;
+
+  public:
+    DummySnir(const IReception *reception) : reception(reception) {}
+    virtual const IReception *getReception() const override { return reception; }
+    virtual const INoise *getNoise() const override { return nullptr; }
+    virtual double getMin() const override { return 10; }
+    virtual double getMax() const override { return 10; }
+    virtual double getMean() const override { return 10; }
+    virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override { return stream << "DummySnir"; }
 };
 
 class MockNicModule : public NetworkInterface {
@@ -148,81 +173,52 @@ auto modeSet = Ieee80211ModeSet::getModeSet("ax");
 auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
 auto channel = new Ieee80211Channel(nullptr, 1);
 
-// Construct HE MU allocations tag simulating the SIG-B layout
-// Allocation: STA1 on RU 0, STA2 on RU 1
-std::vector<Ieee80211HeMuRuAllocationInfo> allocations;
-Ieee80211HeMuRuAllocationInfo alloc1;
-alloc1.ruIndex = 0;
-alloc1.staAddress = MacAddress("00:11:22:33:44:55");
-allocations.push_back(alloc1);
+auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 3);
 
-Ieee80211HeMuRuAllocationInfo alloc2;
-alloc2.ruIndex = 1;
-alloc2.staAddress = MacAddress("66:77:88:99:AA:BB");
-allocations.push_back(alloc2);
-
-// --- Test 1: Sub-transmission on RU 0 ---
+// --- Test 1: Single PPDU with STA1 on RU 0 ---
 {
-    auto packet = new Packet("ru0-packet");
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    phyHeader->setChunkLength(b(48));
-    phyHeader->setRuIndex(0);
-    for (const auto& a : allocations) {
-        phyHeader->appendAllocations(a);
-    }
-    packet->insertAtFront(phyHeader);
+    auto packet = new Packet("he-mu-ppdu");
+    auto tag = packet->addTag<Ieee80211HeMuTag>();
+    tag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), new Packet("sta1-data"));
+    tag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), new Packet("sta2-data"));
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
 
-    // rxModule1 (STA1) is assigned to RU 0 -> should be TRUE
     bool possible1 = rxModule1->checkAssigned(trans);
-    EV << "STA1 on RU0 sub-transmission: " << (possible1 ? "PASS" : "FAIL") << "\n";
+    EV << "STA1 assigned in HE MU PPDU: " << (possible1 ? "PASS" : "FAIL") << "\n";
 
-    // rxModule2 (STA2) is assigned to RU 1, not RU 0 -> should be FALSE
     bool possible2 = rxModule2->checkAssigned(trans);
-    EV << "STA2 on RU0 sub-transmission: " << (!possible2 ? "PASS" : "FAIL") << "\n";
+    EV << "STA2 assigned in HE MU PPDU: " << (possible2 ? "PASS" : "FAIL") << "\n";
 
     delete trans;
     delete packet;
 }
 
-// --- Test 2: Sub-transmission on RU 1 ---
+// --- Test 2: Single PPDU without STA1 allocation ---
 {
-    auto packet = new Packet("ru1-packet");
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    phyHeader->setChunkLength(b(48));
-    phyHeader->setRuIndex(1);
-    for (const auto& a : allocations) {
-        phyHeader->appendAllocations(a);
-    }
-    packet->insertAtFront(phyHeader);
+    auto packet = new Packet("he-mu-ppdu-no-sta1");
+    auto tag = packet->addTag<Ieee80211HeMuTag>();
+    tag->addAllocation(rus[1], MacAddress("66:77:88:99:AA:BB"), new Packet("sta2-data"));
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
 
-    // rxModule1 (STA1) is assigned to RU 0, not RU 1 -> should be FALSE
     bool possible1 = rxModule1->checkAssigned(trans);
-    EV << "STA1 on RU1 sub-transmission: " << (!possible1 ? "PASS" : "FAIL") << "\n";
+    EV << "STA1 unassigned in HE MU PPDU: " << (!possible1 ? "PASS" : "FAIL") << "\n";
 
-    // rxModule2 (STA2) is assigned to RU 1 -> should be TRUE
     bool possible2 = rxModule2->checkAssigned(trans);
-    EV << "STA2 on RU1 sub-transmission: " << (possible2 ? "PASS" : "FAIL") << "\n";
+    EV << "STA2 assigned after STA1 omitted: " << (possible2 ? "PASS" : "FAIL") << "\n";
 
     delete trans;
     delete packet;
 }
 
-// --- Test 3: Sub-transmission on RU 2 (neither STA is assigned) ---
+// --- Test 3: Single PPDU assigned to neither STA ---
 {
-    auto packet = new Packet("ru2-packet");
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    phyHeader->setChunkLength(b(48));
-    phyHeader->setRuIndex(2);
-    for (const auto& a : allocations) {
-        phyHeader->appendAllocations(a);
-    }
-    packet->insertAtFront(phyHeader);
+    auto packet = new Packet("he-mu-ppdu-other-sta");
+    auto tag = packet->addTag<Ieee80211HeMuTag>();
+    tag->addAllocation(rus[2], MacAddress("02:00:00:00:00:03"), new Packet("sta3-data"));
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
@@ -230,8 +226,8 @@ allocations.push_back(alloc2);
     // Both should be FALSE
     bool possible1 = rxModule1->checkAssigned(trans);
     bool possible2 = rxModule2->checkAssigned(trans);
-    EV << "STA1 on RU2 sub-transmission: " << (!possible1 ? "PASS" : "FAIL") << "\n";
-    EV << "STA2 on RU2 sub-transmission: " << (!possible2 ? "PASS" : "FAIL") << "\n";
+    EV << "STA1 absent from HE MU PPDU: " << (!possible1 ? "PASS" : "FAIL") << "\n";
+    EV << "STA2 absent from HE MU PPDU: " << (!possible2 ? "PASS" : "FAIL") << "\n";
 
     delete trans;
     delete packet;
@@ -240,10 +236,7 @@ allocations.push_back(alloc2);
 // --- Test 4: HE MU PHY packet with an empty allocation map is rejected ---
 {
     auto packet = new Packet("empty-allocation-packet");
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    phyHeader->setChunkLength(b(16));
-    phyHeader->setRuIndex(0);
-    packet->insertAtFront(phyHeader);
+    packet->addTag<Ieee80211HeMuTag>();
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
@@ -273,20 +266,67 @@ allocations.push_back(alloc2);
     delete packet;
 }
 
+// --- Test 6: Non-HE receiver gets HE MU legacy duration indication, not RU payload ---
+{
+    rxModule1->setModeSet(Ieee80211ModeSet::getModeSet("g(erp)"));
+
+    auto packet = new Packet("he-mu-ppdu-for-legacy");
+    auto tag = packet->addTag<Ieee80211HeMuTag>();
+    tag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), new Packet("sta1-data"));
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+    auto analogModel = new ScalarReceptionAnalogModel(
+            SimTime(100, SIMTIME_US),
+            SimTime(100, SIMTIME_US),
+            SimTime(800, SIMTIME_US),
+            Hz(5.18e9),
+            Hz(20e6),
+            mW(1));
+    auto reception = new Reception(
+            radio1,
+            trans,
+            SIMTIME_ZERO,
+            SimTime(1, SIMTIME_MS),
+            Coord(), Coord(),
+            Quaternion(), Quaternion(),
+            analogModel);
+    auto decision = new ReceptionDecision(reception, IRadioSignal::SIGNAL_PART_WHOLE, true, true, true);
+    auto decisions = new std::vector<const IReceptionDecision *> { decision };
+    DummySnir snir(reception);
+
+    auto result = rxModule1->computeTestReceptionResult(reception, &snir, decisions);
+    auto receivedPacket = result->getPacket();
+    bool hasLegacyIndication = receivedPacket->hasTag<Ieee80211HeMuLegacyPreambleInd>();
+    bool hasMacProtocol = receivedPacket->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ieee80211HePhy;
+    EV << "Legacy receiver gets HE MU duration indication: " << (hasLegacyIndication ? "PASS" : "FAIL") << "\n";
+    EV << "Legacy receiver does not get MAC RU payload: " << (hasMacProtocol ? "PASS" : "FAIL") << "\n";
+
+    delete result;
+    delete decision;
+    delete reception;
+    delete trans;
+    delete packet;
+
+    rxModule1->setModeSet(Ieee80211ModeSet::getModeSet("ax"));
+}
+
 // Cleanup Channel
 delete channel;
 
 EV << ".\n";
 
 %contains: stdout
-STA1 on RU0 sub-transmission: PASS
-STA2 on RU0 sub-transmission: PASS
-STA1 on RU1 sub-transmission: PASS
-STA2 on RU1 sub-transmission: PASS
-STA1 on RU2 sub-transmission: PASS
-STA2 on RU2 sub-transmission: PASS
+STA1 assigned in HE MU PPDU: PASS
+STA2 assigned in HE MU PPDU: PASS
+STA1 unassigned in HE MU PPDU: PASS
+STA2 assigned after STA1 omitted: PASS
+STA1 absent from HE MU PPDU: PASS
+STA2 absent from HE MU PPDU: PASS
 STA1 empty HE MU allocation map: PASS
 STA2 empty HE MU allocation map: PASS
 STA1 legacy packet without HE MU PHY tag: PASS
 STA2 legacy packet without HE MU PHY tag: PASS
+Legacy receiver gets HE MU duration indication: PASS
+Legacy receiver does not get MAC RU payload: PASS
 .

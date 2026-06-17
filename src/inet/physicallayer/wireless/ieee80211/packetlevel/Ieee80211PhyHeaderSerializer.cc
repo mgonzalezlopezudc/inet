@@ -194,11 +194,14 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
 void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto heMuPhyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(chunk);
-    stream.writeByte(heMuPhyHeader->getRuIndex());
     unsigned int numAllocations = heMuPhyHeader->getAllocationsArraySize();
+    if (numAllocations > 255)
+        throw cRuntimeError("Too many HE MU RU allocations: %u", numAllocations);
     stream.writeByte(numAllocations);
     for (unsigned int i = 0; i < numAllocations; ++i) {
         const auto& alloc = heMuPhyHeader->getAllocations(i);
+        if (alloc.ruIndex < 0 || alloc.ruIndex > 255)
+            throw cRuntimeError("Invalid HE MU RU index for serialization: %d", alloc.ruIndex);
         stream.writeByte(alloc.ruIndex);
         stream.writeMacAddress(alloc.staAddress);
     }
@@ -207,7 +210,6 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
 const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto heMuPhyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    heMuPhyHeader->setRuIndex(stream.readByte());
     unsigned int numAllocations = stream.readByte();
     heMuPhyHeader->setAllocationsArraySize(numAllocations);
     for (unsigned int i = 0; i < numAllocations; ++i) {
@@ -222,4 +224,3 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
 } // namespace physicallayer
 
 } // namespace inet
-
