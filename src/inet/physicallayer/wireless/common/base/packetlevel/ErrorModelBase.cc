@@ -144,11 +144,11 @@ Packet *ErrorModelBase::computeCorruptedPacket(const ISnir *snir) const
     auto ber = computeBitErrorRate(snir, IRadioSignal::SIGNAL_PART_WHOLE);
     auto receivedPacket = computeCorruptedPacket(transmittedPacket, ber);
     receivedPacket->clearTags();
-    receivedPacket->addTag<PacketProtocolTag>()->setProtocol(transmittedPacket->getTag<PacketProtocolTag>()->getProtocol());
+    if (auto protocol = snir->getReception()->getTransmission()->getPacketProtocol())
+        receivedPacket->addTag<PacketProtocolTag>()->setProtocol(protocol);
     return receivedPacket;
 }
 
 } // namespace physicallayer
 
 } // namespace inet
-

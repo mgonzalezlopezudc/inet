@@ -8,6 +8,7 @@ immediately to HE MU QoS data; later STAs wait for the AP's BAR.
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 %file: TestNetwork.ned
@@ -202,7 +203,7 @@ static Packet *makeHeMuDataPacket(const char *name, const MacAddress& receiver, 
     for (int i = 0; i < 2; i++) {
         physicallayer::Ieee80211HeMuRxAllocationInfo allocation;
         allocation.ruIndex = i;
-        allocation.staAddress = i == myAllocationIndex ? receiver : MacAddress("AA:BB:CC:DD:EE:FF");
+        allocation.staId = physicallayer::computeHeMuStaId(i == myAllocationIndex ? receiver : MacAddress("AA:BB:CC:DD:EE:FF"));
         tag->appendAllocations(allocation);
     }
     tag->setRuIndex(myAllocationIndex);

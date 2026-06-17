@@ -1,10 +1,10 @@
 %description:
-Test IEEE 802.11 HE Resource Unit (RU) calculation and multi-user packet tags
+Test IEEE 802.11 HE Resource Unit (RU) calculation and HE-MU PHY user info
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuTag.h"
-#include "inet/common/packet/Packet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 %global:
 
@@ -23,25 +23,19 @@ for (const auto& ru : rus) {
        << " Hz, bandwidth=" << ru.bandwidth.get() << " Hz\n";
 }
 
-// Test Ieee80211HeMuTag
-auto tag = new Ieee80211HeMuTag();
-auto pkt1 = new Packet("pkt1");
-auto pkt2 = new Packet("pkt2");
-tag->addAllocation(rus[0], MacAddress("00:11:22:33:44:55"), pkt1);
-tag->addAllocation(rus[2], MacAddress("66:77:88:99:AA:BB"), pkt2);
+auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ru.index;
+    user.staId = computeHeMuStaId(staAddress);
+    phyHeader->appendUsers(user);
+};
+appendUser(rus[0], MacAddress("00:11:22:33:44:55"));
+appendUser(rus[2], MacAddress("66:77:88:99:AA:BB"));
 
-EV << "Allocations in tag: " << tag->getAllocations().size() << "\n";
-EV << "Alloc 0: RU " << tag->getAllocations()[0].ru.index << ", name=" << tag->getAllocations()[0].packet->getName() << "\n";
-EV << "Alloc 1: RU " << tag->getAllocations()[1].ru.index << ", name=" << tag->getAllocations()[1].packet->getName() << "\n";
-
-// Test duplicate tag
-auto dupTag = tag->dup();
-EV << "Dup Allocations in tag: " << dupTag->getAllocations().size() << "\n";
-EV << "Dup Alloc 0: RU " << dupTag->getAllocations()[0].ru.index << ", name=" << dupTag->getAllocations()[0].packet->getName() << "\n";
-EV << "Dup Alloc 1: RU " << dupTag->getAllocations()[1].ru.index << ", name=" << dupTag->getAllocations()[1].packet->getName() << "\n";
-
-delete tag;
-delete dupTag;
+EV << "Users in HE-MU PHY header: " << phyHeader->getUsersArraySize() << "\n";
+EV << "User 0: RU " << phyHeader->getUsers(0).ruIndex << ", STA-ID=" << phyHeader->getUsers(0).staId << "\n";
+EV << "User 1: RU " << phyHeader->getUsers(1).ruIndex << ", STA-ID=" << phyHeader->getUsers(1).staId << "\n";
 
 EV << ".\n";
 
@@ -51,10 +45,7 @@ RU 0: center=5.1725e+09 Hz, bandwidth=5e+06 Hz
 RU 1: center=5.1775e+09 Hz, bandwidth=5e+06 Hz
 RU 2: center=5.1825e+09 Hz, bandwidth=5e+06 Hz
 RU 3: center=5.1875e+09 Hz, bandwidth=5e+06 Hz
-Allocations in tag: 2
-Alloc 0: RU 0, name=pkt1
-Alloc 1: RU 2, name=pkt2
-Dup Allocations in tag: 2
-Dup Alloc 0: RU 0, name=pkt1
-Dup Alloc 1: RU 2, name=pkt2
+Users in HE-MU PHY header: 2
+User 0: RU 0, STA-ID=1109
+User 1: RU 2, STA-ID=699
 .
