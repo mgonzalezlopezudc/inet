@@ -203,12 +203,15 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     if (edcaf && frameSequenceHandler->isSequenceRunning()) {
         // TODO always call processResponse?
         if ((!isForUs(header) && !startRxTimer->isScheduled()) || isForUs(header)) {
+            auto receiveStep = dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep());
+            bool completesOnReception = receiveStep == nullptr || receiveStep->completesOnReception();
             frameSequenceHandler->processResponse(packet);
             // Only cancel RxTimer when the current running sequence has been handled by frameSequenceHandler->processResponse().
             // If the received frame is not for us, we are still waiting to receive our ACK. In that case, don't cancel the timer.
             // Otherwise, current frame sequence stucks in RX step and runs longer than intendeed, preventing sequence from
             // another access category (AC) to start running (RuntimeError("Channel access granted while a frame sequence is running")).
-            cancelEvent(startRxTimer);
+            if (completesOnReception)
+                cancelEvent(startRxTimer);
         }
         else {
             EV_INFO << "This frame is not for us" << std::endl;
@@ -363,7 +366,10 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
     int myAllocationIndex = -1;
     if (auto heMuRxTag = packet->findTag<Ieee80211HeMuRxTag>()) {
         wasHeMu = true;
-        auto myStaId = computeHeMuStaId(mac->getAddress());
+        auto mib = mac->getMib();
+        auto myStaId = mib != nullptr && mib->bssStationData.associationId > 0
+                ? mib->bssStationData.associationId
+                : computeHeMuStaId(mac->getAddress());
         for (unsigned int i = 0; i < heMuRxTag->getAllocationsArraySize(); ++i) {
             if (heMuRxTag->getAllocations(i).staId == myStaId) {
                 myAllocationIndex = i;
@@ -841,7 +847,9 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packet);
         EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
         if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
-            if (!isHeMuContainerPacket(packet)) {
+            if (!isHeMuContainerPacket(packet) &&
+                    !dynamicPtrCast<const Ieee80211TriggerFrame>(header) &&
+                    !dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header)) {
                 auto pendingPacket = channelOwner->getInProgressFrames()->getPendingFrameFor(packet);
                 const auto& pendingHeader = pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
                 auto duration = singleProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingHeader, txop, recipientAckPolicy);

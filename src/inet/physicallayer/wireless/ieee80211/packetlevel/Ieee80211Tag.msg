@@ -17,8 +17,23 @@ struct Ieee80211HeMuRxAllocationInfo
     uint16_t staId;
 }
 
+class Ieee80211HeMuReq extends TagBase
+{
+    uint8_t ppduFormat = 0;
+    uint32_t triggerId = 0;
+    int ruIndex = -1;
+    uint16_t ruToneSize;
+    uint16_t ruToneOffset;
+    uint16_t staId;
+    uint8_t mcs = 0;
+    simtime_t commonDuration;
+    W transmitPower = W(NaN);
+}
+
 class Ieee80211HeMuRxTag extends TagBase
 {
+    uint8_t ppduFormat = 0;
+    uint32_t triggerId = 0;
     int ruIndex;
     Ieee80211HeMuRxAllocationInfo allocations[];
 }

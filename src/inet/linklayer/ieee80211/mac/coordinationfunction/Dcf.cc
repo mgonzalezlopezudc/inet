@@ -138,7 +138,11 @@ void Dcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     if (frameSequenceHandler->isSequenceRunning()) {
         // TODO always call processResponses
         if ((!isForUs(header) && !startRxTimer->isScheduled()) || isForUs(header)) {
+            auto receiveStep = dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep());
+            bool completesOnReception = receiveStep == nullptr || receiveStep->completesOnReception();
             frameSequenceHandler->processResponse(packet);
+            if (completesOnReception)
+                cancelEvent(startRxTimer);
         }
         else {
             EV_INFO << "This frame is not for us" << std::endl;
@@ -147,7 +151,8 @@ void Dcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
             emit(packetDroppedSignal, packet, &details);
             delete packet;
         }
-        cancelEvent(startRxTimer);
+        if (!isForUs(header))
+            cancelEvent(startRxTimer);
     }
     else if (isForUs(header))
         recipientProcessReceivedFrame(packet, header);
@@ -391,4 +396,3 @@ Dcf::~Dcf()
 
 } // namespace ieee80211
 } // namespace inet
-

@@ -55,6 +55,7 @@ class INET_API IReceiveStep : public IFrameSequenceStep
     virtual simtime_t getTimeout() = 0;
     virtual Packet *getReceivedFrame() = 0;
     virtual void setFrameToReceive(Packet *frame) = 0;
+    virtual bool completesOnReception() const { return true; }
 };
 
 class INET_API IFrameSequence
@@ -73,4 +74,3 @@ class INET_API IFrameSequence
 } // namespace inet
 
 #endif
-
