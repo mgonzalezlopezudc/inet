@@ -155,6 +155,8 @@ class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 struct Ieee80211HeMuUserInfo
 {
     int ruIndex;
+    uint16_t ruToneSize;
+    uint16_t ruToneOffset;
     uint16_t staId;
     uint8_t mcs = 0;
     uint8_t numberOfSpatialStreams = 1;
@@ -169,8 +171,11 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 
 class Ieee80211HeMuRuPayloadHeader extends FieldsChunk
 {
-    chunkLength = b(32);
+    chunkLength = b(80);
     int ruIndex;
+    uint16_t ruToneSize;
+    uint16_t ruToneOffset;
     uint16_t staId;
+    uint8_t mcs = 0;
     B mpduLength;
 }

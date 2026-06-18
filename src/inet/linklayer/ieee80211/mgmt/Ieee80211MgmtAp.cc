@@ -14,6 +14,7 @@
 #endif // ifdef INET_WITH_ETHERNET
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
@@ -199,8 +200,22 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
 
     if (sta) {
         // mark STA as not authenticated; alternatively, it could also be removed from staList
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
+        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
             sendDisAssocNotification(sta->address);
+            
+            // Destroy per-STA queue bank only for APs operating in ax mode.
+            try {
+                cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
+                if (macModule) {
+                    Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
+                    if (mac->isApInAxMode())
+                        mac->destroyStationQueueBank(sta->address);
+                }
+            }
+            catch (const cException &e) {
+                EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
+            }
+        }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
         sta->authSeqExpected = 1;
     }
@@ -221,12 +236,27 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
         return;
     }
 
+    auto associationRequest = packet->peekAt<Ieee80211AssociationRequestFrame>(header->getChunkLength());
+    mib->setStationTransmitPower(sta->address, associationRequest->getTransmitPowerDbm());
     delete packet;
 
     // mark STA as associated
     if (mib->bssAccessPointData.stations[sta->address] != Ieee80211Mib::ASSOCIATED)
         sendAssocNotification(sta->address);
     mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::ASSOCIATED; // TODO this should only take place when MAC receives the ACK for the response
+
+    // Create per-STA queue bank only for APs operating in ax mode.
+    try {
+        cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
+        if (macModule) {
+            Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
+            if (mac->isApInAxMode())
+                mac->createStationQueueBank(sta->address);
+        }
+    }
+    catch (const cException &e) {
+        EV_DEBUG << "Could not get MAC module for queue bank creation: " << e.what() << "\n";
+    }
 
     // send OK response
     const auto& body = makeShared<Ieee80211AssociationResponseFrame>();
@@ -285,6 +315,19 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
         if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
             sendDisAssocNotification(sta->address);
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED;
+
+        // Destroy per-STA queue bank only for APs operating in ax mode.
+        try {
+            cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
+            if (macModule) {
+                Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
+                if (mac->isApInAxMode())
+                    mac->destroyStationQueueBank(sta->address);
+            }
+        }
+        catch (const cException &e) {
+            EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
+        }
     }
 }
 
@@ -354,4 +397,3 @@ void Ieee80211MgmtAp::stop()
 } // namespace ieee80211
 
 } // namespace inet
-

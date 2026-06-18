@@ -38,6 +38,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
         Tid tid = 0;
         int ruIndex;
         Packet *packet = nullptr;
+        std::vector<Packet *> packets;
     };
 
   protected:
@@ -45,12 +46,15 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     int step = -1;
 
     IIeee80211HeDlScheduler *dlScheduler = nullptr;
-    std::vector<MacAddress> candidates;
+    IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     queueing::IPacketQueue *pendingQueue = nullptr;
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
     IFrameSequence *sequence = nullptr;
+    int maxAmpduMpduCount = 16;
+    int maxHeMuPsduLength = 6500631;
+    simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS);
 
     std::vector<ActiveAllocation> activeAllocations;
 
@@ -66,6 +70,15 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     friend class HeDlMuPerStaBlockAckFs;
 
   public:
+    HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
+                 const IIeee80211HeDlScheduler::ScheduleContext& scheduleContext,
+                 physicallayer::Ieee80211ModeSet *modeSet,
+                 queueing::IPacketQueue *pendingQueue,
+                 IAckHandler *ackHandler,
+                 IFrameSequenceHandler::ICallback *callback,
+                 int maxAmpduMpduCount = 16,
+                 int maxHeMuPsduLength = 6500631,
+                 simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS));
     HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                  const std::vector<MacAddress>& candidates,
                  physicallayer::Ieee80211ModeSet *modeSet,

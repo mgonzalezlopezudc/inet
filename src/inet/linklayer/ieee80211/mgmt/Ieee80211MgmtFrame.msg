@@ -177,6 +177,7 @@ class Ieee80211AssociationRequestFrame extends Ieee80211MgmtFrame
 {
     string SSID;
     Ieee80211SupportedRatesElement supportedRates;
+    double transmitPowerDbm = 15;
 }
 
 //

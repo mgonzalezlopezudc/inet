@@ -18,6 +18,12 @@ module HeHcf extends Hcf
 {
     parameters:
         @class(HeHcf);
+        double totalTransmitPower @unit(W) = default(20mW);
+        double receiverNoiseFigure @unit(dB) = default(10dB);
+        double linkEstimateMaxAge @unit(s) = default(1s);
+        int maxAmpduMpduCount = default(16);
+        int maxHeMuPsduLength @unit(B) = default(6500631B);
+        double maxHeMuPpduDuration @unit(s) = default(5.484ms);
 
     submodules:
         dlScheduler: <default("HeDlSchedulerEqualSizedRUs")> like IIeee80211HeDlScheduler {

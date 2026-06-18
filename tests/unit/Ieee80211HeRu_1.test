@@ -27,6 +27,8 @@ auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
 auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
     Ieee80211HeMuUserInfo user;
     user.ruIndex = ru.index;
+    user.ruToneSize = ru.toneSize;
+    user.ruToneOffset = ru.toneOffset;
     user.staId = computeHeMuStaId(staAddress);
     phyHeader->appendUsers(user);
 };
@@ -37,15 +39,43 @@ EV << "Users in HE-MU PHY header: " << phyHeader->getUsersArraySize() << "\n";
 EV << "User 0: RU " << phyHeader->getUsers(0).ruIndex << ", STA-ID=" << phyHeader->getUsers(0).staId << "\n";
 EV << "User 1: RU " << phyHeader->getUsers(1).ruIndex << ", STA-ID=" << phyHeader->getUsers(1).staId << "\n";
 
+// Mixed layout: the two 106-tone branches and the central 26-tone RU.
+std::vector<Ieee80211HeRu> mixed;
+if (!allocateHeRus(centerFrequency, bandwidth, {106, 106, 26}, mixed))
+    throw cRuntimeError("Could not allocate the standard 106+106+26 mixed layout");
+if (mixed.size() != 3 || mixed[0].toneOffset != 0 ||
+        mixed[1].toneOffset != 136 || mixed[2].toneOffset != 108)
+    throw cRuntimeError("Unexpected positions in the standard 106+106+26 mixed layout");
+if (!validateHeRuLayout(mixed, bandwidth))
+    throw cRuntimeError("The standard mixed layout failed validation");
+
+// Non-overlapping is insufficient: positions must be allocation-tree nodes.
+auto invalid = mixed;
+invalid[2].toneOffset++;
+if (validateHeRuLayout(invalid, bandwidth))
+    throw cRuntimeError("A non-catalog RU position passed validation");
+
+auto catalog80 = getHeRuAllocationCatalog(centerFrequency, Hz(80e6));
+int central26Count = 0;
+for (const auto& ru : catalog80)
+    if (ru.toneSize == 26 && ru.toneOffset == 485)
+        central26Count++;
+if (central26Count != 1)
+    throw cRuntimeError("The 80 MHz allocation tree does not contain exactly one central 26-tone RU");
+
+EV << "Mixed allocation used the standard central 26-tone RU.\n";
+EV << "Non-catalog RU placement was rejected.\n";
 EV << ".\n";
 
 %contains: stdout
 Number of RUs: 4
-RU 0: center=5.1725e+09 Hz, bandwidth=5e+06 Hz
-RU 1: center=5.1775e+09 Hz, bandwidth=5e+06 Hz
-RU 2: center=5.1825e+09 Hz, bandwidth=5e+06 Hz
-RU 3: center=5.1875e+09 Hz, bandwidth=5e+06 Hz
+RU 2: center=5.17258e+09 Hz, bandwidth=4.0625e+06 Hz
+RU 5: center=5.1768e+09 Hz, bandwidth=4.0625e+06 Hz
+RU 10: center=5.1832e+09 Hz, bandwidth=4.0625e+06 Hz
+RU 13: center=5.18742e+09 Hz, bandwidth=4.0625e+06 Hz
 Users in HE-MU PHY header: 2
-User 0: RU 0, STA-ID=1109
-User 1: RU 2, STA-ID=699
+User 0: RU 2, STA-ID=1109
+User 1: RU 10, STA-ID=699
+Mixed allocation used the standard central 26-tone RU.
+Non-catalog RU placement was rejected.
 .
