@@ -40,17 +40,22 @@ class INET_API HeHcf : public Hcf
     virtual void initialize(int stage) override;
 
     /**
-     * Scans the pending queue front-to-back and returns up to maxMuStations
-     * unique destination MAC addresses, in first-seen order.
+     * Scans the shared EDCAF queue and all per-STA queues for this access
+     * category, returning one candidate per eligible destination STA.
      */
-    virtual IIeee80211HeDlScheduler::ScheduleContext collectScheduleContext(
-            queueing::IPacketQueue *queue, AccessCategory ac) const;
+    virtual IIeee80211HeDlScheduler::ScheduleContext collectScheduleContext(AccessCategory ac) const;
+
+    virtual queueing::IPacketQueue *findOldestPerStaQueue(AccessCategory ac) const;
+    virtual bool stagePerStaFrameForSingleUserTransmission(AccessCategory ac);
 
     /**
      * Override: selects HeDlMuTxOpFs when ≥2 unique destination STAs are
      * queued and HE mode is active; otherwise delegates to Hcf::startFrameSequence().
      */
     virtual void startFrameSequence(AccessCategory ac) override;
+    virtual void handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs) override;
+    virtual bool hasFrameToTransmit() override;
+    virtual bool hasFrameToTransmit(AccessCategory ac) override;
 
   public:
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
