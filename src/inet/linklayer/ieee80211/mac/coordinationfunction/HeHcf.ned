@@ -5,6 +5,7 @@
 
 package inet.linklayer.ieee80211.mac.coordinationfunction;
 
+import inet.common.Module;
 import inet.linklayer.ieee80211.mac.scheduler.IIeee80211HeDlScheduler;
 
 //
@@ -29,5 +30,9 @@ module HeHcf extends Hcf
         dlScheduler: <default("HeDlSchedulerEqualSizedRUs")> like IIeee80211HeDlScheduler {
             parameters:
                 @display("p=750,100");
+        }
+        queueBanks: Module {
+            parameters:
+                @display("p=750,250;i=block/queue");
         }
 }
