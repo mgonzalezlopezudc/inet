@@ -169,6 +169,8 @@ const IIeee80211Mode *QosRateSelection::computeDataOrMgmtFrameMode(const Ptr<con
 
 const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure)
 {
+    if (dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header))
+        return controlFrameMode ? controlFrameMode : fastestMandatoryMode;
     ASSERT(!isControlResponseFrame(header, txopProcedure));
     if (controlFrameMode)
         return controlFrameMode;
@@ -268,4 +270,3 @@ void QosRateSelection::frameTransmitted(Packet *packet, const Ptr<const Ieee8021
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-
