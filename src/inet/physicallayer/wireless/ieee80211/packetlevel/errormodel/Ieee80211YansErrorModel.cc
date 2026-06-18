@@ -10,6 +10,8 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211YansErrorModel.h"
 
+#include <cmath>
+
 #include "inet/physicallayer/wireless/common/modulation/BpskModulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam1024Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
@@ -21,6 +23,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HrDsssMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmCode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 
@@ -290,7 +293,49 @@ double Ieee80211YansErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, u
     return successRate;
 }
 
+double Ieee80211YansErrorModel::getHeDataSuccessRate(
+        const Ieee80211HeUserPhyParameters& parameters,
+        unsigned int bitLength, double snr) const
+{
+    const ApskModulationBase *modulation = nullptr;
+    switch (parameters.mcs) {
+        case 0: modulation = &BpskModulation::singleton; break;
+        case 1:
+        case 2: modulation = &QpskModulation::singleton; break;
+        case 3:
+        case 4: modulation = &Qam16Modulation::singleton; break;
+        case 5:
+        case 6:
+        case 7: modulation = &Qam64Modulation::singleton; break;
+        case 8:
+        case 9: modulation = &Qam256Modulation::singleton; break;
+        case 10:
+        case 11: modulation = &Qam1024Modulation::singleton; break;
+        default: throw cRuntimeError("Invalid HE MCS: %d", parameters.mcs);
+    }
+    const ConvolutionalCode *code = nullptr;
+    auto rate = getHeMcsCodeRate(parameters.mcs);
+    if (rate == std::make_pair(1, 2))
+        code = &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2;
+    else if (rate == std::make_pair(2, 3))
+        code = &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3;
+    else if (rate == std::make_pair(3, 4))
+        code = &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4;
+    else if (rate == std::make_pair(5, 6))
+        code = &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6;
+    else
+        throw cRuntimeError("Unsupported HE code rate");
+    auto symbolDuration = SimTime(12800, SIMTIME_NS) +
+            getHeGuardIntervalDuration(parameters.guardInterval);
+    bps grossBitrate(parameters.codedBitsPerSymbol / symbolDuration.dbl());
+    auto streamBitLength = (bitLength + parameters.numberOfSpatialStreams - 1) /
+            parameters.numberOfSpatialStreams;
+    auto streamSuccessRate = getOFDMAndERPOFDMChunkSuccessRate(
+            modulation, code, streamBitLength, grossBitrate,
+            parameters.ru.bandwidth, snr);
+    return std::pow(streamSuccessRate, parameters.numberOfSpatialStreams);
+}
+
 } // namespace physicallayer
 
 } // namespace inet
-

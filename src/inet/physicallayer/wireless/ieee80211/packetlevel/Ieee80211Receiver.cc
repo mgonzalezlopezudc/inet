@@ -175,7 +175,8 @@ bool Ieee80211Receiver::isAssignedHeMuRu(const ITransmission *transmission) cons
     if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK)
         return true;
     auto networkInterface = getContainingNicModule(this);
-    return containsHeMuUser(heMuPhyHeader, resolveHeMuStaId(networkInterface, networkInterface->getMacAddress()));
+    auto staId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+    return staId.has_value() && containsHeMuUser(heMuPhyHeader, *staId);
 }
 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
@@ -238,9 +239,10 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
             return new ReceptionResult(reception, decisions, packet);
         }
         auto networkInterface = getContainingNicModule(this);
-        auto myStaId = resolveHeMuStaId(networkInterface, networkInterface->getMacAddress());
-        auto packet = containsHeMuUser(heMuPhyHeader, myStaId) && modeSet->containsMode(transmission->getMode())
-                ? buildHeMuPhyPacket(transmittedPacket, heMuPhyHeader, myStaId)
+        auto myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+        auto packet = myStaId.has_value() && containsHeMuUser(heMuPhyHeader, *myStaId) &&
+                modeSet->containsMode(transmission->getMode())
+                ? buildHeMuPhyPacket(transmittedPacket, heMuPhyHeader, *myStaId)
                 : buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
         if (packet == nullptr)
             packet = buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);

@@ -67,7 +67,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         alloc.estimatedSnrDb = estimateSnrDb(context, selectedCandidates[i], alloc.ru);
         alloc.mcs = selectMcs(alloc.estimatedSnrDb, selectedCandidates[i].hasFreshPathLoss);
         alloc.estimatedDuration = estimateDuration(
-                std::max<int64_t>(selectedCandidates[i].holPacketBytes, 1), alloc.ru.toneSize, alloc.mcs);
+                std::max<int64_t>(selectedCandidates[i].holPacketBytes, 1),
+                alloc.ru.toneSize, alloc.mcs, context.guardInterval);
         result.push_back(alloc);
     }
     return result;

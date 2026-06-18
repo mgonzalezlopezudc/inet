@@ -23,8 +23,10 @@ class INET_API Ieee80211HeTimingRelatedParametersBase
   public:
     const simtime_t getDFTPeriod() const { return 12.8E-6; } // DFT period for HE is 12.8 µs
     const simtime_t getGIDuration() const { return 3.2E-6; }  // Long GI (1/4 GI = 3.2 µs)
+    const simtime_t getMediumGIDuration() const { return 1.6E-6; } // Medium GI (1/8 GI = 1.6 µs)
     const simtime_t getShortGIDuration() const { return 0.8E-6; } // Short GI (1/16 GI = 0.8 µs)
     const simtime_t getSymbolInterval() const { return getDFTPeriod() + getGIDuration(); } // 16.0 µs
+    const simtime_t getMediumGISymbolInterval() const { return getDFTPeriod() + getMediumGIDuration(); } // 14.4 µs
     const simtime_t getShortGISymbolInterval() const { return getDFTPeriod() + getShortGIDuration(); } // 13.6 µs
 };
 
@@ -33,6 +35,7 @@ class INET_API Ieee80211HeModeBase
   public:
     enum GuardIntervalType {
         HE_GUARD_INTERVAL_SHORT, // 0.8 µs
+        HE_GUARD_INTERVAL_MEDIUM, // 1.6 µs
         HE_GUARD_INTERVAL_LONG   // 3.2 µs
     };
 
@@ -83,7 +86,14 @@ class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee8
     virtual b getLength() const override { return b(48); }
     virtual bps getNetBitrate() const override { return Ieee80211HeModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211HeModeBase::getGrossBitrate(); }
-    virtual const simtime_t getSymbolInterval() const override { return Ieee80211HeTimingRelatedParametersBase::getSymbolInterval(); }
+    virtual const simtime_t getSymbolInterval() const override {
+        switch (guardIntervalType) {
+            case HE_GUARD_INTERVAL_SHORT: return getShortGISymbolInterval();
+            case HE_GUARD_INTERVAL_MEDIUM: return getMediumGISymbolInterval();
+            case HE_GUARD_INTERVAL_LONG: return Ieee80211HeTimingRelatedParametersBase::getSymbolInterval();
+            default: throw cRuntimeError("Unknown HE guard interval");
+        }
+    }
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulation; }
     virtual const Ieee80211VhtCode *getCode() const { return code; }
 
@@ -197,7 +207,14 @@ class INET_API Ieee80211HeDataMode : public IIeee80211DataMode, public Ieee80211
     virtual bps getGrossBitrate() const override { return Ieee80211HeModeBase::getGrossBitrate(); }
     virtual const Ieee80211Hemcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }
     virtual const Ieee80211VhtCode *getCode() const { return modulationAndCodingScheme->getCode(); }
-    virtual const simtime_t getSymbolInterval() const override { return Ieee80211HeTimingRelatedParametersBase::getSymbolInterval(); }
+    virtual const simtime_t getSymbolInterval() const override {
+        switch (guardIntervalType) {
+            case HE_GUARD_INTERVAL_SHORT: return getShortGISymbolInterval();
+            case HE_GUARD_INTERVAL_MEDIUM: return getMediumGISymbolInterval();
+            case HE_GUARD_INTERVAL_LONG: return Ieee80211HeTimingRelatedParametersBase::getSymbolInterval();
+            default: throw cRuntimeError("Unknown HE guard interval");
+        }
+    }
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
 };
 
@@ -666,7 +683,9 @@ class INET_API Ieee80211HeCompliantModes
   protected:
     static OPP_THREAD_LOCAL const Ieee80211HeCompliantModes singleton;
 
-    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HeModeBase::GuardIntervalType, unsigned int>, const Ieee80211HeMode *> modeCache;
+    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HeModeBase::GuardIntervalType,
+            unsigned int, Ieee80211HeMode::BandMode,
+            Ieee80211HePreambleMode::HighEfficiencyPreambleFormat>, const Ieee80211HeMode *> modeCache;
 
   public:
     Ieee80211HeCompliantModes();

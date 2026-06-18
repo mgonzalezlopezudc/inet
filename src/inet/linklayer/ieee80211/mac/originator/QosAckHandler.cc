@@ -253,6 +253,20 @@ bool QosAckHandler::isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader
         return false;
 }
 
+std::set<int> QosAckHandler::getOccupiedBlockAckSequenceNumbers(
+        const MacAddress& receiverAddress, Tid tid) const
+{
+    std::set<int> sequenceNumbers;
+    for (const auto& entry : ackStatuses) {
+        if (entry.first.first != receiverAddress || entry.first.second.first != tid)
+            continue;
+        if (entry.second == Status::BLOCK_ACK_ARRIVED_ACKED)
+            continue;
+        sequenceNumbers.insert(entry.first.second.second.getSequenceNumber());
+    }
+    return sequenceNumbers;
+}
+
 void QosAckHandler::transitionToWaitingForBlockAck(const Ptr<const Ieee80211DataHeader>& header)
 {
     auto id = std::make_pair(header->getReceiverAddress(), std::make_pair(header->getTid(), SequenceControlField(header->getSequenceNumber().get(), header->getFragmentNumber())));
@@ -307,4 +321,3 @@ void QosAckHandler::printAckStatuses()
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

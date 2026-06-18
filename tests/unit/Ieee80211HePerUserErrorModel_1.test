@@ -1,0 +1,68 @@
+%description:
+Test per-user HE MCS, NSS, and DCM inputs in the NIST error model.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+
+%file: TestNetwork.ned
+module TestNistErrorModel
+{
+    parameters:
+        @class(TestNistErrorModel);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        errorModel: TestNistErrorModel;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+class TestNistErrorModel : public Ieee80211NistErrorModel
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+
+    double evaluate(const Ieee80211HeUserPhyParameters& parameters,
+            unsigned int bitLength, double snir) const
+    {
+        return getHeDataSuccessRate(parameters, bitLength, snir);
+    }
+};
+
+Define_Module(TestNistErrorModel);
+
+%activity:
+auto errorModel = check_and_cast<TestNistErrorModel *>(
+        getParentModule()->getSubmodule("errorModel"));
+auto ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
+
+auto robust = computeHeUserPhyParameters(B(1000), ru, 0, 1, false, HE_GI_3_2_US);
+auto fast = computeHeUserPhyParameters(B(1000), ru, 5, 1, false, HE_GI_3_2_US);
+double robustSuccess = errorModel->evaluate(robust, 8022, 10);
+double fastSuccess = errorModel->evaluate(fast, 8022, 10);
+ASSERT(robustSuccess > fastSuccess);
+
+auto dcm = computeHeUserPhyParameters(B(1000), ru, 0, 1, true, HE_GI_3_2_US);
+double dcmSuccess = errorModel->evaluate(dcm, 8022, 20); // ideal 3 dB gain
+ASSERT(dcmSuccess > robustSuccess);
+
+auto twoStreams = computeHeUserPhyParameters(B(1000), ru, 0, 2, false, HE_GI_3_2_US);
+double twoStreamSuccess = errorModel->evaluate(twoStreams, 8022, 10);
+ASSERT(twoStreamSuccess != robustSuccess);
+
+EV << "Per-user HE MCS, DCM, and NSS changed payload success probability.\n";
+EV << ".\n";
+
+%contains: stdout
+Per-user HE MCS, DCM, and NSS changed payload success probability.
+.

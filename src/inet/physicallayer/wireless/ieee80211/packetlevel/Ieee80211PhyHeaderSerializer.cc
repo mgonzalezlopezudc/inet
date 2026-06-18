@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderSerializer.h"
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 namespace inet {
@@ -197,8 +198,14 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     unsigned int numUsers = heMuPhyHeader->getUsersArraySize();
     if (numUsers > 255)
         throw cRuntimeError("Too many HE MU users: %u", numUsers);
+    if (heMuPhyHeader->getGuardInterval() > HE_GI_3_2_US)
+        throw cRuntimeError("Invalid HE guard interval: %u", heMuPhyHeader->getGuardInterval());
+    if (heMuPhyHeader->getCoding() != HE_CODING_BCC)
+        throw cRuntimeError("HE LDPC serialization is not supported");
     stream.writeByte(heMuPhyHeader->getBssColor());
     stream.writeByte(heMuPhyHeader->getPpduFormat());
+    stream.writeByte(heMuPhyHeader->getGuardInterval());
+    stream.writeByte(heMuPhyHeader->getCoding());
     stream.writeUint32Be(heMuPhyHeader->getTriggerId());
     stream.writeUint32Be(heMuPhyHeader->getCommonDuration().inUnit(SIMTIME_NS));
     stream.writeByte(numUsers);
@@ -214,6 +221,10 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
             throw cRuntimeError("Invalid HE MU RU tone size: %u", user.ruToneSize);
         if (user.mcs > 11)
             throw cRuntimeError("Invalid HE MU MCS: %u", user.mcs);
+        if (user.numberOfSpatialStreams < 1 || user.numberOfSpatialStreams > 8)
+            throw cRuntimeError("Invalid HE MU NSS: %u", user.numberOfSpatialStreams);
+        if (user.dcm && !isHeDcmCombinationSupported(user.mcs, user.numberOfSpatialStreams))
+            throw cRuntimeError("Invalid HE MU DCM combination");
         stream.writeByte(user.ruIndex);
         stream.writeUint16Be(user.ruToneSize);
         stream.writeUint16Be(user.ruToneOffset);
@@ -231,6 +242,8 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     auto heMuPhyHeader = makeShared<Ieee80211HeMuPhyHeader>();
     heMuPhyHeader->setBssColor(stream.readByte());
     heMuPhyHeader->setPpduFormat(stream.readByte());
+    heMuPhyHeader->setGuardInterval(stream.readByte());
+    heMuPhyHeader->setCoding(stream.readByte());
     heMuPhyHeader->setTriggerId(stream.readUint32Be());
     heMuPhyHeader->setCommonDuration(SimTime(stream.readUint32Be(), SIMTIME_NS));
     unsigned int numUsers = stream.readByte();
