@@ -34,6 +34,7 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         auto networkInterface = interfaceTable->findInterfaceByAddress(mib->bssData.bssid);
         auto apMib = dynamic_cast<Ieee80211Mib *>(networkInterface->getSubmodule("mib"));
         apMib->bssAccessPointData.stations[mib->address] = Ieee80211Mib::ASSOCIATED;
+        mib->bssStationData.associationId = apMib->allocateAssociationId(mib->address);
         mib->bssData.ssid = apMib->bssData.ssid;
     }
 }
@@ -101,4 +102,3 @@ void Ieee80211MgmtStaSimplified::handleProbeResponseFrame(Packet *packet, const 
 } // namespace ieee80211
 
 } // namespace inet
-

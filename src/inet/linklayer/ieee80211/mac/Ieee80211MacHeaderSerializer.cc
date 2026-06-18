@@ -71,6 +71,7 @@ Register_Serializer(Ieee80211MgmtHeader, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211AckFrame, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211RtsFrame, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211CtsFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211TriggerFrame, Ieee80211MacHeaderSerializer);
 
 Register_Serializer(Ieee80211BasicBlockAckReq, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211CompressedBlockAckReq, Ieee80211MacHeaderSerializer);
@@ -78,6 +79,7 @@ Register_Serializer(Ieee80211MultiTidBlockAckReq, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211BasicBlockAck, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211CompressedBlockAck, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211MultiTidBlockAck, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211MultiStaBlockAck, Ieee80211MacHeaderSerializer);
 
 Register_Serializer(Ieee80211ActionFrame, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211AddbaRequest, Ieee80211MacHeaderSerializer);
@@ -245,6 +247,34 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             ASSERT(stream.getLength() - startPos == ackFrame->getChunkLength());
             break;
         }
+        case ST_TRIGGER: {
+            auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(chunk);
+            if (trigger->getUsersArraySize() > 255)
+                throw cRuntimeError("Too many Trigger frame users");
+            stream.writeUint16Le(trigger->getDurationField().inUnit(SIMTIME_US));
+            stream.writeMacAddress(trigger->getReceiverAddress());
+            stream.writeMacAddress(trigger->getTransmitterAddress());
+            stream.writeByte(trigger->getTriggerType());
+            stream.writeUint32Be(trigger->getTriggerId());
+            stream.writeUint16Be(trigger->getCommonDuration().inUnit(SIMTIME_US));
+            stream.writeByte(trigger->getOcwMin());
+            stream.writeByte(trigger->getOcwMax());
+            stream.writeByte(trigger->getUsersArraySize());
+            for (unsigned int i = 0; i < trigger->getUsersArraySize(); i++) {
+                const auto& user = trigger->getUsers(i);
+                stream.writeUint16Be(user.aid);
+                stream.writeByte(user.ruIndex);
+                stream.writeUint16Be(user.ruToneSize);
+                stream.writeUint16Be(user.ruToneOffset);
+                stream.writeByte(user.mcs);
+                stream.writeByte(user.tid);
+                stream.writeByte(static_cast<uint8_t>(user.targetRssiDbm));
+                stream.writeBit(user.randomAccess);
+                stream.writeNBitsOfUint64Be(0, 7);
+            }
+            ASSERT(stream.getLength() - startPos == trigger->getChunkLength());
+            break;
+        }
         case ST_BLOCKACK_REQ: {
             auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(chunk);
             stream.writeUint16Le(blockAckReq->getDurationField().inUnit(SIMTIME_US));
@@ -312,12 +342,32 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             else if (multiTid && compressedBitmap) {
                 throw cRuntimeError("Ieee80211MacHeaderSerializer: cannot serialize the frame, Ieee80211MultiTidBlockAck unimplemented.");
             }
+            else if (multiTid && !compressedBitmap) {
+                auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(chunk);
+                if (multiStaBlockAck == nullptr)
+                    throw cRuntimeError("Unsupported multi-STA Block Ack representation");
+                if (multiStaBlockAck->getRecordsArraySize() > 255)
+                    throw cRuntimeError("Too many Multi-STA Block Ack records");
+                stream.writeUint4(0);
+                stream.writeByte(multiStaBlockAck->getRecordsArraySize());
+                for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {
+                    const auto& record = multiStaBlockAck->getRecords(i);
+                    stream.writeUint16Be(record.aid);
+                    stream.writeByte(record.tid);
+                    stream.writeUint16Be(record.startingSequenceNumber);
+                    stream.writeUint64Be(record.bitmap);
+                    stream.writeBit(record.responseReceived);
+                    stream.writeNBitsOfUint64Be(0, 7);
+                }
+                ASSERT(stream.getLength() - startPos == multiStaBlockAck->getChunkLength());
+            }
             else {
                 throw cRuntimeError("Ieee80211MacHeaderSerializer: cannot serialize the frame, multiTid = 1 && compressedBitmap = 0 is reserved.");
             }
             break;
 
         }
+        case ST_QOS_NULL:
         case ST_DATA_WITH_QOS:
         case ST_DATA: {
             auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(chunk);
@@ -329,12 +379,18 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeNBitsOfUint64Be(dataHeader->getSequenceNumber().get(), 12);
             if (dataHeader->getFromDS() && dataHeader->getToDS())
                 stream.writeMacAddress(dataHeader->getAddress4());
-            if (type == ST_DATA_WITH_QOS) {
+            if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {
                 stream.writeUint4(dataHeader->getTid());
                 stream.writeBit(true);
                 stream.writeUint2(dataHeader->getAckPolicy());
                 stream.writeBit(dataHeader->getAMsduPresent());
                 stream.writeByte(0);
+                if (dataHeader->getBufferStatusPresent()) {
+                    stream.writeUint4(3);
+                    stream.writeUint4(dataHeader->getBufferStatusTid());
+                    stream.writeUint2(dataHeader->getBufferStatusAc());
+                    stream.writeNBitsOfUint64Be(std::min<uint32_t>(dataHeader->getBufferStatusQueueSize(), 0x3fffff), 22);
+                }
             }
             ASSERT(stream.getLength() - startPos == dataHeader->getChunkLength());
             break;
@@ -480,6 +536,34 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             ackFrame->setReceiverAddress(stream.readMacAddress());
             return ackFrame;
         }
+        case ST_TRIGGER: {
+            auto trigger = makeShared<Ieee80211TriggerFrame>();
+            copyBasicFields(trigger, macHeader);
+            trigger->setDurationField(SimTime(stream.readUint16Le(), SIMTIME_US));
+            trigger->setReceiverAddress(stream.readMacAddress());
+            trigger->setTransmitterAddress(stream.readMacAddress());
+            trigger->setTriggerType(stream.readByte());
+            trigger->setTriggerId(stream.readUint32Be());
+            trigger->setCommonDuration(SimTime(stream.readUint16Be(), SIMTIME_US));
+            trigger->setOcwMin(stream.readByte());
+            trigger->setOcwMax(stream.readByte());
+            auto count = stream.readByte();
+            trigger->setUsersArraySize(count);
+            for (unsigned int i = 0; i < count; i++) {
+                Ieee80211HeTriggerUserInfo user;
+                user.aid = stream.readUint16Be();
+                user.ruIndex = stream.readByte();
+                user.ruToneSize = stream.readUint16Be();
+                user.ruToneOffset = stream.readUint16Be();
+                user.mcs = stream.readByte();
+                user.tid = stream.readByte();
+                user.targetRssiDbm = static_cast<int8_t>(stream.readByte());
+                user.randomAccess = stream.readBit();
+                stream.readNBitsToUint64Be(7);
+                trigger->setUsers(i, user);
+            }
+            return trigger;
+        }
         case ST_BLOCKACK_REQ: {
             auto blockAckReq = makeShared<Ieee80211BlockAckReq>();
             copyBasicFields(blockAckReq, macHeader);
@@ -557,6 +641,25 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 compressedBlockAck->setBlockAckBitmap(*(new BitVector(bytes)));
                 return compressedBlockAck;
             }
+            else if (multiTid && !compressedBitmap) {
+                auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
+                copyBasicFields(multiStaBlockAck, macHeader);
+                copyBlockAckFrameFields(multiStaBlockAck, blockAck);
+                stream.readUint4();
+                auto count = stream.readByte();
+                multiStaBlockAck->setRecordsArraySize(count);
+                for (unsigned int i = 0; i < count; i++) {
+                    Ieee80211MultiStaBlockAckRecord record;
+                    record.aid = stream.readUint16Be();
+                    record.tid = stream.readByte();
+                    record.startingSequenceNumber = stream.readUint16Be();
+                    record.bitmap = stream.readUint64Be();
+                    record.responseReceived = stream.readBit();
+                    stream.readNBitsToUint64Be(7);
+                    multiStaBlockAck->setRecords(i, record);
+                }
+                return multiStaBlockAck;
+            }
             else {
                 blockAck->markIncorrect();
                 return blockAck;
@@ -564,6 +667,7 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             return blockAck;
 
         }
+        case ST_QOS_NULL:
         case ST_DATA_WITH_QOS:
         case ST_DATA: {
             auto dataHeader = makeShared<Ieee80211DataHeader>();
@@ -576,12 +680,25 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             dataHeader->setSequenceNumber(SequenceNumberCyclic(stream.readNBitsToUint64Be(12)));
             if (dataHeader->getFromDS() && dataHeader->getToDS())
                 dataHeader->setAddress4(stream.readMacAddress());
-            if (type == ST_DATA_WITH_QOS) {
+            if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {
                 dataHeader->setTid(stream.readUint4());
                 stream.readBit();
                 dataHeader->setAckPolicy(static_cast<AckPolicy>(stream.readUint2()));
                 dataHeader->setAMsduPresent(stream.readBit());
                 stream.readByte();
+                if (order) {
+                    auto controlId = stream.readUint4();
+                    if (controlId == 3) {
+                        dataHeader->setBufferStatusPresent(true);
+                        dataHeader->setBufferStatusTid(stream.readUint4());
+                        dataHeader->setBufferStatusAc(stream.readUint2());
+                        dataHeader->setBufferStatusQueueSize(stream.readNBitsToUint64Be(22));
+                    }
+                    else {
+                        stream.readNBitsToUint64Be(28);
+                        dataHeader->markIncorrect();
+                    }
+                }
             }
             return dataHeader;
         }
@@ -618,4 +735,3 @@ const Ptr<Chunk> Ieee80211MacTrailerSerializer::deserialize(MemoryInputStream& s
 } // namespace ieee80211
 
 } // namespace inet
-

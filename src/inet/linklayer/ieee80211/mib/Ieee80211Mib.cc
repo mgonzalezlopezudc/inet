@@ -24,7 +24,9 @@ void Ieee80211Mib::initialize(int stage)
         WATCH(bssData.bssid);
         WATCH(bssStationData.stationType);
         WATCH(bssStationData.isAssociated);
+        WATCH(bssStationData.associationId);
         WATCH(bssAccessPointData.stations);
+        WATCH(bssAccessPointData.associationIds);
         WATCH_EXPR("modeStr", getModeStr(mode));
         WATCH_EXPR("stationTypeStr", getStationTypeStr(bssStationData.stationType));
         WATCH_EXPR("qosStr", qos ? ", QoS" : ", Non-QoS");
@@ -65,6 +67,45 @@ const Ieee80211Mib::BssAccessPointData::LinkData *Ieee80211Mib::findStationLink(
 {
     auto it = bssAccessPointData.links.find(address);
     return it == bssAccessPointData.links.end() ? nullptr : &it->second;
+}
+
+short Ieee80211Mib::allocateAssociationId(const MacAddress& address)
+{
+    auto existing = bssAccessPointData.associationIds.find(address);
+    if (existing != bssAccessPointData.associationIds.end())
+        return existing->second;
+    for (short aid = 1; aid <= 2007; aid++) {
+        bool used = false;
+        for (const auto& entry : bssAccessPointData.associationIds)
+            if (entry.second == aid) {
+                used = true;
+                break;
+            }
+        if (!used) {
+            bssAccessPointData.associationIds[address] = aid;
+            return aid;
+        }
+    }
+    throw cRuntimeError("No IEEE 802.11 association ID is available");
+}
+
+void Ieee80211Mib::releaseAssociationId(const MacAddress& address)
+{
+    bssAccessPointData.associationIds.erase(address);
+}
+
+short Ieee80211Mib::getAssociationId(const MacAddress& address) const
+{
+    auto it = bssAccessPointData.associationIds.find(address);
+    return it == bssAccessPointData.associationIds.end() ? -1 : it->second;
+}
+
+MacAddress Ieee80211Mib::getStationAddress(short associationId) const
+{
+    for (const auto& entry : bssAccessPointData.associationIds)
+        if (entry.second == associationId)
+            return entry.first;
+    return MacAddress::UNSPECIFIED_ADDRESS;
 }
 
 const char *Ieee80211Mib::getModeStr(Ieee80211Mib::Mode mode)

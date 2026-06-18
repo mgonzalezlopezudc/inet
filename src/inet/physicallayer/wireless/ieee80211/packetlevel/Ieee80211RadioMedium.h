@@ -18,6 +18,8 @@ class INET_API Ieee80211RadioMedium : public RadioMedium
   protected:
     virtual bool findHeMuRuForReceiver(const IRadio *receiver, const ITransmission *transmission, Ieee80211HeRu& ru) const;
     virtual const IReception *computeHeMuRuReception(const IRadio *receiver, const ITransmission *transmission, const Ieee80211HeRu& ru) const;
+    virtual const IInterference *computeInterference(const IRadio *receiver, const IListening *listening,
+            const ITransmission *transmission) const override;
 
   protected:
     virtual void addTransmission(const IRadio *transmitter, const ITransmission *transmission) override;

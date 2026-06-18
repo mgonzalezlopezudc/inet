@@ -32,6 +32,8 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
 
     virtual bool computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const override;
     virtual bool computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const override;
+    virtual bool computeIsReceptionAttempted(const IListening *listening, const IReception *reception,
+            IRadioSignal::SignalPart part, const IInterference *interference) const override;
 
     virtual const IReceptionResult *computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const override;
 
@@ -51,4 +53,3 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
 } // namespace inet
 
 #endif
-
