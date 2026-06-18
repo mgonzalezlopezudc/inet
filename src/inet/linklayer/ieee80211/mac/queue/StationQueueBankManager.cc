@@ -11,16 +11,16 @@
 namespace inet {
 namespace ieee80211 {
 
-StationQueueBankManager::StationQueueBankManager(cModule *owner)
-    : ownerModule(owner)
+StationQueueBankManager::StationQueueBankManager(cModule *queueBanksModule)
+    : queueBanksModule(queueBanksModule)
 {
-    ASSERT(ownerModule);
+    ASSERT(queueBanksModule);
     queueBankType = cModuleType::get("inet.linklayer.ieee80211.mac.queue.StationQueueBank");
 }
 
 StationQueueBankManager::~StationQueueBankManager()
 {
-    // The banks are submodules of ownerModule and are deleted by OMNeT++ as
+    // The banks are submodules of queueBanksModule and are deleted by OMNeT++ as
     // part of the normal module teardown. Deleting them from this member
     // destructor would race the parent cModule destructor.
     banks.clear();
@@ -34,7 +34,7 @@ StationQueueBank *StationQueueBankManager::createQueueBank(const MacAddress &sta
 
     std::string bankName = "queueBank_" + staAddr.str();
     StationQueueBank *bank = check_and_cast<StationQueueBank *>(
-        queueBankType->create(bankName.c_str(), ownerModule));
+        queueBankType->create(bankName.c_str(), queueBanksModule));
     bank->par("staAddress").setStringValue(staAddr.str().c_str());
     bank->finalizeParameters();
     bank->buildInside();
