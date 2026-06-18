@@ -92,8 +92,10 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
             record = std::prev(ackRecords.end());
         }
         record->responseReceived = true;
-        record->startingSequenceNumber = header->getSequenceNumber().get();
-        record->bitmap = 1;
+        if (header->getType() != ST_QOS_NULL) {
+            record->startingSequenceNumber = header->getSequenceNumber().get();
+            record->bitmap = 1;
+        }
         callback->processTriggeredUlFrame(packet->dup(), header, aid);
     }
 }
