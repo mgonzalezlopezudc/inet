@@ -1,13 +1,10 @@
 %description:
-Test the real HeDlSchedulerEqualSizedRUs module. The implementation currently
-uses equal-width RUs as a deliberate model simplification; this test guards that
-behavior and does not claim full IEEE 802.11ax RU taxonomy coverage.
+Test standard equal-sized IEEE 802.11ax RU scheduling for fBW and fHoL.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/common/Units.h"
-#include <set>
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.scheduler.HeDlSchedulerEqualSizedRUs;
@@ -16,16 +13,17 @@ network TestNetwork
 {
     submodules:
         test: Test;
-        scheduler1: HeDlSchedulerEqualSizedRUs {
+        schedulerFbw: HeDlSchedulerEqualSizedRUs {
             parameters:
-                maxMuStations = 1;
+                schedulingFunction = "fBW";
         }
-        scheduler2: HeDlSchedulerEqualSizedRUs {
+        schedulerFhol: HeDlSchedulerEqualSizedRUs {
             parameters:
-                maxMuStations = 2;
+                schedulingFunction = "fHoL";
         }
-        scheduler4: HeDlSchedulerEqualSizedRUs {
+        schedulerCap: HeDlSchedulerEqualSizedRUs {
             parameters:
+                schedulingFunction = "fHoL";
                 maxMuStations = 4;
         }
 }
@@ -40,86 +38,100 @@ using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 using namespace inet::units::values;
 
-static void assertEqualRuCoverage(const std::vector<IIeee80211HeDlScheduler::RuAllocation>& allocs, Hz center, Hz bandwidth)
+static IIeee80211HeDlScheduler::ScheduleContext makeContext(int count, Hz bandwidth)
 {
-    if (allocs.empty())
-        return;
-    Hz ruBandwidth = bandwidth / (int)allocs.size();
-    Hz covered = Hz(0);
-    std::set<int> ruIndices;
-    for (size_t i = 0; i < allocs.size(); i++) {
-        const auto& ru = allocs[i].ru;
-        ASSERT(ru.index == (int)i);
-        ASSERT(ru.bandwidth == ruBandwidth);
-        ASSERT(ru.centerFrequency == center - bandwidth / 2.0 + ruBandwidth * (i + 0.5));
-        ASSERT(ruIndices.insert(ru.index).second);
-        covered += ru.bandwidth;
+    IIeee80211HeDlScheduler::ScheduleContext context;
+    context.channelCenterFrequency = Hz(5.18e9);
+    context.channelBandwidth = bandwidth;
+    for (int i = 0; i < count; ++i) {
+        IIeee80211HeDlScheduler::CandidateInfo candidate;
+        char address[32];
+        snprintf(address, sizeof(address), "02:00:00:00:00:%02X", i + 1);
+        candidate.staAddress = MacAddress(address);
+        candidate.anchor = i == 0;
+        candidate.holDelay = SimTime(count - i, SIMTIME_MS);
+        candidate.backlogBytes = 1000 - i;
+        context.candidates.push_back(candidate);
     }
-    ASSERT(covered == bandwidth);
+    if (!context.candidates.empty())
+        context.anchorSta = context.candidates.front().staAddress;
+    return context;
 }
 
-static std::vector<MacAddress> makeCandidates()
+static void assertStandardLayout(
+        const std::vector<IIeee80211HeDlScheduler::RuAllocation>& allocations,
+        Hz bandwidth, int layoutCount)
 {
-    return {
-        MacAddress("AA:BB:CC:DD:EE:01"),
-        MacAddress("AA:BB:CC:DD:EE:02"),
-        MacAddress("AA:BB:CC:DD:EE:03"),
-        MacAddress("AA:BB:CC:DD:EE:04"),
-        MacAddress("AA:BB:CC:DD:EE:05")
-    };
+    ASSERT(!allocations.empty());
+    int expectedToneSize = getHeEqualRuToneSize(bandwidth, layoutCount);
+    std::vector<Ieee80211HeRu> rus;
+    for (const auto& allocation : allocations) {
+        ASSERT(allocation.ru.toneSize == expectedToneSize);
+        rus.push_back(allocation.ru);
+    }
+    ASSERT(validateHeRuLayout(rus, bandwidth));
 }
 
 %activity:
-auto scheduler1 = check_and_cast<HeDlSchedulerEqualSizedRUs *>(getParentModule()->getSubmodule("scheduler1"));
-auto scheduler2 = check_and_cast<HeDlSchedulerEqualSizedRUs *>(getParentModule()->getSubmodule("scheduler2"));
-auto scheduler4 = check_and_cast<HeDlSchedulerEqualSizedRUs *>(getParentModule()->getSubmodule("scheduler4"));
-
-Hz center(5.18e9);
-Hz bandwidth(20e6);
-auto candidates = makeCandidates();
+auto schedulerFbw = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("schedulerFbw"));
+auto schedulerFhol = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("schedulerFhol"));
+auto schedulerCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("schedulerCap"));
 
 {
-    auto allocs = scheduler4->schedule({}, center, bandwidth);
-    ASSERT(allocs.empty());
-    EV << "Empty candidate list produced no RU allocations.\n";
+    const int fbwCounts[] = {1, 2, 2, 4, 4, 4, 4, 4, 9, 9};
+    const int fholLayoutCounts[] = {1, 2, 4, 4, 9, 9, 9, 9, 9, 9};
+    for (int users = 1; users <= 10; ++users) {
+        auto context = makeContext(users, Hz(20e6));
+        auto fbw = schedulerFbw->schedule(context);
+        ASSERT((int)fbw.size() == std::min(users, fbwCounts[users - 1]));
+        assertStandardLayout(fbw, context.channelBandwidth, fbwCounts[users - 1]);
+
+        auto fhol = schedulerFhol->schedule(context);
+        ASSERT((int)fhol.size() == std::min(users, 9));
+        assertStandardLayout(fhol, context.channelBandwidth, fholLayoutCounts[users - 1]);
+    }
+    EV << "20 MHz fBW and fHoL tables matched the standard RU counts.\n";
 }
 
 {
-    auto allocs = scheduler1->schedule(candidates, center, bandwidth);
-    ASSERT(allocs.size() == 1);
-    ASSERT(allocs[0].staAddress == candidates[0]);
-    ASSERT(allocs[0].ru.bandwidth == bandwidth);
-    ASSERT(allocs[0].ru.centerFrequency == center);
-    EV << "maxMuStations=1 preserved first-seen station order.\n";
+    struct Case { double bandwidth; int users; int fbwCount; int fholCount; };
+    const Case cases[] = {
+        {40e6, 7, 4, 8},
+        {80e6, 12, 8, 16},
+        {160e6, 33, 32, 74}
+    };
+    for (const auto& testCase : cases) {
+        auto context = makeContext(testCase.users, Hz(testCase.bandwidth));
+        auto fbw = schedulerFbw->schedule(context);
+        ASSERT((int)fbw.size() == testCase.fbwCount);
+        assertStandardLayout(fbw, context.channelBandwidth, testCase.fbwCount);
+        auto fhol = schedulerFhol->schedule(context);
+        ASSERT((int)fhol.size() == testCase.users);
+        assertStandardLayout(fhol, context.channelBandwidth, testCase.fholCount);
+    }
+    EV << "40, 80, and 160 MHz ceiling/floor layout selection passed.\n";
 }
 
 {
-    auto allocs = scheduler2->schedule(candidates, center, bandwidth);
-    ASSERT(allocs.size() == 2);
-    ASSERT(allocs[0].staAddress == candidates[0]);
-    ASSERT(allocs[1].staAddress == candidates[1]);
-    assertEqualRuCoverage(allocs, center, bandwidth);
-    EV << "maxMuStations=2 capped candidates and produced equal-width contiguous RUs.\n";
+    auto context = makeContext(6, Hz(20e6));
+    context.candidates[0].anchor = false;
+    context.candidates[4].anchor = true;
+    context.anchorSta = context.candidates[4].staAddress;
+    auto anchorAddress = context.anchorSta;
+    auto allocations = schedulerCap->schedule(context);
+    ASSERT(allocations.size() == 4);
+    ASSERT(allocations.front().staAddress == anchorAddress);
+    assertStandardLayout(allocations, context.channelBandwidth, 4);
+    EV << "Candidate cap preserved the mandatory anchor deterministically.\n";
 }
 
-{
-    auto allocs = scheduler4->schedule(candidates, center, bandwidth);
-    ASSERT(allocs.size() == 4);
-    for (int i = 0; i < 4; i++)
-        ASSERT(allocs[i].staAddress == candidates[i]);
-    for (const auto& alloc : allocs)
-        ASSERT(alloc.staAddress != candidates[4]);
-    assertEqualRuCoverage(allocs, center, bandwidth);
-    EV << "maxMuStations=4 capped candidates, preserved order, and covered the channel exactly.\n";
-}
-
-EV << "Spec-gap guard: HeDlSchedulerEqualSizedRUs uses equal-width RUs only.\n";
 EV << ".\n";
 
 %contains: stdout
-Empty candidate list produced no RU allocations.
-maxMuStations=1 preserved first-seen station order.
-maxMuStations=2 capped candidates and produced equal-width contiguous RUs.
-maxMuStations=4 capped candidates, preserved order, and covered the channel exactly.
-Spec-gap guard: HeDlSchedulerEqualSizedRUs uses equal-width RUs only.
+20 MHz fBW and fHoL tables matched the standard RU counts.
+40, 80, and 160 MHz ceiling/floor layout selection passed.
+Candidate cap preserved the mandatory anchor deterministically.
 .

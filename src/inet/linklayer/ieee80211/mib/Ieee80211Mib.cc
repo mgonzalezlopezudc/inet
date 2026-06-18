@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
+#include <cmath>
+
 namespace inet {
 
 namespace ieee80211 {
@@ -38,6 +40,33 @@ std::string Ieee80211Mib::getSsidStr() const
     if (mode == INFRASTRUCTURE)
         return "\nSSID: " + bssData.ssid + ", " + bssData.bssid.str();
     return "";
+}
+
+void Ieee80211Mib::setStationTransmitPower(const MacAddress& address, double transmitPowerDbm)
+{
+    auto& link = bssAccessPointData.links[address];
+    link.transmitPowerDbm = transmitPowerDbm;
+    if (!std::isnan(link.receivedPowerDbm)) {
+        link.pathLossDb = link.transmitPowerDbm - link.receivedPowerDbm;
+        link.valid = true;
+    }
+}
+
+void Ieee80211Mib::updateStationReceivedPower(const MacAddress& address, units::values::W receivedPower)
+{
+    if (receivedPower.get() <= 0)
+        return;
+    auto& link = bssAccessPointData.links[address];
+    link.receivedPowerDbm = 10 * std::log10(receivedPower.get() / 1e-3);
+    link.pathLossDb = link.transmitPowerDbm - link.receivedPowerDbm;
+    link.lastUpdate = simTime();
+    link.valid = true;
+}
+
+const Ieee80211Mib::BssAccessPointData::LinkData *Ieee80211Mib::findStationLink(const MacAddress& address) const
+{
+    auto it = bssAccessPointData.links.find(address);
+    return it == bssAccessPointData.links.end() ? nullptr : &it->second;
 }
 
 const char *Ieee80211Mib::getModeStr(Ieee80211Mib::Mode mode)

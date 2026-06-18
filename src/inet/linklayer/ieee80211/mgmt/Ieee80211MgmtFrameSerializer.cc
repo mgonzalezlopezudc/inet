@@ -88,6 +88,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
             stream.writeByte(rate);
         }
+        stream.writeUint16Be((uint16_t)std::lround((associationRequestFrame->getTransmitPowerDbm() + 128) * 100));
         // 5    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 6    Power Capability           The Power Capability element shall be present if dot11SpectrumManagementRequired is true.
         // 7    Supported Channel          The Supported Channels element shall be present if dot11SpectrumManagementRequired is true.
@@ -304,6 +305,8 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
         case 0x00: // ST_ASSOCIATIONREQUEST
         {
             auto frame = makeShared<Ieee80211AssociationRequestFrame>();
+            stream.readUint16Be();
+            stream.readUint16Be();
 
             char SSID[256];
             stream.readByte();
@@ -318,6 +321,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             for (int i = 0; i < supRat.numRates; i++)
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
+            frame->setTransmitPowerDbm(stream.readUint16Be() / 100.0 - 128);
             return frame;
         }
 
@@ -437,4 +441,3 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
 } // namespace ieee80211
 
 } // namespace inet
-

@@ -32,6 +32,7 @@ simple Ieee80211MgmtSta extends SimpleModule like IIeee80211Mgmt
         int numChannels = default(1);  // Number of channels to scan
         string mibModule;
         string macModule;               // The path to the MAC module
+        double associationTransmitPower @unit(dBm) = default(15dBm);
         @display("i=block/cogwheel");
         @signal[l2Associated](type=inet::NetworkInterface);
         @signal[l2BeaconLost](type=inet::NetworkInterface);
@@ -41,4 +42,3 @@ simple Ieee80211MgmtSta extends SimpleModule like IIeee80211Mgmt
         input agentIn;   // Used for attaching an agent algorithm
         output agentOut; // Used for attaching an agent algorithm
 }
-

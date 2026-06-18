@@ -35,6 +35,8 @@
 #include "inet/linklayer/ieee80211/mac/originator/TxopProcedure.h"
 #include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/linklayer/ieee80211/mac/queue/OrigEnqueueTimeTag_m.h"
+#include "inet/linklayer/ieee80211/mac/queue/StationQueueBank.h"
 #include "inet/linklayer/ieee80211/mac/recipient/CtsProcedure.h"
 
 namespace inet {
@@ -137,6 +139,9 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const;
     virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
 
+    // Per-STA queue bank routing (HE OFDMA scheduling)
+    virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac);
+
   protected:
     // IFrameSequenceHandler::ICallback
     virtual void originatorProcessRtsProtectionFailed(Packet *packet) override;
@@ -167,6 +172,12 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     IOriginatorMacDataService *getOriginatorMacDataService() const { return originatorDataService; }
     IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const { return originatorBlockAckAgreementHandler; }
+    virtual queueing::IPacketQueue *resolvePerStaQueue(const MacAddress& staAddr, AccessCategory ac) {
+      if (mac == nullptr)
+        return edca->getEdcaf(ac)->getPendingQueue();
+
+      return getPerStaQueue(staAddr, ac);
+    }
 
     // ICoordinationFunction
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;

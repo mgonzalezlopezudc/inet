@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 
+#include <cstring>
+
 #include "inet/common/ModuleAccess.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
@@ -145,7 +147,30 @@ void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
     else
         throw cRuntimeError("Unknown message type");
     EV_INFO << "The upper frame has been classified as a " << printAccessCategory(ac) << " frame." << endl;
-    auto pendingQueue = edca->getEdcaf(ac)->getPendingQueue();
+    
+    // Determine if this frame should use per-STA queue (HE OFDMA scheduling).
+    // Only AP+ax mode uses per-STA queues; all other cases use shared EDCAF queues.
+    queueing::IPacketQueue *pendingQueue = nullptr;
+    MacAddress destMac = header->getReceiverAddress();
+    
+    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        // Check if unicast (not multicast or broadcast)
+        if (!destMac.isMulticast() && !destMac.isBroadcast()) {
+            pendingQueue = resolvePerStaQueue(destMac, ac);
+            
+            // Add original enqueue timestamp if not already present
+            if (!packet->findTag<OrigEnqueueTimeTag>()) {
+                auto timeTag = packet->addTagIfAbsent<OrigEnqueueTimeTag>();
+                timeTag->setEnqueueTime(simTime());
+            }
+        }
+    }
+    
+    // Fallback to shared queue if per-STA queue not available
+    if (!pendingQueue) {
+        pendingQueue = edca->getEdcaf(ac)->getPendingQueue();
+    }
+    
     pendingQueue->enqueuePacket(packet);
     if (!pendingQueue->isEmpty()) {
         auto edcaf = edca->getChannelOwner();
@@ -928,6 +953,41 @@ Hcf::~Hcf()
     delete originatorBlockAckProcedure;
     delete recipientBlockAckProcedure;
     delete frameSequenceHandler;
+}
+
+queueing::IPacketQueue *Hcf::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
+{
+    // Get the queue bank manager from MAC module
+    if (!mac) {
+        EV_DEBUG << "MAC module not available, using shared queue\n";
+        return edca->getEdcaf(ac)->getPendingQueue();
+    }
+
+    auto queueBankManager = mac->getQueueBankManager();
+    if (!queueBankManager) {
+        EV_DEBUG << "Queue bank manager not available (not in AP mode?), using shared queue\n";
+        return edca->getEdcaf(ac)->getPendingQueue();
+    }
+
+    // Get the STA's queue bank
+    auto staBank = queueBankManager->getQueueBank(staAddr);
+    if (!staBank) {
+        EV_DEBUG << "Queue bank not found for STA " << staAddr << ", using shared queue\n";
+        return edca->getEdcaf(ac)->getPendingQueue();
+    }
+
+    // Return the per-AC queue from this STA's bank
+    // Note: StationQueueBank uses: enum AC_BK=0, AC_BE=1, AC_VI=2, AC_VO=3
+    // These match the AccessCategory enum, so we can safely cast
+    queueing::IPacketQueue *staQueue = staBank->getQueue((StationQueueBank::AccessCategory)ac);
+    
+    if (!staQueue) {
+        EV_WARN << "Could not get per-STA queue for STA " << staAddr << " AC " << ac << ", using shared queue\n";
+        return edca->getEdcaf(ac)->getPendingQueue();
+    }
+
+    EV_DEBUG << "Using per-STA queue for STA " << staAddr << " AC " << ac << "\n";
+    return staQueue;
 }
 
 } // namespace ieee80211

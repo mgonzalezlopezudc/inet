@@ -148,7 +148,7 @@ auto band = Ieee80211CompliantBands::getBand("5 GHz");
 auto channel = new Ieee80211Channel(band, 0);
 Hz centerFreq = channel->getCenterFrequency();
 Hz bandwidth = mode->getDataMode()->getBandwidth();
-auto rus = calculateHeRus(centerFreq, bandwidth, 3);
+auto rus = calculateHeRus(centerFreq, bandwidth, 4);
 
 MacAddress sta1("00:11:22:33:44:55");
 MacAddress sta2("66:77:88:99:AA:BB");
@@ -159,13 +159,15 @@ auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
 auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& sta) {
     Ieee80211HeMuUserInfo user;
     user.ruIndex = ru.index;
+    user.ruToneSize = ru.toneSize;
+    user.ruToneOffset = ru.toneOffset;
     user.staId = computeHeMuStaId(sta);
     phyHeader->appendUsers(user);
 };
 appendUser(rus[0], sta1);
 appendUser(rus[1], sta2);
 appendUser(rus[2], sta3);
-phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 41));
+phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 73));
 container->insertAtBack(phyHeader);
 auto containerHdr = makeShared<Ieee80211DataHeader>();
 containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
@@ -176,6 +178,8 @@ auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& sta, const 
     auto mpdu = makeDataPacket(name, sta);
     auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
     payloadHeader->setRuIndex(ru.index);
+    payloadHeader->setRuToneSize(ru.toneSize);
+    payloadHeader->setRuToneOffset(ru.toneOffset);
     payloadHeader->setStaId(computeHeMuStaId(sta));
     payloadHeader->setMpduLength(B(mpdu->getByteLength()));
     container->insertAtBack(payloadHeader);

@@ -1,0 +1,191 @@
+%description:
+Test catalog-backed BacklogBased and HoLMinDelay HE DL schedulers.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerBacklogBased.h"
+#include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerHoLMinDelay.h"
+#include "inet/linklayer/common/MacAddress.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.scheduler.HeDlSchedulerBacklogBased;
+import inet.linklayer.ieee80211.mac.scheduler.HeDlSchedulerHoLMinDelay;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        backlogScheduler: HeDlSchedulerBacklogBased {
+            parameters:
+                maxDurationAlignmentIterations = 0;
+        }
+        backlogAlignedScheduler: HeDlSchedulerBacklogBased;
+        holScheduler: HeDlSchedulerHoLMinDelay {
+            parameters:
+                maxDurationAlignmentIterations = 0;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static IIeee80211HeDlScheduler::CandidateInfo makeCandidate(int id,
+        int64_t backlogBytes, int64_t holPacketBytes, bool anchor = false)
+{
+    IIeee80211HeDlScheduler::CandidateInfo candidate;
+    char address[32];
+    snprintf(address, sizeof(address), "02:00:00:00:01:%02X", id);
+    candidate.staAddress = MacAddress(address);
+    candidate.backlogBytes = backlogBytes;
+    candidate.holPacketBytes = holPacketBytes;
+    candidate.holDelay = SimTime(100 - id, SIMTIME_MS);
+    candidate.anchor = anchor;
+    return candidate;
+}
+
+static IIeee80211HeDlScheduler::ScheduleContext makeContext(
+        Hz bandwidth, std::initializer_list<IIeee80211HeDlScheduler::CandidateInfo> candidates)
+{
+    IIeee80211HeDlScheduler::ScheduleContext context;
+    context.channelCenterFrequency = Hz(5.18e9);
+    context.channelBandwidth = bandwidth;
+    context.candidates = candidates;
+    for (const auto& candidate : context.candidates)
+        if (candidate.anchor)
+            context.anchorSta = candidate.staAddress;
+    return context;
+}
+
+static const IIeee80211HeDlScheduler::RuAllocation& findAllocation(
+        const std::vector<IIeee80211HeDlScheduler::RuAllocation>& allocations,
+        const MacAddress& address)
+{
+    for (const auto& allocation : allocations)
+        if (allocation.staAddress == address)
+            return allocation;
+    throw cRuntimeError("Missing expected HE RU allocation");
+}
+
+static void assertValid(const std::vector<IIeee80211HeDlScheduler::RuAllocation>& allocations,
+        Hz bandwidth)
+{
+    std::vector<Ieee80211HeRu> rus;
+    for (const auto& allocation : allocations)
+        rus.push_back(allocation.ru);
+    ASSERT(validateHeRuLayout(rus, bandwidth));
+}
+
+static double durationVariance(
+        const std::vector<IIeee80211HeDlScheduler::RuAllocation>& allocations)
+{
+    double mean = 0;
+    for (const auto& allocation : allocations)
+        mean += allocation.estimatedDuration.dbl();
+    mean /= allocations.size();
+    double variance = 0;
+    for (const auto& allocation : allocations) {
+        double delta = allocation.estimatedDuration.dbl() - mean;
+        variance += delta * delta;
+    }
+    return variance / allocations.size();
+}
+
+%activity:
+auto backlogScheduler = check_and_cast<HeDlSchedulerBacklogBased *>(
+        getParentModule()->getSubmodule("backlogScheduler"));
+auto backlogAlignedScheduler = check_and_cast<HeDlSchedulerBacklogBased *>(
+        getParentModule()->getSubmodule("backlogAlignedScheduler"));
+auto holScheduler = check_and_cast<HeDlSchedulerHoLMinDelay *>(
+        getParentModule()->getSubmodule("holScheduler"));
+
+{
+    auto anchor = makeCandidate(1, 1000, 1000, true);
+    auto peer = makeCandidate(2, 1000, 1000);
+    auto small = makeCandidate(3, 50, 50);
+    auto context = makeContext(Hz(20e6), {anchor, peer, small});
+    auto allocations = backlogScheduler->schedule(context);
+    ASSERT(allocations.size() == 3);
+    ASSERT(findAllocation(allocations, anchor.staAddress).ru.toneSize == 106);
+    ASSERT(findAllocation(allocations, peer.staAddress).ru.toneSize == 106);
+    const auto& central = findAllocation(allocations, small.staAddress).ru;
+    ASSERT(central.toneSize == 26);
+    ASSERT(central.toneOffset == 108);
+    assertValid(allocations, context.channelBandwidth);
+    EV << "Backlog fitting selected the central 26-tone RU without arbitrary placement.\n";
+}
+
+{
+    auto large = makeCandidate(1, 6000, 1, true);
+    auto mtu = makeCandidate(2, 1500, 1);
+    auto medium = makeCandidate(3, 500, 1);
+    auto small = makeCandidate(4, 80, 1);
+    auto context = makeContext(Hz(80e6), {large, mtu, medium, small});
+    auto allocations = backlogScheduler->schedule(context);
+    ASSERT(findAllocation(allocations, large.staAddress).ru.toneSize == 484);
+    ASSERT(findAllocation(allocations, mtu.staAddress).ru.toneSize == 106);
+    ASSERT(findAllocation(allocations, medium.staAddress).ru.toneSize == 52);
+    ASSERT(findAllocation(allocations, small.staAddress).ru.toneSize == 26);
+    assertValid(allocations, context.channelBandwidth);
+    EV << "Backlog threshold boundaries mapped to 26/52/106/484-tone RUs.\n";
+}
+
+{
+    auto anchor = makeCandidate(1, 9000, 80, true);
+    auto peer = makeCandidate(2, 1, 6000);
+    auto context = makeContext(Hz(80e6), {anchor, peer});
+    auto allocations = holScheduler->schedule(context);
+    ASSERT(findAllocation(allocations, anchor.staAddress).ru.toneSize == 26);
+    ASSERT(findAllocation(allocations, peer.staAddress).ru.toneSize == 484);
+    assertValid(allocations, context.channelBandwidth);
+    EV << "HoL scheduler sized RUs from the HoL MPDU instead of total backlog.\n";
+}
+
+{
+    auto anchor = makeCandidate(1, 100, 100, true);
+    anchor.pathLossDb = 50;
+    anchor.hasFreshPathLoss = true;
+    auto edge = makeCandidate(2, 100, 100);
+    edge.pathLossDb = 60;
+    edge.hasFreshPathLoss = true;
+    auto outside = makeCandidate(3, 100, 100);
+    outside.pathLossDb = 60.1;
+    outside.hasFreshPathLoss = true;
+    auto context = makeContext(Hz(20e6), {anchor, edge, outside});
+    auto allocations = backlogScheduler->schedule(context);
+    ASSERT(allocations.size() == 2);
+    ASSERT(findAllocation(allocations, anchor.staAddress).staAddress == anchor.staAddress);
+    ASSERT(findAllocation(allocations, edge.staAddress).staAddress == edge.staAddress);
+    EV << "Backlog path-loss grouping included 10 dB and excluded values above it.\n";
+}
+
+{
+    auto slow = makeCandidate(1, 1000, 1, true);
+    auto fast = makeCandidate(2, 100, 1);
+    auto context = makeContext(Hz(20e6), {slow, fast});
+    auto unaligned = backlogScheduler->schedule(context);
+    auto aligned = backlogAlignedScheduler->schedule(context);
+    if (findAllocation(unaligned, fast.staAddress).ru.toneSize != 52)
+        throw cRuntimeError("Unexpected initial RU size in duration-alignment test");
+    if (findAllocation(aligned, fast.staAddress).ru.toneSize != 26)
+        throw cRuntimeError("Duration alignment did not shrink the short-duration user");
+    if (!(durationVariance(aligned) < durationVariance(unaligned)))
+        throw cRuntimeError("Duration alignment did not reduce variance");
+    assertValid(aligned, context.channelBandwidth);
+    EV << "Duration alignment accepted only a standards-valid variance reduction.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Backlog fitting selected the central 26-tone RU without arbitrary placement.
+Backlog threshold boundaries mapped to 26/52/106/484-tone RUs.
+HoL scheduler sized RUs from the HoL MPDU instead of total backlog.
+Backlog path-loss grouping included 10 dB and excluded values above it.
+Duration alignment accepted only a standards-valid variance reduction.
+.

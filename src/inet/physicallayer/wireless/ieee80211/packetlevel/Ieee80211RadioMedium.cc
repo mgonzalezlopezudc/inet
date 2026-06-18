@@ -36,16 +36,30 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
     if (scalarTransmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
         return false;
-    auto rus = calculateHeRus(scalarTransmissionAnalogModel->getCenterFrequency(), ieee80211Transmission->getMode()->getDataMode()->getBandwidth(), heMuPhyHeader->getUsersArraySize());
     for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
         const auto& user = heMuPhyHeader->getUsers(i);
         if (user.staId == receiverStaId) {
-            for (const auto& candidateRu : rus) {
-                if (candidateRu.index == user.ruIndex) {
-                    ru = candidateRu;
+            constexpr double HE_TONE_SPACING = 78125;
+            auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
+            if (user.ruToneSize == 0) {
+                auto legacyRus = calculateHeRus(scalarTransmissionAnalogModel->getCenterFrequency(),
+                        channelBandwidth, heMuPhyHeader->getUsersArraySize());
+                if (user.ruIndex >= 0 && user.ruIndex < (int)legacyRus.size()) {
+                    ru = legacyRus[user.ruIndex];
                     return true;
                 }
+                return false;
             }
+            int channelTones = getHeChannelToneCount(channelBandwidth);
+            ru.index = user.ruIndex;
+            ru.toneSize = user.ruToneSize;
+            ru.toneOffset = user.ruToneOffset;
+            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
+            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
+            ru.bandwidth = Hz(ru.toneSize * HE_TONE_SPACING);
+            double centerTone = ru.toneOffset + ru.toneSize / 2.0 - channelTones / 2.0;
+            ru.centerFrequency = scalarTransmissionAnalogModel->getCenterFrequency() + Hz(centerTone * HE_TONE_SPACING);
+            return true;
         }
     }
     return false;

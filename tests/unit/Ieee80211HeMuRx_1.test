@@ -150,10 +150,12 @@ static Packet *makeHeMuPacket(const char *name, const std::vector<std::pair<Ieee
     for (const auto& entry : users) {
         Ieee80211HeMuUserInfo user;
         user.ruIndex = entry.first.index;
+        user.ruToneSize = entry.first.toneSize;
+        user.ruToneOffset = entry.first.toneOffset;
         user.staId = computeHeMuStaId(entry.second);
         phyHeader->appendUsers(user);
     }
-    phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 41));
+    phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 73));
     packet->insertAtBack(phyHeader);
     auto containerHeader = makeShared<Ieee80211DataHeader>();
     containerHeader->setType(ST_DATA_WITH_QOS);
@@ -163,6 +165,8 @@ static Packet *makeHeMuPacket(const char *name, const std::vector<std::pair<Ieee
     for (const auto& entry : users) {
         auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
         payloadHeader->setRuIndex(entry.first.index);
+        payloadHeader->setRuToneSize(entry.first.toneSize);
+        payloadHeader->setRuToneOffset(entry.first.toneOffset);
         payloadHeader->setStaId(computeHeMuStaId(entry.second));
         payloadHeader->setMpduLength(B(32));
         packet->insertAtBack(payloadHeader);
@@ -205,7 +209,7 @@ auto modeSet = Ieee80211ModeSet::getModeSet("ax");
 auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
 auto channel = new Ieee80211Channel(nullptr, 1);
 
-auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 3);
+auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
 
 // --- Test 1: Single PPDU with STA1 on RU 0 ---
 {

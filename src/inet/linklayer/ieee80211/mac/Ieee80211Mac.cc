@@ -24,9 +24,11 @@
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRx.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
+#include "inet/linklayer/ieee80211/mac/aggregation/MpduDeaggregation.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -75,6 +77,11 @@ void Ieee80211Mac::initialize(int stage)
         hcf = check_and_cast_nullable<Hcf *>(getSubmodule("hcf"));
         if (mib->qos && !hcf)
             throw cRuntimeError("Missing hcf module, required for QoS");
+        
+        // Initialize queue bank manager only for APs operating in ax mode.
+        if (isApInAxMode()) {
+            queueBankManager = std::make_unique<StationQueueBankManager>(this);
+        }
     }
 }
 
@@ -183,6 +190,14 @@ void Ieee80211Mac::handleUpperPacket(Packet *packet)
 
 void Ieee80211Mac::handleLowerPacket(Packet *packet)
 {
+    if (packet->hasAtFront<Ieee80211MpduSubframeHeader>()) {
+        MpduDeaggregation deaggregation;
+        auto frames = deaggregation.deaggregateFrame(packet);
+        for (auto frame : *frames)
+            handleLowerPacket(frame);
+        delete frames;
+        return;
+    }
     if (auto legacyPreambleInd = packet->findTag<Ieee80211HeMuLegacyPreambleInd>()) {
         rx->legacySignalReceived(legacyPreambleInd->getDurationField());
         delete packet;
@@ -190,6 +205,12 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
     }
     if (rx->lowerFrameReceived(packet)) {
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
+        if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+            if (auto twoAddressHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header)) {
+                if (auto signalPower = packet->findTag<SignalPowerInd>())
+                    mib->updateStationReceivedPower(twoAddressHeader->getTransmitterAddress(), signalPower->getPower());
+            }
+        }
         processLowerFrame(packet, header);
     }
     else { // corrupted frame received
@@ -419,6 +440,32 @@ void Ieee80211Mac::handleStopOperation(LifecycleOperation *operation)
 // FIXME
 void Ieee80211Mac::handleCrashOperation(LifecycleOperation *operation)
 {
+}
+
+StationQueueBank *Ieee80211Mac::createStationQueueBank(const MacAddress &staAddr)
+{
+    if (!queueBankManager) {
+        EV_WARN << "Queue bank manager not initialized (not in AP mode?)\n";
+        return nullptr;
+    }
+    return queueBankManager->createQueueBank(staAddr);
+}
+
+void Ieee80211Mac::destroyStationQueueBank(const MacAddress &staAddr)
+{
+    if (!queueBankManager) {
+        EV_WARN << "Queue bank manager not initialized (not in AP mode?)\n";
+        return;
+    }
+    queueBankManager->destroyQueueBank(staAddr);
+}
+
+StationQueueBank *Ieee80211Mac::getStationQueueBank(const MacAddress &staAddr) const
+{
+    if (!queueBankManager) {
+        return nullptr;
+    }
+    return queueBankManager->getQueueBank(staAddr);
 }
 
 } // namespace ieee80211

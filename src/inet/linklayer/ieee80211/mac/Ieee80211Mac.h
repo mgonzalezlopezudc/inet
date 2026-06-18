@@ -8,6 +8,8 @@
 #ifndef __INET_IEEE80211MAC_H
 #define __INET_IEEE80211MAC_H
 
+#include <cstring>
+
 #include "inet/common/ModuleRefByPar.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
 #include "inet/linklayer/ieee80211/mac/contract/IDs.h"
@@ -19,6 +21,7 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Mcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Pcf.h"
+#include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 
@@ -29,6 +32,7 @@ class IContention;
 class IRx;
 class IIeee80211Llc;
 class Ieee80211MacHeader;
+class StationQueueBank;
 
 /**
  * Implements the IEEE 802.11 MAC. The features, standards compliance and
@@ -57,6 +61,9 @@ class INET_API Ieee80211Mac : public MacProtocolBase
 
     // The last change channel message received and not yet sent to the physical layer, or nullptr.
     cMessage *pendingRadioConfigMsg = nullptr;
+
+    // Per-STA queue bank management (for AP mode)
+    std::unique_ptr<StationQueueBankManager> queueBankManager;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -99,6 +106,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
 
     virtual FcsMode getFcsMode() const { return fcsMode; }
     virtual const MacAddress& getAddress() const { return mib->address; }
+    virtual Ieee80211Mib *getMib() const { return mib; }
     virtual void sendUp(cMessage *message) override;
     virtual void sendUpFrame(Packet *frame);
     virtual void sendDownFrame(Packet *frame);
@@ -106,10 +114,20 @@ class INET_API Ieee80211Mac : public MacProtocolBase
 
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header);
     virtual void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
+    virtual bool isApInAxMode() const {
+      return modeSet != nullptr && !strcmp(modeSet->getName(), "ax") &&
+          mib != nullptr && mib->mode == Ieee80211Mib::INFRASTRUCTURE &&
+          mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT;
+    }
+
+    // Queue bank management (for AP mode with HE OFDMA scheduling)
+    virtual StationQueueBank *createStationQueueBank(const MacAddress &staAddr);
+    virtual void destroyStationQueueBank(const MacAddress &staAddr);
+    virtual StationQueueBank *getStationQueueBank(const MacAddress &staAddr) const;
+    virtual StationQueueBankManager *getQueueBankManager() const { return queueBankManager.get(); }
 };
 
 } // namespace ieee80211
 } // namespace inet
 
 #endif
-
