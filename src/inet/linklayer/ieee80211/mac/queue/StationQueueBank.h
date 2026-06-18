@@ -48,7 +48,7 @@ class INET_API StationQueueBank : public cModule
 
   protected:
     MacAddress staAddress;  // MAC address of the associated STA
-    queueing::IPacketQueue *queues[4];  // Four AC queues
+    queueing::IPacketQueue *queues[4] = {};  // Four AC queues
     
     // Statistics tracking
     struct {

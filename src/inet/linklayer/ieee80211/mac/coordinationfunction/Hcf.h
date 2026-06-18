@@ -113,7 +113,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     virtual void startFrameSequence(AccessCategory ac);
     void resumeContention();
-    void handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs);
+    virtual void handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs);
 
     void sendUp(const std::vector<Packet *>& completeFrames);
     FrameSequenceContext *buildContext(AccessCategory ac);
@@ -189,4 +189,3 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 } /* namespace inet */
 
 #endif
-

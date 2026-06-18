@@ -25,6 +25,7 @@ import inet.queueing.queue.DropTailQueue;
 module StationQueueBank
 {
     parameters:
+        @class(StationQueueBank);
         string staAddress;  // MAC address of the associated STA
         int packetCapacity = default(100);  // Per-AC queue capacity in packets
         @display("i=block/queue");
@@ -33,28 +34,28 @@ module StationQueueBank
         // Background traffic queue (TID 1, 2)
         queueBK: DropTailQueue {
             parameters:
-                packetCapacity = packetCapacity;
+                packetCapacity = parent.packetCapacity;
                 @display("p=100,100;i=block/queue");
         }
 
         // Best effort queue (TID 0, 3)
         queueBE: DropTailQueue {
             parameters:
-                packetCapacity = packetCapacity;
+                packetCapacity = parent.packetCapacity;
                 @display("p=100,200;i=block/queue");
         }
 
         // Video queue (TID 4, 5)
         queueVI: DropTailQueue {
             parameters:
-                packetCapacity = packetCapacity;
+                packetCapacity = parent.packetCapacity;
                 @display("p=100,300;i=block/queue");
         }
 
         // Voice queue (TID 6, 7)
         queueVO: DropTailQueue {
             parameters:
-                packetCapacity = packetCapacity;
+                packetCapacity = parent.packetCapacity;
                 @display("p=100,400;i=block/queue");
         }
 }

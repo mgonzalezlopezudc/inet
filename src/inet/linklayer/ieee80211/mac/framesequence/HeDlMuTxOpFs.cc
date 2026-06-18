@@ -476,6 +476,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     };
 
     auto resolveStaQueue = [&] (const MacAddress& staAddress) {
+        for (const auto& candidate : scheduleContext.candidates)
+            if (candidate.staAddress == staAddress && candidate.sourceQueue != nullptr)
+                return candidate.sourceQueue;
         auto candidateAc = getCandidateAccessCategory(staAddress, AccessCategory::AC_BE);
         if (hcf != nullptr)
             return hcf->resolvePerStaQueue(staAddress, candidateAc);

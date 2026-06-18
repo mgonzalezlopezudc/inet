@@ -20,7 +20,10 @@ StationQueueBankManager::StationQueueBankManager(cModule *owner)
 
 StationQueueBankManager::~StationQueueBankManager()
 {
-    clear();
+    // The banks are submodules of ownerModule and are deleted by OMNeT++ as
+    // part of the normal module teardown. Deleting them from this member
+    // destructor would race the parent cModule destructor.
+    banks.clear();
 }
 
 StationQueueBank *StationQueueBankManager::createQueueBank(const MacAddress &staAddr)
@@ -31,11 +34,11 @@ StationQueueBank *StationQueueBankManager::createQueueBank(const MacAddress &sta
 
     std::string bankName = "queueBank_" + staAddr.str();
     StationQueueBank *bank = check_and_cast<StationQueueBank *>(
-        queueBankType->createScheduleInit(bankName.c_str(), ownerModule)
-    );
-    
+        queueBankType->create(bankName.c_str(), ownerModule));
     bank->par("staAddress").setStringValue(staAddr.str().c_str());
     bank->finalizeParameters();
+    bank->buildInside();
+    bank->scheduleStart(simTime());
     bank->callInitialize();
 
     banks[staAddr] = bank;

@@ -13,6 +13,7 @@
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/queueing/contract/IPacketQueue.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -37,6 +38,7 @@ class INET_API IIeee80211HeDlScheduler
         simtime_t holDelay = SIMTIME_ZERO;
         double pathLossDb = NaN;
         bool hasFreshPathLoss = false;
+        queueing::IPacketQueue *sourceQueue = nullptr;
     };
 
     struct ScheduleContext {

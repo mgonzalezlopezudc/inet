@@ -61,8 +61,7 @@ void HeHcf::initialize(int stage)
     }
 }
 
-IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(
-        queueing::IPacketQueue *queue, AccessCategory ac) const
+IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCategory ac) const
 {
     IIeee80211HeDlScheduler::ScheduleContext context;
     context.totalTransmitPower = W(par("totalTransmitPower"));
@@ -74,48 +73,94 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(
     auto mib = mac->getMib();
     std::vector<MacAddress> seenDestinations;
     auto baHandler = getOriginatorBlockAckAgreementHandler();
-    int n = queue->getNumPackets();
-    for (int i = 0; i < n; ++i) {
-        Packet *pkt = queue->getPacket(i);
-        const auto& header = pkt->peekAtFront<Ieee80211MacHeader>();
-        MacAddress dest = header->getReceiverAddress();
-        if (dest.isMulticast() || dest.isBroadcast())
-            continue;
-        bool seen = false;
-        for (const auto& c : seenDestinations) {
-            if (c == dest) { seen = true; break; }
-        }
-        if (seen)
-            continue;
-        seenDestinations.push_back(dest);
+    std::vector<queueing::IPacketQueue *> queues = {edcaf->getPendingQueue()};
+    if (auto queueBankManager = mac->getQueueBankManager()) {
+        for (const auto& entry : queueBankManager->getQueueBanks())
+            queues.push_back(entry.second->getQueue((StationQueueBank::AccessCategory)ac));
+    }
 
-        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            if (isMuEligibleDataHeader(dataHeader, baHandler)) {
-                IIeee80211HeDlScheduler::CandidateInfo candidate;
-                candidate.staAddress = dest;
-                candidate.accessCategory = ac;
-                candidate.anchor = context.candidates.empty();
-                candidate.holPacketBytes = pkt->getByteLength();
-                candidate.holEnqueueTime = pkt->getArrivalTime();
-                candidate.holDelay = simTime() - pkt->getArrivalTime();
-                for (int j = i; j < n; ++j) {
-                    Packet *queuedPacket = queue->getPacket(j);
+    for (auto queue : queues) {
+        int n = queue->getNumPackets();
+        for (int i = 0; i < n; ++i) {
+            Packet *pkt = queue->getPacket(i);
+            const auto& header = pkt->peekAtFront<Ieee80211MacHeader>();
+            MacAddress dest = header->getReceiverAddress();
+            if (dest.isMulticast() || dest.isBroadcast())
+                continue;
+            if (std::find(seenDestinations.begin(), seenDestinations.end(), dest) != seenDestinations.end())
+                continue;
+            seenDestinations.push_back(dest);
+
+            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
+            if (!isMuEligibleDataHeader(dataHeader, baHandler))
+                continue;
+
+            IIeee80211HeDlScheduler::CandidateInfo candidate;
+            candidate.staAddress = dest;
+            candidate.accessCategory = ac;
+            candidate.holPacketBytes = pkt->getByteLength();
+            auto enqueueTimeTag = pkt->findTag<OrigEnqueueTimeTag>();
+            candidate.holEnqueueTime = enqueueTimeTag == nullptr ? pkt->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
+            candidate.holDelay = simTime() - candidate.holEnqueueTime;
+            candidate.sourceQueue = queue;
+            for (auto backlogQueue : queues) {
+                for (int j = 0; j < backlogQueue->getNumPackets(); ++j) {
+                    Packet *queuedPacket = backlogQueue->getPacket(j);
                     auto queuedHeader = queuedPacket->peekAtFront<Ieee80211MacHeader>();
                     if (queuedHeader->getReceiverAddress() == dest)
                         candidate.backlogBytes += queuedPacket->getByteLength();
                 }
-                if (auto link = mib->findStationLink(dest)) {
-                    candidate.pathLossDb = link->pathLossDb;
-                    candidate.hasFreshPathLoss = link->valid &&
-                            simTime() - link->lastUpdate <= SimTime(par("linkEstimateMaxAge"));
-                }
-                context.candidates.push_back(candidate);
-                if (candidate.anchor)
-                    context.anchorSta = dest;
             }
+            if (auto link = mib->findStationLink(dest)) {
+                candidate.pathLossDb = link->pathLossDb;
+                candidate.hasFreshPathLoss = link->valid &&
+                        simTime() - link->lastUpdate <= SimTime(par("linkEstimateMaxAge"));
+            }
+            context.candidates.push_back(candidate);
         }
     }
+
+    std::stable_sort(context.candidates.begin(), context.candidates.end(),
+            [] (const auto& left, const auto& right) {
+                return left.holEnqueueTime < right.holEnqueueTime;
+            });
+    if (!context.candidates.empty()) {
+        context.candidates.front().anchor = true;
+        context.anchorSta = context.candidates.front().staAddress;
+    }
     return context;
+}
+
+queueing::IPacketQueue *HeHcf::findOldestPerStaQueue(AccessCategory ac) const
+{
+    auto queueBankManager = mac->getQueueBankManager();
+    if (queueBankManager == nullptr)
+        return nullptr;
+
+    queueing::IPacketQueue *oldestQueue = nullptr;
+    simtime_t oldestEnqueueTime = SIMTIME_MAX;
+    for (const auto& entry : queueBankManager->getQueueBanks()) {
+        auto queue = entry.second->getQueue((StationQueueBank::AccessCategory)ac);
+        if (queue->isEmpty())
+            continue;
+        auto packet = queue->getPacket(0);
+        auto enqueueTimeTag = packet->findTag<OrigEnqueueTimeTag>();
+        auto enqueueTime = enqueueTimeTag == nullptr ? packet->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
+        if (oldestQueue == nullptr || enqueueTime < oldestEnqueueTime) {
+            oldestQueue = queue;
+            oldestEnqueueTime = enqueueTime;
+        }
+    }
+    return oldestQueue;
+}
+
+bool HeHcf::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
+{
+    auto sourceQueue = findOldestPerStaQueue(ac);
+    if (sourceQueue == nullptr)
+        return false;
+    edca->getEdcaf(ac)->getPendingQueue()->enqueuePacket(sourceQueue->dequeuePacket());
+    return true;
 }
 
 void HeHcf::startFrameSequence(AccessCategory ac)
@@ -140,7 +185,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         }
         auto headDataHeader = getEligibleHoLDataHeader(pendingQueue);
         auto baHandler = getOriginatorBlockAckAgreementHandler();
-        if (!isMuEligibleDataHeader(headDataHeader, baHandler)) {
+        if (!pendingQueue->isEmpty() && !isMuEligibleDataHeader(headDataHeader, baHandler)) {
             if (headDataHeader != nullptr) {
                 EV_INFO << "HeHcf: earliest SU-transmittable packet "
                         << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
@@ -149,7 +194,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             Hcf::startFrameSequence(ac);
             return;
         }
-        auto scheduleContext = collectScheduleContext(pendingQueue, ac);
+        auto scheduleContext = collectScheduleContext(ac);
         if (scheduleContext.candidates.size() >= 2) {
             EV_INFO << "HeHcf: MU-OFDMA opportunity detected for " << scheduleContext.candidates.size()
                     << " STAs — starting HeDlMuTxOpFs." << endl;
@@ -163,9 +208,40 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
             return;
         }
+        if (pendingQueue->isEmpty())
+            stagePerStaFrameForSingleUserTransmission(ac);
     }
     // Fallback: standard single-user frame sequence.
     Hcf::startFrameSequence(ac);
+}
+
+void HeHcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
+{
+    for (auto edcaf : internallyCollidedEdcafs) {
+        if (edcaf->getPendingQueue()->isEmpty() && edcaf->getInProgressFrames()->getLength() == 0)
+            stagePerStaFrameForSingleUserTransmission(edcaf->getAccessCategory());
+    }
+    Hcf::handleInternalCollision(internallyCollidedEdcafs);
+}
+
+bool HeHcf::hasFrameToTransmit(AccessCategory ac)
+{
+    if (Hcf::hasFrameToTransmit(ac))
+        return true;
+    auto queueBankManager = mac->getQueueBankManager();
+    if (queueBankManager == nullptr)
+        return false;
+    for (const auto& entry : queueBankManager->getQueueBanks()) {
+        if (!entry.second->getQueue((StationQueueBank::AccessCategory)ac)->isEmpty())
+            return true;
+    }
+    return false;
+}
+
+bool HeHcf::hasFrameToTransmit()
+{
+    auto edcaf = edca->getChannelOwner();
+    return edcaf != nullptr && hasFrameToTransmit(edcaf->getAccessCategory());
 }
 
 void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
@@ -245,8 +321,8 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
                 // Remove from inProgressFrames
                 edcaf->getInProgressFrames()->removeInProgressFrame(failedPacket);
                 
-                // Re-enqueue into pendingQueue
-                auto pendingQueue = edcaf->getPendingQueue();
+                // Re-enqueue into the destination STA's queue bank when available.
+                auto pendingQueue = resolvePerStaQueue(failedHeader->getReceiverAddress(), edcaf->getAccessCategory());
                 pendingQueue->pushPacket(failedPacket, nullptr);
             }
         }

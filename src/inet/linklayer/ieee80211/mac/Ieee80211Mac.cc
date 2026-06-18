@@ -81,6 +81,10 @@ void Ieee80211Mac::initialize(int stage)
         // Initialize queue bank manager only for APs operating in ax mode.
         if (isApInAxMode()) {
             queueBankManager = std::make_unique<StationQueueBankManager>(this);
+            for (const auto& station : mib->bssAccessPointData.stations) {
+                if (station.second == Ieee80211Mib::ASSOCIATED)
+                    queueBankManager->createQueueBank(station.first);
+            }
         }
     }
 }
@@ -190,13 +194,16 @@ void Ieee80211Mac::handleUpperPacket(Packet *packet)
 
 void Ieee80211Mac::handleLowerPacket(Packet *packet)
 {
-    if (packet->hasAtFront<Ieee80211MpduSubframeHeader>()) {
-        MpduDeaggregation deaggregation;
-        auto frames = deaggregation.deaggregateFrame(packet);
-        for (auto frame : *frames)
-            handleLowerPacket(frame);
-        delete frames;
-        return;
+    if (packet->getDataLength() > b(0)) {
+        const auto& frontChunk = packet->peekAtFront();
+        if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frontChunk) != nullptr) {
+            MpduDeaggregation deaggregation;
+            auto frames = deaggregation.deaggregateFrame(packet);
+            for (auto frame : *frames)
+                handleLowerPacket(frame);
+            delete frames;
+            return;
+        }
     }
     if (auto legacyPreambleInd = packet->findTag<Ieee80211HeMuLegacyPreambleInd>()) {
         rx->legacySignalReceived(legacyPreambleInd->getDurationField());

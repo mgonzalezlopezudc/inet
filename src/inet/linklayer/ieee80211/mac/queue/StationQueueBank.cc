@@ -12,9 +12,10 @@
 namespace inet {
 namespace ieee80211 {
 
+Define_Module(StationQueueBank);
+
 StationQueueBank::~StationQueueBank()
 {
-    clear();
 }
 
 void StationQueueBank::initialize()
@@ -81,8 +82,16 @@ StationQueueBank::QueueStats StationQueueBank::getQueueStats(AccessCategory ac) 
     ASSERT(ac >= AC_BK && ac <= AC_VO);
     
     QueueStats qs = {};
-    // TODO: Implement detailed queue statistics collection
-    // This requires accessing the queue internals which depends on the queue implementation
+    auto queue = queues[ac];
+    qs.packetCount = queue->getNumPackets();
+    qs.byteCount = queue->getTotalLength().get<B>();
+    if (!queue->isEmpty()) {
+        auto packet = queue->getPacket(0);
+        auto enqueueTimeTag = packet->findTag<OrigEnqueueTimeTag>();
+        qs.holEnqueueTime = enqueueTimeTag == nullptr ? packet->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
+        qs.holDelay = simTime() - qs.holEnqueueTime;
+        qs.holPacketSize = packet->getByteLength();
+    }
     qs.dropCount = stats.dropped[ac];
     
     return qs;
@@ -90,29 +99,25 @@ StationQueueBank::QueueStats StationQueueBank::getQueueStats(AccessCategory ac) 
 
 int StationQueueBank::getTotalQueuedPackets() const
 {
-    // TODO: Implement by accessing queue internals
     int total = 0;
-    for (int ac = AC_BK; ac <= AC_VO; ac++) {
-        // For now, we can't access queue length through IPacketQueue interface
-        // This will be implemented when queue iteration is available
-    }
+    for (int ac = AC_BK; ac <= AC_VO; ac++)
+        total += queues[ac]->getNumPackets();
     return total;
 }
 
 int StationQueueBank::getTotalQueuedBytes() const
 {
-    // TODO: Implement by accessing queue internals
     int total = 0;
-    for (int ac = AC_BK; ac <= AC_VO; ac++) {
-        // For now, we can't access queue packets through IPacketQueue interface
-        // This will be implemented when queue iteration is available
-    }
+    for (int ac = AC_BK; ac <= AC_VO; ac++)
+        total += queues[ac]->getTotalLength().get<B>();
     return total;
 }
 
 void StationQueueBank::clear()
 {
     for (int ac = AC_BK; ac <= AC_VO; ac++) {
+        if (queues[ac] == nullptr)
+            continue;
         while (!queues[ac]->isEmpty()) {
             Packet *pkt = check_and_cast<Packet *>(queues[ac]->dequeuePacket());
             delete pkt;
