@@ -42,6 +42,7 @@ class INET_API Ieee80211Radio : public FlatRadioBase
 
     virtual void encapsulate(Packet *packet) const override;
     virtual void decapsulate(Packet *packet) const override;
+    virtual bool supportsParallelReception(const ITransmission *transmission) const override;
 
   public:
     Ieee80211Radio();
@@ -57,4 +58,3 @@ class INET_API Ieee80211Radio : public FlatRadioBase
 } // namespace inet
 
 #endif
-

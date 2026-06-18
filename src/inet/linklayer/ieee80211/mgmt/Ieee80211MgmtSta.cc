@@ -624,7 +624,7 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
     const auto& responseBody = packet->peekData<Ieee80211AssociationResponseFrame>();
     MacAddress address = header->getTransmitterAddress();
     int statusCode = responseBody->getStatusCode();
-    // TODO short aid;
+    short aid = responseBody->getAid();
     // TODO Ieee80211SupportedRatesElement supportedRates;
     delete packet;
 
@@ -654,6 +654,7 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
         mib->bssData.ssid = ap->ssid;
         mib->bssData.bssid = ap->address;
         mib->bssStationData.isAssociated = true;
+        mib->bssStationData.associationId = aid;
         (ApInfo&)assocAP = (*ap);
 
         emit(l2AssociatedSignal, myIface, ap);
@@ -694,7 +695,8 @@ void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const
     }
 
     EV << "Setting isAssociated flag to false\n";
-    mib->bssStationData.isAssociated = false;
+        mib->bssStationData.isAssociated = false;
+        mib->bssStationData.associationId = -1;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
 }

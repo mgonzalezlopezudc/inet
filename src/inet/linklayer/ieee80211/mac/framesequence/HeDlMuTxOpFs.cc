@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
@@ -690,7 +691,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         payloadHeader->setRuIndex(alloc.ru.index);
         payloadHeader->setRuToneSize(alloc.ru.toneSize);
         payloadHeader->setRuToneOffset(alloc.ru.toneOffset);
-        payloadHeader->setStaId(computeHeMuStaId(alloc.staAddress));
+        auto aid = hcf == nullptr ? -1 : check_and_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule())->getMib()->getAssociationId(alloc.staAddress);
+        payloadHeader->setStaId(aid > 0 ? aid : computeHeMuStaId(alloc.staAddress));
         payloadHeader->setMcs(alloc.mcs);
         payloadHeader->setMpduLength(selectedAllocation.psduLength);
         container->insertAtBack(payloadHeader);

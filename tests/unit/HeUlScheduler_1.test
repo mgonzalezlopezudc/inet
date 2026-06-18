@@ -1,0 +1,134 @@
+%description:
+Test IEEE 802.11ax uplink scheduled and random-access RU allocation.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerEqualSizedRUs.h"
+#include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerBacklogBased.h"
+#include "inet/linklayer/common/MacAddress.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.scheduler.HeUlSchedulerEqualSizedRUs;
+import inet.linklayer.ieee80211.mac.scheduler.HeUlSchedulerBacklogBased;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        equalScheduler: HeUlSchedulerEqualSizedRUs {
+            parameters:
+                minRandomAccessRus = 1;
+                maxRandomAccessRus = 4;
+        }
+        backlogScheduler: HeUlSchedulerBacklogBased {
+            parameters:
+                minRandomAccessRus = 1;
+                maxRandomAccessRus = 4;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static IIeee80211HeUlScheduler::ScheduleContext makeContext(Hz bandwidth)
+{
+    IIeee80211HeUlScheduler::ScheduleContext context;
+    context.channelCenterFrequency = Hz(5.18e9);
+    context.channelBandwidth = bandwidth;
+    context.requestedDuration = SimTime(1, SIMTIME_MS);
+    context.estimatedRandomAccessContenders = 2;
+    for (int i = 0; i < 4; i++) {
+        IIeee80211HeUlScheduler::CandidateInfo candidate;
+        char address[32];
+        snprintf(address, sizeof(address), "02:00:00:00:10:%02X", i + 1);
+        candidate.staAddress = MacAddress(address);
+        candidate.associationId = i + 1;
+        candidate.selectedAccessCategory = AC_BE;
+        candidate.selectedTid = 0;
+        candidate.backlogBytes[AC_BE] = (i + 1) * 4000;
+        candidate.anchor = i == 2;
+        candidate.lastService = SimTime(i, SIMTIME_MS);
+        context.candidates.push_back(candidate);
+    }
+    return context;
+}
+
+static void assertValidSchedule(const IIeee80211HeUlScheduler::Schedule& schedule, Hz bandwidth)
+{
+    ASSERT(!schedule.allocations.empty());
+    ASSERT(schedule.commonDuration == SimTime(1, SIMTIME_MS));
+    std::vector<Ieee80211HeRu> rus;
+    int randomAccessRus = 0;
+    for (const auto& allocation : schedule.allocations) {
+        rus.push_back(allocation.ru);
+        if (allocation.randomAccess) {
+            randomAccessRus++;
+            ASSERT(allocation.associationId == 0);
+            ASSERT(allocation.ru.toneSize == 26);
+        }
+        else {
+            ASSERT(allocation.associationId > 0);
+            ASSERT(allocation.targetRssiDbm == -75);
+        }
+    }
+    ASSERT(randomAccessRus >= 1);
+    ASSERT(validateHeRuLayout(rus, bandwidth));
+}
+
+%activity:
+auto equalScheduler = check_and_cast<HeUlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("equalScheduler"));
+auto backlogScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
+        getParentModule()->getSubmodule("backlogScheduler"));
+
+const double bandwidths[] = {20e6, 40e6, 80e6, 160e6};
+for (double value : bandwidths) {
+    auto context = makeContext(Hz(value));
+    auto equal = equalScheduler->schedule(context);
+    assertValidSchedule(equal, context.channelBandwidth);
+    auto backlog = backlogScheduler->schedule(context);
+    assertValidSchedule(backlog, context.channelBandwidth);
+}
+EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
+
+{
+    auto context = makeContext(Hz(20e6));
+    context.estimatedRandomAccessContenders = 1;
+    auto lowCollision = equalScheduler->schedule(context);
+    context.recentRandomAccessCollisionRate = 1;
+    auto highCollision = equalScheduler->schedule(context);
+    int lowRa = 0;
+    int highRa = 0;
+    for (const auto& allocation : lowCollision.allocations)
+        lowRa += allocation.randomAccess;
+    for (const auto& allocation : highCollision.allocations)
+        highRa += allocation.randomAccess;
+    ASSERT(highRa >= lowRa);
+    EV << "Collision feedback did not reduce UORA capacity.\n";
+}
+
+{
+    auto context = makeContext(Hz(20e6));
+    context.estimatedRandomAccessContenders = 1;
+    for (auto& candidate : context.candidates)
+        candidate.backlogBytes[AC_BE] = 50000;
+    auto schedule = backlogScheduler->schedule(context);
+    int randomAccessRus = 0;
+    for (const auto& allocation : schedule.allocations)
+        randomAccessRus += allocation.randomAccess;
+    ASSERT(randomAccessRus >= 1);
+    EV << "Backlog fitting preserved mandatory UORA capacity.\n";
+}
+EV << ".\n";
+
+%contains: stdout
+UL scheduled and UORA layouts passed for 20/40/80/160 MHz.
+Collision feedback did not reduce UORA capacity.
+Backlog fitting preserved mandatory UORA capacity.
+.

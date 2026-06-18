@@ -189,6 +189,7 @@ class INET_API Radio : public PhysicalLayerBase, public virtual IRadio
 
     virtual WirelessSignal *createSignal(Packet *packet) const;
 
+    virtual bool supportsParallelReception(const ITransmission *transmission) const { return false; }
     virtual void startReception(cMessage *timer, IRadioSignal::SignalPart part);
     virtual void continueReception(cMessage *timer);
     virtual void endReception(cMessage *timer);
@@ -241,4 +242,3 @@ class INET_API Radio : public PhysicalLayerBase, public virtual IRadio
 } // namespace inet
 
 #endif
-

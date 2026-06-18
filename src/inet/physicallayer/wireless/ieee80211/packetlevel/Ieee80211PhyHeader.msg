@@ -161,11 +161,16 @@ struct Ieee80211HeMuUserInfo
     uint8_t mcs = 0;
     uint8_t numberOfSpatialStreams = 1;
     bool dcm = false;
+    B psduLength;
+    simtime_t duration;
 }
 
 class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t bssColor = 0;
+    uint8_t ppduFormat = 0; // 0: HE MU downlink, 1: HE trigger-based uplink
+    uint32_t triggerId = 0;
+    simtime_t commonDuration;
     Ieee80211HeMuUserInfo users[];
 }
 

@@ -39,6 +39,18 @@ simsignal_t Ieee80211Radio::radioChannelChangedSignal = cComponent::registerSign
 static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
 {
     std::vector<Ieee80211HeMuUserInfo> users;
+    if (auto request = packet->findTag<Ieee80211HeMuReq>()) {
+        Ieee80211HeMuUserInfo user;
+        user.ruIndex = request->getRuIndex();
+        user.ruToneSize = request->getRuToneSize();
+        user.ruToneOffset = request->getRuToneOffset();
+        user.staId = request->getStaId();
+        user.mcs = request->getMcs();
+        user.psduLength = B(packet->getDataLength());
+        user.duration = request->getCommonDuration();
+        users.push_back(user);
+        return users;
+    }
     if (!packet->hasAtFront<ieee80211::Ieee80211MacHeader>())
         return users;
     auto packetCopy = packet->dup();
@@ -54,6 +66,8 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.ruToneOffset = payloadHeader->getRuToneOffset();
         user.staId = payloadHeader->getStaId();
         user.mcs = payloadHeader->getMcs();
+        user.psduLength = payloadHeader->getMpduLength();
+        user.duration = estimateHeMuUserDuration(user.psduLength, user.ruToneSize, user.mcs);
         users.push_back(user);
         packetCopy->popAtFront(payloadHeader->getMpduLength());
     }
@@ -64,6 +78,15 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
 Ieee80211Radio::Ieee80211Radio() :
     FlatRadioBase()
 {
+}
+
+bool Ieee80211Radio::supportsParallelReception(const ITransmission *transmission) const
+{
+    auto packet = transmission == nullptr ? nullptr : transmission->getPacket();
+    if (packet == nullptr || transmission->getPacketProtocol() != &Protocol::ieee80211HePhy ||
+            !packet->hasAtFront<Ieee80211HeMuPhyHeader>())
+        return false;
+    return packet->peekAtFront<Ieee80211HeMuPhyHeader>()->getPpduFormat() == HE_TRIGGER_BASED_UPLINK;
 }
 
 void Ieee80211Radio::initialize(int stage)
@@ -265,9 +288,17 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     auto heMuUsers = collectHeMuUsers(packet);
     auto phyHeader = !heMuUsers.empty() ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
     if (auto heMuPhyHeader = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader)) {
+        auto request = packet->findTag<Ieee80211HeMuReq>();
+        heMuPhyHeader->setPpduFormat(request == nullptr ? HE_MU_DOWNLINK : request->getPpduFormat());
+        heMuPhyHeader->setTriggerId(request == nullptr ? 0 : request->getTriggerId());
+        simtime_t commonDuration = request == nullptr ? SIMTIME_ZERO : request->getCommonDuration();
         for (const auto& user : heMuUsers)
+        {
             heMuPhyHeader->appendUsers(user);
-        phyHeader->setChunkLength(b(16 + heMuPhyHeader->getUsersArraySize() * 73));
+            commonDuration = std::max(commonDuration, user.duration);
+        }
+        heMuPhyHeader->setCommonDuration(commonDuration);
+        phyHeader->setChunkLength(b(88 + heMuPhyHeader->getUsersArraySize() * 137));
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
@@ -314,9 +345,11 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
 
     if (auto heMuPhyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
         auto tag = packet->addTagIfAbsent<Ieee80211HeMuRxTag>();
+        tag->setPpduFormat(heMuPhyHeader->getPpduFormat());
+        tag->setTriggerId(heMuPhyHeader->getTriggerId());
         tag->setRuIndex(-1);
         auto networkInterface = getContainingNicModule(this);
-        auto myStaId = computeHeMuStaId(networkInterface->getMacAddress());
+        auto myStaId = resolveHeMuStaId(networkInterface, networkInterface->getMacAddress());
         for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
             const auto& user = heMuPhyHeader->getUsers(i);
             Ieee80211HeMuRxAllocationInfo info;

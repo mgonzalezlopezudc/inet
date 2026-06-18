@@ -181,6 +181,7 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
             mib->releaseAssociationId(sta->address);
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
+        mib->releaseAssociationId(sta->address);
         sta->authSeqExpected = 1;
     }
 
@@ -345,6 +346,7 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
             mib->releaseAssociationId(sta->address);
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED;
+        mib->releaseAssociationId(sta->address);
 
         // Destroy per-STA queue bank only for APs operating in ax mode.
         try {

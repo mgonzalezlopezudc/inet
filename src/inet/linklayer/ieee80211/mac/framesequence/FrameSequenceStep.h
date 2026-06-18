@@ -70,8 +70,26 @@ class INET_API ReceiveStep : public IReceiveStep
     virtual void setFrameToReceive(Packet *frame) override { this->receivedFrame = frame; }
 };
 
+class INET_API ReceiveCollectionStep : public ReceiveStep
+{
+  protected:
+    std::vector<Packet *> receivedFrames;
+
+  public:
+    using ReceiveStep::ReceiveStep;
+    virtual ~ReceiveCollectionStep()
+    {
+        for (auto frame : receivedFrames)
+            delete frame;
+    }
+
+    virtual Packet *getReceivedFrame() override { return receivedFrames.empty() ? nullptr : receivedFrames.front(); }
+    virtual void setFrameToReceive(Packet *frame) override { receivedFrames.push_back(frame); }
+    virtual bool completesOnReception() const override { return false; }
+    virtual const std::vector<Packet *>& getReceivedFrames() const { return receivedFrames; }
+};
+
 } // namespace ieee80211
 } // namespace inet
 
 #endif
-

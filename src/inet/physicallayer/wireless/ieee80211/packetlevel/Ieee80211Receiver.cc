@@ -172,8 +172,10 @@ bool Ieee80211Receiver::isAssignedHeMuRu(const ITransmission *transmission) cons
     auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
     if (heMuPhyHeader == nullptr)
         return true;
+    if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK)
+        return true;
     auto networkInterface = getContainingNicModule(this);
-    return containsHeMuUser(heMuPhyHeader, computeHeMuStaId(networkInterface->getMacAddress()));
+    return containsHeMuUser(heMuPhyHeader, resolveHeMuStaId(networkInterface, networkInterface->getMacAddress()));
 }
 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
@@ -198,14 +200,45 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
            getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
 }
 
+bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening, const IReception *reception,
+        IRadioSignal::SignalPart part, const IInterference *interference) const
+{
+    auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    if (heMuPhyHeader == nullptr || heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)
+        return FlatReceiverBase::computeIsReceptionAttempted(listening, reception, part, interference);
+    if (!computeIsReceptionPossible(listening, reception, part))
+        return false;
+
+    // Propagation delay makes aligned STA responses arrive a few nanoseconds
+    // apart, so ordinary single-reception arbitration would admit only the
+    // first RU. Allow concurrent UL-TB reception only within one Trigger
+    // exchange; the RU-aware interference model still decides success.
+    auto currentTransmission = reception->getReceiverRadio()->getReceptionInProgress();
+    if (currentTransmission == nullptr || currentTransmission == reception->getTransmission())
+        return true;
+    auto currentHeader = peekHeMuPhyHeader(currentTransmission);
+    return currentHeader != nullptr &&
+           currentHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
+           currentHeader->getTriggerId() == heMuPhyHeader->getTriggerId();
+}
+
 const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const
 {
     auto transmission = check_and_cast<const Ieee80211Transmission *>(reception->getTransmission());
     auto transmittedPacket = transmission->getPacket();
     auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
     if (heMuPhyHeader != nullptr) {
+        if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+            auto packet = transmittedPacket->dup();
+            if (!isReceptionSuccessful(decisions))
+                packet->setBitError(true);
+            addReceptionIndications(packet, reception, interference, snir);
+            packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
+            packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+            return new ReceptionResult(reception, decisions, packet);
+        }
         auto networkInterface = getContainingNicModule(this);
-        auto myStaId = computeHeMuStaId(networkInterface->getMacAddress());
+        auto myStaId = resolveHeMuStaId(networkInterface, networkInterface->getMacAddress());
         auto packet = containsHeMuUser(heMuPhyHeader, myStaId) && modeSet->containsMode(transmission->getMode())
                 ? buildHeMuPhyPacket(transmittedPacket, heMuPhyHeader, myStaId)
                 : buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);

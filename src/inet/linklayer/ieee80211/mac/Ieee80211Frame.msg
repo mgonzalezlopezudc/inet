@@ -77,10 +77,12 @@ enum Ieee80211FrameType
     ST_ACK = 0x1d;
     ST_BLOCKACK_REQ = 0x18;
     ST_BLOCKACK     = 0x19;
+    ST_TRIGGER      = 0x12;
 
     // data (CFPOLL/CFACK subtypes omitted):
     ST_DATA = 0x20;
     ST_DATA_WITH_QOS = 0x28;
+    ST_QOS_NULL = 0x2c;
     //Feedback frame for multicast tramsmission
     ST_LBMS_REQUEST = 0x30;
     ST_LBMS_REPORT = 0x31;
@@ -211,6 +213,33 @@ class Ieee80211DataHeader extends Ieee80211DataOrMgmtHeader
     AckPolicy ackPolicy = NORMAL_ACK;
     uint8_t tid;              // optional field, exists when type == ST_DATA_WITH_QOS
     bool aMsduPresent = false; // 8.2.4.5.9 A-MSDU Present subfield
+    bool bufferStatusPresent = false;
+    uint8_t bufferStatusTid = 0;
+    uint8_t bufferStatusAc = 0;
+    uint32_t bufferStatusQueueSize = 0;
+}
+
+struct Ieee80211HeTriggerUserInfo
+{
+    uint16_t aid;
+    int ruIndex = -1;
+    uint16_t ruToneSize;
+    uint16_t ruToneOffset;
+    uint8_t mcs = 0;
+    uint8_t tid = 0;
+    int8_t targetRssiDbm = -60;
+    bool randomAccess = false;
+}
+
+class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
+{
+    type = ST_TRIGGER;
+    uint8_t triggerType = 0; // 0: Basic Trigger, 4: BSRP Trigger
+    uint32_t triggerId;
+    simtime_t commonDuration;
+    uint8_t ocwMin = 7;
+    uint8_t ocwMax = 31;
+    Ieee80211HeTriggerUserInfo users[];
 }
 
 //TODO this can be introduced when the SNAP header
@@ -470,4 +499,20 @@ class Ieee80211MultiTidBlockAck extends Ieee80211BlockAck
     compressedBitmap = 1;
 
     // TODO unimplemented
+}
+
+struct Ieee80211MultiStaBlockAckRecord
+{
+    uint16_t aid;
+    uint8_t tid;
+    uint16_t startingSequenceNumber;
+    uint64_t bitmap;
+    bool responseReceived;
+}
+
+class Ieee80211MultiStaBlockAck extends Ieee80211BlockAck
+{
+    multiTid = 1;
+    compressedBitmap = 0;
+    Ieee80211MultiStaBlockAckRecord records[];
 }

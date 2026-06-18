@@ -1,0 +1,113 @@
+%description:
+Test Trigger, BSR, and Multi-STA Block Ack serialization.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
+#include "inet/common/packet/Packet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+{
+    auto trigger = makeShared<Ieee80211TriggerFrame>();
+    trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    trigger->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
+    trigger->setTriggerType(0);
+    trigger->setTriggerId(42);
+    trigger->setCommonDuration(SimTime(800, SIMTIME_US));
+    trigger->setUsersArraySize(2);
+    Ieee80211HeTriggerUserInfo scheduled;
+    scheduled.aid = 7;
+    scheduled.ruIndex = 4;
+    scheduled.ruToneSize = 106;
+    scheduled.ruToneOffset = 0;
+    scheduled.mcs = 3;
+    scheduled.tid = 5;
+    scheduled.targetRssiDbm = -70;
+    trigger->setUsers(0, scheduled);
+    Ieee80211HeTriggerUserInfo randomAccess;
+    randomAccess.randomAccess = true;
+    randomAccess.ruIndex = 9;
+    randomAccess.ruToneSize = 26;
+    randomAccess.ruToneOffset = 108;
+    trigger->setUsers(1, randomAccess);
+    trigger->setChunkLength(B(50));
+    auto packet = new Packet("trigger", trigger);
+    auto bytes = packet->peekDataAsBytes();
+    auto received = new Packet("trigger-rx", bytes);
+    auto decoded = received->popAtFront<Ieee80211TriggerFrame>();
+    ASSERT(decoded->getTriggerId() == 42);
+    ASSERT(decoded->getUsersArraySize() == 2);
+    ASSERT(decoded->getUsers(0).aid == 7);
+    ASSERT(decoded->getUsers(1).randomAccess);
+    delete packet;
+    delete received;
+    EV << "Trigger frame round trip passed.\n";
+}
+
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_QOS_NULL);
+    header->setReceiverAddress(MacAddress("10:00:00:00:00:00"));
+    header->setTransmitterAddress(MacAddress("20:00:00:00:00:01"));
+    header->setAddress3(MacAddress("10:00:00:00:00:00"));
+    header->setTid(6);
+    header->setOrder(true);
+    header->setBufferStatusPresent(true);
+    header->setBufferStatusTid(6);
+    header->setBufferStatusAc(AC_VO);
+    header->setBufferStatusQueueSize(12345);
+    header->setChunkLength(B(30));
+    auto packet = new Packet("bsr", header);
+    auto bytes = packet->peekDataAsBytes();
+    auto received = new Packet("bsr-rx", bytes);
+    auto decoded = received->popAtFront<Ieee80211DataHeader>();
+    ASSERT(decoded->getBufferStatusPresent());
+    ASSERT(decoded->getBufferStatusTid() == 6);
+    ASSERT(decoded->getBufferStatusAc() == AC_VO);
+    ASSERT(decoded->getBufferStatusQueueSize() == 12345);
+    delete packet;
+    delete received;
+    EV << "QoS Null BSR round trip passed.\n";
+}
+
+{
+    auto blockAck = makeShared<Ieee80211MultiStaBlockAck>();
+    blockAck->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    blockAck->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
+    blockAck->setRecordsArraySize(2);
+    Ieee80211MultiStaBlockAckRecord first;
+    first.aid = 7;
+    first.tid = 5;
+    first.startingSequenceNumber = 12;
+    first.bitmap = 3;
+    first.responseReceived = true;
+    blockAck->setRecords(0, first);
+    Ieee80211MultiStaBlockAckRecord second;
+    second.aid = 8;
+    second.tid = 0;
+    second.responseReceived = false;
+    blockAck->setRecords(1, second);
+    blockAck->setChunkLength(b(376));
+    auto packet = new Packet("multi-sta-ba", blockAck);
+    auto bytes = packet->peekDataAsBytes();
+    auto received = new Packet("multi-sta-ba-rx", bytes);
+    auto decoded = received->popAtFront<Ieee80211MultiStaBlockAck>();
+    ASSERT(decoded->getRecordsArraySize() == 2);
+    ASSERT(decoded->getRecords(0).bitmap == 3);
+    ASSERT(decoded->getRecords(0).responseReceived);
+    ASSERT(!decoded->getRecords(1).responseReceived);
+    delete packet;
+    delete received;
+    EV << "Multi-STA Block Ack round trip passed.\n";
+}
+EV << ".\n";
+
+%contains: stdout
+Trigger frame round trip passed.
+QoS Null BSR round trip passed.
+Multi-STA Block Ack round trip passed.
+.

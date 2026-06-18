@@ -426,7 +426,8 @@ void Radio::startReception(cMessage *timer, IRadioSignal::SignalPart part)
         auto isReceptionAttempted = medium->isReceptionAttempted(this, transmission, part);
         EV_INFO << "Reception started: " << (isReceptionAttempted ? "\x1b[1mattempting\x1b[0m" : "\x1b[1mnot attempting\x1b[0m") << " " << (IWirelessSignal *)signal << " " << IRadioSignal::getSignalPartName(part) << " as " << reception << endl;
         if (isReceptionAttempted) {
-            receptionTimer = timer;
+            if (!supportsParallelReception(transmission) || receptionTimer == nullptr)
+                receptionTimer = timer;
             emit(receptionStartedSignal, check_and_cast<const cObject *>(reception));
         }
     }
@@ -447,15 +448,16 @@ void Radio::continueReception(cMessage *timer)
     auto signal = static_cast<WirelessSignal *>(timer->getControlInfo());
     auto arrival = signal->getArrival();
     auto reception = signal->getReception();
-    if (timer == receptionTimer && isReceiverMode(radioMode) && arrival->getEndTime(previousPart) == simTime()) {
+    if ((timer == receptionTimer || supportsParallelReception(signal->getTransmission())) &&
+            isReceiverMode(radioMode) && arrival->getEndTime(previousPart) == simTime()) {
         auto transmission = signal->getTransmission();
         bool isReceptionSuccessful = medium->isReceptionSuccessful(this, transmission, previousPart);
         EV_INFO << "Reception ended: " << (isReceptionSuccessful ? "\x1b[1msuccessfully\x1b[0m" : "\x1b[1munsuccessfully\x1b[0m") << " for " << (IWirelessSignal *)signal << " " << IRadioSignal::getSignalPartName(previousPart) << " as " << reception << endl;
-        if (!isReceptionSuccessful)
+        if (!isReceptionSuccessful && timer == receptionTimer)
             receptionTimer = nullptr;
         auto isReceptionAttempted = medium->isReceptionAttempted(this, transmission, nextPart);
         EV_INFO << "Reception started: " << (isReceptionAttempted ? "\x1b[1mattempting\x1b[0m" : "\x1b[1mnot attempting\x1b[0m") << " " << (IWirelessSignal *)signal << " " << IRadioSignal::getSignalPartName(nextPart) << " as " << reception << endl;
-        if (!isReceptionAttempted)
+        if (!isReceptionAttempted && timer == receptionTimer)
             receptionTimer = nullptr;
         // FIXME see handling packets with incorrect PHY headers in the TODO file
     }
@@ -475,7 +477,8 @@ void Radio::endReception(cMessage *timer)
     auto signal = static_cast<WirelessSignal *>(timer->getControlInfo());
     auto arrival = signal->getArrival();
     auto reception = signal->getReception();
-    if (timer == receptionTimer && isReceiverMode(radioMode) && arrival->getEndTime() == simTime()) {
+    if ((timer == receptionTimer || supportsParallelReception(signal->getTransmission())) &&
+            isReceiverMode(radioMode) && arrival->getEndTime() == simTime()) {
         auto transmission = signal->getTransmission();
         // TODO this would draw twice from the random number generator in isReceptionSuccessful: auto isReceptionSuccessful = medium->isReceptionSuccessful(this, transmission, part);
         auto isReceptionSuccessful = medium->getReceptionDecision(this, signal->getListening(), transmission, part)->isReceptionSuccessful();
@@ -609,4 +612,3 @@ void Radio::updateTransceiverPart()
 
 } // namespace physicallayer
 } // namespace inet
-

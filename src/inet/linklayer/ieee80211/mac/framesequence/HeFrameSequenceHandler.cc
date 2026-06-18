@@ -17,7 +17,14 @@ void HeFrameSequenceHandler::handleStartRxTimeout()
     auto lastStep = context->getLastStep();
     switch (lastStep->getType()) {
         case IFrameSequenceStep::Type::RECEIVE: {
-            if (dynamic_cast<HeDlMuTxOpFs *>(frameSequence) != nullptr) {
+            auto receiveStep = check_and_cast<IReceiveStep *>(lastStep);
+            if (!receiveStep->completesOnReception()) {
+                EV_INFO << "HeFrameSequenceHandler: receive collection deadline reached.\n";
+                finishFrameSequenceStep();
+                if (isSequenceRunning())
+                    startFrameSequenceStep();
+            }
+            else if (dynamic_cast<HeDlMuTxOpFs *>(frameSequence) != nullptr) {
                 EV_INFO << "HeFrameSequenceHandler: sequential BlockAck timeout, continuing sequence.\n";
                 lastStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
                 finishFrameSequenceStep();

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/queueing/contract/IPacketQueue.h"
@@ -37,10 +38,18 @@ class INET_API HeHcf : public Hcf
 {
   protected:
     IIeee80211HeDlScheduler *dlScheduler = nullptr;
+    HeUlCoordinator *ulCoordinator = nullptr;
     std::unique_ptr<StationQueueBankManager> queueBankManager;
+    cMessage *ulTriggerTimer = nullptr;
+    IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
+    bool ulTriggerAccessRequested = false;
+    Packet *triggeredUlOriginalPacket = nullptr;
+    queueing::IPacketQueue *triggeredUlSourceQueue = nullptr;
+    bool triggeredUlWasRandomAccess = false;
 
   protected:
     virtual void initialize(int stage) override;
+    virtual void handleMessage(cMessage *msg) override;
     virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac) override;
 
     /**
@@ -60,13 +69,18 @@ class INET_API HeHcf : public Hcf
     virtual void handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs) override;
     virtual bool hasFrameToTransmit() override;
     virtual bool hasFrameToTransmit(AccessCategory ac) override;
+    virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
+    virtual void transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
 
   public:
+    virtual ~HeHcf();
     virtual StationQueueBank *createStationQueueBank(const MacAddress& staAddr) override;
     virtual void destroyStationQueueBank(const MacAddress& staAddr) override;
     virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const override;
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
+    uint16_t getAssociationId(const MacAddress& address) const;
+    void processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid);
 };
 
 } // namespace ieee80211

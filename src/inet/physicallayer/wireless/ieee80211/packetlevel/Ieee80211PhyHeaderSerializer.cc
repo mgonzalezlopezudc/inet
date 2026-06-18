@@ -228,6 +228,9 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     if (numUsers > 255)
         throw cRuntimeError("Too many HE MU users: %u", numUsers);
     stream.writeByte(heMuPhyHeader->getBssColor());
+    stream.writeByte(heMuPhyHeader->getPpduFormat());
+    stream.writeUint32Be(heMuPhyHeader->getTriggerId());
+    stream.writeUint32Be(heMuPhyHeader->getCommonDuration().inUnit(SIMTIME_NS));
     stream.writeByte(numUsers);
     for (unsigned int i = 0; i < numUsers; ++i) {
         const auto& user = heMuPhyHeader->getUsers(i);
@@ -248,6 +251,8 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         stream.writeByte(user.mcs);
         stream.writeByte(user.numberOfSpatialStreams);
         stream.writeBit(user.dcm);
+        stream.writeUint32Be(user.psduLength.get<B>());
+        stream.writeUint32Be(user.duration.inUnit(SIMTIME_NS));
     }
 }
 
@@ -255,6 +260,9 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
 {
     auto heMuPhyHeader = makeShared<Ieee80211HeMuPhyHeader>();
     heMuPhyHeader->setBssColor(stream.readByte());
+    heMuPhyHeader->setPpduFormat(stream.readByte());
+    heMuPhyHeader->setTriggerId(stream.readUint32Be());
+    heMuPhyHeader->setCommonDuration(SimTime(stream.readUint32Be(), SIMTIME_NS));
     unsigned int numUsers = stream.readByte();
     heMuPhyHeader->setUsersArraySize(numUsers);
     for (unsigned int i = 0; i < numUsers; ++i) {
@@ -266,6 +274,8 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
         info.mcs = stream.readByte();
         info.numberOfSpatialStreams = stream.readByte();
         info.dcm = stream.readBit();
+        info.psduLength = B(stream.readUint32Be());
+        info.duration = SimTime(stream.readUint32Be(), SIMTIME_NS);
         heMuPhyHeader->setUsers(i, info);
     }
     return heMuPhyHeader;

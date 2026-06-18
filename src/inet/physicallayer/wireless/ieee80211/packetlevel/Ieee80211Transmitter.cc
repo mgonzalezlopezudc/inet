@@ -7,6 +7,8 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
+#include <cmath>
+
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
@@ -14,6 +16,8 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 
@@ -135,7 +139,23 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
     if (transmissionMode->getDataMode()->getNumberOfSpatialStreams() > transmitter->getAntenna()->getNumAntennas())
         throw cRuntimeError("Number of spatial streams is higher than the number of antennas");
-    const simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
+    simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
+    Hz transmissionCenterFrequency = centerFrequency;
+    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+        if (heMuHeader->getCommonDuration() > SIMTIME_ZERO)
+            duration = heMuHeader->getCommonDuration();
+        if (heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK && heMuHeader->getUsersArraySize() == 1) {
+            const auto& user = heMuHeader->getUsers(0);
+            constexpr double HE_TONE_SPACING = 78125;
+            int channelTones = getHeChannelToneCount(transmissionBandwidth);
+            transmissionBandwidth = Hz(user.ruToneSize * HE_TONE_SPACING);
+            double centerTone = user.ruToneOffset + user.ruToneSize / 2.0 - channelTones / 2.0;
+            transmissionCenterFrequency = centerFrequency + Hz(centerTone * HE_TONE_SPACING);
+            if (auto request = packet->findTag<Ieee80211HeMuReq>())
+                if (!std::isnan(request->getTransmitPower().get()))
+                    transmissionPower = request->getTransmitPower();
+        }
+    }
     const simtime_t endTime = startTime + duration;
     IMobility *mobility = transmitter->getAntenna()->getMobility();
     const Coord& startPosition = mobility->getCurrentPosition();
@@ -145,11 +165,10 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
     const simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
     const simtime_t dataDuration = duration - headerDuration - preambleDuration;
-    auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, transmissionBandwidth, transmissionPower);
+    auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, transmissionPower);
     return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel);
 }
 
 } // namespace physicallayer
 
 } // namespace inet
-
