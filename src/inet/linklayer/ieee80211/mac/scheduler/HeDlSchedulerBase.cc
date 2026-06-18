@@ -10,6 +10,8 @@
 #include <cmath>
 #include <sstream>
 
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+
 namespace inet {
 namespace ieee80211 {
 
@@ -106,13 +108,10 @@ int HeDlSchedulerBase::selectMcs(double snrDb, bool hasFreshPathLoss) const
     return mcs;
 }
 
-simtime_t HeDlSchedulerBase::estimateDuration(int64_t bytes, int toneSize, int mcs) const
+simtime_t HeDlSchedulerBase::estimateDuration(int64_t bytes, int toneSize, int mcs,
+        Ieee80211HeGuardInterval guardInterval) const
 {
-    // HE single-stream spectral efficiencies for MCS 0..11 (bits/s/Hz).
-    static const double efficiency[] =
-        {0.5, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 6.6666667, 7.5, 8.3333333};
-    double rate = toneSize * 78125.0 * efficiency[std::clamp(mcs, 0, 11)];
-    return SimTime(48e-6 + bytes * 8.0 / std::max(rate, 1.0));
+    return estimateHeMuUserDuration(B(bytes), toneSize, mcs, 1, false, guardInterval);
 }
 
 bool HeDlSchedulerBase::defaultCandidateLess(const CandidateInfo& a, const CandidateInfo& b)
@@ -185,7 +184,8 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
             allocation.estimatedSnrDb = estimateSnrDb(context, candidates[i], allocation.ru);
             allocation.mcs = selectMcs(allocation.estimatedSnrDb, candidates[i].hasFreshPathLoss);
             allocation.estimatedDuration = estimateDuration(
-                    std::max<int64_t>(payloadBytes[i], 1), toneSizes[i], allocation.mcs);
+                    std::max<int64_t>(payloadBytes[i], 1), toneSizes[i], allocation.mcs,
+                    context.guardInterval);
             allocations.push_back(allocation);
         }
         return true;

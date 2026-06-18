@@ -115,10 +115,12 @@ Ieee80211HeSignalMode::~Ieee80211HeSignalMode()
 bps Ieee80211HeSignalMode::computeGrossBitrate() const
 {
     unsigned int numberOfCodedBitsPerSymbol = modulation->getSubcarrierModulation()->getCodeWordSize() * getNumberOfDataSubcarriers();
-    if (guardIntervalType == HE_GUARD_INTERVAL_LONG)
-        return bps(numberOfCodedBitsPerSymbol / getSymbolInterval());
-    else
-        return bps(numberOfCodedBitsPerSymbol / getShortGISymbolInterval());
+    switch (guardIntervalType) {
+        case HE_GUARD_INTERVAL_SHORT: return bps(numberOfCodedBitsPerSymbol / getShortGISymbolInterval());
+        case HE_GUARD_INTERVAL_MEDIUM: return bps(numberOfCodedBitsPerSymbol / getMediumGISymbolInterval());
+        case HE_GUARD_INTERVAL_LONG: return bps(numberOfCodedBitsPerSymbol / getSymbolInterval());
+        default: throw cRuntimeError("Unknown HE guard interval");
+    }
 }
 
 bps Ieee80211HeSignalMode::computeNetBitrate() const
@@ -231,10 +233,12 @@ bps Ieee80211HeDataMode::computeGrossBitrate() const
 {
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
-    if (guardIntervalType == HE_GUARD_INTERVAL_LONG)
-        return bps(numberOfCodedBitsPerSymbol / getSymbolInterval());
-    else
-        return bps(numberOfCodedBitsPerSymbol / getShortGISymbolInterval());
+    switch (guardIntervalType) {
+        case HE_GUARD_INTERVAL_SHORT: return bps(numberOfCodedBitsPerSymbol / getShortGISymbolInterval());
+        case HE_GUARD_INTERVAL_MEDIUM: return bps(numberOfCodedBitsPerSymbol / getMediumGISymbolInterval());
+        case HE_GUARD_INTERVAL_LONG: return bps(numberOfCodedBitsPerSymbol / getSymbolInterval());
+        default: throw cRuntimeError("Unknown HE guard interval");
+    }
 }
 
 bps Ieee80211HeDataMode::computeNetBitrate() const
@@ -292,10 +296,12 @@ const simtime_t Ieee80211HeDataMode::getDuration(b dataLength) const
     }
     unsigned int dataBitsPerSymbol = forwardErrorCorrection ? forwardErrorCorrection->getDecodedLength(numberOfCodedBitsPerSymbol) : numberOfCodedBitsPerSymbol;
     int numberOfSymbols = lrint(ceil((double)getCompleteLength(dataLength).get<b>() / dataBitsPerSymbol));
-    if (guardIntervalType == HE_GUARD_INTERVAL_LONG)
-        return numberOfSymbols * getSymbolInterval();
-    else
-        return numberOfSymbols * getShortGISymbolInterval();
+    switch (guardIntervalType) {
+        case HE_GUARD_INTERVAL_SHORT: return numberOfSymbols * getShortGISymbolInterval();
+        case HE_GUARD_INTERVAL_MEDIUM: return numberOfSymbols * getMediumGISymbolInterval();
+        case HE_GUARD_INTERVAL_LONG: return numberOfSymbols * getSymbolInterval();
+        default: throw cRuntimeError("Unknown HE guard interval");
+    }
 }
 
 // Compliant Modes Cache
@@ -315,7 +321,8 @@ const Ieee80211HeMode *Ieee80211HeCompliantModes::getCompliantMode(const Ieee802
 {
     const char *name = "";
     unsigned int nss = mcsMode->getNumNss();
-    auto modeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), guardIntervalType, nss);
+    auto modeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(),
+            guardIntervalType, nss, centerFrequencyMode, preambleFormat);
     auto mode = singleton.modeCache.find(modeId);
     if (mode == singleton.modeCache.end()) {
         const Ieee80211OfdmSignalMode *legacySignal = &Ieee80211OfdmCompliantModes::ofdmHeaderMode6MbpsRate13;
@@ -323,7 +330,7 @@ const Ieee80211HeMode *Ieee80211HeCompliantModes::getCompliantMode(const Ieee802
         const Ieee80211HeDataMode *dataMode = new Ieee80211HeDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType);
         const Ieee80211HePreambleMode *preambleMode = new Ieee80211HePreambleMode(heSignal, legacySignal, preambleFormat, dataMode->getNumberOfSpatialStreams());
         const Ieee80211HeMode *heMode = new Ieee80211HeMode(name, preambleMode, dataMode, centerFrequencyMode);
-        singleton.modeCache.insert(std::pair<std::tuple<Hz, unsigned int, Ieee80211HeModeBase::GuardIntervalType, unsigned int>, const Ieee80211HeMode *>(modeId, heMode));
+        singleton.modeCache.insert({modeId, heMode});
         return heMode;
     }
     return mode->second;

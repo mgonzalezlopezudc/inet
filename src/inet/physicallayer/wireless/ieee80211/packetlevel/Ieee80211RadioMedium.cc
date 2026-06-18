@@ -35,7 +35,9 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         return false;
     auto heMuPhyHeader = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
     auto networkInterface = getContainingNicModule(check_and_cast<const cModule *>(receiver));
-    auto receiverStaId = resolveHeMuStaId(networkInterface, networkInterface->getMacAddress());
+    auto receiverStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+    if (!receiverStaId.has_value() && heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)
+        return false;
     auto scalarTransmissionAnalogModel = dynamic_cast<const ScalarSignalAnalogModel *>(transmission->getAnalogModel());
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
     if (scalarTransmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
@@ -60,7 +62,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
     }
     for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
         const auto& user = heMuPhyHeader->getUsers(i);
-        if (user.staId == receiverStaId) {
+        if (receiverStaId.has_value() && user.staId == *receiverStaId) {
             constexpr double HE_TONE_SPACING = 78125;
             auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
             if (user.ruToneSize == 0) {

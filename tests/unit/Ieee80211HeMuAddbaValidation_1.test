@@ -283,18 +283,21 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
             maxAmpduMpduCount, maxHeMuPsduLength, maxHeMuPpduDuration);
 
     fs->startSequence(context, 0);
-    auto step0 = check_and_cast<ITransmitStep *>(fs->prepareStep(context));
     FirstTransmitStepResult result;
-    result.container = step0->getFrameToTransmit()->dup();
-    result.ackHandlerInProgressCount = ackHandler->inProgressCount;
-    result.inProgressLength = inProgress->getLength();
-    for (int i = 0; i < inProgress->getLength(); i++) {
-        auto header = inProgress->getFrames(i)->peekAtFront<Ieee80211DataHeader>();
-        result.allInProgressUseBlockAck = result.allInProgressUseBlockAck && header->getAckPolicy() == BLOCK_ACK;
-        result.allInProgressHaveDuration = result.allInProgressHaveDuration && header->getDurationField() > SIMTIME_ZERO;
+    auto preparedStep = fs->prepareStep(context);
+    if (preparedStep != nullptr) {
+        auto step0 = check_and_cast<ITransmitStep *>(preparedStep);
+        result.container = step0->getFrameToTransmit()->dup();
+        result.ackHandlerInProgressCount = ackHandler->inProgressCount;
+        result.inProgressLength = inProgress->getLength();
+        for (int i = 0; i < inProgress->getLength(); i++) {
+            auto header = inProgress->getFrames(i)->peekAtFront<Ieee80211DataHeader>();
+            result.allInProgressUseBlockAck = result.allInProgressUseBlockAck && header->getAckPolicy() == BLOCK_ACK;
+            result.allInProgressHaveDuration = result.allInProgressHaveDuration && header->getDurationField() > SIMTIME_ZERO;
+        }
+        delete step0;
     }
 
-    delete step0;
     delete fs;
     delete context;
     delete inProgress;
@@ -420,15 +423,10 @@ Tid tid = 5;
     pendingQueue->enqueuePacket(makeDataPacket("non-qos-sta1", sta1, tid, false));
     pendingQueue->enqueuePacket(makeDataPacket("null-handler-sta2", sta2, tid, true));
 
-    bool abortedWithoutMutation = false;
-    try {
-        auto invalidResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, nullptr);
-        delete invalidResult.container;
-    }
-    catch (cRuntimeError& e) {
-        abortedWithoutMutation = true;
-        EV << "Null handler/non-QoS preflight aborted: " << e.what() << "\n";
-    }
+    auto invalidResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, nullptr);
+    bool abortedWithoutMutation = invalidResult.container == nullptr;
+    delete invalidResult.container;
+    EV << "Null handler/non-QoS preflight returned no MU step.\n";
     requireCondition(abortedWithoutMutation, "null BA handler and non-QoS preflight should abort before mutation");
     requireCondition(pendingQueue->getNumPackets() == 2, "null BA handler and non-QoS packets should remain pending");
     requireCondition(isPacketQueued(pendingQueue, "non-qos-sta1"), "non-QoS packet was removed from the pending queue");
@@ -442,15 +440,10 @@ Tid tid = 5;
     oneActiveHandler.addAgreement(sta1, tid, true);
     oneActiveHandler.addAgreement(sta2, tid, false);
 
-    bool singleActiveAbortedWithoutMutation = false;
-    try {
-        auto invalidResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &oneActiveHandler);
-        delete invalidResult.container;
-    }
-    catch (cRuntimeError& e) {
-        singleActiveAbortedWithoutMutation = true;
-        EV << "Single active allocation preflight aborted: " << e.what() << "\n";
-    }
+    auto oneActiveResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &oneActiveHandler);
+    bool singleActiveAbortedWithoutMutation = oneActiveResult.container == nullptr;
+    delete oneActiveResult.container;
+    EV << "Single active allocation preflight returned no MU step.\n";
     requireCondition(singleActiveAbortedWithoutMutation, "fewer than two active allocations should abort before mutation");
     requireCondition(pendingQueue->getNumPackets() == 2, "single-active abort should not mutate pending queue");
     requireCondition(isPacketQueued(pendingQueue, "only-active-sta1"), "single active packet was removed during abort");
@@ -480,9 +473,9 @@ Tid tid = 5;
 
     runPackingLimitCase("ba-window", 1, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO);
     runPackingLimitCase("psdu-length", 64, 50, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO);
-    runPackingLimitCase("ppdu-duration", 64, 6500631, SimTime(400, SIMTIME_US), SIMTIME_ZERO, SIMTIME_ZERO);
-    runPackingLimitCase("aligned-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SimTime(400, SIMTIME_US), SIMTIME_ZERO);
-    runPackingLimitCase("txop-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SimTime(400, SIMTIME_US));
+    runPackingLimitCase("ppdu-duration", 64, 6500631, SimTime(500, SIMTIME_US), SIMTIME_ZERO, SIMTIME_ZERO);
+    runPackingLimitCase("aligned-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SimTime(500, SIMTIME_US), SIMTIME_ZERO);
+    runPackingLimitCase("txop-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SimTime(500, SIMTIME_US));
     EV << "Per-user A-MPDU packing enforced BA-window, PSDU, PPDU, aligned-duration, and TXOP limits.\n";
 }
 

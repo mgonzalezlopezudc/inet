@@ -137,16 +137,41 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const Ieee80211Channel *transmissionChannel = computeTransmissionChannel(packet);
     W transmissionPower = computeTransmissionPower(packet);
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
-    if (transmissionMode->getDataMode()->getNumberOfSpatialStreams() > transmitter->getAntenna()->getNumAntennas())
+    int requiredSpatialStreams = transmissionMode->getDataMode()->getNumberOfSpatialStreams();
+    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader))
+        for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i)
+            requiredSpatialStreams = std::max(requiredSpatialStreams,
+                    (int)heMuHeader->getUsers(i).numberOfSpatialStreams);
+    if (requiredSpatialStreams > transmitter->getAntenna()->getNumAntennas())
         throw cRuntimeError("Number of spatial streams is higher than the number of antennas");
     simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
+    simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
+    simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
     Hz transmissionCenterFrequency = centerFrequency;
+    std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
     if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+        constexpr double HE_TONE_SPACING = 78125;
         if (heMuHeader->getCommonDuration() > SIMTIME_ZERO)
             duration = heMuHeader->getCommonDuration();
+        preambleDuration = SimTime(40, SIMTIME_US);
+        headerDuration = SimTime(8, SIMTIME_US);
+        for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i) {
+            const auto& user = heMuHeader->getUsers(i);
+            Ieee80211HeRu ru;
+            ru.index = user.ruIndex;
+            ru.toneSize = std::max<int>(user.ruToneSize, 26);
+            ru.toneOffset = user.ruToneOffset;
+            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
+            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
+            ru.bandwidth = Hz(ru.toneSize * HE_TONE_SPACING);
+            heUserPhyParameters.push_back(computeHeUserPhyParameters(
+                    user.psduLength, ru, user.mcs, user.numberOfSpatialStreams,
+                    user.dcm,
+                    static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()),
+                    static_cast<Ieee80211HeCoding>(heMuHeader->getCoding())));
+        }
         if (heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK && heMuHeader->getUsersArraySize() == 1) {
             const auto& user = heMuHeader->getUsers(0);
-            constexpr double HE_TONE_SPACING = 78125;
             int channelTones = getHeChannelToneCount(transmissionBandwidth);
             transmissionBandwidth = Hz(user.ruToneSize * HE_TONE_SPACING);
             double centerTone = user.ruToneOffset + user.ruToneSize / 2.0 - channelTones / 2.0;
@@ -162,11 +187,9 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const Coord& endPosition = mobility->getCurrentPosition();
     const Quaternion& startOrientation = mobility->getCurrentAngularPosition();
     const Quaternion& endOrientation = mobility->getCurrentAngularPosition();
-    const simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
-    const simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
-    const simtime_t dataDuration = duration - headerDuration - preambleDuration;
+    const simtime_t dataDuration = std::max(SIMTIME_ZERO, duration - headerDuration - preambleDuration);
     auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, transmissionPower);
-    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel);
+    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heUserPhyParameters);
 }
 
 } // namespace physicallayer

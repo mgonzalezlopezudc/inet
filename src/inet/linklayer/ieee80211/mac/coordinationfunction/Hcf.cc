@@ -367,11 +367,10 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
     if (auto heMuRxTag = packet->findTag<Ieee80211HeMuRxTag>()) {
         wasHeMu = true;
         auto mib = mac->getMib();
-        auto myStaId = mib != nullptr && mib->bssStationData.associationId > 0
-                ? mib->bssStationData.associationId
-                : computeHeMuStaId(mac->getAddress());
+        auto myStaId = mib == nullptr ? computeHeMuStaId(mac->getAddress()) :
+                mib->bssStationData.associationId;
         for (unsigned int i = 0; i < heMuRxTag->getAllocationsArraySize(); ++i) {
-            if (heMuRxTag->getAllocations(i).staId == myStaId) {
+            if (myStaId > 0 && heMuRxTag->getAllocations(i).staId == myStaId) {
                 myAllocationIndex = i;
                 break;
             }

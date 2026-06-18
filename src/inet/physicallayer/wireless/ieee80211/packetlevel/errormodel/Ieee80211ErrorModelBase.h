@@ -10,6 +10,7 @@
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/ErrorModelBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
 namespace inet {
 
@@ -26,6 +27,8 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
   protected:
     virtual double getHeaderSuccessRate(const IIeee80211Mode *mode, unsigned int bitLength, double snir) const = 0;
     virtual double getDataSuccessRate(const IIeee80211Mode *mode, unsigned int bitLength, double snir) const = 0;
+    virtual double getHeDataSuccessRate(const Ieee80211HeUserPhyParameters& parameters,
+            unsigned int bitLength, double snir) const;
 
     virtual Packet *computeCorruptedPacket(const Packet *packet, double ber) const override;
 
@@ -47,4 +50,3 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
 } // namespace inet
 
 #endif
-

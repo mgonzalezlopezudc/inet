@@ -46,6 +46,7 @@ class INET_API HeHcf : public Hcf
     Packet *triggeredUlOriginalPacket = nullptr;
     queueing::IPacketQueue *triggeredUlSourceQueue = nullptr;
     bool triggeredUlWasRandomAccess = false;
+    bool forceNextSingleUser[4] = {};
 
   protected:
     virtual void initialize(int stage) override;
@@ -80,6 +81,7 @@ class INET_API HeHcf : public Hcf
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
     uint16_t getAssociationId(const MacAddress& address) const;
+    void handleDlMuPlanningFailure(AccessCategory ac);
     void processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid);
 };
 

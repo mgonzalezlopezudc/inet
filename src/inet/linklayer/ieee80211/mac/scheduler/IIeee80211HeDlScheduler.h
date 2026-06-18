@@ -13,6 +13,7 @@
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
 namespace inet {
@@ -46,15 +47,23 @@ class INET_API IIeee80211HeDlScheduler
         MacAddress anchorSta;
         Hz channelCenterFrequency = Hz(NaN);
         Hz channelBandwidth = Hz(NaN);
+        int channelNumber = -1;
         simtime_t txopLimit = SIMTIME_ZERO;
+        int maxAmpduMpduCount = 16;
         W totalTransmitPower = W(NaN);
+        W receiverSensitivity = W(NaN);
         double noiseFigureDb = 0;
+        physicallayer::Ieee80211HeGuardInterval guardInterval = physicallayer::HE_GI_3_2_US;
+        physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
+        std::vector<bool> puncturedSubchannels;
     };
 
     struct RuAllocation {
         MacAddress staAddress;
         physicallayer::Ieee80211HeRu ru;
         int mcs = 0;
+        int numberOfSpatialStreams = 1;
+        bool dcm = false;
         double estimatedSnrDb = NaN;
         simtime_t estimatedDuration = SIMTIME_ZERO;
     };
