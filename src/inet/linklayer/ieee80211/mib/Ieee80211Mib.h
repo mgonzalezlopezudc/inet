@@ -46,11 +46,13 @@ class INET_API Ieee80211Mib : public SimpleModule
       public:
         BssStationType stationType = static_cast<BssStationType>(-1);
         bool isAssociated = false;
+        short associationId = -1;
     };
 
     class INET_API BssAccessPointData {
       public:
         std::map<MacAddress, BssMemberStatus> stations;
+        std::map<MacAddress, short> associationIds;
         struct LinkData {
             double transmitPowerDbm = 15;
             double receivedPowerDbm = NaN;
@@ -80,6 +82,10 @@ class INET_API Ieee80211Mib : public SimpleModule
     void setStationTransmitPower(const MacAddress& address, double transmitPowerDbm);
     void updateStationReceivedPower(const MacAddress& address, units::values::W receivedPower);
     const BssAccessPointData::LinkData *findStationLink(const MacAddress& address) const;
+    short allocateAssociationId(const MacAddress& address);
+    void releaseAssociationId(const MacAddress& address);
+    short getAssociationId(const MacAddress& address) const;
+    MacAddress getStationAddress(short associationId) const;
 };
 
 } // namespace ieee80211

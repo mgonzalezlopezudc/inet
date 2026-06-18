@@ -19,7 +19,13 @@ void FrameSequenceHandler::handleStartRxTimeout()
     auto lastStep = context->getLastStep();
     switch (lastStep->getType()) {
         case IFrameSequenceStep::Type::RECEIVE:
-            abortFrameSequence();
+            if (!check_and_cast<IReceiveStep *>(lastStep)->completesOnReception()) {
+                finishFrameSequenceStep();
+                if (isSequenceRunning())
+                    startFrameSequenceStep();
+            }
+            else
+                abortFrameSequence();
             break;
         case IFrameSequenceStep::Type::TRANSMIT:
             throw cRuntimeError("Received timeout while in transmit step");
@@ -37,9 +43,11 @@ void FrameSequenceHandler::processResponse(Packet *frame)
             // TODO check if not for us and abort
             auto receiveStep = check_and_cast<IReceiveStep *>(context->getLastStep());
             receiveStep->setFrameToReceive(frame);
-            finishFrameSequenceStep();
-            if (isSequenceRunning())
-                startFrameSequenceStep();
+            if (receiveStep->completesOnReception()) {
+                finishFrameSequenceStep();
+                if (isSequenceRunning())
+                    startFrameSequenceStep();
+            }
             break;
         }
         case IFrameSequenceStep::Type::TRANSMIT:
@@ -123,6 +131,8 @@ void FrameSequenceHandler::finishFrameSequenceStep()
             }
             case IFrameSequenceStep::Type::RECEIVE: {
                 auto receiveStep = static_cast<IReceiveStep *>(lastStep);
+                if (!receiveStep->completesOnReception())
+                    break;
                 ITransmitStep *transmitStep = nullptr;
                 for (int i = context->getNumSteps() - 2; i >= 0; --i) {
                     if (context->getStep(i)->getType() == IFrameSequenceStep::Type::TRANSMIT) {
@@ -196,4 +206,3 @@ FrameSequenceHandler::~FrameSequenceHandler()
 
 } // namespace ieee80211
 } // namespace inet
-

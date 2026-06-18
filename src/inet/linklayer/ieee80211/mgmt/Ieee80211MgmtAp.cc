@@ -148,6 +148,7 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
         if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
             sendDisAssocNotification(sta->address);
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
+        mib->releaseAssociationId(sta->address);
         sta->authSeqExpected = 1;
     }
 
@@ -261,7 +262,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     // send OK response
     const auto& body = makeShared<Ieee80211AssociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
-    body->setAid(0); // TODO
+    body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
     body->setChunkLength(B(2 + 2 + 2 + body->getSupportedRates().numRates + 2));
     sendManagementFrame("AssocResp-OK", body, ST_ASSOCIATIONRESPONSE, sta->address);
@@ -295,7 +296,7 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     // send OK response
     const auto& body = makeShared<Ieee80211ReassociationResponseFrame>();
     body->setStatusCode(SC_SUCCESSFUL);
-    body->setAid(0); // TODO
+    body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
     body->setChunkLength(B(2 + (2 + ssid.length()) + (2 + supportedRates.numRates) + 6));
     sendManagementFrame("ReassocResp-OK", body, ST_REASSOCIATIONRESPONSE, sta->address);
@@ -315,6 +316,7 @@ void Ieee80211MgmtAp::handleDisassociationFrame(Packet *packet, const Ptr<const 
         if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
             sendDisAssocNotification(sta->address);
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED;
+        mib->releaseAssociationId(sta->address);
 
         // Destroy per-STA queue bank only for APs operating in ax mode.
         try {
