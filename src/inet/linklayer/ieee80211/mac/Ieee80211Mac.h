@@ -21,7 +21,6 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Mcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Pcf.h"
-#include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 
@@ -61,9 +60,6 @@ class INET_API Ieee80211Mac : public MacProtocolBase
 
     // The last change channel message received and not yet sent to the physical layer, or nullptr.
     cMessage *pendingRadioConfigMsg = nullptr;
-
-    // Per-STA queue bank management (for AP mode)
-    std::unique_ptr<StationQueueBankManager> queueBankManager;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -124,7 +120,6 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     virtual StationQueueBank *createStationQueueBank(const MacAddress &staAddr);
     virtual void destroyStationQueueBank(const MacAddress &staAddr);
     virtual StationQueueBank *getStationQueueBank(const MacAddress &staAddr) const;
-    virtual StationQueueBankManager *getQueueBankManager() const { return queueBankManager.get(); }
 };
 
 } // namespace ieee80211
