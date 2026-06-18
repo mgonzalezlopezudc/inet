@@ -30,11 +30,11 @@ class INET_API StationQueueBankManager
 
   protected:
     StationQueueBankMap banks;
-    cModule *ownerModule = nullptr;
+    cModule *queueBanksModule = nullptr;
     cModuleType *queueBankType = nullptr;
 
   public:
-    StationQueueBankManager(cModule *owner);
+    StationQueueBankManager(cModule *queueBanksModule);
     virtual ~StationQueueBankManager();
 
     // Create/destroy queue banks

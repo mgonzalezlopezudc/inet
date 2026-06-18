@@ -60,7 +60,7 @@ void HeHcf::initialize(int stage)
         frameSequenceHandler = new HeFrameSequenceHandler();
     }
     else if (stage == INITSTAGE_LINK_LAYER && mac->isApInAxMode()) {
-        queueBankManager = std::make_unique<StationQueueBankManager>(this);
+        queueBankManager = std::make_unique<StationQueueBankManager>(getSubmodule("queueBanks"));
         for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
             if (station.second == Ieee80211Mib::ASSOCIATED)
                 queueBankManager->createQueueBank(station.first);
