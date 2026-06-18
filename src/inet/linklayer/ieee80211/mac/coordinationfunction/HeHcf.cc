@@ -31,6 +31,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
 namespace {
 
@@ -169,8 +170,33 @@ StationQueueBank *HeHcf::getStationQueueBank(const MacAddress& staAddr) const
 IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCategory ac) const
 {
     IIeee80211HeDlScheduler::ScheduleContext context;
-    context.totalTransmitPower = W(par("totalTransmitPower"));
+    auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
+    auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
+    auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
+    auto channel = transmitter->getChannel();
+    auto activeMode = transmitter->getMode();
+    if (channel == nullptr || activeMode == nullptr)
+        throw cRuntimeError("HE DL scheduling requires an active IEEE 802.11 channel and mode");
+    context.channelNumber = channel->getChannelNumber();
+    context.channelCenterFrequency = channel->getCenterFrequency();
+    context.channelBandwidth = activeMode->getDataMode()->getBandwidth();
+    context.totalTransmitPower = transmitter->getPower();
+    context.receiverSensitivity = receiver->getSensitivity();
     context.noiseFigureDb = par("receiverNoiseFigure");
+    context.maxAmpduMpduCount = par("maxAmpduMpduCount");
+    if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(activeMode)) {
+        switch (heMode->getDataMode()->getGuardIntervalType()) {
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
+                context.guardInterval = physicallayer::HE_GI_0_8_US;
+                break;
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
+                context.guardInterval = physicallayer::HE_GI_1_6_US;
+                break;
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
+                context.guardInterval = physicallayer::HE_GI_3_2_US;
+                break;
+        }
+    }
     auto edcaf = edca->getEdcaf(ac);
     auto txopProcedure = edcaf == nullptr ? nullptr : edcaf->getTxopProcedure();
     if (txopProcedure != nullptr && txopProcedure->getLimit() > SIMTIME_ZERO)
@@ -178,6 +204,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
     auto mib = mac->getMib();
     std::vector<MacAddress> seenDestinations;
     auto baHandler = getOriginatorBlockAckAgreementHandler();
+    auto ackHandler = edcaf->getAckHandler();
     std::vector<queueing::IPacketQueue *> queues = {edcaf->getPendingQueue()};
     if (queueBankManager != nullptr) {
         for (const auto& entry : queueBankManager->getQueueBanks())
@@ -194,11 +221,19 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                 continue;
             if (std::find(seenDestinations.begin(), seenDestinations.end(), dest) != seenDestinations.end())
                 continue;
-            seenDestinations.push_back(dest);
 
             auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
-            if (!isMuEligibleDataHeader(dataHeader, baHandler))
+            if (!isMuEligibleDataHeader(dataHeader, baHandler) ||
+                    !ackHandler->isEligibleToTransmit(dataHeader))
                 continue;
+            auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
+            int occupiedSlots = ackHandler->getOccupiedBlockAckSequenceNumbers(
+                    dest, dataHeader->getTid()).size();
+            int availableSlots = agreement == nullptr ? 0 :
+                    std::max(0, agreement->getBufferSize() - occupiedSlots);
+            if (availableSlots == 0)
+                continue;
+            seenDestinations.push_back(dest);
 
             IIeee80211HeDlScheduler::CandidateInfo candidate;
             candidate.staAddress = dest;
@@ -208,12 +243,25 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             candidate.holEnqueueTime = enqueueTimeTag == nullptr ? pkt->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
             candidate.holDelay = simTime() - candidate.holEnqueueTime;
             candidate.sourceQueue = queue;
+            int eligiblePackets = 0;
             for (auto backlogQueue : queues) {
                 for (int j = 0; j < backlogQueue->getNumPackets(); ++j) {
                     Packet *queuedPacket = backlogQueue->getPacket(j);
-                    auto queuedHeader = queuedPacket->peekAtFront<Ieee80211MacHeader>();
-                    if (queuedHeader->getReceiverAddress() == dest)
-                        candidate.backlogBytes += queuedPacket->getByteLength();
+                    auto queuedHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                            queuedPacket->peekAtFront<Ieee80211MacHeader>());
+                    if (queuedHeader != nullptr &&
+                            queuedHeader->getType() == ST_DATA_WITH_QOS &&
+                            queuedHeader->getReceiverAddress() == dest &&
+                            queuedHeader->getTid() == dataHeader->getTid() &&
+                            ackHandler->isEligibleToTransmit(queuedHeader) &&
+                            hasActiveOriginatorBlockAckAgreement(baHandler, dest, queuedHeader->getTid()) &&
+                            eligiblePackets < std::min(availableSlots, context.maxAmpduMpduCount)) {
+                        B subframeLength = B(4) + B(queuedPacket->getByteLength());
+                        candidate.backlogBytes += subframeLength.get<B>();
+                        if (eligiblePackets > 0)
+                            candidate.backlogBytes += (4 - subframeLength.get<B>() % 4) % 4;
+                        eligiblePackets++;
+                    }
                 }
             }
             if (auto link = mib->findStationLink(dest)) {
@@ -269,6 +317,11 @@ bool HeHcf::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
 
 void HeHcf::startFrameSequence(AccessCategory ac)
 {
+    if (forceNextSingleUser[ac]) {
+        forceNextSingleUser[ac] = false;
+        Hcf::startFrameSequence(ac);
+        return;
+    }
     // Check whether HE mode and multi-user conditions are met.
     bool isHeMode = (modeSet != nullptr && strcmp(modeSet->getName(), "ax") == 0);
     if (isHeMode && pendingUlTrigger != IIeee80211HeUlTriggerPolicy::NO_TRIGGER &&
@@ -336,16 +389,10 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         auto pendingQueue = edcaf->getPendingQueue();
         auto inProgress = edcaf->getInProgressFrames();
         if (inProgress->getLength() > 0) {
-            EV_INFO << "HeHcf: Pushing " << inProgress->getLength()
-                    << " abandoned in-progress frames back to pendingQueue before starting MU sequence." << endl;
-            std::vector<Packet *> framesToRequeue;
-            for (int i = 0; i < inProgress->getLength(); ++i) {
-                framesToRequeue.push_back(inProgress->getFrames(i));
-            }
-            for (auto frame : framesToRequeue) {
-                inProgress->removeInProgressFrame(frame);
-                pendingQueue->pushPacket(frame, nullptr);
-            }
+            EV_INFO << "HeHcf: completing " << inProgress->getLength()
+                    << " recovery/outstanding frames before opening a new MU transmission." << endl;
+            Hcf::startFrameSequence(ac);
+            return;
         }
         auto headDataHeader = getEligibleHoLDataHeader(pendingQueue);
         auto baHandler = getOriginatorBlockAckAgreementHandler();
@@ -360,6 +407,14 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         }
         auto scheduleContext = collectScheduleContext(ac);
         if (scheduleContext.candidates.size() >= 2) {
+            auto previewAllocations = dlScheduler->schedule(scheduleContext);
+            if (previewAllocations.size() < 2) {
+                EV_INFO << "HeHcf: scheduler preview retained fewer than two MU users; falling back to SU." << endl;
+                if (pendingQueue->isEmpty())
+                    stagePerStaFrameForSingleUserTransmission(ac);
+                Hcf::startFrameSequence(ac);
+                return;
+            }
             EV_INFO << "HeHcf: MU-OFDMA opportunity detected for " << scheduleContext.candidates.size()
                     << " STAs — starting HeDlMuTxOpFs." << endl;
             frameSequenceHandler->startFrameSequence(
@@ -421,7 +476,12 @@ bool HeHcf::hasFrameToTransmit()
 uint16_t HeHcf::getAssociationId(const MacAddress& address) const
 {
     auto aid = mac->getMib()->getAssociationId(address);
-    return aid > 0 ? aid : physicallayer::computeHeMuStaId(address);
+    return aid > 0 ? aid : 0;
+}
+
+void HeHcf::handleDlMuPlanningFailure(AccessCategory ac)
+{
+    forceNextSingleUser[ac] = stagePerStaFrameForSingleUserTransmission(ac);
 }
 
 void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid)

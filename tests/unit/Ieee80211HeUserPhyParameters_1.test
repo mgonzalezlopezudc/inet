@@ -1,0 +1,54 @@
+%description:
+Test authoritative per-user IEEE 802.11ax PHY duration parameters.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+auto ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
+auto shortGi = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_0_8_US);
+auto mediumGi = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_1_6_US);
+auto longGi = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_3_2_US);
+ASSERT(shortGi.numberOfSymbols == mediumGi.numberOfSymbols);
+ASSERT(mediumGi.numberOfSymbols == longGi.numberOfSymbols);
+ASSERT(shortGi.duration < mediumGi.duration);
+ASSERT(mediumGi.duration < longGi.duration);
+
+auto oneStream = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_3_2_US);
+auto twoStreams = computeHeUserPhyParameters(B(1500), ru, 4, 2, false, HE_GI_3_2_US);
+ASSERT(twoStreams.dataBitsPerSymbol == 2 * oneStream.dataBitsPerSymbol);
+ASSERT(twoStreams.numberOfSymbols < oneStream.numberOfSymbols);
+
+auto noDcm = computeHeUserPhyParameters(B(1500), ru, 0, 1, false, HE_GI_3_2_US);
+auto dcm = computeHeUserPhyParameters(B(1500), ru, 0, 1, true, HE_GI_3_2_US);
+ASSERT(dcm.dataBitsPerSymbol * 2 == noDcm.dataBitsPerSymbol);
+ASSERT(dcm.numberOfSymbols > noDcm.numberOfSymbols);
+
+bool invalidDcmRejected = false;
+try {
+    computeHeUserPhyParameters(B(1500), ru, 5, 1, true, HE_GI_3_2_US);
+}
+catch (cRuntimeError&) {
+    invalidDcmRejected = true;
+}
+ASSERT(invalidDcmRejected);
+
+auto mediumMode = Ieee80211HeCompliantModes::getCompliantMode(
+        &Ieee80211HemcsTable::heMcs0BW20MHzNss1,
+        Ieee80211HeMode::BAND_5GHZ,
+        Ieee80211HePreambleMode::HE_PREAMBLE_MU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM);
+ASSERT(mediumMode->getDataMode()->getGuardIntervalType() ==
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM);
+
+EV << "All HE guard intervals, NSS scaling, DCM scaling, and validation passed.\n";
+EV << ".\n";
+
+%contains: stdout
+All HE guard intervals, NSS scaling, DCM scaling, and validation passed.
+.

@@ -15,6 +15,12 @@ struct Ieee80211HeMuRxAllocationInfo
 {
     int ruIndex;
     uint16_t staId;
+    uint16_t ruToneSize;
+    uint16_t ruToneOffset;
+    uint8_t mcs = 0;
+    uint8_t numberOfSpatialStreams = 1;
+    bool dcm = false;
+    simtime_t duration;
 }
 
 class Ieee80211HeMuReq extends TagBase
@@ -26,8 +32,18 @@ class Ieee80211HeMuReq extends TagBase
     uint16_t ruToneOffset;
     uint16_t staId;
     uint8_t mcs = 0;
+    uint8_t numberOfSpatialStreams = 1;
+    bool dcm = false;
+    uint8_t guardInterval = 2;
+    uint8_t coding = 0;
     simtime_t commonDuration;
     W transmitPower = W(NaN);
+}
+
+class Ieee80211HeMuCommonReq extends TagBase
+{
+    uint8_t guardInterval = 2;
+    uint8_t coding = 0;
 }
 
 class Ieee80211HeMuRxTag extends TagBase
@@ -35,6 +51,8 @@ class Ieee80211HeMuRxTag extends TagBase
     uint8_t ppduFormat = 0;
     uint32_t triggerId = 0;
     int ruIndex;
+    uint8_t guardInterval = 2;
+    uint8_t coding = 0;
     Ieee80211HeMuRxAllocationInfo allocations[];
 }
 
