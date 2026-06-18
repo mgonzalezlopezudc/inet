@@ -59,6 +59,56 @@ void HeHcf::initialize(int stage)
         delete frameSequenceHandler;
         frameSequenceHandler = new HeFrameSequenceHandler();
     }
+    else if (stage == INITSTAGE_LINK_LAYER && mac->isApInAxMode()) {
+        queueBankManager = std::make_unique<StationQueueBankManager>(this);
+        for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
+            if (station.second == Ieee80211Mib::ASSOCIATED)
+                queueBankManager->createQueueBank(station.first);
+        }
+    }
+}
+
+queueing::IPacketQueue *HeHcf::getPerStaQueue(const MacAddress& staAddr, AccessCategory ac)
+{
+    if (queueBankManager != nullptr) {
+        auto staBank = queueBankManager->getQueueBank(staAddr);
+        if (staBank != nullptr) {
+            auto staQueue = staBank->getQueue((StationQueueBank::AccessCategory)ac);
+            if (staQueue != nullptr) {
+                EV_DEBUG << "Using per-STA queue for STA " << staAddr << " AC " << ac << "\n";
+                return staQueue;
+            }
+            EV_WARN << "Could not get per-STA queue for STA " << staAddr << " AC " << ac << ", using shared queue\n";
+        }
+        else
+            EV_DEBUG << "Queue bank not found for STA " << staAddr << ", using shared queue\n";
+    }
+    else
+        EV_DEBUG << "Queue bank manager not available, using shared queue\n";
+    return Hcf::getPerStaQueue(staAddr, ac);
+}
+
+StationQueueBank *HeHcf::createStationQueueBank(const MacAddress& staAddr)
+{
+    if (queueBankManager == nullptr) {
+        EV_WARN << "Queue bank manager not initialized (not an 802.11ax AP?)\n";
+        return nullptr;
+    }
+    return queueBankManager->createQueueBank(staAddr);
+}
+
+void HeHcf::destroyStationQueueBank(const MacAddress& staAddr)
+{
+    if (queueBankManager == nullptr) {
+        EV_WARN << "Queue bank manager not initialized (not an 802.11ax AP?)\n";
+        return;
+    }
+    queueBankManager->destroyQueueBank(staAddr);
+}
+
+StationQueueBank *HeHcf::getStationQueueBank(const MacAddress& staAddr) const
+{
+    return queueBankManager == nullptr ? nullptr : queueBankManager->getQueueBank(staAddr);
 }
 
 IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCategory ac) const
@@ -74,7 +124,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
     std::vector<MacAddress> seenDestinations;
     auto baHandler = getOriginatorBlockAckAgreementHandler();
     std::vector<queueing::IPacketQueue *> queues = {edcaf->getPendingQueue()};
-    if (auto queueBankManager = mac->getQueueBankManager()) {
+    if (queueBankManager != nullptr) {
         for (const auto& entry : queueBankManager->getQueueBanks())
             queues.push_back(entry.second->getQueue((StationQueueBank::AccessCategory)ac));
     }
@@ -133,7 +183,6 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
 
 queueing::IPacketQueue *HeHcf::findOldestPerStaQueue(AccessCategory ac) const
 {
-    auto queueBankManager = mac->getQueueBankManager();
     if (queueBankManager == nullptr)
         return nullptr;
 
@@ -228,7 +277,6 @@ bool HeHcf::hasFrameToTransmit(AccessCategory ac)
 {
     if (Hcf::hasFrameToTransmit(ac))
         return true;
-    auto queueBankManager = mac->getQueueBankManager();
     if (queueBankManager == nullptr)
         return false;
     for (const auto& entry : queueBankManager->getQueueBanks()) {

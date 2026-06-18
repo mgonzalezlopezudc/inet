@@ -20,7 +20,7 @@ namespace ieee80211 {
  * - Create a StationQueueBank for each associated STA
  * - Route packets to the correct STA's queue based on destination MAC
  * - Destroy queue banks on STA disassociation
- * - Provide aggregate facades for EDCA per-AC access
+ * - Provide per-AC queue access to the HE coordination function
  */
 class INET_API StationQueueBankManager
 {
