@@ -43,7 +43,8 @@ class INET_API HeHcf : public Hcf
      * Scans the pending queue front-to-back and returns up to maxMuStations
      * unique destination MAC addresses, in first-seen order.
      */
-    virtual std::vector<MacAddress> collectCandidateStations(queueing::IPacketQueue *queue) const;
+    virtual IIeee80211HeDlScheduler::ScheduleContext collectScheduleContext(
+            queueing::IPacketQueue *queue, AccessCategory ac) const;
 
     /**
      * Override: selects HeDlMuTxOpFs when ≥2 unique destination STAs are

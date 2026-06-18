@@ -6,6 +6,8 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
+#include <algorithm>
+
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
@@ -13,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
@@ -58,9 +61,17 @@ void HeHcf::initialize(int stage)
     }
 }
 
-std::vector<MacAddress> HeHcf::collectCandidateStations(queueing::IPacketQueue *queue) const
+IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(
+        queueing::IPacketQueue *queue, AccessCategory ac) const
 {
-    std::vector<MacAddress> candidates;
+    IIeee80211HeDlScheduler::ScheduleContext context;
+    context.totalTransmitPower = W(par("totalTransmitPower"));
+    context.noiseFigureDb = par("receiverNoiseFigure");
+    auto edcaf = edca->getEdcaf(ac);
+    auto txopProcedure = edcaf == nullptr ? nullptr : edcaf->getTxopProcedure();
+    if (txopProcedure != nullptr && txopProcedure->getLimit() > SIMTIME_ZERO)
+        context.txopLimit = std::max(SIMTIME_ZERO, txopProcedure->getLimit() - txopProcedure->getDuration());
+    auto mib = mac->getMib();
     std::vector<MacAddress> seenDestinations;
     auto baHandler = getOriginatorBlockAckAgreementHandler();
     int n = queue->getNumPackets();
@@ -79,11 +90,32 @@ std::vector<MacAddress> HeHcf::collectCandidateStations(queueing::IPacketQueue *
         seenDestinations.push_back(dest);
 
         if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-            if (isMuEligibleDataHeader(dataHeader, baHandler))
-                candidates.push_back(dest);
+            if (isMuEligibleDataHeader(dataHeader, baHandler)) {
+                IIeee80211HeDlScheduler::CandidateInfo candidate;
+                candidate.staAddress = dest;
+                candidate.accessCategory = ac;
+                candidate.anchor = context.candidates.empty();
+                candidate.holPacketBytes = pkt->getByteLength();
+                candidate.holEnqueueTime = pkt->getArrivalTime();
+                candidate.holDelay = simTime() - pkt->getArrivalTime();
+                for (int j = i; j < n; ++j) {
+                    Packet *queuedPacket = queue->getPacket(j);
+                    auto queuedHeader = queuedPacket->peekAtFront<Ieee80211MacHeader>();
+                    if (queuedHeader->getReceiverAddress() == dest)
+                        candidate.backlogBytes += queuedPacket->getByteLength();
+                }
+                if (auto link = mib->findStationLink(dest)) {
+                    candidate.pathLossDb = link->pathLossDb;
+                    candidate.hasFreshPathLoss = link->valid &&
+                            simTime() - link->lastUpdate <= SimTime(par("linkEstimateMaxAge"));
+                }
+                context.candidates.push_back(candidate);
+                if (candidate.anchor)
+                    context.anchorSta = dest;
+            }
         }
     }
-    return candidates;
+    return context;
 }
 
 void HeHcf::startFrameSequence(AccessCategory ac)
@@ -117,13 +149,16 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             Hcf::startFrameSequence(ac);
             return;
         }
-        auto candidates = collectCandidateStations(pendingQueue);
-        if (candidates.size() >= 2) {
-            EV_INFO << "HeHcf: MU-OFDMA opportunity detected for " << candidates.size()
+        auto scheduleContext = collectScheduleContext(pendingQueue, ac);
+        if (scheduleContext.candidates.size() >= 2) {
+            EV_INFO << "HeHcf: MU-OFDMA opportunity detected for " << scheduleContext.candidates.size()
                     << " STAs — starting HeDlMuTxOpFs." << endl;
             frameSequenceHandler->startFrameSequence(
-                    new HeDlMuTxOpFs(dlScheduler, candidates, modeSet,
-                                     pendingQueue, edcaf->getAckHandler(), this),
+                    new HeDlMuTxOpFs(dlScheduler, scheduleContext, modeSet,
+                                     pendingQueue, edcaf->getAckHandler(), this,
+                                     par("maxAmpduMpduCount"),
+                                     par("maxHeMuPsduLength"),
+                                     par("maxHeMuPpduDuration")),
                     buildContext(ac), this);
             emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
             return;
@@ -142,14 +177,15 @@ void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
         if (edcaf) {
             AccessCategory ac = edcaf->getAccessCategory();
             for (const auto& alloc : heMuTxop->getActiveAllocations()) {
-                Packet *staPacket = alloc.packet;
-                auto header = staPacket->peekAtFront<Ieee80211MacHeader>();
-                if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-                    originatorProcessTransmittedDataFrame(staPacket, dataHeader, ac);
-                    edcaf->getAckHandler()->transitionToWaitingForBlockAck(dataHeader);
-                }
-                else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(header)) {
-                    originatorProcessTransmittedManagementFrame(mgmtHeader, ac);
+                for (auto staPacket : alloc.packets) {
+                    auto header = staPacket->peekAtFront<Ieee80211MacHeader>();
+                    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+                        originatorProcessTransmittedDataFrame(staPacket, dataHeader, ac);
+                        edcaf->getAckHandler()->transitionToWaitingForBlockAck(dataHeader);
+                    }
+                    else if (auto mgmtHeader = dynamicPtrCast<const Ieee80211MgmtHeader>(header)) {
+                        originatorProcessTransmittedManagementFrame(mgmtHeader, ac);
+                    }
                 }
             }
         }

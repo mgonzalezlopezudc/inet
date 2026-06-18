@@ -205,7 +205,15 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
             throw cRuntimeError("Invalid HE MU RU index for serialization: %d", user.ruIndex);
         if (user.staId > 2047)
             throw cRuntimeError("Invalid HE MU STA-ID for serialization: %u", user.staId);
+        if (user.ruToneSize != 0 && user.ruToneSize != 26 && user.ruToneSize != 52 && user.ruToneSize != 106 &&
+                user.ruToneSize != 242 && user.ruToneSize != 484 && user.ruToneSize != 996 &&
+                user.ruToneSize != 1992)
+            throw cRuntimeError("Invalid HE MU RU tone size: %u", user.ruToneSize);
+        if (user.mcs > 11)
+            throw cRuntimeError("Invalid HE MU MCS: %u", user.mcs);
         stream.writeByte(user.ruIndex);
+        stream.writeUint16Be(user.ruToneSize);
+        stream.writeUint16Be(user.ruToneOffset);
         stream.writeUint16Be(user.staId);
         stream.writeByte(user.mcs);
         stream.writeByte(user.numberOfSpatialStreams);
@@ -222,6 +230,8 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     for (unsigned int i = 0; i < numUsers; ++i) {
         Ieee80211HeMuUserInfo info;
         info.ruIndex = stream.readByte();
+        info.ruToneSize = stream.readUint16Be();
+        info.ruToneOffset = stream.readUint16Be();
         info.staId = stream.readUint16Be();
         info.mcs = stream.readByte();
         info.numberOfSpatialStreams = stream.readByte();
