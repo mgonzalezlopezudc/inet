@@ -50,7 +50,10 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
         Ieee80211HeMuUserInfo user;
         user.ruIndex = payloadHeader->getRuIndex();
+        user.ruToneSize = payloadHeader->getRuToneSize();
+        user.ruToneOffset = payloadHeader->getRuToneOffset();
         user.staId = payloadHeader->getStaId();
+        user.mcs = payloadHeader->getMcs();
         users.push_back(user);
         packetCopy->popAtFront(payloadHeader->getMpduLength());
     }
@@ -264,7 +267,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     if (auto heMuPhyHeader = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader)) {
         for (const auto& user : heMuUsers)
             heMuPhyHeader->appendUsers(user);
-        phyHeader->setChunkLength(b(16 + heMuPhyHeader->getUsersArraySize() * 41));
+        phyHeader->setChunkLength(b(16 + heMuPhyHeader->getUsersArraySize() * 73));
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));

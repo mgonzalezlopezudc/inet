@@ -267,6 +267,7 @@ void Ieee80211MgmtSta::startAssociation(ApInfo *ap, simtime_t timeout)
 
     // create and send association request
     const auto& body = makeShared<Ieee80211AssociationRequestFrame>();
+    body->setTransmitPowerDbm(par("associationTransmitPower"));
 
     // TODO set the following too?
     // string SSID
@@ -758,4 +759,3 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
 
 } // namespace ieee80211
 } // namespace inet
-

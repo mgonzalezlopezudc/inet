@@ -187,12 +187,16 @@ auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
 auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
     Ieee80211HeMuUserInfo user;
     user.ruIndex = ru.index;
+    user.ruToneSize = ru.toneSize;
+    user.ruToneOffset = ru.toneOffset;
     user.staId = computeHeMuStaId(staAddress);
     phyHeader->appendUsers(user);
 };
 auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
     auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
     payloadHeader->setRuIndex(ru.index);
+    payloadHeader->setRuToneSize(ru.toneSize);
+    payloadHeader->setRuToneOffset(ru.toneOffset);
     payloadHeader->setStaId(computeHeMuStaId(staAddress));
     payloadHeader->setMpduLength(B(100));
     containerPkt->insertAtBack(payloadHeader);
@@ -200,7 +204,7 @@ auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress)
 };
 appendUser(rus[0], MacAddress("00:11:22:33:44:55"));
 appendUser(rus[1], MacAddress("66:77:88:99:AA:BB"));
-phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 41));
+phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 73));
 containerPkt->insertAtBack(phyHeader);
 appendPayload(rus[0], MacAddress("00:11:22:33:44:55"));
 appendPayload(rus[1], MacAddress("66:77:88:99:AA:BB"));
@@ -215,7 +219,11 @@ if (foundHeader->getUsersArraySize() != numRUs)
     throw cRuntimeError("PHY-01 FAILED: HE-MU user count %zu does not match RU count %d", foundHeader->getUsersArraySize(), numRUs);
 for (unsigned int i = 0; i < foundHeader->getUsersArraySize(); i++) {
     const auto& user = foundHeader->getUsers(i);
-    if (user.ruIndex < 0 || user.ruIndex >= numRUs) {
+    bool foundRu = false;
+    for (const auto& ru : rus)
+        if (user.ruIndex == ru.index)
+            foundRu = true;
+    if (!foundRu) {
         throw cRuntimeError("PHY-01 FAILED: User %u has invalid RU index %d", i, user.ruIndex);
     }
 }

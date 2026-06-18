@@ -9,6 +9,7 @@
 #define __INET_IEEE80211MIB_H
 
 #include "inet/common/SimpleModule.h"
+#include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
 
 namespace inet {
@@ -50,6 +51,14 @@ class INET_API Ieee80211Mib : public SimpleModule
     class INET_API BssAccessPointData {
       public:
         std::map<MacAddress, BssMemberStatus> stations;
+        struct LinkData {
+            double transmitPowerDbm = 15;
+            double receivedPowerDbm = NaN;
+            double pathLossDb = NaN;
+            simtime_t lastUpdate = SIMTIME_ZERO;
+            bool valid = false;
+        };
+        std::map<MacAddress, LinkData> links;
     };
 
   public:
@@ -68,6 +77,9 @@ class INET_API Ieee80211Mib : public SimpleModule
     static const char *getModeStr(Ieee80211Mib::Mode mode);
     static const char *getStationTypeStr(Ieee80211Mib::BssStationType stationType);
     std::string getSsidStr() const;
+    void setStationTransmitPower(const MacAddress& address, double transmitPowerDbm);
+    void updateStationReceivedPower(const MacAddress& address, units::values::W receivedPower);
+    const BssAccessPointData::LinkData *findStationLink(const MacAddress& address) const;
 };
 
 } // namespace ieee80211
@@ -75,4 +87,3 @@ class INET_API Ieee80211Mib : public SimpleModule
 } // namespace inet
 
 #endif
-

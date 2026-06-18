@@ -2,6 +2,7 @@
 Test strict active ADDBA validation before packets enter an HE MU OFDMA container.
 
 %includes:
+#include <string>
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
@@ -15,6 +16,7 @@ Test strict active ADDBA validation before packets enter an HE MU OFDMA containe
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
@@ -83,8 +85,10 @@ class MockScheduler : public IIeee80211HeDlScheduler
 {
   public:
     std::vector<MacAddress> scheduledStations;
+    simtime_t estimatedDuration = SIMTIME_ZERO;
 
-    MockScheduler(const std::vector<MacAddress>& scheduledStations) : scheduledStations(scheduledStations) {}
+    MockScheduler(const std::vector<MacAddress>& scheduledStations, simtime_t estimatedDuration = SIMTIME_ZERO) :
+        scheduledStations(scheduledStations), estimatedDuration(estimatedDuration) {}
 
     virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidateStations, Hz centerFrequency, Hz bandwidth) override {
         std::vector<RuAllocation> allocs;
@@ -92,6 +96,9 @@ class MockScheduler : public IIeee80211HeDlScheduler
             RuAllocation alloc;
             alloc.staAddress = scheduledStations[i];
             alloc.ru.index = i;
+            alloc.ru.toneSize = 26;
+            alloc.mcs = 0;
+            alloc.estimatedDuration = estimatedDuration;
             allocs.push_back(alloc);
         }
         return allocs;
@@ -116,8 +123,8 @@ class MockOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreeme
             delete agreement;
     }
 
-    OriginatorBlockAckAgreement *addAgreement(const MacAddress& receiver, Tid tid, bool active) {
-        auto agreement = new OriginatorBlockAckAgreement(receiver, tid, SequenceNumberCyclic(0), 64, false, false);
+    OriginatorBlockAckAgreement *addAgreement(const MacAddress& receiver, Tid tid, bool active, int bufferSize = 64) {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid, SequenceNumberCyclic(0), bufferSize, false, false);
         agreement->setIsAddbaResponseReceived(active);
         agreements.push_back(agreement);
         return agreement;
@@ -203,7 +210,7 @@ static void clearPendingQueue(queueing::IPacketQueue *pendingQueue)
     }
 }
 
-static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid tid, bool qos)
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid tid, bool qos, int payloadBytes = 0)
 {
     Packet *packet = new Packet(name);
     auto header = makeShared<Ieee80211DataHeader>();
@@ -213,6 +220,8 @@ static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid 
     header->setAckPolicy(BLOCK_ACK);
     header->setSequenceNumber(SequenceNumberCyclic(tid));
     packet->insertAtFront(header);
+    if (payloadBytes > 0)
+        packet->insertAtBack(makeShared<ByteCountChunk>(B(payloadBytes)));
     return packet;
 }
 
@@ -239,15 +248,39 @@ struct FirstTransmitStepResult {
     bool allInProgressHaveDuration = true;
 };
 
-static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pendingQueue, MockCallback *callback, const std::vector<MacAddress>& scheduledStations, IOriginatorBlockAckAgreementHandler *baHandler)
+static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pendingQueue, MockCallback *callback,
+        const std::vector<MacAddress>& scheduledStations, IOriginatorBlockAckAgreementHandler *baHandler,
+        int maxAmpduMpduCount = 16, int maxHeMuPsduLength = 6500631,
+        simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS),
+        simtime_t alignedDuration = SIMTIME_ZERO, simtime_t txopPayloadBudget = SIMTIME_ZERO)
 {
     auto modeSet = physicallayer::Ieee80211ModeSet::getModeSet("ax");
-    auto scheduler = new MockScheduler(scheduledStations);
+    auto scheduler = new MockScheduler(scheduledStations, alignedDuration);
     auto ackHandler = new MockAckHandler();
     auto inProgress = new MockInProgressFrames();
     auto qosContext = new QoSContext(nullptr, nullptr, baHandler, nullptr);
     auto context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), inProgress, nullptr, nullptr, nullptr, qosContext);
-    HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, scheduledStations, const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), pendingQueue, ackHandler, callback);
+    IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
+    for (size_t i = 0; i < scheduledStations.size(); ++i) {
+        IIeee80211HeDlScheduler::CandidateInfo candidate;
+        candidate.staAddress = scheduledStations[i];
+        candidate.anchor = i == 0;
+        scheduleContext.candidates.push_back(candidate);
+    }
+    scheduleContext.anchorSta = scheduledStations.front();
+    if (txopPayloadBudget > SIMTIME_ZERO) {
+        auto rateSelection = check_and_cast<IQosRateSelection *>(callback->getSubmodule("rateSelection"));
+        auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+        auto responseMode = rateSelection->computeResponseBlockAckFrameMode(nullptr, dummyReq);
+        simtime_t ackSequenceDuration = modeSet->getSifsTime() + responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+        for (size_t i = 1; i < scheduledStations.size(); ++i)
+            ackSequenceDuration += modeSet->getSifsTime() + responseMode->getDuration(B(38)) +
+                    modeSet->getSifsTime() + responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+        scheduleContext.txopLimit = ackSequenceDuration + txopPayloadBudget;
+    }
+    HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, scheduleContext,
+            const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), pendingQueue, ackHandler, callback,
+            maxAmpduMpduCount, maxHeMuPsduLength, maxHeMuPpduDuration);
 
     fs->startSequence(context, 0);
     auto step0 = check_and_cast<ITransmitStep *>(fs->prepareStep(context));
@@ -425,7 +458,35 @@ Tid tid = 5;
     EV << "Fewer than two active allocations aborted before queue mutation.\n";
 }
 
-// Test 4: bounded AddbaReq retry bursts (3 attempts) and addbaFailureTimeout cooldown resumption.
+// Test 4: per-user A-MPDU packing obeys BA-window, PSDU-length, PPDU-duration,
+// aligned-duration, and remaining-TXOP limits before mutating the queue.
+{
+    auto runPackingLimitCase = [&] (const char *prefix, int blockAckWindow, int maxPsduLength,
+            simtime_t maxPpduDuration, simtime_t alignedDuration, simtime_t txopPayloadBudget) {
+        clearPendingQueue(pendingQueue);
+        for (int i = 0; i < 3; ++i) {
+            pendingQueue->enqueuePacket(makeDataPacket((std::string(prefix) + "-sta1-" + std::to_string(i)).c_str(), sta1, tid, true, 10));
+            pendingQueue->enqueuePacket(makeDataPacket((std::string(prefix) + "-sta2-" + std::to_string(i)).c_str(), sta2, tid, true, 10));
+        }
+        MockOriginatorBlockAckAgreementHandler baHandler;
+        baHandler.addAgreement(sta1, tid, true, blockAckWindow);
+        baHandler.addAgreement(sta2, tid, true, blockAckWindow);
+        auto result = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &baHandler,
+                16, maxPsduLength, maxPpduDuration, alignedDuration, txopPayloadBudget);
+        requireCondition(result.inProgressLength == 2, "packing limit should admit exactly one HoL MPDU per STA");
+        requireCondition(pendingQueue->getNumPackets() == 4, "MPDUs beyond the packing limit must remain queued");
+        delete result.container;
+    };
+
+    runPackingLimitCase("ba-window", 1, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO);
+    runPackingLimitCase("psdu-length", 64, 50, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO);
+    runPackingLimitCase("ppdu-duration", 64, 6500631, SimTime(400, SIMTIME_US), SIMTIME_ZERO, SIMTIME_ZERO);
+    runPackingLimitCase("aligned-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SimTime(400, SIMTIME_US), SIMTIME_ZERO);
+    runPackingLimitCase("txop-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SimTime(400, SIMTIME_US));
+    EV << "Per-user A-MPDU packing enforced BA-window, PSDU, PPDU, aligned-duration, and TXOP limits.\n";
+}
+
+// Test 5: bounded AddbaReq retry bursts (3 attempts) and addbaFailureTimeout cooldown resumption.
 {
     OriginatorBlockAckAgreementHandler retryHandler;
     MockOriginatorBlockAckAgreementPolicy retryPolicy;
@@ -475,6 +536,9 @@ Multicast, broadcast, and no-queued-packet scheduler allocations were skipped wi
 
 %contains: stdout
 Fewer than two active allocations aborted before queue mutation.
+
+%contains: stdout
+Per-user A-MPDU packing enforced BA-window, PSDU, PPDU, aligned-duration, and TXOP limits.
 
 %contains: stdout
 MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while AddbaReq retries are bounded by addbaFailureTimeout and processTransmittedDataFrame; AC_VO classification remains in Hcf management processing.
