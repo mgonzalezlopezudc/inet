@@ -36,13 +36,13 @@
 #include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 #include "inet/linklayer/ieee80211/mac/queue/OrigEnqueueTimeTag_m.h"
-#include "inet/linklayer/ieee80211/mac/queue/StationQueueBank.h"
 #include "inet/linklayer/ieee80211/mac/recipient/CtsProcedure.h"
 
 namespace inet {
 namespace ieee80211 {
 
 class Ieee80211Mac;
+class StationQueueBank;
 
 /**
  * Implements IEEE 802.11 Hybrid Coordination Function.
@@ -172,10 +172,10 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     IOriginatorMacDataService *getOriginatorMacDataService() const { return originatorDataService; }
     IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const { return originatorBlockAckAgreementHandler; }
+    virtual StationQueueBank *createStationQueueBank(const MacAddress& staAddr);
+    virtual void destroyStationQueueBank(const MacAddress& staAddr);
+    virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const;
     virtual queueing::IPacketQueue *resolvePerStaQueue(const MacAddress& staAddr, AccessCategory ac) {
-      if (mac == nullptr)
-        return edca->getEdcaf(ac)->getPendingQueue();
-
       return getPerStaQueue(staAddr, ac);
     }
 
