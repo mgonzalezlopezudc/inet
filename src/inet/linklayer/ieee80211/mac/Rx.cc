@@ -195,6 +195,8 @@ void Rx::transmissionStateChanged(IRadio::TransmissionState state)
 
 void Rx::setOrExtendNav(simtime_t navInterval)
 {
+    if (navInterval == -1)
+        return;
     ASSERT(navInterval >= 0);
     if (navInterval > 0) {
         simtime_t endNav = simTime() + navInterval;
