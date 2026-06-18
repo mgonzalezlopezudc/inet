@@ -46,8 +46,20 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.ruToneOffset = request->getRuToneOffset();
         user.staId = request->getStaId();
         user.mcs = request->getMcs();
+        user.numberOfSpatialStreams = request->getNumberOfSpatialStreams();
+        user.dcm = request->getDcm();
         user.psduLength = B(packet->getDataLength());
-        user.duration = request->getCommonDuration();
+        Ieee80211HeRu ru;
+        ru.index = user.ruIndex;
+        ru.toneSize = std::max<int>(user.ruToneSize, 26);
+        ru.toneOffset = user.ruToneOffset;
+        ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
+        ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
+        ru.bandwidth = Hz(ru.toneSize * 78125.0);
+        user.duration = computeHeUserPhyParameters(user.psduLength, ru, user.mcs,
+                user.numberOfSpatialStreams, user.dcm,
+                static_cast<Ieee80211HeGuardInterval>(request->getGuardInterval()),
+                static_cast<Ieee80211HeCoding>(request->getCoding())).duration;
         users.push_back(user);
         return users;
     }
@@ -66,6 +78,8 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.ruToneOffset = payloadHeader->getRuToneOffset();
         user.staId = payloadHeader->getStaId();
         user.mcs = payloadHeader->getMcs();
+        user.numberOfSpatialStreams = payloadHeader->getNumberOfSpatialStreams();
+        user.dcm = payloadHeader->getDcm();
         user.psduLength = payloadHeader->getMpduLength();
         user.duration = estimateHeMuUserDuration(user.psduLength, user.ruToneSize, user.mcs);
         users.push_back(user);
@@ -291,6 +305,24 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         auto request = packet->findTag<Ieee80211HeMuReq>();
         heMuPhyHeader->setPpduFormat(request == nullptr ? HE_MU_DOWNLINK : request->getPpduFormat());
         heMuPhyHeader->setTriggerId(request == nullptr ? 0 : request->getTriggerId());
+        auto commonRequest = packet->findTag<Ieee80211HeMuCommonReq>();
+        heMuPhyHeader->setGuardInterval(request != nullptr ? request->getGuardInterval() :
+                commonRequest != nullptr ? commonRequest->getGuardInterval() : HE_GI_3_2_US);
+        heMuPhyHeader->setCoding(request != nullptr ? request->getCoding() :
+                commonRequest != nullptr ? commonRequest->getCoding() : HE_CODING_BCC);
+        for (auto& user : heMuUsers) {
+            Ieee80211HeRu ru;
+            ru.index = user.ruIndex;
+            ru.toneSize = std::max<int>(user.ruToneSize, 26);
+            ru.toneOffset = user.ruToneOffset;
+            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
+            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
+            ru.bandwidth = Hz(ru.toneSize * 78125.0);
+            user.duration = computeHeUserPhyParameters(user.psduLength, ru, user.mcs,
+                    user.numberOfSpatialStreams, user.dcm,
+                    static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval()),
+                    static_cast<Ieee80211HeCoding>(heMuPhyHeader->getCoding())).duration;
+        }
         simtime_t commonDuration = request == nullptr ? SIMTIME_ZERO : request->getCommonDuration();
         for (const auto& user : heMuUsers)
         {
@@ -298,7 +330,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             commonDuration = std::max(commonDuration, user.duration);
         }
         heMuPhyHeader->setCommonDuration(commonDuration);
-        phyHeader->setChunkLength(b(88 + heMuPhyHeader->getUsersArraySize() * 137));
+        phyHeader->setChunkLength(b(104 + heMuPhyHeader->getUsersArraySize() * 137));
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
@@ -347,16 +379,24 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         auto tag = packet->addTagIfAbsent<Ieee80211HeMuRxTag>();
         tag->setPpduFormat(heMuPhyHeader->getPpduFormat());
         tag->setTriggerId(heMuPhyHeader->getTriggerId());
+        tag->setGuardInterval(heMuPhyHeader->getGuardInterval());
+        tag->setCoding(heMuPhyHeader->getCoding());
         tag->setRuIndex(-1);
         auto networkInterface = getContainingNicModule(this);
-        auto myStaId = resolveHeMuStaId(networkInterface, networkInterface->getMacAddress());
+        auto myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
         for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
             const auto& user = heMuPhyHeader->getUsers(i);
             Ieee80211HeMuRxAllocationInfo info;
             info.ruIndex = user.ruIndex;
             info.staId = user.staId;
+            info.ruToneSize = user.ruToneSize;
+            info.ruToneOffset = user.ruToneOffset;
+            info.mcs = user.mcs;
+            info.numberOfSpatialStreams = user.numberOfSpatialStreams;
+            info.dcm = user.dcm;
+            info.duration = user.duration;
             tag->appendAllocations(info);
-            if (user.staId == myStaId)
+            if (myStaId.has_value() && user.staId == *myStaId)
                 tag->setRuIndex(user.ruIndex);
         }
     }

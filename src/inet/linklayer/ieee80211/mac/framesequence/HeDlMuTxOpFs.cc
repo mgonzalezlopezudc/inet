@@ -18,6 +18,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
@@ -48,14 +49,6 @@ B calculateAmpduPsduLength(const std::vector<Packet *>& packets)
     return length;
 }
 
-simtime_t estimateHeMuUserDuration(B psduLength, int toneSize, int mcs)
-{
-    static const double efficiency[] =
-        {0.5, 1, 1.5, 2, 3, 4, 4.5, 5, 6, 6.6666667, 7.5, 8.3333333};
-    double rate = std::max(toneSize, 26) * 78125.0 * efficiency[std::clamp(mcs, 0, 11)];
-    return SimTime(48e-6 + psduLength.get<B>() * 8.0 / std::max(rate, 1.0));
-}
-
 } // namespace
 
 class HeDlMuPpduFs : public IFrameSequence
@@ -74,6 +67,10 @@ class HeDlMuPpduFs : public IFrameSequence
         switch (step) {
             case 0:
                 owner->containerPacket = owner->buildMuContainerPacket(context);
+                if (owner->containerPacket == nullptr) {
+                    step = 1;
+                    return nullptr;
+                }
                 return new TransmitStep(owner->containerPacket, context->getIfs(), true);
             case 1:
                 return nullptr;
@@ -377,6 +374,13 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
           }
           if (!candidates.empty())
               context.anchorSta = candidates.front();
+          if (modeSet != nullptr && modeSet->getNumModes() > 0) {
+              auto firstMode = modeSet->getMode(0);
+              context.channelBandwidth = firstMode->getDataMode()->getBandwidth();
+              if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(firstMode))
+                  context.channelCenterFrequency = heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ?
+                          Hz(2.412e9) : Hz(5.18e9);
+          }
           return context;
       }(), modeSet, pendingQueue, ackHandler, callback, 16, 6500631, SimTime(5.484, SIMTIME_MS))
 {
@@ -397,6 +401,14 @@ HeDlMuTxOpFs::~HeDlMuTxOpFs()
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
     activeAllocations.clear();
+    auto hcf = dynamic_cast<Hcf *>(callback);
+    auto notifyPlanningFailure = [&] {
+        if (auto heHcf = dynamic_cast<HeHcf *>(callback)) {
+            auto ac = scheduleContext.candidates.empty() ? AccessCategory::AC_BE :
+                    scheduleContext.candidates.front().accessCategory;
+            heHcf->handleDlMuPlanningFailure(ac);
+        }
+    };
     struct SelectedAllocation {
         IIeee80211HeDlScheduler::RuAllocation allocation;
         queueing::IPacketQueue *sourceQueue = nullptr;
@@ -404,27 +416,36 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         Ptr<const Ieee80211DataHeader> dataHeader;
         std::vector<Packet *> packets;
         B psduLength = B(0);
+        uint16_t associationId = 0;
     };
 
-    // Determine channel bandwidth and center frequency from the modeSet's first HE mode.
-    Hz channelBandwidth = Hz(20e6);       // default: 20 MHz
-    Hz channelCenterFrequency = Hz(5.18e9); // default: 5 GHz band, ch36
-
-    if (modeSet != nullptr && modeSet->getNumModes() > 0) {
-        auto firstMode = modeSet->getMode(0);
-        if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(firstMode)) {
-            channelBandwidth = heMode->getDataMode()->getBandwidth();
-            channelCenterFrequency = (heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ)
-                    ? Hz(2.412e9) : Hz(5.18e9);
+    // Obtain per-STA RU assignments from the scheduler.
+    if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
+            std::isnan(scheduleContext.channelBandwidth.get())) {
+        if (hcf != nullptr)
+            throw cRuntimeError("HeDlMuTxOpFs: scheduler context is missing active radio channel geometry");
+        if (modeSet != nullptr && modeSet->getNumModes() > 0) {
+            auto firstMode = modeSet->getMode(0);
+            scheduleContext.channelBandwidth = firstMode->getDataMode()->getBandwidth();
+            if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(firstMode))
+                scheduleContext.channelCenterFrequency =
+                        heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ?
+                        Hz(2.412e9) : Hz(5.18e9);
         }
     }
-
-    // Obtain per-STA RU assignments from the scheduler.
-    scheduleContext.channelCenterFrequency = channelCenterFrequency;
-    scheduleContext.channelBandwidth = channelBandwidth;
+    if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
+            std::isnan(scheduleContext.channelBandwidth.get()))
+        throw cRuntimeError("HeDlMuTxOpFs: scheduler context is missing channel geometry");
+    if (!scheduleContext.puncturedSubchannels.empty() &&
+            std::any_of(scheduleContext.puncturedSubchannels.begin(),
+                    scheduleContext.puncturedSubchannels.end(), [] (bool punctured) { return punctured; }))
+        throw cRuntimeError("HeDlMuTxOpFs: preamble puncturing is not implemented");
     auto allocations = dlScheduler->schedule(scheduleContext);
-    if (allocations.empty())
-        throw cRuntimeError("HeDlMuTxOpFs: scheduler returned empty RU allocation");
+    if (allocations.empty()) {
+        EV_WARN << "HeDlMuTxOpFs: scheduler returned no usable RU allocations; deferring to SU." << endl;
+        notifyPlanningFailure();
+        return nullptr;
+    }
 
     // Assemble the HE MU PPDU container packet.
     auto container = new Packet("HE-MU-PPDU");
@@ -437,7 +458,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     // 1. Calculate the total sequential ACK sequence duration
     simtime_t totalDuration = simtime_t::ZERO;
-    auto hcf = dynamic_cast<Hcf *>(callback);
     auto qosContext = context->getQoSContext();
     auto originatorBAHandler = qosContext != nullptr ? qosContext->blockAckAgreementHandler : nullptr;
     if (originatorBAHandler == nullptr && hcf != nullptr)
@@ -536,6 +556,18 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         selectedAllocation.sourceQueue = sourceQueue;
         selectedAllocation.packet = staPacket;
         selectedAllocation.dataHeader = dataHeader;
+        if (hcf != nullptr) {
+            auto hcfMac = check_and_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule());
+            auto aid = hcfMac->getMib()->getAssociationId(alloc.staAddress);
+            if (aid <= 0) {
+                warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(),
+                        alloc.ru.index, "scheduled receiver has no association ID");
+                continue;
+            }
+            selectedAllocation.associationId = aid;
+        }
+        else
+            selectedAllocation.associationId = computeHeMuStaId(alloc.staAddress);
         selectedAllocations.push_back(selectedAllocation);
     }
 
@@ -543,7 +575,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         EV_WARN << "HeDlMuTxOpFs: aborting HE MU PPDU assembly because only "
                 << selectedAllocations.size() << " active Block Ack allocations remain before queue mutation." << endl;
         delete container;
-        throw cRuntimeError("HeDlMuTxOpFs: fewer than two active Block Ack allocations for MU-OFDMA transmission");
+        notifyPlanningFailure();
+        return nullptr;
     }
 
     auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
@@ -600,7 +633,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
         auto agreement = originatorBAHandler->getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
         int blockAckWindowLimit = agreement == nullptr ? 0 : agreement->getBufferSize();
-        int packetLimit = std::min(maxAmpduMpduCount, blockAckWindowLimit);
+        int occupiedSlots = ackHandler == nullptr ? 0 :
+                ackHandler->getOccupiedBlockAckSequenceNumbers(
+                        dataHeader->getReceiverAddress(), dataHeader->getTid()).size();
+        int availableSlots = std::max(0, blockAckWindowLimit - occupiedSlots);
+        int packetLimit = std::min(maxAmpduMpduCount, availableSlots);
         if (packetLimit <= 0) {
             warnIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
                     selectedAllocation.allocation.ru.index, "Block Ack window has no available entries");
@@ -626,7 +663,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             if (proposedLength.get<B>() > maxHeMuPsduLength)
                 break;
             if (estimateHeMuUserDuration(proposedLength, selectedAllocation.allocation.ru.toneSize,
-                    selectedAllocation.allocation.mcs) > packingDurationLimit)
+                    selectedAllocation.allocation.mcs,
+                    selectedAllocation.allocation.numberOfSpatialStreams,
+                    selectedAllocation.allocation.dcm,
+                    scheduleContext.guardInterval) > packingDurationLimit)
                 break;
             selectedAllocation.packets = proposedPackets;
             selectedAllocation.psduLength = proposedLength;
@@ -644,7 +684,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         EV_WARN << "HeDlMuTxOpFs: aborting HE MU PPDU assembly because only "
                 << finalAllocations.size() << " active Block Ack allocations remain after final validation." << endl;
         delete container;
-        throw cRuntimeError("HeDlMuTxOpFs: fewer than two active Block Ack allocations after final validation");
+        notifyPlanningFailure();
+        return nullptr;
     }
 
     // 2. Build the final MU container packet and assign duration/sequence numbers to sub-packets.
@@ -652,13 +693,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         const auto& alloc = selectedAllocation.allocation;
         Packet *firstPacket = selectedAllocation.packet;
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(firstPacket->peekAtFront<Ieee80211MacHeader>());
-        if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS ||
-                !hasActiveOriginatorBlockAckAgreement(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
-            Tid tid = dataHeader == nullptr ? -1 : dataHeader->getTid();
-            auto receiverAddress = dataHeader == nullptr ? alloc.staAddress : dataHeader->getReceiverAddress();
-            warnIneligible(firstPacket, receiverAddress, tid, alloc.ru.index, "failed final validation before tag allocation");
-            continue;
-        }
+        ASSERT(dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS);
+        ASSERT(hasActiveOriginatorBlockAckAgreement(originatorBAHandler,
+                dataHeader->getReceiverAddress(), dataHeader->getTid()));
 
         const auto& staPackets = selectedAllocation.packets;
 
@@ -691,9 +728,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         payloadHeader->setRuIndex(alloc.ru.index);
         payloadHeader->setRuToneSize(alloc.ru.toneSize);
         payloadHeader->setRuToneOffset(alloc.ru.toneOffset);
-        auto aid = hcf == nullptr ? -1 : check_and_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule())->getMib()->getAssociationId(alloc.staAddress);
-        payloadHeader->setStaId(aid > 0 ? aid : computeHeMuStaId(alloc.staAddress));
+        payloadHeader->setStaId(selectedAllocation.associationId);
         payloadHeader->setMcs(alloc.mcs);
+        payloadHeader->setNumberOfSpatialStreams(alloc.numberOfSpatialStreams);
+        payloadHeader->setDcm(alloc.dcm);
         payloadHeader->setMpduLength(selectedAllocation.psduLength);
         container->insertAtBack(payloadHeader);
         if (staPackets.size() == 1)
@@ -720,9 +758,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
 
     container->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    auto commonRequest = container->addTagIfAbsent<Ieee80211HeMuCommonReq>();
+    commonRequest->setGuardInterval(scheduleContext.guardInterval);
+    commonRequest->setCoding(scheduleContext.coding);
 
-    if (activeAllocations.size() < 2)
-        throw cRuntimeError("HeDlMuTxOpFs: fewer than two packets assembled for MU-OFDMA transmission");
+    ASSERT(activeAllocations.size() >= 2);
 
     EV_INFO << "HeDlMuTxOpFs: assembled HE MU PPDU with "
             << activeAllocations.size() << " RU allocations. Total sequential duration = " << totalDuration << endl;

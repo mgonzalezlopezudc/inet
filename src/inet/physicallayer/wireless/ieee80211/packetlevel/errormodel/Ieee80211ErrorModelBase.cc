@@ -9,6 +9,9 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/common/ModuleAccess.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 namespace inet {
 
@@ -18,6 +21,13 @@ Ieee80211ErrorModelBase::Ieee80211ErrorModelBase()
 {
 }
 
+double Ieee80211ErrorModelBase::getHeDataSuccessRate(
+        const Ieee80211HeUserPhyParameters& parameters,
+        unsigned int bitLength, double snir) const
+{
+    throw cRuntimeError("Per-user HE error evaluation is unsupported by this error model");
+}
+
 double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const
 {
     Enter_Method("computePacketErrorRate");
@@ -25,10 +35,48 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
     auto mode = transmission->getMode();
     auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket());
     auto headerLength = mode->getHeaderMode()->getLength();
-    auto dataLength = b(mode->getDataMode()->getCompleteLength(B(phyHeader->getLengthField())));
+    unsigned int dataLength = mode->getDataMode()->getCompleteLength(B(phyHeader->getLengthField())).get<b>();
     // TODO check header length and data length for OFDM (signal) field
     double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), getScalarSnir(snir));
-    double dataSuccessRate = getDataSuccessRate(mode, dataLength.get<b>(), getScalarSnir(snir));
+    double dataSuccessRate;
+    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+        const Ieee80211HeMuUserInfo *selectedUser = nullptr;
+        if (heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
+                heMuHeader->getUsersArraySize() == 1)
+            selectedUser = &heMuHeader->getUsers(0);
+        else {
+            auto receiver = snir->getReception()->getReceiverRadio();
+            auto networkInterface = getContainingNicModule(check_and_cast<const cModule *>(receiver));
+            auto staId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+            if (staId.has_value())
+                for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i)
+                    if (heMuHeader->getUsers(i).staId == *staId) {
+                        selectedUser = &heMuHeader->getUsers(i);
+                        break;
+                    }
+        }
+        if (selectedUser == nullptr)
+            dataSuccessRate = 0;
+        else {
+            Ieee80211HeRu ru;
+            ru.index = selectedUser->ruIndex;
+            ru.toneSize = std::max<int>(selectedUser->ruToneSize, 26);
+            ru.toneOffset = selectedUser->ruToneOffset;
+            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
+            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
+            ru.bandwidth = Hz(ru.toneSize * 78125.0);
+            auto parameters = computeHeUserPhyParameters(selectedUser->psduLength, ru,
+                    selectedUser->mcs, selectedUser->numberOfSpatialStreams,
+                    selectedUser->dcm,
+                    static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()),
+                    static_cast<Ieee80211HeCoding>(heMuHeader->getCoding()));
+            dataLength = 16 + selectedUser->psduLength.get<B>() * 8 + 6;
+            double userSnir = getScalarSnir(snir) * (selectedUser->dcm ? 2.0 : 1.0);
+            dataSuccessRate = getHeDataSuccessRate(parameters, dataLength, userSnir);
+        }
+    }
+    else
+        dataSuccessRate = getDataSuccessRate(mode, dataLength, getScalarSnir(snir));
     switch (part) {
         case IRadioSignal::SIGNAL_PART_WHOLE:
             return 1.0 - headerSuccessRate * dataSuccessRate;
@@ -116,4 +164,3 @@ double Ieee80211ErrorModelBase::getDsssDqpskCck11SuccessRate(uint32_t bitLength,
 } // namespace physicallayer
 
 } // namespace inet
-

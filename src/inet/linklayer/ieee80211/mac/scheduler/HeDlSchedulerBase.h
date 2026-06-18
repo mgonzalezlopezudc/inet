@@ -40,7 +40,8 @@ class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public Simple
     virtual double estimateSnrDb(const ScheduleContext& context, const CandidateInfo& candidate,
             const physicallayer::Ieee80211HeRu& ru) const;
     virtual int selectMcs(double snrDb, bool hasFreshPathLoss) const;
-    virtual simtime_t estimateDuration(int64_t bytes, int toneSize, int mcs) const;
+    virtual simtime_t estimateDuration(int64_t bytes, int toneSize, int mcs,
+            physicallayer::Ieee80211HeGuardInterval guardInterval) const;
 
     std::vector<RuAllocation> fitRequestedRus(const ScheduleContext& context,
             const std::vector<CandidateInfo>& candidates, std::vector<int> requestedTones,

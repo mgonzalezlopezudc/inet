@@ -169,6 +169,8 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t bssColor = 0;
     uint8_t ppduFormat = 0; // 0: HE MU downlink, 1: HE trigger-based uplink
+    uint8_t guardInterval = 2; // 0: 0.8 us, 1: 1.6 us, 2: 3.2 us
+    uint8_t coding = 0; // 0: BCC, 1: LDPC
     uint32_t triggerId = 0;
     simtime_t commonDuration;
     Ieee80211HeMuUserInfo users[];
@@ -176,11 +178,13 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 
 class Ieee80211HeMuRuPayloadHeader extends FieldsChunk
 {
-    chunkLength = b(80);
+    chunkLength = b(89);
     int ruIndex;
     uint16_t ruToneSize;
     uint16_t ruToneOffset;
     uint16_t staId;
     uint8_t mcs = 0;
+    uint8_t numberOfSpatialStreams = 1;
+    bool dcm = false;
     B mpduLength;
 }
