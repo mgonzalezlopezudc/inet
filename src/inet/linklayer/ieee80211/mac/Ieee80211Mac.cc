@@ -77,15 +77,6 @@ void Ieee80211Mac::initialize(int stage)
         hcf = check_and_cast_nullable<Hcf *>(getSubmodule("hcf"));
         if (mib->qos && !hcf)
             throw cRuntimeError("Missing hcf module, required for QoS");
-        
-        // Initialize queue bank manager only for APs operating in ax mode.
-        if (isApInAxMode()) {
-            queueBankManager = std::make_unique<StationQueueBankManager>(this);
-            for (const auto& station : mib->bssAccessPointData.stations) {
-                if (station.second == Ieee80211Mib::ASSOCIATED)
-                    queueBankManager->createQueueBank(station.first);
-            }
-        }
     }
 }
 
@@ -451,28 +442,25 @@ void Ieee80211Mac::handleCrashOperation(LifecycleOperation *operation)
 
 StationQueueBank *Ieee80211Mac::createStationQueueBank(const MacAddress &staAddr)
 {
-    if (!queueBankManager) {
-        EV_WARN << "Queue bank manager not initialized (not in AP mode?)\n";
+    if (!hcf) {
+        EV_WARN << "HCF not available for queue bank creation\n";
         return nullptr;
     }
-    return queueBankManager->createQueueBank(staAddr);
+    return hcf->createStationQueueBank(staAddr);
 }
 
 void Ieee80211Mac::destroyStationQueueBank(const MacAddress &staAddr)
 {
-    if (!queueBankManager) {
-        EV_WARN << "Queue bank manager not initialized (not in AP mode?)\n";
+    if (!hcf) {
+        EV_WARN << "HCF not available for queue bank destruction\n";
         return;
     }
-    queueBankManager->destroyQueueBank(staAddr);
+    hcf->destroyStationQueueBank(staAddr);
 }
 
 StationQueueBank *Ieee80211Mac::getStationQueueBank(const MacAddress &staAddr) const
 {
-    if (!queueBankManager) {
-        return nullptr;
-    }
-    return queueBankManager->getQueueBank(staAddr);
+    return hcf == nullptr ? nullptr : hcf->getStationQueueBank(staAddr);
 }
 
 } // namespace ieee80211

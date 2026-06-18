@@ -7,9 +7,11 @@
 #ifndef __INET_HEHCF_H
 #define __INET_HEHCF_H
 
+#include <memory>
 #include <vector>
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
@@ -35,9 +37,11 @@ class INET_API HeHcf : public Hcf
 {
   protected:
     IIeee80211HeDlScheduler *dlScheduler = nullptr;
+    std::unique_ptr<StationQueueBankManager> queueBankManager;
 
   protected:
     virtual void initialize(int stage) override;
+    virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac) override;
 
     /**
      * Scans the shared EDCAF queue and all per-STA queues for this access
@@ -58,6 +62,9 @@ class INET_API HeHcf : public Hcf
     virtual bool hasFrameToTransmit(AccessCategory ac) override;
 
   public:
+    virtual StationQueueBank *createStationQueueBank(const MacAddress& staAddr) override;
+    virtual void destroyStationQueueBank(const MacAddress& staAddr) override;
+    virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const override;
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
 };
