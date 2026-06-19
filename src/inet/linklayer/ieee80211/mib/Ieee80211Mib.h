@@ -12,6 +12,7 @@
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211VhtCapabilities.h"
 
 namespace inet {
 
@@ -64,6 +65,8 @@ class INET_API Ieee80211Mib : public SimpleModule
         std::map<MacAddress, LinkData> links;
         std::map<MacAddress, Ieee80211HeCapabilities> advertisedHeCapabilities;
         std::map<MacAddress, Ieee80211NegotiatedHeCapabilities> negotiatedHeCapabilities;
+        std::map<MacAddress, Ieee80211VhtCapabilities> advertisedVhtCapabilities;
+        std::map<MacAddress, Ieee80211NegotiatedVhtCapabilities> negotiatedVhtCapabilities;
     };
 
   public:
@@ -76,6 +79,8 @@ class INET_API Ieee80211Mib : public SimpleModule
     BssAccessPointData bssAccessPointData;
     Ieee80211HeCapabilities localHeCapabilities;
     Ieee80211HeOperation heOperation;
+    Ieee80211VhtCapabilities localVhtCapabilities;
+    Ieee80211VhtOperation vhtOperation;
 
   protected:
     virtual void initialize(int stage) override;
@@ -95,6 +100,10 @@ class INET_API Ieee80211Mib : public SimpleModule
             const Ieee80211HeOperation& operation);
     void removePeerHeCapabilities(const MacAddress& address);
     const Ieee80211NegotiatedHeCapabilities *findNegotiatedHeCapabilities(const MacAddress& address) const;
+    void setPeerVhtCapabilities(const MacAddress& address, const Ieee80211VhtCapabilities& capabilities,
+            const Ieee80211VhtOperation& operation);
+    void removePeerVhtCapabilities(const MacAddress& address);
+    const Ieee80211NegotiatedVhtCapabilities *findNegotiatedVhtCapabilities(const MacAddress& address) const;
 };
 
 } // namespace ieee80211

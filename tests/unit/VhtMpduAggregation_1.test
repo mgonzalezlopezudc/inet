@@ -1,0 +1,56 @@
+%description:
+Test VhtMpduAggregationPolicy length limits (based on exponents 0-7)
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/aggregation/VhtMpduAggregationPolicy.h"
+#include "inet/common/packet/Packet.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+auto policy = new VhtMpduAggregationPolicy();
+// Expose setter for maxAmpduLengthExponent for testing
+policy->setMaxAmpduLengthExponent(0); // 8,191 bytes limit
+
+std::vector<Packet *> frames;
+for (int i = 0; i < 10; ++i) {
+    auto pkt = new Packet("data");
+    pkt->insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>(1500, 0))); // 1500 bytes each
+    frames.push_back(pkt);
+}
+
+// Compute aggregate frames under exponent = 0 (8,191 bytes limit)
+// 1500 + overhead per frame. E.g. each subframe adds ~4 bytes delimiter.
+// 5 frames = 5 * 1504 = 7520. 6 frames = 9024 > 8191.
+// So at most 5 frames should be aggregated.
+auto result = policy->computeAggregateFrames(&frames);
+if (result) {
+    EV << "Aggregated frames size under exp 0: " << result->size() << "\n";
+    delete result;
+} else {
+    EV << "Aggregated frames size under exp 0: 0\n";
+}
+
+// Set exponent = 3 (65,535 bytes limit)
+policy->setMaxAmpduLengthExponent(3);
+auto result2 = policy->computeAggregateFrames(&frames);
+if (result2) {
+    EV << "Aggregated frames size under exp 3: " << result2->size() << "\n";
+    delete result2;
+} else {
+    EV << "Aggregated frames size under exp 3: 0\n";
+}
+
+for (auto pkt : frames) {
+    delete pkt;
+}
+delete policy;
+EV << ".\n";
+
+%contains: stdout
+Aggregated frames size under exp 0: 5
+Aggregated frames size under exp 3: 10
+.

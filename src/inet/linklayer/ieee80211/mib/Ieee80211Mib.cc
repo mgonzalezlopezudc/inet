@@ -32,6 +32,17 @@ void Ieee80211Mib::initialize(int stage)
         WATCH_EXPR("qosStr", qos ? ", QoS" : ", Non-QoS");
         WATCH_EXPR("ssidStr", getSsidStr());
         WATCH_EXPR("associatedStr", bssStationData.stationType == STATION ? (bssStationData.isAssociated ? "\nAssociated" : "\nNot associated") : "");
+
+        // Initialize local VHT capabilities
+        localVhtCapabilities.ldpc = par("vhtLdpc").boolValue();
+        localVhtCapabilities.maxNss = par("vhtMaxNss").intValue();
+        localVhtCapabilities.maxAmpduLengthExponent = par("vhtMaxAmpduLengthExponent").intValue();
+        localVhtCapabilities.txBeamforming = par("vhtBeamforming").boolValue();
+        localVhtCapabilities.muMimo = par("vhtMuMimo").boolValue();
+
+        vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
+        vhtOperation.ldpc = localVhtCapabilities.ldpc;
+        vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
     }
 }
 
@@ -93,6 +104,7 @@ void Ieee80211Mib::releaseAssociationId(const MacAddress& address)
 {
     bssAccessPointData.associationIds.erase(address);
     removePeerHeCapabilities(address);
+    removePeerVhtCapabilities(address);
 }
 
 short Ieee80211Mib::getAssociationId(const MacAddress& address) const
@@ -128,6 +140,27 @@ const Ieee80211NegotiatedHeCapabilities *Ieee80211Mib::findNegotiatedHeCapabilit
 {
     auto it = bssAccessPointData.negotiatedHeCapabilities.find(address);
     return it == bssAccessPointData.negotiatedHeCapabilities.end() ? nullptr : &it->second;
+}
+
+void Ieee80211Mib::setPeerVhtCapabilities(const MacAddress& address,
+        const Ieee80211VhtCapabilities& capabilities, const Ieee80211VhtOperation& operation)
+{
+    bssAccessPointData.advertisedVhtCapabilities[address] = capabilities;
+    bssAccessPointData.negotiatedVhtCapabilities[address] =
+            negotiateVhtCapabilities(localVhtCapabilities, capabilities, operation);
+}
+
+void Ieee80211Mib::removePeerVhtCapabilities(const MacAddress& address)
+{
+    bssAccessPointData.advertisedVhtCapabilities.erase(address);
+    bssAccessPointData.negotiatedVhtCapabilities.erase(address);
+}
+
+const Ieee80211NegotiatedVhtCapabilities *Ieee80211Mib::findNegotiatedVhtCapabilities(
+        const MacAddress& address) const
+{
+    auto it = bssAccessPointData.negotiatedVhtCapabilities.find(address);
+    return it == bssAccessPointData.negotiatedVhtCapabilities.end() ? nullptr : &it->second;
 }
 
 const char *Ieee80211Mib::getModeStr(Ieee80211Mib::Mode mode)

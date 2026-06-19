@@ -20,6 +20,12 @@ simple Ieee80211Mib extends SimpleModule
 {
     parameters:
         @class(Ieee80211Mib);
+        bool vhtLdpc = default(false);
+        int vhtMaxNss = default(8);
+        int vhtMaxAmpduLengthExponent = default(7);
+        bool vhtBeamforming = default(false);
+        bool vhtMuMimo = default(false);
+        double vhtOperatingChannelWidth @unit(Hz) = default(20MHz);
         displayStringTextFormat = default("Address: {address}{ssidStr}\n{modeStr}{stationTypeStr}{qosStr}{associatedStr}");
         @display("i=block/table");
 }

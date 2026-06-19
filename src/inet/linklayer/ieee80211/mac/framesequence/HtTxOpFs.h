@@ -19,6 +19,7 @@ class INET_API HtTxOpFs : public AlternativesFs
     HtTxOpFs();
 
     virtual int selectHtTxOpSequence(AlternativesFs *frameSequence, FrameSequenceContext *context);
+    virtual bool isRtsCtsNeeded(OptionalFs *frameSequence, FrameSequenceContext *context);
 };
 
 } // namespace ieee80211
