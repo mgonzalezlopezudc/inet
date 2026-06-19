@@ -1,0 +1,139 @@
+%description:
+Test HE Capabilities, HE Operation, and HE 6 GHz Band Capabilities management element serialization.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+auto request = makeShared<Ieee80211AssociationRequestFrame>();
+request->setSSID("he");
+Ieee80211SupportedRatesElement rates;
+rates.numRates = 2;
+rates.rate[0] = 6;
+rates.rate[1] = 12;
+request->setSupportedRates(rates);
+request->setTransmitPowerDbm(12.5);
+
+Ieee80211HeCapabilitiesElement capabilities;
+capabilities.supportedChannelWidth40MHz = true;
+capabilities.supportedChannelWidth80MHz = true;
+capabilities.supportedChannelWidth160MHz = true;
+capabilities.dlOfdma = true;
+capabilities.ulOfdma = true;
+capabilities.dcm = true;
+capabilities.maxDcmConstellation = 4;
+capabilities.maxDcmNss = 2;
+capabilities.ldpc = true;
+capabilities.multiTidAggregationRx = true;
+capabilities.multiTidAggregationTx = true;
+capabilities.muBarTriggerRx = true;
+capabilities.heTbBlockAckTx = true;
+capabilities.maxAmpduLengthExponent = 6;
+capabilities.maxMpduLength = 11454;
+capabilities.maxBlockAckBufferSize = 64;
+capabilities.ru26Tone = true;
+capabilities.ru52Tone = true;
+capabilities.ru106Tone = true;
+capabilities.ru242Tone = true;
+capabilities.ru484Tone = true;
+capabilities.ru996Tone = true;
+capabilities.ru1992Tone = true;
+for (int i = 0; i < 8; ++i) {
+    capabilities.rxMcsNss.maxMcsForNss[i] = i < 2 ? 11 : -1;
+    capabilities.txMcsNss.maxMcsForNss[i] = i < 1 ? 9 : -1;
+}
+request->setHeCapabilitiesPresent(true);
+request->setHeCapabilities(capabilities);
+
+Ieee80211HeOperationElement operation;
+operation.bssColor = 37;
+operation.operatingChannelWidthMHz = 20;
+operation.basicHeMcsNss = 0xfffc;
+operation.defaultPeDurationPresent = true;
+operation.defaultPeDurationUs = 16;
+request->setHeOperationPresent(true);
+request->setHeOperation(operation);
+
+Ieee80211He6GhzBandCapabilitiesElement sixGhzCapabilities;
+sixGhzCapabilities.minimumMpduStartSpacing = 3;
+sixGhzCapabilities.maxAmpduLengthExponent = 7;
+sixGhzCapabilities.maxMpduLength = 11454;
+request->setHe6GhzBandCapabilitiesPresent(true);
+request->setHe6GhzBandCapabilities(sixGhzCapabilities);
+
+request->setChunkLength(B(56));
+
+auto packet = new Packet("he-mgmt", request);
+auto bytes = packet->peekDataAsBytes();
+ASSERT(bytes->getChunkLength() == B(56));
+
+const auto& raw = bytes->getBytes();
+ASSERT(raw[14] == 255);
+ASSERT(raw[15] == 26);
+ASSERT(raw[16] == 35);
+ASSERT(raw[42] == 255);
+ASSERT(raw[43] == 7);
+ASSERT(raw[44] == 36);
+ASSERT(raw[51] == 255);
+ASSERT(raw[52] == 3);
+ASSERT(raw[53] == 59);
+
+auto received = new Packet("he-mgmt-rx", bytes);
+auto decoded = received->popAtFront<Ieee80211AssociationRequestFrame>();
+
+ASSERT(decoded->getHeCapabilitiesPresent());
+auto decodedCapabilities = decoded->getHeCapabilities();
+ASSERT(decodedCapabilities.supportedChannelWidth40MHz);
+ASSERT(decodedCapabilities.supportedChannelWidth80MHz);
+ASSERT(decodedCapabilities.supportedChannelWidth160MHz);
+ASSERT(decodedCapabilities.dlOfdma);
+ASSERT(decodedCapabilities.ulOfdma);
+ASSERT(decodedCapabilities.dcm);
+ASSERT(decodedCapabilities.maxDcmConstellation == 4);
+ASSERT(decodedCapabilities.maxDcmNss == 2);
+ASSERT(decodedCapabilities.ldpc);
+ASSERT(decodedCapabilities.multiTidAggregationRx);
+ASSERT(decodedCapabilities.multiTidAggregationTx);
+ASSERT(decodedCapabilities.muBarTriggerRx);
+ASSERT(decodedCapabilities.heTbBlockAckTx);
+ASSERT(decodedCapabilities.maxAmpduLengthExponent == 6);
+ASSERT(decodedCapabilities.maxMpduLength == 11454);
+ASSERT(decodedCapabilities.maxBlockAckBufferSize == 64);
+ASSERT(decodedCapabilities.ru26Tone);
+ASSERT(decodedCapabilities.ru52Tone);
+ASSERT(decodedCapabilities.ru106Tone);
+ASSERT(decodedCapabilities.ru242Tone);
+ASSERT(decodedCapabilities.ru484Tone);
+ASSERT(decodedCapabilities.ru996Tone);
+ASSERT(decodedCapabilities.ru1992Tone);
+ASSERT(decodedCapabilities.rxMcsNss.maxMcsForNss[0] == 11);
+ASSERT(decodedCapabilities.rxMcsNss.maxMcsForNss[1] == 11);
+ASSERT(decodedCapabilities.rxMcsNss.maxMcsForNss[2] == -1);
+ASSERT(decodedCapabilities.txMcsNss.maxMcsForNss[0] == 9);
+ASSERT(decodedCapabilities.txMcsNss.maxMcsForNss[1] == -1);
+
+ASSERT(decoded->getHeOperationPresent());
+auto decodedOperation = decoded->getHeOperation();
+ASSERT(decodedOperation.bssColor == 37);
+ASSERT(decodedOperation.basicHeMcsNss == (short)0xfffc);
+ASSERT(decodedOperation.defaultPeDurationPresent);
+ASSERT(decodedOperation.defaultPeDurationUs == 16);
+
+ASSERT(decoded->getHe6GhzBandCapabilitiesPresent());
+auto decoded6GhzCapabilities = decoded->getHe6GhzBandCapabilities();
+ASSERT(decoded6GhzCapabilities.minimumMpduStartSpacing == 3);
+ASSERT(decoded6GhzCapabilities.maxAmpduLengthExponent == 7);
+ASSERT(decoded6GhzCapabilities.maxMpduLength == 11454);
+
+delete packet;
+delete received;
+EV << "HE management elements round trip passed.\n";
+
+%contains: stdout
+HE management elements round trip passed.

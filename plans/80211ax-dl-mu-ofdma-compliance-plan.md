@@ -31,6 +31,48 @@ Exact HE PHY timing and signaling
              +------------------------------------+--> correct DL MU BA exchange
 ```
 
+## Progress Status
+
+*Last updated: 2026-06-19.*
+
+The core compliance work was implemented in commit `bc14642e7f` on branch
+`topic/80211heulmuofdma`. The focused HE/DL unit-test suite passes and the
+OFDMA validation scenario runs successfully.
+
+| Phase | Status | Evidence |
+|---|---|---|
+| Phase 1: Exact HE-MU PHY Timing | Done | `Ieee80211HePhyCalculator.h`, per-user parameters, common symbol alignment, 5.484 ms limit, `Ieee80211HeUserPhyParameters_1.test`, `Ieee80211HePerUserTransmission_1.test`. |
+| Phase 2: Standards-Shaped HE Signaling | Done | `Ieee80211HeSigCodec.h`, HE-SIG-B RU codec, `Ieee80211HeMuPhyHeaderSerializer_1.test`. |
+| Phase 3: HE Capability and Operation Negotiation | Mostly done | `Ieee80211HeCapabilities.h`, MIB negotiated state, scheduler enforcement, HE Capabilities/Operation/6 GHz element representations, management serializer, `Ieee80211HeMgmtElements_1.test`. Automatic 6 GHz element advertisement still needs active-band metadata. |
+| Phase 4: Standards-Shaped A-MPDU and Per-MPDU Reception | Done | A-MPDU delimiters, per-MPDU receive result tags, partial BA, `Ieee80211HeMuSeqAck_1.test`, `Ieee80211HeBlockAckWindow_1.test`. |
+| Phase 5: Correct DL MU Block Ack Exchange | Done | MU-BAR Trigger default, explicit sequential BAR compatibility, receive collection, `Ieee80211HeMuSeqAck_1.test`. |
+| Cross-Phase Refactoring | Done | Transactional plan with runtime-safe SU fallback, occupied BA window accounting, TID-aware backlog. Statistics and end-to-end scenario coverage are partial. |
+
+**Remaining literal-plan gaps**
+
+1. **Automatic HE 6 GHz Band Capabilities advertisement.** HE 6 GHz Band
+   Capabilities are now represented in `Ieee80211MgmtFrame.msg` and
+   serialized/deserialized by `Ieee80211MgmtFrameSerializer`, but the management
+   procedures do not yet automatically emit the element because the MIB does not
+   expose active band state. Scenarios can still set the element explicitly on a
+   management frame.
+2. **LDPC processing.** The PHY calculator rejects `HE_CODING_LDPC` with the
+   validation error "HE LDPC is not implemented". This satisfies the Phase 1
+   acceptance fallback (reject before scheduling), but full LDPC codeword sizing,
+   shortening, puncturing, repetition, and extra-symbol handling from the plan
+   scope are still missing.
+
+### Recommended next steps
+
+1. Add active-band awareness to management/MIB state and automatically include
+   HE 6 GHz Band Capabilities when operating in 6 GHz.
+2. Implement LDPC codeword sizing, shortening, puncturing, repetition, and
+   extra-symbol handling in `Ieee80211HePhyCalculator`, then enable LDPC in the
+   default capability set and add focused unit tests.
+3. Add the cross-phase statistics defined in this plan (HE-MU duration,
+   per-user padding, MPDU outcome counters, MU-BAR response counters, capability
+   exclusions, SU fallback reasons) and end-to-end scenario coverage.
+
 ## Current Baseline
 
 The current implementation already provides:

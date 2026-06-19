@@ -13,6 +13,7 @@
 #include "inet/common/packet/Message.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/RadioControlInfo_m.h"
@@ -268,12 +269,14 @@ void Ieee80211MgmtSta::startAssociation(ApInfo *ap, simtime_t timeout)
     // create and send association request
     const auto& body = makeShared<Ieee80211AssociationRequestFrame>();
     body->setTransmitPowerDbm(par("associationTransmitPower"));
+    body->setHeCapabilitiesPresent(true);
+    body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
 
     // TODO set the following too?
     // string SSID
 //    Ieee80211SupportedRatesElement supportedRates;
 
-    body->setChunkLength(B(2 + 2 + strlen(body->getSSID()) + 2 + body->getSupportedRates().numRates + 2));
+    body->setChunkLength(B(2 + 2 + (2 + strlen(body->getSSID())) + (2 + body->getSupportedRates().numRates) + 2) + getHeMgmtElementsLength(body));
     sendManagementFrame("Assoc", body, ST_ASSOCIATIONREQUEST, ap->address);
 
     // schedule timeout
@@ -377,7 +380,9 @@ void Ieee80211MgmtSta::sendProbeRequest()
     const auto& body = makeShared<Ieee80211ProbeRequestFrame>();
     body->setSSID(scanning.ssid.c_str());
     body->setSupportedRates(supportedRates);
-    body->setChunkLength(B((2 + scanning.ssid.length()) + (2 + body->getSupportedRates().numRates)));
+    body->setHeCapabilitiesPresent(true);
+    body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
+    body->setChunkLength(B((2 + scanning.ssid.length()) + (2 + body->getSupportedRates().numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("ProbeReq", body, ST_PROBEREQUEST, scanning.bssid);
 }
 
@@ -477,6 +482,7 @@ void Ieee80211MgmtSta::disassociate()
 {
     EV << "Disassociating from AP address=" << assocAP.address << "\n";
     ASSERT(mib->bssStationData.isAssociated);
+    mib->removePeerHeCapabilities(assocAP.address);
     mib->bssStationData.isAssociated = false;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
@@ -602,6 +608,7 @@ void Ieee80211MgmtSta::handleDeauthenticationFrame(Packet *packet, const Ptr<con
 
     EV << "Setting isAuthenticated flag for that AP to false\n";
     ap->isAuthenticated = false;
+    mib->removePeerHeCapabilities(address);
     delete packet;
 }
 
@@ -625,6 +632,10 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
     MacAddress address = header->getTransmitterAddress();
     int statusCode = responseBody->getStatusCode();
     short aid = responseBody->getAid();
+    bool heCapabilitiesPresent = responseBody->getHeCapabilitiesPresent();
+    Ieee80211HeCapabilitiesElement heCapabilities = responseBody->getHeCapabilities();
+    bool heOperationPresent = responseBody->getHeOperationPresent();
+    Ieee80211HeOperationElement heOperation = responseBody->getHeOperation();
     // TODO Ieee80211SupportedRatesElement supportedRates;
     delete packet;
 
@@ -656,6 +667,15 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
         mib->bssStationData.isAssociated = true;
         mib->bssStationData.associationId = aid;
         (ApInfo&)assocAP = (*ap);
+        if (heCapabilitiesPresent)
+            mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(heCapabilities),
+                    heOperationPresent ? makeHeOperation(heOperation) :
+                    (ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation));
+        else if (ap->heCapabilitiesPresent)
+            mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(ap->heCapabilities),
+                    ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation);
+        else
+            mib->removePeerHeCapabilities(ap->address);
 
         emit(l2AssociatedSignal, myIface, ap);
 
@@ -695,8 +715,9 @@ void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const
     }
 
     EV << "Setting isAssociated flag to false\n";
-        mib->bssStationData.isAssociated = false;
-        mib->bssStationData.associationId = -1;
+    mib->removePeerHeCapabilities(address);
+    mib->bssStationData.isAssociated = false;
+    mib->bssStationData.associationId = -1;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
 }
@@ -751,6 +772,12 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
     ap->ssid = body->getSSID();
     ap->supportedRates = body->getSupportedRates();
     ap->beaconInterval = body->getBeaconInterval();
+    ap->heCapabilitiesPresent = body->getHeCapabilitiesPresent();
+    if (ap->heCapabilitiesPresent)
+        ap->heCapabilities = body->getHeCapabilities();
+    ap->heOperationPresent = body->getHeOperationPresent();
+    if (ap->heOperationPresent)
+        ap->heOperation = body->getHeOperation();
     auto signalPowerInd = packet->getTag<SignalPowerInd>();
     if (signalPowerInd != nullptr) {
         ap->rxPower = signalPowerInd->getPower().get<W>();
