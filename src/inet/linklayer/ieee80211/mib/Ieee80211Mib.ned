@@ -22,6 +22,10 @@ simple Ieee80211Mib extends SimpleModule
         @class(Ieee80211Mib);
         bool vhtLdpc = default(false);
         bool htLdpc = default(false);
+        // HE features are opt-in so existing configurations retain BCC and
+        // the unextended PPDU geometry.
+        bool heLdpc = default(false);
+        int heDefaultPeDurationUs = default(0); // 0, 4, 8, 12, or 16
         int vhtMaxNss = default(8);
         int vhtMaxAmpduLengthExponent = default(7);
         bool vhtBeamforming = default(false);
@@ -30,4 +34,3 @@ simple Ieee80211Mib extends SimpleModule
         displayStringTextFormat = default("Address: {address}{ssidStr}\n{modeStr}{stationTypeStr}{qosStr}{associatedStr}");
         @display("i=block/table");
 }
-

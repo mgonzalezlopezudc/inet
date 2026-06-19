@@ -531,10 +531,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
             std::isnan(scheduleContext.channelBandwidth.get()))
         throw cRuntimeError("HeDlMuTxOpFs: scheduler context is missing channel geometry");
-    if (!scheduleContext.puncturedSubchannels.empty() &&
-            std::any_of(scheduleContext.puncturedSubchannels.begin(),
-                    scheduleContext.puncturedSubchannels.end(), [] (bool punctured) { return punctured; }))
-        throw cRuntimeError("HeDlMuTxOpFs: preamble puncturing is not implemented");
     auto allocations = dlScheduler->schedule(scheduleContext);
     if (allocations.empty()) {
         EV_WARN << "HeDlMuTxOpFs: scheduler returned no usable RU allocations; deferring to SU." << endl;
@@ -941,6 +937,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto commonRequest = container->addTagIfAbsent<Ieee80211HeMuCommonReq>();
     commonRequest->setGuardInterval(scheduleContext.guardInterval);
     commonRequest->setCoding(scheduleContext.coding);
+    commonRequest->setPacketExtensionDurationUs(scheduleContext.packetExtensionDurationUs);
+    commonRequest->setPuncturedSubchannelMask(scheduleContext.puncturedSubchannelMask);
 
     ASSERT(activeAllocations.size() >= 2);
 
