@@ -78,6 +78,7 @@ class INET_API Ieee80211CompliantBands
     static const Ieee80211ArithmeticalBand band5GHz40MHz;
     static const Ieee80211ArithmeticalBand band5GHz80MHz;
     static const Ieee80211ArithmeticalBand band5GHz160MHz;
+    static const Ieee80211ArithmeticalBand band5GHz80_80MHz;
     static const Ieee80211ArithmeticalBand band5_9GHz;
 
     static const IIeee80211Band *findBand(const char *name);
