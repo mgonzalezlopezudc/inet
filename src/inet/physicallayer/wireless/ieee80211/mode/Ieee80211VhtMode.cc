@@ -62,11 +62,43 @@ Ieee80211VhtSignalMode::Ieee80211VhtSignalMode(unsigned int modulationAndCodingS
 {
 }
 
-Ieee80211VhtDataMode::Ieee80211VhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType) :
+Ieee80211VhtDataMode::Ieee80211VhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc) :
     Ieee80211VhtModeBase(modulationAndCodingScheme->getMcsIndex(), computeNumberOfSpatialStreams(modulationAndCodingScheme), bandwidth, guardIntervalType),
     modulationAndCodingScheme(modulationAndCodingScheme),
-    numberOfBccEncoders(computeNumberOfBccEncoders())
+    numberOfBccEncoders(computeNumberOfBccEncoders()),
+    ldpc(ldpc)
 {
+    if (ldpc) {
+        if (modulationAndCodingScheme->getModulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getModulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension1Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension1Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension2Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension2Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension3Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension3Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension4Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension4Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension5Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension5Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension6Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension6Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension7Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension7Modulation()->getSubcarrierModulation()->getCodeWordSize());
+
+        auto bccCode = modulationAndCodingScheme->getCode();
+        ldpcCode = new Ieee80211VhtCode(
+            bccCode->getForwardErrorCorrection(),
+            new Ieee80211VhtInterleaving(numberOfCodedBitsPerSpatialStreams, bandwidth),
+            bccCode->getScrambling(),
+            true
+        );
+    }
+}
+
+Ieee80211VhtDataMode::~Ieee80211VhtDataMode()
+{
+    delete ldpcCode;
 }
 
 Ieee80211Vhtmcs::Ieee80211Vhtmcs(unsigned int mcsIndex, const ApskModulationBase *stream1SubcarrierModulation, const ApskModulationBase *stream2SubcarrierModulation, const ApskModulationBase *stream3SubcarrierModulation, const ApskModulationBase *stream4SubcarrierModulation, const ApskModulationBase *stream5SubcarrierModulation, const ApskModulationBase *stream6SubcarrierModulation, const ApskModulationBase *stream7SubcarrierModulation, const ApskModulationBase *stream8SubcarrierModulation, const Ieee80211ConvolutionalCode* convolutionalCode, Hz bandwidth) :
@@ -670,11 +702,11 @@ Ieee80211VhtCompliantModes::~Ieee80211VhtCompliantModes()
         delete entry.second;
 }
 
-const Ieee80211VhtMode *Ieee80211VhtCompliantModes::getCompliantMode(const Ieee80211Vhtmcs *mcsMode, Ieee80211VhtMode::BandMode centerFrequencyMode, Ieee80211VhtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211VhtModeBase::GuardIntervalType guardIntervalType)
+const Ieee80211VhtMode *Ieee80211VhtCompliantModes::getCompliantMode(const Ieee80211Vhtmcs *mcsMode, Ieee80211VhtMode::BandMode centerFrequencyMode, Ieee80211VhtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211VhtModeBase::GuardIntervalType guardIntervalType, bool ldpc)
 {
     const char *name = ""; // TODO
     unsigned int nss = mcsMode->getNumNss();
-    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), guardIntervalType, nss);
+    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), guardIntervalType, nss, ldpc);
     auto mode = singleton.modeCache.find(htModeId);
     if (mode == singleton.modeCache.end()) {
         const Ieee80211OfdmSignalMode *legacySignal = nullptr;
@@ -690,10 +722,10 @@ const Ieee80211VhtMode *Ieee80211VhtCompliantModes::getCompliantMode(const Ieee8
             default:
                 throw cRuntimeError("Unknown preamble format");
         }
-        const Ieee80211VhtDataMode *dataMode = new Ieee80211VhtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType);
+        const Ieee80211VhtDataMode *dataMode = new Ieee80211VhtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType, ldpc);
         const Ieee80211VhtPreambleMode *preambleMode = new Ieee80211VhtPreambleMode(htSignal, legacySignal, preambleFormat, dataMode->getNumberOfSpatialStreams());
         const Ieee80211VhtMode *htMode = new Ieee80211VhtMode(name, preambleMode, dataMode, centerFrequencyMode);
-        singleton.modeCache.insert(std::pair<std::tuple<Hz, unsigned int, Ieee80211VhtModeBase::GuardIntervalType, unsigned int>, const Ieee80211VhtMode *>(htModeId, htMode));
+        singleton.modeCache.insert(std::pair<std::tuple<Hz, unsigned int, Ieee80211VhtModeBase::GuardIntervalType, unsigned int, bool>, const Ieee80211VhtMode *>(htModeId, htMode));
         return htMode;
     }
     return mode->second;

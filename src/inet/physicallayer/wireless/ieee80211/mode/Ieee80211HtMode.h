@@ -195,6 +195,9 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
   protected:
     const Ieee80211Htmcs *modulationAndCodingScheme;
     const unsigned int numberOfBccEncoders;
+    bool ldpc = false;
+    mutable const Ieee80211HtCode *ldpcCode = nullptr;
+    mutable std::vector<unsigned int> numberOfCodedBitsPerSpatialStreams;
 
   protected:
     bps computeGrossBitrate() const override;
@@ -204,10 +207,11 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
     unsigned int computeNumberOfBccEncoders() const;
 
   public:
-    Ieee80211HtDataMode(const Ieee80211Htmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType);
+    Ieee80211HtDataMode(const Ieee80211Htmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc = false);
+    virtual ~Ieee80211HtDataMode();
 
     b getServiceFieldLength() const { return b(16); }
-    b getTailFieldLength() const { return b(6) * numberOfBccEncoders; }
+    b getTailFieldLength() const { return (getCode() && getCode()->isLdpc()) ? b(0) : b(6) * numberOfBccEncoders; }
 
     virtual Hz getBandwidth() const override { return bandwidth; }
     virtual int getNumberOfSpatialStreams() const override { return Ieee80211HtModeBase::getNumberOfSpatialStreams(); }
@@ -217,7 +221,7 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
     virtual bps getNetBitrate() const override { return Ieee80211HtModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211HtModeBase::getGrossBitrate(); }
     virtual const Ieee80211Htmcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }
-    virtual const Ieee80211HtCode *getCode() const { return modulationAndCodingScheme->getCode(); }
+    virtual const Ieee80211HtCode *getCode() const { return ldpc ? ldpcCode : modulationAndCodingScheme->getCode(); }
     virtual const simtime_t getSymbolInterval() const override { return Ieee80211HtTimingRelatedParametersBase::getSymbolInterval(); }
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
 };
@@ -460,13 +464,13 @@ class INET_API Ieee80211HtCompliantModes
   protected:
     static OPP_THREAD_LOCAL const Ieee80211HtCompliantModes singleton;
 
-    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType>, const Ieee80211HtMode *> modeCache;
+    mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType, bool>, const Ieee80211HtMode *> modeCache;
 
   public:
     Ieee80211HtCompliantModes();
     virtual ~Ieee80211HtCompliantModes();
 
-    static const Ieee80211HtMode *getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType);
+    static const Ieee80211HtMode *getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType, bool ldpc = false);
 };
 
 } /* namespace physicallayer */

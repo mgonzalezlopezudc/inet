@@ -23,13 +23,15 @@ class INET_API Ieee80211HtCode : public ICode
     const Ieee80211ConvolutionalCode *forwardErrorCorrection;
     const Ieee80211HtInterleaving *interleaving;
     const AdditiveScrambling *scrambling;
+    bool ldpc = false;
 
   public:
-    Ieee80211HtCode(const Ieee80211ConvolutionalCode *forwardErrorCorrection, const Ieee80211HtInterleaving *interleaving, const AdditiveScrambling *scrambling);
+    Ieee80211HtCode(const Ieee80211ConvolutionalCode *forwardErrorCorrection, const Ieee80211HtInterleaving *interleaving, const AdditiveScrambling *scrambling, bool ldpc = false);
 
     const Ieee80211ConvolutionalCode *getForwardErrorCorrection() const { return forwardErrorCorrection; }
     const AdditiveScrambling *getScrambling() const { return scrambling; }
     const Ieee80211HtInterleaving *getInterleaving() const { return interleaving; }
+    bool isLdpc() const { return ldpc; }
 
     virtual ~Ieee80211HtCode();
 };
