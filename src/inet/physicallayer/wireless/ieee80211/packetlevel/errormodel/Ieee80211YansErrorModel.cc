@@ -266,14 +266,17 @@ double Ieee80211YansErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, u
                                                         htMode->getDataMode()->getGrossBitrate(),
                                                         htMode->getDataMode()->getBandwidth(),
                                                         snr);
-    else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode))
+    else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+        double effectiveSnr = snr;
+        if (vhtMode->getDataMode()->getCode() && vhtMode->getDataMode()->getCode()->isLdpc())
+            effectiveSnr *= std::pow(10.0, 1.5 / 10.0);
         successRate = getOFDMAndERPOFDMChunkSuccessRate(vhtMode->getDataMode()->getModulation()->getSubcarrierModulation(),
-                                                        vhtMode->getDataMode()->getCode()->getForwardErrorCorrection(),
-                                                        //bitLength + vhtMode->getHeaderMode()->getHTLengthLength().get<b>(),
-                                                        bitLength,
-                                                        vhtMode->getDataMode()->getGrossBitrate(),
-                                                        vhtMode->getDataMode()->getBandwidth(),
-                                                        snr);
+                                                         vhtMode->getDataMode()->getCode()->getForwardErrorCorrection(),
+                                                         bitLength,
+                                                         vhtMode->getDataMode()->getGrossBitrate(),
+                                                         vhtMode->getHeaderMode()->getBandwidth(),
+                                                         effectiveSnr);
+    }
     else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode))
         successRate = getOFDMAndERPOFDMChunkSuccessRate(heMode->getDataMode()->getModulation()->getSubcarrierModulation(),
                                                         heMode->getDataMode()->getCode()->getForwardErrorCorrection(),

@@ -1,0 +1,88 @@
+%description:
+Test IEEE 802.11ac VHT LDPC coding gain in error models (NIST and YANS)
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211YansErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmCode.h"
+#include "inet/physicallayer/wireless/common/modulation/BpskModulation.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+class TestNistErrorModel : public Ieee80211NistErrorModel {
+  public:
+    using Ieee80211NistErrorModel::getDataSuccessRate;
+};
+
+class TestYansErrorModel : public Ieee80211YansErrorModel {
+  public:
+    using Ieee80211YansErrorModel::getDataSuccessRate;
+};
+
+class TestVhtDataMode : public Ieee80211VhtDataMode {
+  protected:
+    const Ieee80211VhtCode *customCode;
+  public:
+    TestVhtDataMode(const Ieee80211Vhtmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, const Ieee80211VhtCode *customCode) :
+        Ieee80211VhtDataMode(modulationAndCodingScheme, bandwidth, guardIntervalType), customCode(customCode) {}
+    virtual const Ieee80211VhtCode *getCode() const override { return customCode; }
+};
+
+%activity:
+// 1. Instantiating models
+TestNistErrorModel nistModel;
+TestYansErrorModel yansModel;
+
+// 2. Setup modes (VHT MCS 0, 20MHz, Nss 1, Long GI)
+const Ieee80211VhtMode *bccMode = Ieee80211VhtCompliantModes::getCompliantMode(
+    &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+    Ieee80211VhtMode::BAND_5GHZ,
+    Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+
+// For LDPC mode, we clone or build a custom mode using an LDPC Vhtmcs
+const Ieee80211Vhtmcs *ldpcMcs = new Ieee80211Vhtmcs(
+    0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 1);
+// Set the internal code to LDPC (this is normally set via constructor, so we can pass it or verify that getCompliantMode handles it)
+// Let's create an LDPC VhtMode directly for testing:
+const Ieee80211VhtCode *customLdpcCode = new Ieee80211VhtCode(&Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, nullptr, nullptr, true);
+const Ieee80211VhtSignalMode *ldpcSignal = new Ieee80211VhtSignalMode(
+    0, &Ieee80211OfdmCompliantModulations::subcarriers52QbpskModulation,
+    customLdpcCode, MHz(20), Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+const Ieee80211VhtDataMode *ldpcData = new TestVhtDataMode(ldpcMcs, MHz(20), Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG, customLdpcCode);
+// Make sure data mode code is LDPC
+const_cast<Ieee80211VhtCode*>(ldpcData->getCode())->isLdpc(); // Verify it works.
+const Ieee80211VhtMode *ldpcMode = new Ieee80211VhtMode("ac-ldpc",
+    new Ieee80211VhtPreambleMode(ldpcSignal, &Ieee80211OfdmCompliantModes::ofdmHeaderMode6MbpsRate13, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, 1),
+    ldpcData, Ieee80211VhtMode::BAND_5GHZ);
+
+// 3. Compare success rates at marginal SNR (e.g. 2.0 linear SNR) for 8000 bits
+double snr = 2.0;
+unsigned int bitLength = 8000;
+
+double nistBccSuccess = nistModel.getDataSuccessRate(bccMode, bitLength, snr);
+double nistLdpcSuccess = nistModel.getDataSuccessRate(ldpcMode, bitLength, snr);
+
+double yansBccSuccess = yansModel.getDataSuccessRate(bccMode, bitLength, snr);
+double yansLdpcSuccess = yansModel.getDataSuccessRate(ldpcMode, bitLength, snr);
+
+EV << "NIST BCC Success: " << nistBccSuccess << "\n";
+EV << "NIST LDPC Success: " << nistLdpcSuccess << "\n";
+EV << "NIST gain is positive: " << (nistLdpcSuccess > nistBccSuccess) << "\n";
+
+EV << "YANS BCC Success: " << yansBccSuccess << "\n";
+EV << "YANS LDPC Success: " << yansLdpcSuccess << "\n";
+EV << "YANS gain is positive: " << (yansLdpcSuccess > yansBccSuccess) << "\n";
+
+delete ldpcMode;
+EV << ".\n";
+
+%contains: stdout
+NIST gain is positive: 1
+
+%contains: stdout
+YANS gain is positive: 1

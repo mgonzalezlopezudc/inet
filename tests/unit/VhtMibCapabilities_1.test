@@ -1,0 +1,39 @@
+%description:
+Test IEEE 802.11ac VHT capabilities intersection and negotiation logic
+
+%includes:
+#include "inet/linklayer/ieee80211/mib/Ieee80211VhtCapabilities.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+Ieee80211VhtCapabilities local;
+local.ldpc = true;
+local.maxAmpduLengthExponent = 7;
+local.maxNss = 8;
+
+Ieee80211VhtCapabilities peer;
+peer.ldpc = false; // Peer does not support LDPC
+peer.maxAmpduLengthExponent = 3;
+peer.maxNss = 4;
+
+Ieee80211VhtOperation operation;
+operation.operatingChannelWidth = Hz(80e6);
+
+Ieee80211NegotiatedVhtCapabilities negotiated = negotiateVhtCapabilities(local, peer, operation);
+
+EV << "Negotiated LDPC: " << negotiated.intersection.ldpc << "\n";
+EV << "Negotiated maxAmpduLengthExponent: " << negotiated.intersection.maxAmpduLengthExponent << "\n";
+EV << "Negotiated maxNss: " << negotiated.intersection.maxNss << "\n";
+EV << "Negotiated channel width: " << negotiated.operation.operatingChannelWidth << "\n";
+EV << ".\n";
+
+%contains: stdout
+Negotiated LDPC: 0
+Negotiated maxAmpduLengthExponent: 3
+Negotiated maxNss: 4
+Negotiated channel width: 80 MHz
+.

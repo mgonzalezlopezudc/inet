@@ -12,6 +12,8 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
 
 namespace inet {
 
@@ -37,7 +39,16 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
     auto headerLength = mode->getHeaderMode()->getLength();
     unsigned int dataLength = mode->getDataMode()->getCompleteLength(B(phyHeader->getLengthField())).get<b>();
     // TODO check header length and data length for OFDM (signal) field
-    double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), getScalarSnir(snir));
+    double snr = getScalarSnir(snir);
+    auto vhtTag = transmission->getPacket() ? transmission->getPacket()->findTag<Ieee80211VhtTransmissionTag>() : nullptr;
+    if (vhtTag) {
+        if (vhtTag->getBeamformed())
+            snr *= std::pow(10.0, vhtTag->getBeamformingGainDb() / 10.0);
+        if (vhtTag->getMuMimo())
+            snr /= std::pow(10.0, vhtTag->getMuMimoPenaltyDb() / 10.0);
+    }
+
+    double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), snr);
     double dataSuccessRate;
     if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
         const Ieee80211HeMuUserInfo *selectedUser = nullptr;
@@ -71,12 +82,12 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
                     static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()),
                     static_cast<Ieee80211HeCoding>(heMuHeader->getCoding()));
             dataLength = 16 + selectedUser->psduLength.get<B>() * 8 + 6;
-            double userSnir = getScalarSnir(snir) * (selectedUser->dcm ? 2.0 : 1.0);
+            double userSnir = snr * (selectedUser->dcm ? 2.0 : 1.0);
             dataSuccessRate = getHeDataSuccessRate(parameters, dataLength, userSnir);
         }
     }
     else
-        dataSuccessRate = getDataSuccessRate(mode, dataLength, getScalarSnir(snir));
+        dataSuccessRate = getDataSuccessRate(mode, dataLength, snr);
     switch (part) {
         case IRadioSignal::SIGNAL_PART_WHOLE:
             return 1.0 - headerSuccessRate * dataSuccessRate;

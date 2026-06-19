@@ -1,0 +1,40 @@
+%description:
+Test IEEE 802.11ac VhtCode and LDPC parameters
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtCode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmCode.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+// 1. Check default BCC code
+const Ieee80211VhtCode *bccCode = Ieee80211VhtCompliantCodes::getCompliantCode(
+    &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2,
+    &Ieee80211OfdmCompliantModulations::subcarriers52BpskModulation,
+    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, MHz(20), true);
+
+EV << "BCC Code isLdpc: " << bccCode->isLdpc() << "\n";
+EV << "BCC Code Rate: " << bccCode->getForwardErrorCorrection()->getCodeRate() << "\n";
+
+// 2. Check LDPC code
+const Ieee80211VhtCode *ldpcCode = new Ieee80211VhtCode(
+    &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4,
+    nullptr, nullptr, true);
+
+EV << "LDPC Code isLdpc: " << ldpcCode->isLdpc() << "\n";
+EV << "LDPC Code Rate: " << ldpcCode->getForwardErrorCorrection()->getCodeRate() << "\n";
+
+delete bccCode;
+delete ldpcCode;
+EV << ".\n";
+
+%contains: stdout
+BCC Code isLdpc: 0
+BCC Code Rate: 0.5
+LDPC Code isLdpc: 1
+LDPC Code Rate: 0.75
+.

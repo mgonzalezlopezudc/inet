@@ -15,10 +15,12 @@ namespace physicallayer {
 Ieee80211VhtCode::Ieee80211VhtCode(
         const Ieee80211ConvolutionalCode* forwardErrorCorrection,
         const Ieee80211VhtInterleaving* interleaving,
-        const AdditiveScrambling* scrambling) :
+        const AdditiveScrambling* scrambling,
+        bool ldpc) :
     forwardErrorCorrection(forwardErrorCorrection),
     interleaving(interleaving),
-    scrambling(scrambling)
+    scrambling(scrambling),
+    ldpc(ldpc)
 {
 
 }

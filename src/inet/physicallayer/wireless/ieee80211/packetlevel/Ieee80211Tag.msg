@@ -134,3 +134,12 @@ class Ieee80211ChannelReq extends Ieee80211ChannelTagBase
 class Ieee80211ChannelInd extends Ieee80211ChannelTagBase
 {
 }
+
+class Ieee80211VhtTransmissionTag extends TagBase
+{
+    bool beamformed = false;
+    bool muMimo = false;
+    double beamformingGainDb = 3.0;
+    double muMimoPenaltyDb = 2.0;
+}
+
