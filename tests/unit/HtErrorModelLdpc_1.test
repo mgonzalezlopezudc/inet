@@ -1,0 +1,70 @@
+%description:
+Test IEEE 802.11n HT LDPC coding gain in error models (NIST and YANS)
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211YansErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmCode.h"
+#include "inet/physicallayer/wireless/common/modulation/BpskModulation.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+class TestNistErrorModel : public Ieee80211NistErrorModel {
+  public:
+    using Ieee80211NistErrorModel::getDataSuccessRate;
+};
+
+class TestYansErrorModel : public Ieee80211YansErrorModel {
+  public:
+    using Ieee80211YansErrorModel::getDataSuccessRate;
+};
+
+%activity:
+// 1. Instantiating models
+TestNistErrorModel nistModel;
+TestYansErrorModel yansModel;
+
+// 2. Setup modes (HT MCS 0, 20MHz, Long GI)
+const Ieee80211HtMode *bccMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+    false);
+
+const Ieee80211HtMode *ldpcMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+    true);
+
+// 3. Compare success rates at marginal SNR (e.g. 2.0 linear SNR) for 8000 bits
+double snr = 2.0;
+unsigned int bitLength = 8000;
+
+double nistBccSuccess = nistModel.getDataSuccessRate(bccMode, bitLength, snr);
+double nistLdpcSuccess = nistModel.getDataSuccessRate(ldpcMode, bitLength, snr);
+
+double yansBccSuccess = yansModel.getDataSuccessRate(bccMode, bitLength, snr);
+double yansLdpcSuccess = yansModel.getDataSuccessRate(ldpcMode, bitLength, snr);
+
+EV << "NIST BCC Success: " << nistBccSuccess << "\n";
+EV << "NIST LDPC Success: " << nistLdpcSuccess << "\n";
+EV << "NIST gain is positive: " << (nistLdpcSuccess > nistBccSuccess) << "\n";
+
+EV << "YANS BCC Success: " << yansBccSuccess << "\n";
+EV << "YANS LDPC Success: " << yansLdpcSuccess << "\n";
+EV << "YANS gain is positive: " << (yansLdpcSuccess > yansBccSuccess) << "\n";
+
+EV << ".\n";
+
+%contains: stdout
+NIST gain is positive: 1
+
+%contains: stdout
+YANS gain is positive: 1

@@ -61,11 +61,35 @@ Ieee80211HtSignalMode::Ieee80211HtSignalMode(unsigned int modulationAndCodingSch
 {
 }
 
-Ieee80211HtDataMode::Ieee80211HtDataMode(const Ieee80211Htmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType) :
+Ieee80211HtDataMode::Ieee80211HtDataMode(const Ieee80211Htmcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc) :
     Ieee80211HtModeBase(modulationAndCodingScheme->getMcsIndex(), computeNumberOfSpatialStreams(modulationAndCodingScheme->getModulation(), modulationAndCodingScheme->getStreamExtension1Modulation(), modulationAndCodingScheme->getStreamExtension2Modulation(), modulationAndCodingScheme->getStreamExtension3Modulation()), bandwidth, guardIntervalType),
     modulationAndCodingScheme(modulationAndCodingScheme),
-    numberOfBccEncoders(computeNumberOfBccEncoders())
+    numberOfBccEncoders(computeNumberOfBccEncoders()),
+    ldpc(ldpc)
 {
+    if (ldpc) {
+        if (modulationAndCodingScheme->getModulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getModulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension1Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension1Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension2Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension2Modulation()->getSubcarrierModulation()->getCodeWordSize());
+        if (modulationAndCodingScheme->getStreamExtension3Modulation())
+            numberOfCodedBitsPerSpatialStreams.push_back(modulationAndCodingScheme->getStreamExtension3Modulation()->getSubcarrierModulation()->getCodeWordSize());
+
+        auto bccCode = modulationAndCodingScheme->getCode();
+        ldpcCode = new Ieee80211HtCode(
+            bccCode->getForwardErrorCorrection(),
+            new Ieee80211HtInterleaving(numberOfCodedBitsPerSpatialStreams, bandwidth),
+            bccCode->getScrambling(),
+            true
+        );
+    }
+}
+
+Ieee80211HtDataMode::~Ieee80211HtDataMode()
+{
+    delete ldpcCode;
 }
 
 Ieee80211Htmcs::Ieee80211Htmcs(unsigned int mcsIndex, const ApskModulationBase *stream1SubcarrierModulation, const ApskModulationBase *stream2SubcarrierModulation, const ApskModulationBase *stream3SubcarrierModulation, const ApskModulationBase *stream4SubcarrierModulation, const Ieee80211ConvolutionalCode* convolutionalCode, Hz bandwidth) :
@@ -323,10 +347,10 @@ Ieee80211HtCompliantModes::~Ieee80211HtCompliantModes()
         delete entry.second;
 }
 
-const Ieee80211HtMode *Ieee80211HtCompliantModes::getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType)
+const Ieee80211HtMode *Ieee80211HtCompliantModes::getCompliantMode(const Ieee80211Htmcs *mcsMode, Ieee80211HtMode::BandMode centerFrequencyMode, Ieee80211HtPreambleMode::HighTroughputPreambleFormat preambleFormat, Ieee80211HtModeBase::GuardIntervalType guardIntervalType, bool ldpc)
 {
     const char *name = ""; // TODO
-    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), guardIntervalType);
+    auto htModeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(), guardIntervalType, ldpc);
     auto mode = singleton.modeCache.find(htModeId);
     if (mode == singleton.modeCache.end()) {
         const Ieee80211OfdmModulation *modulation = nullptr;
@@ -345,10 +369,10 @@ const Ieee80211HtMode *Ieee80211HtCompliantModes::getCompliantMode(const Ieee802
             default:
                 throw cRuntimeError("Unknown preamble format");
         }
-        const Ieee80211HtDataMode *dataMode = new Ieee80211HtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType);
+        const Ieee80211HtDataMode *dataMode = new Ieee80211HtDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType, ldpc);
         const Ieee80211HtPreambleMode *preambleMode = new Ieee80211HtPreambleMode(htSignal, legacySignal, preambleFormat, dataMode->getNumberOfSpatialStreams());
         const Ieee80211HtMode *htMode = new Ieee80211HtMode(name, preambleMode, dataMode, centerFrequencyMode);
-        singleton.modeCache.insert(std::pair<std::tuple<Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType>, const Ieee80211HtMode *>(htModeId, htMode));
+        singleton.modeCache.insert(std::pair<std::tuple<Hz, unsigned int, Ieee80211HtModeBase::GuardIntervalType, bool>, const Ieee80211HtMode *>(htModeId, htMode));
         return htMode;
     }
     return mode->second;

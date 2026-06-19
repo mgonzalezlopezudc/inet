@@ -137,6 +137,7 @@ class Ieee80211HtPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211HtPhyHeader extends Ieee80211PhyHeader
 {
+    uint8_t coding = 0; // 0: BCC, 1: LDPC
 }
 
 // IEEE 802.11 21. High Throughput (VHT)
@@ -147,6 +148,7 @@ class Ieee80211VhtPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 {
+    uint8_t coding = 0; // 0: BCC, 1: LDPC
 }
 
 //

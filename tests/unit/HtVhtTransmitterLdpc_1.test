@@ -1,0 +1,178 @@
+%description:
+Test HT and VHT transmitter LDPC mapping and PHY header serialization.
+
+%includes:
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+%file: TestNetwork.ned
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+import inet.mobility.static.StationaryMobility;
+
+module InspectableRadio extends Ieee80211ScalarRadio
+{
+    parameters:
+        @class(InspectableRadio);
+}
+
+module MockNic
+{
+    parameters:
+        @class(MockNicModule);
+    submodules:
+        mib: Ieee80211Mib;
+        radio: InspectableRadio;
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.nic.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.radio.opMode = "ac"
+**.radio.bandName = "5 GHz (20 MHz)"
+**.radio.channelNumber = 0
+**.radio.transmitter.power = 20mW
+**.radio.transmitter.bitrate = 6.5Mbps
+**.radio.antenna.numAntennas = 2
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.nic.mib.htLdpc = true
+**.nic.mib.vhtLdpc = true
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class InspectableRadio : public Ieee80211Radio
+{
+  public:
+    void testEncapsulate(Packet *packet) const { encapsulate(packet); }
+};
+
+class MockNicModule : public NetworkInterface
+{
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(InspectableRadio);
+Define_Module(MockNicModule);
+
+%activity:
+cModuleType *nicType = cModuleType::find("MockNic");
+ASSERT(nicType != nullptr);
+cModule *nic = nicType->create("nic", getSystemModule());
+nic->buildInside();
+auto networkInterface = check_and_cast<MockNicModule *>(nic);
+networkInterface->setMacAddress(MacAddress("02:00:00:00:00:01"));
+
+nic->callInitialize();
+
+auto radio = check_and_cast<InspectableRadio *>(nic->getSubmodule("radio"));
+auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
+const_cast<Ieee80211Transmitter *>(transmitter)->setModeSet(nullptr);
+
+// 1. Test HT transmission mapping with htLdpc=true
+{
+    auto packet = new Packet("ht-pkt");
+    auto macHeader = makeShared<Ieee80211DataHeader>();
+    macHeader->setType(ST_DATA_WITH_QOS);
+    macHeader->setReceiverAddress(MacAddress("02:00:00:00:00:02"));
+    macHeader->setChunkLength(b(288));
+    packet->insertAtBack(macHeader);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+
+    auto mode = Ieee80211HtCompliantModes::getCompliantMode(
+        &Ieee80211HtmcsTable::htMcs0BW20MHz,
+        Ieee80211HtMode::BAND_5GHZ,
+        Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+
+    radio->testEncapsulate(packet);
+    auto phyHeader = packet->peekAtFront<Ieee80211HtPhyHeader>();
+    EV << "HT encapsulated header coding field: " << (int)phyHeader->getCoding() << "\n";
+
+    auto resolvedMode = transmitter->computeTransmissionMode(packet);
+    auto htMode = dynamic_cast<const Ieee80211HtMode *>(resolvedMode);
+    ASSERT(htMode != nullptr);
+    EV << "HT resolved mode isLdpc: " << htMode->getDataMode()->getCode()->isLdpc() << "\n";
+
+    delete packet;
+}
+
+// 2. Test VHT transmission mapping with vhtLdpc=true
+{
+    auto packet = new Packet("vht-pkt");
+    auto macHeader = makeShared<Ieee80211DataHeader>();
+    macHeader->setType(ST_DATA_WITH_QOS);
+    macHeader->setReceiverAddress(MacAddress("02:00:00:00:00:02"));
+    macHeader->setChunkLength(b(288));
+    packet->insertAtBack(macHeader);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+
+    auto mode = Ieee80211VhtCompliantModes::getCompliantMode(
+        &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+        Ieee80211VhtMode::BAND_5GHZ,
+        Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+        Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+
+    radio->testEncapsulate(packet);
+    auto phyHeader = packet->peekAtFront<Ieee80211VhtPhyHeader>();
+    EV << "VHT encapsulated header coding field: " << (int)phyHeader->getCoding() << "\n";
+
+    auto resolvedMode = transmitter->computeTransmissionMode(packet);
+    auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(resolvedMode);
+    ASSERT(vhtMode != nullptr);
+    EV << "VHT resolved mode isLdpc: " << vhtMode->getDataMode()->getCode()->isLdpc() << "\n";
+
+    delete packet;
+}
+
+nic->deleteModule();
+EV << ".\n";
+
+%contains: stdout
+HT encapsulated header coding field: 1
+HT resolved mode isLdpc: 1
+VHT encapsulated header coding field: 1
+VHT resolved mode isLdpc: 1

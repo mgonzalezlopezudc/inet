@@ -301,12 +301,16 @@ double Ieee80211NistErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, u
                                                         ofdmMode->getDataMode()->getCode()->getConvolutionalCode(),
                                                         bitLength + ofdmMode->getHeaderMode()->getServiceFieldLength().get<b>(),
                                                         snr);
-    else if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode))
+    else if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
+        double effectiveSnr = snr;
+        if (htMode->getDataMode()->getCode() && htMode->getDataMode()->getCode()->isLdpc())
+            effectiveSnr *= std::pow(10.0, 1.5 / 10.0);
         successRate = getOFDMAndERPOFDMChunkSuccessRate(htMode->getDataMode()->getModulation()->getSubcarrierModulation(),
                                                         htMode->getDataMode()->getCode()->getForwardErrorCorrection(),
                                                         //bitLength + htMode->getHeaderMode()->getHTLengthLength().get<b>(),
                                                         bitLength,
-                                                        snr);
+                                                        effectiveSnr);
+    }
     else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
         double effectiveSnr = snr;
         if (vhtMode->getDataMode()->getCode() && vhtMode->getDataMode()->getCode()->isLdpc())

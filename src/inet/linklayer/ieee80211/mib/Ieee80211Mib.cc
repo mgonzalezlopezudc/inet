@@ -41,6 +41,8 @@ void Ieee80211Mib::initialize(int stage)
         localVhtCapabilities.txBeamforming = par("vhtBeamforming").boolValue();
         localVhtCapabilities.muMimo = par("vhtMuMimo").boolValue();
 
+        localHtLdpc = par("htLdpc").boolValue();
+
         vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
         vhtOperation.ldpc = localVhtCapabilities.ldpc;
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;

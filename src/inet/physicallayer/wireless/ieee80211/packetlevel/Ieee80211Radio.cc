@@ -352,6 +352,22 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
+
+    if (auto htPhyHeader = dynamicPtrCast<Ieee80211HtPhyHeader>(phyHeader)) {
+        if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(mode)) {
+            if (htMode->getDataMode()->getCode()) {
+                htPhyHeader->setCoding(htMode->getDataMode()->getCode()->isLdpc() ? 1 : 0);
+            }
+        }
+    }
+    else if (auto vhtPhyHeader = dynamicPtrCast<Ieee80211VhtPhyHeader>(phyHeader)) {
+        if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+            if (vhtMode->getDataMode()->getCode()) {
+                vhtPhyHeader->setCoding(vhtMode->getDataMode()->getCode()->isLdpc() ? 1 : 0);
+            }
+        }
+    }
+
     phyHeader->setLengthField(B((packet->getDataLength().get<b>() + 7) / 8));
     insertFcs(phyHeader);
     packet->insertAtFront(phyHeader);
