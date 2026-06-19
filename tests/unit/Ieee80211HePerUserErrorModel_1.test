@@ -1,8 +1,9 @@
 %description:
-Test per-user HE MCS, NSS, and DCM inputs in the NIST error model.
+Test per-user HE MCS, NSS, GI, RU, and DCM inputs in the NIST and Yans error models.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211YansErrorModel.h"
 
 %file: TestNetwork.ned
 module TestNistErrorModel
@@ -11,11 +12,18 @@ module TestNistErrorModel
         @class(TestNistErrorModel);
 }
 
+module TestYansErrorModel
+{
+    parameters:
+        @class(TestYansErrorModel);
+}
+
 network TestNetwork
 {
     submodules:
         test: Test;
-        errorModel: TestNistErrorModel;
+        nist: TestNistErrorModel;
+        yans: TestYansErrorModel;
 }
 
 %inifile: omnetpp.ini
@@ -39,30 +47,70 @@ class TestNistErrorModel : public Ieee80211NistErrorModel
     }
 };
 
+class TestYansErrorModel : public Ieee80211YansErrorModel
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+
+    double evaluate(const Ieee80211HeUserPhyParameters& parameters,
+            unsigned int bitLength, double snir) const
+    {
+        return getHeDataSuccessRate(parameters, bitLength, snir);
+    }
+};
+
 Define_Module(TestNistErrorModel);
+Define_Module(TestYansErrorModel);
 
 %activity:
-auto errorModel = check_and_cast<TestNistErrorModel *>(
-        getParentModule()->getSubmodule("errorModel"));
-auto ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
+auto nist = check_and_cast<TestNistErrorModel *>(getParentModule()->getSubmodule("nist"));
+auto yans = check_and_cast<TestYansErrorModel *>(getParentModule()->getSubmodule("yans"));
+auto smallRu = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 26, 0);
+auto largeRu = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
 
-auto robust = computeHeUserPhyParameters(B(1000), ru, 0, 1, false, HE_GI_3_2_US);
-auto fast = computeHeUserPhyParameters(B(1000), ru, 5, 1, false, HE_GI_3_2_US);
-double robustSuccess = errorModel->evaluate(robust, 8022, 10);
-double fastSuccess = errorModel->evaluate(fast, 8022, 10);
-ASSERT(robustSuccess > fastSuccess);
+auto evaluatePayload = [] (auto *model, const Ieee80211HeUserPhyParameters& parameters,
+        unsigned int bitLength, double scalarSnir) {
+    return model->evaluate(parameters, bitLength, scalarSnir * (parameters.dcm ? 2.0 : 1.0));
+};
 
-auto dcm = computeHeUserPhyParameters(B(1000), ru, 0, 1, true, HE_GI_3_2_US);
-double dcmSuccess = errorModel->evaluate(dcm, 8022, 20); // ideal 3 dB gain
-ASSERT(dcmSuccess > robustSuccess);
+for (auto *model : {static_cast<TestNistErrorModel *>(nist)}) {
+    auto robust = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_3_2_US);
+    auto fast = computeHeUserPhyParameters(B(1000), largeRu, 5, 1, false, HE_GI_3_2_US);
+    double robustSuccess = evaluatePayload(model, robust, 8022, 10);
+    double fastSuccess = evaluatePayload(model, fast, 8022, 10);
+    ASSERT(robustSuccess > fastSuccess);
 
-auto twoStreams = computeHeUserPhyParameters(B(1000), ru, 0, 2, false, HE_GI_3_2_US);
-double twoStreamSuccess = errorModel->evaluate(twoStreams, 8022, 10);
-ASSERT(twoStreamSuccess != robustSuccess);
+    auto dcm = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, true, HE_GI_3_2_US);
+    double dcmSuccess = evaluatePayload(model, dcm, 8022, 10);
+    ASSERT(dcmSuccess > robustSuccess);
 
-EV << "Per-user HE MCS, DCM, and NSS changed payload success probability.\n";
+    auto twoStreams = computeHeUserPhyParameters(B(1000), largeRu, 0, 2, false, HE_GI_3_2_US);
+    double twoStreamSuccess = evaluatePayload(model, twoStreams, 8022, 10);
+    ASSERT(twoStreamSuccess != robustSuccess);
+
+    auto shortGi = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_0_8_US);
+    ASSERT(evaluatePayload(model, shortGi, 8022, 10) == robustSuccess);
+}
+
+{
+    auto robust = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_3_2_US);
+    auto fast = computeHeUserPhyParameters(B(1000), largeRu, 5, 1, false, HE_GI_3_2_US);
+    ASSERT(evaluatePayload(yans, robust, 8022, 10) > evaluatePayload(yans, fast, 8022, 10));
+
+    auto dcm = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, true, HE_GI_3_2_US);
+    ASSERT(evaluatePayload(yans, dcm, 8022, 10) > evaluatePayload(yans, robust, 8022, 10));
+
+    auto shortGi = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_0_8_US);
+    ASSERT(evaluatePayload(yans, shortGi, 8022, 10) != evaluatePayload(yans, robust, 8022, 10));
+
+    auto small = computeHeUserPhyParameters(B(1000), smallRu, 0, 1, false, HE_GI_3_2_US);
+    ASSERT(evaluatePayload(yans, small, 8022, 10) != evaluatePayload(yans, robust, 8022, 10));
+}
+
+EV << "NIST and Yans use per-user HE MCS, NSS, GI, RU, and DCM payload parameters.\n";
 EV << ".\n";
 
 %contains: stdout
-Per-user HE MCS, DCM, and NSS changed payload success probability.
+NIST and Yans use per-user HE MCS, NSS, GI, RU, and DCM payload parameters.
 .

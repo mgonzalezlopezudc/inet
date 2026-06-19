@@ -76,9 +76,17 @@ class MockAckHandler : public IAckHandler
 {
   public:
     int inProgressCount = 0;
+    int occupiedSlots = 0;
     virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
     virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { inProgressCount++; }
+    virtual std::set<int> getOccupiedBlockAckSequenceNumbers(
+            const MacAddress& receiverAddress, Tid tid) const override {
+        std::set<int> result;
+        for (int i = 0; i < occupiedSlots; ++i)
+            result.insert(i);
+        return result;
+    }
 };
 
 class MockScheduler : public IIeee80211HeDlScheduler
@@ -252,11 +260,13 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
         const std::vector<MacAddress>& scheduledStations, IOriginatorBlockAckAgreementHandler *baHandler,
         int maxAmpduMpduCount = 16, int maxHeMuPsduLength = 6500631,
         simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS),
-        simtime_t alignedDuration = SIMTIME_ZERO, simtime_t txopPayloadBudget = SIMTIME_ZERO)
+        simtime_t alignedDuration = SIMTIME_ZERO, simtime_t txopPayloadBudget = SIMTIME_ZERO,
+        int occupiedSlots = 0)
 {
     auto modeSet = physicallayer::Ieee80211ModeSet::getModeSet("ax");
     auto scheduler = new MockScheduler(scheduledStations, alignedDuration);
     auto ackHandler = new MockAckHandler();
+    ackHandler->occupiedSlots = occupiedSlots;
     auto inProgress = new MockInProgressFrames();
     auto qosContext = new QoSContext(nullptr, nullptr, baHandler, nullptr);
     auto context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), inProgress, nullptr, nullptr, nullptr, qosContext);
@@ -477,6 +487,79 @@ Tid tid = 5;
     runPackingLimitCase("aligned-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SimTime(500, SIMTIME_US), SIMTIME_ZERO);
     runPackingLimitCase("txop-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SimTime(500, SIMTIME_US));
     EV << "Per-user A-MPDU packing enforced BA-window, PSDU, PPDU, aligned-duration, and TXOP limits.\n";
+
+    clearPendingQueue(pendingQueue);
+    for (int i = 0; i < 3; ++i) {
+        pendingQueue->enqueuePacket(makeDataPacket((std::string("occupied-sta1-") + std::to_string(i)).c_str(), sta1, tid, true, 10));
+        pendingQueue->enqueuePacket(makeDataPacket((std::string("occupied-sta2-") + std::to_string(i)).c_str(), sta2, tid, true, 10));
+    }
+    MockOriginatorBlockAckAgreementHandler partialHandler;
+    partialHandler.addAgreement(sta1, tid, true, 3);
+    partialHandler.addAgreement(sta2, tid, true, 3);
+    auto partialResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &partialHandler,
+            16, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO, 2);
+    requireCondition(partialResult.inProgressLength == 2,
+            "partially occupied BA windows should admit only their remaining slot");
+    requireCondition(pendingQueue->getNumPackets() == 4,
+            "packets beyond partially occupied BA windows must remain queued");
+    delete partialResult.container;
+
+    clearPendingQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("full-window-sta1", sta1, tid, true, 10));
+    pendingQueue->enqueuePacket(makeDataPacket("full-window-sta2", sta2, tid, true, 10));
+    MockOriginatorBlockAckAgreementHandler fullHandler;
+    fullHandler.addAgreement(sta1, tid, true, 1);
+    fullHandler.addAgreement(sta2, tid, true, 1);
+    auto fullResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &fullHandler,
+            16, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO, 1);
+    requireCondition(fullResult.container == nullptr,
+            "full BA windows should abort MU planning");
+    requireCondition(fullResult.inProgressLength == 0 && fullResult.ackHandlerInProgressCount == 0,
+            "full BA-window abort must leave ACK and in-progress state unchanged");
+    requireCondition(pendingQueue->getNumPackets() == 2,
+            "full BA-window abort must leave queues unchanged");
+    delete fullResult.container;
+    EV << "Partially occupied and full Block Ack windows limited or rejected MU packing transactionally.\n";
+
+    clearPendingQueue(pendingQueue);
+    MacAddress collidingSta("10:11:22:33:44:55");
+    requireCondition(physicallayer::computeHeMuStaId(sta1) ==
+            physicallayer::computeHeMuStaId(collidingSta),
+            "collision fixture must share the fallback 11-bit STA ID");
+    pendingQueue->enqueuePacket(makeDataPacket("collision-sta1", sta1, tid, true, 10));
+    pendingQueue->enqueuePacket(makeDataPacket("collision-sta2", collidingSta, tid, true, 10));
+    MockOriginatorBlockAckAgreementHandler collisionHandler;
+    collisionHandler.addAgreement(sta1, tid, true);
+    collisionHandler.addAgreement(collidingSta, tid, true);
+    auto collisionResult = runFirstTransmitStep(
+            pendingQueue, mockHcf, {sta1, collidingSta}, &collisionHandler);
+    requireCondition(collisionResult.container == nullptr,
+            "colliding STA IDs must not produce an MU container");
+    requireCondition(collisionResult.inProgressLength == 0 &&
+            collisionResult.ackHandlerInProgressCount == 0 &&
+            pendingQueue->getNumPackets() == 2,
+            "STA-ID collision rejection must be transactional");
+    delete collisionResult.container;
+    EV << "Colliding STA IDs rejected MU planning without queue or ACK-state mutation.\n";
+
+    clearPendingQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("mixed-sta1-tid5", sta1, tid, true, 10));
+    pendingQueue->enqueuePacket(makeDataPacket("mixed-sta1-tid6", sta1, tid + 1, true, 10));
+    pendingQueue->enqueuePacket(makeDataPacket("mixed-sta2-tid5", sta2, tid, true, 10));
+    pendingQueue->enqueuePacket(makeDataPacket("mixed-sta2-nonqos", sta2, tid, false, 10));
+    MockOriginatorBlockAckAgreementHandler mixedHandler;
+    mixedHandler.addAgreement(sta1, tid, true);
+    mixedHandler.addAgreement(sta1, tid + 1, true);
+    mixedHandler.addAgreement(sta2, tid, true);
+    auto mixedResult = runFirstTransmitStep(pendingQueue, mockHcf, {sta1, sta2}, &mixedHandler);
+    requireCondition(mixedResult.inProgressLength == 2,
+            "packing must select only the scheduled destination/TID QoS flow");
+    requireCondition(pendingQueue->getNumPackets() == 2 &&
+            isPacketQueued(pendingQueue, "mixed-sta1-tid6") &&
+            isPacketQueued(pendingQueue, "mixed-sta2-nonqos"),
+            "wrong-TID and non-QoS traffic must not inflate packable backlog");
+    delete mixedResult.container;
+    EV << "Mixed destination/TID/QoS queues packed only eligible traffic.\n";
 }
 
 // Test 5: bounded AddbaReq retry bursts (3 attempts) and addbaFailureTimeout cooldown resumption.
@@ -532,6 +615,15 @@ Fewer than two active allocations aborted before queue mutation.
 
 %contains: stdout
 Per-user A-MPDU packing enforced BA-window, PSDU, PPDU, aligned-duration, and TXOP limits.
+
+%contains: stdout
+Partially occupied and full Block Ack windows limited or rejected MU packing transactionally.
+
+%contains: stdout
+Colliding STA IDs rejected MU planning without queue or ACK-state mutation.
+
+%contains: stdout
+Mixed destination/TID/QoS queues packed only eligible traffic.
 
 %contains: stdout
 MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while AddbaReq retries are bounded by addbaFailureTimeout and processTransmittedDataFrame; AC_VO classification remains in Hcf management processing.
