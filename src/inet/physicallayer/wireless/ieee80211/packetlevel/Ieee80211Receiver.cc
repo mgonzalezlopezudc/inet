@@ -95,6 +95,62 @@ static bool isReceptionSuccessful(const std::vector<const IReceptionDecision *> 
     return successful;
 }
 
+static bool applyHeMuMpduReceiveOutcomes(Packet *packet,
+        const std::vector<const IReceptionDecision *> *decisions, cRNG *rng)
+{
+    bool commonSuccessful = true;
+    bool dataSuccessful = true;
+    for (auto decision : *decisions) {
+        if (decision->isReceptionSuccessful())
+            continue;
+        switch (decision->getSignalPart()) {
+            case IRadioSignal::SIGNAL_PART_PREAMBLE:
+            case IRadioSignal::SIGNAL_PART_HEADER:
+            case IRadioSignal::SIGNAL_PART_WHOLE:
+                commonSuccessful = false;
+                break;
+            case IRadioSignal::SIGNAL_PART_DATA:
+                dataSuccessful = false;
+                break;
+            default:
+                break;
+        }
+    }
+    auto indication = packet->findTagForUpdate<Ieee80211MpduReceiveInd>();
+    if (!commonSuccessful || indication == nullptr)
+        return commonSuccessful && dataSuccessful;
+    if (dataSuccessful)
+        return true;
+
+    int64_t totalBytes = 0;
+    for (unsigned int i = 0; i < indication->getResultsArraySize(); ++i) {
+        const auto& result = indication->getResults(i);
+        if (result.status == MPDU_NOT_EVALUATED)
+            totalBytes += std::max<int64_t>(1, result.length.get<B>());
+    }
+    if (totalBytes == 0)
+        return false;
+
+    int64_t failedByte = std::min<int64_t>(totalBytes - 1,
+            static_cast<int64_t>(rng->doubleRand() * totalBytes));
+    int64_t cumulativeBytes = 0;
+    bool failureAssigned = false;
+    for (unsigned int i = 0; i < indication->getResultsArraySize(); ++i) {
+        auto result = indication->getResults(i);
+        if (result.status == MPDU_NOT_EVALUATED) {
+            cumulativeBytes += std::max<int64_t>(1, result.length.get<B>());
+            if (!failureAssigned && failedByte < cumulativeBytes) {
+                result.status = MPDU_FCS_ERROR;
+                failureAssigned = true;
+            }
+            else
+                result.status = MPDU_SUCCESS;
+            indication->setResults(i, result);
+        }
+    }
+    return true;
+}
+
 static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
 {
     auto packetCopy = transmittedPacket->dup();
@@ -105,6 +161,42 @@ static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
         if (payloadHeader->getStaId() == staId) {
             auto mpdu = new Packet(transmittedPacket->getName());
             mpdu->insertAtBack(packetCopy->popAtFront(payloadHeader->getMpduLength()));
+            auto indication = mpdu->addTagIfAbsent<Ieee80211MpduReceiveInd>();
+            auto parser = mpdu->dup();
+            B offset(0);
+            while (parser->getDataLength() > b(0) &&
+                    parser->hasAtFront<ieee80211::Ieee80211MpduSubframeHeader>()) {
+                auto delimiter = parser->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(
+                        B(-1), Chunk::PF_ALLOW_INCORRECT);
+                Ieee80211MpduReceiveResult receiveResult;
+                receiveResult.offset = offset;
+                receiveResult.length = B(delimiter->getLength());
+                receiveResult.status = delimiter->isIncorrect() ?
+                        MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
+                if (parser->getDataLength() >= receiveResult.length) {
+                    auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(
+                            parser->peekAtFront<ieee80211::Ieee80211MacHeader>(
+                                    B(-1), Chunk::PF_ALLOW_INCORRECT));
+                    if (macHeader != nullptr) {
+                        receiveResult.sequenceNumber = macHeader->getSequenceNumber().get();
+                        receiveResult.fragmentNumber = macHeader->getFragmentNumber();
+                        receiveResult.tid = macHeader->getTid();
+                    }
+                    parser->popAtFront(receiveResult.length, Chunk::PF_ALLOW_INCORRECT);
+                }
+                else {
+                    receiveResult.status = MPDU_PAYLOAD_ERROR;
+                    parser->popAtFront(parser->getDataLength(), Chunk::PF_ALLOW_INCORRECT);
+                }
+                indication->appendResults(receiveResult);
+                offset += B(4) + receiveResult.length;
+                int padding = (4 - (B(4) + receiveResult.length).get<B>() % 4) % 4;
+                if (padding > 0 && parser->getDataLength() >= B(padding)) {
+                    parser->popAtFront(B(padding), Chunk::PF_ALLOW_INCORRECT);
+                    offset += B(padding);
+                }
+            }
+            delete parser;
             delete packetCopy;
             return mpdu;
         }
@@ -246,7 +338,7 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
                 : buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
         if (packet == nullptr)
             packet = buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
-        if (!isReceptionSuccessful(decisions))
+        if (!applyHeMuMpduReceiveOutcomes(packet, decisions, getRNG(0)))
             packet->setBitError(true);
         addReceptionIndications(packet, reception, interference, snir);
         packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());

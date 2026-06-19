@@ -26,6 +26,7 @@ module HeHcf extends Hcf
         int maxAmpduMpduCount = default(16);
         int maxHeMuPsduLength @unit(B) = default(6500631B);
         double maxHeMuPpduDuration @unit(s) = default(5.484ms);
+        string dlMuAckMethod = default("muBarTrigger"); // muBarTrigger or sequentialBar
         bool enableUlMuOfdma = default(false);
         double ulTriggerCheckInterval @unit(s) = default(1ms);
         double ulTargetRssiMargin @unit(dB) = default(10dB);

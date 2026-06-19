@@ -36,6 +36,8 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         apMib->bssAccessPointData.stations[mib->address] = Ieee80211Mib::ASSOCIATED;
         mib->bssStationData.associationId = apMib->allocateAssociationId(mib->address);
         mib->bssData.ssid = apMib->bssData.ssid;
+        apMib->setPeerHeCapabilities(mib->address, mib->localHeCapabilities, apMib->heOperation);
+        mib->setPeerHeCapabilities(apMib->address, apMib->localHeCapabilities, apMib->heOperation);
     }
 }
 

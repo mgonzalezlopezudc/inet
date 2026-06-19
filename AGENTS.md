@@ -23,3 +23,12 @@
 - Running the test runner without the INET environment can fail with `No module named 'inet'`.
 - `inet_run_unit_tests -f` takes a single regex filter. Use alternation for multiple test groups.
 - The matplotlib warning about `/home/user/.config/matplotlib` not being writable is non-fatal; it falls back to a temporary cache under `/tmp`.
+
+## Running a Qtenv simulation with its associated MCP server
+Useful for having access to tools to control the simulation in Qtenv:
+- Add `--mcp-server-address 127.0.0.1:8765` when running the Qtenv simulation command. Example: running the Aloha OMNeT++ sample with `./aloha -u Qtenv   --mcp-server-address 127.0.0.1:8765   -c General omnetpp.ini`.
+- Prepend `opp_sandbox` if you want to generate and run custom C++ snippets for complex data inspections. Example: `opp_sandbox ./aloha -u Qtenv   --mcp-server-address 127.0.0.1:8765   -c General omnetpp.ini`.
+
+## Actual 802.11 standards documents
+They are available in the `standards` folder.
+

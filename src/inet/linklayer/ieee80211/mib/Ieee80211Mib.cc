@@ -93,6 +93,7 @@ short Ieee80211Mib::allocateAssociationId(const MacAddress& address)
 void Ieee80211Mib::releaseAssociationId(const MacAddress& address)
 {
     bssAccessPointData.associationIds.erase(address);
+    removePeerHeCapabilities(address);
 }
 
 short Ieee80211Mib::getAssociationId(const MacAddress& address) const
@@ -107,6 +108,27 @@ MacAddress Ieee80211Mib::getStationAddress(short associationId) const
         if (entry.second == associationId)
             return entry.first;
     return MacAddress::UNSPECIFIED_ADDRESS;
+}
+
+void Ieee80211Mib::setPeerHeCapabilities(const MacAddress& address,
+        const Ieee80211HeCapabilities& capabilities, const Ieee80211HeOperation& operation)
+{
+    bssAccessPointData.advertisedHeCapabilities[address] = capabilities;
+    bssAccessPointData.negotiatedHeCapabilities[address] =
+            negotiateHeCapabilities(localHeCapabilities, capabilities, operation);
+}
+
+void Ieee80211Mib::removePeerHeCapabilities(const MacAddress& address)
+{
+    bssAccessPointData.advertisedHeCapabilities.erase(address);
+    bssAccessPointData.negotiatedHeCapabilities.erase(address);
+}
+
+const Ieee80211NegotiatedHeCapabilities *Ieee80211Mib::findNegotiatedHeCapabilities(
+        const MacAddress& address) const
+{
+    auto it = bssAccessPointData.negotiatedHeCapabilities.find(address);
+    return it == bssAccessPointData.negotiatedHeCapabilities.end() ? nullptr : &it->second;
 }
 
 const char *Ieee80211Mib::getModeStr(Ieee80211Mib::Mode mode)

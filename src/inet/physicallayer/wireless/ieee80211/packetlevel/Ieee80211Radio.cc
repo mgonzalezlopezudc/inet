@@ -310,6 +310,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 commonRequest != nullptr ? commonRequest->getGuardInterval() : HE_GI_3_2_US);
         heMuPhyHeader->setCoding(request != nullptr ? request->getCoding() :
                 commonRequest != nullptr ? commonRequest->getCoding() : HE_CODING_BCC);
+        std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
         for (auto& user : heMuUsers) {
             Ieee80211HeRu ru;
             ru.index = user.ruIndex;
@@ -318,16 +319,33 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
             ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
             ru.bandwidth = Hz(ru.toneSize * 78125.0);
-            user.duration = computeHeUserPhyParameters(user.psduLength, ru, user.mcs,
-                    user.numberOfSpatialStreams, user.dcm,
-                    static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval()),
-                    static_cast<Ieee80211HeCoding>(heMuPhyHeader->getCoding())).duration;
+            Ieee80211HeUserPhyParameters requested;
+            requested.ru = ru;
+            requested.mcs = user.mcs;
+            requested.numberOfSpatialStreams = user.numberOfSpatialStreams;
+            requested.dcm = user.dcm;
+            requested.coding = static_cast<Ieee80211HeCoding>(heMuPhyHeader->getCoding());
+            requested.psduLength = user.psduLength;
+            requestedUsers.push_back(requested);
         }
-        simtime_t commonDuration = request == nullptr ? SIMTIME_ZERO : request->getCommonDuration();
-        for (const auto& user : heMuUsers)
-        {
+        auto calculation = computeHePpduParameters(requestedUsers,
+                mode->getDataMode()->getBandwidth(),
+                static_cast<Ieee80211HePpduFormat>(heMuPhyHeader->getPpduFormat()),
+                static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval()));
+        if (!calculation)
+            throw cRuntimeError("Cannot construct HE MU PPDU: %s", calculation.error.c_str());
+        simtime_t commonDuration = request != nullptr && request->getCommonDuration() > SIMTIME_ZERO ?
+                request->getCommonDuration() : calculation.parameters.duration;
+        if (request != nullptr && request->getPpduFormat() == HE_MU_DOWNLINK &&
+                request->getCommonDuration() > SIMTIME_ZERO &&
+                request->getCommonDuration() != calculation.parameters.duration)
+            throw cRuntimeError("Planned HE MU PPDU duration does not match the resolved PHY parameters");
+        if (request != nullptr && request->getPpduFormat() == HE_TRIGGER_BASED_UPLINK)
+            commonDuration = std::max(commonDuration, calculation.parameters.duration);
+        for (size_t i = 0; i < heMuUsers.size(); ++i) {
+            auto& user = heMuUsers[i];
+            user.duration = commonDuration;
             heMuPhyHeader->appendUsers(user);
-            commonDuration = std::max(commonDuration, user.duration);
         }
         heMuPhyHeader->setCommonDuration(commonDuration);
         phyHeader->setChunkLength(b(104 + heMuPhyHeader->getUsersArraySize() * 137));
@@ -398,6 +416,15 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
             tag->appendAllocations(info);
             if (myStaId.has_value() && user.staId == *myStaId)
                 tag->setRuIndex(user.ruIndex);
+        }
+    }
+    if (auto indication = packet->findTagForUpdate<Ieee80211MpduReceiveInd>()) {
+        bool failed = packet->hasBitError();
+        for (unsigned int i = 0; i < indication->getResultsArraySize(); ++i) {
+            auto result = indication->getResults(i);
+            if (result.status == MPDU_NOT_EVALUATED)
+                result.status = failed ? MPDU_FCS_ERROR : MPDU_SUCCESS;
+            indication->setResults(i, result);
         }
     }
 

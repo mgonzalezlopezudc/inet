@@ -23,6 +23,31 @@ struct Ieee80211HeMuRxAllocationInfo
     simtime_t duration;
 }
 
+enum Ieee80211MpduReceiveStatus
+{
+    MPDU_SUCCESS = 0;
+    MPDU_DELIMITER_ERROR = 1;
+    MPDU_HEADER_ERROR = 2;
+    MPDU_PAYLOAD_ERROR = 3;
+    MPDU_FCS_ERROR = 4;
+    MPDU_NOT_EVALUATED = 5;
+}
+
+struct Ieee80211MpduReceiveResult
+{
+    int sequenceNumber = -1;
+    int fragmentNumber = -1;
+    int tid = -1;
+    B offset;
+    B length;
+    Ieee80211MpduReceiveStatus status = MPDU_NOT_EVALUATED;
+}
+
+class Ieee80211MpduReceiveInd extends TagBase
+{
+    Ieee80211MpduReceiveResult results[];
+}
+
 class Ieee80211HeMuReq extends TagBase
 {
     uint8_t ppduFormat = 0;

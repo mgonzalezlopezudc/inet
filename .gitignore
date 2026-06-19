@@ -1,6 +1,7 @@
 .agent
 .codex
 .github
+standards
 
 # local and generated files not to be committed
 doc/src/showcases

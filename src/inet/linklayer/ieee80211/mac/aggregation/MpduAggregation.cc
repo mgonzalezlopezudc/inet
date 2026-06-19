@@ -23,6 +23,8 @@ Packet *MpduAggregation::aggregateFrames(std::vector<Packet *> *frames)
         auto mpduSubframeHeader = makeShared<Ieee80211MpduSubframeHeader>();
         auto frame = frames->at(i);
         auto mpdu = frame->peekAll();
+        mpduSubframeHeader->setEof(false);
+        mpduSubframeHeader->setReserved(0);
         mpduSubframeHeader->setLength(mpdu->getChunkLength().get<B>());
         aggregatedFrame->insertAtBack(mpduSubframeHeader);
         aggregatedFrame->insertAtBack(mpdu);
@@ -44,4 +46,3 @@ Packet *MpduAggregation::aggregateFrames(std::vector<Packet *> *frames)
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 
 #include <algorithm>
+#include <atomic>
 #include <map>
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -38,8 +39,6 @@ B calculateAmpduPsduLength(const std::vector<Packet *>& packets)
 {
     if (packets.empty())
         return B(0);
-    if (packets.size() == 1)
-        return B(packets.front()->getByteLength());
     B length(0);
     for (size_t i = 0; i < packets.size(); ++i) {
         B subframeLength = B(4) + B(packets[i]->getByteLength());
@@ -223,54 +222,32 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
 
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
     {
-        if (allocationIndex == 0) {
-            switch (step) {
-                case 0:
-                    return prepareBlockAckStep(context);
-                case 1:
-                    return nullptr;
-                default:
-                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown first-allocation step %d", step);
-            }
-        }
-        else {
-            switch (step) {
-                case 0:
-                    return prepareBarStep(context);
-                case 1:
-                    return prepareBlockAckStep(context);
-                case 2:
-                    return nullptr;
-                default:
-                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
-            }
+        switch (step) {
+            case 0:
+                return prepareBarStep(context);
+            case 1:
+                return prepareBlockAckStep(context);
+            case 2:
+                return nullptr;
+            default:
+                throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
         }
     }
 
     virtual bool completeStep(FrameSequenceContext *context) override
     {
-        if (allocationIndex == 0) {
-            switch (step) {
-                case 0:
-                    return completeBlockAckStep(context);
-                default:
-                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown first-allocation step %d", step);
-            }
-        }
-        else {
-            switch (step) {
-                case 0:
-                    step++;
-                    return true;
-                case 1:
-                    return completeBlockAckStep(context);
-                default:
-                    throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
-            }
+        switch (step) {
+            case 0:
+                step++;
+                return true;
+            case 1:
+                return completeBlockAckStep(context);
+            default:
+                throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
         }
     }
 
-    virtual std::string getHistory() const override { return allocationIndex == 0 ? "BLOCKACK" : "BLOCKACKREQ BLOCKACK"; }
+    virtual std::string getHistory() const override { return "BLOCKACKREQ BLOCKACK"; }
 };
 
 class HeDlMuSequentialBlockAckFs : public IFrameSequence
@@ -331,6 +308,114 @@ class HeDlMuSequentialBlockAckFs : public IFrameSequence
     }
 };
 
+class HeDlMuBarBlockAckFs : public IFrameSequence
+{
+  protected:
+    HeDlMuTxOpFs *owner = nullptr;
+    int step = -1;
+
+    Packet *buildMuBarTrigger() const
+    {
+        auto header = makeShared<Ieee80211TriggerFrame>();
+        header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+        auto hcfModule = check_and_cast<cModule *>(owner->callback);
+        auto mac = check_and_cast<Ieee80211Mac *>(
+                getContainingNicModule(hcfModule)->getSubmodule("mac"));
+        header->setTransmitterAddress(mac->getAddress());
+        header->setTriggerType(2); // MU-BAR Trigger
+        header->setTriggerId(owner->ackTriggerId);
+        header->setUsersArraySize(owner->activeAllocations.size());
+        simtime_t commonDuration = SIMTIME_ZERO;
+        for (size_t i = 0; i < owner->activeAllocations.size(); ++i) {
+            const auto& allocation = owner->activeAllocations[i];
+            Ieee80211HeTriggerUserInfo user;
+            user.aid = allocation.associationId;
+            user.ruIndex = allocation.ruIndex;
+            user.ruToneSize = allocation.ru.toneSize;
+            user.ruToneOffset = allocation.ru.toneOffset;
+            user.mcs = 0;
+            user.tid = allocation.tid;
+            header->setUsers(i, user);
+            commonDuration = std::max(commonDuration,
+                    estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK,
+                            allocation.ru.toneSize, 0));
+        }
+        header->setCommonDuration(commonDuration);
+        header->setDurationField(owner->modeSet->getSifsTime() + commonDuration);
+        header->setChunkLength(B(26 + 12 * owner->activeAllocations.size()));
+        auto packet = new Packet("HE-MU-BAR-Trigger", header);
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        return packet;
+    }
+
+    void processResponses(FrameSequenceContext *context)
+    {
+        auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
+        std::set<MacAddress> responded;
+        for (auto packet : collection->getReceivedFrames()) {
+            auto blockAck = dynamicPtrCast<const Ieee80211BasicBlockAck>(
+                    packet->peekAtFront<Ieee80211MacHeader>());
+            if (blockAck == nullptr)
+                continue;
+            auto expected = std::find_if(owner->activeAllocations.begin(),
+                    owner->activeAllocations.end(), [&] (const auto& allocation) {
+                        return allocation.staAddress == blockAck->getTransmitterAddress() &&
+                                allocation.tid == blockAck->getTidInfo();
+                    });
+            auto rx = packet->findTag<Ieee80211HeMuRxTag>();
+            if (expected == owner->activeAllocations.end() ||
+                    rx == nullptr ||
+                    rx->getTriggerId() != owner->ackTriggerId ||
+                    rx->getRuIndex() != expected->ruIndex ||
+                    responded.count(expected->staAddress) != 0)
+                continue;
+            responded.insert(expected->staAddress);
+            owner->callback->originatorProcessReceivedFrame(packet->dup(), owner->containerPacket);
+        }
+        for (const auto& allocation : owner->activeAllocations) {
+            if (responded.count(allocation.staAddress) != 0)
+                continue;
+            EV_WARN << "HeDlMuTxOpFs: MU-BAR response timeout for STA "
+                    << allocation.staAddress << endl;
+            for (auto packet : allocation.packets)
+                owner->callback->originatorProcessFailedFrame(packet);
+        }
+    }
+
+  public:
+    explicit HeDlMuBarBlockAckFs(HeDlMuTxOpFs *owner) : owner(owner) {}
+
+    virtual void startSequence(FrameSequenceContext *context, int firstStep) override { step = 0; }
+
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
+    {
+        switch (step) {
+            case 0:
+                return new TransmitStep(buildMuBarTrigger(), owner->modeSet->getSifsTime(), true);
+            case 1: {
+                auto trigger = check_and_cast<ITransmitStep *>(context->getLastStep())->getFrameToTransmit();
+                auto header = trigger->peekAtFront<Ieee80211TriggerFrame>();
+                return new ReceiveCollectionStep(owner->modeSet->getSifsTime() +
+                        header->getCommonDuration() + owner->modeSet->getSlotTime());
+            }
+            case 2:
+                return nullptr;
+            default:
+                throw cRuntimeError("Invalid HE MU-BAR frame sequence step");
+        }
+    }
+
+    virtual bool completeStep(FrameSequenceContext *context) override
+    {
+        if (step == 1)
+            processResponses(context);
+        step++;
+        return true;
+    }
+
+    virtual std::string getHistory() const override { return "MU-BAR HE-TB-BLOCKACK"; }
+};
+
 HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                              const IIeee80211HeDlScheduler::ScheduleContext& scheduleContext,
                              Ieee80211ModeSet *modeSet,
@@ -339,7 +424,8 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                              IFrameSequenceHandler::ICallback *callback,
                              int maxAmpduMpduCount,
                              int maxHeMuPsduLength,
-                             simtime_t maxHeMuPpduDuration)
+                             simtime_t maxHeMuPpduDuration,
+                             AckMethod ackMethod)
     : dlScheduler(dlScheduler),
       scheduleContext(scheduleContext),
       modeSet(modeSet),
@@ -348,15 +434,20 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
       callback(callback),
       maxAmpduMpduCount(maxAmpduMpduCount),
       maxHeMuPsduLength(maxHeMuPsduLength),
-      maxHeMuPpduDuration(maxHeMuPpduDuration)
+      maxHeMuPpduDuration(maxHeMuPpduDuration),
+      ackMethod(ackMethod)
 {
+    static std::atomic<uint32_t> nextTriggerId{1};
+    ackTriggerId = nextTriggerId++;
     if (maxAmpduMpduCount <= 0)
         throw cRuntimeError("maxAmpduMpduCount must be positive");
     if (maxHeMuPsduLength <= 0)
         throw cRuntimeError("maxHeMuPsduLength must be positive");
     if (maxHeMuPpduDuration <= SIMTIME_ZERO)
         throw cRuntimeError("maxHeMuPpduDuration must be positive");
-    sequence = new SequentialFs({new HeDlMuPpduFs(this), new HeDlMuSequentialBlockAckFs(this)});
+    sequence = ackMethod == AckMethod::MU_BAR_TRIGGER ?
+            static_cast<IFrameSequence *>(new SequentialFs({new HeDlMuPpduFs(this), new HeDlMuBarBlockAckFs(this)})) :
+            static_cast<IFrameSequence *>(new SequentialFs({new HeDlMuPpduFs(this), new HeDlMuSequentialBlockAckFs(this)}));
 }
 
 HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
@@ -383,7 +474,8 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                           Hz(2.412e9) : Hz(5.18e9);
           }
           return context;
-      }(), modeSet, pendingQueue, ackHandler, callback, 16, 6500631, SimTime(5.484, SIMTIME_MS))
+      }(), modeSet, pendingQueue, ackHandler, callback, 16, 6500631,
+      SimTime(5.484, SIMTIME_MS), AckMethod::EXPLICIT_SEQUENTIAL_BAR)
 {
 }
 
@@ -601,15 +693,20 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto responseMode = rateSelection->computeResponseBlockAckFrameMode(container, dummyReq);
     for (size_t idx = 0; idx < selectedAllocations.size(); ++idx) {
         simtime_t responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-        simtime_t barDuration = idx >= 1 ? responseMode->getDuration(B(38)) : simtime_t::ZERO;
-        if (idx >= 1)
-            totalDuration += modeSet->getSifsTime() + barDuration + modeSet->getSifsTime() + responseDuration;
-        else
-            totalDuration += modeSet->getSifsTime() + responseDuration;
+        simtime_t barDuration = responseMode->getDuration(B(38));
+        if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR)
+            totalDuration += modeSet->getSifsTime() + barDuration +
+                    modeSet->getSifsTime() + responseDuration;
 
         auto dataOrMgmtHdr = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(selectedAllocations[idx].dataHeader);
         auto staMode = rateSelection->computeMode(selectedAllocations[idx].packet, dataOrMgmtHdr, nullptr);
         RateSelection::setFrameMode(selectedAllocations[idx].packet, dataOrMgmtHdr, staMode);
+    }
+    if (ackMethod == AckMethod::MU_BAR_TRIGGER) {
+        auto triggerDuration = responseMode->getDuration(B(26 + 12 * selectedAllocations.size()));
+        auto responseDuration = estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK, 26, 0);
+        totalDuration = modeSet->getSifsTime() + triggerDuration +
+                modeSet->getSifsTime() + responseDuration;
     }
 
     // Set the totalDuration on the container header to protect the sequential responses
@@ -706,6 +803,74 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         return nullptr;
     }
 
+    auto calculatePlannedPpdu = [&] {
+        std::vector<Ieee80211HeUserPhyParameters> users;
+        for (const auto& selectedAllocation : finalAllocations) {
+            Ieee80211HeUserPhyParameters user;
+            user.ru = selectedAllocation.allocation.ru;
+            if (user.ru.toneSize <= 0) {
+                user.ru.toneSize = 26;
+                user.ru.dataSubcarriers = getHeRuDataSubcarrierCount(26);
+                user.ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(26);
+                user.ru.bandwidth = Hz(26 * 78125.0);
+            }
+            user.mcs = selectedAllocation.allocation.mcs;
+            user.numberOfSpatialStreams = selectedAllocation.allocation.numberOfSpatialStreams;
+            user.dcm = selectedAllocation.allocation.dcm;
+            user.coding = scheduleContext.coding;
+            user.psduLength = selectedAllocation.psduLength;
+            users.push_back(user);
+        }
+        return computeHePpduParameters(users, scheduleContext.channelBandwidth,
+                HE_MU_DOWNLINK, scheduleContext.guardInterval);
+    };
+    auto plannedPpdu = calculatePlannedPpdu();
+    while ((!plannedPpdu || plannedPpdu.parameters.duration > packingDurationLimit) &&
+            finalAllocations.size() >= 2) {
+        auto longest = std::max_element(finalAllocations.begin(), finalAllocations.end(),
+                [] (const SelectedAllocation& a, const SelectedAllocation& b) {
+                    return a.psduLength < b.psduLength;
+                });
+        if (longest->packets.size() > 1) {
+            longest->packets.pop_back();
+            longest->psduLength = calculateAmpduPsduLength(longest->packets);
+        }
+        else
+            finalAllocations.erase(longest);
+        if (finalAllocations.size() >= 2)
+            plannedPpdu = calculatePlannedPpdu();
+    }
+    if (finalAllocations.size() < 2 || !plannedPpdu ||
+            plannedPpdu.parameters.duration > packingDurationLimit) {
+        EV_WARN << "HeDlMuTxOpFs: no complete HE MU PPDU fits the PHY/TXOP duration limit." << endl;
+        delete container;
+        notifyPlanningFailure();
+        return nullptr;
+    }
+    auto heRequest = container->addTagIfAbsent<Ieee80211HeMuReq>();
+    heRequest->setPpduFormat(HE_MU_DOWNLINK);
+    heRequest->setGuardInterval(scheduleContext.guardInterval);
+    heRequest->setCoding(scheduleContext.coding);
+    heRequest->setCommonDuration(plannedPpdu.parameters.duration);
+
+    totalDuration = SIMTIME_ZERO;
+    auto finalBarDuration = responseMode->getDuration(B(38));
+    auto finalBlockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
+    if (ackMethod == AckMethod::EXPLICIT_SEQUENTIAL_BAR) {
+        for (size_t i = 0; i < finalAllocations.size(); ++i)
+            totalDuration += modeSet->getSifsTime() + finalBarDuration +
+                    modeSet->getSifsTime() + finalBlockAckDuration;
+    }
+    else {
+        auto triggerDuration = responseMode->getDuration(B(26 + 12 * finalAllocations.size()));
+        auto responseDuration = estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK, 26, 0);
+        totalDuration = modeSet->getSifsTime() + triggerDuration +
+                modeSet->getSifsTime() + responseDuration;
+    }
+    auto finalContainerHdr = container->removeAtFront<Ieee80211DataHeader>();
+    finalContainerHdr->setDurationField(totalDuration);
+    container->insertAtFront(finalContainerHdr);
+
     // 2. Build the final MU container packet and assign duration/sequence numbers to sub-packets.
     for (const auto& selectedAllocation : finalAllocations) {
         const auto& alloc = selectedAllocation.allocation;
@@ -752,24 +917,22 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         payloadHeader->setDcm(alloc.dcm);
         payloadHeader->setMpduLength(selectedAllocation.psduLength);
         container->insertAtBack(payloadHeader);
-        if (staPackets.size() == 1)
-            container->insertAtBack(staPackets.front()->peekData());
-        else {
-            for (size_t i = 0; i < staPackets.size(); ++i) {
-                auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
-                delimiter->setLength(staPackets[i]->getByteLength());
-                container->insertAtBack(delimiter);
-                container->insertAtBack(staPackets[i]->peekData());
-                int padding = (4 - (B(4) + B(staPackets[i]->getByteLength())).get<B>() % 4) % 4;
-                if (i + 1 != staPackets.size() && padding != 0)
-                    container->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
-            }
+        for (size_t i = 0; i < staPackets.size(); ++i) {
+            auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+            delimiter->setLength(staPackets[i]->getByteLength());
+            container->insertAtBack(delimiter);
+            container->insertAtBack(staPackets[i]->peekData());
+            int padding = (4 - (B(4) + B(staPackets[i]->getByteLength())).get<B>() % 4) % 4;
+            if (i + 1 != staPackets.size() && padding != 0)
+                container->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
         }
 
         ActiveAllocation activeAlloc;
         activeAlloc.staAddress = alloc.staAddress;
+        activeAlloc.associationId = selectedAllocation.associationId;
         activeAlloc.tid = dataHeader->getTid();
         activeAlloc.ruIndex = alloc.ru.index;
+        activeAlloc.ru = alloc.ru;
         activeAlloc.packet = staPackets.front();
         activeAlloc.packets = staPackets;
         activeAllocations.push_back(activeAlloc);

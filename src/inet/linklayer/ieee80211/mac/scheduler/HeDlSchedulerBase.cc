@@ -178,11 +178,24 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         allocations.clear();
         allocations.reserve(candidates.size());
         for (size_t i = 0; i < candidates.size(); ++i) {
+            const auto *negotiated = candidates[i].negotiatedHeCapabilities;
+            if (negotiated != nullptr &&
+                    (!negotiated->valid ||
+                     !negotiated->intersection.dlOfdma ||
+                     negotiated->intersection.supportedChannelWidths.count(context.channelBandwidth) == 0 ||
+                     negotiated->intersection.supportedRuToneSizes.count(rusByCandidate[i].toneSize) == 0))
+                return false;
             RuAllocation allocation;
             allocation.staAddress = candidates[i].staAddress;
             allocation.ru = rusByCandidate[i];
             allocation.estimatedSnrDb = estimateSnrDb(context, candidates[i], allocation.ru);
             allocation.mcs = selectMcs(allocation.estimatedSnrDb, candidates[i].hasFreshPathLoss);
+            if (negotiated != nullptr) {
+                int maxMcs = negotiated->intersection.txMcsNss.maxMcsPerNss[0];
+                if (maxMcs < 0)
+                    return false;
+                allocation.mcs = std::min(allocation.mcs, maxMcs);
+            }
             allocation.estimatedDuration = estimateDuration(
                     std::max<int64_t>(payloadBytes[i], 1), toneSizes[i], allocation.mcs,
                     context.guardInterval);

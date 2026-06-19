@@ -1,6 +1,6 @@
 %description:
-Test HE MU recipient BlockAck gating. Only the first scheduled STA responds
-immediately to HE MU QoS data; later STAs wait for the AP's BAR.
+Test HE MU recipient BlockAck gating. No STA responds solely because of its
+allocation index; all Block Ack responses require an explicit BAR or MU-BAR.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
@@ -178,6 +178,10 @@ class TestHcf : public Hcf
         recipientProcessReceivedFrame(packet, header);
     }
 
+    void receiveAmpdu(Packet *packet) {
+        recipientProcessReceivedFrame(packet, Ptr<const Ieee80211MacHeader>());
+    }
+
     void receiveControl(Packet *packet) {
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         recipientProcessReceivedControlFrame(packet, header);
@@ -221,6 +225,29 @@ static Packet *makeBarPacket(const MacAddress& receiver, const MacAddress& trans
     return new Packet("BasicBlockAckReq", blockAckReq);
 }
 
+static Packet *makePartialAmpdu(const MacAddress& receiver, const MacAddress& transmitter, Tid tid)
+{
+    auto ampdu = new Packet("partial-he-mu-ampdu");
+    auto indication = ampdu->addTag<physicallayer::Ieee80211MpduReceiveInd>();
+    for (int i = 0; i < 2; ++i) {
+        auto mpdu = makeHeMuDataPacket(i == 0 ? "successful-mpdu" : "failed-mpdu",
+                receiver, transmitter, tid, i + 2);
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setLength(mpdu->getByteLength());
+        ampdu->insertAtBack(delimiter);
+        ampdu->insertAtBack(mpdu->peekData());
+        physicallayer::Ieee80211MpduReceiveResult result;
+        result.sequenceNumber = i + 2;
+        result.fragmentNumber = 0;
+        result.tid = tid;
+        result.length = B(mpdu->getByteLength());
+        result.status = i == 0 ? physicallayer::MPDU_SUCCESS : physicallayer::MPDU_FCS_ERROR;
+        indication->appendResults(result);
+        delete mpdu;
+    }
+    return ampdu;
+}
+
 %activity:
 auto hcf = check_and_cast<TestHcf *>(getParentModule()->getSubmodule("hcf"));
 auto mac = check_and_cast<MockMac *>(getParentModule()->getSubmodule("mac"));
@@ -238,25 +265,42 @@ auto agreementHandler = new MockRecipientBlockAckAgreementHandler(ap, tid);
 hcf->setup(mac, &tx, &rateSelection, &ackPolicy, &dataService, agreementHandler);
 
 hcf->receiveData(makeHeMuDataPacket("he-mu-data-sta0", sta, ap, tid, 0));
-ASSERT(tx.transmitCount == 1);
-ASSERT(tx.lastPacketName == "BasicBlockAck");
+ASSERT(tx.transmitCount == 0);
 EV << "STA0 immediate BlockAck count: " << tx.transmitCount << "\n";
 
 hcf->receiveData(makeHeMuDataPacket("he-mu-data-sta1", sta, ap, tid, 1));
-ASSERT(tx.transmitCount == 1);
+ASSERT(tx.transmitCount == 0);
 EV << "STA1 immediate BlockAck count after data: " << tx.transmitCount << "\n";
 ASSERT(agreementHandler->qosFrameReceivedCount == 2);
 EV << "QoS BlockAck record updates: " << agreementHandler->qosFrameReceivedCount << "\n";
 
+hcf->receiveAmpdu(makePartialAmpdu(sta, ap, tid));
+ASSERT(agreementHandler->qosFrameReceivedCount == 3);
+ASSERT(agreementHandler->agreement->getBlockAckRecord()->getAckState(SequenceNumberCyclic(2), 0));
+ASSERT(!agreementHandler->agreement->getBlockAckRecord()->getAckState(SequenceNumberCyclic(3), 0));
+EV << "Partial A-MPDU acknowledged only the successful MPDU.\n";
+
 auto barPacket = makeBarPacket(sta, ap, tid);
 hcf->receiveControl(barPacket);
-ASSERT(tx.transmitCount == 2);
+ASSERT(tx.transmitCount == 1);
 ASSERT(tx.lastPacketName == "BasicBlockAck");
 EV << "STA1 BlockAck count after BAR: " << tx.transmitCount << "\n";
 delete barPacket;
 
 %contains: stdout
-STA1 immediate BlockAck count after data: 1
+STA0 immediate BlockAck count: 0
+
+%contains: stdout
+STA1 immediate BlockAck count after data: 0
+
+%contains: stdout
 QoS BlockAck record updates: 2
-TX 2: BasicBlockAck ifs=0.000016
-STA1 BlockAck count after BAR: 2
+
+%contains: stdout
+Partial A-MPDU acknowledged only the successful MPDU.
+
+%contains: stdout
+TX 1: BasicBlockAck ifs=0.000016
+
+%contains: stdout
+STA1 BlockAck count after BAR: 1

@@ -36,6 +36,8 @@ HcfFs::HcfFs() :
 int HcfFs::selectHcfSequence(AlternativesFs *frameSequence, FrameSequenceContext *context)
 {
     auto frameToTransmit = context->getInProgressFrames()->getFrameToTransmit();
+    if (frameToTransmit == nullptr)
+        throw cRuntimeError("HCF frame sequence started without an eligible in-progress frame");
     return frameToTransmit->peekAtFront<Ieee80211MacHeader>()->getReceiverAddress().isMulticast() ? 0 : 1;
 }
 
@@ -74,4 +76,3 @@ bool HcfFs::hasMoreTxOpsAndMulticast(RepeatingFs *frameSequence, FrameSequenceCo
 
 } // namespace ieee80211
 } // namespace inet
-

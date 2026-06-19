@@ -359,6 +359,42 @@ void Hcf::frameSequenceFinished()
 
 void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
+    if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr) {
+        constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
+                Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
+        auto receiveInd = packet->findTag<Ieee80211MpduReceiveInd>();
+        unsigned int resultIndex = 0;
+        while (packet->getDataLength() > b(0) &&
+                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr) {
+            auto delimiter = packet->popAtFront<Ieee80211MpduSubframeHeader>(
+                    B(-1), parsingFlags);
+            auto status = delimiter->isIncorrect() ? MPDU_DELIMITER_ERROR : MPDU_SUCCESS;
+            if (receiveInd != nullptr && resultIndex < receiveInd->getResultsArraySize())
+                status = receiveInd->getResults(resultIndex).status;
+            auto mpduLength = B(delimiter->getLength());
+            if (mpduLength > packet->getDataLength())
+                status = MPDU_PAYLOAD_ERROR;
+            else {
+                auto mpdu = new Packet(packet->getName());
+                mpdu->copyTags(*packet);
+                mpdu->removeTagIfPresent<Ieee80211MpduReceiveInd>();
+                mpdu->insertAtBack(packet->popAtFront(mpduLength, parsingFlags));
+                auto mpduHeader = dynamicPtrCast<const Ieee80211MacHeader>(
+                        mpdu->peekAtFront(b(-1), parsingFlags));
+                if (status == MPDU_SUCCESS && mpduHeader != nullptr)
+                    recipientProcessReceivedFrame(mpdu, mpduHeader);
+                else
+                    delete mpdu;
+            }
+            resultIndex++;
+            int padding = (4 - (B(4) + mpduLength).get<B>() % 4) % 4;
+            if (padding > 0 && packet->getDataLength() >= B(padding))
+                packet->popAtFront(B(padding), parsingFlags);
+        }
+        delete packet;
+        return;
+    }
+
     EV_INFO << "Processing received frame " << packet->getName() << " as recipient.\n";
     emit(packetReceivedFromPeerSignal, packet);
 
@@ -388,44 +424,9 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                     auto agreement = recipientBlockAckAgreementHandler->getAgreement(dataHeader->getTid(), dataHeader->getTransmitterAddress());
                     if (agreement)
                         recipientBlockAckAgreementHandler->qosFrameReceived(dataHeader, this);
-                    if (agreement && myAllocationIndex == 0) {
-                        auto blockAck = makeShared<Ieee80211BasicBlockAck>();
-                        auto startingSequenceNumber = agreement->getStartingSequenceNumber();
-                        for (int i = 0; i < 64; i++) {
-                            BitVector& bitmap = blockAck->getBlockAckBitmapForUpdate(i);
-                            for (FragmentNumber fragNum = 0; fragNum < 16; fragNum++) {
-                                bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, fragNum);
-                                bitmap.setBit(fragNum, ackState);
-                            }
-                        }
-                        blockAck->setReceiverAddress(dataHeader->getTransmitterAddress());
-                        blockAck->setCompressedBitmap(false);
-                        blockAck->setStartingSequenceNumber(startingSequenceNumber);
-                        blockAck->setTidInfo(dataHeader->getTid());
-
-                        auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
-                        auto responseMode = rateSelection->computeResponseBlockAckFrameMode(packet, dummyReq);
-                        simtime_t blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-                        simtime_t ifs = modeSet->getSifsTime();
-
-                        simtime_t duration = dataHeader->getDurationField() - ifs - blockAckDuration;
-                        if (duration < 0) duration = 0;
-                        blockAck->setDurationField(duration);
-
-                        auto blockAckPacket = new Packet("BasicBlockAck", blockAck);
-                        blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
-                        setFrameMode(blockAckPacket, blockAck, responseMode);
-
-                        EV_INFO << "HeHcf: STA sequential BlockAck scheduled: index = " << myAllocationIndex
-                                << ", delay = " << ifs << ", duration = " << blockAckDuration << endl;
-
-                        tx->transmitFrame(blockAckPacket, blockAck, ifs, this);
-                        delete blockAckPacket;
-                        responseSent = true;
-                    }
-                    else if (agreement) {
-                        EV_INFO << "HeHcf: STA waits for BAR before BlockAck: index = " << myAllocationIndex << endl;
-                    }
+                    if (agreement)
+                        EV_INFO << "HeHcf: STA waits for an explicit BAR or MU-BAR Trigger before BlockAck: index = "
+                                << myAllocationIndex << endl;
                 }
             }
 

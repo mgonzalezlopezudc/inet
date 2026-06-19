@@ -132,7 +132,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     macHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     macHeader->setChunkLength(b(288));
     packet->insertAtBack(macHeader);
-    appendDlUser(packet, rus[0], 1, 0, 1, false, 1200);
+    appendDlUser(packet, rus[0], 1, 0, 1, false, 600);
     appendDlUser(packet, rus[1], 2, 7, 1, false, 300);
     auto common = packet->addTag<Ieee80211HeMuCommonReq>();
     common->setGuardInterval(HE_GI_1_6_US);
@@ -144,12 +144,20 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     ASSERT(phyHeader->getUsersArraySize() == 2);
     const auto& user0 = phyHeader->getUsers(0);
     const auto& user1 = phyHeader->getUsers(1);
-    auto expected0 = computeHeUserPhyParameters(B(1200), rus[0], 0, 1, false, HE_GI_1_6_US);
-    auto expected1 = computeHeUserPhyParameters(B(300), rus[1], 7, 1, false, HE_GI_1_6_US);
-    ASSERT(user0.duration == expected0.duration);
-    ASSERT(user1.duration == expected1.duration);
-    ASSERT(user0.duration != user1.duration);
-    ASSERT(phyHeader->getCommonDuration() == std::max(user0.duration, user1.duration));
+    Ieee80211HeUserPhyParameters requested0;
+    requested0.ru = rus[0];
+    requested0.mcs = 0;
+    requested0.psduLength = B(600);
+    Ieee80211HeUserPhyParameters requested1;
+    requested1.ru = rus[1];
+    requested1.mcs = 7;
+    requested1.psduLength = B(300);
+    auto expected = computeHePpduParameters({requested0, requested1}, Hz(20e6),
+            HE_MU_DOWNLINK, HE_GI_1_6_US);
+    ASSERT(expected);
+    ASSERT(user0.duration == expected.parameters.duration);
+    ASSERT(user1.duration == expected.parameters.duration);
+    ASSERT(phyHeader->getCommonDuration() == expected.parameters.duration);
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, SimTime(1, SIMTIME_S)));
@@ -159,10 +167,10 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     ASSERT(transmission->getHeUserPhyParameters().size() == 2);
     ASSERT(transmission->getHeUserPhyParameters()[0].duration == user0.duration);
     ASSERT(transmission->getHeUserPhyParameters()[1].duration == user1.duration);
-    ASSERT(transmission->getPreambleDuration() == expected0.preambleDuration);
-    ASSERT(transmission->getHeaderDuration() == expected0.headerDuration);
+    ASSERT(transmission->getPreambleDuration() == expected.parameters.common.commonPreambleDuration);
+    ASSERT(transmission->getHeaderDuration() == SIMTIME_ZERO);
     ASSERT(transmission->getDataDuration() ==
-            phyHeader->getCommonDuration() - expected0.preambleDuration - expected0.headerDuration);
+            phyHeader->getCommonDuration() - expected.parameters.common.commonPreambleDuration);
 
     delete transmission;
     delete packet;

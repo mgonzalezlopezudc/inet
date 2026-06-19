@@ -12,6 +12,7 @@
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/queueing/contract/IPacketQueue.h"
@@ -40,6 +41,7 @@ class INET_API IIeee80211HeDlScheduler
         double pathLossDb = NaN;
         bool hasFreshPathLoss = false;
         queueing::IPacketQueue *sourceQueue = nullptr;
+        const Ieee80211NegotiatedHeCapabilities *negotiatedHeCapabilities = nullptr;
     };
 
     struct ScheduleContext {
