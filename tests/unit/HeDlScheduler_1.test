@@ -128,10 +128,37 @@ auto schedulerCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
     EV << "Candidate cap preserved the mandatory anchor deterministically.\n";
 }
 
+{
+    Ieee80211HeCapabilities local;
+    Ieee80211HeCapabilities peer;
+    peer.supportedChannelWidths = {Hz(20e6)};
+    peer.rxMcsNss.maxMcsPerNss[0] = 3;
+    peer.supportedRuToneSizes = {26};
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = Hz(20e6);
+    std::vector<Ieee80211NegotiatedHeCapabilities> negotiated(2,
+            negotiateHeCapabilities(local, peer, operation));
+    ASSERT(negotiated[0].intersection.supportedChannelWidths.size() == 1);
+    auto context = makeContext(2, Hz(20e6));
+    for (int i = 0; i < 2; ++i)
+        context.candidates[i].negotiatedHeCapabilities = &negotiated[i];
+    auto allocations = schedulerFhol->schedule(context);
+    ASSERT(allocations.size() == 2);
+    for (const auto& allocation : allocations) {
+        ASSERT(allocation.ru.toneSize == 26);
+        ASSERT(allocation.mcs <= 3);
+    }
+    negotiated[1].intersection.dlOfdma = false;
+    negotiated[1].valid = false;
+    ASSERT(schedulerFhol->schedule(context).empty());
+    EV << "Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.\n";
+}
+
 EV << ".\n";
 
 %contains: stdout
 20 MHz fBW and fHoL tables matched the standard RU counts.
 40, 80, and 160 MHz ceiling/floor layout selection passed.
 Candidate cap preserved the mandatory anchor deterministically.
+Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.
 .

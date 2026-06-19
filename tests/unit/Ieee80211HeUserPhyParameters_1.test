@@ -96,6 +96,38 @@ ASSERT(computeHeUserPhyParameters(B(0), ru, 0).numberOfSymbols == 1);
 ASSERT(estimateHeMuUserDuration(B(1500), ru.toneSize, 4, 2, true, HE_GI_1_6_US) ==
         computeHeUserPhyParameters(B(1500), ru, 4, 2, true, HE_GI_1_6_US).duration);
 
+Ieee80211HeUserPhyParameters shortUser;
+shortUser.ru = ru;
+shortUser.mcs = 4;
+shortUser.psduLength = B(300);
+Ieee80211HeUserPhyParameters longUser = shortUser;
+longUser.psduLength = B(3000);
+auto commonPpdu = computeHePpduParameters({shortUser, longUser}, Hz(20e6));
+ASSERT(commonPpdu);
+ASSERT(commonPpdu.parameters.users[0].numberOfDataSymbols <
+        commonPpdu.parameters.commonNumberOfDataSymbols);
+ASSERT(commonPpdu.parameters.users[0].dataDuration ==
+        commonPpdu.parameters.users[1].dataDuration);
+ASSERT(commonPpdu.parameters.users[0].duration == commonPpdu.parameters.duration);
+ASSERT(getHeSigBSymbolCount(Hz(80e6), 8) >
+        getHeSigBSymbolCount(Hz(80e6), 2));
+
+Ieee80211HeUserPhyParameters encoderUser;
+encoderUser.ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(160)), 0, 1992, 0);
+encoderUser.mcs = 11;
+encoderUser.numberOfSpatialStreams = 2;
+encoderUser.psduLength = B(1500);
+auto encoderPpdu = computeHePpduParameters({encoderUser}, Hz(160e6));
+ASSERT(encoderPpdu);
+ASSERT(encoderPpdu.parameters.users[0].numberOfEncoders > 1);
+ASSERT(encoderPpdu.parameters.users[0].tailBits ==
+        6 * encoderPpdu.parameters.users[0].numberOfEncoders);
+
+Ieee80211HeUserPhyParameters oversizedUser = shortUser;
+oversizedUser.mcs = 0;
+oversizedUser.psduLength = B(100000);
+ASSERT(!computeHePpduParameters({oversizedUser}, Hz(20e6)));
+
 auto mediumMode = Ieee80211HeCompliantModes::getCompliantMode(
         &Ieee80211HemcsTable::heMcs0BW20MHzNss1,
         Ieee80211HeMode::BAND_5GHZ,
@@ -105,8 +137,10 @@ ASSERT(mediumMode->getDataMode()->getGuardIntervalType() ==
         Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM);
 
 EV << "All HE RU sizes, MCS boundaries, NSS values, guard intervals, DCM rules, and symbol boundaries passed.\n";
+EV << "Common HE-MU alignment, HE-SIG-B growth, BCC encoder tails, and PPDU limit passed.\n";
 EV << ".\n";
 
 %contains: stdout
 All HE RU sizes, MCS boundaries, NSS values, guard intervals, DCM rules, and symbol boundaries passed.
+Common HE-MU alignment, HE-SIG-B growth, BCC encoder tails, and PPDU limit passed.
 .

@@ -11,6 +11,7 @@
 #include "inet/common/SimpleModule.h"
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 
 namespace inet {
 
@@ -61,6 +62,8 @@ class INET_API Ieee80211Mib : public SimpleModule
             bool valid = false;
         };
         std::map<MacAddress, LinkData> links;
+        std::map<MacAddress, Ieee80211HeCapabilities> advertisedHeCapabilities;
+        std::map<MacAddress, Ieee80211NegotiatedHeCapabilities> negotiatedHeCapabilities;
     };
 
   public:
@@ -71,6 +74,8 @@ class INET_API Ieee80211Mib : public SimpleModule
     BssData bssData;
     BssStationData bssStationData;
     BssAccessPointData bssAccessPointData;
+    Ieee80211HeCapabilities localHeCapabilities;
+    Ieee80211HeOperation heOperation;
 
   protected:
     virtual void initialize(int stage) override;
@@ -86,6 +91,10 @@ class INET_API Ieee80211Mib : public SimpleModule
     void releaseAssociationId(const MacAddress& address);
     short getAssociationId(const MacAddress& address) const;
     MacAddress getStationAddress(short associationId) const;
+    void setPeerHeCapabilities(const MacAddress& address, const Ieee80211HeCapabilities& capabilities,
+            const Ieee80211HeOperation& operation);
+    void removePeerHeCapabilities(const MacAddress& address);
+    const Ieee80211NegotiatedHeCapabilities *findNegotiatedHeCapabilities(const MacAddress& address) const;
 };
 
 } // namespace ieee80211

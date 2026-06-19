@@ -23,6 +23,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
@@ -53,6 +54,16 @@ bool isMuEligibleDataHeader(const inet::Ptr<const inet::ieee80211::Ieee80211Data
     return dataHeader != nullptr &&
            dataHeader->getType() == inet::ieee80211::ST_DATA_WITH_QOS &&
            inet::ieee80211::hasActiveOriginatorBlockAckAgreement(baHandler, dataHeader->getReceiverAddress(), dataHeader->getTid());
+}
+
+bool hasEligibleExistingFrame(inet::ieee80211::InProgressFrames *inProgress, inet::ieee80211::IAckHandler *ackHandler)
+{
+    for (int i = 0; i < inProgress->getLength(); ++i) {
+        auto header = inProgress->getFrames(i)->peekAtFront<inet::ieee80211::Ieee80211DataOrMgmtHeader>();
+        if (ackHandler->isEligibleToTransmit(header))
+            return true;
+    }
+    return false;
 }
 
 inet::ieee80211::AccessCategory mapTidToAccessCategory(inet::ieee80211::Tid tid)
@@ -226,6 +237,15 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             if (!isMuEligibleDataHeader(dataHeader, baHandler) ||
                     !ackHandler->isEligibleToTransmit(dataHeader))
                 continue;
+            auto negotiated = mib->findNegotiatedHeCapabilities(dest);
+            if (negotiated != nullptr &&
+                    (!negotiated->valid ||
+                     !negotiated->intersection.dlOfdma ||
+                     negotiated->intersection.supportedChannelWidths.count(context.channelBandwidth) == 0 ||
+                     (par("dlMuAckMethod").stdstringValue() != "sequentialBar" &&
+                      (!negotiated->intersection.muBarTriggerRx ||
+                       !negotiated->intersection.heTbBlockAckTx))))
+                continue;
             auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
             int occupiedSlots = ackHandler->getOccupiedBlockAckSequenceNumbers(
                     dest, dataHeader->getTid()).size();
@@ -243,6 +263,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             candidate.holEnqueueTime = enqueueTimeTag == nullptr ? pkt->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
             candidate.holDelay = simTime() - candidate.holEnqueueTime;
             candidate.sourceQueue = queue;
+            candidate.negotiatedHeCapabilities = negotiated;
             int eligiblePackets = 0;
             for (auto backlogQueue : queues) {
                 for (int j = 0; j < backlogQueue->getNumPackets(); ++j) {
@@ -388,7 +409,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         auto edcaf = edca->getEdcaf(ac);
         auto pendingQueue = edcaf->getPendingQueue();
         auto inProgress = edcaf->getInProgressFrames();
-        if (inProgress->getLength() > 0) {
+        if (hasEligibleExistingFrame(inProgress, edcaf->getAckHandler())) {
             EV_INFO << "HeHcf: completing " << inProgress->getLength()
                     << " recovery/outstanding frames before opening a new MU transmission." << endl;
             Hcf::startFrameSequence(ac);
@@ -417,12 +438,16 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             }
             EV_INFO << "HeHcf: MU-OFDMA opportunity detected for " << scheduleContext.candidates.size()
                     << " STAs — starting HeDlMuTxOpFs." << endl;
+            auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
+                    HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
+                    HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
             frameSequenceHandler->startFrameSequence(
                     new HeDlMuTxOpFs(dlScheduler, scheduleContext, modeSet,
                                      pendingQueue, edcaf->getAckHandler(), this,
                                      par("maxAmpduMpduCount"),
                                      par("maxHeMuPsduLength"),
-                                     par("maxHeMuPpduDuration")),
+                                     par("maxHeMuPpduDuration"),
+                                     ackMethod),
                     buildContext(ac), this);
             emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
             return;
@@ -435,9 +460,8 @@ void HeHcf::startFrameSequence(AccessCategory ac)
     if (fallbackEdcaf->getPendingQueue()->isEmpty() &&
             fallbackEdcaf->getInProgressFrames()->getLength() == 0)
         stagePerStaFrameForSingleUserTransmission(ac);
-    if (fallbackEdcaf->getPendingQueue()->isEmpty() &&
-            fallbackEdcaf->getInProgressFrames()->getLength() == 0) {
-        EV_WARN << "HeHcf: channel granted without a pending SU, DL-MU, or UL trigger frame; releasing channel.\n";
+    if (fallbackEdcaf->getInProgressFrames()->getFrameToTransmit() == nullptr) {
+        EV_WARN << "HeHcf: channel granted without an eligible SU, DL-MU, or UL trigger frame; releasing channel.\n";
         fallbackEdcaf->releaseChannel(this);
         fallbackEdcaf->getTxopProcedure()->endTxop();
         return;
@@ -514,6 +538,49 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {
+        if (trigger->getTriggerType() == 2) {
+            auto myAid = mac->getMib()->bssStationData.associationId;
+            const Ieee80211HeTriggerUserInfo *selected = nullptr;
+            for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i)
+                if (trigger->getUsers(i).aid == myAid) {
+                    selected = &trigger->getUsers(i);
+                    break;
+                }
+            auto agreement = selected == nullptr || recipientBlockAckAgreementHandler == nullptr ?
+                    nullptr : recipientBlockAckAgreementHandler->getAgreement(
+                            selected->tid, trigger->getTransmitterAddress());
+            if (agreement != nullptr) {
+                auto blockAck = makeShared<Ieee80211BasicBlockAck>();
+                auto startingSequenceNumber = agreement->getStartingSequenceNumber();
+                for (int i = 0; i < 64; ++i) {
+                    auto& bitmap = blockAck->getBlockAckBitmapForUpdate(i);
+                    for (FragmentNumber fragment = 0; fragment < 16; ++fragment)
+                        bitmap.setBit(fragment, agreement->getBlockAckRecord()->getAckState(
+                                startingSequenceNumber + i, fragment));
+                }
+                blockAck->setReceiverAddress(trigger->getTransmitterAddress());
+                blockAck->setTransmitterAddress(mac->getAddress());
+                blockAck->setCompressedBitmap(false);
+                blockAck->setStartingSequenceNumber(startingSequenceNumber);
+                blockAck->setTidInfo(selected->tid);
+                blockAck->setDurationField(SIMTIME_ZERO);
+                auto response = new Packet("HE-TB-BlockAck", blockAck);
+                response->insertAtBack(makeShared<Ieee80211MacTrailer>());
+                auto request = response->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
+                request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
+                request->setTriggerId(trigger->getTriggerId());
+                request->setRuIndex(selected->ruIndex);
+                request->setRuToneSize(selected->ruToneSize);
+                request->setRuToneOffset(selected->ruToneOffset);
+                request->setStaId(myAid);
+                request->setMcs(selected->mcs);
+                request->setCommonDuration(trigger->getCommonDuration());
+                tx->transmitFrame(response, blockAck, modeSet->getSifsTime(), this);
+                delete response;
+            }
+            delete packet;
+            return;
+        }
         if (!ulCoordinator->isEnabled() || mac->isApInAxMode() ||
                 mac->getMib()->bssStationData.associationId <= 0 || triggeredUlOriginalPacket != nullptr) {
             delete packet;
