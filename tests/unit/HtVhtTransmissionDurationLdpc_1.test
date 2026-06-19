@@ -1,0 +1,93 @@
+%description:
+Test IEEE 802.11 HT and VHT transmission duration calculations and tail-bit omission for LDPC.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+
+// Test HT Mode Duration and Tail Bits
+const Ieee80211HtMode *htBccMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+    false);
+
+const Ieee80211HtMode *htLdpcMode = Ieee80211HtCompliantModes::getCompliantMode(
+    &Ieee80211HtmcsTable::htMcs0BW20MHz,
+    Ieee80211HtMode::BAND_5GHZ,
+    Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG,
+    true);
+
+EV << "HT BCC isLdpc: " << htBccMode->getDataMode()->getCode()->isLdpc() << "\n";
+EV << "HT LDPC isLdpc: " << htLdpcMode->getDataMode()->getCode()->isLdpc() << "\n";
+EV << "HT BCC tail bits: " << htBccMode->getDataMode()->getTailFieldLength().get() << "\n";
+EV << "HT LDPC tail bits: " << htLdpcMode->getDataMode()->getTailFieldLength().get() << "\n";
+
+b testLength(8000);
+b testLengthShort(504);
+simtime_t htBccDuration = htBccMode->getDuration(testLength);
+simtime_t htLdpcDuration = htLdpcMode->getDuration(testLength);
+simtime_t htBccDurationShort = htBccMode->getDuration(testLengthShort);
+simtime_t htLdpcDurationShort = htLdpcMode->getDuration(testLengthShort);
+EV << "HT BCC duration (8000): " << htBccDuration << "\n";
+EV << "HT LDPC duration (8000): " << htLdpcDuration << "\n";
+EV << "HT LDPC duration <= BCC duration (8000): " << (htLdpcDuration <= htBccDuration) << "\n";
+EV << "HT LDPC duration < BCC duration (504): " << (htLdpcDurationShort < htBccDurationShort) << "\n";
+
+// Test VHT Mode Duration and Tail Bits
+const Ieee80211VhtMode *vhtBccMode = Ieee80211VhtCompliantModes::getCompliantMode(
+    &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+    Ieee80211VhtMode::BAND_5GHZ,
+    Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG,
+    false);
+
+const Ieee80211VhtMode *vhtLdpcMode = Ieee80211VhtCompliantModes::getCompliantMode(
+    &Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1,
+    Ieee80211VhtMode::BAND_5GHZ,
+    Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED,
+    Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG,
+    true);
+
+EV << "VHT BCC isLdpc: " << vhtBccMode->getDataMode()->getCode()->isLdpc() << "\n";
+EV << "VHT LDPC isLdpc: " << vhtLdpcMode->getDataMode()->getCode()->isLdpc() << "\n";
+EV << "VHT BCC tail bits: " << vhtBccMode->getDataMode()->getTailFieldLength().get() << "\n";
+EV << "VHT LDPC tail bits: " << vhtLdpcMode->getDataMode()->getTailFieldLength().get() << "\n";
+
+simtime_t vhtBccDuration = vhtBccMode->getDuration(testLength);
+simtime_t vhtLdpcDuration = vhtLdpcMode->getDuration(testLength);
+simtime_t vhtBccDurationShort = vhtBccMode->getDuration(testLengthShort);
+simtime_t vhtLdpcDurationShort = vhtLdpcMode->getDuration(testLengthShort);
+EV << "VHT BCC duration (8000): " << vhtBccDuration << "\n";
+EV << "VHT LDPC duration (8000): " << vhtLdpcDuration << "\n";
+EV << "VHT LDPC duration <= BCC duration (8000): " << (vhtLdpcDuration <= vhtBccDuration) << "\n";
+EV << "VHT LDPC duration < BCC duration (504): " << (vhtLdpcDurationShort < vhtBccDurationShort) << "\n";
+
+EV << ".\n";
+
+%contains: stdout
+HT BCC isLdpc: 0
+HT LDPC isLdpc: 1
+HT BCC tail bits: 6
+HT LDPC tail bits: 0
+
+%contains: stdout
+HT LDPC duration < BCC duration (504): 1
+
+%contains: stdout
+VHT BCC isLdpc: 0
+VHT LDPC isLdpc: 1
+VHT BCC tail bits: 6
+VHT LDPC tail bits: 0
+
+%contains: stdout
+VHT LDPC duration < BCC duration (504): 1
