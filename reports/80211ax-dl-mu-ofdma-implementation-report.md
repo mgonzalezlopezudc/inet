@@ -1,5 +1,35 @@
 # 802.11ax Downlink MU-OFDMA Implementation Report
 
+## Compliance update (2026-06-19)
+
+The DL MU-OFDMA compliance plan in
+`plans/80211ax-dl-mu-ofdma-compliance-plan.md` has since been executed on branch
+`topic/80211heulmuofdma`. Most of the limitations noted in the original report
+below have been resolved:
+
+- A shared HE PPDU timing calculator now computes exact per-user and common
+  HE-MU symbol counts from live radio configuration.
+- Per-user MCS, NSS, RU, GI, and DCM are now used for both duration and
+  packet-level error evaluation.
+- HE-SIG-A/HE-SIG-B signaling and RU allocation encoding are standards-shaped.
+- Negotiated HE capabilities are stored per peer in the MIB and enforced by the
+  scheduler and frame builder.
+- HE Capabilities, HE Operation, and HE 6 GHz Band Capabilities now have
+  management-frame packet representations and serializer round-trip coverage for
+  model-backed fields.
+- A-MPDU delimiters are standards-shaped and per-MPDU receive outcomes drive
+  partial Block Ack bitmaps and selective retry.
+- MU-BAR Trigger plus simultaneous HE-TB BlockAck responses are the default
+  acknowledgment sequence; an explicit sequential BAR/BA compatibility mode is
+  also available.
+- Final MU construction failures now fall back safely to SU transmission.
+
+The focused HE/DL unit-test suite passes (19/19), the OFDMA validation scenario
+runs to completion, and the shared IEEE 802.11 unit slice passes (17/17 in this
+run). The remaining literal-plan gaps are automatic HE 6 GHz Band Capabilities
+advertisement from active-band state and LDPC processing; LDPC is currently
+rejected before scheduling.
+
 ## Executive summary
 
 The current implementation provides a coherent packet-level model of IEEE
