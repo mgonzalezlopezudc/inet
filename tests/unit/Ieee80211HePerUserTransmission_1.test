@@ -1,0 +1,223 @@
+%description:
+Test authoritative HE per-user parameters from packed DL-MU and UL-TB metadata
+through PHY encapsulation and transmission creation.
+
+%includes:
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IScalarSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%file: TestNetwork.ned
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.mobility.static.StationaryMobility;
+
+module InspectableRadio extends Ieee80211ScalarRadio
+{
+    parameters:
+        @class(InspectableRadio);
+}
+
+module MockNic
+{
+    parameters:
+        @class(MockNicModule);
+    submodules:
+        radio: InspectableRadio;
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.nic.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.radio.opMode = "ax"
+**.radio.bandName = "5 GHz (20 MHz)"
+**.radio.channelNumber = 0
+**.radio.transmitter.bitrate = 7.3125Mbps
+**.radio.transmitter.power = 20mW
+**.radio.antenna.numAntennas = 2
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class InspectableRadio : public Ieee80211Radio
+{
+  public:
+    void testEncapsulate(Packet *packet) const { encapsulate(packet); }
+};
+
+class MockNicModule : public NetworkInterface
+{
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(InspectableRadio);
+Define_Module(MockNicModule);
+
+static void appendDlUser(Packet *packet, const Ieee80211HeRu& ru, uint16_t staId,
+        int mcs, int nss, bool dcm, int payloadBytes)
+{
+    auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
+    payloadHeader->setRuIndex(ru.index);
+    payloadHeader->setRuToneSize(ru.toneSize);
+    payloadHeader->setRuToneOffset(ru.toneOffset);
+    payloadHeader->setStaId(staId);
+    payloadHeader->setMcs(mcs);
+    payloadHeader->setNumberOfSpatialStreams(nss);
+    payloadHeader->setDcm(dcm);
+    payloadHeader->setMpduLength(B(payloadBytes));
+    packet->insertAtBack(payloadHeader);
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(payloadBytes)));
+}
+
+%activity:
+cModuleType *nicType = cModuleType::find("MockNic");
+ASSERT(nicType != nullptr);
+cModule *nic = nicType->create("nic", getSystemModule());
+nic->buildInside();
+auto networkInterface = check_and_cast<MockNicModule *>(nic);
+networkInterface->setMacAddress(MacAddress("02:00:00:00:00:01"));
+nic->callInitialize();
+
+auto radio = check_and_cast<InspectableRadio *>(nic->getSubmodule("radio"));
+auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
+auto channel = transmitter->getChannel();
+ASSERT(channel != nullptr);
+auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
+
+// DL-MU: two users with different MCS/lengths get distinct durations. The
+// common PPDU and actual transmission end at the longest user's duration.
+{
+    auto packet = new Packet("dl-he-mu");
+    auto macHeader = makeShared<Ieee80211DataHeader>();
+    macHeader->setType(ST_DATA_WITH_QOS);
+    macHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    macHeader->setChunkLength(b(288));
+    packet->insertAtBack(macHeader);
+    appendDlUser(packet, rus[0], 1, 0, 1, false, 1200);
+    appendDlUser(packet, rus[1], 2, 7, 1, false, 300);
+    auto common = packet->addTag<Ieee80211HeMuCommonReq>();
+    common->setGuardInterval(HE_GI_1_6_US);
+    common->setCoding(HE_CODING_BCC);
+
+    radio->testEncapsulate(packet);
+    auto phyHeader = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
+    ASSERT(phyHeader->getPpduFormat() == HE_MU_DOWNLINK);
+    ASSERT(phyHeader->getUsersArraySize() == 2);
+    const auto& user0 = phyHeader->getUsers(0);
+    const auto& user1 = phyHeader->getUsers(1);
+    auto expected0 = computeHeUserPhyParameters(B(1200), rus[0], 0, 1, false, HE_GI_1_6_US);
+    auto expected1 = computeHeUserPhyParameters(B(300), rus[1], 7, 1, false, HE_GI_1_6_US);
+    ASSERT(user0.duration == expected0.duration);
+    ASSERT(user1.duration == expected1.duration);
+    ASSERT(user0.duration != user1.duration);
+    ASSERT(phyHeader->getCommonDuration() == std::max(user0.duration, user1.duration));
+
+    auto transmission = check_and_cast<const Ieee80211Transmission *>(
+            transmitter->createTransmission(radio, packet, SimTime(1, SIMTIME_S)));
+    ASSERT(transmission->getDuration() == phyHeader->getCommonDuration());
+    ASSERT(transmission->getEndTime() ==
+            transmission->getStartTime() + phyHeader->getCommonDuration());
+    ASSERT(transmission->getHeUserPhyParameters().size() == 2);
+    ASSERT(transmission->getHeUserPhyParameters()[0].duration == user0.duration);
+    ASSERT(transmission->getHeUserPhyParameters()[1].duration == user1.duration);
+    ASSERT(transmission->getPreambleDuration() == expected0.preambleDuration);
+    ASSERT(transmission->getHeaderDuration() == expected0.headerDuration);
+    ASSERT(transmission->getDataDuration() ==
+            phyHeader->getCommonDuration() - expected0.preambleDuration - expected0.headerDuration);
+
+    delete transmission;
+    delete packet;
+}
+
+// UL-TB: the sole transmitted user's descriptor drives duration, RU bandwidth,
+// guard interval, NSS, DCM, and resolved transmission parameters.
+{
+    auto packet = new Packet("ul-he-tb");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(700)));
+    auto request = packet->addTag<Ieee80211HeMuReq>();
+    request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    request->setTriggerId(42);
+    request->setRuIndex(rus[2].index);
+    request->setRuToneSize(rus[2].toneSize);
+    request->setRuToneOffset(rus[2].toneOffset);
+    request->setStaId(7);
+    request->setMcs(3);
+    request->setNumberOfSpatialStreams(2);
+    request->setDcm(true);
+    request->setGuardInterval(HE_GI_0_8_US);
+    request->setCoding(HE_CODING_BCC);
+
+    radio->testEncapsulate(packet);
+    auto phyHeader = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
+    ASSERT(phyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK);
+    ASSERT(phyHeader->getTriggerId() == 42);
+    ASSERT(phyHeader->getUsersArraySize() == 1);
+    const auto& user = phyHeader->getUsers(0);
+    auto expected = computeHeUserPhyParameters(user.psduLength, rus[2], 3, 2, true, HE_GI_0_8_US);
+    ASSERT(user.duration == expected.duration);
+    ASSERT(phyHeader->getCommonDuration() == expected.duration);
+
+    auto transmission = check_and_cast<const Ieee80211Transmission *>(
+            transmitter->createTransmission(radio, packet, SimTime(2, SIMTIME_S)));
+    ASSERT(transmission->getDuration() == expected.duration);
+    ASSERT(transmission->getHeUserPhyParameters().size() == 1);
+    const auto& resolved = transmission->getHeUserPhyParameters().front();
+    ASSERT(resolved.mcs == 3);
+    ASSERT(resolved.numberOfSpatialStreams == 2);
+    ASSERT(resolved.dcm);
+    ASSERT(resolved.guardInterval == HE_GI_0_8_US);
+    ASSERT(resolved.duration == expected.duration);
+    auto analog = check_and_cast<const IScalarSignalAnalogModel *>(transmission->getAnalogModel());
+    ASSERT(analog->getBandwidth() == rus[2].bandwidth);
+
+    delete transmission;
+    delete packet;
+}
+
+nic->deleteModule();
+
+EV << "DL-MU and UL-TB per-user header, common, and transmission durations are identical.\n";
+EV << ".\n";
+
+%contains: stdout
+DL-MU and UL-TB per-user header, common, and transmission durations are identical.
+.

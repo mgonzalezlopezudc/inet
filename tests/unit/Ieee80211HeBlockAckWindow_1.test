@@ -1,0 +1,96 @@
+%description:
+Test occupied HE Block Ack sequence-number accounting, including duplicate
+fragments, flow isolation, a full window, and sequence-number wrap.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.originator.QosAckHandler;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        ackHandler: QosAckHandler;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static Ptr<Ieee80211DataHeader> makeHeader(const MacAddress& receiver, Tid tid,
+        int sequenceNumber, int fragmentNumber = 0)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTid(tid);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setFragmentNumber(fragmentNumber);
+    header->setAckPolicy(BLOCK_ACK);
+    return header;
+}
+
+%activity:
+auto ackHandler = check_and_cast<QosAckHandler *>(
+        getParentModule()->getSubmodule("ackHandler"));
+MacAddress sta1("02:00:00:00:00:01");
+MacAddress sta2("02:00:00:00:00:02");
+Tid tid = 5;
+
+ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).empty());
+
+auto seq100frag0 = makeHeader(sta1, tid, 100, 0);
+auto seq100frag1 = makeHeader(sta1, tid, 100, 1);
+auto seq101 = makeHeader(sta1, tid, 101);
+ackHandler->frameGotInProgress(seq100frag0);
+ackHandler->frameGotInProgress(seq100frag1);
+ackHandler->frameGotInProgress(seq101);
+auto partial = ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid);
+ASSERT(partial.size() == 2);
+ASSERT(partial.count(100) == 1);
+ASSERT(partial.count(101) == 1);
+
+auto otherSta = makeHeader(sta2, tid, 100);
+auto otherTid = makeHeader(sta1, tid + 1, 100);
+ackHandler->frameGotInProgress(otherSta);
+ackHandler->frameGotInProgress(otherTid);
+ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid) == partial);
+
+ackHandler->dropFrame(seq100frag0);
+ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).size() == 2);
+ackHandler->dropFrame(seq100frag1);
+auto afterFragments = ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid);
+ASSERT(afterFragments.size() == 1);
+ASSERT(afterFragments.count(101) == 1);
+ackHandler->dropFrame(seq101);
+ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).empty());
+
+std::vector<Ptr<Ieee80211DataHeader>> wrappedHeaders;
+for (int sequenceNumber : {4094, 4095, 0, 1}) {
+    auto header = makeHeader(sta1, tid, sequenceNumber);
+    wrappedHeaders.push_back(header);
+    ackHandler->frameGotInProgress(header);
+}
+auto fullWrappedWindow = ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid);
+ASSERT(fullWrappedWindow.size() == 4);
+ASSERT(fullWrappedWindow.count(4094) == 1);
+ASSERT(fullWrappedWindow.count(4095) == 1);
+ASSERT(fullWrappedWindow.count(0) == 1);
+ASSERT(fullWrappedWindow.count(1) == 1);
+
+for (const auto& header : wrappedHeaders)
+    ackHandler->dropFrame(header);
+ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).empty());
+
+EV << "Empty, partial, full, isolated, fragmented, and wrapped Block Ack occupancy passed.\n";
+EV << ".\n";
+
+%contains: stdout
+Empty, partial, full, isolated, fragmented, and wrapped Block Ack occupancy passed.
+.

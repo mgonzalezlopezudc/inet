@@ -334,7 +334,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
-    phyHeader->setLengthField(B(packet->getDataLength()));
+    phyHeader->setLengthField(B((packet->getDataLength().get<b>() + 7) / 8));
     insertFcs(phyHeader);
     packet->insertAtFront(phyHeader);
 

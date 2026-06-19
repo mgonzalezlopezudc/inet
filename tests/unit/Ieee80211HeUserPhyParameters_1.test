@@ -2,6 +2,8 @@
 Test authoritative per-user IEEE 802.11ax PHY duration parameters.
 
 %includes:
+#include <functional>
+#include <vector>
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
@@ -9,8 +11,48 @@ Test authoritative per-user IEEE 802.11ax PHY duration parameters.
 using namespace inet;
 using namespace inet::physicallayer;
 
+static void expectRuntimeError(const std::function<void()>& operation)
+{
+    bool rejected = false;
+    try {
+        operation();
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    ASSERT(rejected);
+}
+
 %activity:
+const std::vector<int> toneSizes = {26, 52, 106, 242, 484, 996, 1992};
+int previousDataSubcarriers = 0;
+simtime_t previousDuration = SIMTIME_MAX;
+for (int toneSize : toneSizes) {
+    auto ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(160)), 0, toneSize, 0);
+    auto parameters = computeHeUserPhyParameters(B(1500), ru, 0);
+    ASSERT(ru.dataSubcarriers == getHeRuDataSubcarrierCount(toneSize));
+    ASSERT(parameters.dataBitsPerSymbol == ru.dataSubcarriers / 2);
+    ASSERT(parameters.codedBitsPerSymbol == ru.dataSubcarriers);
+    ASSERT(parameters.dataDuration ==
+            parameters.numberOfSymbols * (SimTime(12800, SIMTIME_NS) + SimTime(3200, SIMTIME_NS)));
+    ASSERT(parameters.duration ==
+            parameters.preambleDuration + parameters.headerDuration + parameters.dataDuration);
+    ASSERT(ru.dataSubcarriers > previousDataSubcarriers);
+    ASSERT(parameters.duration < previousDuration);
+    previousDataSubcarriers = ru.dataSubcarriers;
+    previousDuration = parameters.duration;
+}
+
 auto ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
+auto lowestMcs = computeHeUserPhyParameters(B(1500), ru, 0);
+auto highestMcs = computeHeUserPhyParameters(B(1500), ru, 11);
+ASSERT(lowestMcs.mcs == 0);
+ASSERT(highestMcs.mcs == 11);
+ASSERT(highestMcs.dataBitsPerSymbol > lowestMcs.dataBitsPerSymbol);
+ASSERT(highestMcs.numberOfSymbols < lowestMcs.numberOfSymbols);
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, -1); });
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 12); });
+
 auto shortGi = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_0_8_US);
 auto mediumGi = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_1_6_US);
 auto longGi = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_3_2_US);
@@ -21,22 +63,38 @@ ASSERT(mediumGi.duration < longGi.duration);
 
 auto oneStream = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_3_2_US);
 auto twoStreams = computeHeUserPhyParameters(B(1500), ru, 4, 2, false, HE_GI_3_2_US);
+auto eightStreams = computeHeUserPhyParameters(B(1500), ru, 4, 8, false, HE_GI_3_2_US);
 ASSERT(twoStreams.dataBitsPerSymbol == 2 * oneStream.dataBitsPerSymbol);
 ASSERT(twoStreams.numberOfSymbols < oneStream.numberOfSymbols);
+ASSERT(eightStreams.dataBitsPerSymbol == 8 * oneStream.dataBitsPerSymbol);
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 4, 0); });
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 4, 9); });
 
 auto noDcm = computeHeUserPhyParameters(B(1500), ru, 0, 1, false, HE_GI_3_2_US);
 auto dcm = computeHeUserPhyParameters(B(1500), ru, 0, 1, true, HE_GI_3_2_US);
 ASSERT(dcm.dataBitsPerSymbol * 2 == noDcm.dataBitsPerSymbol);
 ASSERT(dcm.numberOfSymbols > noDcm.numberOfSymbols);
+for (int mcs : {0, 1, 3, 4}) {
+    ASSERT(computeHeUserPhyParameters(B(1500), ru, mcs, 1, true).dcm);
+    ASSERT(computeHeUserPhyParameters(B(1500), ru, mcs, 2, true).dcm);
+}
+for (int mcs : {2, 5, 6, 7, 8, 9, 10, 11})
+    expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, mcs, 1, true); });
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 0, 3, true); });
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 0, 1, false,
+        HE_GI_3_2_US, HE_CODING_LDPC); });
 
-bool invalidDcmRejected = false;
-try {
-    computeHeUserPhyParameters(B(1500), ru, 5, 1, true, HE_GI_3_2_US);
-}
-catch (cRuntimeError&) {
-    invalidDcmRejected = true;
-}
-ASSERT(invalidDcmRejected);
+// 106-tone, MCS 0, NSS 1 has N_DBPS=51. Service + 10-byte PSDU + BCC tail
+// is exactly 102 bits (two symbols); one more byte must round up to three.
+auto exactBoundary = computeHeUserPhyParameters(B(10), ru, 0);
+auto roundedBoundary = computeHeUserPhyParameters(B(11), ru, 0);
+ASSERT(exactBoundary.dataBitsPerSymbol == 51);
+ASSERT(exactBoundary.numberOfSymbols == 2);
+ASSERT(roundedBoundary.numberOfSymbols == 3);
+ASSERT(computeHeUserPhyParameters(B(0), ru, 0).numberOfSymbols == 1);
+
+ASSERT(estimateHeMuUserDuration(B(1500), ru.toneSize, 4, 2, true, HE_GI_1_6_US) ==
+        computeHeUserPhyParameters(B(1500), ru, 4, 2, true, HE_GI_1_6_US).duration);
 
 auto mediumMode = Ieee80211HeCompliantModes::getCompliantMode(
         &Ieee80211HemcsTable::heMcs0BW20MHzNss1,
@@ -46,9 +104,9 @@ auto mediumMode = Ieee80211HeCompliantModes::getCompliantMode(
 ASSERT(mediumMode->getDataMode()->getGuardIntervalType() ==
         Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM);
 
-EV << "All HE guard intervals, NSS scaling, DCM scaling, and validation passed.\n";
+EV << "All HE RU sizes, MCS boundaries, NSS values, guard intervals, DCM rules, and symbol boundaries passed.\n";
 EV << ".\n";
 
 %contains: stdout
-All HE guard intervals, NSS scaling, DCM scaling, and validation passed.
+All HE RU sizes, MCS boundaries, NSS values, guard intervals, DCM rules, and symbol boundaries passed.
 .
