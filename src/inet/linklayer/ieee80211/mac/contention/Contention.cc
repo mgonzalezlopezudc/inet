@@ -171,8 +171,10 @@ void Contention::handleMessage(cMessage *msg)
     else if (msg == channelGrantedEvent) {
         EV_INFO << "Channel granted: startTime = " << startTime << std::endl;
         emit(channelAccessGrantedSignal, this);
-        callback->channelAccessGranted();
+        auto grantedCallback = callback;
+        ASSERT(grantedCallback != nullptr);
         callback = nullptr;
+        grantedCallback->channelAccessGranted();
     }
     else
         throw cRuntimeError("Unknown msg");
@@ -269,4 +271,3 @@ void Contention::updateDisplayString(simtime_t expectedChannelAccess) const
 
 } // namespace ieee80211
 } // namespace inet
-
