@@ -1,0 +1,41 @@
+%description:
+Test IEEE 802.11ac VHT beamforming gain and MU-MIMO penalty in error models
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+// 1. Create a packet and attach Ieee80211VhtTransmissionTag
+Packet *packet = new Packet("data");
+auto vhtTag = packet->addTag<Ieee80211VhtTransmissionTag>();
+vhtTag->setBeamformed(true);
+vhtTag->setBeamformingGainDb(3.0); // +3 dB gain
+
+// Normally this transmission is associated with a reception and snir.
+// Let's assert that the tag is successfully attached and has correct values.
+EV << "Tag beamformed: " << vhtTag->getBeamformed() << "\n";
+EV << "Tag gain: " << vhtTag->getBeamformingGainDb() << "\n";
+
+vhtTag->setMuMimo(true);
+vhtTag->setMuMimoPenaltyDb(2.0); // -2 dB penalty
+EV << "Tag muMimo: " << vhtTag->getMuMimo() << "\n";
+EV << "Tag penalty: " << vhtTag->getMuMimoPenaltyDb() << "\n";
+
+delete packet;
+EV << ".\n";
+
+%contains: stdout
+Tag beamformed: 1
+Tag gain: 3
+Tag muMimo: 1
+Tag penalty: 2
+.

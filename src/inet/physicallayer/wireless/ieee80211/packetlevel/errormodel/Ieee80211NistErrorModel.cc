@@ -307,12 +307,15 @@ double Ieee80211NistErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, u
                                                         //bitLength + htMode->getHeaderMode()->getHTLengthLength().get<b>(),
                                                         bitLength,
                                                         snr);
-    else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode))
+    else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(mode)) {
+        double effectiveSnr = snr;
+        if (vhtMode->getDataMode()->getCode() && vhtMode->getDataMode()->getCode()->isLdpc())
+            effectiveSnr *= std::pow(10.0, 1.5 / 10.0);
         successRate = getOFDMAndERPOFDMChunkSuccessRate(vhtMode->getDataMode()->getModulation()->getSubcarrierModulation(),
-                                                        vhtMode->getDataMode()->getCode()->getForwardErrorCorrection(),
-                                                        //bitLength + vhtMode->getHeaderMode()->getHTLengthLength().get<b>(),
-                                                        bitLength,
-                                                        snr);
+                                                         vhtMode->getDataMode()->getCode()->getForwardErrorCorrection(),
+                                                         bitLength,
+                                                         effectiveSnr);
+    }
     else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode))
         successRate = getOFDMAndERPOFDMChunkSuccessRate(heMode->getDataMode()->getModulation()->getSubcarrierModulation(),
                                                         heMode->getDataMode()->getCode()->getForwardErrorCorrection(),
