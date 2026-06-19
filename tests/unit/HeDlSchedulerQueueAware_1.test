@@ -2,6 +2,7 @@
 Test catalog-backed BacklogBased and HoLMinDelay HE DL schedulers.
 
 %includes:
+#include <cmath>
 #include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerBacklogBased.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerHoLMinDelay.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -180,6 +181,54 @@ auto holScheduler = check_and_cast<HeDlSchedulerHoLMinDelay *>(
     EV << "Duration alignment accepted only a standards-valid variance reduction.\n";
 }
 
+{
+    auto anchor = makeCandidate(1, 1200, 1200, true);
+    auto peer = makeCandidate(2, 300, 300);
+    anchor.pathLossDb = 60;
+    anchor.hasFreshPathLoss = true;
+    peer.pathLossDb = 60;
+    peer.hasFreshPathLoss = true;
+
+    auto shortContext = makeContext(Hz(20e6), {anchor, peer});
+    shortContext.channelCenterFrequency = Hz(5.22e9);
+    shortContext.channelNumber = 44;
+    shortContext.totalTransmitPower = W(0.1);
+    shortContext.receiverSensitivity = W(1e-12);
+    shortContext.noiseFigureDb = 7;
+    shortContext.guardInterval = HE_GI_0_8_US;
+    auto shortAllocations = backlogScheduler->schedule(shortContext);
+
+    auto longContext = shortContext;
+    longContext.guardInterval = HE_GI_3_2_US;
+    auto longAllocations = backlogScheduler->schedule(longContext);
+    ASSERT(shortAllocations.size() == longAllocations.size());
+    for (const auto& candidate : shortContext.candidates) {
+        const auto& shortAllocation = findAllocation(shortAllocations, candidate.staAddress);
+        const auto& longAllocation = findAllocation(longAllocations, candidate.staAddress);
+        ASSERT(shortAllocation.ru.centerFrequency != Hz(5.18e9));
+        ASSERT(shortAllocation.ru.toneSize == longAllocation.ru.toneSize);
+        ASSERT(shortAllocation.mcs == longAllocation.mcs);
+        ASSERT(shortAllocation.estimatedDuration ==
+                computeHeUserPhyParameters(B(std::max<int64_t>(candidate.backlogBytes, 1)),
+                        shortAllocation.ru, shortAllocation.mcs, 1, false,
+                        HE_GI_0_8_US).duration);
+        ASSERT(longAllocation.estimatedDuration ==
+                computeHeUserPhyParameters(B(std::max<int64_t>(candidate.backlogBytes, 1)),
+                        longAllocation.ru, longAllocation.mcs, 1, false,
+                        HE_GI_3_2_US).duration);
+        ASSERT(shortAllocation.estimatedDuration < longAllocation.estimatedDuration);
+
+        double totalDbm = 10 * std::log10(shortContext.totalTransmitPower.get() / 1e-3);
+        double ruPowerDbm = totalDbm + 10 * std::log10(
+                shortAllocation.ru.bandwidth.get() / shortContext.channelBandwidth.get());
+        double noiseDbm = -174 + 10 * std::log10(shortAllocation.ru.bandwidth.get()) +
+                shortContext.noiseFigureDb;
+        double expectedSnrDb = ruPowerDbm - candidate.pathLossDb - noiseDbm;
+        ASSERT(std::abs(shortAllocation.estimatedSnrDb - expectedSnrDb) < 1e-9);
+    }
+    EV << "Live center frequency, power, noise figure, and GI drove authoritative scheduler estimates.\n";
+}
+
 EV << ".\n";
 
 %contains: stdout
@@ -188,4 +237,5 @@ Backlog threshold boundaries mapped to 26/52/106/484-tone RUs.
 HoL scheduler sized RUs from the HoL MPDU instead of total backlog.
 Backlog path-loss grouping included 10 dB and excluded values above it.
 Duration alignment accepted only a standards-valid variance reduction.
+Live center frequency, power, noise figure, and GI drove authoritative scheduler estimates.
 .
