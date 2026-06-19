@@ -119,10 +119,85 @@ struct Ieee80211SupportedRatesElement
 }
 
 //
+// HE-MCS map used by the HE Capabilities and HE Operation elements.
+// Each entry is the maximum supported HE-MCS for NSS n+1; -1 means unsupported.
+//
+struct Ieee80211HeMcsNssMapElement
+{
+    short maxMcsForNss[8];
+}
+
+//
+// Packet representation of the IEEE 802.11ax HE Capabilities element fields
+// used by the packet-level HE OFDMA model. The serializer maps these fields
+// into the standard Element ID Extension element body and leaves unrelated
+// HE capability bits reserved/zero.
+//
+struct Ieee80211HeCapabilitiesElement
+{
+    bool supportedChannelWidth40MHz;
+    bool supportedChannelWidth80MHz;
+    bool supportedChannelWidth160MHz;
+    bool supportedChannelWidth80Plus80MHz;
+    Ieee80211HeMcsNssMapElement rxMcsNss;
+    Ieee80211HeMcsNssMapElement txMcsNss;
+    bool dlOfdma;
+    bool ulOfdma;
+    bool dcm;
+    short maxDcmConstellation;
+    short maxDcmNss;
+    bool ldpc;
+    bool multiTidAggregationRx;
+    bool multiTidAggregationTx;
+    bool muBarTriggerRx;
+    bool heTbBlockAckTx;
+    short maxAmpduLengthExponent;
+    int maxMpduLength;
+    short maxBlockAckBufferSize;
+    bool ru26Tone;
+    bool ru52Tone;
+    bool ru106Tone;
+    bool ru242Tone;
+    bool ru484Tone;
+    bool ru996Tone;
+    bool ru1992Tone;
+}
+
+//
+// Packet representation of the HE Operation element fields consumed by the
+// model. Unsupported optional operation subfields are serialized as absent.
+//
+struct Ieee80211HeOperationElement
+{
+    short bssColor;
+    int operatingChannelWidthMHz;
+    short basicHeMcsNss;
+    bool defaultPeDurationPresent;
+    short defaultPeDurationUs;
+}
+
+//
+// Packet representation of HE 6 GHz Band Capabilities. The element is only
+// present when explicitly requested by the frame.
+//
+struct Ieee80211He6GhzBandCapabilitiesElement
+{
+    short minimumMpduStartSpacing;
+    short maxAmpduLengthExponent;
+    int maxMpduLength;
+}
+
+//
 // Frame body base class used to hide various frame body types
 //
 class Ieee80211MgmtFrame extends FieldsChunk
 {
+    bool heCapabilitiesPresent;
+    Ieee80211HeCapabilitiesElement heCapabilities;
+    bool heOperationPresent;
+    Ieee80211HeOperationElement heOperation;
+    bool he6GhzBandCapabilitiesPresent;
+    Ieee80211He6GhzBandCapabilitiesElement he6GhzBandCapabilities;
 }
 
 //

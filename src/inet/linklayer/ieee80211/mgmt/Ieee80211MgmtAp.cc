@@ -16,6 +16,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAp.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 
@@ -32,6 +33,14 @@ static std::ostream& operator<<(std::ostream& os, const Ieee80211MgmtAp::StaInfo
 {
     os << "address:" << sta.address;
     return os;
+}
+
+static void addApHeManagementElements(const Ptr<Ieee80211MgmtFrame>& body, Ieee80211Mib *mib)
+{
+    body->setHeCapabilitiesPresent(true);
+    body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
+    body->setHeOperationPresent(true);
+    body->setHeOperation(makeHeOperationElement(mib->heOperation));
 }
 
 Ieee80211MgmtAp::~Ieee80211MgmtAp()
@@ -117,7 +126,8 @@ void Ieee80211MgmtAp::sendBeacon()
     body->setSupportedRates(supportedRates);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
-    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)));
+    addApHeManagementElements(body, mib);
+    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("Beacon", body, ST_BEACON, MacAddress::BROADCAST_ADDRESS);
 }
 
@@ -218,6 +228,7 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
             }
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
+        mib->removePeerHeCapabilities(sta->address);
         sta->authSeqExpected = 1;
     }
 }
@@ -239,6 +250,10 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
 
     auto associationRequest = packet->peekAt<Ieee80211AssociationRequestFrame>(header->getChunkLength());
     mib->setStationTransmitPower(sta->address, associationRequest->getTransmitPowerDbm());
+    if (associationRequest->getHeCapabilitiesPresent())
+        mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(associationRequest->getHeCapabilities()), mib->heOperation);
+    else
+        mib->removePeerHeCapabilities(sta->address);
     delete packet;
 
     // mark STA as associated
@@ -264,7 +279,8 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
-    body->setChunkLength(B(2 + 2 + 2 + body->getSupportedRates().numRates + 2));
+    addApHeManagementElements(body, mib);
+    body->setChunkLength(B(2 + 2 + 2 + body->getSupportedRates().numRates + 2) + getHeMgmtElementsLength(body));
     sendManagementFrame("AssocResp-OK", body, ST_ASSOCIATIONRESPONSE, sta->address);
 }
 
@@ -288,6 +304,11 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
         return;
     }
 
+    auto reassociationRequest = packet->peekAt<Ieee80211ReassociationRequestFrame>(header->getChunkLength());
+    if (reassociationRequest->getHeCapabilitiesPresent())
+        mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(reassociationRequest->getHeCapabilities()), mib->heOperation);
+    else
+        mib->removePeerHeCapabilities(sta->address);
     delete packet;
 
     // mark STA as associated
@@ -298,7 +319,8 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
-    body->setChunkLength(B(2 + (2 + ssid.length()) + (2 + supportedRates.numRates) + 6));
+    addApHeManagementElements(body, mib);
+    body->setChunkLength(B(2 + 2 + 2 + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("ReassocResp-OK", body, ST_REASSOCIATIONRESPONSE, sta->address);
 }
 
@@ -358,7 +380,8 @@ void Ieee80211MgmtAp::handleProbeRequestFrame(Packet *packet, const Ptr<const Ie
     body->setSupportedRates(supportedRates);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
-    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)));
+    addApHeManagementElements(body, mib);
+    body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("ProbeResp", body, ST_PROBERESPONSE, staAddress);
 }
 

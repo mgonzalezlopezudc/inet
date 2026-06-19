@@ -7,7 +7,11 @@
 
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrameSerializer.h"
 
+#include <algorithm>
+#include <vector>
+
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 
 namespace inet {
@@ -24,6 +28,338 @@ Register_Serializer(Ieee80211ProbeRequestFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211ProbeResponseFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211ReassociationRequestFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211ReassociationResponseFrame, Ieee80211MgmtFrameSerializer);
+
+static const uint8_t ELEMENT_ID_EXTENSION = 255;
+static const uint8_t ELEMENT_ID_EXTENSION_HE_CAPABILITIES = 35;
+static const uint8_t ELEMENT_ID_EXTENSION_HE_OPERATION = 36;
+static const uint8_t ELEMENT_ID_EXTENSION_HE_6GHZ_BAND_CAPABILITIES = 59;
+
+static uint64_t getBits(uint64_t value, int offset, int length)
+{
+    return (value >> offset) & ((uint64_t(1) << length) - 1);
+}
+
+static void setBits(uint64_t& value, int offset, int length, uint64_t field)
+{
+    uint64_t mask = ((uint64_t(1) << length) - 1) << offset;
+    value = (value & ~mask) | ((field << offset) & mask);
+}
+
+static bool getBit(const std::vector<uint8_t>& bytes, int bit)
+{
+    return (bytes[bit / 8] & (1 << (bit % 8))) != 0;
+}
+
+static int getBits(const std::vector<uint8_t>& bytes, int offset, int length)
+{
+    int value = 0;
+    for (int i = 0; i < length; ++i)
+        if (getBit(bytes, offset + i))
+            value |= 1 << i;
+    return value;
+}
+
+static void setBits(std::vector<uint8_t>& bytes, int offset, int length, int field)
+{
+    for (int i = 0; i < length; ++i) {
+        if ((field & (1 << i)) != 0)
+            bytes[(offset + i) / 8] |= 1 << ((offset + i) % 8);
+        else
+            bytes[(offset + i) / 8] &= ~(1 << ((offset + i) % 8));
+    }
+}
+
+static int encodeHeMcsMapEntry(int maxMcs)
+{
+    if (maxMcs < 0)
+        return 3;
+    else if (maxMcs <= 7)
+        return 0;
+    else if (maxMcs <= 9)
+        return 1;
+    else
+        return 2;
+}
+
+static int decodeHeMcsMapEntry(int encoded)
+{
+    switch (encoded) {
+        case 0: return 7;
+        case 1: return 9;
+        case 2: return 11;
+        case 3: return -1;
+        default: throw cRuntimeError("Invalid HE-MCS map entry");
+    }
+}
+
+static uint16_t encodeHeMcsMap(const Ieee80211HeMcsNssMapElement& map)
+{
+    uint16_t encoded = 0;
+    for (int i = 0; i < 8; ++i)
+        encoded |= encodeHeMcsMapEntry(map.maxMcsForNss[i]) << (2 * i);
+    return encoded;
+}
+
+static void decodeHeMcsMap(uint16_t encoded, Ieee80211HeMcsNssMapElement& map)
+{
+    for (int i = 0; i < 8; ++i)
+        map.maxMcsForNss[i] = decodeHeMcsMapEntry((encoded >> (2 * i)) & 0x3);
+}
+
+static int encodeDcmConstellation(int maxDcmConstellation)
+{
+    if (maxDcmConstellation <= 0)
+        return 0;
+    else if (maxDcmConstellation <= 1)
+        return 1;
+    else if (maxDcmConstellation <= 2)
+        return 2;
+    else
+        return 3;
+}
+
+static int decodeDcmConstellation(int encoded)
+{
+    switch (encoded) {
+        case 0: return 0;
+        case 1: return 1;
+        case 2: return 2;
+        case 3: return 4;
+        default: throw cRuntimeError("Invalid HE DCM constellation");
+    }
+}
+
+static int encodeMaxMpduLength(int maxMpduLength)
+{
+    if (maxMpduLength <= 3895)
+        return 0;
+    else if (maxMpduLength <= 7991)
+        return 1;
+    else
+        return 2;
+}
+
+static int decodeMaxMpduLength(int encoded)
+{
+    switch (encoded) {
+        case 0: return 3895;
+        case 1: return 7991;
+        case 2: return 11454;
+        default: return 11454;
+    }
+}
+
+static int encodeDcmMaxRu(const Ieee80211HeCapabilitiesElement& capabilities)
+{
+    if (capabilities.ru1992Tone)
+        return 3;
+    else if (capabilities.ru996Tone)
+        return 2;
+    else if (capabilities.ru484Tone)
+        return 1;
+    else
+        return 0;
+}
+
+static void skipBytes(MemoryInputStream& stream, int length)
+{
+    for (int i = 0; i < length; ++i)
+        stream.readByte();
+}
+
+static void writeHeCapabilitiesElement(MemoryOutputStream& stream, const Ieee80211HeCapabilitiesElement& capabilities)
+{
+    int mcsNssLength = capabilities.supportedChannelWidth160MHz || capabilities.supportedChannelWidth80Plus80MHz ? 8 : 4;
+    stream.writeByte(ELEMENT_ID_EXTENSION);
+    stream.writeByte(1 + 6 + 11 + mcsNssLength);
+    stream.writeByte(ELEMENT_ID_EXTENSION_HE_CAPABILITIES);
+
+    uint64_t macCapabilities = 0;
+    setBits(macCapabilities, 12, 3, capabilities.multiTidAggregationRx ? 1 : 0);
+    setBits(macCapabilities, 17, 1, capabilities.heTbBlockAckTx ? 1 : 0);
+    setBits(macCapabilities, 19, 1, capabilities.ulOfdma ? 1 : 0);
+    setBits(macCapabilities, 26, 1, capabilities.ulOfdma ? 1 : 0);
+    setBits(macCapabilities, 27, 2, std::clamp((int)capabilities.maxAmpduLengthExponent - 3, 0, 3));
+    setBits(macCapabilities, 35, 1, capabilities.multiTidAggregationTx ? 1 : 0);
+    for (int i = 0; i < 6; ++i)
+        stream.writeByte((macCapabilities >> (8 * i)) & 0xff);
+
+    std::vector<uint8_t> phyCapabilities(11, 0);
+    int supportedChannelWidthSet = 0;
+    if (capabilities.supportedChannelWidth40MHz || capabilities.supportedChannelWidth80MHz)
+        supportedChannelWidthSet |= 1 << 1;
+    if (capabilities.supportedChannelWidth160MHz)
+        supportedChannelWidthSet |= 1 << 2;
+    if (capabilities.supportedChannelWidth80Plus80MHz)
+        supportedChannelWidthSet |= 1 << 3;
+    setBits(phyCapabilities, 1, 7, supportedChannelWidthSet);
+    setBits(phyCapabilities, 13, 1, capabilities.ldpc ? 1 : 0);
+    int dcmConstellation = capabilities.dcm ? encodeDcmConstellation(capabilities.maxDcmConstellation) : 0;
+    int dcmNss = capabilities.dcm && capabilities.maxDcmNss > 1 ? 1 : 0;
+    setBits(phyCapabilities, 24, 2, dcmConstellation);
+    setBits(phyCapabilities, 26, 1, dcmNss);
+    setBits(phyCapabilities, 27, 2, dcmConstellation);
+    setBits(phyCapabilities, 29, 1, dcmNss);
+    setBits(phyCapabilities, 70, 2, encodeDcmMaxRu(capabilities));
+    for (auto byte : phyCapabilities)
+        stream.writeByte(byte);
+
+    stream.writeUint16Le(encodeHeMcsMap(capabilities.rxMcsNss));
+    stream.writeUint16Le(encodeHeMcsMap(capabilities.txMcsNss));
+    if (mcsNssLength >= 8) {
+        stream.writeUint16Le(encodeHeMcsMap(capabilities.rxMcsNss));
+        stream.writeUint16Le(encodeHeMcsMap(capabilities.txMcsNss));
+    }
+}
+
+static void writeHeOperationElement(MemoryOutputStream& stream, const Ieee80211HeOperationElement& operation)
+{
+    stream.writeByte(ELEMENT_ID_EXTENSION);
+    stream.writeByte(1 + 3 + 1 + 2);
+    stream.writeByte(ELEMENT_ID_EXTENSION_HE_OPERATION);
+    uint32_t operationParameters = 0;
+    if (operation.defaultPeDurationPresent)
+        operationParameters |= std::clamp((int)operation.defaultPeDurationUs / 4, 0, 4);
+    stream.writeByte(operationParameters & 0xff);
+    stream.writeByte((operationParameters >> 8) & 0xff);
+    stream.writeByte((operationParameters >> 16) & 0xff);
+    stream.writeByte(operation.bssColor & 0x3f);
+    stream.writeUint16Le(operation.basicHeMcsNss);
+}
+
+static void writeHe6GhzBandCapabilitiesElement(MemoryOutputStream& stream, const Ieee80211He6GhzBandCapabilitiesElement& capabilities)
+{
+    stream.writeByte(ELEMENT_ID_EXTENSION);
+    stream.writeByte(1 + 2);
+    stream.writeByte(ELEMENT_ID_EXTENSION_HE_6GHZ_BAND_CAPABILITIES);
+    uint16_t capabilitiesInformation = 0;
+    capabilitiesInformation |= (capabilities.minimumMpduStartSpacing & 0x7);
+    capabilitiesInformation |= (std::clamp((int)capabilities.maxAmpduLengthExponent, 0, 7) & 0x7) << 3;
+    capabilitiesInformation |= (encodeMaxMpduLength(capabilities.maxMpduLength) & 0x3) << 6;
+    stream.writeUint16Le(capabilitiesInformation);
+}
+
+static void writeHeMgmtElements(MemoryOutputStream& stream, const Ptr<const Ieee80211MgmtFrame>& frame)
+{
+    if (frame->getHeCapabilitiesPresent())
+        writeHeCapabilitiesElement(stream, frame->getHeCapabilities());
+    if (frame->getHeOperationPresent())
+        writeHeOperationElement(stream, frame->getHeOperation());
+    if (frame->getHe6GhzBandCapabilitiesPresent())
+        writeHe6GhzBandCapabilitiesElement(stream, frame->getHe6GhzBandCapabilities());
+}
+
+static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (payloadLength < 6 + 11 + 4)
+        throw cRuntimeError("Malformed HE Capabilities element: length is %d", payloadLength);
+    Ieee80211HeCapabilitiesElement capabilities;
+    uint64_t macCapabilities = 0;
+    for (int i = 0; i < 6; ++i)
+        macCapabilities |= (uint64_t)stream.readByte() << (8 * i);
+    std::vector<uint8_t> phyCapabilities(11);
+    for (auto& byte : phyCapabilities)
+        byte = stream.readByte();
+    int mcsNssLength = payloadLength - 6 - 11;
+    decodeHeMcsMap(stream.readUint16Le(), capabilities.rxMcsNss);
+    decodeHeMcsMap(stream.readUint16Le(), capabilities.txMcsNss);
+    if (mcsNssLength > 4)
+        skipBytes(stream, mcsNssLength - 4);
+
+    int supportedChannelWidthSet = getBits(phyCapabilities, 1, 7);
+    capabilities.supportedChannelWidth40MHz = (supportedChannelWidthSet & (1 << 1)) != 0;
+    capabilities.supportedChannelWidth80MHz = (supportedChannelWidthSet & (1 << 1)) != 0;
+    capabilities.supportedChannelWidth160MHz = (supportedChannelWidthSet & (1 << 2)) != 0;
+    capabilities.supportedChannelWidth80Plus80MHz = (supportedChannelWidthSet & (1 << 3)) != 0;
+    capabilities.dlOfdma = true;
+    capabilities.ulOfdma = getBits(macCapabilities, 26, 1) != 0 || getBits(macCapabilities, 19, 1) != 0;
+    capabilities.ldpc = getBit(phyCapabilities, 13);
+    int dcmConstellation = getBits(phyCapabilities, 27, 2);
+    capabilities.dcm = dcmConstellation != 0;
+    capabilities.maxDcmConstellation = decodeDcmConstellation(dcmConstellation);
+    capabilities.maxDcmNss = getBits(phyCapabilities, 29, 1) != 0 ? 2 : 1;
+    capabilities.multiTidAggregationRx = getBits(macCapabilities, 12, 3) != 0;
+    capabilities.multiTidAggregationTx = getBits(macCapabilities, 35, 1) != 0;
+    capabilities.muBarTriggerRx = true;
+    capabilities.heTbBlockAckTx = getBits(macCapabilities, 17, 1) != 0;
+    capabilities.maxAmpduLengthExponent = 3 + getBits(macCapabilities, 27, 2);
+    capabilities.maxMpduLength = 11454;
+    capabilities.maxBlockAckBufferSize = 64;
+    capabilities.ru26Tone = true;
+    capabilities.ru52Tone = true;
+    capabilities.ru106Tone = true;
+    capabilities.ru242Tone = true;
+    int dcmMaxRu = getBits(phyCapabilities, 70, 2);
+    capabilities.ru484Tone = dcmMaxRu >= 1;
+    capabilities.ru996Tone = dcmMaxRu >= 2;
+    capabilities.ru1992Tone = dcmMaxRu >= 3;
+    frame->setHeCapabilitiesPresent(true);
+    frame->setHeCapabilities(capabilities);
+}
+
+static void readHeOperationElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (payloadLength < 3 + 1 + 2)
+        throw cRuntimeError("Malformed HE Operation element: length is %d", payloadLength);
+    Ieee80211HeOperationElement operation;
+    uint32_t operationParameters = stream.readByte();
+    operationParameters |= (uint32_t)stream.readByte() << 8;
+    operationParameters |= (uint32_t)stream.readByte() << 16;
+    int defaultPeDuration = operationParameters & 0x7;
+    operation.defaultPeDurationPresent = defaultPeDuration != 0;
+    operation.defaultPeDurationUs = defaultPeDuration * 4;
+    operation.bssColor = stream.readByte() & 0x3f;
+    operation.basicHeMcsNss = stream.readUint16Le();
+    operation.operatingChannelWidthMHz = 20;
+    if (payloadLength > 6)
+        skipBytes(stream, payloadLength - 6);
+    frame->setHeOperationPresent(true);
+    frame->setHeOperation(operation);
+}
+
+static void readHe6GhzBandCapabilitiesElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (payloadLength != 2)
+        throw cRuntimeError("Malformed HE 6 GHz Band Capabilities element: length is %d", payloadLength);
+    uint16_t capabilitiesInformation = stream.readUint16Le();
+    Ieee80211He6GhzBandCapabilitiesElement capabilities;
+    capabilities.minimumMpduStartSpacing = capabilitiesInformation & 0x7;
+    capabilities.maxAmpduLengthExponent = (capabilitiesInformation >> 3) & 0x7;
+    capabilities.maxMpduLength = decodeMaxMpduLength((capabilitiesInformation >> 6) & 0x3);
+    frame->setHe6GhzBandCapabilitiesPresent(true);
+    frame->setHe6GhzBandCapabilities(capabilities);
+}
+
+static void readHeMgmtElements(MemoryInputStream& stream, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    while (stream.getRemainingLength() >= B(2)) {
+        int elementId = stream.readByte();
+        int length = stream.readByte();
+        if (stream.getRemainingLength() < B(length))
+            throw cRuntimeError("Malformed IEEE 802.11 management element: id=%d length=%d remaining=%" PRId64,
+                    elementId, length, stream.getRemainingLength().get<B>());
+        if (elementId == ELEMENT_ID_EXTENSION && length >= 1) {
+            int extensionId = stream.readByte();
+            int payloadLength = length - 1;
+            switch (extensionId) {
+                case ELEMENT_ID_EXTENSION_HE_CAPABILITIES:
+                    readHeCapabilitiesElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_HE_OPERATION:
+                    readHeOperationElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_HE_6GHZ_BAND_CAPABILITIES:
+                    readHe6GhzBandCapabilitiesElement(stream, payloadLength, frame);
+                    break;
+                default:
+                    skipBytes(stream, payloadLength);
+                    break;
+            }
+        }
+        else
+            skipBytes(stream, length);
+    }
+}
 
 void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
@@ -63,6 +399,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
             stream.writeByte(rate);
         }
+        writeHeMgmtElements(stream, probeRequestFrame);
         // 3    Request information         May be included if dot11MultiDomainCapabilityEnabled is true.
         // 4    Extended Supported Rates    The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // Last Vendor Specific             One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
@@ -89,6 +426,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeByte(rate);
         }
         stream.writeUint16Be((uint16_t)std::lround((associationRequestFrame->getTransmitPowerDbm() + 128) * 100));
+        writeHeMgmtElements(stream, associationRequestFrame);
         // 5    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 6    Power Capability           The Power Capability element shall be present if dot11SpectrumManagementRequired is true.
         // 7    Supported Channel          The Supported Channels element shall be present if dot11SpectrumManagementRequired is true.
@@ -120,6 +458,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
             stream.writeByte(rate);
         }
+        writeHeMgmtElements(stream, reassociationRequestFrame);
         // 6    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 7    Power Capability           The Power Capability element shall be present if dot11SpectrumManagementRequired is true.
         // 8    Supported Channels         The Supported Channels element shall be present if dot11SpectrumManagementRequired is true.
@@ -143,6 +482,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
             stream.writeByte(rate);
         }
+        writeHeMgmtElements(stream, associationResponseFrame);
         // 5    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 6    EDCA Parameter Set
         // Last Vendor Specific            One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
@@ -163,6 +503,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
             stream.writeByte(rate);
         }
+        writeHeMgmtElements(stream, reassociationResponseFrame);
         // 5    Extended Supported Rates   The Extended Supported Rates element is present whenever there are more than eight supported rates, and it is optional otherwise.
         // 6    EDCA Parameter Set
         // Last Vendor Specific            One or more vendor-specific information elements may appear in this frame. This information element follows all other information elements.
@@ -189,6 +530,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
             stream.writeByte(rate);
         }
+        writeHeMgmtElements(stream, beaconFrame);
         // 6    Frequency-Hopping (FH) Parameter Set   The FH Parameter Set information element is present within Beacon frames generated by STAs using FH PHYs.
         // 7    DS Parameter Set                       The DS Parameter Set information element is present within Beacon frames generated by STAs using Clause 15, Clause 18, and Clause 19 PHYs.
         // 8    CF Parameter Set                       The CF Parameter Set information element is present only within Beacon frames generated by APs supporting a PCF.
@@ -232,6 +574,7 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
             // rate |= 0x80 if rate contained in the BSSBasicRateSet parameter
             stream.writeByte(rate);
         }
+        writeHeMgmtElements(stream, probeResponseFrame);
         // 6      FH Parameter Set                The FH Parameter Set information element is present within Probe Response frames generated by STAs using FH PHYs.
         // 7      DS Parameter Set                The DS Parameter Set information element is present within Probe Response frames generated by STAs using Clause 15, Clause 18, and Clause 19 PHYs.
         // 8      CF Parameter Set                The CF Parameter Set information element is present only within Probe Response frames generated by APs supporting a PCF.
@@ -299,6 +642,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             for (int i = 0; i < supRat.numRates; i++)
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
+            readHeMgmtElements(stream, frame);
             return frame;
         }
 
@@ -322,6 +666,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
             frame->setTransmitPowerDbm(stream.readUint16Be() / 100.0 - 128);
+            readHeMgmtElements(stream, frame);
             return frame;
         }
 
@@ -346,6 +691,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             for (int i = 0; i < supRat.numRates; i++)
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
+            readHeMgmtElements(stream, frame);
             return frame;
         }
 
@@ -362,6 +708,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             for (int i = 0; i < supRat.numRates; i++)
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
+            readHeMgmtElements(stream, frame);
             return frame;
         }
 
@@ -378,6 +725,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             for (int i = 0; i < supRat.numRates; i++)
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
+            readHeMgmtElements(stream, frame);
             return frame;
         }
 
@@ -404,6 +752,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             for (int i = 0; i < supRat.numRates; i++)
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
+            readHeMgmtElements(stream, frame);
             return frame;
         }
 
@@ -430,6 +779,7 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
             for (int i = 0; i < supRat.numRates; i++)
                 supRat.rate[i] = (double)(stream.readByte() & 0x7F) * 0.5;
             frame->setSupportedRates(supRat);
+            readHeMgmtElements(stream, frame);
             return frame;
         }
 

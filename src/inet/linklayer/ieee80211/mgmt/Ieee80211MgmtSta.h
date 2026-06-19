@@ -50,6 +50,10 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
         Ieee80211SupportedRatesElement supportedRates;
         simtime_t beaconInterval;
         double rxPower;
+        bool heCapabilitiesPresent;
+        Ieee80211HeCapabilitiesElement heCapabilities;
+        bool heOperationPresent;
+        Ieee80211HeOperationElement heOperation;
 
         bool isAuthenticated;
         int authSeqExpected; // valid while authenticating; values: 1,3,5...
@@ -59,6 +63,8 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
         {
             channel = -1;
             beaconInterval = rxPower = 0;
+            heCapabilitiesPresent = false;
+            heOperationPresent = false;
             authSeqExpected = -1;
             isAuthenticated = false;
             authTimeoutMsg = nullptr;
@@ -190,4 +196,3 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
 } // namespace inet
 
 #endif
-
