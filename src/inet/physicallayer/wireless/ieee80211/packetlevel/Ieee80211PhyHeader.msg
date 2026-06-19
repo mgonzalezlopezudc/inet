@@ -178,7 +178,7 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 
 class Ieee80211HeMuRuPayloadHeader extends FieldsChunk
 {
-    chunkLength = b(89);
+    chunkLength = B(12);
     int ruIndex;
     uint16_t ruToneSize;
     uint16_t ruToneOffset;

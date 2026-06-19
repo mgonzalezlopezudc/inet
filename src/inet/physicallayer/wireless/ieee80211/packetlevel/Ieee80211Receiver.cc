@@ -153,21 +153,27 @@ static bool applyHeMuMpduReceiveOutcomes(Packet *packet,
 
 static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
 {
+    constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
+            Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
+            Chunk::PF_ALLOW_REINTERPRETATION;
     auto packetCopy = transmittedPacket->dup();
-    packetCopy->popAtFront<Ieee80211HeMuPhyHeader>();
-    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>();
-    while (packetCopy->getDataLength() > b(0) && packetCopy->hasAtFront<Ieee80211HeMuRuPayloadHeader>()) {
-        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
+    packetCopy->popAtFront<Ieee80211HeMuPhyHeader>(B(-1), parsingFlags);
+    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>(B(-1), parsingFlags);
+    while (packetCopy->getDataLength() > b(0) &&
+            dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(
+                    packetCopy->peekAtFront(B(-1), parsingFlags)) != nullptr) {
+        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>(B(-1), parsingFlags);
         if (payloadHeader->getStaId() == staId) {
             auto mpdu = new Packet(transmittedPacket->getName());
-            mpdu->insertAtBack(packetCopy->popAtFront(payloadHeader->getMpduLength()));
+            mpdu->insertAtBack(packetCopy->popAtFront(payloadHeader->getMpduLength(), parsingFlags));
             auto indication = mpdu->addTagIfAbsent<Ieee80211MpduReceiveInd>();
             auto parser = mpdu->dup();
             B offset(0);
             while (parser->getDataLength() > b(0) &&
-                    parser->hasAtFront<ieee80211::Ieee80211MpduSubframeHeader>()) {
+                    dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(
+                            parser->peekAtFront(B(-1), parsingFlags)) != nullptr) {
                 auto delimiter = parser->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(
-                        B(-1), Chunk::PF_ALLOW_INCORRECT);
+                        B(-1), parsingFlags);
                 Ieee80211MpduReceiveResult receiveResult;
                 receiveResult.offset = offset;
                 receiveResult.length = B(delimiter->getLength());
@@ -175,24 +181,23 @@ static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
                         MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
                 if (parser->getDataLength() >= receiveResult.length) {
                     auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(
-                            parser->peekAtFront<ieee80211::Ieee80211MacHeader>(
-                                    B(-1), Chunk::PF_ALLOW_INCORRECT));
+                            parser->peekAtFront(B(-1), parsingFlags));
                     if (macHeader != nullptr) {
                         receiveResult.sequenceNumber = macHeader->getSequenceNumber().get();
                         receiveResult.fragmentNumber = macHeader->getFragmentNumber();
                         receiveResult.tid = macHeader->getTid();
                     }
-                    parser->popAtFront(receiveResult.length, Chunk::PF_ALLOW_INCORRECT);
+                    parser->popAtFront(receiveResult.length, parsingFlags);
                 }
                 else {
                     receiveResult.status = MPDU_PAYLOAD_ERROR;
-                    parser->popAtFront(parser->getDataLength(), Chunk::PF_ALLOW_INCORRECT);
+                    parser->popAtFront(parser->getDataLength(), parsingFlags);
                 }
                 indication->appendResults(receiveResult);
                 offset += B(4) + receiveResult.length;
                 int padding = (4 - (B(4) + receiveResult.length).get<B>() % 4) % 4;
                 if (padding > 0 && parser->getDataLength() >= B(padding)) {
-                    parser->popAtFront(B(padding), Chunk::PF_ALLOW_INCORRECT);
+                    parser->popAtFront(B(padding), parsingFlags);
                     offset += B(padding);
                 }
             }
@@ -200,7 +205,7 @@ static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
             delete packetCopy;
             return mpdu;
         }
-        packetCopy->popAtFront(payloadHeader->getMpduLength());
+        packetCopy->popAtFront(payloadHeader->getMpduLength(), parsingFlags);
     }
     delete packetCopy;
     return nullptr;
