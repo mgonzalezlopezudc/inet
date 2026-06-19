@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 
 #include <algorithm>
+#include <map>
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
@@ -570,6 +571,23 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             selectedAllocation.associationId = computeHeMuStaId(alloc.staAddress);
         selectedAllocations.push_back(selectedAllocation);
     }
+
+    std::map<uint16_t, int> associationIdCounts;
+    for (const auto& selectedAllocation : selectedAllocations)
+        associationIdCounts[selectedAllocation.associationId]++;
+    selectedAllocations.erase(
+            std::remove_if(selectedAllocations.begin(), selectedAllocations.end(),
+                    [&] (const SelectedAllocation& selectedAllocation) {
+                        if (associationIdCounts[selectedAllocation.associationId] <= 1)
+                            return false;
+                        warnIneligible(selectedAllocation.packet,
+                                selectedAllocation.dataHeader->getReceiverAddress(),
+                                selectedAllocation.dataHeader->getTid(),
+                                selectedAllocation.allocation.ru.index,
+                                "association ID collides with another scheduled receiver");
+                        return true;
+                    }),
+            selectedAllocations.end());
 
     if (selectedAllocations.size() < 2) {
         EV_WARN << "HeDlMuTxOpFs: aborting HE MU PPDU assembly because only "

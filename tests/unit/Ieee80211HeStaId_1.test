@@ -1,0 +1,73 @@
+%description:
+Test strict HE STA-ID resolution from association IDs, including missing IDs,
+unique allocation, release/reuse, station-side AID, and the broadcast special ID.
+
+%includes:
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+module MockNic
+{
+    submodules:
+        mib: Ieee80211Mib;
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        ap: MockNic;
+        sta: MockNic;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%activity:
+auto ap = getParentModule()->getSubmodule("ap");
+auto apMib = check_and_cast<Ieee80211Mib *>(ap->getSubmodule("mib"));
+MacAddress sta1("02:00:00:00:00:01");
+MacAddress sta2("02:00:00:00:00:02");
+MacAddress missing("02:00:00:00:00:03");
+
+ASSERT(!tryResolveHeMuStaId(ap, missing).has_value());
+short aid1 = apMib->allocateAssociationId(sta1);
+short aid2 = apMib->allocateAssociationId(sta2);
+ASSERT(aid1 > 0);
+ASSERT(aid2 > 0);
+ASSERT(aid1 != aid2);
+ASSERT(tryResolveHeMuStaId(ap, sta1) == aid1);
+ASSERT(tryResolveHeMuStaId(ap, sta2) == aid2);
+ASSERT(apMib->getStationAddress(aid1) == sta1);
+ASSERT(apMib->getStationAddress(aid2) == sta2);
+
+apMib->releaseAssociationId(sta1);
+ASSERT(!tryResolveHeMuStaId(ap, sta1).has_value());
+short reusedAid = apMib->allocateAssociationId(missing);
+ASSERT(reusedAid == aid1);
+ASSERT(reusedAid != aid2);
+
+auto station = getParentModule()->getSubmodule("sta");
+auto stationMib = check_and_cast<Ieee80211Mib *>(station->getSubmodule("mib"));
+stationMib->bssStationData.stationType = Ieee80211Mib::STATION;
+stationMib->bssStationData.associationId = 77;
+ASSERT(tryResolveHeMuStaId(station, sta1) == 77);
+
+ASSERT(tryResolveHeMuStaId(ap, MacAddress::BROADCAST_ADDRESS) == HE_STA_ID_BROADCAST);
+ASSERT(HE_STA_ID_BROADCAST == 2047);
+
+EV << "Missing and colliding HE STA IDs were avoided by strict association-ID allocation and resolution.\n";
+EV << ".\n";
+
+%contains: stdout
+Missing and colliding HE STA IDs were avoided by strict association-ID allocation and resolution.
+.
