@@ -273,11 +273,20 @@ inline bool validateHeRuLayout(const std::vector<Ieee80211HeRu>& layout, Hz chan
  * Requests should be ordered from largest to smallest for deterministic fitting.
  */
 inline bool allocateHeRus(Hz centerFrequency, Hz channelBandwidth,
-        const std::vector<int>& requestedToneSizes, std::vector<Ieee80211HeRu>& allocations)
+        const std::vector<int>& requestedToneSizes, std::vector<Ieee80211HeRu>& allocations,
+        const std::vector<bool>& puncturedSubchannels = {})
 {
     auto catalog = getHeRuAllocationCatalog(centerFrequency, channelBandwidth);
     int channelTones = getHeChannelToneCount(channelBandwidth);
     std::vector<bool> occupied(channelTones, false);
+    if (!puncturedSubchannels.empty()) {
+        int expectedSubchannels = std::lround(channelBandwidth.get() / 20e6);
+        if ((int)puncturedSubchannels.size() != expectedSubchannels)
+            throw std::invalid_argument("HE puncturing mask does not match channel bandwidth");
+        for (int tone = 0; tone < channelTones; ++tone)
+            occupied[tone] = puncturedSubchannels[std::min(expectedSubchannels - 1,
+                    tone * expectedSubchannels / channelTones)];
+    }
     allocations.clear();
     allocations.reserve(requestedToneSizes.size());
     for (int requestedToneSize : requestedToneSizes) {

@@ -310,6 +310,10 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 commonRequest != nullptr ? commonRequest->getGuardInterval() : HE_GI_3_2_US);
         heMuPhyHeader->setCoding(request != nullptr ? request->getCoding() :
                 commonRequest != nullptr ? commonRequest->getCoding() : HE_CODING_BCC);
+        heMuPhyHeader->setPacketExtensionDurationUs(request != nullptr ? request->getPacketExtensionDurationUs() :
+                commonRequest != nullptr ? commonRequest->getPacketExtensionDurationUs() : 0);
+        heMuPhyHeader->setPuncturedSubchannelMask(request != nullptr ? request->getPuncturedSubchannelMask() :
+                commonRequest != nullptr ? commonRequest->getPuncturedSubchannelMask() : 0);
         std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
         for (auto& user : heMuUsers) {
             Ieee80211HeRu ru;
@@ -331,7 +335,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         auto calculation = computeHePpduParameters(requestedUsers,
                 mode->getDataMode()->getBandwidth(),
                 static_cast<Ieee80211HePpduFormat>(heMuPhyHeader->getPpduFormat()),
-                static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval()));
+                static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval()), HE_LTF_4X,
+                heMuPhyHeader->getPacketExtensionDurationUs());
         if (!calculation)
             throw cRuntimeError("Cannot construct HE MU PPDU: %s", calculation.error.c_str());
         simtime_t commonDuration = request != nullptr && request->getCommonDuration() > SIMTIME_ZERO ?
@@ -348,7 +353,10 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             heMuPhyHeader->appendUsers(user);
         }
         heMuPhyHeader->setCommonDuration(commonDuration);
-        phyHeader->setChunkLength(b(104 + heMuPhyHeader->getUsersArraySize() * 137));
+        bool extendedControls = heMuPhyHeader->getPacketExtensionDurationUs() != 0 ||
+                heMuPhyHeader->getPuncturedSubchannelMask() != 0;
+        phyHeader->setChunkLength(b((extendedControls ? 120 : 104) +
+                heMuPhyHeader->getUsersArraySize() * 137));
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));
@@ -415,6 +423,8 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         tag->setTriggerId(heMuPhyHeader->getTriggerId());
         tag->setGuardInterval(heMuPhyHeader->getGuardInterval());
         tag->setCoding(heMuPhyHeader->getCoding());
+        tag->setPacketExtensionDurationUs(heMuPhyHeader->getPacketExtensionDurationUs());
+        tag->setPuncturedSubchannelMask(heMuPhyHeader->getPuncturedSubchannelMask());
         tag->setRuIndex(-1);
         auto networkInterface = getContainingNicModule(this);
         auto myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());

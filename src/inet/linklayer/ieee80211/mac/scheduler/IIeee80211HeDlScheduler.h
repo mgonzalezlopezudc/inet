@@ -57,6 +57,8 @@ class INET_API IIeee80211HeDlScheduler
         double noiseFigureDb = 0;
         physicallayer::Ieee80211HeGuardInterval guardInterval = physicallayer::HE_GI_3_2_US;
         physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
+        int packetExtensionDurationUs = 0;
+        uint8_t puncturedSubchannelMask = 0;
         std::vector<bool> puncturedSubchannels;
     };
 

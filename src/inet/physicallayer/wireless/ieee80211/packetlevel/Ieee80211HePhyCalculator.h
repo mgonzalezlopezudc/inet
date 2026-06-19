@@ -95,6 +95,13 @@ struct Ieee80211HeUserPhyParameters
     int dataBitsPerSymbol = 0;
     int serviceBits = 16;
     int tailBits = 6;
+    // Packet-level representation of the HE LDPC encoder.  These fields are
+    // deliberately retained in the common calculator result so scheduling,
+    // transmission and reception cannot silently use different assumptions.
+    int ldpcCodewordLength = 0;
+    int ldpcCodewordCount = 0;
+    int ldpcShorteningBits = 0;
+    int ldpcRepetitionBits = 0;
     int preFecPaddingFactor = 4;
     int postFecPaddingBits = 0;
     int numberOfDataSymbols = 0;
@@ -278,8 +285,8 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
             result.error = "invalid HE number of spatial streams";
             return result;
         }
-        if (user.coding != HE_CODING_BCC) {
-            result.error = "HE LDPC is not implemented";
+        if (user.coding != HE_CODING_BCC && user.coding != HE_CODING_LDPC) {
+            result.error = "invalid HE coding type";
             return result;
         }
         if (user.dcm && !isHeDcmCombinationSupported(user.mcs, user.numberOfSpatialStreams)) {
@@ -300,10 +307,41 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
             return result;
         }
         user.numberOfEncoders = std::max(1, (user.dataBitsPerSymbol + 647) / 648);
-        user.tailBits = 6 * user.numberOfEncoders;
+        user.tailBits = user.coding == HE_CODING_LDPC ? 0 : 6 * user.numberOfEncoders;
         int64_t uncodedBits = user.serviceBits + user.psduLength.get<B>() * 8 + user.tailBits;
-        user.numberOfDataSymbols = std::max<int64_t>(1,
-                (uncodedBits + user.dataBitsPerSymbol - 1) / user.dataBitsPerSymbol);
+        if (user.coding == HE_CODING_LDPC) {
+            // 802.11 LDPC uses 648/1296/1944-bit codewords.  At packet level
+            // we model codeword selection, shortening and repetition while
+            // retaining the standard NDBPS symbol rounding used by the PHY.
+            // The largest legal codeword which can carry a single shortened
+            // payload is chosen first; additional payload is split over equal
+            // codewords.  This makes the boundary behaviour deterministic and
+            // keeps the accounting shared by DL and HE-TB calculations.
+            const int candidates[] = {648, 1296, 1944};
+            int codeRateNumerator = codeRate.first;
+            int codeRateDenominator = codeRate.second;
+            user.ldpcCodewordLength = 1944;
+            for (int candidate : candidates) {
+                if (uncodedBits <= candidate * codeRateNumerator / codeRateDenominator) {
+                    user.ldpcCodewordLength = candidate;
+                    break;
+                }
+            }
+            int informationBitsPerCodeword = user.ldpcCodewordLength * codeRateNumerator / codeRateDenominator;
+            user.ldpcCodewordCount = std::max<int64_t>(1,
+                    (uncodedBits + informationBitsPerCodeword - 1) / informationBitsPerCodeword);
+            int64_t ldpcInformationCapacity = (int64_t)user.ldpcCodewordCount * informationBitsPerCodeword;
+            user.ldpcShorteningBits = std::max<int64_t>(0, ldpcInformationCapacity - uncodedBits);
+            int64_t codedBits = (int64_t)user.ldpcCodewordCount * user.ldpcCodewordLength;
+            user.numberOfDataSymbols = std::max<int64_t>(1,
+                    (codedBits + user.codedBitsPerSymbol - 1) / user.codedBitsPerSymbol);
+            int64_t symbolCapacity = (int64_t)user.numberOfDataSymbols * user.codedBitsPerSymbol;
+            user.ldpcRepetitionBits = std::max<int64_t>(0, symbolCapacity - codedBits);
+        }
+        else {
+            user.numberOfDataSymbols = std::max<int64_t>(1,
+                    (uncodedBits + user.dataBitsPerSymbol - 1) / user.dataBitsPerSymbol);
+        }
         int64_t bitsInLastSymbol = uncodedBits -
                 (int64_t)(user.numberOfDataSymbols - 1) * user.dataBitsPerSymbol;
         user.preFecPaddingFactor = std::clamp<int>(

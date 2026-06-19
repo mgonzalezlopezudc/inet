@@ -194,6 +194,7 @@ static void writeHeCapabilitiesElement(MemoryOutputStream& stream, const Ieee802
         supportedChannelWidthSet |= 1 << 3;
     setBits(phyCapabilities, 1, 7, supportedChannelWidthSet);
     setBits(phyCapabilities, 13, 1, capabilities.ldpc ? 1 : 0);
+    setBits(phyCapabilities, 14, 1, capabilities.preamblePuncturing ? 1 : 0);
     int dcmConstellation = capabilities.dcm ? encodeDcmConstellation(capabilities.maxDcmConstellation) : 0;
     int dcmNss = capabilities.dcm && capabilities.maxDcmNss > 1 ? 1 : 0;
     setBits(phyCapabilities, 24, 2, dcmConstellation);
@@ -274,6 +275,7 @@ static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLeng
     capabilities.dlOfdma = true;
     capabilities.ulOfdma = getBits(macCapabilities, 26, 1) != 0 || getBits(macCapabilities, 19, 1) != 0;
     capabilities.ldpc = getBit(phyCapabilities, 13);
+    capabilities.preamblePuncturing = getBit(phyCapabilities, 14);
     int dcmConstellation = getBits(phyCapabilities, 27, 2);
     capabilities.dcm = dcmConstellation != 0;
     capabilities.maxDcmConstellation = decodeDcmConstellation(dcmConstellation);
