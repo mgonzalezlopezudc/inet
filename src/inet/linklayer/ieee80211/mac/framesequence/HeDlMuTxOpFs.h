@@ -33,10 +33,17 @@ using namespace inet::units::values;
 class INET_API HeDlMuTxOpFs : public IFrameSequence
 {
   public:
+    enum class AckMethod {
+        MU_BAR_TRIGGER,
+        EXPLICIT_SEQUENTIAL_BAR
+    };
+
     struct ActiveAllocation {
         MacAddress staAddress;
+        uint16_t associationId = 0;
         Tid tid = 0;
         int ruIndex;
+        physicallayer::Ieee80211HeRu ru;
         Packet *packet = nullptr;
         std::vector<Packet *> packets;
     };
@@ -55,6 +62,8 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     int maxAmpduMpduCount = 16;
     int maxHeMuPsduLength = 6500631;
     simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS);
+    AckMethod ackMethod = AckMethod::EXPLICIT_SEQUENTIAL_BAR;
+    uint32_t ackTriggerId = 0;
 
     std::vector<ActiveAllocation> activeAllocations;
 
@@ -68,6 +77,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     friend class HeDlMuPpduFs;
     friend class HeDlMuSequentialBlockAckFs;
     friend class HeDlMuPerStaBlockAckFs;
+    friend class HeDlMuBarBlockAckFs;
 
   public:
     HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
@@ -78,7 +88,8 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
                  IFrameSequenceHandler::ICallback *callback,
                  int maxAmpduMpduCount = 16,
                  int maxHeMuPsduLength = 6500631,
-                 simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS));
+                 simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS),
+                 AckMethod ackMethod = AckMethod::EXPLICIT_SEQUENTIAL_BAR);
     HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                  const std::vector<MacAddress>& candidates,
                  physicallayer::Ieee80211ModeSet *modeSet,
