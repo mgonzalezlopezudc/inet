@@ -42,6 +42,14 @@ void Ieee80211Mib::initialize(int stage)
         localVhtCapabilities.muMimo = par("vhtMuMimo").boolValue();
 
         localHtLdpc = par("htLdpc").boolValue();
+        localHeCapabilities.ldpc = par("heLdpc").boolValue();
+        int defaultPeDurationUs = par("heDefaultPeDurationUs").intValue();
+        if (defaultPeDurationUs != 0 && defaultPeDurationUs != 4 &&
+                defaultPeDurationUs != 8 && defaultPeDurationUs != 12 &&
+                defaultPeDurationUs != 16)
+            throw cRuntimeError("heDefaultPeDurationUs must be 0, 4, 8, 12, or 16 us");
+        heOperation.defaultPeDurationPresent = defaultPeDurationUs != 0;
+        heOperation.defaultPeDurationUs = defaultPeDurationUs;
 
         vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
         vhtOperation.ldpc = localVhtCapabilities.ldpc;

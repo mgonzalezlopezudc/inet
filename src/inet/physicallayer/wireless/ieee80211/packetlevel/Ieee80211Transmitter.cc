@@ -229,7 +229,8 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         }
         auto calculation = computeHePpduParameters(requestedUsers, transmissionBandwidth,
                 static_cast<Ieee80211HePpduFormat>(heMuHeader->getPpduFormat()),
-                static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()));
+                static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()), HE_LTF_4X,
+                heMuHeader->getPacketExtensionDurationUs());
         if (!calculation)
             throw cRuntimeError("Invalid planned HE MU PPDU: %s", calculation.error.c_str());
         hePpduParameters = calculation.parameters;

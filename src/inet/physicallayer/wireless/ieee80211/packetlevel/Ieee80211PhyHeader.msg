@@ -173,6 +173,8 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
     uint8_t ppduFormat = 0; // 0: HE MU downlink, 1: HE trigger-based uplink
     uint8_t guardInterval = 2; // 0: 0.8 us, 1: 1.6 us, 2: 3.2 us
     uint8_t coding = 0; // 0: BCC, 1: LDPC
+    uint8_t packetExtensionDurationUs = 0;
+    uint8_t puncturedSubchannelMask = 0; // 20 MHz subchannels, LSB is primary
     uint32_t triggerId = 0;
     simtime_t commonDuration;
     Ieee80211HeMuUserInfo users[];

@@ -31,6 +31,9 @@ module HeHcf extends Hcf
         double ulTriggerCheckInterval @unit(s) = default(1ms);
         double ulTargetRssiMargin @unit(dB) = default(10dB);
         double maxHeTbPpduDuration @unit(s) = default(1ms);
+        // Bit 0 denotes the primary 20 MHz subchannel. Empty keeps the
+        // legacy unpunctured channel; puncturing is supported for 80/160 MHz.
+        string hePreamblePuncturing = default("");
 
     submodules:
         dlScheduler: <default("HeDlSchedulerEqualSizedRUs")> like IIeee80211HeDlScheduler {

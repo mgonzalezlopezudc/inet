@@ -168,7 +168,7 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
             sortedRequests.push_back(toneSizes[index]);
         std::vector<Ieee80211HeRu> fittedRus;
         if (!allocateHeRus(context.channelCenterFrequency, context.channelBandwidth,
-                sortedRequests, fittedRus))
+                sortedRequests, fittedRus, context.puncturedSubchannels))
             return false;
 
         std::vector<Ieee80211HeRu> rusByCandidate(candidates.size());

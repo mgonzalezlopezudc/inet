@@ -7,6 +7,7 @@
 #ifndef __INET_HEHCF_H
 #define __INET_HEHCF_H
 
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -43,9 +44,19 @@ class INET_API HeHcf : public Hcf
     cMessage *ulTriggerTimer = nullptr;
     IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     bool ulTriggerAccessRequested = false;
-    Packet *triggeredUlOriginalPacket = nullptr;
-    queueing::IPacketQueue *triggeredUlSourceQueue = nullptr;
-    bool triggeredUlWasRandomAccess = false;
+    struct TriggeredUlExchange {
+        Tid tid = 0;
+        queueing::IPacketQueue *sourceQueue = nullptr;
+        std::vector<Packet *> packets;
+        std::vector<int> sequenceNumbers;
+        physicallayer::Ieee80211HeRu ru;
+        bool randomAccess = false;
+        simtime_t expectedResponseTime = SIMTIME_ZERO;
+    };
+    // A response is retained by Trigger ID until its Multi-STA Block Ack is
+    // processed.  This is intentionally not a single global packet: an HE-TB
+    // response can be a single-TID A-MPDU and must be retried per MPDU.
+    std::map<uint32_t, TriggeredUlExchange> triggeredUlExchanges;
     bool forceNextSingleUser[4] = {};
 
   protected:

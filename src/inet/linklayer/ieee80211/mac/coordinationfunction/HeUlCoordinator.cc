@@ -134,6 +134,16 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
         anchor->anchor = true;
     }
     auto schedule = scheduler->schedule(context);
+    schedule.packetExtensionDurationUs = mib->heOperation.defaultPeDurationUs;
+    bool ldpcSupportedByAll = mib->localHeCapabilities.ldpc;
+    for (const auto& allocation : schedule.allocations) {
+        if (allocation.randomAccess)
+            continue;
+        auto negotiated = mib->findNegotiatedHeCapabilities(allocation.staAddress);
+        ldpcSupportedByAll = ldpcSupportedByAll && negotiated != nullptr &&
+                negotiated->valid && negotiated->intersection.ldpc;
+    }
+    schedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
     long scheduledUsers = 0;
     long randomAccessRus = 0;
     for (const auto& allocation : schedule.allocations)

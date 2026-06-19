@@ -81,6 +81,44 @@ inet::ieee80211::AccessCategory mapTidToAccessCategory(inet::ieee80211::Tid tid)
     }
 }
 
+std::vector<bool> parseHePreamblePuncturing(const char *value, inet::units::values::Hz bandwidth)
+{
+    std::string mask(value == nullptr ? "" : value);
+    if (mask.empty())
+        return {};
+    int widthMhz = std::lround(bandwidth.get() / 1e6);
+    if (widthMhz != 80 && widthMhz != 160)
+        throw omnetpp::cRuntimeError("HE preamble puncturing is supported only for 80 and 160 MHz channels");
+    int expectedBits = widthMhz / 20;
+    if ((int)mask.size() != expectedBits)
+        throw omnetpp::cRuntimeError("HE preamble puncturing mask must contain %d bits", expectedBits);
+    std::vector<bool> result;
+    for (char bit : mask) {
+        if (bit != '0' && bit != '1')
+            throw omnetpp::cRuntimeError("HE preamble puncturing mask must contain only 0 and 1");
+        result.push_back(bit == '1');
+    }
+    if (result.front())
+        throw omnetpp::cRuntimeError("The primary 20 MHz HE subchannel must not be punctured");
+    if (std::all_of(result.begin(), result.end(), [] (bool value) { return value; }))
+        throw omnetpp::cRuntimeError("At least one HE 20 MHz subchannel must remain active");
+    return result;
+}
+
+bool overlapsHePuncturedSubchannel(const inet::physicallayer::Ieee80211HeRu& ru,
+        const std::vector<bool>& puncturedSubchannels, inet::units::values::Hz bandwidth)
+{
+    if (puncturedSubchannels.empty())
+        return false;
+    int channelTones = inet::physicallayer::getHeChannelToneCount(bandwidth);
+    int first = ru.toneOffset * puncturedSubchannels.size() / channelTones;
+    int last = (ru.toneOffset + ru.toneSize - 1) * puncturedSubchannels.size() / channelTones;
+    for (int subchannel = first; subchannel <= last; ++subchannel)
+        if (puncturedSubchannels.at(subchannel))
+            return true;
+    return false;
+}
+
 } // namespace
 
 namespace inet {
@@ -195,6 +233,12 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
     context.receiverSensitivity = receiver->getSensitivity();
     context.noiseFigureDb = par("receiverNoiseFigure");
     context.maxAmpduMpduCount = par("maxAmpduMpduCount");
+    context.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
+    context.puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(),
+            context.channelBandwidth);
+    for (size_t i = 0; i < context.puncturedSubchannels.size(); ++i)
+        if (context.puncturedSubchannels[i])
+            context.puncturedSubchannelMask |= 1U << i;
     if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(activeMode)) {
         switch (heMode->getDataMode()->getGuardIntervalType()) {
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
@@ -245,6 +289,9 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                      (par("dlMuAckMethod").stdstringValue() != "sequentialBar" &&
                       (!negotiated->intersection.muBarTriggerRx ||
                        !negotiated->intersection.heTbBlockAckTx))))
+                continue;
+            if (!context.puncturedSubchannels.empty() && (negotiated == nullptr ||
+                    !negotiated->intersection.preamblePuncturing))
                 continue;
             auto agreement = baHandler->getAgreement(dest, dataHeader->getTid());
             int occupiedSlots = ackHandler->getOccupiedBlockAckSequenceNumbers(
@@ -302,6 +349,11 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
         context.candidates.front().anchor = true;
         context.anchorSta = context.candidates.front().staAddress;
     }
+    context.coding = mac->getMib()->localHeCapabilities.ldpc &&
+            std::all_of(context.candidates.begin(), context.candidates.end(), [] (const auto& candidate) {
+                return candidate.negotiatedHeCapabilities != nullptr &&
+                        candidate.negotiatedHeCapabilities->valid && candidate.negotiatedHeCapabilities->intersection.ldpc;
+            }) ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
     return context;
 }
 
@@ -394,6 +446,52 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             ulSchedule = ulCoordinator->createSchedule(mac->getMib(), centerFrequency, channelBandwidth,
                     txopLimit, sensitivityDbm, par("ulTargetRssiMargin"), staleOrUnknown, 0, 0);
         }
+        auto puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(), channelBandwidth);
+        if (!puncturedSubchannels.empty()) {
+            for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
+                if (puncturedSubchannels[i])
+                    ulSchedule.puncturedSubchannelMask |= 1U << i;
+            auto supportsPuncturing = [&] (const IIeee80211HeUlScheduler::RuAllocation& allocation) {
+                if (allocation.randomAccess)
+                    return std::all_of(mac->getMib()->bssAccessPointData.stations.begin(),
+                            mac->getMib()->bssAccessPointData.stations.end(), [&] (const auto& station) {
+                                auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+                                return station.second != Ieee80211Mib::ASSOCIATED ||
+                                        (capabilities != nullptr && capabilities->valid &&
+                                         capabilities->intersection.preamblePuncturing);
+                            });
+                auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
+                return capabilities != nullptr && capabilities->valid && capabilities->intersection.preamblePuncturing;
+            };
+            ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
+                    [&] (const auto& allocation) {
+                        return overlapsHePuncturedSubchannel(allocation.ru, puncturedSubchannels, channelBandwidth) ||
+                                !supportsPuncturing(allocation);
+                    }), ulSchedule.allocations.end());
+        }
+        ulSchedule.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
+        if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0))) {
+            switch (heMode->getDataMode()->getGuardIntervalType()) {
+                case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
+                    ulSchedule.guardInterval = physicallayer::HE_GI_0_8_US;
+                    break;
+                case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
+                    ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
+                    break;
+                case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
+                    ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
+                    break;
+            }
+        }
+        bool ldpcSupportedByAll = mac->getMib()->localHeCapabilities.ldpc;
+        for (const auto& allocation : ulSchedule.allocations) {
+            if (allocation.randomAccess)
+                continue;
+            auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
+            ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr && capabilities->valid &&
+                    capabilities->intersection.ldpc;
+        }
+        ulSchedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
         auto triggerType = pendingUlTrigger;
         pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
         if (!ulSchedule.allocations.empty()) {
@@ -582,7 +680,7 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             return;
         }
         if (!ulCoordinator->isEnabled() || mac->isApInAxMode() ||
-                mac->getMib()->bssStationData.associationId <= 0 || triggeredUlOriginalPacket != nullptr) {
+                mac->getMib()->bssStationData.associationId <= 0 || !triggeredUlExchanges.empty()) {
             delete packet;
             return;
         }
@@ -670,6 +768,14 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
         }
         if (sourceQueue == nullptr)
             sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
+        auto ulBaAgreement = originatorBlockAckAgreementHandler == nullptr ? nullptr :
+                originatorBlockAckAgreementHandler->getAgreement(mac->getMib()->bssData.bssid, selectedTid);
+        int occupiedSlots = edca->getEdcaf(selectedAc)->getAckHandler()->getOccupiedBlockAckSequenceNumbers(
+                mac->getMib()->bssData.bssid, selectedTid).size();
+        int availableSlots = ulBaAgreement == nullptr ? 0 :
+                std::max(0, ulBaAgreement->getBufferSize() - occupiedSlots);
+        if (sourcePacket != nullptr && (ulBaAgreement == nullptr || availableSlots == 0))
+            sourcePacket = nullptr;
         int64_t queueBytes = 0;
         for (int i = 0; i < sourceQueue->getNumPackets(); i++) {
             auto queuedPacket = sourceQueue->getPacket(i);
@@ -698,8 +804,6 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             writableHeader->setBufferStatusQueueSize(queueBytes);
             sourcePacket->insertAtFront(writableHeader);
             responsePacket = sourcePacket->dup();
-            triggeredUlOriginalPacket = sourcePacket;
-            triggeredUlSourceQueue = sourceQueue;
         }
         else {
             auto nullHeader = makeShared<Ieee80211DataHeader>();
@@ -720,6 +824,70 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
         }
 
+        TriggeredUlExchange exchange;
+        exchange.tid = selectedTid;
+        exchange.sourceQueue = sourceQueue;
+        exchange.randomAccess = randomAccess;
+        exchange.ru.index = selected->ruIndex;
+        exchange.ru.toneSize = selected->ruToneSize;
+        exchange.ru.toneOffset = selected->ruToneOffset;
+        exchange.expectedResponseTime = simTime() + modeSet->getSifsTime();
+        if (sourcePacket != nullptr) {
+            exchange.packets.push_back(sourcePacket);
+            exchange.sequenceNumbers.push_back(sourcePacket->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber().get());
+
+            // Basic Trigger UL aggregation is deliberately single-TID.  The
+            // retained packets remain in their EDCA queue until the bitmap
+            // arrives, so a partial Multi-STA BA can retry just the misses.
+            int maximumMpduCount = std::min(64, availableSlots);
+            for (int i = 0; ulBaAgreement != nullptr && (int)exchange.packets.size() < maximumMpduCount &&
+                    i < sourceQueue->getNumPackets(); ++i) {
+                auto candidate = sourceQueue->getPacket(i);
+                if (candidate == sourcePacket)
+                    continue;
+                auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(candidate->peekAtFront<Ieee80211MacHeader>());
+                if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||
+                        candidateHeader->getTid() != selectedTid ||
+                        candidateHeader->getReceiverAddress() != mac->getMib()->bssData.bssid)
+                    continue;
+                B psduLength(0);
+                for (auto packet : exchange.packets)
+                    psduLength += B(4 + packet->getByteLength());
+                psduLength += B(4 + candidate->getByteLength());
+                physicallayer::Ieee80211HeRu ru = exchange.ru;
+                ru.dataSubcarriers = physicallayer::getHeRuDataSubcarrierCount(ru.toneSize);
+                ru.pilotSubcarriers = physicallayer::getHeRuPilotSubcarrierCount(ru.toneSize);
+                ru.bandwidth = Hz(ru.toneSize * 78125.0);
+                if (physicallayer::computeHeUserPhyParameters(psduLength, ru, selected->mcs).duration > trigger->getCommonDuration())
+                    break;
+                auto writableCandidateHeader = candidate->removeAtFront<Ieee80211DataHeader>();
+                if (!writableCandidateHeader->getRetry()) {
+                    auto qosDataService = check_and_cast<OriginatorQosMacDataService *>(originatorDataService);
+                    qosDataService->assignSequenceNumber(writableCandidateHeader);
+                }
+                writableCandidateHeader->setOrder(true);
+                writableCandidateHeader->setAckPolicy(BLOCK_ACK);
+                candidate->insertAtFront(writableCandidateHeader);
+                exchange.packets.push_back(candidate);
+                exchange.sequenceNumbers.push_back(writableCandidateHeader->getSequenceNumber().get());
+            }
+            if (exchange.packets.size() > 1) {
+                delete responsePacket;
+                responsePacket = new Packet("HE-TB-A-MPDU");
+                for (size_t i = 0; i < exchange.packets.size(); ++i) {
+                    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+                    delimiter->setLength(exchange.packets[i]->getByteLength());
+                    delimiter->setEof(i + 1 == exchange.packets.size());
+                    responsePacket->insertAtBack(delimiter);
+                    responsePacket->insertAtBack(exchange.packets[i]->peekAll());
+                    int padding = (4 - (B(4) + B(exchange.packets[i]->getByteLength())).get<B>() % 4) % 4;
+                    if (i + 1 != exchange.packets.size() && padding != 0)
+                        responsePacket->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
+                }
+            }
+            triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
+        }
+
         auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
         auto transmitter = check_and_cast<const physicallayer::FlatTransmitterBase *>(radio->getTransmitter());
         W transmitPower = transmitter->getMaxPower();
@@ -737,9 +905,12 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
         request->setRuToneOffset(selected->ruToneOffset);
         request->setStaId(myAid);
         request->setMcs(selected->mcs);
+        request->setGuardInterval(trigger->getGuardInterval());
+        request->setCoding(trigger->getCoding());
+        request->setPacketExtensionDurationUs(trigger->getPacketExtensionDurationUs());
+        request->setPuncturedSubchannelMask(trigger->getPuncturedSubchannelMask());
         request->setCommonDuration(trigger->getCommonDuration());
         request->setTransmitPower(transmitPower);
-        triggeredUlWasRandomAccess = randomAccess;
         tx->transmitFrame(responsePacket, responsePacket->peekAtFront<Ieee80211MacHeader>(),
                 modeSet->getSifsTime(), this);
         delete responsePacket;
@@ -756,23 +927,38 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                 break;
             }
         }
-        if (triggeredUlOriginalPacket != nullptr) {
-            if (success) {
-                triggeredUlSourceQueue->removePacket(triggeredUlOriginalPacket);
-                take(triggeredUlOriginalPacket);
-                delete triggeredUlOriginalPacket;
+        for (auto& entry : triggeredUlExchanges) {
+            auto& exchange = entry.second;
+            const Ieee80211MultiStaBlockAckRecord *record = nullptr;
+            for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); ++i)
+                if (multiStaBlockAck->getRecords(i).aid == myAid && multiStaBlockAck->getRecords(i).tid == exchange.tid) {
+                    record = &multiStaBlockAck->getRecords(i);
+                    break;
+                }
+            bool exchangeSuccess = false;
+            for (size_t i = 0; i < exchange.packets.size(); ++i) {
+                bool acknowledged = false;
+                if (record != nullptr && record->responseReceived) {
+                    int offset = (exchange.sequenceNumbers[i] - record->startingSequenceNumber + 4096) % 4096;
+                    acknowledged = offset < 64 && (record->bitmap & (UINT64_C(1) << offset));
+                }
+                if (acknowledged) {
+                    exchange.sourceQueue->removePacket(exchange.packets[i]);
+                    take(exchange.packets[i]);
+                    delete exchange.packets[i];
+                    exchangeSuccess = true;
+                }
+                else {
+                    auto writableHeader = exchange.packets[i]->removeAtFront<Ieee80211DataHeader>();
+                    writableHeader->setRetry(true);
+                    exchange.packets[i]->insertAtFront(writableHeader);
+                }
             }
-            else {
-                auto writableHeader = triggeredUlOriginalPacket->removeAtFront<Ieee80211DataHeader>();
-                writableHeader->setRetry(true);
-                triggeredUlOriginalPacket->insertAtFront(writableHeader);
-            }
+            if (exchange.randomAccess)
+                ulCoordinator->reportRandomAccessResult(exchangeSuccess);
+            success = success || exchangeSuccess;
         }
-        if (triggeredUlWasRandomAccess)
-            ulCoordinator->reportRandomAccessResult(success);
-        triggeredUlOriginalPacket = nullptr;
-        triggeredUlSourceQueue = nullptr;
-        triggeredUlWasRandomAccess = false;
+        triggeredUlExchanges.clear();
         delete packet;
         return;
     }

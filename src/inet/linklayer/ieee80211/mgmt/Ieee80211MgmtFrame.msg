@@ -147,6 +147,7 @@ struct Ieee80211HeCapabilitiesElement
     short maxDcmConstellation;
     short maxDcmNss;
     bool ldpc;
+    bool preamblePuncturing;
     bool multiTidAggregationRx;
     bool multiTidAggregationTx;
     bool muBarTriggerRx;

@@ -337,6 +337,8 @@ double Ieee80211YansErrorModel::getHeDataSuccessRate(
     bps grossBitrate(parameters.codedBitsPerSymbol / symbolDuration.dbl());
     auto streamBitLength = (bitLength + parameters.numberOfSpatialStreams - 1) /
             parameters.numberOfSpatialStreams;
+    if (parameters.coding == HE_CODING_LDPC)
+        snr *= std::pow(10.0, 1.5 / 10.0);
     auto streamSuccessRate = getOFDMAndERPOFDMChunkSuccessRate(
             modulation, code, streamBitLength, grossBitrate,
             parameters.ru.bandwidth, snr);

@@ -14,6 +14,7 @@
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -68,6 +69,10 @@ class INET_API IIeee80211HeUlScheduler
     struct Schedule {
         std::vector<RuAllocation> allocations;
         simtime_t commonDuration = SIMTIME_ZERO;
+        physicallayer::Ieee80211HeGuardInterval guardInterval = physicallayer::HE_GI_3_2_US;
+        physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
+        int packetExtensionDurationUs = 0;
+        uint8_t puncturedSubchannelMask = 0;
     };
 
     virtual ~IIeee80211HeUlScheduler() {}

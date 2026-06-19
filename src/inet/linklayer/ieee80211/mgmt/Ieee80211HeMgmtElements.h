@@ -45,6 +45,7 @@ inline Ieee80211HeCapabilitiesElement makeHeCapabilitiesElement(const Ieee80211H
     element.maxDcmConstellation = capabilities.maxDcmConstellation;
     element.maxDcmNss = capabilities.maxDcmNss;
     element.ldpc = capabilities.ldpc;
+    element.preamblePuncturing = capabilities.preamblePuncturing;
     element.multiTidAggregationRx = capabilities.multiTidAggregationRx;
     element.multiTidAggregationTx = capabilities.multiTidAggregationTx;
     element.muBarTriggerRx = capabilities.muBarTriggerRx;
@@ -81,6 +82,7 @@ inline Ieee80211HeCapabilities makeHeCapabilities(const Ieee80211HeCapabilitiesE
     capabilities.maxDcmConstellation = element.maxDcmConstellation;
     capabilities.maxDcmNss = element.maxDcmNss;
     capabilities.ldpc = element.ldpc;
+    capabilities.preamblePuncturing = element.preamblePuncturing;
     capabilities.multiTidAggregationRx = element.multiTidAggregationRx;
     capabilities.multiTidAggregationTx = element.multiTidAggregationTx;
     capabilities.muBarTriggerRx = element.muBarTriggerRx;

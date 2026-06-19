@@ -61,6 +61,8 @@ class Ieee80211HeMuReq extends TagBase
     bool dcm = false;
     uint8_t guardInterval = 2;
     uint8_t coding = 0;
+    uint8_t packetExtensionDurationUs = 0;
+    uint8_t puncturedSubchannelMask = 0;
     simtime_t commonDuration;
     W transmitPower = W(NaN);
 }
@@ -69,6 +71,8 @@ class Ieee80211HeMuCommonReq extends TagBase
 {
     uint8_t guardInterval = 2;
     uint8_t coding = 0;
+    uint8_t packetExtensionDurationUs = 0;
+    uint8_t puncturedSubchannelMask = 0;
 }
 
 class Ieee80211HeMuRxTag extends TagBase
@@ -78,6 +82,8 @@ class Ieee80211HeMuRxTag extends TagBase
     int ruIndex;
     uint8_t guardInterval = 2;
     uint8_t coding = 0;
+    uint8_t packetExtensionDurationUs = 0;
+    uint8_t puncturedSubchannelMask = 0;
     Ieee80211HeMuRxAllocationInfo allocations[];
 }
 
@@ -142,4 +148,3 @@ class Ieee80211VhtTransmissionTag extends TagBase
     double beamformingGainDb = 3.0;
     double muMimoPenaltyDb = 2.0;
 }
-
