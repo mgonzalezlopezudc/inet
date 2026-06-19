@@ -389,6 +389,8 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
 
     virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
     {
+        if (owner->activeAllocations.empty())
+            return nullptr;
         switch (step) {
             case 0:
                 return new TransmitStep(buildMuBarTrigger(), owner->modeSet->getSifsTime(), true);
@@ -714,6 +716,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     container->insertAtBack(containerHdr);
 
     simtime_t packingDurationLimit = maxHeMuPpduDuration;
+    simtime_t ppduDurationLimit = maxHeMuPpduDuration;
     simtime_t alignedDuration = SIMTIME_ZERO;
     for (const auto& selectedAllocation : selectedAllocations)
         alignedDuration = std::max(alignedDuration, selectedAllocation.allocation.estimatedDuration);
@@ -729,9 +732,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         remainingTxop = hasTxopLimit ? std::min(remainingTxop, liveRemainingTxop) : liveRemainingTxop;
         hasTxopLimit = true;
     }
-    if (hasTxopLimit)
-        packingDurationLimit = std::min(packingDurationLimit,
-                std::max(SIMTIME_ZERO, remainingTxop - totalDuration));
+    if (hasTxopLimit) {
+        auto txopPpduLimit = std::max(SIMTIME_ZERO, remainingTxop - totalDuration);
+        packingDurationLimit = std::min(packingDurationLimit, txopPpduLimit);
+        ppduDurationLimit = std::min(ppduDurationLimit, txopPpduLimit);
+    }
 
     std::vector<SelectedAllocation> finalAllocations;
     for (auto selectedAllocation : selectedAllocations) {
@@ -825,7 +830,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 HE_MU_DOWNLINK, scheduleContext.guardInterval);
     };
     auto plannedPpdu = calculatePlannedPpdu();
-    while ((!plannedPpdu || plannedPpdu.parameters.duration > packingDurationLimit) &&
+    while ((!plannedPpdu || plannedPpdu.parameters.duration > ppduDurationLimit) &&
             finalAllocations.size() >= 2) {
         auto longest = std::max_element(finalAllocations.begin(), finalAllocations.end(),
                 [] (const SelectedAllocation& a, const SelectedAllocation& b) {
@@ -841,18 +846,12 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             plannedPpdu = calculatePlannedPpdu();
     }
     if (finalAllocations.size() < 2 || !plannedPpdu ||
-            plannedPpdu.parameters.duration > packingDurationLimit) {
+            plannedPpdu.parameters.duration > ppduDurationLimit) {
         EV_WARN << "HeDlMuTxOpFs: no complete HE MU PPDU fits the PHY/TXOP duration limit." << endl;
         delete container;
         notifyPlanningFailure();
         return nullptr;
     }
-    auto heRequest = container->addTagIfAbsent<Ieee80211HeMuReq>();
-    heRequest->setPpduFormat(HE_MU_DOWNLINK);
-    heRequest->setGuardInterval(scheduleContext.guardInterval);
-    heRequest->setCoding(scheduleContext.coding);
-    heRequest->setCommonDuration(plannedPpdu.parameters.duration);
-
     totalDuration = SIMTIME_ZERO;
     auto finalBarDuration = responseMode->getDuration(B(38));
     auto finalBlockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
@@ -921,7 +920,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
             delimiter->setLength(staPackets[i]->getByteLength());
             container->insertAtBack(delimiter);
-            container->insertAtBack(staPackets[i]->peekData());
+            container->insertAtBack(staPackets[i]->peekAll());
             int padding = (4 - (B(4) + B(staPackets[i]->getByteLength())).get<B>() % 4) % 4;
             if (i + 1 != staPackets.size() && padding != 0)
                 container->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
