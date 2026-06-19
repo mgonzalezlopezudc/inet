@@ -40,6 +40,7 @@ struct Ieee80211HeCapabilities
     int maxDcmConstellation = 4;
     int maxDcmNss = 2;
     bool ldpc = false;
+    bool preamblePuncturing = true;
     bool multiTidAggregationRx = false;
     bool multiTidAggregationTx = false;
     bool muBarTriggerRx = true;
@@ -96,6 +97,7 @@ inline Ieee80211NegotiatedHeCapabilities negotiateHeCapabilities(
             std::min(local.maxDcmConstellation, peer.maxDcmConstellation);
     negotiated.intersection.maxDcmNss = std::min(local.maxDcmNss, peer.maxDcmNss);
     negotiated.intersection.ldpc = local.ldpc && peer.ldpc;
+    negotiated.intersection.preamblePuncturing = local.preamblePuncturing && peer.preamblePuncturing;
     negotiated.intersection.multiTidAggregationRx =
             local.multiTidAggregationRx && peer.multiTidAggregationTx;
     negotiated.intersection.multiTidAggregationTx =

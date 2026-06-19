@@ -371,6 +371,8 @@ double Ieee80211NistErrorModel::getHeDataSuccessRate(
         throw cRuntimeError("Unsupported HE code rate");
     auto streamBitLength = (bitLength + parameters.numberOfSpatialStreams - 1) /
             parameters.numberOfSpatialStreams;
+    if (parameters.coding == HE_CODING_LDPC)
+        snr *= std::pow(10.0, 1.5 / 10.0);
     auto streamSuccessRate = getOFDMAndERPOFDMChunkSuccessRate(
             modulation, code, streamBitLength, snr);
     return std::pow(streamSuccessRate, parameters.numberOfSpatialStreams);

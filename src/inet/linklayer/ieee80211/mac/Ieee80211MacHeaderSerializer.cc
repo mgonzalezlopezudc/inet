@@ -291,9 +291,17 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeUint16Le(trigger->getDurationField().inUnit(SIMTIME_US));
             stream.writeMacAddress(trigger->getReceiverAddress());
             stream.writeMacAddress(trigger->getTransmitterAddress());
-            stream.writeByte(trigger->getTriggerType());
+            bool extended = trigger->getGuardInterval() != 2 || trigger->getCoding() != 0 ||
+                    trigger->getPacketExtensionDurationUs() != 0 || trigger->getPuncturedSubchannelMask() != 0;
+            stream.writeByte(trigger->getTriggerType() | (extended ? 0x80 : 0));
             stream.writeUint32Be(trigger->getTriggerId());
             stream.writeUint16Be(trigger->getCommonDuration().inUnit(SIMTIME_US));
+            if (extended) {
+                stream.writeByte(trigger->getGuardInterval());
+                stream.writeByte(trigger->getCoding());
+                stream.writeByte(trigger->getPacketExtensionDurationUs());
+                stream.writeByte(trigger->getPuncturedSubchannelMask());
+            }
             stream.writeByte(trigger->getOcwMin());
             stream.writeByte(trigger->getOcwMax());
             stream.writeByte(trigger->getUsersArraySize());
@@ -579,9 +587,17 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             trigger->setDurationField(SimTime(stream.readUint16Le(), SIMTIME_US));
             trigger->setReceiverAddress(stream.readMacAddress());
             trigger->setTransmitterAddress(stream.readMacAddress());
-            trigger->setTriggerType(stream.readByte());
+            auto encodedTriggerType = stream.readByte();
+            bool extended = (encodedTriggerType & 0x80) != 0;
+            trigger->setTriggerType(encodedTriggerType & 0x7f);
             trigger->setTriggerId(stream.readUint32Be());
             trigger->setCommonDuration(SimTime(stream.readUint16Be(), SIMTIME_US));
+            if (extended) {
+                trigger->setGuardInterval(stream.readByte());
+                trigger->setCoding(stream.readByte());
+                trigger->setPacketExtensionDurationUs(stream.readByte());
+                trigger->setPuncturedSubchannelMask(stream.readByte());
+            }
             trigger->setOcwMin(stream.readByte());
             trigger->setOcwMax(stream.readByte());
             auto count = stream.readByte();

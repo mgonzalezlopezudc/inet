@@ -200,12 +200,20 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         throw cRuntimeError("Too many HE MU users: %u", numUsers);
     if (heMuPhyHeader->getGuardInterval() > HE_GI_3_2_US)
         throw cRuntimeError("Invalid HE guard interval: %u", heMuPhyHeader->getGuardInterval());
-    if (heMuPhyHeader->getCoding() != HE_CODING_BCC)
-        throw cRuntimeError("HE LDPC serialization is not supported");
+    if (heMuPhyHeader->getCoding() != HE_CODING_BCC && heMuPhyHeader->getCoding() != HE_CODING_LDPC)
+        throw cRuntimeError("Invalid HE coding: %u", heMuPhyHeader->getCoding());
     stream.writeByte(heMuPhyHeader->getBssColor());
     stream.writeByte(heMuPhyHeader->getPpduFormat());
     stream.writeByte(heMuPhyHeader->getGuardInterval());
-    stream.writeByte(heMuPhyHeader->getCoding());
+    bool extended = heMuPhyHeader->getPacketExtensionDurationUs() != 0 ||
+            heMuPhyHeader->getPuncturedSubchannelMask() != 0;
+    // Preserve the legacy packet-level header layout when no new control is
+    // active.  The high coding bit is an internal serialization version bit.
+    stream.writeByte(heMuPhyHeader->getCoding() | (extended ? 0x80 : 0));
+    if (extended) {
+        stream.writeByte(heMuPhyHeader->getPacketExtensionDurationUs());
+        stream.writeByte(heMuPhyHeader->getPuncturedSubchannelMask());
+    }
     stream.writeUint32Be(heMuPhyHeader->getTriggerId());
     stream.writeUint32Be(heMuPhyHeader->getCommonDuration().inUnit(SIMTIME_NS));
     stream.writeByte(numUsers);
@@ -243,7 +251,13 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     heMuPhyHeader->setBssColor(stream.readByte());
     heMuPhyHeader->setPpduFormat(stream.readByte());
     heMuPhyHeader->setGuardInterval(stream.readByte());
-    heMuPhyHeader->setCoding(stream.readByte());
+    auto encodedCoding = stream.readByte();
+    bool extended = (encodedCoding & 0x80) != 0;
+    heMuPhyHeader->setCoding(encodedCoding & 0x7f);
+    if (extended) {
+        heMuPhyHeader->setPacketExtensionDurationUs(stream.readByte());
+        heMuPhyHeader->setPuncturedSubchannelMask(stream.readByte());
+    }
     heMuPhyHeader->setTriggerId(stream.readUint32Be());
     heMuPhyHeader->setCommonDuration(SimTime(stream.readUint32Be(), SIMTIME_NS));
     unsigned int numUsers = stream.readByte();

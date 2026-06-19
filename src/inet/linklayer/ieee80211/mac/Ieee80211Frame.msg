@@ -237,6 +237,10 @@ class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
     uint8_t triggerType = 0; // 0: Basic Trigger, 4: BSRP Trigger
     uint32_t triggerId;
     simtime_t commonDuration;
+    uint8_t guardInterval = 2;
+    uint8_t coding = 0;
+    uint8_t packetExtensionDurationUs = 0;
+    uint8_t puncturedSubchannelMask = 0;
     uint8_t ocwMin = 7;
     uint8_t ocwMax = 31;
     Ieee80211HeTriggerUserInfo users[];
