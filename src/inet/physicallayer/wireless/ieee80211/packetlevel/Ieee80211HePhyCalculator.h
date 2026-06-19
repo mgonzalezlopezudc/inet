@@ -1,0 +1,376 @@
+//
+// Copyright (C) 2026 INET Framework contributors
+//
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//
+
+#ifndef __INET_IEEE80211HEPHYCALCULATOR_H
+#define __INET_IEEE80211HEPHYCALCULATOR_H
+
+#include <algorithm>
+#include <cmath>
+#include <string>
+#include <vector>
+
+#include "inet/common/Units.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+
+namespace inet {
+namespace physicallayer {
+
+using namespace inet::units::values;
+
+enum Ieee80211HePpduFormat {
+    HE_MU_DOWNLINK = 0,
+    HE_TRIGGER_BASED_UPLINK = 1
+};
+
+enum Ieee80211HeGuardInterval {
+    HE_GI_0_8_US = 0,
+    HE_GI_1_6_US = 1,
+    HE_GI_3_2_US = 2
+};
+
+enum Ieee80211HeCoding {
+    HE_CODING_BCC = 0,
+    HE_CODING_LDPC = 1
+};
+
+enum Ieee80211HeLtfType {
+    HE_LTF_1X = 1,
+    HE_LTF_2X = 2,
+    HE_LTF_4X = 4
+};
+
+struct Ieee80211HeSigAFields
+{
+    Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
+    uint8_t bssColor = 0;
+    bool uplink = false;
+    int txopDurationUs = 0;
+    bool doppler = false;
+    bool stbc = false;
+};
+
+struct Ieee80211HeSigBFields
+{
+    bool compression = false;
+    int mcs = 0;
+    int numberOfSymbols = 0;
+    int commonFieldBits = 0;
+    int userFieldBits = 0;
+};
+
+struct Ieee80211HeCommonPhyParameters
+{
+    Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
+    Hz channelBandwidth = Hz(NaN);
+    Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US;
+    Ieee80211HeLtfType ltfType = HE_LTF_4X;
+    int numberOfHeLtfSymbols = 1;
+    bool ldpcExtraSymbol = false;
+    int packetExtensionDurationUs = 0;
+    Ieee80211HeSigAFields sigA;
+    Ieee80211HeSigBFields sigB;
+    simtime_t legacyPreambleDuration = SimTime(20, SIMTIME_US);
+    simtime_t rlSigDuration = SimTime(4, SIMTIME_US);
+    simtime_t heSigADuration = SimTime(8, SIMTIME_US);
+    simtime_t heSigBDuration = SIMTIME_ZERO;
+    simtime_t heStfDuration = SimTime(4, SIMTIME_US);
+    simtime_t heLtfDuration = SIMTIME_ZERO;
+    simtime_t commonPreambleDuration = SIMTIME_ZERO;
+};
+
+struct Ieee80211HeUserPhyParameters
+{
+    Ieee80211HeRu ru;
+    int mcs = 0;
+    int numberOfSpatialStreams = 1;
+    bool dcm = false;
+    Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US; // compatibility
+    Ieee80211HeCoding coding = HE_CODING_BCC;
+    B psduLength = B(0);
+    int numberOfEncoders = 1;
+    int codedBitsPerSymbol = 0;
+    int dataBitsPerSymbol = 0;
+    int serviceBits = 16;
+    int tailBits = 6;
+    int preFecPaddingFactor = 4;
+    int postFecPaddingBits = 0;
+    int numberOfDataSymbols = 0;
+    int numberOfSymbols = 0; // compatibility
+    simtime_t preambleDuration = SIMTIME_ZERO; // compatibility
+    simtime_t headerDuration = SIMTIME_ZERO; // compatibility
+    simtime_t dataDuration = SIMTIME_ZERO;
+    simtime_t duration = SIMTIME_ZERO; // compatibility
+};
+
+struct Ieee80211HePpduParameters
+{
+    Ieee80211HeCommonPhyParameters common;
+    std::vector<Ieee80211HeUserPhyParameters> users;
+    int commonNumberOfDataSymbols = 0;
+    simtime_t duration = SIMTIME_ZERO;
+};
+
+struct Ieee80211HePhyValidationResult
+{
+    bool valid = false;
+    std::string error;
+    Ieee80211HePpduParameters parameters;
+
+    explicit operator bool() const { return valid; }
+};
+
+inline int getHeMcsBitsPerSubcarrier(int mcs)
+{
+    static const int values[] = {1, 2, 2, 4, 4, 6, 6, 6, 8, 8, 10, 10};
+    if (mcs < 0 || mcs > 11)
+        throw cRuntimeError("Invalid HE MCS: %d", mcs);
+    return values[mcs];
+}
+
+inline std::pair<int, int> getHeMcsCodeRate(int mcs)
+{
+    static const std::pair<int, int> values[] = {
+        {1, 2}, {1, 2}, {3, 4}, {1, 2}, {3, 4}, {2, 3},
+        {3, 4}, {5, 6}, {3, 4}, {5, 6}, {3, 4}, {5, 6}
+    };
+    if (mcs < 0 || mcs > 11)
+        throw cRuntimeError("Invalid HE MCS: %d", mcs);
+    return values[mcs];
+}
+
+inline simtime_t getHeGuardIntervalDuration(Ieee80211HeGuardInterval guardInterval)
+{
+    switch (guardInterval) {
+        case HE_GI_0_8_US: return SimTime(800, SIMTIME_NS);
+        case HE_GI_1_6_US: return SimTime(1600, SIMTIME_NS);
+        case HE_GI_3_2_US: return SimTime(3200, SIMTIME_NS);
+        default: throw cRuntimeError("Invalid HE guard interval: %d", (int)guardInterval);
+    }
+}
+
+inline bool isHeDcmCombinationSupported(int mcs, int numberOfSpatialStreams)
+{
+    return (mcs == 0 || mcs == 1 || mcs == 3 || mcs == 4) &&
+           numberOfSpatialStreams >= 1 && numberOfSpatialStreams <= 2;
+}
+
+inline int getHeNumberOfLtfSymbols(int spaceTimeStreams)
+{
+    if (spaceTimeStreams <= 1)
+        return 1;
+    if (spaceTimeStreams == 2)
+        return 2;
+    if (spaceTimeStreams <= 4)
+        return 4;
+    if (spaceTimeStreams <= 6)
+        return 6;
+    return 8;
+}
+
+inline simtime_t getHeLtfSymbolDuration(Ieee80211HeLtfType ltfType)
+{
+    switch (ltfType) {
+        case HE_LTF_1X: return SimTime(4, SIMTIME_US);
+        case HE_LTF_2X: return SimTime(8, SIMTIME_US);
+        case HE_LTF_4X: return SimTime(16, SIMTIME_US);
+        default: throw cRuntimeError("Invalid HE-LTF type: %d", (int)ltfType);
+    }
+}
+
+inline int getHeSigBContentChannelCount(Hz channelBandwidth)
+{
+    int widthMhz = std::lround(channelBandwidth.get() / 1e6);
+    if (widthMhz == 20)
+        return 1;
+    if (widthMhz == 40 || widthMhz == 80 || widthMhz == 160)
+        return 2;
+    throw cRuntimeError("Unsupported HE channel bandwidth: %g MHz", channelBandwidth.get() / 1e6);
+}
+
+inline int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
+{
+    int widthMhz = std::lround(channelBandwidth.get() / 1e6);
+    int contentChannels = getHeSigBContentChannelCount(channelBandwidth);
+    int twentyMhzChannels = widthMhz / 20;
+    int commonBitsPerContentChannel = 8 * ((twentyMhzChannels + contentChannels - 1) / contentChannels) + 10;
+    int usersPerContentChannel = (numberOfUsers + contentChannels - 1) / contentChannels;
+    int userBitsPerContentChannel = usersPerContentChannel * 21 + 10;
+    constexpr int heSigBDataBitsPerSymbol = 26; // BPSK, rate 1/2
+    return std::max(1, (commonBitsPerContentChannel + userBitsPerContentChannel +
+            heSigBDataBitsPerSymbol - 1) / heSigBDataBitsPerSymbol);
+}
+
+inline Ieee80211HePhyValidationResult computeHePpduParameters(
+        const std::vector<Ieee80211HeUserPhyParameters>& requestedUsers,
+        Hz channelBandwidth,
+        Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK,
+        Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US,
+        Ieee80211HeLtfType ltfType = HE_LTF_4X,
+        int packetExtensionDurationUs = 0,
+        bool enforceDurationLimit = true)
+{
+    Ieee80211HePhyValidationResult result;
+    if (requestedUsers.empty()) {
+        result.error = "HE PPDU has no users";
+        return result;
+    }
+    if (packetExtensionDurationUs != 0 && packetExtensionDurationUs != 4 &&
+            packetExtensionDurationUs != 8 && packetExtensionDurationUs != 12 && packetExtensionDurationUs != 16) {
+        result.error = "invalid HE packet extension duration";
+        return result;
+    }
+    try {
+        getHeSigBContentChannelCount(channelBandwidth);
+        getHeGuardIntervalDuration(guardInterval);
+        getHeLtfSymbolDuration(ltfType);
+    }
+    catch (const cRuntimeError& error) {
+        result.error = error.what();
+        return result;
+    }
+
+    auto& parameters = result.parameters;
+    parameters.common.ppduFormat = ppduFormat;
+    parameters.common.channelBandwidth = channelBandwidth;
+    parameters.common.guardInterval = guardInterval;
+    parameters.common.ltfType = ltfType;
+    parameters.common.packetExtensionDurationUs = packetExtensionDurationUs;
+    parameters.common.sigA.ppduFormat = ppduFormat;
+    parameters.common.sigA.uplink = ppduFormat == HE_TRIGGER_BASED_UPLINK;
+    parameters.common.sigB.numberOfSymbols = ppduFormat == HE_MU_DOWNLINK ?
+            getHeSigBSymbolCount(channelBandwidth, requestedUsers.size()) : 0;
+    parameters.common.sigB.commonFieldBits = ppduFormat == HE_MU_DOWNLINK ?
+            8 * std::lround(channelBandwidth.get() / 20e6) + 10 : 0;
+    parameters.common.sigB.userFieldBits = ppduFormat == HE_MU_DOWNLINK ?
+            21 * requestedUsers.size() + 10 : 0;
+    parameters.common.heSigBDuration =
+            parameters.common.sigB.numberOfSymbols * SimTime(4, SIMTIME_US);
+
+    int totalSpaceTimeStreams = 0;
+    for (const auto& requested : requestedUsers)
+        totalSpaceTimeStreams += requested.numberOfSpatialStreams;
+    if (totalSpaceTimeStreams < 1 || totalSpaceTimeStreams > 8) {
+        result.error = "HE PPDU has an unsupported total number of space-time streams";
+        return result;
+    }
+    parameters.common.numberOfHeLtfSymbols = getHeNumberOfLtfSymbols(totalSpaceTimeStreams);
+    parameters.common.heLtfDuration =
+            parameters.common.numberOfHeLtfSymbols * getHeLtfSymbolDuration(ltfType);
+    parameters.common.commonPreambleDuration =
+            parameters.common.legacyPreambleDuration +
+            parameters.common.rlSigDuration +
+            parameters.common.heSigADuration +
+            parameters.common.heSigBDuration +
+            parameters.common.heStfDuration +
+            parameters.common.heLtfDuration;
+
+    auto symbolDuration = SimTime(12800, SIMTIME_NS) + getHeGuardIntervalDuration(guardInterval);
+    for (const auto& requested : requestedUsers) {
+        auto user = requested;
+        if (user.ru.toneSize <= 0) {
+            result.error = "invalid HE RU tone size";
+            return result;
+        }
+        if (user.numberOfSpatialStreams < 1 || user.numberOfSpatialStreams > 8) {
+            result.error = "invalid HE number of spatial streams";
+            return result;
+        }
+        if (user.coding != HE_CODING_BCC) {
+            result.error = "HE LDPC is not implemented";
+            return result;
+        }
+        if (user.dcm && !isHeDcmCombinationSupported(user.mcs, user.numberOfSpatialStreams)) {
+            result.error = "unsupported HE DCM combination";
+            return result;
+        }
+        int dataSubcarriers = user.ru.dataSubcarriers > 0 ? user.ru.dataSubcarriers :
+                getHeRuDataSubcarrierCount(user.ru.toneSize);
+        auto codeRate = getHeMcsCodeRate(user.mcs);
+        user.guardInterval = guardInterval;
+        user.codedBitsPerSymbol = dataSubcarriers * getHeMcsBitsPerSubcarrier(user.mcs) *
+                user.numberOfSpatialStreams;
+        user.dataBitsPerSymbol = user.codedBitsPerSymbol * codeRate.first / codeRate.second;
+        if (user.dcm)
+            user.dataBitsPerSymbol /= 2;
+        if (user.dataBitsPerSymbol <= 0) {
+            result.error = "HE user has no data bits per symbol";
+            return result;
+        }
+        user.numberOfEncoders = std::max(1, (user.dataBitsPerSymbol + 647) / 648);
+        user.tailBits = 6 * user.numberOfEncoders;
+        int64_t uncodedBits = user.serviceBits + user.psduLength.get<B>() * 8 + user.tailBits;
+        user.numberOfDataSymbols = std::max<int64_t>(1,
+                (uncodedBits + user.dataBitsPerSymbol - 1) / user.dataBitsPerSymbol);
+        int64_t bitsInLastSymbol = uncodedBits -
+                (int64_t)(user.numberOfDataSymbols - 1) * user.dataBitsPerSymbol;
+        user.preFecPaddingFactor = std::clamp<int>(
+                (4 * bitsInLastSymbol + user.dataBitsPerSymbol - 1) / user.dataBitsPerSymbol, 1, 4);
+        int effectiveLastSymbolBits =
+                (user.preFecPaddingFactor * user.dataBitsPerSymbol + 3) / 4;
+        user.postFecPaddingBits = std::max<int64_t>(0, effectiveLastSymbolBits - bitsInLastSymbol);
+        user.numberOfSymbols = user.numberOfDataSymbols;
+        parameters.commonNumberOfDataSymbols =
+                std::max(parameters.commonNumberOfDataSymbols, user.numberOfDataSymbols);
+        parameters.users.push_back(user);
+    }
+
+    parameters.duration = parameters.common.commonPreambleDuration +
+            parameters.commonNumberOfDataSymbols * symbolDuration +
+            SimTime(packetExtensionDurationUs, SIMTIME_US);
+    if (enforceDurationLimit && parameters.duration > SimTime(5.484, SIMTIME_MS)) {
+        result.error = "HE PPDU exceeds the 5.484 ms duration limit";
+        return result;
+    }
+    for (auto& user : parameters.users) {
+        user.dataDuration = parameters.commonNumberOfDataSymbols * symbolDuration;
+        user.preambleDuration = parameters.common.commonPreambleDuration;
+        user.headerDuration = SIMTIME_ZERO;
+        user.duration = parameters.duration;
+    }
+    result.valid = true;
+    return result;
+}
+
+inline Ieee80211HeUserPhyParameters computeHeUserPhyParameters(
+        B psduLength, const Ieee80211HeRu& ru, int mcs,
+        int numberOfSpatialStreams = 1, bool dcm = false,
+        Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US,
+        Ieee80211HeCoding coding = HE_CODING_BCC)
+{
+    Ieee80211HeUserPhyParameters request;
+    request.ru = ru;
+    request.mcs = mcs;
+    request.numberOfSpatialStreams = numberOfSpatialStreams;
+    request.dcm = dcm;
+    request.coding = coding;
+    request.psduLength = psduLength;
+    Hz bandwidth = ru.toneSize >= 1992 ? Hz(160e6) :
+            ru.toneSize >= 996 ? Hz(80e6) :
+            ru.toneSize >= 484 ? Hz(40e6) : Hz(20e6);
+    auto result = computeHePpduParameters({request}, bandwidth,
+            HE_MU_DOWNLINK, guardInterval, HE_LTF_4X, 0, false);
+    if (!result)
+        throw cRuntimeError("%s", result.error.c_str());
+    return result.parameters.users.front();
+}
+
+inline simtime_t estimateHeMuUserDuration(B psduLength, int toneSize, int mcs,
+        int numberOfSpatialStreams = 1, bool dcm = false,
+        Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US)
+{
+    Ieee80211HeRu ru;
+    ru.toneSize = std::max(toneSize, 26);
+    ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
+    ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
+    ru.bandwidth = Hz(ru.toneSize * 78125.0);
+    return computeHeUserPhyParameters(psduLength, ru, mcs,
+            numberOfSpatialStreams, dcm, guardInterval).duration;
+}
+
+} // namespace physicallayer
+} // namespace inet
+
+#endif

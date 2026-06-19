@@ -280,7 +280,11 @@ class Ieee80211MsduSubframeHeader extends FieldsChunk
 class Ieee80211MpduSubframeHeader extends FieldsChunk
 {
     chunkLength = LENGTH_A_MPDU_SUBFRAME_HEADER;
+    bool eof = false;
+    uint8_t reserved = 0;
     int length;
+    uint8_t delimiterCrc;
+    uint8_t signature = 0x4E;
 }
 
 //

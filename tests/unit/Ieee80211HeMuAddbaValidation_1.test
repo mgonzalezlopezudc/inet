@@ -282,8 +282,8 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
         auto rateSelection = check_and_cast<IQosRateSelection *>(callback->getSubmodule("rateSelection"));
         auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
         auto responseMode = rateSelection->computeResponseBlockAckFrameMode(nullptr, dummyReq);
-        simtime_t ackSequenceDuration = modeSet->getSifsTime() + responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-        for (size_t i = 1; i < scheduledStations.size(); ++i)
+        simtime_t ackSequenceDuration = SIMTIME_ZERO;
+        for (size_t i = 0; i < scheduledStations.size(); ++i)
             ackSequenceDuration += modeSet->getSifsTime() + responseMode->getDuration(B(38)) +
                     modeSet->getSifsTime() + responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
         scheduleContext.txopLimit = ackSequenceDuration + txopPayloadBudget;
@@ -483,9 +483,9 @@ Tid tid = 5;
 
     runPackingLimitCase("ba-window", 1, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO);
     runPackingLimitCase("psdu-length", 64, 50, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SIMTIME_ZERO);
-    runPackingLimitCase("ppdu-duration", 64, 6500631, SimTime(500, SIMTIME_US), SIMTIME_ZERO, SIMTIME_ZERO);
-    runPackingLimitCase("aligned-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SimTime(500, SIMTIME_US), SIMTIME_ZERO);
-    runPackingLimitCase("txop-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SimTime(500, SIMTIME_US));
+    runPackingLimitCase("ppdu-duration", 64, 6500631, SimTime(600, SIMTIME_US), SIMTIME_ZERO, SIMTIME_ZERO);
+    runPackingLimitCase("aligned-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SimTime(600, SIMTIME_US), SIMTIME_ZERO);
+    runPackingLimitCase("txop-duration", 64, 6500631, SimTime(5.484, SIMTIME_MS), SIMTIME_ZERO, SimTime(600, SIMTIME_US));
     EV << "Per-user A-MPDU packing enforced BA-window, PSDU, PPDU, aligned-duration, and TXOP limits.\n";
 
     clearPendingQueue(pendingQueue);

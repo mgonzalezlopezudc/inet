@@ -24,15 +24,17 @@ class INET_API Ieee80211Transmission : public TransmissionBase
     const IIeee80211Mode *mode;
     const Ieee80211Channel *channel;
     const std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
+    const Ieee80211HePpduParameters hePpduParameters;
 
   public:
-    Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, const std::vector<Ieee80211HeUserPhyParameters>& heUserPhyParameters = {});
+    Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, const std::vector<Ieee80211HeUserPhyParameters>& heUserPhyParameters = {}, const Ieee80211HePpduParameters& hePpduParameters = {});
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
     virtual const IIeee80211Mode *getMode() const { return mode; }
     virtual const Ieee80211Channel *getChannel() const { return channel; }
     virtual const std::vector<Ieee80211HeUserPhyParameters>& getHeUserPhyParameters() const { return heUserPhyParameters; }
+    virtual const Ieee80211HePpduParameters& getHePpduParameters() const { return hePpduParameters; }
 };
 
 } // namespace physicallayer

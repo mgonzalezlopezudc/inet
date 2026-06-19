@@ -111,21 +111,58 @@ const Ptr<Chunk> Ieee80211MsduSubframeHeaderSerializer::deserialize(MemoryInputS
 void Ieee80211MpduSubframeHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto mpduSubframe = dynamicPtrCast<const Ieee80211MpduSubframeHeader>(chunk);
-    stream.writeUint4(0);
-    stream.writeUint4(mpduSubframe->getLength() >> 8);
+    if (mpduSubframe->getReserved() > 1 || mpduSubframe->getLength() < 0 ||
+            mpduSubframe->getLength() > 16383 || mpduSubframe->getSignature() != 0x4E)
+        throw cRuntimeError("Invalid A-MPDU delimiter");
+    auto computeDelimiterCrc = [] (uint16_t value) {
+        uint8_t crc = 0xFF;
+        for (int bit = 0; bit < 16; ++bit) {
+            bool feedback = ((crc >> 7) & 1) ^ ((value >> bit) & 1);
+            crc <<= 1;
+            if (feedback)
+                crc ^= 0x07;
+        }
+        return static_cast<uint8_t>(~crc);
+    };
+    uint16_t delimiterValue = (mpduSubframe->getEof() ? 1 : 0) |
+            ((mpduSubframe->getReserved() & 1) << 1) |
+            ((mpduSubframe->getLength() & 0x3FFF) << 2);
+    stream.writeUint2(delimiterValue & 0x3);
+    for (int bit = 13; bit >= 8; --bit)
+        stream.writeBit((mpduSubframe->getLength() >> bit) & 1);
     stream.writeUint8(mpduSubframe->getLength() & 0xFF);
-    stream.writeByte(0);
-    stream.writeByte(0x4E);
+    stream.writeByte(computeDelimiterCrc(delimiterValue));
+    stream.writeByte(mpduSubframe->getSignature());
 }
 
 const Ptr<Chunk> Ieee80211MpduSubframeHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto mpduSubframe = makeShared<Ieee80211MpduSubframeHeader>();
-    stream.readUint4();
-    mpduSubframe->setLength(stream.readUint4() >> 8);
-    mpduSubframe->setLength(stream.readUint8());
-    stream.readByte();
-    stream.readByte();
+    auto computeDelimiterCrc = [] (uint16_t value) {
+        uint8_t crc = 0xFF;
+        for (int bit = 0; bit < 16; ++bit) {
+            bool feedback = ((crc >> 7) & 1) ^ ((value >> bit) & 1);
+            crc <<= 1;
+            if (feedback)
+                crc ^= 0x07;
+        }
+        return static_cast<uint8_t>(~crc);
+    };
+    uint8_t control = stream.readUint2();
+    int length = 0;
+    for (int bit = 13; bit >= 8; --bit)
+        length |= stream.readBit() << bit;
+    length |= stream.readUint8();
+    uint16_t delimiterValue = control | (length << 2);
+    uint8_t crc = stream.readByte();
+    uint8_t signature = stream.readByte();
+    mpduSubframe->setEof((control & 1) != 0);
+    mpduSubframe->setReserved((control >> 1) & 1);
+    mpduSubframe->setLength(length);
+    mpduSubframe->setDelimiterCrc(crc);
+    mpduSubframe->setSignature(signature);
+    if (signature != 0x4E || crc != computeDelimiterCrc(delimiterValue))
+        mpduSubframe->markIncorrect();
     return mpduSubframe;
 }
 
