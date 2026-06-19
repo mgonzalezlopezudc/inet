@@ -20,6 +20,11 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
 
 namespace inet {
 
@@ -63,6 +68,57 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
         transmissionMode = mode;
     if (transmissionMode == nullptr)
         throw cRuntimeError("Transmission mode is undefined");
+
+    // Map to LDPC variant if enabled/negotiated
+    cModule *nic = getContainingNicModule(this);
+    auto mib = nic ? dynamic_cast<const ieee80211::Ieee80211Mib *>(nic->getSubmodule("mib")) : nullptr;
+    if (mib != nullptr) {
+        Ptr<const ieee80211::Ieee80211MacHeader> macHeader;
+        auto frontChunk = packet->peekAtFront();
+        if (dynamic_cast<const Ieee80211PhyHeader *>(frontChunk.get()) != nullptr) {
+            auto packetCopy = packet->dup();
+            packetCopy->popAtFront<Ieee80211PhyHeader>();
+            auto innerFront = packetCopy->peekAtFront();
+            if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(innerFront.get()) != nullptr) {
+                macHeader = packetCopy->peekAtFront<ieee80211::Ieee80211MacHeader>();
+            }
+            delete packetCopy;
+        }
+        else if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(frontChunk.get()) != nullptr) {
+            macHeader = packet->peekAtFront<ieee80211::Ieee80211MacHeader>();
+        }
+        MacAddress receiverAddress = macHeader != nullptr ? macHeader->getReceiverAddress() : MacAddress::UNSPECIFIED_ADDRESS;
+
+        bool useLdpc = false;
+        if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(transmissionMode)) {
+            useLdpc = mib->localHtLdpc;
+        }
+        else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(transmissionMode)) {
+            if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
+                auto negotiatedVht = mib->findNegotiatedVhtCapabilities(receiverAddress);
+                useLdpc = negotiatedVht ? negotiatedVht->intersection.ldpc : mib->localVhtCapabilities.ldpc;
+            }
+            else {
+                useLdpc = mib->localVhtCapabilities.ldpc;
+            }
+        }
+
+        if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(transmissionMode)) {
+            auto mcs = htMode->getDataMode()->getModulationAndCodingScheme();
+            auto preambleFormat = htMode->getPreambleMode()->getPreambleFormat();
+            auto gi = htMode->getDataMode()->getGuardIntervalType();
+            auto centerFreqMode = htMode->getCenterFrequencyMode();
+            transmissionMode = Ieee80211HtCompliantModes::getCompliantMode(mcs, centerFreqMode, preambleFormat, gi, useLdpc);
+        }
+        else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(transmissionMode)) {
+            auto mcs = vhtMode->getDataMode()->getModulationAndCodingScheme();
+            auto preambleFormat = vhtMode->getPreambleMode()->getPreambleFormat();
+            auto gi = vhtMode->getDataMode()->getGuardIntervalType();
+            auto centerFreqMode = vhtMode->getCenterFrequencyMode();
+            transmissionMode = Ieee80211VhtCompliantModes::getCompliantMode(mcs, centerFreqMode, preambleFormat, gi, useLdpc);
+        }
+    }
+
     return transmissionMode;
 }
 

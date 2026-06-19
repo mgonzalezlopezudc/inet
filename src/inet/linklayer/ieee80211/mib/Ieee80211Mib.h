@@ -81,6 +81,7 @@ class INET_API Ieee80211Mib : public SimpleModule
     Ieee80211HeOperation heOperation;
     Ieee80211VhtCapabilities localVhtCapabilities;
     Ieee80211VhtOperation vhtOperation;
+    bool localHtLdpc = false;
 
   protected:
     virtual void initialize(int stage) override;

@@ -21,6 +21,7 @@ simple Ieee80211Mib extends SimpleModule
     parameters:
         @class(Ieee80211Mib);
         bool vhtLdpc = default(false);
+        bool htLdpc = default(false);
         int vhtMaxNss = default(8);
         int vhtMaxAmpduLengthExponent = default(7);
         bool vhtBeamforming = default(false);
