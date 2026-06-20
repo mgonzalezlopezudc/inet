@@ -121,7 +121,10 @@ Packet *InProgressFrames::getPendingFrameFor(Packet *frame)
 void InProgressFrames::dropFrame(Packet *packet)
 {
     EV_DEBUG << "Dropping frame " << packet->getName() << ".\n";
-    inProgressFrames.erase(std::remove(inProgressFrames.begin(), inProgressFrames.end(), packet), inProgressFrames.end());
+    auto it = std::remove(inProgressFrames.begin(), inProgressFrames.end(), packet);
+    if (it == inProgressFrames.end())
+        return; // frame was not in inProgressFrames (e.g. sounding frame) — nothing to do
+    inProgressFrames.erase(it, inProgressFrames.end());
     droppedFrames.push_back(packet);
     emit(packetDequeuedSignal, packet);
 }
