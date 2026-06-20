@@ -305,8 +305,12 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                 continue;
 
             auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
+            // Fresh queue entries have not been assigned a sequence number
+            // yet. They are eligible to start a transmission without an ACK
+            // status lookup; retried/in-progress entries retain a sequence
+            // number and must still be checked by the ACK handler.
             if (!isMuEligibleDataHeader(dataHeader, baHandler) ||
-                    !ackHandler->isEligibleToTransmit(dataHeader))
+                    (dataHeader->getSequenceNumber().isValid() && !ackHandler->isEligibleToTransmit(dataHeader)))
                 continue;
             auto negotiated = mib->findNegotiatedHeCapabilities(dest);
             if (negotiated != nullptr &&
@@ -348,7 +352,8 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                             queuedHeader->getType() == ST_DATA_WITH_QOS &&
                             queuedHeader->getReceiverAddress() == dest &&
                             queuedHeader->getTid() == dataHeader->getTid() &&
-                            ackHandler->isEligibleToTransmit(queuedHeader) &&
+                            (!queuedHeader->getSequenceNumber().isValid() ||
+                             ackHandler->isEligibleToTransmit(queuedHeader)) &&
                             hasActiveOriginatorBlockAckAgreement(baHandler, dest, queuedHeader->getTid()) &&
                             eligiblePackets < std::min(availableSlots, context.maxAmpduMpduCount)) {
                         B subframeLength = B(4) + B(queuedPacket->getByteLength());

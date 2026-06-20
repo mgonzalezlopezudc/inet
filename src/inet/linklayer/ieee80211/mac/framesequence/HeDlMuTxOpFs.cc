@@ -115,6 +115,13 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
 
     Packet *findTransmittedPacket(FrameSequenceContext *context) const
     {
+        // The HE MU PPDU is represented by a container packet in the frame
+        // sequence. Its per-STA MPDUs are retained in the active allocation,
+        // not necessarily as individual frames in the context. Use that
+        // recorded MPDU for the BAR sequence number and response mode.
+        if (getActiveAllocation().packet != nullptr)
+            return getActiveAllocation().packet;
+
         const auto& targetSta = getActiveAllocation().staAddress;
         auto inProgress = context->getInProgressFrames();
         for (int i = 0; i < inProgress->getLength(); ++i) {
@@ -546,6 +553,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     containerHdr->setType(ST_DATA_WITH_QOS);
     containerHdr->setChunkLength(b(288)); // minimal 802.11 QoS data header size
+    if (auto heHcf = dynamic_cast<HeHcf *>(callback)) {
+        auto originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(heHcf->getOriginatorMacDataService());
+        originatorQosDataService->assignSequenceNumber(containerHdr);
+    }
 
     // 1. Calculate the total sequential ACK sequence duration
     simtime_t totalDuration = simtime_t::ZERO;

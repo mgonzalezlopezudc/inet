@@ -157,12 +157,22 @@ static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
             Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
             Chunk::PF_ALLOW_REINTERPRETATION;
     auto packetCopy = transmittedPacket->dup();
-    packetCopy->popAtFront<Ieee80211HeMuPhyHeader>(B(-1), parsingFlags);
-    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>(B(-1), parsingFlags);
+    packetCopy->popAtFront<Ieee80211HeMuPhyHeader>(b(-1), parsingFlags);
+    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>(b(-1), parsingFlags);
     while (packetCopy->getDataLength() > b(0) &&
             dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(
-                    packetCopy->peekAtFront(B(-1), parsingFlags)) != nullptr) {
-        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>(B(-1), parsingFlags);
+                    packetCopy->peekAtFront(b(-1), parsingFlags)) != nullptr) {
+        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>(b(-1), parsingFlags);
+        if (payloadHeader->getMpduLength() == B(0)) {
+            // An NDP carries no MAC payload. Deliver it as a legacy-preamble
+            // indication when it is addressed to this STA; otherwise continue
+            // parsing the remaining zero-length user descriptors.
+            if (payloadHeader->getStaId() == staId) {
+                delete packetCopy;
+                return nullptr;
+            }
+            continue;
+        }
         if (payloadHeader->getStaId() == staId) {
             auto mpdu = new Packet(transmittedPacket->getName());
             mpdu->insertAtBack(packetCopy->popAtFront(payloadHeader->getMpduLength(), parsingFlags));
@@ -171,9 +181,9 @@ static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
             B offset(0);
             while (parser->getDataLength() > b(0) &&
                     dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(
-                            parser->peekAtFront(B(-1), parsingFlags)) != nullptr) {
+                            parser->peekAtFront(b(-1), parsingFlags)) != nullptr) {
                 auto delimiter = parser->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(
-                        B(-1), parsingFlags);
+                        b(-1), parsingFlags);
                 Ieee80211MpduReceiveResult receiveResult;
                 receiveResult.offset = offset;
                 receiveResult.length = B(delimiter->getLength());
@@ -181,7 +191,7 @@ static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
                         MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
                 if (parser->getDataLength() >= receiveResult.length) {
                     auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(
-                            parser->peekAtFront(B(-1), parsingFlags));
+                            parser->peekAtFront(b(-1), parsingFlags));
                     if (macHeader != nullptr) {
                         receiveResult.sequenceNumber = macHeader->getSequenceNumber().get();
                         receiveResult.fragmentNumber = macHeader->getFragmentNumber();

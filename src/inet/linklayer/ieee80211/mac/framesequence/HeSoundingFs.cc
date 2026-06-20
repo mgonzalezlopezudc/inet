@@ -152,6 +152,10 @@ Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
     else if (bandwidth >= Hz(40e6)) ruToneSize = 484;
 
     int totalNsts = 0;
+    for (const auto& target : targets)
+        totalNsts += target.maxNss;
+
+    int streamStartIndex = 0;
     for (size_t i = 0; i < targets.size(); ++i) {
         auto payloadHeader = makeShared<physicallayer::Ieee80211HeMuRuPayloadHeader>();
         payloadHeader->setRuIndex(0);
@@ -162,21 +166,11 @@ Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
         payloadHeader->setNumberOfSpatialStreams(targets[i].maxNss);
         payloadHeader->setDcm(false);
         payloadHeader->setMpduLength(B(0));
-        payloadHeader->setStreamStartIndex(totalNsts);
+        payloadHeader->setStreamStartIndex(streamStartIndex);
         payloadHeader->setMuMimo(true);
-        totalNsts += targets[i].maxNss;
         payloadHeader->setTotalNsts(totalNsts);
         ndpPacket->insertAtBack(payloadHeader);
-    }
-
-    // Update totalNsts on all payload headers
-    auto data = dynamicPtrCast<const SequenceChunk>(ndpPacket->peekData());
-    if (data != nullptr) {
-        for (auto& chunk : data->getChunks()) {
-            if (auto ph = dynamicPtrCast<physicallayer::Ieee80211HeMuRuPayloadHeader>(constPtrCast<Chunk>(chunk))) {
-                ph->setTotalNsts(totalNsts);
-            }
-        }
+        streamStartIndex += targets[i].maxNss;
     }
 
     ndpPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
