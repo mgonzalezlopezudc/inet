@@ -231,6 +231,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             requested.coding = static_cast<Ieee80211HeCoding>(heMuHeader->getCoding());
             requested.psduLength = user.psduLength;
             requested.streamStartIndex = user.streamStartIndex;
+            requested.staId = user.staId;
             requestedUsers.push_back(requested);
         }
         auto calculation = computeHePpduParameters(requestedUsers, transmissionBandwidth,

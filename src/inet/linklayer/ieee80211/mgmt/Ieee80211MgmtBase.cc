@@ -147,6 +147,14 @@ void Ieee80211MgmtBase::processFrame(Packet *packet, const Ptr<const Ieee80211Da
             handleProbeResponseFrame(packet, dynamicPtrCast<const Ieee80211MgmtHeader>(header));
             break;
 
+        case ST_ACTION:
+            // Action frames (e.g. HE NDP Announcement, Compressed Beamforming Feedback)
+            // are fully consumed by the HCF layer (HeHcf::recipientProcessReceivedFrame).
+            // The copy that reaches the management module is silently dropped.
+            numMgmtFramesDropped++;
+            delete packet;
+            break;
+
         default:
             throw cRuntimeError("Unexpected frame type (%s)%s", packet->getClassName(), packet->getName());
     }

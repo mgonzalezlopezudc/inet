@@ -16,6 +16,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
+#include "inet/common/packet/chunk/SequenceChunk.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -125,6 +126,24 @@ bool overlapsHePuncturedSubchannel(const inet::physicallayer::Ieee80211HeRu& ru,
 
 namespace inet {
 namespace ieee80211 {
+
+namespace {
+
+template <typename T>
+Ptr<const T> findPacketChunk(const Packet *packet)
+{
+    auto data = packet->peekData();
+    if (auto chunk = dynamicPtrCast<const T>(data))
+        return chunk;
+    if (auto sequence = dynamicPtrCast<const SequenceChunk>(data)) {
+        for (const auto& chunk : sequence->getChunks())
+            if (auto result = dynamicPtrCast<const T>(chunk))
+                return result;
+    }
+    return nullptr;
+}
+
+} // namespace
 
 Define_Module(HeHcf);
 
@@ -684,55 +703,57 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 
 void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (auto ndpa = packet->peekData<Ieee80211HeNdpAnnouncement>()) {
-        soundingTargets.clear();
-        ndpAnnouncementReceived = false;
-        ndpReceived = false;
-        soundingDialogToken = ndpa->getDialogToken();
+    if (dynamicPtrCast<const Ieee80211MgmtHeader>(header) && header->getType() == ST_ACTION) {
+        if (auto ndpa = findPacketChunk<Ieee80211HeNdpAnnouncement>(packet)) {
+            soundingTargets.clear();
+            ndpAnnouncementReceived = false;
+            ndpReceived = false;
+            soundingDialogToken = ndpa->getDialogToken();
 
-        auto myAid = mac->getMib()->bssStationData.associationId;
-        bool targeted = false;
-        if (myAid > 0) {
-            for (unsigned int i = 0; i < ndpa->getStationsArraySize(); ++i) {
-                const auto& staInfo = ndpa->getStations(i);
-                if (staInfo.aid == myAid) {
-                    targeted = true;
+            auto myAid = mac->getMib()->bssStationData.associationId;
+            bool targeted = false;
+            if (myAid > 0) {
+                for (unsigned int i = 0; i < ndpa->getStationsArraySize(); ++i) {
+                    const auto& staInfo = ndpa->getStations(i);
+                    if (staInfo.aid == myAid) {
+                        targeted = true;
+                    }
+                    SoundingTarget target;
+                    target.aid = staInfo.aid;
+                    target.maxNss = staInfo.nc;
+                    soundingTargets.push_back(target);
                 }
-                SoundingTarget target;
-                target.aid = staInfo.aid;
-                target.maxNss = staInfo.nc;
-                soundingTargets.push_back(target);
             }
+            if (targeted) {
+                ndpAnnouncementReceived = true;
+            }
+            delete packet;
+            return;
         }
-        if (targeted) {
-            ndpAnnouncementReceived = true;
-        }
-        delete packet;
-        return;
-    }
 
-    if (auto feedback = packet->peekData<Ieee80211HeCompressedBeamformingFeedback>()) {
-        if (feedback->getValid()) {
-            std::vector<MacAddress> allAssociatedStations;
-            for (const auto& entry : mac->getMib()->bssAccessPointData.associationIds) {
-                allAssociatedStations.push_back(entry.first);
+        if (auto feedback = findPacketChunk<Ieee80211HeCompressedBeamformingFeedback>(packet)) {
+            if (feedback->getValid()) {
+                std::vector<MacAddress> allAssociatedStations;
+                for (const auto& entry : mac->getMib()->bssAccessPointData.associationIds) {
+                    allAssociatedStations.push_back(entry.first);
+                }
+                auto getAid = [this](const MacAddress& addr) {
+                    return mac->getMib()->getAssociationId(addr);
+                };
+                auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
+                auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
+                Hz bw = Hz(20e6);
+                if (transmitter && transmitter->getMode()) {
+                    bw = transmitter->getMode()->getDataMode()->getBandwidth();
+                }
+                auto twoAddrHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header);
+                if (twoAddrHeader != nullptr) {
+                    csiManager.updateCsi(twoAddrHeader->getTransmitterAddress(), bw, allAssociatedStations, getAid);
+                }
             }
-            auto getAid = [this](const MacAddress& addr) {
-                return mac->getMib()->getAssociationId(addr);
-            };
-            auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
-            auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
-            Hz bw = Hz(20e6);
-            if (transmitter && transmitter->getMode()) {
-                bw = transmitter->getMode()->getDataMode()->getBandwidth();
-            }
-            auto twoAddrHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header);
-            if (twoAddrHeader != nullptr) {
-                csiManager.updateCsi(twoAddrHeader->getTransmitterAddress(), bw, allAssociatedStations, getAid);
-            }
+            delete packet;
+            return;
         }
-        delete packet;
-        return;
     }
 
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {

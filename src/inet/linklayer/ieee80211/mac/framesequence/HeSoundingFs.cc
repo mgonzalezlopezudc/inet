@@ -20,6 +20,24 @@
 namespace inet {
 namespace ieee80211 {
 
+namespace {
+
+template <typename T>
+Ptr<const T> findPacketChunk(const Packet *packet)
+{
+    auto data = packet->peekData();
+    if (auto chunk = dynamicPtrCast<const T>(data))
+        return chunk;
+    if (auto sequence = dynamicPtrCast<const SequenceChunk>(data)) {
+        for (const auto& chunk : sequence->getChunks())
+            if (auto result = dynamicPtrCast<const T>(chunk))
+                return result;
+    }
+    return nullptr;
+}
+
+} // namespace
+
 HeSoundingFs::HeSoundingFs(Ieee80211Mib *mib,
                            const std::vector<TargetSta>& targets,
                            physicallayer::Ieee80211ModeSet *modeSet,
@@ -200,9 +218,9 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
         user.targetRssiDbm = -60;
         header->setUsers(i, user);
 
-        // Feedback frame size is 42 bytes (management header + body + trailer)
+        // The feedback body is 42 bytes; account for the management header and FCS too.
         commonDuration = std::max(commonDuration,
-                physicallayer::estimateHeMuUserDuration(B(42), ruLayout[i].toneSize, 0));
+                physicallayer::estimateHeMuUserDuration(B(70), ruLayout[i].toneSize, 0));
     }
     header->setCommonDuration(commonDuration);
     header->setDurationField(modeSet->getSifsTime() + commonDuration);
@@ -226,7 +244,7 @@ void HeSoundingFs::processFeedbacks(FrameSequenceContext *context)
 
     for (auto packet : collection->getReceivedFrames()) {
         auto header = packet->peekAtFront<Ieee80211MgmtHeader>();
-        auto feedback = packet->peekData<Ieee80211HeCompressedBeamformingFeedback>();
+        auto feedback = findPacketChunk<Ieee80211HeCompressedBeamformingFeedback>(packet);
         if (header == nullptr || feedback == nullptr)
             continue;
         if (feedback->getDialogToken() == dialogToken && feedback->getValid()) {
