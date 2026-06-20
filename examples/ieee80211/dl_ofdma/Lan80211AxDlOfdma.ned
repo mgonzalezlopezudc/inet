@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: LGPL-3.0-or-later
 //
 
-package inet.examples.ieee80211.ofdma;
+package inet.examples.ieee80211.dl_ofdma;
 
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
 import inet.node.ethernet.Eth100M;
@@ -13,7 +13,7 @@ import inet.node.wireless.AccessPoint;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 import inet.visualizer.contract.IIntegratedVisualizer;
 
-network Lan80211AxOfdma
+network Lan80211AxDlOfdma
 {
     parameters:
         int numHosts = default(3);
