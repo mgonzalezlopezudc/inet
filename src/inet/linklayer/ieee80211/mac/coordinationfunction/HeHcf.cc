@@ -15,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -33,6 +34,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 
 namespace {
 
@@ -140,6 +142,12 @@ void HeHcf::initialize(int stage)
         ulTriggerTimer = new cMessage("heUlTriggerTimer");
         delete frameSequenceHandler;
         frameSequenceHandler = new HeFrameSequenceHandler();
+
+        enableDlMuMimo = par("enableDlMuMimo").boolValue();
+        csiValidityDuration = par("csiValidityDuration");
+        defaultCsiLeakage = par("defaultCsiLeakage");
+        csiLeakageOverrides = par("csiLeakageOverrides").stdstringValue();
+        csiManager.configure(csiValidityDuration, defaultCsiLeakage, csiLeakageOverrides);
     }
     else if (stage == INITSTAGE_LINK_LAYER && mac->isApInAxMode()) {
         queueBankManager = std::make_unique<StationQueueBankManager>(getSubmodule("queueBanks"));
@@ -354,6 +362,8 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                 return candidate.negotiatedHeCapabilities != nullptr &&
                         candidate.negotiatedHeCapabilities->valid && candidate.negotiatedHeCapabilities->intersection.ldpc;
             }) ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
+    context.csiManager = &csiManager;
+    context.numApAntennas = radio->getAntenna()->getNumAntennas();
     return context;
 }
 
@@ -505,6 +515,45 @@ void HeHcf::startFrameSequence(AccessCategory ac)
     }
     if (isHeMode) {
         auto edcaf = edca->getEdcaf(ac);
+        // Sounding Check
+        if (mac->isApInAxMode() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
+            auto scheduleContext = collectScheduleContext(ac);
+            int lackCsiCount = 0;
+            std::vector<HeSoundingFs::TargetSta> soundingStas;
+            for (const auto& candidate : scheduleContext.candidates) {
+                auto negotiated = candidate.negotiatedHeCapabilities;
+                if (negotiated == nullptr || !negotiated->valid)
+                    continue;
+                auto mib = mac->getMib();
+                auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
+                const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
+                if (staCapabilities == nullptr)
+                    continue;
+                if (isDlMuMimoEligible(mac->getMib()->localHeCapabilities, *staCapabilities, *negotiated, scheduleContext.channelBandwidth, scheduleContext.numApAntennas)) {
+                    if (!csiManager.hasFreshCsi(candidate.staAddress, scheduleContext.channelBandwidth)) {
+                        lackCsiCount++;
+                    }
+                    HeSoundingFs::TargetSta target;
+                    target.address = candidate.staAddress;
+                    target.aid = mac->getMib()->getAssociationId(candidate.staAddress);
+                    target.maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
+                    soundingStas.push_back(target);
+                }
+            }
+            if (lackCsiCount >= 2) {
+                if (soundingStas.size() > 8)
+                    soundingStas.resize(8);
+                EV_INFO << "HeHcf: At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << endl;
+                static uint8_t nextSoundingDialogToken = 1;
+                static uint32_t nextTriggerId = 1;
+                auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
+                                                         &csiManager, scheduleContext.channelBandwidth,
+                                                         nextSoundingDialogToken++, nextTriggerId++);
+                frameSequenceHandler->startFrameSequence(soundingSequence, buildContext(ac), this);
+                emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
+                return;
+            }
+        }
         auto pendingQueue = edcaf->getPendingQueue();
         auto inProgress = edcaf->getInProgressFrames();
         if (hasEligibleExistingFrame(inProgress, edcaf->getAckHandler())) {
@@ -635,8 +684,113 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 
 void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
+    if (auto ndpa = packet->peekData<Ieee80211HeNdpAnnouncement>()) {
+        soundingTargets.clear();
+        ndpAnnouncementReceived = false;
+        ndpReceived = false;
+        soundingDialogToken = ndpa->getDialogToken();
+
+        auto myAid = mac->getMib()->bssStationData.associationId;
+        bool targeted = false;
+        if (myAid > 0) {
+            for (unsigned int i = 0; i < ndpa->getStationsArraySize(); ++i) {
+                const auto& staInfo = ndpa->getStations(i);
+                if (staInfo.aid == myAid) {
+                    targeted = true;
+                }
+                SoundingTarget target;
+                target.aid = staInfo.aid;
+                target.maxNss = staInfo.nc;
+                soundingTargets.push_back(target);
+            }
+        }
+        if (targeted) {
+            ndpAnnouncementReceived = true;
+        }
+        delete packet;
+        return;
+    }
+
+    if (auto feedback = packet->peekData<Ieee80211HeCompressedBeamformingFeedback>()) {
+        if (feedback->getValid()) {
+            std::vector<MacAddress> allAssociatedStations;
+            for (const auto& entry : mac->getMib()->bssAccessPointData.associationIds) {
+                allAssociatedStations.push_back(entry.first);
+            }
+            auto getAid = [this](const MacAddress& addr) {
+                return mac->getMib()->getAssociationId(addr);
+            };
+            auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
+            auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
+            Hz bw = Hz(20e6);
+            if (transmitter && transmitter->getMode()) {
+                bw = transmitter->getMode()->getDataMode()->getBandwidth();
+            }
+            auto twoAddrHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header);
+            if (twoAddrHeader != nullptr) {
+                csiManager.updateCsi(twoAddrHeader->getTransmitterAddress(), bw, allAssociatedStations, getAid);
+            }
+        }
+        delete packet;
+        return;
+    }
+
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {
         if (trigger->getTriggerType() == 2) {
+            if (ndpAnnouncementReceived && ndpReceived) {
+                auto myAid = mac->getMib()->bssStationData.associationId;
+                const Ieee80211HeTriggerUserInfo *selected = nullptr;
+                for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
+                    if (trigger->getUsers(i).aid == myAid) {
+                        selected = &trigger->getUsers(i);
+                        break;
+                    }
+                }
+                if (selected != nullptr) {
+                    int maxNss = 1;
+                    auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(trigger->getTransmitterAddress());
+                    if (negotiated != nullptr && negotiated->valid) {
+                        maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
+                    }
+
+                    auto feedback = makeShared<Ieee80211HeCompressedBeamformingFeedback>();
+                    feedback->setDialogToken(soundingDialogToken);
+                    feedback->setAid(myAid);
+                    feedback->setFeedbackBandwidth(20e6);
+                    feedback->setNc(maxNss);
+                    feedback->setNr(mac->getMib()->localHeCapabilities.soundingDimensions);
+                    feedback->setValid(true);
+                    feedback->setChunkLength(B(42));
+
+                    auto responseHeader = makeShared<Ieee80211MgmtHeader>();
+                    responseHeader->setType(ST_ACTION);
+                    responseHeader->setReceiverAddress(trigger->getTransmitterAddress());
+                    responseHeader->setTransmitterAddress(mac->getAddress());
+                    responseHeader->setAddress3(trigger->getTransmitterAddress()); // BSSID
+
+                    auto response = new Packet("HE-Feedback", responseHeader);
+                    response->insertAtBack(feedback);
+                    response->insertAtBack(makeShared<Ieee80211MacTrailer>());
+
+                    auto request = response->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
+                    request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
+                    request->setTriggerId(trigger->getTriggerId());
+                    request->setRuIndex(selected->ruIndex);
+                    request->setRuToneSize(selected->ruToneSize);
+                    request->setRuToneOffset(selected->ruToneOffset);
+                    request->setStaId(myAid);
+                    request->setMcs(selected->mcs);
+                    request->setCommonDuration(trigger->getCommonDuration());
+
+                    tx->transmitFrame(response, responseHeader, modeSet->getSifsTime(), this);
+                    delete response;
+                }
+                ndpAnnouncementReceived = false;
+                ndpReceived = false;
+                delete packet;
+                return;
+            }
+
             auto myAid = mac->getMib()->bssStationData.associationId;
             const Ieee80211HeTriggerUserInfo *selected = nullptr;
             for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i)
@@ -1064,6 +1218,13 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
     }
     else {
         Hcf::originatorProcessFailedFrame(failedPacket);
+    }
+}
+
+void HeHcf::legacyPreambleReceived(Packet *packet)
+{
+    if (ndpAnnouncementReceived) {
+        ndpReceived = true;
     }
 }
 

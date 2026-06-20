@@ -45,7 +45,7 @@ user.ruIndex = 1;
 user.ruToneSize = 242;
 user.staId = 1;
 header->appendUsers(user);
-header->setChunkLength(b(120 + 137));
+header->setChunkLength(B(39));
 auto packet = new Packet("extended-he-header", header);
 auto bytes = packet->peekDataAsBytes();
 auto received = new Packet("extended-he-header-rx", bytes);

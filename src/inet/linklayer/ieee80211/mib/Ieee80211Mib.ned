@@ -20,17 +20,23 @@ simple Ieee80211Mib extends SimpleModule
 {
     parameters:
         @class(Ieee80211Mib);
-        bool vhtLdpc = default(false);
-        bool htLdpc = default(false);
+        bool vhtLdpc = default(false); // Advertises and enables VHT LDPC when the peer also supports it
+        bool htLdpc = default(false); // Advertises and enables HT LDPC when the peer also supports it
         // HE features are opt-in so existing configurations retain BCC and
         // the unextended PPDU geometry.
-        bool heLdpc = default(false);
-        int heDefaultPeDurationUs = default(0); // 0, 4, 8, 12, or 16
-        int vhtMaxNss = default(8);
-        int vhtMaxAmpduLengthExponent = default(7);
-        bool vhtBeamforming = default(false);
-        bool vhtMuMimo = default(false);
-        double vhtOperatingChannelWidth @unit(Hz) = default(20MHz);
+        bool heLdpc = default(false); // Advertises and enables HE LDPC when the peer also supports it
+        int heDefaultPeDurationUs = default(0); // Default HE packet extension: 0, 4, 8, 12, or 16 microseconds
+        bool heDlMuMimoBeamformer = default(false);
+        bool heDlMuMimoBeamformee = default(false);
+        int heSoundingDimensions = default(0);
+        int heBeamformeeSts20Mhz = default(0);
+        int heBeamformeeStsAbove20Mhz = default(0);
+        int heFeedbackMode = default(0); // 0=None, 1=SU, 2=MU, 3=Both
+        int vhtMaxNss = default(8); // Maximum VHT spatial streams advertised by this MIB
+        int vhtMaxAmpduLengthExponent = default(7); // VHT maximum A-MPDU-length exponent advertised to peers
+        bool vhtBeamforming = default(false); // Enables VHT transmit beamforming capability negotiation
+        bool vhtMuMimo = default(false); // Enables VHT multi-user MIMO capability negotiation
+        double vhtOperatingChannelWidth @unit(Hz) = default(20MHz); // VHT operating width advertised to peers
         displayStringTextFormat = default("Address: {address}{ssidStr}\n{modeStr}{stationTypeStr}{qosStr}{associatedStr}");
         @display("i=block/table");
 }

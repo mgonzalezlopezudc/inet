@@ -21,9 +21,16 @@ namespace ieee80211 {
 
 using namespace inet::units::values;
 
+/**
+ * Interface for schedulers of IEEE 802.11ax trigger-based uplink OFDMA.
+ *
+ * Given AP-side buffer reports and channel constraints, implementations choose
+ * scheduled and random-access RUs and a common HE-TB transmission duration.
+ */
 class INET_API IIeee80211HeUlScheduler
 {
   public:
+    /** Latest AP-side traffic and link information for one associated STA. */
     struct CandidateInfo {
         MacAddress staAddress;
         uint16_t associationId = 0;
@@ -41,6 +48,7 @@ class INET_API IIeee80211HeUlScheduler
         int64_t getSelectedBacklogBytes() const { return backlogBytes[selectedAccessCategory]; }
     };
 
+    /** Channel, TXOP, receiver, and random-access observations for one Trigger decision. */
     struct ScheduleContext {
         std::vector<CandidateInfo> candidates;
         Hz channelCenterFrequency = Hz(NaN);
@@ -54,6 +62,7 @@ class INET_API IIeee80211HeUlScheduler
         double recentRandomAccessIdleRate = 0;
     };
 
+    /** One scheduled or random-access RU in a trigger-based uplink PPDU. */
     struct RuAllocation {
         MacAddress staAddress;
         uint16_t associationId = 0;
@@ -66,6 +75,7 @@ class INET_API IIeee80211HeUlScheduler
         simtime_t estimatedDuration = SIMTIME_ZERO;
     };
 
+    /** Complete Trigger allocation plus PHY parameters common to all HE-TB users. */
     struct Schedule {
         std::vector<RuAllocation> allocations;
         simtime_t commonDuration = SIMTIME_ZERO;

@@ -21,6 +21,7 @@ class INET_API HeDlSchedulerEqualSizedRUs : public HeDlSchedulerBase
 {
   protected:
     std::string schedulingFunction;
+    int nextAnchorIndex = 0;
 
   protected:
     virtual void initialize(int stage) override;

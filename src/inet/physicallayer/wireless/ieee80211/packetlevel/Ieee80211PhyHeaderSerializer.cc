@@ -206,13 +206,17 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     stream.writeByte(heMuPhyHeader->getPpduFormat());
     stream.writeByte(heMuPhyHeader->getGuardInterval());
     bool extended = heMuPhyHeader->getPacketExtensionDurationUs() != 0 ||
-            heMuPhyHeader->getPuncturedSubchannelMask() != 0;
+            heMuPhyHeader->getPuncturedSubchannelMask() != 0 ||
+            heMuPhyHeader->getMuMimo();
     // Preserve the legacy packet-level header layout when no new control is
     // active.  The high coding bit is an internal serialization version bit.
     stream.writeByte(heMuPhyHeader->getCoding() | (extended ? 0x80 : 0));
     if (extended) {
         stream.writeByte(heMuPhyHeader->getPacketExtensionDurationUs());
         stream.writeByte(heMuPhyHeader->getPuncturedSubchannelMask());
+        stream.writeBit(heMuPhyHeader->getMuMimo());
+        stream.writeByte(heMuPhyHeader->getSpatialConfiguration());
+        stream.writeByte(heMuPhyHeader->getTotalNsts());
     }
     stream.writeUint32Be(heMuPhyHeader->getTriggerId());
     stream.writeUint32Be(heMuPhyHeader->getCommonDuration().inUnit(SIMTIME_NS));
@@ -240,6 +244,10 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         stream.writeByte(user.mcs);
         stream.writeByte(user.numberOfSpatialStreams);
         stream.writeBit(user.dcm);
+        if (extended) {
+            stream.writeByte(user.streamStartIndex);
+            stream.writeUint16Be((uint16_t)std::lround(user.leakageSum * 10000.0));
+        }
         stream.writeUint32Be(user.psduLength.get<B>());
         stream.writeUint32Be(user.duration.inUnit(SIMTIME_NS));
     }
@@ -257,6 +265,9 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     if (extended) {
         heMuPhyHeader->setPacketExtensionDurationUs(stream.readByte());
         heMuPhyHeader->setPuncturedSubchannelMask(stream.readByte());
+        heMuPhyHeader->setMuMimo(stream.readBit());
+        heMuPhyHeader->setSpatialConfiguration(stream.readByte());
+        heMuPhyHeader->setTotalNsts(stream.readByte());
     }
     heMuPhyHeader->setTriggerId(stream.readUint32Be());
     heMuPhyHeader->setCommonDuration(SimTime(stream.readUint32Be(), SIMTIME_NS));
@@ -271,6 +282,10 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
         info.mcs = stream.readByte();
         info.numberOfSpatialStreams = stream.readByte();
         info.dcm = stream.readBit();
+        if (extended) {
+            info.streamStartIndex = stream.readByte();
+            info.leakageSum = stream.readUint16Be() / 10000.0;
+        }
         info.psduLength = B(stream.readUint32Be());
         info.duration = SimTime(stream.readUint32Be(), SIMTIME_NS);
         heMuPhyHeader->setUsers(i, info);
