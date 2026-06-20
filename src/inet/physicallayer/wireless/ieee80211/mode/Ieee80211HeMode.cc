@@ -278,23 +278,18 @@ const simtime_t Ieee80211HeDataMode::getDuration(b dataLength) const
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
     const IForwardErrorCorrection *forwardErrorCorrection = getCode() ? getCode()->getForwardErrorCorrection() : nullptr;
-    if (forwardErrorCorrection) {
-        // We can check the parameters of ConvolutionalCode
-        if (auto convCode = dynamic_cast<const ConvolutionalCode *>(forwardErrorCorrection)) {
-            int n = convCode->getCodeRatePuncturingN();
-            if (numberOfCodedBitsPerSymbol % n != 0) {
-                std::cerr << "CRASH DIAGNOSTIC from getDuration: "
-                          << "bandwidth=" << bandwidth.get() << " Hz, "
-                          << "mcsIndex=" << mcsIndex << ", "
-                          << "numberOfSpatialStreams=" << numberOfSpatialStreams << ", "
-                          << "numberOfCodedBitsPerSubcarrierSum=" << numberOfCodedBitsPerSubcarrierSum << ", "
-                          << "getNumberOfDataSubcarriers()=" << getNumberOfDataSubcarriers() << ", "
-                          << "numberOfCodedBitsPerSymbol=" << numberOfCodedBitsPerSymbol << ", "
-                          << "puncturingN=" << n << std::endl;
-            }
-        }
+    unsigned int dataBitsPerSymbol = numberOfCodedBitsPerSymbol;
+    if (auto convCode = dynamic_cast<const ConvolutionalCode *>(forwardErrorCorrection)) {
+        // IEEE 802.11-2024, 27.5.1 defines NDBPS as the integer product
+        // NCBPS * R. For example, an 80 MHz HE MCS 11 symbol has 9800 coded
+        // bits and 8166 data bits at rate 5/6. ConvolutionalCode operates on
+        // complete puncturing periods, so getDecodedLength() is deliberately
+        // stricter than this PHY-level calculation.
+        dataBitsPerSymbol = numberOfCodedBitsPerSymbol * convCode->getCodeRatePuncturingK() /
+                convCode->getCodeRatePuncturingN();
     }
-    unsigned int dataBitsPerSymbol = forwardErrorCorrection ? forwardErrorCorrection->getDecodedLength(numberOfCodedBitsPerSymbol) : numberOfCodedBitsPerSymbol;
+    else if (forwardErrorCorrection != nullptr)
+        dataBitsPerSymbol = forwardErrorCorrection->getDecodedLength(numberOfCodedBitsPerSymbol);
     int numberOfSymbols = lrint(ceil((double)getCompleteLength(dataLength).get<b>() / dataBitsPerSymbol));
     switch (guardIntervalType) {
         case HE_GUARD_INTERVAL_SHORT: return numberOfSymbols * getShortGISymbolInterval();

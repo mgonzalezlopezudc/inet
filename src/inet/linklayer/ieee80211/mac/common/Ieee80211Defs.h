@@ -31,6 +31,7 @@ struct SequenceNumberCyclic
     explicit SequenceNumberCyclic(SequenceNumber value) : value(value) { ASSERT(0 <= value && value < 4096); }
     SequenceNumberCyclic(const SequenceNumberCyclic& other) : value(other.value) { ASSERT(other.value != -1); }
 
+    bool isValid() const { return value != -1; }
     SequenceNumber get() const { ASSERT(value != -1); return value; }
 
     SequenceNumberCyclic& operator=(const SequenceNumberCyclic& other) { ASSERT(other.value != -1 || value == other.value); value = other.value; return *this; }
@@ -64,4 +65,3 @@ inline void doParsimUnpacking(omnetpp::cCommBuffer *b, SequenceNumberCyclic& s) 
 } // namespace inet
 
 #endif
-
