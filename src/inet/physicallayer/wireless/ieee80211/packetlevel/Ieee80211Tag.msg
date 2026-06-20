@@ -11,6 +11,10 @@ import inet.physicallayer.wireless.ieee80211.mode.Ieee80211Channel;
 
 namespace inet::physicallayer;
 
+//
+// Receive-side description of one intended HE MU allocation. The tag is used
+// by the radio to retain the per-RU context after the common PPDU is decoded.
+//
 struct Ieee80211HeMuRxAllocationInfo
 {
     int ruIndex;
@@ -48,6 +52,10 @@ class Ieee80211MpduReceiveInd extends TagBase
     Ieee80211MpduReceiveResult results[];
 }
 
+//
+// Request for transmitting one user's part of a HE MU or trigger-based PPDU.
+// The transmitter combines these tags into a common packet-level PHY header.
+//
 class Ieee80211HeMuReq extends TagBase
 {
     uint8_t ppduFormat = 0;
@@ -67,6 +75,11 @@ class Ieee80211HeMuReq extends TagBase
     W transmitPower = W(NaN);
 }
 
+//
+// Common HE MU settings supplied separately from the per-user request when a
+// caller only needs to configure guard interval, coding, extension, or
+// puncturing.
+//
 class Ieee80211HeMuCommonReq extends TagBase
 {
     uint8_t guardInterval = 2;
@@ -75,6 +88,10 @@ class Ieee80211HeMuCommonReq extends TagBase
     uint8_t puncturedSubchannelMask = 0;
 }
 
+//
+// Reception indication containing the HE MU allocations decoded for the
+// receiver. The packet-level error model uses this to select the relevant RU.
+//
 class Ieee80211HeMuRxTag extends TagBase
 {
     uint8_t ppduFormat = 0;
@@ -87,6 +104,10 @@ class Ieee80211HeMuRxTag extends TagBase
     Ieee80211HeMuRxAllocationInfo allocations[];
 }
 
+//
+// Indicates the legacy duration field observed before an HE MU transmission.
+// MAC logic uses it to maintain NAV compatibility with HE traffic.
+//
 class Ieee80211HeMuLegacyPreambleInd extends TagBase
 {
     simtime_t durationField;
@@ -141,6 +162,10 @@ class Ieee80211ChannelInd extends Ieee80211ChannelTagBase
 {
 }
 
+//
+// Optional VHT transmission metadata used by the packet-level error model to
+// apply the configured beamforming gain or MU-MIMO penalty.
+//
 class Ieee80211VhtTransmissionTag extends TagBase
 {
     bool beamformed = false;

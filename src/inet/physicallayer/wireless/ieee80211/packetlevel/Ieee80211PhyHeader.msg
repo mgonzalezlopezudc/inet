@@ -135,6 +135,10 @@ class Ieee80211HtPhyPreamble extends Ieee80211PhyPreamble
 {
 }
 
+//
+// HT PHY header modelled at packet level. coding selects BCC (0) or LDPC (1)
+// for the associated HT data field.
+//
 class Ieee80211HtPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t coding = 0; // 0: BCC, 1: LDPC
@@ -146,6 +150,10 @@ class Ieee80211VhtPhyPreamble extends Ieee80211PhyPreamble
 {
 }
 
+//
+// VHT PHY header modelled at packet level. coding selects BCC (0) or LDPC (1)
+// for the associated VHT data field.
+//
 class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t coding = 0; // 0: BCC, 1: LDPC
@@ -153,6 +161,11 @@ class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 
 //
 // IEEE 802.11 22. High Efficiency (HE) Multi-User (MU)
+//
+//
+// Per-user HE MU allocation carried by an Ieee80211HeMuPhyHeader. The RU
+// geometry and station ID identify the intended receiver; MCS, NSS, DCM and
+// PSDU length drive its independent reception calculation.
 //
 struct Ieee80211HeMuUserInfo
 {
@@ -165,8 +178,15 @@ struct Ieee80211HeMuUserInfo
     bool dcm = false;
     B psduLength;
     simtime_t duration;
+    int streamStartIndex = 0;
+    double leakageSum = 0;
 }
 
+//
+// Packet-level common header of a HE downlink MU or trigger-based uplink
+// PPDU. It contains PHY settings shared by all users and a per-user RU list.
+// This is an INET model representation, not a bit-exact HE-SIG encoding.
+//
 class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t bssColor = 0;
@@ -178,8 +198,15 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
     uint32_t triggerId = 0;
     simtime_t commonDuration;
     Ieee80211HeMuUserInfo users[];
+    bool muMimo = false;
+    uint8_t spatialConfiguration = 0;
+    uint8_t totalNsts = 0;
 }
 
+//
+// Delimits the MPDU payload assigned to one RU inside the simulated HE MU
+// container packet. It is consumed by the packet-level transmitter/receiver.
+//
 class Ieee80211HeMuRuPayloadHeader extends FieldsChunk
 {
     chunkLength = B(12);
@@ -191,4 +218,9 @@ class Ieee80211HeMuRuPayloadHeader extends FieldsChunk
     uint8_t numberOfSpatialStreams = 1;
     bool dcm = false;
     B mpduLength;
+    bool muMimo = false;
+    uint8_t spatialConfiguration = 0;
+    uint8_t totalNsts = 0;
+    int streamStartIndex = 0;
+    double leakageSum = 0;
 }

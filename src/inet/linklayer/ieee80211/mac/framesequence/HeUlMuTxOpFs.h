@@ -19,6 +19,12 @@ namespace ieee80211 {
 class HeHcf;
 class HeUlCoordinator;
 
+/**
+ * AP-side frame sequence for a trigger-based HE uplink OFDMA TXOP.
+ *
+ * It sends the selected Trigger, receives the scheduled HE-TB responses, and
+ * completes the exchange with a Multi-STA Block Ack.
+ */
 class INET_API HeUlMuTxOpFs : public IFrameSequence
 {
   protected:

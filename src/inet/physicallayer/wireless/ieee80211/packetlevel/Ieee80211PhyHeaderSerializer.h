@@ -93,7 +93,8 @@ class INET_API Ieee80211ErpOfdmPhyHeaderSerializer : public FieldsChunkSerialize
 };
 
 /**
- * Converts between Ieee80211HtPhyHeader and binary network byte order IEEE 802.11 HT PHY header.
+ * Converts the packet-level HT PHY header and its serialized representation,
+ * including the BCC/LDPC coding selector.
  */
 class INET_API Ieee80211HtPhyHeaderSerializer : public FieldsChunkSerializer
 {
@@ -106,7 +107,8 @@ class INET_API Ieee80211HtPhyHeaderSerializer : public FieldsChunkSerializer
 };
 
 /**
- * Converts between Ieee80211VhtPhyHeader and binary network byte order IEEE 802.11 VHT PHY header.
+ * Converts the packet-level VHT PHY header and its serialized representation,
+ * including the BCC/LDPC coding selector.
  */
 class INET_API Ieee80211VhtPhyHeaderSerializer : public FieldsChunkSerializer
 {
@@ -119,7 +121,8 @@ class INET_API Ieee80211VhtPhyHeaderSerializer : public FieldsChunkSerializer
 };
 
 /**
- * Converts between Ieee80211HeMuPhyHeader and binary network byte order IEEE 802.11 HE MU PHY header.
+ * Converts the INET packet-level representation of a HE MU PHY header,
+ * including common PPDU settings and per-user RU allocations.
  */
 class INET_API Ieee80211HeMuPhyHeaderSerializer : public FieldsChunkSerializer
 {
@@ -136,4 +139,3 @@ class INET_API Ieee80211HeMuPhyHeaderSerializer : public FieldsChunkSerializer
 } // namespace inet
 
 #endif
-

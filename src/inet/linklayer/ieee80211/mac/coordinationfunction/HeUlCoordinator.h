@@ -19,9 +19,17 @@
 namespace inet {
 namespace ieee80211 {
 
+/**
+ * AP-side coordinator for HE trigger-based uplink OFDMA.
+ *
+ * It caches per-AID buffer-status reports, obtains Trigger and RU decisions
+ * from the installed policies, and maintains UORA contention state. HeHcf
+ * owns this module and uses it to construct an HeUlMuTxOpFs exchange.
+ */
 class INET_API HeUlCoordinator : public SimpleModule
 {
   public:
+    /** Most recent backlog and retry information reported by one associated STA. */
     struct BufferStatus {
         std::array<int64_t, 4> backlogBytes = {};
         std::array<uint8_t, 4> tid = {};

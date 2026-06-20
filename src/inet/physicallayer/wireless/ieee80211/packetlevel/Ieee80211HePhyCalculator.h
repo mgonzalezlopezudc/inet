@@ -20,28 +20,33 @@ namespace physicallayer {
 
 using namespace inet::units::values;
 
+/** HE PPDU formats modelled by the common MU PHY calculator. */
 enum Ieee80211HePpduFormat {
     HE_MU_DOWNLINK = 0,
     HE_TRIGGER_BASED_UPLINK = 1
 };
 
+/** Guard-interval choices expressed by HE packet-level parameters. */
 enum Ieee80211HeGuardInterval {
     HE_GI_0_8_US = 0,
     HE_GI_1_6_US = 1,
     HE_GI_3_2_US = 2
 };
 
+/** Forward-error-correction coding used by HE user payloads. */
 enum Ieee80211HeCoding {
     HE_CODING_BCC = 0,
     HE_CODING_LDPC = 1
 };
 
+/** HE long-training-field duration multiplier. */
 enum Ieee80211HeLtfType {
     HE_LTF_1X = 1,
     HE_LTF_2X = 2,
     HE_LTF_4X = 4
 };
 
+/** Modelled HE-SIG-A fields shared by every user in the PPDU. */
 struct Ieee80211HeSigAFields
 {
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
@@ -52,6 +57,7 @@ struct Ieee80211HeSigAFields
     bool stbc = false;
 };
 
+/** Modelled HE-SIG-B parameters for a downlink MU PPDU. */
 struct Ieee80211HeSigBFields
 {
     bool compression = false;
@@ -61,6 +67,7 @@ struct Ieee80211HeSigBFields
     int userFieldBits = 0;
 };
 
+/** Preamble and signaling parameters common to all users in an HE MU PPDU. */
 struct Ieee80211HeCommonPhyParameters
 {
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
@@ -81,6 +88,7 @@ struct Ieee80211HeCommonPhyParameters
     simtime_t commonPreambleDuration = SIMTIME_ZERO;
 };
 
+/** RU-specific coding, payload, and duration parameters for one HE user. */
 struct Ieee80211HeUserPhyParameters
 {
     Ieee80211HeRu ru;
@@ -90,6 +98,8 @@ struct Ieee80211HeUserPhyParameters
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US; // compatibility
     Ieee80211HeCoding coding = HE_CODING_BCC;
     B psduLength = B(0);
+    int streamStartIndex = 0;
+    uint16_t staId = 0;
     int numberOfEncoders = 1;
     int codedBitsPerSymbol = 0;
     int dataBitsPerSymbol = 0;
@@ -112,6 +122,7 @@ struct Ieee80211HeUserPhyParameters
     simtime_t duration = SIMTIME_ZERO; // compatibility
 };
 
+/** Fully calculated common and per-user parameters of one HE MU PPDU. */
 struct Ieee80211HePpduParameters
 {
     Ieee80211HeCommonPhyParameters common;
@@ -120,6 +131,7 @@ struct Ieee80211HePpduParameters
     simtime_t duration = SIMTIME_ZERO;
 };
 
+/** Result returned by the non-throwing HE PPDU validation/calculation API. */
 struct Ieee80211HePhyValidationResult
 {
     bool valid = false;
@@ -210,6 +222,12 @@ inline int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
             heSigBDataBitsPerSymbol - 1) / heSigBDataBitsPerSymbol);
 }
 
+/**
+ * Validates and calculates a common-duration HE MU or trigger-based PPDU.
+ *
+ * The returned result contains either a complete set of parameters used by
+ * scheduling, transmission, and reception, or a diagnostic error string.
+ */
 inline Ieee80211HePhyValidationResult computeHePpduParameters(
         const std::vector<Ieee80211HeUserPhyParameters>& requestedUsers,
         Hz channelBandwidth,
@@ -224,6 +242,57 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
         result.error = "HE PPDU has no users";
         return result;
     }
+
+    // Group users by RU index to detect and validate MU-MIMO
+    std::map<int, std::vector<Ieee80211HeUserPhyParameters>> ruGroups;
+    for (const auto& requested : requestedUsers) {
+        ruGroups[requested.ru.index].push_back(requested);
+    }
+    for (const auto& pair : ruGroups) {
+        const auto& group = pair.second;
+        if (group.size() > 1) {
+            if (group.size() > 8) {
+                result.error = "HE MU-MIMO group has too many users (max 8)";
+                return result;
+            }
+            uint16_t toneSize = group[0].ru.toneSize;
+            uint16_t toneOffset = group[0].ru.toneOffset;
+            std::set<uint16_t> staIds;
+            std::vector<std::pair<int, int>> streams; // {startIndex, nss}
+            int groupTotalNsts = 0;
+            for (const auto& user : group) {
+                if (user.ru.toneSize != toneSize || user.ru.toneOffset != toneOffset) {
+                    result.error = "HE MU-MIMO users on the same RU must have matching tone size and offset";
+                    return result;
+                }
+                if (staIds.count(user.staId) > 0) {
+                    result.error = "HE MU-MIMO group contains duplicate STA IDs";
+                    return result;
+                }
+                staIds.insert(user.staId);
+                if (user.numberOfSpatialStreams > 4) {
+                    result.error = "HE MU-MIMO user cannot have more than 4 spatial streams";
+                    return result;
+                }
+                streams.push_back({user.streamStartIndex, user.numberOfSpatialStreams});
+                groupTotalNsts += user.numberOfSpatialStreams;
+            }
+            if (groupTotalNsts > 8) {
+                result.error = "HE MU-MIMO group total spatial streams exceeds 8";
+                return result;
+            }
+            std::sort(streams.begin(), streams.end());
+            int expectedStart = 0;
+            for (const auto& stream : streams) {
+                if (stream.first != expectedStart) {
+                    result.error = "HE MU-MIMO spatial streams are not contiguous or have gaps/overlaps";
+                    return result;
+                }
+                expectedStart += stream.second;
+            }
+        }
+    }
+
     if (packetExtensionDurationUs != 0 && packetExtensionDurationUs != 4 &&
             packetExtensionDurationUs != 8 && packetExtensionDurationUs != 12 && packetExtensionDurationUs != 16) {
         result.error = "invalid HE packet extension duration";

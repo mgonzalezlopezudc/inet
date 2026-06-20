@@ -16,12 +16,14 @@
 namespace inet {
 namespace physicallayer {
 
+/** HE-SIG-B representation of an RU layout and its compact allocation codes. */
 struct Ieee80211HeSigBRuAllocation
 {
     std::vector<uint8_t> allocationCodes;
     std::vector<Ieee80211HeRu> rus;
 };
 
+/** Non-throwing result of HE-SIG-B RU allocation encoding or decoding. */
 struct Ieee80211HeSigCodecResult
 {
     bool valid = false;
@@ -31,6 +33,7 @@ struct Ieee80211HeSigCodecResult
     explicit operator bool() const { return valid; }
 };
 
+/** Encodes a validated HE RU layout using its canonical allocation-catalog indices. */
 inline Ieee80211HeSigCodecResult encodeHeSigBRuAllocation(
         const std::vector<Ieee80211HeRu>& rus, Hz channelBandwidth)
 {
@@ -62,6 +65,7 @@ inline Ieee80211HeSigCodecResult encodeHeSigBRuAllocation(
     return result;
 }
 
+/** Decodes HE-SIG-B allocation codes into channel-centered RU descriptions. */
 inline Ieee80211HeSigCodecResult decodeHeSigBRuAllocation(
         const std::vector<uint8_t>& allocationCodes, Hz channelCenterFrequency,
         Hz channelBandwidth)

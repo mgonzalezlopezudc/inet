@@ -4,8 +4,9 @@ SPHINXBUILD   = sphinx-build
 SPHINXPROJ    = INETFramework
 SOURCEDIR     = .
 BUILDDIR      = _build
+SERVERPORT     = 8001
 
-.PHONY: pdf html clean deploy help server copy-media
+.PHONY: all pdf pdf-lualatex html clean deploy help server copy-media
 
 all: html pdf
 
@@ -18,25 +19,84 @@ help:
 include tools/sphinx_deployment.mk
 
 server: Makefile copy-media
-	@ln -sf ../../showcases; ln -sf ../../tutorials
-	@sphinx-autobuild --host 0.0.0.0 --port 8000 "$(SOURCEDIR)" "$(BUILDDIR)/html" $(SPHINXOPTS) $(O) --ignore .git
-	@unlink showcases; unlink tutorials
+	@ln -sfn ../../showcases showcases
+	@ln -sfn ../../tutorials tutorials
+	@trap 'rm -f showcases tutorials' EXIT; \
+	sphinx-autobuild \
+		--host 0.0.0.0 \
+		--port $(SERVERPORT) \
+		"$(SOURCEDIR)" \
+		"$(BUILDDIR)/html" \
+		$(SPHINXOPTS) \
+		$(O) \
+		--ignore .git
 
 pdf: Makefile
-	@ln -sf ../../showcases; ln -sf ../../tutorials
-	@$(SPHINXBUILD) -M latexpdf "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
-	@unlink showcases; unlink tutorials
+	@ln -sfn ../../showcases showcases
+	@ln -sfn ../../tutorials tutorials
+	@trap 'rm -f showcases tutorials' EXIT; \
+	$(SPHINXBUILD) \
+		-M latexpdf \
+		"$(SOURCEDIR)" \
+		"$(BUILDDIR)" \
+		$(SPHINXOPTS) \
+		$(O)
+
+pdf-lualatex: Makefile
+	@ln -sfn ../../showcases showcases
+	@ln -sfn ../../tutorials tutorials
+	@trap 'rm -f showcases tutorials' EXIT; \
+	$(SPHINXBUILD) \
+		-M latex \
+		"$(SOURCEDIR)" \
+		"$(BUILDDIR)" \
+		-D latex_engine=lualatex \
+		$(SPHINXOPTS) \
+		$(O) && \
+	$(MAKE) -C "$(BUILDDIR)/latex" clean && \
+	$(MAKE) \
+		-C "$(BUILDDIR)/latex" \
+		PDFLATEX="latexmk -lualatex -interaction=nonstopmode" \
+		LATEXOPTS="" \
+		all-pdf
 
 html: Makefile copy-media
-	@ln -sf ../../showcases; ln -sf ../../tutorials
-	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
-	@unlink showcases; unlink tutorials
+	@ln -sfn ../../showcases showcases
+	@ln -sfn ../../tutorials tutorials
+	@trap 'rm -f showcases tutorials' EXIT; \
+	$(SPHINXBUILD) \
+		-M html \
+		"$(SOURCEDIR)" \
+		"$(BUILDDIR)" \
+		$(SPHINXOPTS) \
+		$(O)
 
 copy-media: ../../media
-	@mkdir -p _build/html
-	@# copy the video files also to the output directory. This should be copied by the SPHINXBUILD itself, so this must be FIXED later.
-	@rsync -a --copy-links --prune-empty-dirs --exclude '_docs' --include '*/' --include '*.wav' --include '*.mp3' --include '*.mp4' --include '*.m4v' --exclude '*' ../../tutorials _build/html
-	@rsync -a --copy-links --prune-empty-dirs --exclude '_docs' --include '*/' --include '*.wav' --include '*.mp3' --include '*.mp4' --include '*.m4v' --exclude '*' ../../showcases _build/html
+	@mkdir -p "$(BUILDDIR)/html"
+	@# Copy video and audio files to the output directory.
+	@# This should eventually be handled by SPHINXBUILD itself.
+	@rsync -a \
+		--copy-links \
+		--prune-empty-dirs \
+		--exclude '_docs' \
+		--include '*/' \
+		--include '*.wav' \
+		--include '*.mp3' \
+		--include '*.mp4' \
+		--include '*.m4v' \
+		--exclude '*' \
+		../../tutorials "$(BUILDDIR)/html"
+	@rsync -a \
+		--copy-links \
+		--prune-empty-dirs \
+		--exclude '_docs' \
+		--include '*/' \
+		--include '*.wav' \
+		--include '*.mp3' \
+		--include '*.mp4' \
+		--include '*.m4v' \
+		--exclude '*' \
+		../../showcases "$(BUILDDIR)/html"
 
 ../../media:
 	@echo "*** 'media' folder is not present. Check out using:"

@@ -28,6 +28,16 @@ class INET_API Ieee80211MgmtFrameSerializer : public FieldsChunkSerializer
     Ieee80211MgmtFrameSerializer() : FieldsChunkSerializer() {}
 };
 
+class INET_API Ieee80211HeSoundingMgmtFrameSerializer : public FieldsChunkSerializer
+{
+  protected:
+    virtual void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const override;
+    virtual const Ptr<Chunk> deserialize(MemoryInputStream& stream) const override;
+
+  public:
+    Ieee80211HeSoundingMgmtFrameSerializer() : FieldsChunkSerializer() {}
+};
+
 } // namespace ieee80211
 
 } // namespace inet

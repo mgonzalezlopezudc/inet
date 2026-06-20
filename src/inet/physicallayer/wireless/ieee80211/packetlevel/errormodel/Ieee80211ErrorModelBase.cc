@@ -82,7 +82,16 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
                     static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()),
                     static_cast<Ieee80211HeCoding>(heMuHeader->getCoding()));
             dataLength = 16 + selectedUser->psduLength.get<B>() * 8 + 6;
-            double userSnir = snr * (selectedUser->dcm ? 2.0 : 1.0);
+            double userSnir = snr;
+            if (heMuHeader->getMuMimo() && heMuHeader->getTotalNsts() > 0) {
+                double desiredNsts = selectedUser->numberOfSpatialStreams;
+                double totalNsts = heMuHeader->getTotalNsts();
+                double signalShare = desiredNsts / totalNsts;
+                double interferenceShare = selectedUser->leakageSum / totalNsts;
+                userSnir = (snr * signalShare) / (1.0 + snr * interferenceShare);
+            }
+            if (selectedUser->dcm)
+                userSnir *= 2.0;
             dataSuccessRate = getHeDataSuccessRate(parameters, dataLength, userSnir);
         }
     }

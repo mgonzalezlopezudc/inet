@@ -28,6 +28,8 @@ Register_Serializer(Ieee80211ProbeRequestFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211ProbeResponseFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211ReassociationRequestFrame, Ieee80211MgmtFrameSerializer);
 Register_Serializer(Ieee80211ReassociationResponseFrame, Ieee80211MgmtFrameSerializer);
+Register_Serializer(Ieee80211HeNdpAnnouncement, Ieee80211HeSoundingMgmtFrameSerializer);
+Register_Serializer(Ieee80211HeCompressedBeamformingFeedback, Ieee80211HeSoundingMgmtFrameSerializer);
 
 static const uint8_t ELEMENT_ID_EXTENSION = 255;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_CAPABILITIES = 35;
@@ -202,6 +204,12 @@ static void writeHeCapabilitiesElement(MemoryOutputStream& stream, const Ieee802
     setBits(phyCapabilities, 27, 2, dcmConstellation);
     setBits(phyCapabilities, 29, 1, dcmNss);
     setBits(phyCapabilities, 70, 2, encodeDcmMaxRu(capabilities));
+    setBits(phyCapabilities, 75, 1, capabilities.dlMuMimoBeamformer ? 1 : 0);
+    setBits(phyCapabilities, 76, 1, capabilities.dlMuMimoBeamformee ? 1 : 0);
+    setBits(phyCapabilities, 77, 3, capabilities.soundingDimensions);
+    setBits(phyCapabilities, 80, 3, capabilities.beamformeeSts20Mhz);
+    setBits(phyCapabilities, 83, 3, capabilities.beamformeeStsAbove20Mhz);
+    setBits(phyCapabilities, 86, 2, capabilities.feedbackMode);
     for (auto byte : phyCapabilities)
         stream.writeByte(byte);
 
@@ -295,6 +303,12 @@ static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLeng
     capabilities.ru484Tone = dcmMaxRu >= 1;
     capabilities.ru996Tone = dcmMaxRu >= 2;
     capabilities.ru1992Tone = dcmMaxRu >= 3;
+    capabilities.dlMuMimoBeamformer = getBit(phyCapabilities, 75);
+    capabilities.dlMuMimoBeamformee = getBit(phyCapabilities, 76);
+    capabilities.soundingDimensions = getBits(phyCapabilities, 77, 3);
+    capabilities.beamformeeSts20Mhz = getBits(phyCapabilities, 80, 3);
+    capabilities.beamformeeStsAbove20Mhz = getBits(phyCapabilities, 83, 3);
+    capabilities.feedbackMode = getBits(phyCapabilities, 86, 2);
     frame->setHeCapabilitiesPresent(true);
     frame->setHeCapabilities(capabilities);
 }
@@ -604,6 +618,8 @@ void Ieee80211MgmtFrameSerializer::serialize(MemoryOutputStream& stream, const P
 const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& stream) const
 {
     switch (0) { // TODO receive and dispatch on type_info parameter
+
+
         case 0xB0: // ST_AUTHENTICATION
         {
             auto frame = makeShared<Ieee80211AuthenticationFrame>();
@@ -788,6 +804,64 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
         default:
             throw cRuntimeError("Cannot deserialize frame");
     }
+}
+
+void Ieee80211HeSoundingMgmtFrameSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
+{
+    if (auto ndpaFrame = dynamicPtrCast<const Ieee80211HeNdpAnnouncement>(chunk)) {
+        stream.writeByte(0); // tag
+        stream.writeByte(ndpaFrame->getDialogToken());
+        unsigned int size = ndpaFrame->getStationsArraySize();
+        stream.writeByte(size);
+        for (unsigned int i = 0; i < size; ++i) {
+            const auto& sta = ndpaFrame->getStations(i);
+            stream.writeUint16Be(sta.aid);
+            stream.writeByte(sta.feedbackType);
+            stream.writeByte(sta.nc);
+        }
+    }
+    else if (auto feedbackFrame = dynamicPtrCast<const Ieee80211HeCompressedBeamformingFeedback>(chunk)) {
+        stream.writeByte(1); // tag
+        stream.writeByte(feedbackFrame->getDialogToken());
+        stream.writeUint16Be(feedbackFrame->getAid());
+        stream.writeUint64Be(std::lround(feedbackFrame->getFeedbackBandwidth()));
+        stream.writeByte(feedbackFrame->getNc());
+        stream.writeByte(feedbackFrame->getNr());
+        stream.writeBit(feedbackFrame->getValid());
+    }
+    else
+        throw cRuntimeError("Cannot serialize frame");
+}
+
+const Ptr<Chunk> Ieee80211HeSoundingMgmtFrameSerializer::deserialize(MemoryInputStream& stream) const
+{
+    uint8_t tag = stream.readByte();
+    if (tag == 0) {
+        auto frame = makeShared<Ieee80211HeNdpAnnouncement>();
+        frame->setDialogToken(stream.readByte());
+        unsigned int size = stream.readByte();
+        frame->setStationsArraySize(size);
+        for (unsigned int i = 0; i < size; ++i) {
+            Ieee80211HeNdpStaInfo sta;
+            sta.aid = stream.readUint16Be();
+            sta.feedbackType = stream.readByte();
+            sta.nc = stream.readByte();
+            frame->setStations(i, sta);
+        }
+        return frame;
+    }
+    else if (tag == 1) {
+        auto frame = makeShared<Ieee80211HeCompressedBeamformingFeedback>();
+        frame->setDialogToken(stream.readByte());
+        frame->setAid(stream.readUint16Be());
+        frame->setFeedbackBandwidth(stream.readUint64Be());
+        frame->setNc(stream.readByte());
+        frame->setNr(stream.readByte());
+        frame->setValid(stream.readBit());
+        return frame;
+    }
+    else
+        throw cRuntimeError("Cannot deserialize frame");
 }
 
 } // namespace ieee80211

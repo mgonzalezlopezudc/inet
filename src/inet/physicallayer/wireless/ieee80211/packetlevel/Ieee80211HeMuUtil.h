@@ -16,8 +16,10 @@
 namespace inet {
 namespace physicallayer {
 
+/** Reserved HE station ID used for a broadcast/multicast MU allocation. */
 constexpr uint16_t HE_STA_ID_BROADCAST = 2047;
 
+/** Returns a deterministic fallback HE station ID when no association ID is available. */
 inline uint16_t computeHeMuStaId(const MacAddress& address)
 {
     // TODO replace this fallback with the association ID when it is available
@@ -25,6 +27,7 @@ inline uint16_t computeHeMuStaId(const MacAddress& address)
     return address.isBroadcast() ? HE_STA_ID_BROADCAST : static_cast<uint16_t>(address.getInt() & 0x7ff);
 }
 
+/** Resolves a station ID from the interface MIB without applying a fallback. */
 inline std::optional<uint16_t> tryResolveHeMuStaId(const cModule *networkInterface, const MacAddress& address)
 {
     if (address.isBroadcast())
@@ -43,6 +46,7 @@ inline std::optional<uint16_t> tryResolveHeMuStaId(const cModule *networkInterfa
     return std::nullopt;
 }
 
+/** Resolves a receive-side station ID, retaining a deterministic fallback for PHY-only test NICs. */
 inline std::optional<uint16_t> resolveHeMuStaIdForReception(
         const cModule *networkInterface, const MacAddress& address)
 {

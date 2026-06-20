@@ -20,6 +20,8 @@
 namespace inet {
 namespace ieee80211 {
 
+class HeMuMimoCsiManager;
+
 using namespace inet::units::values;
 
 /**
@@ -30,6 +32,7 @@ using namespace inet::units::values;
 class INET_API IIeee80211HeDlScheduler
 {
   public:
+    /** Queue, link-estimate, and negotiated-capability data for one DL candidate STA. */
     struct CandidateInfo {
         MacAddress staAddress;
         AccessCategory accessCategory = AC_BE;
@@ -44,6 +47,7 @@ class INET_API IIeee80211HeDlScheduler
         const Ieee80211NegotiatedHeCapabilities *negotiatedHeCapabilities = nullptr;
     };
 
+    /** Shared AP, channel, TXOP, and PHY constraints presented to a DL scheduler. */
     struct ScheduleContext {
         std::vector<CandidateInfo> candidates;
         MacAddress anchorSta;
@@ -60,8 +64,11 @@ class INET_API IIeee80211HeDlScheduler
         int packetExtensionDurationUs = 0;
         uint8_t puncturedSubchannelMask = 0;
         std::vector<bool> puncturedSubchannels;
+        const HeMuMimoCsiManager *csiManager = nullptr;
+        int numApAntennas = 1;
     };
 
+    /** One scheduled STA's RU and selected PHY parameters. */
     struct RuAllocation {
         MacAddress staAddress;
         physicallayer::Ieee80211HeRu ru;

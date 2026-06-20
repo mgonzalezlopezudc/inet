@@ -16,6 +16,7 @@
 #include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/queueing/contract/IPacketQueue.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -59,10 +60,30 @@ class INET_API HeHcf : public Hcf
     std::map<uint32_t, TriggeredUlExchange> triggeredUlExchanges;
     bool forceNextSingleUser[4] = {};
 
+    HeMuMimoCsiManager csiManager;
+    bool enableDlMuMimo = false;
+    simtime_t csiValidityDuration = SimTime(0.1);
+    double defaultCsiLeakage = 0.1;
+    std::string csiLeakageOverrides = "";
+
+    // SOUNDING STATE (STA side)
+    bool ndpAnnouncementReceived = false;
+    bool ndpReceived = false;
+    uint8_t soundingDialogToken = 0;
+    struct SoundingTarget {
+        MacAddress address;
+        uint16_t aid = 0;
+        int maxNss = 1;
+    };
+    std::vector<SoundingTarget> soundingTargets;
+
   protected:
     virtual void initialize(int stage) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac) override;
+
+  public:
+    virtual void legacyPreambleReceived(Packet *packet);
 
     /**
      * Scans the shared EDCAF queue and all per-STA queues for this access

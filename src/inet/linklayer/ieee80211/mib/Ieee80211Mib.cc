@@ -43,6 +43,12 @@ void Ieee80211Mib::initialize(int stage)
 
         localHtLdpc = par("htLdpc").boolValue();
         localHeCapabilities.ldpc = par("heLdpc").boolValue();
+        localHeCapabilities.dlMuMimoBeamformer = par("heDlMuMimoBeamformer").boolValue();
+        localHeCapabilities.dlMuMimoBeamformee = par("heDlMuMimoBeamformee").boolValue();
+        localHeCapabilities.soundingDimensions = par("heSoundingDimensions").intValue();
+        localHeCapabilities.beamformeeSts20Mhz = par("heBeamformeeSts20Mhz").intValue();
+        localHeCapabilities.beamformeeStsAbove20Mhz = par("heBeamformeeStsAbove20Mhz").intValue();
+        localHeCapabilities.feedbackMode = par("heFeedbackMode").intValue();
         int defaultPeDurationUs = par("heDefaultPeDurationUs").intValue();
         if (defaultPeDurationUs != 0 && defaultPeDurationUs != 4 &&
                 defaultPeDurationUs != 8 && defaultPeDurationUs != 12 &&

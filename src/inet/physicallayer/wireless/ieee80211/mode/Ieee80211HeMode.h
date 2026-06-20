@@ -18,6 +18,7 @@
 namespace inet {
 namespace physicallayer {
 
+/** HE OFDM timing constants for the 0.8, 1.6, and 3.2 microsecond guard intervals. */
 class INET_API Ieee80211HeTimingRelatedParametersBase
 {
   public:
@@ -30,6 +31,7 @@ class INET_API Ieee80211HeTimingRelatedParametersBase
     const simtime_t getShortGISymbolInterval() const { return getDFTPeriod() + getShortGIDuration(); } // 13.6 µs
 };
 
+/** Common HE bandwidth, guard-interval, MCS, stream-count, and bitrate state. */
 class INET_API Ieee80211HeModeBase
 {
   public:
@@ -66,6 +68,7 @@ class INET_API Ieee80211HeModeBase
     virtual bps getGrossBitrate() const;
 };
 
+/** HE signaling-field transmission mode. */
 class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee80211HeModeBase, public Ieee80211HeTimingRelatedParametersBase
 {
   protected:
@@ -100,6 +103,7 @@ class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee8
     virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211HtPhyHeader>(); }
 };
 
+/** HE SU or MU preamble mode, including the legacy-compatible preamble portion. */
 class INET_API Ieee80211HePreambleMode : public IIeee80211PreambleMode, public Ieee80211HeTimingRelatedParametersBase
 {
   public:
@@ -139,6 +143,7 @@ class INET_API Ieee80211HePreambleMode : public IIeee80211PreambleMode, public I
     virtual Ptr<Ieee80211PhyPreamble> createPreamble() const override { return makeShared<Ieee80211VhtPhyPreamble>(); }
 };
 
+/** One HE MCS definition: per-stream modulation, FEC, and channel bandwidth. */
 class INET_API Ieee80211Hemcs
 {
   protected:
@@ -179,6 +184,7 @@ class INET_API Ieee80211Hemcs
     }
 };
 
+/** HE PSDU data mode and airtime calculator for the SU mode-set path. */
 class INET_API Ieee80211HeDataMode : public IIeee80211DataMode, public Ieee80211HeModeBase, public Ieee80211HeTimingRelatedParametersBase
 {
   protected:
@@ -218,6 +224,7 @@ class INET_API Ieee80211HeDataMode : public IIeee80211DataMode, public Ieee80211
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
 };
 
+/** Complete HE PHY mode composed of its preamble and PSDU data mode. */
 class INET_API Ieee80211HeMode : public Ieee80211ModeBase
 {
   public:
@@ -258,6 +265,7 @@ class INET_API Ieee80211HeMode : public Ieee80211ModeBase
     virtual const simtime_t getDuration(b dataBitLength) const override { return preambleMode->getDuration() + dataMode->getDuration(dataBitLength); }
 };
 
+/** Lookup table for standard HE MCS combinations. */
 class INET_API Ieee80211HemcsTable
 {  public:
     // BW=20MHz, NSS=1
@@ -678,6 +686,7 @@ class INET_API Ieee80211HemcsTable
     static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss8;
 };
 
+/** Factory and cache for standard HE PHY modes. */
 class INET_API Ieee80211HeCompliantModes
 {
   protected:

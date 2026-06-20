@@ -46,6 +46,7 @@ struct Ieee80211HeRu {
     }
 };
 
+/** Returns the data-subcarrier count for a standard HE RU tone size. */
 inline int getHeRuDataSubcarrierCount(int toneSize)
 {
     switch (toneSize) {
@@ -210,6 +211,10 @@ inline void appendHeRuAllocationTree(std::vector<Ieee80211HeRu>& catalog,
     }
 }
 
+/**
+ * Builds the canonical nested RU allocation catalog for a channel. The index
+ * is stable within this catalog and is therefore usable in HE-SIG-B encoding.
+ */
 inline std::vector<Ieee80211HeRu> getHeRuAllocationCatalog(
         Hz centerFrequency, Hz channelBandwidth)
 {
@@ -240,6 +245,7 @@ inline std::vector<Ieee80211HeRu> getHeEqualRuLayout(Hz centerFrequency, Hz chan
     return result;
 }
 
+/** Checks that a layout contains only standard, non-overlapping RUs in-band. */
 inline bool validateHeRuLayout(const std::vector<Ieee80211HeRu>& layout, Hz channelBandwidth)
 {
     int channelTones = getHeChannelToneCount(channelBandwidth);

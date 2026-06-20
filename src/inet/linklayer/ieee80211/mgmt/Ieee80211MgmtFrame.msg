@@ -162,6 +162,12 @@ struct Ieee80211HeCapabilitiesElement
     bool ru484Tone;
     bool ru996Tone;
     bool ru1992Tone;
+    bool dlMuMimoBeamformer;
+    bool dlMuMimoBeamformee;
+    short soundingDimensions;
+    short beamformeeSts20Mhz;
+    short beamformeeStsAbove20Mhz;
+    short feedbackMode;
 }
 
 //
@@ -298,4 +304,27 @@ class Ieee80211BeaconFrame extends Ieee80211MgmtFrame
 //
 class Ieee80211ProbeResponseFrame extends Ieee80211BeaconFrame
 {
+}
+
+struct Ieee80211HeNdpStaInfo
+{
+    uint16_t aid;
+    uint8_t feedbackType;
+    uint8_t nc;
+}
+
+class Ieee80211HeNdpAnnouncement extends Ieee80211MgmtFrame
+{
+    uint8_t dialogToken;
+    Ieee80211HeNdpStaInfo stations[];
+}
+
+class Ieee80211HeCompressedBeamformingFeedback extends Ieee80211MgmtFrame
+{
+    uint8_t dialogToken;
+    uint16_t aid;
+    double feedbackBandwidth;
+    uint8_t nc;
+    uint8_t nr;
+    bool valid = true;
 }

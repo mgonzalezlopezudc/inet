@@ -13,6 +13,12 @@
 namespace inet {
 namespace ieee80211 {
 
+/**
+ * Shared implementation for HE uplink OFDMA schedulers.
+ *
+ * It determines the bounded UORA reservation, requested target RSSI, and a
+ * common HE-TB duration after a derived scheduler has selected its users.
+ */
 class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public SimpleModule
 {
   protected:

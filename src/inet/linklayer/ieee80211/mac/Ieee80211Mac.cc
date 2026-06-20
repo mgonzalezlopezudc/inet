@@ -29,6 +29,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -198,6 +199,9 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
     }
     if (auto legacyPreambleInd = packet->findTag<Ieee80211HeMuLegacyPreambleInd>()) {
         rx->legacySignalReceived(legacyPreambleInd->getDurationField());
+        if (auto heHcf = dynamic_cast<HeHcf *>(hcf.get())) {
+            heHcf->legacyPreambleReceived(packet);
+        }
         delete packet;
         return;
     }

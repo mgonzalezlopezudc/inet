@@ -1,0 +1,141 @@
+%description:
+Test IEEE 802.11ax Downlink MU-MIMO capabilities, sounding sequence, CSI manager, and scheduler stream apportionment.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
+#include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.h"
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/common/Units.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.scheduler.HeDlSchedulerEqualSizedRUs;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        scheduler: HeDlSchedulerEqualSizedRUs {
+            parameters:
+                schedulingFunction = "fBW";
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+%activity:
+// 1. Test Capabilities & Gating Validation
+{
+    Ieee80211HeCapabilities apCap;
+    apCap.dlMuMimoBeamformer = true;
+    apCap.soundingDimensions = 4;
+    apCap.supportedChannelWidths = {Hz(20e6), Hz(40e6)};
+
+    Ieee80211HeCapabilities staCap;
+    staCap.dlMuMimoBeamformee = true;
+    staCap.feedbackMode = 2; // MU only
+    staCap.beamformeeSts20Mhz = 2;
+    staCap.supportedChannelWidths = {Hz(20e6)};
+
+    Ieee80211HeMcsNssMap mcsNssMap;
+    mcsNssMap.maxMcsPerNss[0] = 9; // NSS=1
+    mcsNssMap.maxMcsPerNss[1] = 9; // NSS=2
+
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = Hz(20e6);
+
+    Ieee80211NegotiatedHeCapabilities negotiated = negotiateHeCapabilities(apCap, staCap, operation);
+    negotiated.intersection.txMcsNss = mcsNssMap;
+    negotiated.valid = true;
+
+    ASSERT(isDlMuMimoEligible(apCap, staCap, negotiated, Hz(20e6), 4));
+    
+    // Ineligible if AP lacks antennas/dimensions
+    ASSERT(!isDlMuMimoEligible(apCap, staCap, negotiated, Hz(20e6), 1));
+    
+    // Ineligible if STA lacks beamformee support
+    staCap.dlMuMimoBeamformee = false;
+    ASSERT(!isDlMuMimoEligible(apCap, staCap, negotiated, Hz(20e6), 4));
+    
+    EV << "MU-MIMO Capability Gating checks passed.\n";
+}
+
+// 2. Test CSI Manager and Overrides
+{
+    HeMuMimoCsiManager csi;
+    csi.configure(SimTime(0.2), 0.1, "1-2:0.01,2-3:0.05");
+
+    MacAddress addr1("02:00:00:00:00:01");
+    MacAddress addr2("02:00:00:00:00:02");
+    MacAddress addr3("02:00:00:00:00:03");
+
+    std::vector<MacAddress> stas = {addr1, addr2, addr3};
+    auto getAid = [](const MacAddress& addr) {
+        if (addr == MacAddress("02:00:00:00:00:01")) return 1;
+        if (addr == MacAddress("02:00:00:00:00:02")) return 2;
+        if (addr == MacAddress("02:00:00:00:00:03")) return 3;
+        return 0;
+    };
+
+    ASSERT(!csi.hasFreshCsi(addr1, Hz(20e6)));
+
+    csi.updateCsi(addr1, Hz(20e6), stas, getAid);
+    ASSERT(csi.hasFreshCsi(addr1, Hz(20e6)));
+
+    // Leakage override 1-2 is 0.01
+    ASSERT(std::abs(csi.getLeakage(addr1, addr2, Hz(20e6)) - 0.01) < 1e-6);
+    // Leakage default for 1-3 is 0.1
+    ASSERT(std::abs(csi.getLeakage(addr1, addr3, Hz(20e6)) - 0.1) < 1e-6);
+
+    csi.invalidateCsi(addr1, Hz(20e6));
+    ASSERT(!csi.hasFreshCsi(addr1, Hz(20e6)));
+
+    EV << "CSI Manager & Leakage Overrides checks passed.\n";
+}
+
+// 3. Serialization Round Trip
+{
+    auto feedback = makeShared<Ieee80211HeCompressedBeamformingFeedback>();
+    feedback->setDialogToken(7);
+    feedback->setAid(42);
+    feedback->setFeedbackBandwidth(40e6);
+    feedback->setNc(2);
+    feedback->setNr(4);
+    feedback->setValid(true);
+    feedback->setChunkLength(B(42));
+
+    auto packet = new Packet("test-feedback", feedback);
+    auto bytes = packet->peekDataAsBytes();
+    
+    auto received = new Packet("test-feedback-rx", bytes);
+    auto decoded = received->popAtFront<Ieee80211HeCompressedBeamformingFeedback>();
+    
+    ASSERT(decoded->getDialogToken() == 7);
+    ASSERT(decoded->getAid() == 42);
+    ASSERT(decoded->getFeedbackBandwidth() == 40e6);
+    ASSERT(decoded->getNc() == 2);
+    ASSERT(decoded->getNr() == 4);
+    ASSERT(decoded->getValid());
+
+    delete packet;
+    delete received;
+    EV << "Feedback frame serialization round trip passed.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+MU-MIMO Capability Gating checks passed.
+CSI Manager & Leakage Overrides checks passed.
+Feedback frame serialization round trip passed.
+.

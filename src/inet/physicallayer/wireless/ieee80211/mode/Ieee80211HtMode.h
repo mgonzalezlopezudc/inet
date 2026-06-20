@@ -18,6 +18,7 @@
 namespace inet {
 namespace physicallayer {
 
+/** HT OFDM timing constants shared by HT signal, preamble, and data modes. */
 class INET_API Ieee80211HtTimingRelatedParametersBase
 {
   public:
@@ -28,6 +29,7 @@ class INET_API Ieee80211HtTimingRelatedParametersBase
     const simtime_t getShortGISymbolInterval() const { return getDFTPeriod() + getShortGIDuration(); } // SYMS
 };
 
+/** Common HT bandwidth, guard-interval, MCS, stream-count, and bitrate state. */
 class INET_API Ieee80211HtModeBase
 {
   public:
@@ -63,6 +65,7 @@ class INET_API Ieee80211HtModeBase
     virtual bps getGrossBitrate() const;
 };
 
+/** HT-SIG header transmission mode. */
 class INET_API Ieee80211HtSignalMode : public IIeee80211HeaderMode, public Ieee80211HtModeBase, public Ieee80211HtTimingRelatedParametersBase
 {
   protected:
@@ -116,6 +119,7 @@ class INET_API Ieee80211HtSignalMode : public IIeee80211HeaderMode, public Ieee8
  * The HT preambles are defined in HT-mixed format and in HT-greenfield format to carry the required
  * information to operate in a system with multiple transmit and multiple receive antennas. (20.3.9 HT preamble)
  */
+/** HT mixed-format or greenfield preamble mode, including legacy compatibility fields. */
 class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public Ieee80211HtTimingRelatedParametersBase
 {
   public:
@@ -158,6 +162,7 @@ class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public I
     virtual Ptr<Ieee80211PhyPreamble> createPreamble() const override { return makeShared<Ieee80211HtPhyPreamble>(); }
 };
 
+/** One HT MCS definition: per-stream modulation, FEC, and channel bandwidth. */
 class INET_API Ieee80211Htmcs
 {
   protected:
@@ -190,6 +195,12 @@ class INET_API Ieee80211Htmcs
 
 };
 
+/**
+ * HT PSDU data mode and airtime calculator.
+ *
+ * With ldpc enabled it applies the HT LDPC service/tail and codeword rules;
+ * otherwise it retains the BCC encoder and tail-bit calculation.
+ */
 class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211HtModeBase, public Ieee80211HtTimingRelatedParametersBase
 {
   protected:
@@ -226,6 +237,7 @@ class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
 };
 
+/** Complete HT PHY mode composed of its preamble and PSDU data mode. */
 class INET_API Ieee80211HtMode : public Ieee80211ModeBase
 {
   public:
@@ -272,6 +284,7 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
 // parameters that consists of modulation order (e.g., BPSK, QPSK, 16-QAM,
 // 64-QAM) and forward error correction (FEC) coding rate (e.g., 1/2, 2/3,
 // 3/4, 5/6).
+/** Lookup table for the standard HT MCS combinations. */
 class INET_API Ieee80211HtmcsTable
 {
   public:
@@ -459,6 +472,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs76BW40MHz;
 };
 
+/** Factory and cache for standard HT PHY modes. */
 class INET_API Ieee80211HtCompliantModes
 {
   protected:
@@ -477,4 +491,3 @@ class INET_API Ieee80211HtCompliantModes
 } /* namespace inet */
 
 #endif
-

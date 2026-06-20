@@ -12,6 +12,10 @@
 namespace inet {
 namespace ieee80211 {
 
+/**
+ * HE DL scheduler that favors compatible backlog while bounding path-loss
+ * spread among selected STAs.
+ */
 class INET_API HeDlSchedulerBacklogBased : public HeDlSchedulerBase
 {
   protected:

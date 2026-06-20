@@ -4,6 +4,11 @@
 
 package inet.linklayer.ieee80211.mac.scheduler;
 
+//
+// Interface for HE trigger-based uplink OFDMA schedulers. Implementations
+// select scheduled users, optionally reserve random-access RUs, and return
+// the common HE-TB duration and PHY settings for a Trigger exchange.
+//
 moduleinterface IIeee80211HeUlScheduler
 {
     parameters:

@@ -13,6 +13,13 @@
 namespace inet {
 namespace ieee80211 {
 
+/**
+ * HT/VHT TXOP frame-sequence selector.
+ *
+ * It chooses the appropriate aggregation and RTS/CTS alternatives for an HT
+ * TXOP; VHT extensions reuse this path to keep TXOP and aggregation handling
+ * consistent across the two PHY families.
+ */
 class INET_API HtTxOpFs : public AlternativesFs
 {
   public:
@@ -26,4 +33,3 @@ class INET_API HtTxOpFs : public AlternativesFs
 } // namespace inet
 
 #endif
-

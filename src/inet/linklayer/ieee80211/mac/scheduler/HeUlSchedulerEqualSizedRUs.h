@@ -12,6 +12,7 @@
 namespace inet {
 namespace ieee80211 {
 
+/** HE UL scheduler that partitions the available channel into equal-sized RUs. */
 class INET_API HeUlSchedulerEqualSizedRUs : public HeUlSchedulerBase
 {
   public:

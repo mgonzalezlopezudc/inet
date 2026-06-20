@@ -194,10 +194,15 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     W transmissionPower = computeTransmissionPower(packet);
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
     int requiredSpatialStreams = transmissionMode->getDataMode()->getNumberOfSpatialStreams();
-    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader))
-        for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i)
-            requiredSpatialStreams = std::max(requiredSpatialStreams,
-                    (int)heMuHeader->getUsers(i).numberOfSpatialStreams);
+    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+        if (heMuHeader->getMuMimo()) {
+            requiredSpatialStreams = heMuHeader->getTotalNsts();
+        } else {
+            for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i)
+                requiredSpatialStreams = std::max(requiredSpatialStreams,
+                        (int)heMuHeader->getUsers(i).numberOfSpatialStreams);
+        }
+    }
     if (requiredSpatialStreams > transmitter->getAntenna()->getNumAntennas())
         throw cRuntimeError("Number of spatial streams is higher than the number of antennas");
     simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
@@ -225,6 +230,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             requested.dcm = user.dcm;
             requested.coding = static_cast<Ieee80211HeCoding>(heMuHeader->getCoding());
             requested.psduLength = user.psduLength;
+            requested.streamStartIndex = user.streamStartIndex;
             requestedUsers.push_back(requested);
         }
         auto calculation = computeHePpduParameters(requestedUsers, transmissionBandwidth,

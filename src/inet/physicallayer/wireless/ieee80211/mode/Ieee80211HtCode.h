@@ -17,6 +17,13 @@
 namespace inet {
 namespace physicallayer {
 
+/**
+ * Coding chain associated with an HT spatial stream.
+ *
+ * It packages the HT interleaver, scrambler, and FEC description used by an
+ * HT mode. isLdpc() identifies the packet-level LDPC path; the convolutional
+ * code pointer remains available for BCC-compatible callers.
+ */
 class INET_API Ieee80211HtCode : public ICode
 {
   protected:
@@ -36,6 +43,7 @@ class INET_API Ieee80211HtCode : public ICode
     virtual ~Ieee80211HtCode();
 };
 
+/** Factory and cache for standard-compliant HT coding-chain combinations. */
 class INET_API Ieee80211HtCompliantCodes
 {
   public:
@@ -50,4 +58,3 @@ class INET_API Ieee80211HtCompliantCodes
 } /* namespace inet */
 
 #endif
-
