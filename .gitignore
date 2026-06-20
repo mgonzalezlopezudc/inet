@@ -4,6 +4,7 @@
 standards
 
 # local and generated files not to be committed
+/media
 doc/src/showcases
 doc/src/tutorials
 src/Makefile
