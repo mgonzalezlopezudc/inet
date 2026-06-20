@@ -1,0 +1,2 @@
+Sphinx==8.2.3
+docutils==0.21.2
