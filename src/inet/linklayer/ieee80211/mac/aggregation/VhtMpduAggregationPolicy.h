@@ -13,6 +13,13 @@
 namespace inet {
 namespace ieee80211 {
 
+/**
+ * MPDU aggregation policy that enforces the IEEE 802.11 VHT A-MPDU limit.
+ *
+ * The limit is derived from the VHT maximum-A-MPDU-length exponent. The
+ * policy returns a prefix of the supplied MPDUs, so callers retain unsent
+ * packets for a subsequent transmission opportunity.
+ */
 class INET_API VhtMpduAggregationPolicy : public IMpduAggregationPolicy, public SimpleModule
 {
   protected:

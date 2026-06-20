@@ -18,6 +18,7 @@ namespace ieee80211 {
 
 using namespace inet::units::values;
 
+/** Per-spatial-stream maximum HE MCS map; -1 denotes an unsupported stream. */
 struct Ieee80211HeMcsNssMap
 {
     std::array<int, 8> maxMcsPerNss;
@@ -29,6 +30,13 @@ struct Ieee80211HeMcsNssMap
     }
 };
 
+/**
+ * HE capability set used by management negotiation and MU scheduling.
+ *
+ * It covers the subset of IEEE 802.11ax capabilities that affects the INET
+ * packet-level model: channel widths, MCS/NSS maps, OFDMA, coding, A-MPDU,
+ * Block Ack, puncturing, and supported RU sizes.
+ */
 struct Ieee80211HeCapabilities
 {
     std::set<Hz> supportedChannelWidths = {Hz(20e6), Hz(40e6), Hz(80e6), Hz(160e6)};
@@ -49,8 +57,15 @@ struct Ieee80211HeCapabilities
     int maxMpduLength = 11454;
     int maxBlockAckBufferSize = 64;
     std::set<int> supportedRuToneSizes = {26, 52, 106, 242, 484, 996, 1992};
+    bool dlMuMimoBeamformer = false;
+    bool dlMuMimoBeamformee = false;
+    int soundingDimensions = 0;
+    int beamformeeSts20Mhz = 0;
+    int beamformeeStsAbove20Mhz = 0;
+    int feedbackMode = 0;
 };
 
+/** HE operating parameters advertised by an AP after capability negotiation. */
 struct Ieee80211HeOperation
 {
     uint8_t bssColor = 0;
@@ -60,6 +75,7 @@ struct Ieee80211HeOperation
     int defaultPeDurationUs = 0;
 };
 
+/** Usable HE feature set and operation produced for a local/peer association. */
 struct Ieee80211NegotiatedHeCapabilities
 {
     Ieee80211HeCapabilities intersection;
@@ -67,6 +83,12 @@ struct Ieee80211NegotiatedHeCapabilities
     bool valid = false;
 };
 
+/**
+ * Computes directional MCS/NSS maps and mutual HE capabilities.
+ *
+ * The result is valid only when downlink OFDMA, the requested operating width,
+ * at least one RU size, and one transmit stream are mutually supported.
+ */
 inline Ieee80211NegotiatedHeCapabilities negotiateHeCapabilities(
         const Ieee80211HeCapabilities& local,
         const Ieee80211HeCapabilities& peer,
@@ -113,11 +135,60 @@ inline Ieee80211NegotiatedHeCapabilities negotiateHeCapabilities(
     for (int toneSize : local.supportedRuToneSizes)
         if (peer.supportedRuToneSizes.count(toneSize) != 0)
             negotiated.intersection.supportedRuToneSizes.insert(toneSize);
+    negotiated.intersection.dlMuMimoBeamformer = local.dlMuMimoBeamformer;
+    negotiated.intersection.dlMuMimoBeamformee = peer.dlMuMimoBeamformee;
+    negotiated.intersection.soundingDimensions = local.soundingDimensions;
+    negotiated.intersection.beamformeeSts20Mhz = peer.beamformeeSts20Mhz;
+    negotiated.intersection.beamformeeStsAbove20Mhz = peer.beamformeeStsAbove20Mhz;
+    negotiated.intersection.feedbackMode = peer.feedbackMode;
     negotiated.valid = negotiated.intersection.dlOfdma &&
             negotiated.intersection.supportedChannelWidths.count(operation.operatingChannelWidth) != 0 &&
             !negotiated.intersection.supportedRuToneSizes.empty() &&
             negotiated.intersection.txMcsNss.maxMcsPerNss[0] >= 0;
     return negotiated;
+}
+
+inline int getMaxNss(const Ieee80211HeMcsNssMap& map)
+{
+    int maxNss = 0;
+    for (int i = 0; i < 8; ++i) {
+        if (map.maxMcsPerNss[i] >= 0)
+            maxNss = i + 1;
+    }
+    return maxNss;
+}
+
+inline bool isDlMuMimoEligible(
+        const Ieee80211HeCapabilities& apCapabilities,
+        const Ieee80211HeCapabilities& staCapabilities,
+        const Ieee80211NegotiatedHeCapabilities& negotiated,
+        Hz operatingBandwidth,
+        int numApAntennas)
+{
+    if (!apCapabilities.dlMuMimoBeamformer)
+        return false;
+    if (!staCapabilities.dlMuMimoBeamformee)
+        return false;
+    if (apCapabilities.supportedChannelWidths.count(operatingBandwidth) == 0 ||
+        staCapabilities.supportedChannelWidths.count(operatingBandwidth) == 0)
+        return false;
+    if (apCapabilities.soundingDimensions < 2 || numApAntennas < 2)
+        return false;
+    if (staCapabilities.feedbackMode != 2 && staCapabilities.feedbackMode != 3)
+        return false;
+
+    int negotiatedNss = getMaxNss(negotiated.intersection.txMcsNss);
+    if (negotiatedNss < 1)
+        return false;
+
+    if (operatingBandwidth == Hz(20e6)) {
+        if (staCapabilities.beamformeeSts20Mhz < negotiatedNss)
+            return false;
+    } else {
+        if (staCapabilities.beamformeeStsAbove20Mhz < negotiatedNss)
+            return false;
+    }
+    return true;
 }
 
 } // namespace ieee80211

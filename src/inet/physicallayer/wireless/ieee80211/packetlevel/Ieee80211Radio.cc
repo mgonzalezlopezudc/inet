@@ -81,6 +81,7 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.numberOfSpatialStreams = payloadHeader->getNumberOfSpatialStreams();
         user.dcm = payloadHeader->getDcm();
         user.psduLength = payloadHeader->getMpduLength();
+        user.streamStartIndex = payloadHeader->getStreamStartIndex();
         user.duration = estimateHeMuUserDuration(user.psduLength, user.ruToneSize, user.mcs);
         users.push_back(user);
         packetCopy->popAtFront(payloadHeader->getMpduLength());
@@ -330,6 +331,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             requested.dcm = user.dcm;
             requested.coding = static_cast<Ieee80211HeCoding>(heMuPhyHeader->getCoding());
             requested.psduLength = user.psduLength;
+            requested.streamStartIndex = user.streamStartIndex;
+            requested.staId = user.staId;
             requestedUsers.push_back(requested);
         }
         auto calculation = computeHePpduParameters(requestedUsers,
@@ -352,9 +355,32 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             user.duration = commonDuration;
             heMuPhyHeader->appendUsers(user);
         }
+        // Detect MU-MIMO
+        std::map<int, std::vector<size_t>> ruUserIndices;
+        for (size_t i = 0; i < heMuUsers.size(); ++i) {
+            ruUserIndices[heMuUsers[i].ruIndex].push_back(i);
+        }
+        bool isMuMimo = false;
+        int maxTotalNsts = 0;
+        for (const auto& pair : ruUserIndices) {
+            if (pair.second.size() > 1) {
+                isMuMimo = true;
+                int groupNsts = 0;
+                for (size_t idx : pair.second) {
+                    groupNsts += heMuUsers[idx].numberOfSpatialStreams;
+                }
+                if (groupNsts > maxTotalNsts)
+                    maxTotalNsts = groupNsts;
+            }
+        }
+        heMuPhyHeader->setMuMimo(isMuMimo);
+        if (isMuMimo) {
+            heMuPhyHeader->setTotalNsts(maxTotalNsts);
+        }
         heMuPhyHeader->setCommonDuration(commonDuration);
         bool extendedControls = heMuPhyHeader->getPacketExtensionDurationUs() != 0 ||
-                heMuPhyHeader->getPuncturedSubchannelMask() != 0;
+                heMuPhyHeader->getPuncturedSubchannelMask() != 0 ||
+                heMuPhyHeader->getMuMimo();
         phyHeader->setChunkLength(b((extendedControls ? 120 : 104) +
                 heMuPhyHeader->getUsersArraySize() * 137));
     }

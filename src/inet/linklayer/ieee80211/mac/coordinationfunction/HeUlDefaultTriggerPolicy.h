@@ -13,6 +13,13 @@
 namespace inet {
 namespace ieee80211 {
 
+/**
+ * Default HE uplink trigger policy.
+ *
+ * It first requests BSRP reports when report information is stale, then
+ * requests Basic Triggers for known backlog or retry traffic, subject to a
+ * configurable minimum interval.
+ */
 class INET_API HeUlDefaultTriggerPolicy : public IIeee80211HeUlTriggerPolicy, public SimpleModule
 {
   protected:

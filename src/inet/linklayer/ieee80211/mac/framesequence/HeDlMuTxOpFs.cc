@@ -806,6 +806,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     auto calculatePlannedPpdu = [&] {
         std::vector<Ieee80211HeUserPhyParameters> users;
+        std::map<int, int> ruStreamStartIndex;
         for (const auto& selectedAllocation : finalAllocations) {
             Ieee80211HeUserPhyParameters user;
             user.ru = selectedAllocation.allocation.ru;
@@ -820,6 +821,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             user.dcm = selectedAllocation.allocation.dcm;
             user.coding = scheduleContext.coding;
             user.psduLength = selectedAllocation.psduLength;
+            user.staId = selectedAllocation.associationId;
+            user.streamStartIndex = ruStreamStartIndex[user.ru.index];
+            ruStreamStartIndex[user.ru.index] += user.numberOfSpatialStreams;
             users.push_back(user);
         }
         return computeHePpduParameters(users, scheduleContext.channelBandwidth,
@@ -866,6 +870,14 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     finalContainerHdr->setDurationField(totalDuration);
     container->insertAtFront(finalContainerHdr);
 
+    std::map<int, int> ruTotalNsts;
+    std::map<int, int> ruUserCount;
+    for (const auto& selectedAllocation : finalAllocations) {
+        ruTotalNsts[selectedAllocation.allocation.ru.index] += selectedAllocation.allocation.numberOfSpatialStreams;
+        ruUserCount[selectedAllocation.allocation.ru.index]++;
+    }
+    std::map<int, int> ruStreamStartIndex;
+
     // 2. Build the final MU container packet and assign duration/sequence numbers to sub-packets.
     for (const auto& selectedAllocation : finalAllocations) {
         const auto& alloc = selectedAllocation.allocation;
@@ -902,6 +914,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             context->getInProgressFrames()->addInProgressFrame(staPacket);
         }
 
+        int ruIdx = alloc.ru.index;
+        int startIndex = ruStreamStartIndex[ruIdx];
+        ruStreamStartIndex[ruIdx] += alloc.numberOfSpatialStreams;
+        bool isRuMuMimo = ruUserCount[ruIdx] > 1;
+
         auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
         payloadHeader->setRuIndex(alloc.ru.index);
         payloadHeader->setRuToneSize(alloc.ru.toneSize);
@@ -911,6 +928,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         payloadHeader->setNumberOfSpatialStreams(alloc.numberOfSpatialStreams);
         payloadHeader->setDcm(alloc.dcm);
         payloadHeader->setMpduLength(selectedAllocation.psduLength);
+        payloadHeader->setStreamStartIndex(startIndex);
+        payloadHeader->setMuMimo(isRuMuMimo);
+        if (isRuMuMimo) {
+            payloadHeader->setTotalNsts(ruTotalNsts[ruIdx]);
+        }
         container->insertAtBack(payloadHeader);
         for (size_t i = 0; i < staPackets.size(); ++i) {
             auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();

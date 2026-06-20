@@ -4,14 +4,22 @@
 
 package inet.linklayer.ieee80211.mac.coordinationfunction;
 
+//
+// Maintains AP-side state for trigger-based HE uplink OFDMA.
+//
+// The coordinator records buffer-status reports by association ID, delegates
+// trigger selection and RU allocation to the configured policies, and tracks
+// the OFDMA random-access contention window. It is created inside HeHcf and
+// is not normally connected directly by a network model.
+//
 simple HeUlCoordinator
 {
     parameters:
         @class(HeUlCoordinator);
-        bool enabled = default(false);
-        double reportMaxAge @unit(s) = default(100ms);
-        int ocwMin = default(7);
-        int ocwMax = default(31);
+        bool enabled = default(false); // Enables trigger scheduling and buffer-status processing
+        double reportMaxAge @unit(s) = default(100ms); // Buffer-status reports older than this are not considered fresh
+        int ocwMin = default(7); // Minimum OFDMA random-access contention window
+        int ocwMax = default(31); // Maximum OFDMA random-access contention window
         @signal[heUlBasicTriggerSent](type=long);
         @signal[heUlBsrpTriggerSent](type=long);
         @signal[heUlBufferStatusUpdated](type=long);

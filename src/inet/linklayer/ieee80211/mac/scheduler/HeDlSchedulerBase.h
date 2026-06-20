@@ -14,7 +14,11 @@ namespace inet {
 namespace ieee80211 {
 
 /**
- * Common standards-aware machinery for queue-sensitive HE DL schedulers.
+ * Common standards-aware machinery for queue-sensitive HE downlink schedulers.
+ *
+ * Derived classes supply a ranking policy. This base class translates backlog
+ * into standard RU requests, estimates SNR/MCS and duration, and shrinks or
+ * expands RUs to fit a valid, duration-aligned MU PPDU.
  */
 class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public SimpleModule
 {
