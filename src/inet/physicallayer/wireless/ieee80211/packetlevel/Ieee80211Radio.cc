@@ -84,7 +84,8 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.streamStartIndex = payloadHeader->getStreamStartIndex();
         user.duration = estimateHeMuUserDuration(user.psduLength, user.ruToneSize, user.mcs);
         users.push_back(user);
-        packetCopy->popAtFront(payloadHeader->getMpduLength());
+        if (payloadHeader->getMpduLength() > B(0))
+            packetCopy->popAtFront(payloadHeader->getMpduLength());
     }
     delete packetCopy;
     return users;
