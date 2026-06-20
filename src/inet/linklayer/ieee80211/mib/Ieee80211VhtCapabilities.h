@@ -16,6 +16,7 @@ namespace ieee80211 {
 
 using namespace inet::units::values;
 
+/** Capabilities advertised by a VHT station for local configuration or negotiation. */
 struct Ieee80211VhtCapabilities
 {
     bool ldpc = false;
@@ -27,6 +28,7 @@ struct Ieee80211VhtCapabilities
     int maxMcs = 9;
 };
 
+/** VHT operating parameters selected for a BSS or an individual transmission. */
 struct Ieee80211VhtOperation
 {
     Hz operatingChannelWidth = Hz(20e6);
@@ -35,6 +37,7 @@ struct Ieee80211VhtOperation
     bool ldpc = false;
 };
 
+/** Result of intersecting local and peer VHT capabilities for an operation. */
 struct Ieee80211NegotiatedVhtCapabilities
 {
     Ieee80211VhtCapabilities intersection;
@@ -42,6 +45,11 @@ struct Ieee80211NegotiatedVhtCapabilities
     bool valid = false;
 };
 
+/**
+ * Intersects symmetric VHT features and limits. The operation is copied
+ * unchanged; callers are responsible for selecting an operating width that
+ * both stations support.
+ */
 inline Ieee80211NegotiatedVhtCapabilities negotiateVhtCapabilities(
         const Ieee80211VhtCapabilities& local,
         const Ieee80211VhtCapabilities& peer,

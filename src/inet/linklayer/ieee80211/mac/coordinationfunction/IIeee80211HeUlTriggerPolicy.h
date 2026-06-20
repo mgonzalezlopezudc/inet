@@ -12,6 +12,7 @@
 namespace inet {
 namespace ieee80211 {
 
+/** Strategy interface for deciding whether an AP should initiate HE uplink OFDMA. */
 class INET_API IIeee80211HeUlTriggerPolicy
 {
   public:
@@ -21,6 +22,7 @@ class INET_API IIeee80211HeUlTriggerPolicy
         BSRP_TRIGGER = 4,
     };
 
+    /** Aggregate association, report, backlog, retry, and timing state for a decision. */
     struct Context {
         int associatedStations = 0;
         int freshReports = 0;

@@ -17,6 +17,12 @@
 namespace inet {
 namespace physicallayer {
 
+/**
+ * Coding chain associated with a VHT spatial stream.
+ *
+ * The chain contains the VHT interleaver and scrambling state and identifies
+ * whether the selected VHT data mode uses packet-level LDPC or BCC.
+ */
 class INET_API Ieee80211VhtCode : public ICode
 {
   protected:
@@ -36,6 +42,7 @@ class INET_API Ieee80211VhtCode : public ICode
     virtual ~Ieee80211VhtCode();
 };
 
+/** Factory and cache for standard-compliant VHT coding-chain combinations. */
 class INET_API Ieee80211VhtCompliantCodes
 {
   public:
@@ -47,4 +54,3 @@ class INET_API Ieee80211VhtCompliantCodes
 } /* namespace inet */
 
 #endif
-

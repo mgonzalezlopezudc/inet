@@ -30,6 +30,7 @@ inline void copyMcsNssMapFromElement(const Ieee80211HeMcsNssMapElement& source, 
         destination.maxMcsPerNss[i] = source.maxMcsForNss[i];
 }
 
+/** Converts the scheduler/MIB HE capability representation to a management-frame element. */
 inline Ieee80211HeCapabilitiesElement makeHeCapabilitiesElement(const Ieee80211HeCapabilities& capabilities)
 {
     Ieee80211HeCapabilitiesElement element;
@@ -60,9 +61,16 @@ inline Ieee80211HeCapabilitiesElement makeHeCapabilitiesElement(const Ieee80211H
     element.ru484Tone = capabilities.supportedRuToneSizes.count(484) != 0;
     element.ru996Tone = capabilities.supportedRuToneSizes.count(996) != 0;
     element.ru1992Tone = capabilities.supportedRuToneSizes.count(1992) != 0;
+    element.dlMuMimoBeamformer = capabilities.dlMuMimoBeamformer;
+    element.dlMuMimoBeamformee = capabilities.dlMuMimoBeamformee;
+    element.soundingDimensions = capabilities.soundingDimensions;
+    element.beamformeeSts20Mhz = capabilities.beamformeeSts20Mhz;
+    element.beamformeeStsAbove20Mhz = capabilities.beamformeeStsAbove20Mhz;
+    element.feedbackMode = capabilities.feedbackMode;
     return element;
 }
 
+/** Converts a received HE capabilities element to the representation used by negotiation. */
 inline Ieee80211HeCapabilities makeHeCapabilities(const Ieee80211HeCapabilitiesElement& element)
 {
     Ieee80211HeCapabilities capabilities;
@@ -105,9 +113,16 @@ inline Ieee80211HeCapabilities makeHeCapabilities(const Ieee80211HeCapabilitiesE
         capabilities.supportedRuToneSizes.insert(996);
     if (element.ru1992Tone)
         capabilities.supportedRuToneSizes.insert(1992);
+    capabilities.dlMuMimoBeamformer = element.dlMuMimoBeamformer;
+    capabilities.dlMuMimoBeamformee = element.dlMuMimoBeamformee;
+    capabilities.soundingDimensions = element.soundingDimensions;
+    capabilities.beamformeeSts20Mhz = element.beamformeeSts20Mhz;
+    capabilities.beamformeeStsAbove20Mhz = element.beamformeeStsAbove20Mhz;
+    capabilities.feedbackMode = element.feedbackMode;
     return capabilities;
 }
 
+/** Converts negotiated HE operating parameters to their management-frame element. */
 inline Ieee80211HeOperationElement makeHeOperationElement(const Ieee80211HeOperation& operation)
 {
     Ieee80211HeOperationElement element;
@@ -119,6 +134,7 @@ inline Ieee80211HeOperationElement makeHeOperationElement(const Ieee80211HeOpera
     return element;
 }
 
+/** Converts a received HE operation element to the MIB operation representation. */
 inline Ieee80211HeOperation makeHeOperation(const Ieee80211HeOperationElement& element)
 {
     Ieee80211HeOperation operation;
@@ -154,6 +170,7 @@ inline B getHe6GhzBandCapabilitiesElementLength()
     return B(1 + 1 + 1 + 2);
 }
 
+/** Returns the encoded length of HE management elements present in a management frame. */
 inline B getHeMgmtElementsLength(const Ptr<const Ieee80211MgmtFrame>& frame)
 {
     B length = B(0);

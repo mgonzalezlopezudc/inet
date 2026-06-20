@@ -12,6 +12,7 @@
 namespace inet {
 namespace ieee80211 {
 
+/** HE UL scheduler that serves stations in descending reported-backlog order. */
 class INET_API HeUlSchedulerBacklogBased : public HeUlSchedulerBase
 {
   public:

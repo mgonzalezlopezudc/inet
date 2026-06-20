@@ -19,6 +19,7 @@
 namespace inet {
 namespace physicallayer {
 
+/** Common VHT bandwidth, guard-interval, MCS, stream-count, and bitrate state. */
 class INET_API Ieee80211VhtModeBase
 {
   public:
@@ -54,6 +55,7 @@ class INET_API Ieee80211VhtModeBase
     virtual bps getGrossBitrate() const;
 };
 
+/** VHT-SIG header transmission mode. */
 class INET_API Ieee80211VhtSignalMode : public IIeee80211HeaderMode, public Ieee80211VhtModeBase, public Ieee80211HtTimingRelatedParametersBase
 {
   protected:
@@ -107,6 +109,7 @@ class INET_API Ieee80211VhtSignalMode : public IIeee80211HeaderMode, public Ieee
  * The HT preambles are defined in HT-mixed format and in HT-greenfield format to carry the required
  * information to operate in a system with multiple transmit and multiple receive antennas. (20.3.9 HT preamble)
  */
+/** VHT preamble mode, including the legacy-compatible signaling fields. */
 class INET_API Ieee80211VhtPreambleMode : public IIeee80211PreambleMode, public Ieee80211HtTimingRelatedParametersBase
 {
   public:
@@ -153,6 +156,7 @@ class INET_API Ieee80211VhtPreambleMode : public IIeee80211PreambleMode, public 
     virtual Ptr<Ieee80211PhyPreamble> createPreamble() const override { return makeShared<Ieee80211VhtPhyPreamble>(); }
 };
 
+/** One VHT MCS definition: per-stream modulation, FEC, and channel bandwidth. */
 class INET_API Ieee80211Vhtmcs
 {
   protected:
@@ -205,6 +209,9 @@ class INET_API Ieee80211Vhtmcs
     static int getNumberOfTotalSubcarriers(Hz bandwidth) { return getNumberOfDataSubcarriers(bandwidth) + getNumberOfPilotSubcarriers(bandwidth); }
 };
 
+/**
+ * VHT PSDU data mode and airtime calculator with BCC and LDPC support.
+ */
 class INET_API Ieee80211VhtDataMode : public IIeee80211DataMode, public Ieee80211VhtModeBase, public Ieee80211HtTimingRelatedParametersBase
 {
   protected:
@@ -245,6 +252,7 @@ class INET_API Ieee80211VhtDataMode : public IIeee80211DataMode, public Ieee8021
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulationAndCodingScheme->getModulation(); }
 };
 
+/** Complete VHT PHY mode composed of its preamble and PSDU data mode. */
 class INET_API Ieee80211VhtMode : public Ieee80211ModeBase
 {
   public:
@@ -291,6 +299,7 @@ class INET_API Ieee80211VhtMode : public Ieee80211ModeBase
 // parameters that consists of modulation order (e.g., BPSK, QPSK, 16-QAM,
 // 64-QAM) and forward error correction (FEC) coding rate (e.g., 1/2, 2/3,
 // 3/4, 5/6).
+/** Lookup table for the standard VHT MCS combinations. */
 class INET_API Ieee80211VhtmcsTable
 {
   public:
@@ -678,6 +687,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss8;
 };
 
+/** Factory and cache for standard VHT PHY modes. */
 class INET_API Ieee80211VhtCompliantModes
 {
   protected:
@@ -696,4 +706,3 @@ class INET_API Ieee80211VhtCompliantModes
 } /* namespace inet */
 
 #endif
-

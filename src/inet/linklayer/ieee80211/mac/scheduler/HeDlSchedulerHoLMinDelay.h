@@ -12,6 +12,7 @@
 namespace inet {
 namespace ieee80211 {
 
+/** HE DL scheduler that ranks eligible STAs by head-of-line packet delay. */
 class INET_API HeDlSchedulerHoLMinDelay : public HeDlSchedulerBase
 {
   public:
