@@ -281,13 +281,17 @@ double Ieee80211YansErrorModel::getDataSuccessRate(const IIeee80211Mode *mode, u
                                                          vhtMode->getHeaderMode()->getBandwidth(),
                                                          effectiveSnr);
     }
-    else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode))
+    else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode)) {
+        double effectiveSnr = snr;
+        if (heMode->getDataMode()->getCode() && heMode->getDataMode()->getCode()->isLdpc())
+            effectiveSnr *= std::pow(10.0, 1.5 / 10.0);
         successRate = getOFDMAndERPOFDMChunkSuccessRate(heMode->getDataMode()->getModulation()->getSubcarrierModulation(),
                                                         heMode->getDataMode()->getCode()->getForwardErrorCorrection(),
                                                         bitLength,
                                                         heMode->getDataMode()->getGrossBitrate(),
                                                         heMode->getDataMode()->getBandwidth(),
-                                                        snr);
+                                                        effectiveSnr);
+    }
     else if (auto dsssMode = dynamic_cast<const Ieee80211DsssMode *>(mode))
         successRate = getDSSSAndHrDSSSChunkSuccessRate(dsssMode->getDataMode()->getNetBitrate(), bitLength, snr);
     else if (auto hrDsssMode = dynamic_cast<const Ieee80211HrDsssMode *>(mode))

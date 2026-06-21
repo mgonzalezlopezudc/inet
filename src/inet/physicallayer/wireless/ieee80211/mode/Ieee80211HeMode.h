@@ -190,6 +190,8 @@ class INET_API Ieee80211HeDataMode : public IIeee80211DataMode, public Ieee80211
   protected:
     const Ieee80211Hemcs *modulationAndCodingScheme;
     const unsigned int numberOfBccEncoders;
+    const bool ldpc;
+    const Ieee80211VhtCode *ldpcCode = nullptr;
 
   protected:
     bps computeGrossBitrate() const override;
@@ -199,10 +201,12 @@ class INET_API Ieee80211HeDataMode : public IIeee80211DataMode, public Ieee80211
     unsigned int computeNumberOfBccEncoders() const;
 
   public:
-    Ieee80211HeDataMode(const Ieee80211Hemcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType);
+    Ieee80211HeDataMode(const Ieee80211Hemcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc = false);
+    virtual ~Ieee80211HeDataMode() { delete ldpcCode; }
 
     b getServiceFieldLength() const { return b(16); }
-    b getTailFieldLength() const { return b(6) * numberOfBccEncoders; }
+    b getTailFieldLength() const { return ldpc ? b(0) : b(6) * numberOfBccEncoders; }
+    bool isLdpc() const { return ldpc; }
 
     virtual int getNumberOfSpatialStreams() const override { return Ieee80211HeModeBase::getNumberOfSpatialStreams(); }
     virtual Hz getBandwidth() const override { return bandwidth; }
@@ -212,7 +216,7 @@ class INET_API Ieee80211HeDataMode : public IIeee80211DataMode, public Ieee80211
     virtual bps getNetBitrate() const override { return Ieee80211HeModeBase::getNetBitrate(); }
     virtual bps getGrossBitrate() const override { return Ieee80211HeModeBase::getGrossBitrate(); }
     virtual const Ieee80211Hemcs *getModulationAndCodingScheme() const { return modulationAndCodingScheme; }
-    virtual const Ieee80211VhtCode *getCode() const { return modulationAndCodingScheme->getCode(); }
+    virtual const Ieee80211VhtCode *getCode() const { return ldpc ? ldpcCode : modulationAndCodingScheme->getCode(); }
     virtual const simtime_t getSymbolInterval() const override {
         switch (guardIntervalType) {
             case HE_GUARD_INTERVAL_SHORT: return getShortGISymbolInterval();
@@ -694,13 +698,14 @@ class INET_API Ieee80211HeCompliantModes
 
     mutable std::map<std::tuple<Hz, unsigned int, Ieee80211HeModeBase::GuardIntervalType,
             unsigned int, Ieee80211HeMode::BandMode,
-            Ieee80211HePreambleMode::HighEfficiencyPreambleFormat>, const Ieee80211HeMode *> modeCache;
+            Ieee80211HePreambleMode::HighEfficiencyPreambleFormat,
+            bool>, const Ieee80211HeMode *> modeCache;
 
   public:
     Ieee80211HeCompliantModes();
     virtual ~Ieee80211HeCompliantModes();
 
-    static const Ieee80211HeMode *getCompliantMode(const Ieee80211Hemcs *mcsMode, Ieee80211HeMode::BandMode centerFrequencyMode, Ieee80211HePreambleMode::HighEfficiencyPreambleFormat preambleFormat, Ieee80211HeModeBase::GuardIntervalType guardIntervalType);
+    static const Ieee80211HeMode *getCompliantMode(const Ieee80211Hemcs *mcsMode, Ieee80211HeMode::BandMode centerFrequencyMode, Ieee80211HePreambleMode::HighEfficiencyPreambleFormat preambleFormat, Ieee80211HeModeBase::GuardIntervalType guardIntervalType, bool ldpc = false);
 };
 
 } // namespace physicallayer
