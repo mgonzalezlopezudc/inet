@@ -1,0 +1,91 @@
+%description:
+Test IEEE 802.11ax single-user LDPC mode construction, coding flag,
+airtime accounting, and error-model propagation.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+
+auto mcs = &Ieee80211HemcsTable::heMcs5BW80MHzNss1;
+auto bcc = Ieee80211HeCompliantModes::getCompliantMode(mcs,
+        Ieee80211HeMode::BAND_5GHZ,
+        Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, false);
+auto ldpc = Ieee80211HeCompliantModes::getCompliantMode(mcs,
+        Ieee80211HeMode::BAND_5GHZ,
+        Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, true);
+
+ASSERT(!bcc->getDataMode()->isLdpc());
+ASSERT(ldpc->getDataMode()->isLdpc());
+ASSERT(!bcc->getDataMode()->getCode()->isLdpc());
+ASSERT(ldpc->getDataMode()->getCode()->isLdpc());
+EV << "HE SU LDPC code flag passed.\n";
+
+ASSERT(bcc->getDataMode()->getTailFieldLength() == b(6));
+ASSERT(ldpc->getDataMode()->getTailFieldLength() == b(0));
+EV << "HE SU LDPC tail omission passed.\n";
+
+auto dataLength = B(1500);
+ASSERT(bcc->getDataMode()->getCompleteLength(dataLength) ==
+        bcc->getDataMode()->getServiceFieldLength() + bcc->getDataMode()->getTailFieldLength() + dataLength);
+ASSERT(ldpc->getDataMode()->getCompleteLength(dataLength) ==
+        ldpc->getDataMode()->getServiceFieldLength() + dataLength);
+EV << "HE SU LDPC complete length passed.\n";
+
+ASSERT(bcc->getDataMode()->getNetBitrate() == ldpc->getDataMode()->getNetBitrate());
+ASSERT(bcc->getDataMode()->getGrossBitrate() == ldpc->getDataMode()->getGrossBitrate());
+EV << "HE SU LDPC bitrate parity passed.\n";
+
+// Compare LDPC duration against the same standards-faithful calculator used by HE-MU.
+Ieee80211HeRu ru;
+ru.index = 0;
+ru.toneOffset = 0;
+ru.toneSize = 996;
+ru.dataSubcarriers = 980;
+ru.pilotSubcarriers = 16;
+ru.bandwidth = Hz(ru.toneSize * 78125.0);
+auto reference = computeHeUserPhyParameters(dataLength, ru, mcs->getMcsIndex(),
+        mcs->getNumNss(), false, HE_GI_3_2_US, HE_CODING_LDPC);
+auto ldpcDataDuration = ldpc->getDataMode()->getDuration(b(dataLength.get<B>() * 8));
+auto referenceDataDuration = reference.numberOfDataSymbols *
+        (SimTime(12800, SIMTIME_NS) + getHeGuardIntervalDuration(HE_GI_3_2_US));
+ASSERT(ldpcDataDuration == referenceDataDuration);
+ASSERT(reference.tailBits == 0);
+ASSERT(reference.ldpcCodewordLength > 0);
+ASSERT(reference.ldpcCodewordCount > 0);
+EV << "HE SU LDPC airtime accounting passed.\n";
+
+// BCC duration must differ (tail bits present) for this payload.
+auto bccDataDuration = bcc->getDataMode()->getDuration(b(dataLength.get<B>() * 8));
+ASSERT(bccDataDuration != ldpcDataDuration);
+EV << "HE SU BCC/LDPC duration differs passed.\n";
+
+// Cached factory returns the same instance for identical parameters.
+auto ldpc2 = Ieee80211HeCompliantModes::getCompliantMode(mcs,
+        Ieee80211HeMode::BAND_5GHZ,
+        Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, true);
+ASSERT(ldpc == ldpc2);
+EV << "HE SU LDPC mode cache passed.\n";
+
+EV << ".\n";
+
+%contains: stdout
+HE SU LDPC code flag passed.
+HE SU LDPC tail omission passed.
+HE SU LDPC complete length passed.
+HE SU LDPC bitrate parity passed.
+HE SU LDPC airtime accounting passed.
+HE SU BCC/LDPC duration differs passed.
+HE SU LDPC mode cache passed.
+.
