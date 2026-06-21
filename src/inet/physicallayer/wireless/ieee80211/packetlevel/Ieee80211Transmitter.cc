@@ -22,6 +22,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -102,6 +103,15 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
                 useLdpc = mib->localVhtCapabilities.ldpc;
             }
         }
+        else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(transmissionMode)) {
+            if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
+                auto negotiatedHe = mib->findNegotiatedHeCapabilities(receiverAddress);
+                useLdpc = negotiatedHe ? negotiatedHe->intersection.ldpc : mib->localHeCapabilities.ldpc;
+            }
+            else {
+                useLdpc = mib->localHeCapabilities.ldpc;
+            }
+        }
 
         if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(transmissionMode)) {
             auto mcs = htMode->getDataMode()->getModulationAndCodingScheme();
@@ -116,6 +126,13 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
             auto gi = vhtMode->getDataMode()->getGuardIntervalType();
             auto centerFreqMode = vhtMode->getCenterFrequencyMode();
             transmissionMode = Ieee80211VhtCompliantModes::getCompliantMode(mcs, centerFreqMode, preambleFormat, gi, useLdpc);
+        }
+        else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(transmissionMode)) {
+            auto mcs = heMode->getDataMode()->getModulationAndCodingScheme();
+            auto preambleFormat = heMode->getPreambleMode()->getPreambleFormat();
+            auto gi = heMode->getDataMode()->getGuardIntervalType();
+            auto centerFreqMode = heMode->getCenterFrequencyMode();
+            transmissionMode = Ieee80211HeCompliantModes::getCompliantMode(mcs, centerFreqMode, preambleFormat, gi, useLdpc);
         }
     }
 

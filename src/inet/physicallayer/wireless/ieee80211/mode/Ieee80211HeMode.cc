@@ -17,6 +17,8 @@
 #include "inet/physicallayer/wireless/common/modulation/Qam1024Modulation.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmCode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtCode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/common/radio/bitlevel/ConvolutionalCode.h"
 
 namespace inet {
@@ -222,11 +224,26 @@ Ieee80211Hemcs::~Ieee80211Hemcs()
 }
 
 // Data Mode
-Ieee80211HeDataMode::Ieee80211HeDataMode(const Ieee80211Hemcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType) :
+Ieee80211HeDataMode::Ieee80211HeDataMode(const Ieee80211Hemcs *modulationAndCodingScheme, const Hz bandwidth, GuardIntervalType guardIntervalType, bool ldpc) :
     Ieee80211HeModeBase(modulationAndCodingScheme->getMcsIndex(), modulationAndCodingScheme->getNumNss(), bandwidth, guardIntervalType),
     modulationAndCodingScheme(modulationAndCodingScheme),
-    numberOfBccEncoders(computeNumberOfBccEncoders())
+    numberOfBccEncoders(computeNumberOfBccEncoders()),
+    ldpc(ldpc)
 {
+    if (ldpc) {
+        auto bccCode = modulationAndCodingScheme->getCode();
+        ldpcCode = Ieee80211VhtCompliantCodes::getCompliantCode(
+                bccCode->getForwardErrorCorrection(),
+                modulationAndCodingScheme->getModulation(),
+                modulationAndCodingScheme->getStreamExtension1Modulation(),
+                modulationAndCodingScheme->getStreamExtension2Modulation(),
+                modulationAndCodingScheme->getStreamExtension3Modulation(),
+                modulationAndCodingScheme->getStreamExtension4Modulation(),
+                modulationAndCodingScheme->getStreamExtension5Modulation(),
+                modulationAndCodingScheme->getStreamExtension6Modulation(),
+                modulationAndCodingScheme->getStreamExtension7Modulation(),
+                bandwidth, true, true);
+    }
 }
 
 bps Ieee80211HeDataMode::computeGrossBitrate() const
@@ -275,6 +292,48 @@ b Ieee80211HeDataMode::getCompleteLength(b dataLength) const
 
 const simtime_t Ieee80211HeDataMode::getDuration(b dataLength) const
 {
+    if (ldpc) {
+        // Use the same standards-faithful HE PHY calculator as HE-MU.
+        Ieee80211HeRu ru;
+        ru.index = 0;
+        ru.toneOffset = 0;
+        if (bandwidth == MHz(20)) {
+            ru.toneSize = 242;
+            ru.dataSubcarriers = 234;
+            ru.pilotSubcarriers = 8;
+        }
+        else if (bandwidth == MHz(40)) {
+            ru.toneSize = 484;
+            ru.dataSubcarriers = 468;
+            ru.pilotSubcarriers = 16;
+        }
+        else if (bandwidth == MHz(80)) {
+            ru.toneSize = 996;
+            ru.dataSubcarriers = 980;
+            ru.pilotSubcarriers = 16;
+        }
+        else if (bandwidth == MHz(160)) {
+            ru.toneSize = 1992;
+            ru.dataSubcarriers = 1960;
+            ru.pilotSubcarriers = 32;
+        }
+        else
+            throw cRuntimeError("Unsupported HE bandwidth");
+        ru.bandwidth = Hz(ru.toneSize * 78125.0);
+        Ieee80211HeGuardInterval guardInterval;
+        switch (guardIntervalType) {
+            case HE_GUARD_INTERVAL_SHORT: guardInterval = HE_GI_0_8_US; break;
+            case HE_GUARD_INTERVAL_MEDIUM: guardInterval = HE_GI_1_6_US; break;
+            case HE_GUARD_INTERVAL_LONG: guardInterval = HE_GI_3_2_US; break;
+            default: throw cRuntimeError("Unknown HE guard interval");
+        }
+        auto parameters = computeHeUserPhyParameters(
+                B(dataLength.get<b>() / 8), ru,
+                getMcsIndex(), getNumberOfSpatialStreams(), false,
+                guardInterval, HE_CODING_LDPC);
+        return parameters.numberOfDataSymbols *
+                (SimTime(12800, SIMTIME_NS) + getHeGuardIntervalDuration(guardInterval));
+    }
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
     const IForwardErrorCorrection *forwardErrorCorrection = getCode() ? getCode()->getForwardErrorCorrection() : nullptr;
@@ -312,17 +371,17 @@ Ieee80211HeCompliantModes::~Ieee80211HeCompliantModes()
         delete entry.second;
 }
 
-const Ieee80211HeMode *Ieee80211HeCompliantModes::getCompliantMode(const Ieee80211Hemcs *mcsMode, Ieee80211HeMode::BandMode centerFrequencyMode, Ieee80211HePreambleMode::HighEfficiencyPreambleFormat preambleFormat, Ieee80211HeModeBase::GuardIntervalType guardIntervalType)
+const Ieee80211HeMode *Ieee80211HeCompliantModes::getCompliantMode(const Ieee80211Hemcs *mcsMode, Ieee80211HeMode::BandMode centerFrequencyMode, Ieee80211HePreambleMode::HighEfficiencyPreambleFormat preambleFormat, Ieee80211HeModeBase::GuardIntervalType guardIntervalType, bool ldpc)
 {
     const char *name = "";
     unsigned int nss = mcsMode->getNumNss();
     auto modeId = std::make_tuple(mcsMode->getBandwidth(), mcsMode->getMcsIndex(),
-            guardIntervalType, nss, centerFrequencyMode, preambleFormat);
+            guardIntervalType, nss, centerFrequencyMode, preambleFormat, ldpc);
     auto mode = singleton.modeCache.find(modeId);
     if (mode == singleton.modeCache.end()) {
         const Ieee80211OfdmSignalMode *legacySignal = &Ieee80211OfdmCompliantModes::ofdmHeaderMode6MbpsRate13;
         const Ieee80211HeSignalMode *heSignal = new Ieee80211HeSignalMode(mcsMode->getMcsIndex(), &Ieee80211OfdmCompliantModulations::subcarriers52QbpskModulation, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, mcsMode->getBandwidth(), guardIntervalType);
-        const Ieee80211HeDataMode *dataMode = new Ieee80211HeDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType);
+        const Ieee80211HeDataMode *dataMode = new Ieee80211HeDataMode(mcsMode, mcsMode->getBandwidth(), guardIntervalType, ldpc);
         const Ieee80211HePreambleMode *preambleMode = new Ieee80211HePreambleMode(heSignal, legacySignal, preambleFormat, dataMode->getNumberOfSpatialStreams());
         const Ieee80211HeMode *heMode = new Ieee80211HeMode(name, preambleMode, dataMode, centerFrequencyMode);
         singleton.modeCache.insert({modeId, heMode});
