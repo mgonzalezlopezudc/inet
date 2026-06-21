@@ -25,7 +25,7 @@ Ieee80211VhtCode::Ieee80211VhtCode(
 
 }
 
-const Ieee80211VhtCode *Ieee80211VhtCompliantCodes::getCompliantCode(const Ieee80211ConvolutionalCode *convolutionalCode, const Ieee80211OfdmModulation *stream1Modulation, const Ieee80211OfdmModulation *stream2Modulation, const Ieee80211OfdmModulation *stream3Modulation, const Ieee80211OfdmModulation *stream4Modulation, const Ieee80211OfdmModulation *stream5Modulation, const Ieee80211OfdmModulation *stream6Modulation, const Ieee80211OfdmModulation *stream7Modulation, const Ieee80211OfdmModulation *stream8Modulation, Hz bandwidth, bool withScrambling)
+const Ieee80211VhtCode *Ieee80211VhtCompliantCodes::getCompliantCode(const Ieee80211ConvolutionalCode *convolutionalCode, const Ieee80211OfdmModulation *stream1Modulation, const Ieee80211OfdmModulation *stream2Modulation, const Ieee80211OfdmModulation *stream3Modulation, const Ieee80211OfdmModulation *stream4Modulation, const Ieee80211OfdmModulation *stream5Modulation, const Ieee80211OfdmModulation *stream6Modulation, const Ieee80211OfdmModulation *stream7Modulation, const Ieee80211OfdmModulation *stream8Modulation, Hz bandwidth, bool withScrambling, bool ldpc)
 {
     std::vector<unsigned int> numberOfCodedBitsPerSpatialStreams;
     if (stream1Modulation)
@@ -44,8 +44,8 @@ const Ieee80211VhtCode *Ieee80211VhtCompliantCodes::getCompliantCode(const Ieee8
         numberOfCodedBitsPerSpatialStreams.push_back(stream7Modulation->getSubcarrierModulation()->getCodeWordSize());
     if (stream8Modulation)
         numberOfCodedBitsPerSpatialStreams.push_back(stream8Modulation->getSubcarrierModulation()->getCodeWordSize());
-    return withScrambling ? new Ieee80211VhtCode(convolutionalCode, new Ieee80211VhtInterleaving(numberOfCodedBitsPerSpatialStreams, bandwidth), &Ieee80211OfdmCompliantCodes::ofdmScrambling) :
-                            new Ieee80211VhtCode(convolutionalCode, new Ieee80211VhtInterleaving(numberOfCodedBitsPerSpatialStreams, bandwidth), nullptr);
+    return withScrambling ? new Ieee80211VhtCode(convolutionalCode, new Ieee80211VhtInterleaving(numberOfCodedBitsPerSpatialStreams, bandwidth), &Ieee80211OfdmCompliantCodes::ofdmScrambling, ldpc) :
+                            new Ieee80211VhtCode(convolutionalCode, new Ieee80211VhtInterleaving(numberOfCodedBitsPerSpatialStreams, bandwidth), nullptr, ldpc);
 }
 
 Ieee80211VhtCode::~Ieee80211VhtCode()
