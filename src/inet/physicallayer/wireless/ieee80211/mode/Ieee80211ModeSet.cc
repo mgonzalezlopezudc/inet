@@ -861,10 +861,75 @@ Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> en
     }
 }
 
+namespace {
+
+using namespace inet::physicallayer;
+
+// The LDPC and BCC variants of a given HT/VHT/HE mode are represented by
+// distinct mode objects (they differ in airtime due to the BCC tail bits),
+// but the mode set only stores the BCC variant. Treat the LDPC variant as
+// equivalent so that receivers accept LDPC transmissions.
+
+bool isSameHtModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
+{
+    auto htA = dynamic_cast<const Ieee80211HtMode *>(a);
+    auto htB = dynamic_cast<const Ieee80211HtMode *>(b);
+    if (htA == nullptr || htB == nullptr)
+        return false;
+    auto dataA = htA->getDataMode();
+    auto dataB = htB->getDataMode();
+    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
+           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
+           dataA->getBandwidth() == dataB->getBandwidth() &&
+           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
+           htA->getPreambleMode()->getPreambleFormat() == htB->getPreambleMode()->getPreambleFormat() &&
+           htA->getCenterFrequencyMode() == htB->getCenterFrequencyMode();
+}
+
+bool isSameVhtModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
+{
+    auto vhtA = dynamic_cast<const Ieee80211VhtMode *>(a);
+    auto vhtB = dynamic_cast<const Ieee80211VhtMode *>(b);
+    if (vhtA == nullptr || vhtB == nullptr)
+        return false;
+    auto dataA = vhtA->getDataMode();
+    auto dataB = vhtB->getDataMode();
+    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
+           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
+           dataA->getBandwidth() == dataB->getBandwidth() &&
+           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
+           vhtA->getPreambleMode()->getPreambleFormat() == vhtB->getPreambleMode()->getPreambleFormat() &&
+           vhtA->getCenterFrequencyMode() == vhtB->getCenterFrequencyMode();
+}
+
+bool isSameHeModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
+{
+    auto heA = dynamic_cast<const Ieee80211HeMode *>(a);
+    auto heB = dynamic_cast<const Ieee80211HeMode *>(b);
+    if (heA == nullptr || heB == nullptr)
+        return false;
+    auto dataA = heA->getDataMode();
+    auto dataB = heB->getDataMode();
+    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
+           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
+           dataA->getBandwidth() == dataB->getBandwidth() &&
+           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
+           heA->getPreambleMode()->getPreambleFormat() == heB->getPreambleMode()->getPreambleFormat() &&
+           heA->getCenterFrequencyMode() == heB->getCenterFrequencyMode();
+}
+
+} // namespace
+
 int Ieee80211ModeSet::findModeIndex(const IIeee80211Mode *mode) const
 {
     for (size_t index = 0; index < entries.size(); index++)
         if (entries[index].mode == mode)
+            return index;
+    // Mode sets contain the BCC variants; accept LDPC variants as equivalent.
+    for (size_t index = 0; index < entries.size(); index++)
+        if (isSameHtModeIgnoringLdpc(entries[index].mode, mode) ||
+            isSameVhtModeIgnoringLdpc(entries[index].mode, mode) ||
+            isSameHeModeIgnoringLdpc(entries[index].mode, mode))
             return index;
     return -1;
 }
