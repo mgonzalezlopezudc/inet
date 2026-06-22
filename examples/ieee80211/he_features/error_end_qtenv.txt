@@ -1,0 +1,7 @@
+Assert: Condition 'fuzzyCompare(src_wireRect.rs.width, dest_wireRect.rs.width)' does not hold in function 'arrowcoords' at function arrowcoords.cc:442
+
+A runtime error occurred:
+
+ASSERT: Condition 'componentv[i]->isChannel() && componentv[i]->getParentModule()==nullptr' does not hold in function 'deleteNetwork' at csimulation.cc:544 - during network cleanup 
+
+Debug now? 
