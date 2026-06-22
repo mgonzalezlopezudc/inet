@@ -38,6 +38,7 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         mib->bssData.ssid = apMib->bssData.ssid;
         apMib->setPeerHeCapabilities(mib->address, mib->localHeCapabilities, apMib->heOperation);
         mib->setPeerHeCapabilities(apMib->address, apMib->localHeCapabilities, apMib->heOperation);
+        mib->heOperation.bssColor = apMib->heOperation.bssColor;
     }
 }
 
