@@ -58,6 +58,11 @@ void Ieee80211Mib::initialize(int stage)
         heOperation.defaultPeDurationPresent = defaultPeDurationUs != 0;
         heOperation.defaultPeDurationUs = defaultPeDurationUs;
 
+        int heBssColor = par("heBssColor").intValue();
+        if (heBssColor < 0 || heBssColor > 63)
+            throw cRuntimeError("heBssColor must be between 0 and 63");
+        heOperation.bssColor = heBssColor;
+
         vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
         vhtOperation.ldpc = localVhtCapabilities.ldpc;
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
