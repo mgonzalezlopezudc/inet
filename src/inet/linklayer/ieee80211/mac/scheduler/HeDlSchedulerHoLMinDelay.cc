@@ -16,6 +16,8 @@ Define_Module(HeDlSchedulerHoLMinDelay);
 std::vector<IIeee80211HeDlScheduler::RuAllocation>
 HeDlSchedulerHoLMinDelay::schedule(const ScheduleContext& context)
 {
+    ASSERT(!std::isnan(context.channelCenterFrequency.get()) && context.channelCenterFrequency > Hz(0));
+    ASSERT(!std::isnan(context.channelBandwidth.get()) && context.channelBandwidth > Hz(0));
     std::vector<CandidateInfo> selected = context.candidates;
     std::sort(selected.begin(), selected.end(), [] (const CandidateInfo& a, const CandidateInfo& b) {
         if (a.anchor != b.anchor)
@@ -30,8 +32,17 @@ HeDlSchedulerHoLMinDelay::schedule(const ScheduleContext& context)
     });
     int limit = maxMuStations < 0 ? physicallayer::getHeMaxRuCount(context.channelBandwidth) :
             std::min(maxMuStations, physicallayer::getHeMaxRuCount(context.channelBandwidth));
-    if ((int)selected.size() > limit)
+    if ((int)selected.size() > limit) {
+#ifndef NDEBUG
+        EV_DEBUG << "HeDlSchedulerHoLMinDelay::schedule: truncating candidate list from "
+                 << selected.size() << " to " << limit << "\n";
+#endif
         selected.resize(limit);
+    }
+#ifndef NDEBUG
+    EV_INFO << "HeDlSchedulerHoLMinDelay::schedule: scheduling " << selected.size()
+            << " STAs by head-of-line delay\n";
+#endif
     std::vector<int> requests;
     std::vector<int64_t> payloadBytes;
     for (const auto& candidate : selected)

@@ -35,6 +35,8 @@ void HeDlSchedulerEqualSizedRUs::initialize(int stage)
 std::vector<IIeee80211HeDlScheduler::RuAllocation>
 HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
 {
+    ASSERT(!std::isnan(context.channelCenterFrequency.get()) && context.channelCenterFrequency > Hz(0));
+    ASSERT(!std::isnan(context.channelBandwidth.get()) && context.channelBandwidth > Hz(0));
     if (context.candidates.empty())
         return {};
 
@@ -44,7 +46,16 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     bool enableDlMuMimo = hcf != nullptr ? hcf->par("enableDlMuMimo").boolValue() : false;
     bool isApBeamformer = mib != nullptr ? (bool)mib->localHeCapabilities.dlMuMimoBeamformer : false;
 
+#ifndef NDEBUG
+    EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: " << context.candidates.size()
+             << " candidates, schedulingFunction = " << schedulingFunction
+             << ", enableDlMuMimo = " << (enableDlMuMimo ? "true" : "false") << "\n";
+#endif
+
     if (enableDlMuMimo && isApBeamformer && mib != nullptr && context.csiManager != nullptr) {
+#ifndef NDEBUG
+        EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: attempting DL MU-MIMO group selection\n";
+#endif
         // Collect MU-MIMO eligible candidates who have fresh CSI
         std::vector<CandidateInfo> eligibleCandidates;
         for (const auto& candidate : context.candidates) {
@@ -62,6 +73,10 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         }
 
         if (eligibleCandidates.size() >= 2) {
+#ifndef NDEBUG
+            EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: " << eligibleCandidates.size()
+                     << " backlogged candidates are MU-MIMO eligible\n";
+#endif
             // Retrieve stable list of all associated MU-MIMO eligible STAs
             std::vector<MacAddress> allEligibleStas;
             for (const auto& station : mib->bssAccessPointData.stations) {
@@ -101,6 +116,10 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             }
 
             if (selectedAnchorIdx != -1) {
+#ifndef NDEBUG
+                EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: selected anchor " << anchorAddress
+                         << " (index " << selectedAnchorIdx << " in eligible list)\n";
+#endif
                 nextAnchorIndex = (selectedAnchorIdx + 1) % allEligibleStas.size();
 
                 // Order candidate list in stable round-robin sequence starting from anchor
@@ -188,6 +207,10 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                         groupCandidates = tempGroup;
                         finalNss = tempNss;
                         finalSnirDb = tempSnirDb;
+#ifndef NDEBUG
+                        EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: expanded MU-MIMO group to "
+                                 << groupCandidates.size() << " STAs\n";
+#endif
                     }
                 }
 
@@ -209,10 +232,27 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                                 fullChannelRu.toneSize, alloc.mcs, finalNss[i], false, context.guardInterval);
                         result.push_back(alloc);
                     }
+#ifndef NDEBUG
+                    EV_INFO << "HeDlSchedulerEqualSizedRUs::schedule: selected DL MU-MIMO group of "
+                            << result.size() << " STAs on full-channel RU\n";
+#endif
                     return result;
                 }
+#ifndef NDEBUG
+                EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: no compatible MU-MIMO group found\n";
+#endif
             }
+#ifndef NDEBUG
+            else {
+                EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: no backlogged anchor STA found for MU-MIMO\n";
+            }
+#endif
         }
+#ifndef NDEBUG
+        else {
+            EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: fewer than two MU-MIMO eligible candidates\n";
+        }
+#endif
     }
 
     // Fallback: standard equal-sized RU scheduling
@@ -239,7 +279,14 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         }
     }
     int numSelected = std::min(candidates, ruCount);
+    ASSERT(numSelected > 0);
     auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, ruCount);
+    ASSERT((int)rus.size() == ruCount);
+
+#ifndef NDEBUG
+    EV_INFO << "HeDlSchedulerEqualSizedRUs::schedule: falling back to " << ruCount
+            << " equal-sized RUs, scheduling " << numSelected << " STAs\n";
+#endif
 
     std::vector<RuAllocation> result;
     result.reserve(numSelected);
