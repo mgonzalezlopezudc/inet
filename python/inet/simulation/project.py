@@ -433,7 +433,7 @@ class SimulationProject:
     def collect_binary_simulation_distribution_file_paths(self):
         file_paths = []
         def append_file_if_exists(file_name):
-            if os.path.exists(file_name):
+            if os.path.isfile(file_name):
                 file_paths.append(file_name)
         file_paths.append(get_omnetpp_relative_path("bin/opp_run"))
         file_paths.append(get_omnetpp_relative_path("bin/opp_run_release"))
@@ -539,7 +539,7 @@ def find_simulation_project_from_current_working_directory():
     path = current_working_directory
     while True:
         project_file_name = os.path.join(path, ".omnetpp")
-        if os.path.exists(project_file_name):
+        if os.path.isfile(project_file_name):
             with open(project_file_name) as project_file:
                 kwargs = json.load(project_file)
                 return define_simulation_project(**kwargs)

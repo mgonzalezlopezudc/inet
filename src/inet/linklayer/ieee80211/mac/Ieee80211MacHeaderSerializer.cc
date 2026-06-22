@@ -348,7 +348,14 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 ASSERT(stream.getLength() - startPos == compressedBlockAckReq->getChunkLength());
             }
             else if (multiTid && compressedBitmap) {
-                throw cRuntimeError("Ieee80211MacHeaderSerializer: cannot serialize the frame, Ieee80211MultiTidBlockAckReq unimplemented.");
+                auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(chunk);
+                stream.writeByte(multiTidReq->getRecordsArraySize());
+                for (unsigned int i = 0; i < multiTidReq->getRecordsArraySize(); ++i) {
+                    const auto& rec = multiTidReq->getRecords(i);
+                    stream.writeByte(rec.tid);
+                    stream.writeUint16Be(rec.startingSequenceNumber);
+                }
+                ASSERT(stream.getLength() - startPos == multiTidReq->getChunkLength());
             }
             else
                 throw cRuntimeError("Ieee80211MacHeaderSerializer: cannot serialize the frame, multiTid = 1 && compressedBitmap = 0 is reserved.");
@@ -385,7 +392,15 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 ASSERT(stream.getLength() - startPos == compressedBlockAck->getChunkLength());
             }
             else if (multiTid && compressedBitmap) {
-                throw cRuntimeError("Ieee80211MacHeaderSerializer: cannot serialize the frame, Ieee80211MultiTidBlockAck unimplemented.");
+                auto multiTidAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(chunk);
+                stream.writeByte(multiTidAck->getRecordsArraySize());
+                for (unsigned int i = 0; i < multiTidAck->getRecordsArraySize(); ++i) {
+                    const auto& rec = multiTidAck->getRecords(i);
+                    stream.writeByte(rec.tid);
+                    stream.writeUint16Be(rec.startingSequenceNumber);
+                    stream.writeUint64Be(rec.bitmap);
+                }
+                ASSERT(stream.getLength() - startPos == multiTidAck->getChunkLength());
             }
             else if (multiTid && !compressedBitmap) {
                 auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(chunk);
@@ -649,6 +664,20 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 compressedBlockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint64Be()));
                 return compressedBlockAckReq;
             }
+            else if (multiTid && compressedBitmap) {
+                auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
+                copyBasicFields(multiTidReq, macHeader);
+                copyBlockAckReqFrameFields(multiTidReq, blockAckReq);
+                auto count = stream.readByte();
+                multiTidReq->setRecordsArraySize(count);
+                for (unsigned int i = 0; i < count; ++i) {
+                    Ieee80211MultiTidBlockAckReqRecord rec;
+                    rec.tid = stream.readByte();
+                    rec.startingSequenceNumber = stream.readUint16Be();
+                    multiTidReq->setRecords(i, rec);
+                }
+                return multiTidReq;
+            }
             else
                 blockAckReq->markIncorrect();
             return blockAckReq;
@@ -712,6 +741,21 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     multiStaBlockAck->setRecords(i, record);
                 }
                 return multiStaBlockAck;
+            }
+            else if (multiTid && compressedBitmap) {
+                auto multiTidAck = makeShared<Ieee80211MultiTidBlockAck>();
+                copyBasicFields(multiTidAck, macHeader);
+                copyBlockAckFrameFields(multiTidAck, blockAck);
+                auto count = stream.readByte();
+                multiTidAck->setRecordsArraySize(count);
+                for (unsigned int i = 0; i < count; ++i) {
+                    Ieee80211MultiTidBlockAckRecord rec;
+                    rec.tid = stream.readByte();
+                    rec.startingSequenceNumber = stream.readUint16Be();
+                    rec.bitmap = stream.readUint64Be();
+                    multiTidAck->setRecords(i, rec);
+                }
+                return multiTidAck;
             }
             else {
                 blockAck->markIncorrect();
