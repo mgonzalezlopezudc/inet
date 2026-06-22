@@ -43,6 +43,8 @@ void Ieee80211Mib::initialize(int stage)
 
         localHtLdpc = par("htLdpc").boolValue();
         localHeCapabilities.ldpc = par("heLdpc").boolValue();
+        localHeCapabilities.multiTidAggregationRx = par("heMultiTidAggregationRx").boolValue();
+        localHeCapabilities.multiTidAggregationTx = par("heMultiTidAggregationTx").boolValue();
         localHeCapabilities.dlMuMimoBeamformer = par("heDlMuMimoBeamformer").boolValue();
         localHeCapabilities.dlMuMimoBeamformee = par("heDlMuMimoBeamformee").boolValue();
         localHeCapabilities.soundingDimensions = par("heSoundingDimensions").intValue();
