@@ -28,6 +28,8 @@ module Ieee80211Receiver extends NarrowbandReceiverBase
         int channelNumber;
         modulation = default("BPSK"); // TODO this is simply wrong
         errorModel.typename = default("Ieee80211NistErrorModel");
+        bool enableSpatialReuse = default(false);
+        double obssPdThreshold @unit(dBm) = default(-62 dBm);
         // TODO remove when opMode is removed from the error model
         *.opMode = this.opMode;
         @class(Ieee80211Receiver);

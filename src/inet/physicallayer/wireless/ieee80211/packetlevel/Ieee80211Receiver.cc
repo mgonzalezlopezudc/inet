@@ -260,6 +260,8 @@ void Ieee80211Receiver::initialize(int stage)
         int channelNumber = par("channelNumber");
         if (channelNumber != -1)
             setChannelNumber(channelNumber);
+        enableSpatialReuse = par("enableSpatialReuse");
+        obssPdThreshold = mW(math::dBmW2mW(par("obssPdThreshold")));
     }
 }
 
@@ -301,6 +303,14 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
     auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    if (enableSpatialReuse && heMuPhyHeader != nullptr && heMuPhyHeader->getBssColor() != 0) {
+        auto networkInterface = getContainingNicModule(this);
+        auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
+        if (mib != nullptr && heMuPhyHeader->getBssColor() != mib->heOperation.bssColor) {
+            if (!getAnalogModel()->computeIsReceptionPossible(listening, reception, obssPdThreshold))
+                return false;
+        }
+    }
     if (heMuPhyHeader != nullptr)
         return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
                getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
@@ -312,6 +322,14 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
         IRadioSignal::SignalPart part, const IInterference *interference) const
 {
     auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    if (enableSpatialReuse && heMuPhyHeader != nullptr && heMuPhyHeader->getBssColor() != 0) {
+        auto networkInterface = getContainingNicModule(this);
+        auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
+        if (mib != nullptr && heMuPhyHeader->getBssColor() != mib->heOperation.bssColor) {
+            if (!getAnalogModel()->computeIsReceptionPossible(listening, reception, obssPdThreshold))
+                return false;
+        }
+    }
     if (heMuPhyHeader == nullptr || heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)
         return FlatReceiverBase::computeIsReceptionAttempted(listening, reception, part, interference);
     if (!computeIsReceptionPossible(listening, reception, part))

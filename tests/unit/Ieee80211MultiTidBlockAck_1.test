@@ -1,0 +1,101 @@
+%description:
+Test Multi-TID Block Ack request and response serialization.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/common/packet/Packet.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+{
+    auto req = makeShared<Ieee80211MultiTidBlockAckReq>();
+    req->setReceiverAddress(MacAddress("20:00:00:00:00:01"));
+    req->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
+    req->setBarAckPolicy(true);
+    req->setRecordsArraySize(2);
+    
+    Ieee80211MultiTidBlockAckReqRecord rec1;
+    rec1.tid = 3;
+    rec1.startingSequenceNumber = 100;
+    req->setRecords(0, rec1);
+
+    Ieee80211MultiTidBlockAckReqRecord rec2;
+    rec2.tid = 5;
+    rec2.startingSequenceNumber = 200;
+    req->setRecords(1, rec2);
+
+    req->setChunkLength(b(196));
+    
+    auto packet = new Packet("multi-tid-bar", req);
+    auto bytes = packet->peekDataAsBytes();
+    auto received = new Packet("multi-tid-bar-rx", bytes);
+    auto decoded = received->popAtFront<Ieee80211MultiTidBlockAckReq>();
+    
+    ASSERT(decoded->getReceiverAddress() == MacAddress("20:00:00:00:00:01"));
+    ASSERT(decoded->getTransmitterAddress() == MacAddress("10:00:00:00:00:00"));
+    ASSERT(decoded->getBarAckPolicy() == true);
+    ASSERT(decoded->getMultiTid() == true);
+    ASSERT(decoded->getCompressedBitmap() == true);
+    ASSERT(decoded->getRecordsArraySize() == 2);
+    ASSERT(decoded->getRecords(0).tid == 3);
+    ASSERT(decoded->getRecords(0).startingSequenceNumber == 100);
+    ASSERT(decoded->getRecords(1).tid == 5);
+    ASSERT(decoded->getRecords(1).startingSequenceNumber == 200);
+    
+    delete packet;
+    delete received;
+    EV << "Multi-TID Block Ack Req round trip passed.\n";
+}
+
+{
+    auto ack = makeShared<Ieee80211MultiTidBlockAck>();
+    ack->setReceiverAddress(MacAddress("10:00:00:00:00:00"));
+    ack->setTransmitterAddress(MacAddress("20:00:00:00:00:01"));
+    ack->setBlockAckPolicy(false);
+    ack->setRecordsArraySize(2);
+    
+    Ieee80211MultiTidBlockAckRecord rec1;
+    rec1.tid = 3;
+    rec1.startingSequenceNumber = 100;
+    rec1.bitmap = 0xF0F0F0F0F0F0F0F0ULL;
+    ack->setRecords(0, rec1);
+
+    Ieee80211MultiTidBlockAckRecord rec2;
+    rec2.tid = 5;
+    rec2.startingSequenceNumber = 200;
+    rec2.bitmap = 0x0F0F0F0F0F0F0F0FULL;
+    ack->setRecords(1, rec2);
+
+    ack->setChunkLength(b(324));
+    
+    auto packet = new Packet("multi-tid-ba", ack);
+    auto bytes = packet->peekDataAsBytes();
+    auto received = new Packet("multi-tid-ba-rx", bytes);
+    auto decoded = received->popAtFront<Ieee80211MultiTidBlockAck>();
+    
+    ASSERT(decoded->getReceiverAddress() == MacAddress("10:00:00:00:00:00"));
+    ASSERT(decoded->getTransmitterAddress() == MacAddress("20:00:00:00:00:01"));
+    ASSERT(decoded->getBlockAckPolicy() == false);
+    ASSERT(decoded->getMultiTid() == true);
+    ASSERT(decoded->getCompressedBitmap() == true);
+    ASSERT(decoded->getRecordsArraySize() == 2);
+    ASSERT(decoded->getRecords(0).tid == 3);
+    ASSERT(decoded->getRecords(0).startingSequenceNumber == 100);
+    ASSERT(decoded->getRecords(0).bitmap == 0xF0F0F0F0F0F0F0F0ULL);
+    ASSERT(decoded->getRecords(1).tid == 5);
+    ASSERT(decoded->getRecords(1).startingSequenceNumber == 200);
+    ASSERT(decoded->getRecords(1).bitmap == 0x0F0F0F0F0F0F0F0FULL);
+    
+    delete packet;
+    delete received;
+    EV << "Multi-TID Block Ack round trip passed.\n";
+}
+EV << ".\n";
+
+%contains: stdout
+Multi-TID Block Ack Req round trip passed.
+Multi-TID Block Ack round trip passed.
+.

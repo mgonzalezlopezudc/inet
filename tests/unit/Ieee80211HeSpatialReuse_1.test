@@ -1,0 +1,258 @@
+%description:
+Test HE Spatial Reuse (BSS Color CCA tuning) logic at Ieee80211Receiver.
+Verifies that a station with spatial reuse enabled ignores OBSS frames (different BSS color)
+when their received power is below the OBSS PD threshold (-62 dBm), but still attempts
+reception if the power is above the threshold or if it is an intra-BSS frame (same BSS color).
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+
+%file: TestNetwork.ned
+
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+import inet.mobility.static.StationaryMobility;
+
+module DummyReceiverModule extends Ieee80211Receiver
+{
+    parameters:
+        @class(DummyReceiverModule);
+}
+
+module MockNic
+{
+    parameters:
+        @class(MockNicModule);
+    submodules:
+        mib: Ieee80211Mib;
+        radio: Ieee80211ScalarRadio {
+            receiver.typename = "DummyReceiverModule";
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.receiver.typename = "DummyReceiverModule"
+**.nic*.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.receiver.energyDetection = -100dBm
+**.receiver.sensitivity = -90dBm
+**.receiver.centerFrequency = 5.18GHz
+**.receiver.bandwidth = 20MHz
+**.receiver.modulation = "BPSK"
+**.receiver.snirThreshold = 4dB
+**.receiver.opMode = "ax"
+**.receiver.bandName = "5 GHz"
+**.receiver.channelNumber = 36
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class MockIeee80211Transmission : public Ieee80211Transmission
+{
+  public:
+    MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode, const Ieee80211Channel *channel)
+        : Ieee80211Transmission(
+            transmitter,
+            packet,
+            0.0, 0.0, // startTime, endTime
+            0.0, 0.0, 0.0, // preamble, header, data duration
+            Coord(), Coord(), // start, end position
+            Quaternion(), Quaternion(), // start, end orientation
+            nullptr, nullptr, nullptr, nullptr, nullptr, // models
+            mode, channel
+        ) {}
+};
+
+class DummyReceiverModule : public Ieee80211Receiver {
+  public:
+    bool checkReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const {
+        return computeIsReceptionPossible(listening, reception, part);
+    }
+    bool checkReceptionAttempted(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const {
+        return computeIsReceptionAttempted(listening, reception, part, nullptr);
+    }
+    void setSpatialReuse(bool enable, W threshold) {
+        enableSpatialReuse = enable;
+        obssPdThreshold = threshold;
+    }
+};
+
+class MockNicModule : public NetworkInterface {
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(DummyReceiverModule);
+Define_Module(MockNicModule);
+
+static Packet *makeHeMuPacketWithBssColor(const char *name, uint8_t bssColor)
+{
+    auto packet = new Packet(name);
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    phyHeader->setBssColor(bssColor);
+    
+    // Add one user so getUsersArraySize() > 0
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = 0;
+    user.ruToneSize = 242;
+    user.ruToneOffset = 0;
+    user.staId = 1;
+    phyHeader->appendUsers(user);
+    
+    phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 73));
+    packet->insertAtBack(phyHeader);
+    
+    auto containerHeader = makeShared<Ieee80211DataHeader>();
+    containerHeader->setType(ST_DATA_WITH_QOS);
+    containerHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    containerHeader->setChunkLength(b(288));
+    packet->insertAtBack(containerHeader);
+    
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    return packet;
+}
+
+%activity:
+
+cModuleType *nicType = cModuleType::find("MockNic");
+if (!nicType) {
+    throw cRuntimeError("Could not find MockNic module type");
+}
+
+cModule *nic = nicType->create("nic", getSystemModule());
+nic->buildInside();
+auto netIface = check_and_cast<MockNicModule *>(nic);
+netIface->setMacAddress(MacAddress("00:11:22:33:44:55"));
+nic->callInitialize();
+
+auto rxModule = check_and_cast<DummyReceiverModule *>(nic->getSubmodule("radio")->getSubmodule("receiver"));
+auto mibModule = check_and_cast<Ieee80211Mib *>(nic->getSubmodule("mib"));
+auto radio = check_and_cast<IRadio *>(nic->getSubmodule("radio"));
+
+// Set receiver sensitivity to -90 dBm
+rxModule->setSensitivity(mW(math::dBmW2mW(-90)));
+
+// Set local BSS color in MIB to 5
+mibModule->heOperation.bssColor = 5;
+
+// Retrieve mode and channel for mock transmissions
+auto modeSet = Ieee80211ModeSet::getModeSet("ax");
+auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto channel = new Ieee80211Channel(nullptr, 1);
+
+// Construct Listening object
+auto listening = rxModule->getAnalogModel()->createListening(
+    radio, SIMTIME_ZERO, SimTime(1, SIMTIME_MS), Coord(), Coord(), Hz(5.18e9), Hz(20e6)
+);
+
+// We will test three scenarios for received signal power:
+// 1. Below sensitivity (e.g., -95 dBm) -> impossible for all
+// 2. Below OBSS PD threshold (-62 dBm) but above sensitivity (e.g., -70 dBm)
+// 3. Above OBSS PD threshold (e.g., -55 dBm)
+W pBelowSens = mW(math::dBmW2mW(-95));
+W pBetween = mW(math::dBmW2mW(-70));
+W pAbove = mW(math::dBmW2mW(-55));
+
+auto runTestCase = [&](const char *label, bool enableSR, uint8_t frameBssColor, W rxPower, bool expectedPossible) {
+    auto packet = makeHeMuPacketWithBssColor("test-packet", frameBssColor);
+    auto trans = new MockIeee80211Transmission(radio, packet, mode, channel);
+    
+    auto analogModel = new ScalarReceptionAnalogModel(
+        SIMTIME_ZERO, SIMTIME_ZERO, SimTime(1, SIMTIME_MS), Hz(5.18e9), Hz(20e6), rxPower
+    );
+    auto reception = new Reception(
+        radio, trans, SIMTIME_ZERO, SimTime(1, SIMTIME_MS), Coord(), Coord(), Quaternion(), Quaternion(), analogModel
+    );
+    
+    rxModule->setSpatialReuse(enableSR, mW(math::dBmW2mW(-62))); // threshold is -62 dBm
+    
+    bool possible = rxModule->checkReceptionPossible(listening, reception, IRadioSignal::SIGNAL_PART_WHOLE);
+    bool attempted = rxModule->checkReceptionAttempted(listening, reception, IRadioSignal::SIGNAL_PART_WHOLE);
+    
+    EV << label << " -> possible: " << (possible ? "YES" : "NO")
+       << ", attempted: " << (attempted ? "YES" : "NO")
+       << " (Expected: " << (expectedPossible ? "YES" : "NO") << ")\n";
+    
+    ASSERT(possible == expectedPossible);
+    ASSERT(attempted == expectedPossible);
+    
+    delete reception;
+    delete trans;
+    delete packet;
+};
+
+// 1. Spatial Reuse Disabled, Intra-BSS (color 5), power between -> should be possible
+runTestCase("SR_Disabled_Intra_Between", false, 5, pBetween, true);
+
+// 2. Spatial Reuse Disabled, OBSS (color 9), power between -> should be possible (since SR is disabled)
+runTestCase("SR_Disabled_OBSS_Between", false, 9, pBetween, true);
+
+// 3. Spatial Reuse Enabled, Intra-BSS (color 5), power between -> should be possible
+runTestCase("SR_Enabled_Intra_Between", true, 5, pBetween, true);
+
+// 4. Spatial Reuse Enabled, OBSS (color 9), power between -> should be IGNORED (not possible)
+runTestCase("SR_Enabled_OBSS_Between", true, 9, pBetween, false);
+
+// 5. Spatial Reuse Enabled, OBSS (color 9), power above threshold -> should be possible
+runTestCase("SR_Enabled_OBSS_Above", true, 9, pAbove, true);
+
+// 6. Spatial Reuse Enabled, OBSS (color 9), power below sensitivity -> should be impossible
+runTestCase("SR_Enabled_OBSS_BelowSens", true, 9, pBelowSens, false);
+
+delete listening;
+delete channel;
+EV << ".\n";
+
+%contains: stdout
+SR_Disabled_Intra_Between -> possible: YES, attempted: YES (Expected: YES)
+SR_Disabled_OBSS_Between -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_Intra_Between -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_OBSS_Between -> possible: NO, attempted: NO (Expected: NO)
+SR_Enabled_OBSS_Above -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_OBSS_BelowSens -> possible: NO, attempted: NO (Expected: NO)
+.
