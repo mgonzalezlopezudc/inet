@@ -415,19 +415,17 @@ class Ieee80211CompressedBlockAckReq extends Ieee80211BlockAckReq
     compressedBitmap = 1;
 }
 
+struct Ieee80211MultiTidBlockAckReqRecord
+{
+    uint8_t tid;
+    uint16_t startingSequenceNumber;
+}
+
 class Ieee80211MultiTidBlockAckReq extends Ieee80211BlockAckReq
 {
-    // chunkLength TODO
-    // The BAR Information field of the Compressed BlockAckReq frame contains the Block Ack Starting
-    // Sequence Control subfield, as shown in Figure 8-21. The Starting Sequence Number subfield of the Block
-    // Ack Starting Sequence Control subfield contains the sequence number of the first MSDU or A-MSDU for
-    // which this BlockAckReq frame is sent. The Fragment Number subfield of the Block Ack Starting Sequence
-    // Control subfield is set to 0.
-
     multiTid = 1;
     compressedBitmap = 1;
-
-    // TODO unimplemented
+    Ieee80211MultiTidBlockAckReqRecord records[];
 }
 
 //
@@ -500,13 +498,18 @@ class Ieee80211CompressedBlockAck extends Ieee80211BlockAck
 //
 // 8.3.1.9.4 Multi-TID BlockAck variant
 //
+struct Ieee80211MultiTidBlockAckRecord
+{
+    uint8_t tid;
+    uint16_t startingSequenceNumber;
+    uint64_t bitmap;
+}
+
 class Ieee80211MultiTidBlockAck extends Ieee80211BlockAck
 {
-    // chunkLength TODO
     multiTid = 1;
     compressedBitmap = 1;
-
-    // TODO unimplemented
+    Ieee80211MultiTidBlockAckRecord records[];
 }
 
 struct Ieee80211MultiStaBlockAckRecord

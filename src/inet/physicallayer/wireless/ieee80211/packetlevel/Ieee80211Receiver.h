@@ -23,6 +23,8 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     const Ieee80211ModeSet *modeSet = nullptr;
     const IIeee80211Band *band = nullptr;
     const Ieee80211Channel *channel = nullptr;
+    bool enableSpatialReuse = false;
+    W obssPdThreshold = W(NaN);
 
   protected:
     virtual bool isAssignedHeMuRu(const ITransmission *transmission) const;
