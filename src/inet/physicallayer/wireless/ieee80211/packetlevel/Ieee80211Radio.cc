@@ -305,6 +305,10 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     auto heMuUsers = collectHeMuUsers(packet);
     auto phyHeader = !heMuUsers.empty() ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
     if (auto heMuPhyHeader = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader)) {
+        auto networkInterface = getContainingNicModule(this);
+        auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
+        if (mib != nullptr)
+            heMuPhyHeader->setBssColor(mib->heOperation.bssColor);
         auto request = packet->findTag<Ieee80211HeMuReq>();
         heMuPhyHeader->setPpduFormat(request == nullptr ? HE_MU_DOWNLINK : request->getPpduFormat());
         heMuPhyHeader->setTriggerId(request == nullptr ? 0 : request->getTriggerId());

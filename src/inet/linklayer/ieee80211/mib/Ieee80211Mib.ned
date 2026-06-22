@@ -27,6 +27,7 @@ simple Ieee80211Mib extends SimpleModule
         bool heLdpc = default(false); // Advertises and enables HE LDPC when the peer also supports it
         bool heMultiTidAggregationRx = default(false); // Advertises support for receiving Multi-TID Block Acks
         bool heMultiTidAggregationTx = default(false); // Advertises support for transmitting Multi-TID Block Acks
+        int heBssColor = default(0); // HE BSS color (1-63), 0 indicates disabled / unspecified
         int heDefaultPeDurationUs = default(0); // Default HE packet extension: 0, 4, 8, 12, or 16 microseconds
         bool heDlMuMimoBeamformer = default(false);
         bool heDlMuMimoBeamformee = default(false);

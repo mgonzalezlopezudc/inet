@@ -483,6 +483,7 @@ void Ieee80211MgmtSta::disassociate()
     EV << "Disassociating from AP address=" << assocAP.address << "\n";
     ASSERT(mib->bssStationData.isAssociated);
     mib->removePeerHeCapabilities(assocAP.address);
+    mib->heOperation.bssColor = 0;
     mib->bssStationData.isAssociated = false;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
@@ -667,15 +668,21 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
         mib->bssStationData.isAssociated = true;
         mib->bssStationData.associationId = aid;
         (ApInfo&)assocAP = (*ap);
-        if (heCapabilitiesPresent)
-            mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(heCapabilities),
-                    heOperationPresent ? makeHeOperation(heOperation) :
-                    (ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation));
-        else if (ap->heCapabilitiesPresent)
-            mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(ap->heCapabilities),
-                    ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation);
-        else
+        if (heCapabilitiesPresent) {
+            auto apHeOperation = heOperationPresent ? makeHeOperation(heOperation) :
+                    (ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation);
+            mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(heCapabilities), apHeOperation);
+            mib->heOperation.bssColor = apHeOperation.bssColor;
+        }
+        else if (ap->heCapabilitiesPresent) {
+            auto apHeOperation = ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation;
+            mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(ap->heCapabilities), apHeOperation);
+            mib->heOperation.bssColor = apHeOperation.bssColor;
+        }
+        else {
             mib->removePeerHeCapabilities(ap->address);
+            mib->heOperation.bssColor = 0;
+        }
 
         emit(l2AssociatedSignal, myIface, ap);
 
@@ -716,6 +723,7 @@ void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const
 
     EV << "Setting isAssociated flag to false\n";
     mib->removePeerHeCapabilities(address);
+    mib->heOperation.bssColor = 0;
     mib->bssStationData.isAssociated = false;
     mib->bssStationData.associationId = -1;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
