@@ -207,10 +207,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                         groupCandidates = tempGroup;
                         finalNss = tempNss;
                         finalSnirDb = tempSnirDb;
-#ifndef NDEBUG
-                        EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: expanded MU-MIMO group to "
-                                 << groupCandidates.size() << " STAs\n";
-#endif
+                        EV_DEBUG << "DL EqualSizedRUs scheduler: expanded MU-MIMO group to "
+                                 << groupCandidates.size() << " STTas\n";
                     }
                 }
 
@@ -232,27 +230,19 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                                 fullChannelRu.toneSize, alloc.mcs, finalNss[i], false, context.guardInterval);
                         result.push_back(alloc);
                     }
-#ifndef NDEBUG
-                    EV_INFO << "HeDlSchedulerEqualSizedRUs::schedule: selected DL MU-MIMO group of "
+                    EV_INFO << "DL EqualSizedRUs scheduler: selected DL MU-MIMO group of "
                             << result.size() << " STAs on full-channel RU\n";
-#endif
                     return result;
                 }
-#ifndef NDEBUG
-                EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: no compatible MU-MIMO group found\n";
-#endif
+                EV_DEBUG << "DL EqualSizedRUs scheduler: no compatible MU-MIMO group found\n";
             }
-#ifndef NDEBUG
             else {
-                EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: no backlogged anchor STA found for MU-MIMO\n";
+                EV_DEBUG << "DL EqualSizedRUs scheduler: no backlogged anchor STA found for MU-MIMO\n";
             }
-#endif
         }
-#ifndef NDEBUG
         else {
-            EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: fewer than two MU-MIMO eligible candidates\n";
+            EV_DEBUG << "DL EqualSizedRUs scheduler: fewer than two MU-MIMO eligible candidates\n";
         }
-#endif
     }
 
     // Fallback: standard equal-sized RU scheduling
@@ -283,10 +273,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, ruCount);
     ASSERT((int)rus.size() == ruCount);
 
-#ifndef NDEBUG
-    EV_INFO << "HeDlSchedulerEqualSizedRUs::schedule: falling back to " << ruCount
+    EV_INFO << "DL EqualSizedRUs scheduler: falling back to " << ruCount
             << " equal-sized RUs, scheduling " << numSelected << " STAs\n";
-#endif
 
     std::vector<RuAllocation> result;
     result.reserve(numSelected);

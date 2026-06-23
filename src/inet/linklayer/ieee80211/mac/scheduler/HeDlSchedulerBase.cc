@@ -162,13 +162,11 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
     for (size_t i = 0; i < requestOrder.size(); ++i)
         requestOrder[i] = i;
 
-#ifndef NDEBUG
     EV_DEBUG << "HeDlSchedulerBase::fitRequestedRus: fitting " << candidates.size()
              << " candidates, initial requested tones =";
     for (int tones : requestedTones)
         EV_DEBUG << " " << tones;
     EV_DEBUG << "\n";
-#endif
 
     // Helper that maps requested tone sizes to actual RU allocations and computes per-user MCS/duration.
     auto buildAllocations = [&] (const std::vector<int>& toneSizes,
@@ -237,16 +235,12 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
                 downgrade = i;
         }
         if (downgrade == -1) {
-#ifndef NDEBUG
             EV_DEBUG << "HeDlSchedulerBase::fitRequestedRus: cannot fit requested RUs, no further downgrades possible\n";
-#endif
             return {};
         }
-#ifndef NDEBUG
         EV_DEBUG << "HeDlSchedulerBase::fitRequestedRus: downgrading candidate " << downgrade
                  << " (" << candidates[downgrade].staAddress << ") from " << requestedTones[downgrade]
                  << " to " << getNextSmallerRu(requestedTones[downgrade]) << " tones\n";
-#endif
         requestedTones[downgrade] = getNextSmallerRu(requestedTones[downgrade]);
     }
 
@@ -274,10 +268,9 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         std::vector<int> bestTones = requestedTones;
         std::vector<RuAllocation> bestResult = result;
 
-#ifndef NDEBUG
-        EV_DEBUG << "HeDlSchedulerBase::fitRequestedRus: duration alignment iteration " << iteration
+
+        EV_DEBUG << "HE DL base scheduler: duration alignment iteration " << iteration
                  << ", mean duration = " << mean << ", variance = " << bestVariance << "\n";
-#endif
 
         auto tryProposal = [&] (const std::vector<int>& proposal) {
             std::vector<RuAllocation> proposalResult;
@@ -324,10 +317,8 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         }
 
         if (bestTones == requestedTones) {
-#ifndef NDEBUG
-            EV_DEBUG << "HeDlSchedulerBase::fitRequestedRus: duration alignment converged after "
+            EV_DEBUG << "HE DL base scheduler: duration alignment converged after "
                      << (iteration + 1) << " iterations\n";
-#endif
             break;
         }
         requestedTones = bestTones;
@@ -342,13 +333,12 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         }(), context.channelBandwidth))
         throw cRuntimeError("HE scheduler produced an invalid RU layout");
     ASSERT(result.empty() || result.size() == candidates.size());
-#ifndef NDEBUG
-    EV_INFO << "HeDlSchedulerBase::fitRequestedRus: produced " << result.size()
+    EV_INFO << "HE DL base scheduler: produced " << result.size()
             << " RU allocations, durations =";
     for (const auto& allocation : result)
         EV_INFO << " " << allocation.estimatedDuration;
     EV_INFO << "\n";
-#endif
+
     return result;
 }
 
