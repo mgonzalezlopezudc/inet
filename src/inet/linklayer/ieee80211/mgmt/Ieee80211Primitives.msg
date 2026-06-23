@@ -28,6 +28,10 @@ enum Ieee80211PrimRequestCode
     PR_ASSOCIATE_REQUEST = 4;
     PR_REASSOCIATE_REQUEST = 5;
     PR_DISASSOCIATE_REQUEST = 6;
+    PR_TWT_SETUP_REQUEST = 7;
+    PR_TWT_TEARDOWN_REQUEST = 8;
+    PR_TWT_INFORMATION_REQUEST = 9;
+    PR_BROADCAST_TWT_SCHEDULE_REQUEST = 10;
 }
 
 //
@@ -46,6 +50,10 @@ enum Ieee80211PrimConfirmCode
     PR_ASSOCIATE_CONFIRM = 4;
     PR_REASSOCIATE_CONFIRM = 5;
     PR_DISASSOCIATE_CONFIRM = 6;
+    PR_TWT_SETUP_CONFIRM = 7;
+    PR_TWT_TEARDOWN_CONFIRM = 8;
+    PR_TWT_INFORMATION_CONFIRM = 9;
+    PR_BROADCAST_TWT_SCHEDULE_CONFIRM = 10;
 }
 
 enum Ieee80211BssType
@@ -201,4 +209,72 @@ class Ieee80211Prim_DisassociateRequest extends Ieee80211PrimRequest
 {
     MacAddress address;
     Ieee80211ReasonCode reasonCode;
+}
+
+// Runtime TWT primitives. Time fields are simulation-time projections of the
+// TSF values carried in the corresponding action frames.
+class Ieee80211Prim_TwtSetupRequest extends Ieee80211PrimRequest
+{
+    MacAddress peerAddress;
+    bool broadcast;
+    short flowId;
+    short broadcastId;
+    short setupCommand;
+    bool implicit;
+    bool announced;
+    bool triggerEnabled;
+    simtime_t targetWakeTime;
+    simtime_t wakeInterval;
+    simtime_t wakeDuration;
+    short persistence;
+}
+
+class Ieee80211Prim_TwtSetupConfirm extends Ieee80211PrimConfirm
+{
+    Ieee80211Prim_TwtSetupRequest agreement;
+}
+
+class Ieee80211Prim_TwtSetupIndication extends Ieee80211Prim_TwtSetupConfirm
+{
+}
+
+class Ieee80211Prim_TwtTeardownRequest extends Ieee80211PrimRequest
+{
+    MacAddress peerAddress;
+    short flowId;
+    bool broadcast;
+    short broadcastId;
+}
+
+class Ieee80211Prim_TwtTeardownConfirm extends Ieee80211PrimConfirm
+{
+}
+
+class Ieee80211Prim_TwtInformationRequest extends Ieee80211PrimRequest
+{
+    MacAddress peerAddress;
+    short flowId;
+    simtime_t nextWakeTime;
+}
+
+class Ieee80211Prim_TwtInformationConfirm extends Ieee80211PrimConfirm
+{
+}
+
+class Ieee80211Prim_BroadcastTwtScheduleRequest extends Ieee80211PrimRequest
+{
+    short operation; // 0=create, 1=update, 2=delete
+    short broadcastId;
+    bool implicit;
+    bool announced;
+    bool triggerEnabled;
+    simtime_t targetWakeTime;
+    simtime_t wakeInterval;
+    simtime_t wakeDuration;
+    short persistence;
+}
+
+class Ieee80211Prim_BroadcastTwtScheduleConfirm extends Ieee80211PrimConfirm
+{
+    short broadcastId;
 }

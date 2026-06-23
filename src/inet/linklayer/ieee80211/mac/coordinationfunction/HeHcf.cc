@@ -320,6 +320,10 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             }
             if (std::find(seenDestinations.begin(), seenDestinations.end(), dest) != seenDestinations.end())
                 continue;
+            if (!mac->isTwtPeerEligible(dest)) {
+                EV_DEBUG << "HE DL schedule context: skipping sleeping TWT STA " << dest << "\n";
+                continue;
+            }
 
             auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
             // Fresh queue entries have not been assigned a sequence number
@@ -503,6 +507,10 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
                 if (station.second != Ieee80211Mib::ASSOCIATED || index >= maxRus)
                     continue;
+                if (!mac->isTwtPeerEligible(station.first)) {
+                    EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.first << "\n";
+                    continue;
+                }
                 IIeee80211HeUlScheduler::RuAllocation allocation;
                 allocation.staAddress = station.first;
                 allocation.associationId = mac->getMib()->getAssociationId(station.first);
@@ -527,6 +535,10 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             ulSchedule = ulCoordinator->createSchedule(mac->getMib(), centerFrequency, channelBandwidth,
                     txopLimit, sensitivityDbm, par("ulTargetRssiMargin"), staleOrUnknown, 0, 0);
         }
+        ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
+                [this] (const auto& allocation) {
+                    return !allocation.randomAccess && !mac->isTwtPeerEligible(allocation.staAddress);
+                }), ulSchedule.allocations.end());
         auto puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(), channelBandwidth);
         if (!puncturedSubchannels.empty()) {
             for (size_t i = 0; i < puncturedSubchannels.size(); ++i)

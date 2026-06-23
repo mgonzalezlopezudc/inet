@@ -6,6 +6,9 @@
 
 
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtSta.h"
+#include "inet/linklayer/ieee80211/twt/ITwtManager.h"
+
+#include <cmath>
 
 #include "inet/common/INETUtils.h"
 #include "inet/common/ModuleAccess.h"
@@ -179,6 +182,76 @@ void Ieee80211MgmtSta::handleCommand(int msgkind, cObject *ctrl)
         processReassociateCommand(cmd);
     else if (auto cmd = dynamic_cast<Ieee80211Prim_DisassociateRequest *>(ctrl))
         processDisassociateCommand(cmd);
+    else if (auto cmd = dynamic_cast<Ieee80211Prim_TwtSetupRequest *>(ctrl)) {
+        auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+        auto confirm = new Ieee80211Prim_TwtSetupConfirm();
+        confirm->setAgreement(*cmd);
+        const auto *peerCapabilities = mib->findNegotiatedHeCapabilities(assocAP.address);
+        bool peerSupportsTwt = assocAP.heCapabilitiesPresent &&
+                (assocAP.heCapabilities.twtResponder || (cmd->getBroadcast() && assocAP.heCapabilities.broadcastTwt));
+        if (manager == nullptr || !manager->isEnabled() || assocAP.address.isUnspecified() ||
+                !mib->localHeCapabilities.twtRequester || !peerSupportsTwt || peerCapabilities == nullptr || !peerCapabilities->valid)
+            sendConfirm(confirm, PRC_REFUSED);
+        else if (cmd->getWakeInterval() <= SIMTIME_ZERO || cmd->getWakeDuration() <= SIMTIME_ZERO || cmd->getWakeDuration() > cmd->getWakeInterval())
+            sendConfirm(confirm, PRC_INVALID_PARAMETERS);
+        else {
+            uint8_t dialogToken = nextTwtDialogToken++;
+            if (dialogToken == 0)
+                dialogToken = nextTwtDialogToken++;
+            pendingTwtSetups[dialogToken] = *cmd;
+            auto frame = makeShared<Ieee80211TwtSetupFrame>();
+            frame->setDialogToken(dialogToken);
+            frame->setTwtRequest(true);
+            frame->setSetupCommand(cmd->getSetupCommand());
+            frame->setTrigger(cmd->getTriggerEnabled());
+            frame->setImplicit(cmd->getImplicit());
+            frame->setAnnounced(cmd->getAnnounced());
+            frame->setBroadcast(cmd->getBroadcast());
+            frame->setFlowId(cmd->getFlowId());
+            frame->setBroadcastId(cmd->getBroadcastId());
+            frame->setTargetWakeTime(cmd->getTargetWakeTime().inUnit(SIMTIME_US));
+            uint64_t intervalUs = cmd->getWakeInterval().inUnit(SIMTIME_US);
+            uint8_t exponent = 0;
+            while (intervalUs > 0xffff && exponent < 31) {
+                intervalUs = (intervalUs + 1) / 2;
+                exponent++;
+            }
+            frame->setWakeIntervalExponent(exponent);
+            frame->setWakeIntervalMantissa(intervalUs);
+            frame->setNominalWakeDuration(std::clamp((int)std::ceil(cmd->getWakeDuration().inUnit(SIMTIME_US) / 256.0), 1, 255));
+            frame->setPersistence(cmd->getPersistence());
+            sendTwtActionFrame("TwtSetupRequest", frame, assocAP.address);
+            delete confirm; // confirm is emitted only after the AP's over-the-air response
+        }
+    }
+    else if (auto cmd = dynamic_cast<Ieee80211Prim_TwtTeardownRequest *>(ctrl)) {
+        auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+        auto confirm = new Ieee80211Prim_TwtTeardownConfirm();
+        if (manager == nullptr || !manager->isEnabled())
+            sendConfirm(confirm, PRC_REFUSED);
+        else {
+            auto frame = makeShared<Ieee80211TwtTeardownFrame>();
+            frame->setFlowId(cmd->getFlowId());
+            frame->setBroadcast(cmd->getBroadcast());
+            frame->setBroadcastId(cmd->getBroadcastId());
+            sendTwtActionFrame("TwtTeardown", frame, cmd->getPeerAddress().isUnspecified() ? assocAP.address : cmd->getPeerAddress());
+            manager->removeAgreement(cmd->getPeerAddress(), cmd->getFlowId(), cmd->getBroadcast(), cmd->getBroadcastId());
+            if (cmd->getBroadcast())
+                manager->removeBroadcastMember(cmd->getBroadcastId(), mib->address);
+            sendConfirm(confirm, PRC_SUCCESS);
+        }
+    }
+    else if (auto cmd = dynamic_cast<Ieee80211Prim_TwtInformationRequest *>(ctrl)) {
+        auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+        auto confirm = new Ieee80211Prim_TwtInformationConfirm();
+        auto peer = cmd->getPeerAddress().isUnspecified() ? assocAP.address : cmd->getPeerAddress();
+        auto frame = makeShared<Ieee80211TwtInformationFrame>();
+        frame->setFlowId(cmd->getFlowId());
+        frame->setNextWakeTimePresent(true);
+        frame->setNextWakeTime(cmd->getNextWakeTime().inUnit(SIMTIME_US));
+        sendTwtActionFrame("TwtInformation", frame, peer);
+        sendConfirm(confirm, manager != nullptr && manager->updateNextWakeTime(peer, cmd->getFlowId(), cmd->getNextWakeTime()) ? PRC_SUCCESS : PRC_REFUSED);
+    }
     else if (ctrl)
         throw cRuntimeError("handleCommand(): unrecognized control info class `%s'", ctrl->getClassName());
     else
@@ -228,6 +301,69 @@ void Ieee80211MgmtSta::sendManagementFrame(const char *name, const Ptr<Ieee80211
     packet->addTag<Ieee80211SubtypeReq>()->setSubtype(subtype);
     packet->insertAtBack(body);
     sendDown(packet);
+}
+
+void Ieee80211MgmtSta::sendTwtActionFrame(const char *name, const Ptr<Ieee80211ActionFrame>& frame, const MacAddress& address)
+{
+    auto packet = new Packet(name);
+    frame->setReceiverAddress(address);
+    frame->setTransmitterAddress(mib->address);
+    frame->setAddress3(mib->bssData.bssid);
+    packet->insertAtFront(frame);
+    sendDown(packet);
+}
+
+void Ieee80211MgmtSta::sendAnnouncedTwtPsPoll(const MacAddress& address)
+{
+    auto packet = new Packet("TwtPsPoll");
+    auto frame = makeShared<Ieee80211PsPollFrame>();
+    frame->setAID(mib->bssStationData.associationId);
+    frame->setReceiverAddress(address);
+    frame->setTransmitterAddress(mib->address);
+    packet->insertAtFront(frame);
+    sendDown(packet);
+}
+
+void Ieee80211MgmtSta::processTwtSetupResponse(const Ptr<const Ieee80211TwtSetupFrame>& frame)
+{
+    auto pending = pendingTwtSetups.find(frame->getDialogToken());
+    if (pending == pendingTwtSetups.end())
+        return;
+    auto confirm = new Ieee80211Prim_TwtSetupConfirm();
+    confirm->setAgreement(pending->second);
+    auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+    bool accepted = frame->getSetupCommand() == 3 || frame->getSetupCommand() == 4 || frame->getSetupCommand() == 5;
+    if (manager == nullptr || !manager->isEnabled() || !accepted)
+        sendConfirm(confirm, PRC_REFUSED);
+    else {
+        TwtAgreement agreement;
+        agreement.peerAddress = assocAP.address;
+        agreement.flowId = frame->getFlowId();
+        agreement.broadcast = frame->getBroadcast();
+        agreement.broadcastId = frame->getBroadcastId();
+        agreement.implicit = frame->getImplicit();
+        agreement.announced = frame->getAnnounced();
+        agreement.triggerEnabled = frame->getTrigger();
+        agreement.nextWakeTime = SimTime((int64_t)frame->getTargetWakeTime(), SIMTIME_US);
+        agreement.wakeInterval = SimTime((int64_t)frame->getWakeIntervalMantissa() * (uint64_t(1) << frame->getWakeIntervalExponent()), SIMTIME_US);
+        agreement.wakeDuration = SimTime((int64_t)frame->getNominalWakeDuration() * 256, SIMTIME_US);
+        agreement.persistence = frame->getPersistence();
+        agreement.active = agreement.wakeInterval > SIMTIME_ZERO && agreement.wakeDuration > SIMTIME_ZERO && agreement.wakeDuration <= agreement.wakeInterval;
+        if (agreement.broadcast) {
+            TwtBroadcastSchedule schedule;
+            if (!manager->findBroadcastSchedule(agreement.broadcastId, schedule)) {
+                schedule = TwtBroadcastSchedule();
+                static_cast<TwtAgreement&>(schedule) = agreement;
+                schedule.expiresAt = simTime() + assocAP.beaconInterval * std::max(1, (int)agreement.persistence);
+                manager->installBroadcastSchedule(schedule);
+            }
+            manager->addBroadcastMember(agreement.broadcastId, mib->address);
+        }
+        else
+            manager->installAgreement(agreement);
+        sendConfirm(confirm, agreement.active ? PRC_SUCCESS : PRC_INVALID_PARAMETERS);
+    }
+    pendingTwtSetups.erase(pending);
 }
 
 void Ieee80211MgmtSta::startAuthentication(ApInfo *ap, simtime_t timeout)
@@ -739,6 +875,26 @@ void Ieee80211MgmtSta::handleBeaconFrame(Packet *packet, const Ptr<const Ieee802
     EV << "Received Beacon frame\n";
     const auto& beaconBody = packet->peekData<Ieee80211BeaconFrame>();
     storeAPInfo(packet, header, beaconBody);
+    if (mib->bssStationData.isAssociated && header->getTransmitterAddress() == assocAP.address && beaconBody->getBroadcastTwtPresent()) {
+        if (auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr && manager->isEnabled()) {
+            for (unsigned int i = 0; i < beaconBody->getBroadcastTwtSchedulesArraySize(); ++i) {
+                const auto& element = beaconBody->getBroadcastTwtSchedules(i);
+                TwtBroadcastSchedule schedule;
+                schedule.peerAddress = assocAP.address;
+                schedule.broadcastId = element.broadcastId;
+                schedule.implicit = element.implicit;
+                schedule.announced = element.announced;
+                schedule.triggerEnabled = element.triggerEnabled;
+                schedule.persistence = element.persistence;
+                schedule.nextWakeTime = element.targetWakeTime;
+                schedule.wakeInterval = element.wakeInterval;
+                schedule.wakeDuration = element.wakeDuration;
+                schedule.active = schedule.wakeInterval > SIMTIME_ZERO && schedule.wakeDuration > SIMTIME_ZERO;
+                schedule.expiresAt = simTime() + beaconBody->getBeaconInterval() * std::max(1, (int)schedule.persistence);
+                manager->installBroadcastSchedule(schedule);
+            }
+        }
+    }
 
     // if it is out associate AP, restart beacon timeout
     if (mib->bssStationData.isAssociated && header->getTransmitterAddress() == assocAP.address) {
@@ -764,6 +920,29 @@ void Ieee80211MgmtSta::handleProbeResponseFrame(Packet *packet, const Ptr<const 
     const auto& probeResponseBody = packet->peekData<Ieee80211ProbeResponseFrame>();
     storeAPInfo(packet, header, probeResponseBody);
     delete packet;
+}
+
+void Ieee80211MgmtSta::handleActionFrame(Packet *packet, const Ptr<const Ieee80211ActionFrame>& header)
+{
+    if (auto setup = dynamicPtrCast<const Ieee80211TwtSetupFrame>(header)) {
+        if (!setup->getTwtRequest())
+            processTwtSetupResponse(setup);
+        delete packet;
+    }
+    else if (auto teardown = dynamicPtrCast<const Ieee80211TwtTeardownFrame>(header)) {
+        if (auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr)
+            manager->removeAgreement(header->getTransmitterAddress(), teardown->getFlowId(), teardown->getBroadcast(), teardown->getBroadcastId());
+        delete packet;
+    }
+    else if (auto information = dynamicPtrCast<const Ieee80211TwtInformationFrame>(header)) {
+        if (auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+                manager != nullptr && information->getNextWakeTimePresent())
+            manager->updateNextWakeTime(header->getTransmitterAddress(), information->getFlowId(),
+                    SimTime((int64_t)information->getNextWakeTime(), SIMTIME_US));
+        delete packet;
+    }
+    else
+        Ieee80211MgmtBase::handleActionFrame(packet, header);
 }
 
 void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header, const Ptr<const Ieee80211BeaconFrame>& body)

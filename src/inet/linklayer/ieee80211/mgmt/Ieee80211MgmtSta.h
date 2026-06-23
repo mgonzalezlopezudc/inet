@@ -8,6 +8,8 @@
 #ifndef __INET_IEEE80211MGMTSTA_H
 #define __INET_IEEE80211MGMTSTA_H
 
+#include <map>
+
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtBase.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211Primitives_m.h"
 
@@ -99,6 +101,8 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
     // associated Access Point
     cMessage *assocTimeoutMsg; // if non-nullptr: association is in progress
     AssociatedApInfo assocAP;
+    std::map<uint8_t, Ieee80211Prim_TwtSetupRequest> pendingTwtSetups;
+    uint8_t nextTwtDialogToken = 1;
 
   public:
     Ieee80211MgmtSta() : host(nullptr), numChannels(-1), isScanning(false), assocTimeoutMsg(nullptr) {}
@@ -159,6 +163,9 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
 
     /** Utility function: sends a management frame */
     virtual void sendManagementFrame(const char *name, const Ptr<Ieee80211MgmtFrame>& body, int subtype, const MacAddress& address);
+    virtual void sendTwtActionFrame(const char *name, const Ptr<Ieee80211ActionFrame>& frame, const MacAddress& address);
+    virtual void sendAnnouncedTwtPsPoll(const MacAddress& address);
+    virtual void processTwtSetupResponse(const Ptr<const Ieee80211TwtSetupFrame>& frame);
 
     /** Called by the signal handler whenever a change occurs we're interested in */
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
@@ -178,6 +185,7 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
     virtual void handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override;
     virtual void handleProbeRequestFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override;
     virtual void handleProbeResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override;
+    virtual void handleActionFrame(Packet *packet, const Ptr<const Ieee80211ActionFrame>& header) override;
     //@}
 
     /** @name Processing of different agent commands */

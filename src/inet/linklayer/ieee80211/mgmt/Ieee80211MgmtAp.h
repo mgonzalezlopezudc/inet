@@ -11,6 +11,7 @@
 #include <map>
 
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtApBase.h"
+#include "inet/linklayer/ieee80211/twt/TwtAgreement.h"
 
 namespace inet {
 
@@ -81,6 +82,8 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
 
     /** Utility function: set fields in the given frame and send it out to the address */
     virtual void sendManagementFrame(const char *name, const Ptr<Ieee80211MgmtFrame>& body, int subtype, const MacAddress& destAddr);
+    virtual void sendTwtActionFrame(const char *name, const Ptr<Ieee80211ActionFrame>& frame, const MacAddress& destAddr);
+    virtual TwtAgreement makeTwtAgreement(const Ptr<const Ieee80211TwtSetupFrame>& frame, const MacAddress& peer) const;
 
     /** Utility function: creates and sends a beacon frame */
     virtual void sendBeacon();
@@ -97,6 +100,7 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
     virtual void handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override;
     virtual void handleProbeRequestFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override;
     virtual void handleProbeResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) override;
+    virtual void handleActionFrame(Packet *packet, const Ptr<const Ieee80211ActionFrame>& header) override;
     //@}
 
     void sendAssocNotification(const MacAddress& addr);
@@ -117,4 +121,3 @@ class INET_API Ieee80211MgmtAp : public Ieee80211MgmtApBase
 } // namespace inet
 
 #endif
-

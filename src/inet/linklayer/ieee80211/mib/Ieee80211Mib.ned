@@ -25,6 +25,9 @@ simple Ieee80211Mib extends SimpleModule
         // HE features are opt-in so existing configurations retain BCC and
         // the unextended PPDU geometry.
         bool heLdpc = default(false); // Advertises and enables HE LDPC when the peer also supports it
+        bool heTwtRequester = default(false); // Advertises HE TWT requester support
+        bool heTwtResponder = default(false); // Advertises HE TWT responder support
+        bool heBroadcastTwt = default(false); // Advertises HE broadcast TWT support
         bool heMultiTidAggregationRx = default(false); // Advertises support for receiving Multi-TID Block Acks
         bool heMultiTidAggregationTx = default(false); // Advertises support for transmitting Multi-TID Block Acks
         int heBssColor = default(0); // HE BSS color (1-63), 0 indicates disabled / unspecified

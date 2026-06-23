@@ -102,6 +102,12 @@ void Ieee80211AgentSta::handleResponse(cMessage *msg)
         processAssociateConfirm(ptr);
     else if (auto ptr = dynamic_cast<Ieee80211Prim_ReassociateConfirm *>(ctrl))
         processReassociateConfirm(ptr);
+    else if (auto ptr = dynamic_cast<Ieee80211Prim_TwtSetupConfirm *>(ctrl))
+        processTwtSetupConfirm(ptr);
+    else if (auto ptr = dynamic_cast<Ieee80211Prim_TwtTeardownConfirm *>(ctrl))
+        processTwtTeardownConfirm(ptr);
+    else if (auto ptr = dynamic_cast<Ieee80211Prim_TwtInformationConfirm *>(ctrl))
+        processTwtInformationConfirm(ptr);
     else if (ctrl)
         throw cRuntimeError("handleResponse(): unrecognized control info class `%s'", ctrl->getClassName());
     else
@@ -130,6 +136,21 @@ void Ieee80211AgentSta::sendRequest(Ieee80211PrimRequest *req)
     cMessage *msg = new cMessage(req->getClassName());
     msg->setControlInfo(req);
     send(msg, "mgmtOut");
+}
+
+void Ieee80211AgentSta::requestTwtSetup(const Ieee80211Prim_TwtSetupRequest& request)
+{
+    sendRequest(new Ieee80211Prim_TwtSetupRequest(request));
+}
+
+void Ieee80211AgentSta::requestTwtTeardown(const Ieee80211Prim_TwtTeardownRequest& request)
+{
+    sendRequest(new Ieee80211Prim_TwtTeardownRequest(request));
+}
+
+void Ieee80211AgentSta::requestTwtInformation(const Ieee80211Prim_TwtInformationRequest& request)
+{
+    sendRequest(new Ieee80211Prim_TwtInformationRequest(request));
 }
 
 void Ieee80211AgentSta::sendScanRequest()
@@ -315,6 +336,21 @@ void Ieee80211AgentSta::processReassociateConfirm(Ieee80211Prim_ReassociateConfi
         emit(acceptConfirmSignal, PR_REASSOCIATE_CONFIRM);
         // we are happy!
     }
+}
+
+void Ieee80211AgentSta::processTwtSetupConfirm(Ieee80211Prim_TwtSetupConfirm *resp)
+{
+    emit(resp->getResultCode() == PRC_SUCCESS ? acceptConfirmSignal : dropConfirmSignal, PR_TWT_SETUP_CONFIRM);
+}
+
+void Ieee80211AgentSta::processTwtTeardownConfirm(Ieee80211Prim_TwtTeardownConfirm *resp)
+{
+    emit(resp->getResultCode() == PRC_SUCCESS ? acceptConfirmSignal : dropConfirmSignal, PR_TWT_TEARDOWN_CONFIRM);
+}
+
+void Ieee80211AgentSta::processTwtInformationConfirm(Ieee80211Prim_TwtInformationConfirm *resp)
+{
+    emit(resp->getResultCode() == PRC_SUCCESS ? acceptConfirmSignal : dropConfirmSignal, PR_TWT_INFORMATION_CONFIRM);
 }
 
 } // namespace ieee80211

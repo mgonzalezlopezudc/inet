@@ -35,6 +35,7 @@ static const uint8_t ELEMENT_ID_EXTENSION = 255;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_CAPABILITIES = 35;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_OPERATION = 36;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_6GHZ_BAND_CAPABILITIES = 59;
+static const uint8_t ELEMENT_ID_TWT = 216;
 
 static uint64_t getBits(uint64_t value, int offset, int length)
 {
@@ -177,8 +178,11 @@ static void writeHeCapabilitiesElement(MemoryOutputStream& stream, const Ieee802
     stream.writeByte(ELEMENT_ID_EXTENSION_HE_CAPABILITIES);
 
     uint64_t macCapabilities = 0;
+    setBits(macCapabilities, 1, 1, capabilities.twtRequester ? 1 : 0);
+    setBits(macCapabilities, 2, 1, capabilities.twtResponder ? 1 : 0);
     setBits(macCapabilities, 12, 3, capabilities.multiTidAggregationRx ? 1 : 0);
     setBits(macCapabilities, 17, 1, capabilities.heTbBlockAckTx ? 1 : 0);
+    setBits(macCapabilities, 18, 1, capabilities.broadcastTwt ? 1 : 0);
     setBits(macCapabilities, 19, 1, capabilities.ulOfdma ? 1 : 0);
     setBits(macCapabilities, 26, 1, capabilities.ulOfdma ? 1 : 0);
     setBits(macCapabilities, 27, 2, std::clamp((int)capabilities.maxAmpduLengthExponent - 3, 0, 3));
@@ -248,6 +252,42 @@ static void writeHe6GhzBandCapabilitiesElement(MemoryOutputStream& stream, const
     stream.writeUint16Le(capabilitiesInformation);
 }
 
+static uint8_t encodeTwtWakeDuration(simtime_t duration)
+{
+    return std::clamp((int)std::ceil(duration.inUnit(SIMTIME_US) / 256.0), 1, 255);
+}
+
+static void writeBroadcastTwtElement(MemoryOutputStream& stream, const Ptr<const Ieee80211MgmtFrame>& frame)
+{
+    if (!frame->getBroadcastTwtPresent())
+        return;
+    int count = frame->getBroadcastTwtSchedulesArraySize();
+    if (count == 0 || count > 16)
+        throw cRuntimeError("Broadcast TWT element requires 1..16 parameter sets");
+    stream.writeByte(ELEMENT_ID_TWT);
+    stream.writeByte(1 + count * 15);
+    stream.writeByte(0x08 | ((count - 1) << 4)); // Broadcast=1, last parameter-set index
+    for (int i = 0; i < count; ++i) {
+        const auto& schedule = frame->getBroadcastTwtSchedules(i);
+        if (schedule.broadcastId < 0 || schedule.broadcastId > 31 || schedule.wakeInterval <= SIMTIME_ZERO || schedule.wakeDuration <= SIMTIME_ZERO)
+            throw cRuntimeError("Invalid broadcast TWT parameter set");
+        uint64_t targetWakeTime = schedule.targetWakeTime.inUnit(SIMTIME_US);
+        uint64_t intervalUs = schedule.wakeInterval.inUnit(SIMTIME_US);
+        uint8_t exponent = 0;
+        while (intervalUs > 0xffff && exponent < 31) {
+            intervalUs = (intervalUs + 1) / 2;
+            exponent++;
+        }
+        stream.writeUint64Le(targetWakeTime);
+        stream.writeByte(encodeTwtWakeDuration(schedule.wakeDuration));
+        stream.writeUint16Le(intervalUs);
+        uint16_t requestType = (schedule.triggerEnabled ? 1 : 0) | (schedule.implicit ? 2 : 0) | ((uint16_t)exponent << 7);
+        stream.writeUint16Le(requestType);
+        uint16_t broadcastInfo = (schedule.broadcastId & 0x1f) | ((schedule.persistence & 0xff) << 8);
+        stream.writeUint16Le(broadcastInfo);
+    }
+}
+
 static void writeHeMgmtElements(MemoryOutputStream& stream, const Ptr<const Ieee80211MgmtFrame>& frame)
 {
     if (frame->getHeCapabilitiesPresent())
@@ -256,6 +296,7 @@ static void writeHeMgmtElements(MemoryOutputStream& stream, const Ptr<const Ieee
         writeHeOperationElement(stream, frame->getHeOperation());
     if (frame->getHe6GhzBandCapabilitiesPresent())
         writeHe6GhzBandCapabilitiesElement(stream, frame->getHe6GhzBandCapabilities());
+    writeBroadcastTwtElement(stream, frame);
 }
 
 static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
@@ -277,6 +318,9 @@ static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLeng
 
     int supportedChannelWidthSet = getBits(phyCapabilities, 1, 7);
     capabilities.supportedChannelWidth40MHz = (supportedChannelWidthSet & (1 << 1)) != 0;
+    capabilities.twtRequester = getBits(macCapabilities, 1, 1) != 0;
+    capabilities.twtResponder = getBits(macCapabilities, 2, 1) != 0;
+    capabilities.broadcastTwt = getBits(macCapabilities, 18, 1) != 0;
     capabilities.supportedChannelWidth80MHz = (supportedChannelWidthSet & (1 << 1)) != 0;
     capabilities.supportedChannelWidth160MHz = (supportedChannelWidthSet & (1 << 2)) != 0;
     capabilities.supportedChannelWidth80Plus80MHz = (supportedChannelWidthSet & (1 << 3)) != 0;
@@ -346,6 +390,34 @@ static void readHe6GhzBandCapabilitiesElement(MemoryInputStream& stream, int pay
     frame->setHe6GhzBandCapabilities(capabilities);
 }
 
+static void readBroadcastTwtElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    if (payloadLength < 16 || (payloadLength - 1) % 15 != 0)
+        throw cRuntimeError("Malformed Broadcast TWT element: length is %d", payloadLength);
+    uint8_t control = stream.readByte();
+    if ((control & 0x08) == 0)
+        throw cRuntimeError("Received non-broadcast TWT element in Beacon");
+    int count = (payloadLength - 1) / 15;
+    if ((control >> 4) != count - 1)
+        throw cRuntimeError("Malformed Broadcast TWT element parameter-set count");
+    frame->setBroadcastTwtPresent(true);
+    frame->setBroadcastTwtSchedulesArraySize(count);
+    for (int i = 0; i < count; ++i) {
+        auto& schedule = frame->getBroadcastTwtSchedulesForUpdate(i);
+        schedule.targetWakeTime = SimTime((int64_t)stream.readUint64Le(), SIMTIME_US);
+        schedule.wakeDuration = SimTime((int64_t)stream.readByte() * 256, SIMTIME_US);
+        uint64_t mantissa = stream.readUint16Le();
+        uint16_t requestType = stream.readUint16Le();
+        schedule.triggerEnabled = requestType & 1;
+        schedule.implicit = requestType & 2;
+        schedule.announced = false;
+        schedule.wakeInterval = SimTime((int64_t)mantissa * (uint64_t(1) << ((requestType >> 7) & 0x1f)), SIMTIME_US);
+        uint16_t broadcastInfo = stream.readUint16Le();
+        schedule.broadcastId = broadcastInfo & 0x1f;
+        schedule.persistence = (broadcastInfo >> 8) & 0xff;
+    }
+}
+
 static void readHeMgmtElements(MemoryInputStream& stream, const Ptr<Ieee80211MgmtFrame>& frame)
 {
     while (stream.getRemainingLength() >= B(2)) {
@@ -354,7 +426,10 @@ static void readHeMgmtElements(MemoryInputStream& stream, const Ptr<Ieee80211Mgm
         if (stream.getRemainingLength() < B(length))
             throw cRuntimeError("Malformed IEEE 802.11 management element: id=%d length=%d remaining=%" PRId64,
                     elementId, length, stream.getRemainingLength().get<B>());
-        if (elementId == ELEMENT_ID_EXTENSION && length >= 1) {
+        if (elementId == ELEMENT_ID_TWT) {
+            readBroadcastTwtElement(stream, length, frame);
+        }
+        else if (elementId == ELEMENT_ID_EXTENSION && length >= 1) {
             int extensionId = stream.readByte();
             int payloadLength = length - 1;
             switch (extensionId) {
