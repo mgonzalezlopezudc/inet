@@ -327,12 +327,12 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             // status lookup; retried/in-progress entries retain a sequence
             // number and must still be checked by the ACK handler.
             if (!isMuEligibleDataHeader(dataHeader, baHandler)) {
-                EV_INFO << "HE DL schedule context: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " — not a QoS data frame or no active originator Block Ack agreement\n";
                 continue;
             }
             if (dataHeader->getSequenceNumber().isValid() && !ackHandler->isEligibleToTransmit(dataHeader)) {
-                EV_INFO << "HE DL schedule context: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " TID " << (int)dataHeader->getTid()
                          << " — sequence number not eligible for retransmission\n";
                 continue;
@@ -351,13 +351,13 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                                 "channel bandwidth not supported" :
                         par("dlMuAckMethod").stdstringValue() != "sequentialBar" ?
                                 "MU-BAR/HE-TB BlockAck not supported" : "unknown";
-                EV_INFO << "HE DL schedule context: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " — negotiated HE capability mismatch: " << reason << "\n";
                 continue;
             }
             if (!context.puncturedSubchannels.empty() && (negotiated == nullptr ||
                     !negotiated->intersection.preamblePuncturing)) {
-                EV_INFO << "HE DL schedule context: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " — preamble puncturing not supported\n";
                 continue;
             }
@@ -367,7 +367,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             int availableSlots = agreement == nullptr ? 0 :
                     std::max(0, agreement->getBufferSize() - occupiedSlots);
             if (availableSlots == 0) {
-                EV_INFO << "HE DL schedule context: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " TID " << (int)dataHeader->getTid()
                          << " — Block Ack window full (" << occupiedSlots << "/"
                          << (agreement == nullptr ? 0 : agreement->getBufferSize()) << ")\n";
@@ -661,7 +661,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
                 Hcf::startFrameSequence(ac);
                 return;
             }
-            EV_INFO << "HE DL MU-OFDMA opportunity detected for " << scheduleContext.candidates.size()
+            EV_INFO << "HE DL MU opportunity detected for " << scheduleContext.candidates.size()
                     << " STAs — starting HE DL MU TxOp FS." << endl;
             auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
                     HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
