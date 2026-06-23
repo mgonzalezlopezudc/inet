@@ -193,6 +193,9 @@ void HeHcf::handleMessage(cMessage *msg)
     auto triggerType = ulCoordinator->selectTrigger(mac->getMib());
     if (triggerType == IIeee80211HeUlTriggerPolicy::NO_TRIGGER)
         return;
+    EV_INFO << "Requesting channel access for HE UL "
+             << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
+             << " Trigger\n";
     pendingUlTrigger = triggerType;
     ulTriggerAccessRequested = true;
     auto ac = triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
@@ -573,6 +576,11 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         auto triggerType = pendingUlTrigger;
         pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
         if (!ulSchedule.allocations.empty()) {
+            ASSERT(ulSchedule.commonDuration > SIMTIME_ZERO);
+            EV_INFO << "Starting HE UL "
+                     << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
+                     << " exchange with " << ulSchedule.allocations.size()
+                     << " RU allocations for " << ulSchedule.commonDuration << "\n";
             frameSequenceHandler->startFrameSequence(
                     new HeUlMuTxOpFs(ulCoordinator, this, ulSchedule, triggerType,
                             modeSet, mac->getAddress()),
@@ -580,6 +588,8 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
             return;
         }
+        EV_WARN << "Skipping HE UL Trigger because no usable RU allocations remain"
+                << " after scheduling and puncturing checks\n";
     }
     if (isHeMode) {
         auto edcaf = edca->getEdcaf(ac);
@@ -992,9 +1002,14 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                 sourcePacket = nullptr;
         }
         if (selected == nullptr) {
+            EV_INFO << "Ignoring HE UL Trigger " << trigger->getTriggerId()
+                     << ": this STA has no scheduled or selected random-access RU\n";
             delete packet;
             return;
         }
+
+        ASSERT(selected->ruToneSize > 0);
+        ASSERT(trigger->getCommonDuration() > SIMTIME_ZERO);
 
         uint8_t selectedTid = bsrpTid >= 0 ? bsrpTid : selected->tid;
         if (sourcePacket != nullptr) {
@@ -1147,6 +1162,11 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
         request->setPuncturedSubchannelMask(trigger->getPuncturedSubchannelMask());
         request->setCommonDuration(trigger->getCommonDuration());
         request->setTransmitPower(transmitPower);
+        EV_INFO << "Sending HE-TB response: trigger=" << trigger->getTriggerId()
+                 << ", AID=" << myAid
+                 << ", " << (randomAccess ? "random-access" : "scheduled")
+                 << " RU=" << selected->ruIndex
+                 << ", packets=" << exchange.packets.size() << "\n";
         tx->transmitFrame(responsePacket, responsePacket->peekAtFront<Ieee80211MacHeader>(),
                 modeSet->getSifsTime(), this);
         delete responsePacket;
