@@ -39,6 +39,11 @@ struct Ieee80211HeMcsNssMap
  */
 struct Ieee80211HeCapabilities
 {
+    // HE MAC Capabilities Information: TWT requester/responder are bits 1/2
+    // and broadcast TWT support is bit 18 (IEEE 802.11-2024, 9.4.2.247.2).
+    bool twtRequester = false;
+    bool twtResponder = false;
+    bool broadcastTwt = false;
     std::set<Hz> supportedChannelWidths = {Hz(20e6), Hz(40e6), Hz(80e6), Hz(160e6)};
     Ieee80211HeMcsNssMap rxMcsNss;
     Ieee80211HeMcsNssMap txMcsNss;

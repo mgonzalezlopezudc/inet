@@ -31,6 +31,7 @@ simple Ieee80211MgmtAp extends SimpleModule like IIeee80211Mgmt
         string radioModule = default("^.radio");   // The path to the Radio module  //FIXME remove default value
         string mibModule;
         string macModule;               // The path to the MAC module
+        string twtModule = default("^.twt");
         @display("i=block/cogwheel");
         @signal[l2ApAssociated](type="inet::ieee80211::Ieee80211MgmtAp::NotificationInfoSta");
         @signal[l2ApDisassociated](type="inet::ieee80211::Ieee80211MgmtAp::NotificationInfoSta");

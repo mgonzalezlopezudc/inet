@@ -32,6 +32,7 @@ simple Ieee80211MgmtSta extends SimpleModule like IIeee80211Mgmt
         int numChannels = default(1);  // Number of channels to scan
         string mibModule;
         string macModule;               // The path to the MAC module
+        string twtModule = default("^.twt");
         double associationTransmitPower @unit(dBm) = default(15dBm);
         @display("i=block/cogwheel");
         @signal[l2Associated](type=inet::NetworkInterface);

@@ -30,6 +30,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/twt/ITwtManager.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -76,6 +77,12 @@ void Ieee80211Mac::initialize(int stage)
         tx = check_and_cast<ITx *>(getSubmodule("tx"));
         dcf = check_and_cast<Dcf *>(getSubmodule("dcf"));
         hcf = check_and_cast_nullable<Hcf *>(getSubmodule("hcf"));
+        if (hasPar("twtModule")) {
+            auto twtModule = getModuleByPath(par("twtModule"));
+            twtManager = dynamic_cast<ITwtManager *>(twtModule);
+            if (twtModule != nullptr && twtManager == nullptr)
+                throw cRuntimeError("twtModule does not implement ITwtManager");
+        }
         if (mib->qos && !hcf)
             throw cRuntimeError("Missing hcf module, required for QoS");
     }
@@ -145,6 +152,17 @@ void Ieee80211Mac::handleSelfMessage(cMessage *msg)
 
 void Ieee80211Mac::handleMgmtPacket(Packet *packet)
 {
+    const auto& first = packet->peekAtFront();
+    if (auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(first)) {
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        processUpperFrame(packet, header);
+        return;
+    }
+    if (auto header = dynamicPtrCast<const Ieee80211MacHeader>(first)) {
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        sendDownFrame(packet);
+        return;
+    }
     const auto& header = makeShared<Ieee80211MgmtHeader>();
     header->setType((Ieee80211FrameType)packet->getTag<Ieee80211SubtypeReq>()->getSubtype());
     header->setReceiverAddress(packet->getTag<MacAddressReq>()->getDestAddress());
@@ -346,7 +364,7 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
         if (transmissionFinished) {
             tx->radioTransmissionFinished();
             EV_DEBUG << "changing radio to receiver mode\n";
-            configureRadioMode(IRadio::RADIO_MODE_RECEIVER); // FIXME this is in a very wrong place!!! should be done explicitly from coordination function!
+            configureRadioMode(twtManager != nullptr && !twtManager->isStationAwake() ? IRadio::RADIO_MODE_SLEEP : IRadio::RADIO_MODE_RECEIVER); // FIXME this is in a very wrong place!!! should be done explicitly from coordination function!
         }
         rx->transmissionStateChanged(transmissionState);
     }
@@ -392,6 +410,28 @@ void Ieee80211Mac::sendDownFrame(Packet *frame)
     configureRadioMode(IRadio::RADIO_MODE_TRANSMITTER);
     frame->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
     sendDown(frame);
+}
+
+void Ieee80211Mac::setTwtRadioAwake(bool awake)
+{
+    if (radio != nullptr)
+        configureRadioMode(awake ? IRadio::RADIO_MODE_RECEIVER : IRadio::RADIO_MODE_SLEEP);
+}
+
+bool Ieee80211Mac::isTwtPeerEligible(const MacAddress& peer) const
+{
+    return twtManager == nullptr || twtManager->isPeerEligible(peer);
+}
+
+void Ieee80211Mac::sendTwtPsPoll(const MacAddress& peer)
+{
+    auto header = makeShared<Ieee80211PsPollFrame>();
+    header->setAID(mib->bssStationData.associationId);
+    header->setReceiverAddress(peer);
+    header->setTransmitterAddress(mib->address);
+    auto packet = new Packet("TwtPsPoll", header);
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    sendDownFrame(packet);
 }
 
 void Ieee80211Mac::sendDownPendingRadioConfigMsg()
