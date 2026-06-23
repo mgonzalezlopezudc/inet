@@ -14,8 +14,10 @@ Define_Module(HeUlDefaultTriggerPolicy);
 void HeUlDefaultTriggerPolicy::initialize(int stage)
 {
     SimpleModule::initialize(stage);
-    if (stage == INITSTAGE_LOCAL)
+    if (stage == INITSTAGE_LOCAL) {
         minimumTriggerInterval = par("minimumTriggerInterval");
+        ASSERT(minimumTriggerInterval >= SIMTIME_ZERO);
+    }
 }
 
 IIeee80211HeUlTriggerPolicy::TriggerType HeUlDefaultTriggerPolicy::selectTrigger(const Context& context) const

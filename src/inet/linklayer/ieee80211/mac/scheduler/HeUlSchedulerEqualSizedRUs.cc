@@ -19,6 +19,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
 {
     Schedule result;
     int availableRus = physicallayer::getHeMaxRuCount(context.channelBandwidth);
+    ASSERT(availableRus >= 0);
     int raCount = computeRandomAccessRuCount(context, availableRus);
     int scheduledCount = std::min({(int)context.candidates.size(), maxMuStations,
             std::max(0, availableRus - raCount)});
@@ -26,6 +27,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
         raCount = std::min(raCount, availableRus);
     auto layout = physicallayer::getHeEqualRuLayout(context.channelCenterFrequency,
             context.channelBandwidth, availableRus);
+    ASSERT((int)layout.size() == availableRus);
     int targetRssiDbm = computeTargetRssiDbm(context);
     for (int i = 0; i < scheduledCount; i++) {
         const auto& candidate = context.candidates[i];
@@ -52,6 +54,9 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
         result.allocations.push_back(allocation);
     }
     result.commonDuration = computeCommonDuration(context, result.allocations);
+    EV_INFO << "HE UL equal-RU schedule: scheduled=" << scheduledCount
+             << ", randomAccess=" << raCount
+             << ", total=" << result.allocations.size() << "\n";
     return result;
 }
 

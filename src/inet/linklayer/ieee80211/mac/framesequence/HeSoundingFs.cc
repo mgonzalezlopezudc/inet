@@ -5,6 +5,9 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
+
+#include <cmath>
+
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
@@ -53,17 +56,30 @@ HeSoundingFs::HeSoundingFs(Ieee80211Mib *mib,
     dialogToken(dialogToken),
     triggerId(triggerId)
 {
+    ASSERT(mib != nullptr);
+    ASSERT(modeSet != nullptr);
+    ASSERT(csiManager != nullptr);
+    ASSERT(!std::isnan(bandwidth.get()) && bandwidth > Hz(0));
+    for (const auto& target : targets) {
+        ASSERT(target.aid != 0);
+        ASSERT(target.maxNss > 0);
+    }
     apAddress = mib->address;
 }
 
 void HeSoundingFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
+    ASSERT(context != nullptr);
     this->firstStep = firstStep;
     step = 0;
+    EV_INFO << "Starting HE sounding exchange: targets=" << targets.size()
+            << ", dialogToken=" << (int)dialogToken
+            << ", triggerId=" << triggerId << "\n";
 }
 
 IFrameSequenceStep *HeSoundingFs::prepareStep(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     if (targets.empty())
         return nullptr;
 
@@ -84,6 +100,7 @@ IFrameSequenceStep *HeSoundingFs::prepareStep(FrameSequenceContext *context)
             auto txStep = check_and_cast<ITransmitStep *>(context->getLastStep());
             auto trigger = txStep->getFrameToTransmit();
             auto header = trigger->peekAtFront<Ieee80211TriggerFrame>();
+            ASSERT(header->getCommonDuration() > SIMTIME_ZERO);
             return new ReceiveCollectionStep(modeSet->getSifsTime() +
                     header->getCommonDuration() + modeSet->getSlotTime());
         }
@@ -96,6 +113,7 @@ IFrameSequenceStep *HeSoundingFs::prepareStep(FrameSequenceContext *context)
 
 bool HeSoundingFs::completeStep(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     switch (step) {
         case 0:
         case 1:
@@ -113,6 +131,7 @@ bool HeSoundingFs::completeStep(FrameSequenceContext *context)
 
 Packet *HeSoundingFs::buildNdpaFrame(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     auto ndpaBody = makeShared<Ieee80211HeNdpAnnouncement>();
     ndpaBody->setDialogToken(dialogToken);
     ndpaBody->setStationsArraySize(targets.size());
@@ -139,6 +158,7 @@ Packet *HeSoundingFs::buildNdpaFrame(FrameSequenceContext *context)
 
 Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     auto ndpHdr = makeShared<Ieee80211DataHeader>();
     ndpHdr->setType(ST_DATA);
     ndpHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
@@ -154,6 +174,7 @@ Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
     int totalNsts = 0;
     for (const auto& target : targets)
         totalNsts += target.maxNss;
+    ASSERT(totalNsts > 0);
 
     int streamStartIndex = 0;
     for (size_t i = 0; i < targets.size(); ++i) {
@@ -186,6 +207,7 @@ Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
 
 Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     auto header = makeShared<Ieee80211TriggerFrame>();
     header->setTriggerType(2); // BFRP Trigger type
     header->setTriggerId(triggerId);
@@ -200,6 +222,11 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     else if (count > 1) layoutCount = 2;
 
     auto ruLayout = physicallayer::getHeEqualRuLayout(Hz(0), bandwidth, layoutCount);
+
+    // A BFRP Trigger is addressed only to users for which the selected
+    // equal-sized RU layout has an explicit RU. Keep this assertion next to
+    // the indexing below to turn configuration mistakes into local failures.
+    ASSERT(targets.size() <= ruLayout.size());
 
     simtime_t commonDuration = SIMTIME_ZERO;
     for (size_t i = 0; i < targets.size(); ++i) {
@@ -216,17 +243,22 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
         commonDuration = std::max(commonDuration,
                 physicallayer::estimateHeMuUserDuration(B(70), ruLayout[i].toneSize, 0));
     }
+    ASSERT(commonDuration > SIMTIME_ZERO);
     header->setCommonDuration(commonDuration);
     header->setDurationField(modeSet->getSifsTime() + commonDuration);
     header->setChunkLength(B(26 + 12 * targets.size()));
 
     auto packet = new Packet("HE-BFRP-Trigger", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    EV_INFO << "Built HE BFRP Trigger " << triggerId
+            << " for " << targets.size() << " sounding targets"
+            << " using " << layoutCount << " RUs\n";
     return packet;
 }
 
 void HeSoundingFs::processFeedbacks(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
     std::vector<MacAddress> allAssociatedStations;
     for (const auto& entry : mib->bssAccessPointData.associationIds) {
@@ -236,16 +268,26 @@ void HeSoundingFs::processFeedbacks(FrameSequenceContext *context)
         return mib->getAssociationId(addr);
     };
 
+    int acceptedFeedbacks = 0;
+    int ignoredFeedbacks = 0;
     for (auto packet : collection->getReceivedFrames()) {
         auto header = packet->peekAtFront<Ieee80211MgmtHeader>();
         auto feedback = findPacketChunk<Ieee80211HeCompressedBeamformingFeedback>(packet);
-        if (header == nullptr || feedback == nullptr)
+        if (header == nullptr || feedback == nullptr) {
+            ignoredFeedbacks++;
             continue;
+        }
         if (feedback->getDialogToken() == dialogToken && feedback->getValid()) {
             MacAddress staAddress = header->getTransmitterAddress();
             csiManager->updateCsi(staAddress, bandwidth, allAssociatedStations, getAid);
+            acceptedFeedbacks++;
         }
+        else
+            ignoredFeedbacks++;
     }
+    EV_INFO << "Completed HE sounding feedback collection: accepted=" << acceptedFeedbacks
+            << ", ignored=" << ignoredFeedbacks
+            << ", triggerId=" << triggerId << "\n";
 }
 
 } // namespace ieee80211
