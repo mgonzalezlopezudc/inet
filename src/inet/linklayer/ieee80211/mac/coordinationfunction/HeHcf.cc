@@ -264,7 +264,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
     context.channelNumber = channel->getChannelNumber();
     context.channelCenterFrequency = channel->getCenterFrequency();
     context.channelBandwidth = activeMode->getDataMode()->getBandwidth();
-    EV_DEBUG << "HeHcf::collectScheduleContext: AC " << ac
+    EV_INFO << "HE DL schedule context: AC " << ac
              << ", channel " << context.channelNumber
              << ", centerFreq " << context.channelCenterFrequency
              << ", bandwidth " << context.channelBandwidth << "\n";
@@ -315,7 +315,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             const auto& header = pkt->peekAtFront<Ieee80211MacHeader>();
             MacAddress dest = header->getReceiverAddress();
             if (dest.isMulticast() || dest.isBroadcast()) {
-                EV_DEBUG << "HeHcf::collectScheduleContext: skipping " << dest << " — broadcast/multicast\n";
+                EV_INFO << "HE DL schedule context: skipping " << dest << " — broadcast/multicast\n";
                 continue;
             }
             if (std::find(seenDestinations.begin(), seenDestinations.end(), dest) != seenDestinations.end())
@@ -327,12 +327,12 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             // status lookup; retried/in-progress entries retain a sequence
             // number and must still be checked by the ACK handler.
             if (!isMuEligibleDataHeader(dataHeader, baHandler)) {
-                EV_DEBUG << "HeHcf::collectScheduleContext: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping " << dest
                          << " — not a QoS data frame or no active originator Block Ack agreement\n";
                 continue;
             }
             if (dataHeader->getSequenceNumber().isValid() && !ackHandler->isEligibleToTransmit(dataHeader)) {
-                EV_DEBUG << "HeHcf::collectScheduleContext: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping " << dest
                          << " TID " << (int)dataHeader->getTid()
                          << " — sequence number not eligible for retransmission\n";
                 continue;
@@ -351,13 +351,13 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                                 "channel bandwidth not supported" :
                         par("dlMuAckMethod").stdstringValue() != "sequentialBar" ?
                                 "MU-BAR/HE-TB BlockAck not supported" : "unknown";
-                EV_DEBUG << "HeHcf::collectScheduleContext: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping " << dest
                          << " — negotiated HE capability mismatch: " << reason << "\n";
                 continue;
             }
             if (!context.puncturedSubchannels.empty() && (negotiated == nullptr ||
                     !negotiated->intersection.preamblePuncturing)) {
-                EV_DEBUG << "HeHcf::collectScheduleContext: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping " << dest
                          << " — preamble puncturing not supported\n";
                 continue;
             }
@@ -367,7 +367,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             int availableSlots = agreement == nullptr ? 0 :
                     std::max(0, agreement->getBufferSize() - occupiedSlots);
             if (availableSlots == 0) {
-                EV_DEBUG << "HeHcf::collectScheduleContext: skipping " << dest
+                EV_INFO << "HE DL schedule context: skipping " << dest
                          << " TID " << (int)dataHeader->getTid()
                          << " — Block Ack window full (" << occupiedSlots << "/"
                          << (agreement == nullptr ? 0 : agreement->getBufferSize()) << ")\n";
@@ -423,7 +423,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
         context.candidates.front().anchor = true;
         context.anchorSta = context.candidates.front().staAddress;
     }
-    EV_INFO << "HeHcf::collectScheduleContext: collected " << context.candidates.size()
+    EV_INFO << "HE DL schedule context: collected " << context.candidates.size()
             << " DL MU candidates for AC " << ac
             << (context.candidates.empty() ? "" : ", anchor = " + context.anchorSta.str()) << "\n";
     context.coding = mac->getMib()->localHeCapabilities.ldpc &&
@@ -470,7 +470,7 @@ bool HeHcf::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
 void HeHcf::startFrameSequence(AccessCategory ac)
 {
     if (forceNextSingleUser[ac]) {
-        EV_INFO << "HeHcf::startFrameSequence: forced single-user TXOP for AC " << ac << "\n";
+        EV_INFO << "Start FS: forced single-user TXOP for AC " << ac << "\n";
         forceNextSingleUser[ac] = false;
         Hcf::startFrameSequence(ac);
         return;
@@ -577,7 +577,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
         if (!ulSchedule.allocations.empty()) {
             ASSERT(ulSchedule.commonDuration > SIMTIME_ZERO);
-            EV_INFO << "Starting HE UL "
+            EV_INFO << "HE UL starting"
                      << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
                      << " exchange with " << ulSchedule.allocations.size()
                      << " RU allocations for " << ulSchedule.commonDuration << "\n";
@@ -588,7 +588,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
             return;
         }
-        EV_WARN << "Skipping HE UL Trigger because no usable RU allocations remain"
+        EV_WARN << "HE UL skipping Trigger because no usable RU allocations remain"
                 << " after scheduling and puncturing checks\n";
     }
     if (isHeMode) {
@@ -621,7 +621,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             if (lackCsiCount >= 2) {
                 if (soundingStas.size() > 8)
                     soundingStas.resize(8);
-                EV_INFO << "HeHcf: At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << endl;
+                EV_INFO << "At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << endl;
                 static uint8_t nextSoundingDialogToken = 1;
                 static uint32_t nextTriggerId = 1;
                 auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
@@ -635,7 +635,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         auto pendingQueue = edcaf->getPendingQueue();
         auto inProgress = edcaf->getInProgressFrames();
         if (hasEligibleExistingFrame(inProgress, edcaf->getAckHandler())) {
-            EV_INFO << "HeHcf: completing " << inProgress->getLength()
+            EV_INFO << "Completing " << inProgress->getLength()
                     << " recovery/outstanding frames before opening a new MU transmission." << endl;
             Hcf::startFrameSequence(ac);
             return;
@@ -644,7 +644,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         auto baHandler = getOriginatorBlockAckAgreementHandler();
         if (!pendingQueue->isEmpty() && !isMuEligibleDataHeader(headDataHeader, baHandler)) {
             if (headDataHeader != nullptr) {
-                EV_INFO << "HeHcf: earliest SU-transmittable packet "
+                EV_INFO << "Earliest SU-transmittable packet "
                         << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
                         << " is MU-ineligible, falling back to Hcf::startFrameSequence(ac)." << endl;
             }
@@ -655,18 +655,18 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         if (scheduleContext.candidates.size() >= 2) {
             auto previewAllocations = dlScheduler->schedule(scheduleContext);
             if (previewAllocations.size() < 2) {
-                EV_INFO << "HeHcf: scheduler preview retained fewer than two MU users; falling back to SU." << endl;
+                EV_INFO << "HE DL scheduler preview retained fewer than two MU users; falling back to SU." << endl;
                 if (pendingQueue->isEmpty())
                     stagePerStaFrameForSingleUserTransmission(ac);
                 Hcf::startFrameSequence(ac);
                 return;
             }
-            EV_INFO << "HeHcf: MU-OFDMA opportunity detected for " << scheduleContext.candidates.size()
-                    << " STAs — starting HeDlMuTxOpFs." << endl;
+            EV_INFO << "HE DL MU-OFDMA opportunity detected for " << scheduleContext.candidates.size()
+                    << " STAs — starting HE DL MU TxOp FS." << endl;
             auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
                     HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
                     HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
-            EV_DEBUG << "HeHcf::startFrameSequence: using "
+            EV_INFO << "Start HE DL MU TxOp FS: using "
                      << (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR")
                      << " acknowledgment method\n";
             frameSequenceHandler->startFrameSequence(
@@ -683,11 +683,11 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         if (pendingQueue->isEmpty())
             stagePerStaFrameForSingleUserTransmission(ac);
         else
-            EV_DEBUG << "HeHcf::startFrameSequence: only " << scheduleContext.candidates.size()
+            EV_INFO << "Only " << scheduleContext.candidates.size()
                      << " MU candidate(s), falling back to single-user\n";
     }
     else if (isHeMode) {
-        EV_DEBUG << "HeHcf::startFrameSequence: HE mode but no MU opportunity, falling back to SU\n";
+        EV_INFO << "HE mode but no MU opportunity, falling back to SU\n";
     }
     // Fallback: standard single-user frame sequence.
     auto fallbackEdcaf = edca->getEdcaf(ac);
@@ -695,7 +695,7 @@ void HeHcf::startFrameSequence(AccessCategory ac)
             fallbackEdcaf->getInProgressFrames()->getLength() == 0)
         stagePerStaFrameForSingleUserTransmission(ac);
     if (fallbackEdcaf->getInProgressFrames()->getFrameToTransmit() == nullptr) {
-        EV_WARN << "HeHcf: channel granted without an eligible SU, DL-MU, or UL trigger frame; releasing channel.\n";
+        EV_WARN << "Channel granted without an eligible SU, DL-MU, or UL trigger frame; releasing channel.\n";
         fallbackEdcaf->releaseChannel(this);
         fallbackEdcaf->getTxopProcedure()->endTxop();
         return;
@@ -741,7 +741,7 @@ void HeHcf::handleDlMuPlanningFailure(AccessCategory ac)
 {
     bool staged = stagePerStaFrameForSingleUserTransmission(ac);
     forceNextSingleUser[ac] = staged;
-    EV_WARN << "HeHcf::handleDlMuPlanningFailure: DL MU planning failed for AC " << ac
+    EV_WARN << "DL MU planning failed for AC " << ac
             << ", forcing next TXOP single-user (staged = " << (staged ? "true" : "false") << ")\n";
 }
 
@@ -1244,7 +1244,7 @@ void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
         auto edcaf = edca->getChannelOwner();
         if (edcaf) {
             ASSERT(!heMuTxop->getActiveAllocations().empty());
-            EV_DEBUG << "HeHcf::originatorProcessTransmittedFrame: HE DL MU container transmitted with "
+            EV_DEBUG << "HE DL MU container transmitted with "
                      << heMuTxop->getActiveAllocations().size() << " active allocations\n";
             AccessCategory ac = edcaf->getAccessCategory();
             for (const auto& alloc : heMuTxop->getActiveAllocations()) {
@@ -1270,7 +1270,7 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 {
     Enter_Method("originatorProcessFailedFrame");
     ASSERT(failedPacket != nullptr);
-    EV_WARN << "HeHcf: originatorProcessFailedFrame for packet " << failedPacket->getName()
+    EV_WARN << "HE MU: transmission failed for frame " << failedPacket->getName()
             << " type = " << (failedPacket->peekAtFront<Ieee80211MacHeader>() != nullptr ? (int)failedPacket->peekAtFront<Ieee80211MacHeader>()->getType() : -1) << endl;
     if (dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence()) != nullptr) {
         // In an MU TXOP a failed sub-frame is re-queued to its per-STA queue bank
@@ -1314,7 +1314,7 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
                 edcaf->getAckHandler()->dropFrame(dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(failedHeader));
             }
             else {
-                EV_INFO << "Retrying frame in MU-OFDMA: " << failedPacket->getName() << ", re-queuing.\n";
+                EV_INFO << "HE DL MU retrying frame: " << failedPacket->getName() << ", re-queuing.\n";
                 auto h = failedPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
                 ASSERT(h != nullptr);
                 h->setRetry(true);
