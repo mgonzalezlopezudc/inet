@@ -204,12 +204,12 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
         auto transmittedPacket = findTransmittedPacket(context);
         if (receivedPacket != nullptr) {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
-            EV_INFO << "HeDlMuTxOpFs: received BlockAck from STA " << getActiveAllocation().staAddress << "\n";
+            EV_INFO << "HE DL MU TxOp FS: received BlockAck from STA " << getActiveAllocation().staAddress << "\n";
         }
         else {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
             if (transmittedPacket != nullptr) {
-                EV_WARN << "HeDlMuTxOpFs: sequential BlockAck timeout for STA " << getActiveAllocation().staAddress
+                EV_WARN << "HE DL MU TxOp FS: sequential BlockAck timeout for STA " << getActiveAllocation().staAddress
                         << ", triggering failure recovery." << endl;
                 owner->callback->originatorProcessFailedFrame(transmittedPacket);
                 for (auto packet : getActiveAllocation().packets)
@@ -217,7 +217,7 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
                         owner->callback->originatorProcessFailedFrame(packet);
             }
             else {
-                EV_WARN << "HeDlMuTxOpFs: sequential BlockAck timeout for STA " << getActiveAllocation().staAddress
+                EV_WARN << "HE DL MU TxOp FS: sequential BlockAck timeout for STA " << getActiveAllocation().staAddress
                         << " but no transmitted packet recorded" << endl;
             }
         }
@@ -374,7 +374,7 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
         header->setChunkLength(B(26 + 12 * owner->activeAllocations.size()));
         auto packet = new Packet("HE-MU-BAR-Trigger", header);
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
-        EV_INFO << "HeDlMuBarBlockAckFs: built MU-BAR trigger for " << owner->activeAllocations.size()
+        EV_INFO << "HE DL MU-BAR FS: built MU-BAR trigger for " << owner->activeAllocations.size()
                  << " STAs, triggerId = " << owner->ackTriggerId << "\n";
         return packet;
     }
@@ -383,12 +383,12 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
     {
         auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
         std::set<MacAddress> responded;
-        EV_INFO << "HeDlMuBarBlockAckFs: processing MU-BAR responses, triggerId = " << owner->ackTriggerId << "\n";
+        EV_INFO << "HE DL MU-BAR FS: processing MU-BAR responses, triggerId = " << owner->ackTriggerId << "\n";
         for (auto packet : collection->getReceivedFrames()) {
             auto blockAck = dynamicPtrCast<const Ieee80211BasicBlockAck>(
                     packet->peekAtFront<Ieee80211MacHeader>());
             if (blockAck == nullptr) {
-                EV_WARN << "HeDlMuBarBlockAckFs: received non-BlockAck frame in MU-BAR response window\n";
+                EV_WARN << "HE DL MU-BAR FS: received non-BlockAck frame in MU-BAR response window\n";
                 continue;
             }
             auto expected = std::find_if(owner->activeAllocations.begin(),
@@ -402,7 +402,7 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
                     rx->getTriggerId() != owner->ackTriggerId ||
                     rx->getRuIndex() != expected->ruIndex ||
                     responded.count(expected->staAddress) != 0) {
-                EV_WARN << "HeDlMuBarBlockAckFs: ignoring unexpected BlockAck from "
+                EV_WARN << "HE DL MU-BAR FS: ignoring unexpected BlockAck from "
                         << blockAck->getTransmitterAddress()
                         << " tid=" << (int)blockAck->getTidInfo()
                         << " (matched=" << (expected != owner->activeAllocations.end())
@@ -412,13 +412,13 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
                 continue;
             }
             responded.insert(expected->staAddress);
-            EV_INFO << "HeDlMuBarBlockAckFs: accepted BlockAck from " << expected->staAddress << "\n";
+            EV_INFO << "HE DL MU-BAR FS: accepted BlockAck from " << expected->staAddress << "\n";
             owner->callback->originatorProcessReceivedFrame(packet->dup(), owner->containerPacket);
         }
         for (const auto& allocation : owner->activeAllocations) {
             if (responded.count(allocation.staAddress) != 0)
                 continue;
-            EV_WARN << "HeDlMuTxOpFs: MU-BAR response timeout for STA "
+            EV_WARN << "HE DL MU-BAR FS: MU-BAR response timeout for STA "
                     << allocation.staAddress << endl;
             for (auto packet : allocation.packets)
                 owner->callback->originatorProcessFailedFrame(packet);
@@ -538,7 +538,7 @@ void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
     this->firstStep = firstStep;
     step = 0;
     sequence->startSequence(context, firstStep);
-    EV_INFO << "Starting HE DL MU frame sequence at step " << firstStep << "\n";
+    EV_INFO << "Starting HE DL MU FS at step " << firstStep << "\n";
 }
 
 HeDlMuTxOpFs::~HeDlMuTxOpFs()
@@ -576,7 +576,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
             std::isnan(scheduleContext.channelBandwidth.get())) {
         if (hcf != nullptr)
-            throw cRuntimeError("HeDlMuTxOpFs: scheduler context is missing active radio channel geometry");
+            throw cRuntimeError("Scheduler context is missing active radio channel geometry");
         if (modeSet != nullptr && modeSet->getNumModes() > 0) {
             auto firstMode = modeSet->getMode(0);
             scheduleContext.channelBandwidth = firstMode->getDataMode()->getBandwidth();
@@ -588,11 +588,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
             std::isnan(scheduleContext.channelBandwidth.get()))
-        throw cRuntimeError("HeDlMuTxOpFs: scheduler context is missing channel geometry");
+        throw cRuntimeError("Scheduler context is missing channel geometry");
     auto allocations = dlScheduler->schedule(scheduleContext);
-    EV_INFO << "HE DL MU scheduler returned " << allocations.size() << " allocations\n";
+    EV_INFO << "Scheduler returned " << allocations.size() << " allocations\n";
     if (allocations.empty()) {
-        EV_WARN << "HeDlMuTxOpFs: scheduler returned no usable RU allocations; deferring to SU." << endl;
+        EV_WARN << "Scheduler returned no usable RU allocations; deferring to SU." << endl;
         notifyPlanningFailure();
         return nullptr;
     }
@@ -629,7 +629,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     RateSelection::setFrameMode(container, containerHdr, containerMode);
 
     auto warnIneligible = [] (Packet *packet, const MacAddress& receiverAddress, Tid tid, int ruIndex, const char *reason) {
-        EV_WARN << "HeDlMuTxOpFs: skipping MU-ineligible packet "
+        EV_WARN << "HE DL MU TXOP FS: skipping MU-ineligible packet "
                 << (packet == nullptr ? "<none>" : packet->getName())
                 << " for receiver " << receiverAddress
                 << ", TID " << (int)tid
@@ -743,7 +743,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         ASSERT(selectedAllocation.associationId != 0);
         selectedAllocations.push_back(selectedAllocation);
     }
-    EV_DEBUG << "HeDlMuTxOpFs::buildMuContainerPacket: " << selectedAllocations.size()
+    EV_DEBUG << "Building MU container packet: " << selectedAllocations.size()
              << " of " << allocations.size() << " scheduler allocations survived initial validation"
              << " (" << skippedAllocations << " skipped)\n";
 
@@ -765,7 +765,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             selectedAllocations.end());
 
     if (selectedAllocations.size() < 2) {
-        EV_WARN << "HeDlMuTxOpFs: aborting HE MU PPDU assembly because only "
+        EV_WARN << "Aborting HE MU PPDU assembly because only "
                 << selectedAllocations.size() << " active Block Ack allocations remain before queue mutation." << endl;
         delete container;
         notifyPlanningFailure();
@@ -890,11 +890,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         }
         finalAllocations.push_back(selectedAllocation);
     }
-    EV_DEBUG << "HeDlMuTxOpFs::buildMuContainerPacket: " << finalAllocations.size()
+    EV_DEBUG << "Building MU container packet: " << finalAllocations.size()
              << " allocations survived final validation (" << rejectedFinalValidation << " rejected)\n";
 
     if (finalAllocations.size() < 2) {
-        EV_WARN << "HeDlMuTxOpFs: aborting HE MU PPDU assembly because only "
+        EV_WARN << "Aborting HE MU PPDU assembly because only "
                 << finalAllocations.size() << " active Block Ack allocations remain after final validation." << endl;
         delete container;
         notifyPlanningFailure();
@@ -909,7 +909,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             user.ru = selectedAllocation.allocation.ru;
             if (user.ru.toneSize <= 0) {
                 // Defensive fallback: a zero-sized RU should never reach this point.
-                EV_WARN << "HeDlMuTxOpFs::buildMuContainerPacket: zero RU tone size for "
+                EV_WARN << "Building MU container packet: zero RU tone size for "
                         << selectedAllocation.allocation.staAddress << ", falling back to 26-tone RU\n";
                 user.ru.toneSize = 26;
                 user.ru.dataSubcarriers = getHeRuDataSubcarrierCount(26);
@@ -941,13 +941,13 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 });
         ASSERT(longest != finalAllocations.end());
         if (longest->packets.size() > 1) {
-            EV_DEBUG << "HeDlMuTxOpFs::buildMuContainerPacket: trimming last MPDU from "
+            EV_DEBUG << "Building MU container packet: trimming last MPDU from "
                      << longest->allocation.staAddress << " to fit duration limit\n";
             longest->packets.pop_back();
             longest->psduLength = calculateAmpduPsduLength(longest->packets);
         }
         else {
-            EV_DEBUG << "HeDlMuTxOpFs::buildMuContainerPacket: dropping " << longest->allocation.staAddress
+            EV_DEBUG << "Building MU container packet: dropping " << longest->allocation.staAddress
                      << " to fit duration limit\n";
             finalAllocations.erase(longest);
         }
@@ -955,11 +955,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             plannedPpdu = calculatePlannedPpdu();
         durationTrimIterations++;
     }
-    EV_DEBUG << "HeDlMuTxOpFs::buildMuContainerPacket: duration trim took " << durationTrimIterations
+    EV_DEBUG << "Building MU container packet: duration trim took " << durationTrimIterations
              << " iteration(s), final allocations = " << finalAllocations.size() << "\n";
     if (finalAllocations.size() < 2 || !plannedPpdu ||
             plannedPpdu.parameters.duration > ppduDurationLimit) {
-        EV_WARN << "HeDlMuTxOpFs: no complete HE MU PPDU fits the PHY/TXOP duration limit." << endl;
+        EV_WARN << "Building MU container packet: no complete HE MU PPDU fits the PHY/TXOP duration limit." << endl;
         delete container;
         notifyPlanningFailure();
         return nullptr;
@@ -1085,7 +1085,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     ASSERT(activeAllocations.size() >= 2);
 
-    EV_INFO << "HeDlMuTxOpFs: assembled HE MU PPDU with "
+    EV_INFO << "Assembled HE MU PPDU with "
             << activeAllocations.size() << " RU allocations. Total sequential duration = " << totalDuration << endl;
     return container;
 }
