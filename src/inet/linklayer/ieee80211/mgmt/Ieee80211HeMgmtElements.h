@@ -34,6 +34,9 @@ inline void copyMcsNssMapFromElement(const Ieee80211HeMcsNssMapElement& source, 
 inline Ieee80211HeCapabilitiesElement makeHeCapabilitiesElement(const Ieee80211HeCapabilities& capabilities)
 {
     Ieee80211HeCapabilitiesElement element;
+    element.twtRequester = capabilities.twtRequester;
+    element.twtResponder = capabilities.twtResponder;
+    element.broadcastTwt = capabilities.broadcastTwt;
     element.supportedChannelWidth40MHz = containsChannelWidth(capabilities, 40);
     element.supportedChannelWidth80MHz = containsChannelWidth(capabilities, 80);
     element.supportedChannelWidth160MHz = containsChannelWidth(capabilities, 160);
@@ -74,6 +77,9 @@ inline Ieee80211HeCapabilitiesElement makeHeCapabilitiesElement(const Ieee80211H
 inline Ieee80211HeCapabilities makeHeCapabilities(const Ieee80211HeCapabilitiesElement& element)
 {
     Ieee80211HeCapabilities capabilities;
+    capabilities.twtRequester = element.twtRequester;
+    capabilities.twtResponder = element.twtResponder;
+    capabilities.broadcastTwt = element.broadcastTwt;
     capabilities.supportedChannelWidths.clear();
     capabilities.supportedChannelWidths.insert(Hz(20e6));
     if (element.supportedChannelWidth40MHz)
@@ -170,6 +176,11 @@ inline B getHe6GhzBandCapabilitiesElementLength()
     return B(1 + 1 + 1 + 2);
 }
 
+inline B getBroadcastTwtElementLength(const Ptr<const Ieee80211MgmtFrame>& frame)
+{
+    return frame->getBroadcastTwtPresent() ? B(3 + 15 * frame->getBroadcastTwtSchedulesArraySize()) : B(0);
+}
+
 /** Returns the encoded length of HE management elements present in a management frame. */
 inline B getHeMgmtElementsLength(const Ptr<const Ieee80211MgmtFrame>& frame)
 {
@@ -180,6 +191,7 @@ inline B getHeMgmtElementsLength(const Ptr<const Ieee80211MgmtFrame>& frame)
         length += getHeOperationElementLength();
     if (frame->getHe6GhzBandCapabilitiesPresent())
         length += getHe6GhzBandCapabilitiesElementLength();
+    length += getBroadcastTwtElementLength(frame);
     return length;
 }
 

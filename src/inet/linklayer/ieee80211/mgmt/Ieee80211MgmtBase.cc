@@ -148,16 +148,22 @@ void Ieee80211MgmtBase::processFrame(Packet *packet, const Ptr<const Ieee80211Da
             break;
 
         case ST_ACTION:
-            // Action frames (e.g. HE NDP Announcement, Compressed Beamforming Feedback)
-            // are fully consumed by the HCF layer (HeHcf::recipientProcessReceivedFrame).
-            // The copy that reaches the management module is silently dropped.
-            numMgmtFramesDropped++;
-            delete packet;
+            numMgmtFramesReceived++;
+            handleActionFrame(packet, dynamicPtrCast<const Ieee80211ActionFrame>(header));
             break;
 
         default:
             throw cRuntimeError("Unexpected frame type (%s)%s", packet->getClassName(), packet->getName());
     }
+}
+
+void Ieee80211MgmtBase::handleActionFrame(Packet *packet, const Ptr<const Ieee80211ActionFrame>& header)
+{
+    if (dynamicPtrCast<const Ieee80211TwtSetupFrame>(header) ||
+            dynamicPtrCast<const Ieee80211TwtTeardownFrame>(header) ||
+            dynamicPtrCast<const Ieee80211TwtInformationFrame>(header))
+        EV_WARN << "Received TWT action without a TWT-capable management implementation\n";
+    dropManagementFrame(packet);
 }
 
 void Ieee80211MgmtBase::start()
@@ -171,4 +177,3 @@ void Ieee80211MgmtBase::stop()
 } // namespace ieee80211
 
 } // namespace inet
-

@@ -175,6 +175,15 @@ class Ieee80211RtsFrame extends Ieee80211TwoAddressHeader
     type = ST_RTS;
 }
 
+// Power Save-Poll control frame. TWT announced service periods use this to
+// release AP buffered downlink traffic; it is intentionally not a
+// simulation-only notification.
+class Ieee80211PsPollFrame extends Ieee80211TwoAddressHeader
+{
+    chunkLength = B(16);
+    type = ST_PSPOLL;
+}
+
 //
 // Format of the 802.11 CTS frame
 //
@@ -269,8 +278,52 @@ class Ieee80211ActionFrame extends Ieee80211MgmtHeader
     type = ST_ACTION;
     short category;
     uint8_t blockAckAction;
+    uint8_t s1gAction;
     // TODO subclasses will add action subfield contents
     //WirelessNetworkManagementAction action; // action TODO remove it
+}
+
+// IEEE 802.11 Unprotected S1G Action category and its TWT action values.
+class Ieee80211TwtSetupFrame extends Ieee80211ActionFrame
+{
+    chunkLength = B(42);
+    category = 22;
+    s1gAction = 6;
+    uint8_t dialogToken;
+    bool twtRequest;
+    uint8_t setupCommand;
+    bool trigger;
+    bool implicit;
+    bool announced;
+    bool broadcast;
+    uint8_t flowId;
+    uint8_t broadcastId;
+    uint64_t targetWakeTime;
+    uint8_t wakeIntervalExponent;
+    uint16_t wakeIntervalMantissa;
+    uint8_t nominalWakeDuration;
+    uint8_t persistence;
+}
+
+class Ieee80211TwtTeardownFrame extends Ieee80211ActionFrame
+{
+    chunkLength = B(27);
+    category = 22;
+    s1gAction = 7;
+    uint8_t flowId;
+    uint8_t broadcastId;
+    bool broadcast;
+    bool teardownAll;
+}
+
+class Ieee80211TwtInformationFrame extends Ieee80211ActionFrame
+{
+    chunkLength = B(36);
+    category = 22;
+    s1gAction = 11;
+    uint8_t flowId;
+    bool nextWakeTimePresent;
+    uint64_t nextWakeTime;
 }
 
 class Ieee80211MsduSubframeHeader extends FieldsChunk

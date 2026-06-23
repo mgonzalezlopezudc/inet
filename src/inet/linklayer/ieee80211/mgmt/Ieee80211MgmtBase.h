@@ -76,6 +76,8 @@ class INET_API Ieee80211MgmtBase : public OperationalBase, public cListener
     virtual void handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) = 0;
     virtual void handleProbeRequestFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) = 0;
     virtual void handleProbeResponseFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header) = 0;
+    /** TWT actions are management-owned; other actions remain MAC-owned. */
+    virtual void handleActionFrame(Packet *packet, const Ptr<const Ieee80211ActionFrame>& header);
     //@}
 
     /** lifecycle support */
@@ -99,4 +101,3 @@ class INET_API Ieee80211MgmtBase : public OperationalBase, public cListener
 } // namespace inet
 
 #endif
-

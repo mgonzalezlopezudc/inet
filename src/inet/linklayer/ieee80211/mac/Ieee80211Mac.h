@@ -32,6 +32,7 @@ class IRx;
 class IIeee80211Llc;
 class Ieee80211MacHeader;
 class StationQueueBank;
+class ITwtManager;
 
 /**
  * Implements the IEEE 802.11 MAC. The features, standards compliance and
@@ -57,6 +58,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     opp_component_ptr<Pcf> pcf;
     opp_component_ptr<Hcf> hcf;
     opp_component_ptr<Mcf> mcf;
+    ITwtManager *twtManager = nullptr;
 
     // The last change channel message received and not yet sent to the physical layer, or nullptr.
     cMessage *pendingRadioConfigMsg = nullptr;
@@ -107,6 +109,10 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     virtual void sendUpFrame(Packet *frame);
     virtual void sendDownFrame(Packet *frame);
     virtual void sendDownPendingRadioConfigMsg();
+    virtual void setTwtRadioAwake(bool awake);
+    virtual bool isTwtPeerEligible(const MacAddress& peer) const;
+    virtual void sendTwtPsPoll(const MacAddress& peer);
+    virtual ITwtManager *getTwtManager() const { return twtManager; }
 
     virtual void processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header);
     virtual void processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
@@ -115,6 +121,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
           mib != nullptr && mib->mode == Ieee80211Mib::INFRASTRUCTURE &&
           mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT;
     }
+    virtual bool isAxMode() const { return modeSet != nullptr && !strcmp(modeSet->getName(), "ax"); }
 
     // Queue bank management (for AP mode with HE OFDMA scheduling)
     virtual StationQueueBank *createStationQueueBank(const MacAddress &staAddr);

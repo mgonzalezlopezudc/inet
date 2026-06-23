@@ -125,7 +125,10 @@ std::vector<Packet *> RecipientQosMacDataService::managementFrameReceived(Packet
     if (auto delba = dynamicPtrCast<const Ieee80211Delba>(mgmtHeader))
         blockAckReordering->processReceivedDelba(delba);
     // TODO Defrag, MSDU Integrity, Replay Detection, RX MSDU Rate Limiting
-    if (dynamicPtrCast<const Ieee80211ActionFrame>(mgmtHeader)) {
+    if (dynamicPtrCast<const Ieee80211ActionFrame>(mgmtHeader) &&
+            !dynamicPtrCast<const Ieee80211TwtSetupFrame>(mgmtHeader) &&
+            !dynamicPtrCast<const Ieee80211TwtTeardownFrame>(mgmtHeader) &&
+            !dynamicPtrCast<const Ieee80211TwtInformationFrame>(mgmtHeader)) {
         delete mgmtPacket;
         return std::vector<Packet *>();
     }
@@ -196,4 +199,3 @@ RecipientQosMacDataService::~RecipientQosMacDataService()
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

@@ -1,0 +1,106 @@
+%description:
+Test TWT action-frame and Broadcast-TWT Beacon-element serialization.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+auto setup = makeShared<Ieee80211TwtSetupFrame>();
+setup->setReceiverAddress(MacAddress("10:00:00:00:00:01"));
+setup->setTransmitterAddress(MacAddress("10:00:00:00:00:02"));
+setup->setAddress3(MacAddress("10:00:00:00:00:01"));
+setup->setDialogToken(19);
+setup->setTwtRequest(true);
+setup->setSetupCommand(2);
+setup->setTrigger(true);
+setup->setImplicit(false);
+setup->setAnnounced(true);
+setup->setBroadcast(false);
+setup->setFlowId(3);
+setup->setTargetWakeTime(1234567);
+setup->setWakeIntervalExponent(4);
+setup->setWakeIntervalMantissa(6250);
+setup->setNominalWakeDuration(8);
+setup->setPersistence(7);
+
+auto actionPacket = new Packet("twt-setup", setup);
+auto actionBytes = actionPacket->peekDataAsBytes();
+ASSERT(actionBytes->getChunkLength() == B(42));
+auto actionReceived = new Packet("twt-setup-rx", actionBytes);
+auto decodedSetup = actionReceived->popAtFront<Ieee80211TwtSetupFrame>();
+ASSERT(decodedSetup->getDialogToken() == 19);
+ASSERT(decodedSetup->getTwtRequest());
+ASSERT(decodedSetup->getSetupCommand() == 2);
+ASSERT(decodedSetup->getTrigger());
+ASSERT(!decodedSetup->getImplicit());
+ASSERT(decodedSetup->getAnnounced());
+ASSERT(decodedSetup->getFlowId() == 3);
+ASSERT(decodedSetup->getTargetWakeTime() == 1234567);
+ASSERT(decodedSetup->getWakeIntervalExponent() == 4);
+ASSERT(decodedSetup->getWakeIntervalMantissa() == 6250);
+
+auto psPoll = makeShared<Ieee80211PsPollFrame>();
+psPoll->setAID(17);
+psPoll->setReceiverAddress(MacAddress("10:00:00:00:00:01"));
+psPoll->setTransmitterAddress(MacAddress("10:00:00:00:00:02"));
+auto psPollPacket = new Packet("twt-ps-poll", psPoll);
+auto psPollBytes = psPollPacket->peekDataAsBytes();
+ASSERT(psPollBytes->getChunkLength() == B(16));
+auto psPollReceived = new Packet("twt-ps-poll-rx", psPollBytes);
+auto decodedPsPoll = psPollReceived->popAtFront<Ieee80211PsPollFrame>();
+ASSERT(decodedPsPoll->getAID() == 17);
+ASSERT(decodedPsPoll->getTransmitterAddress() == MacAddress("10:00:00:00:00:02"));
+
+auto beacon = makeShared<Ieee80211BeaconFrame>();
+beacon->setSSID("twt");
+Ieee80211SupportedRatesElement rates;
+rates.numRates = 1;
+rates.rate[0] = 6;
+beacon->setSupportedRates(rates);
+beacon->setBeaconInterval(SimTime(100, SIMTIME_MS));
+beacon->setBroadcastTwtPresent(true);
+beacon->setBroadcastTwtSchedulesArraySize(1);
+Ieee80211BroadcastTwtScheduleElement schedule;
+schedule.broadcastId = 5;
+schedule.implicit = true;
+schedule.announced = false;
+schedule.triggerEnabled = true;
+schedule.persistence = 3;
+schedule.targetWakeTime = SimTime(1, SIMTIME_S);
+schedule.wakeInterval = SimTime(32, SIMTIME_MS);
+schedule.wakeDuration = SimTime(2, SIMTIME_MS);
+beacon->setBroadcastTwtSchedules(0, schedule);
+beacon->setChunkLength(B(8 + 2 + 2 + 5 + 3) + getHeMgmtElementsLength(beacon));
+
+auto beaconPacket = new Packet("twt-beacon", beacon);
+auto beaconBytes = beaconPacket->peekDataAsBytes();
+auto beaconReceived = new Packet("twt-beacon-rx", beaconBytes);
+auto decodedBeacon = beaconReceived->popAtFront<Ieee80211BeaconFrame>();
+ASSERT(decodedBeacon->getBroadcastTwtPresent());
+ASSERT(decodedBeacon->getBroadcastTwtSchedulesArraySize() == 1);
+auto decodedSchedule = decodedBeacon->getBroadcastTwtSchedules(0);
+ASSERT(decodedSchedule.broadcastId == 5);
+ASSERT(decodedSchedule.implicit);
+ASSERT(decodedSchedule.triggerEnabled);
+ASSERT(decodedSchedule.persistence == 3);
+ASSERT(decodedSchedule.targetWakeTime == SimTime(1, SIMTIME_S));
+ASSERT(decodedSchedule.wakeInterval == SimTime(32, SIMTIME_MS));
+ASSERT(decodedSchedule.wakeDuration == SimTime(2, SIMTIME_MS));
+
+delete actionPacket;
+delete actionReceived;
+delete psPollPacket;
+delete psPollReceived;
+delete beaconPacket;
+delete beaconReceived;
+EV << "TWT frame round trips passed.\n";
+
+%contains: stdout
+TWT frame round trips passed.
