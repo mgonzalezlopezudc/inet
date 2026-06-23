@@ -49,6 +49,12 @@ class INET_API Ieee80211AgentSta : public SimpleModule, public cListener // TODO
   public:
     Ieee80211AgentSta() {}
 
+    // TWT is application-controlled: these helpers are intentionally public
+    // but are never invoked by the association state machine itself.
+    virtual void requestTwtSetup(const Ieee80211Prim_TwtSetupRequest& request);
+    virtual void requestTwtTeardown(const Ieee80211Prim_TwtTeardownRequest& request);
+    virtual void requestTwtInformation(const Ieee80211Prim_TwtInformationRequest& request);
+
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int) override;
@@ -84,6 +90,9 @@ class INET_API Ieee80211AgentSta : public SimpleModule, public cListener // TODO
     virtual void processAuthenticateConfirm(Ieee80211Prim_AuthenticateConfirm *resp);
     virtual void processAssociateConfirm(Ieee80211Prim_AssociateConfirm *resp);
     virtual void processReassociateConfirm(Ieee80211Prim_ReassociateConfirm *resp);
+    virtual void processTwtSetupConfirm(Ieee80211Prim_TwtSetupConfirm *resp);
+    virtual void processTwtTeardownConfirm(Ieee80211Prim_TwtTeardownConfirm *resp);
+    virtual void processTwtInformationConfirm(Ieee80211Prim_TwtInformationConfirm *resp);
     //@}
 
     /** Choose one AP from the list to associate with */

@@ -11,6 +11,7 @@
 
 #include "inet/common/ModuleAccess.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/twt/ITwtManager.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreementHandler.h"
@@ -481,6 +482,11 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
 
 void Hcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
+    if (auto psPoll = dynamicPtrCast<const Ieee80211PsPollFrame>(header)) {
+        if (auto twtManager = mac->getTwtManager())
+            twtManager->notifyPeerAwake(psPoll->getTransmitterAddress());
+        return;
+    }
     if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(header))
         ctsProcedure->processReceivedRts(packet, rtsFrame, ctsPolicy, this);
     else if (auto blockAckRequest = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(header)) {
@@ -804,6 +810,8 @@ void Hcf::originatorProcessReceivedDataFrame(const Ptr<const Ieee80211DataHeader
 
 bool Hcf::hasFrameToTransmit(AccessCategory ac)
 {
+    if (auto twtManager = mac->getTwtManager(); twtManager != nullptr && !twtManager->isStationAwake())
+        return false;
     auto edcaf = edca->getEdcaf(ac);
     if (edcaf)
         return !edcaf->getPendingQueue()->isEmpty() || edcaf->getInProgressFrames()->hasInProgressFrames();
@@ -813,6 +821,8 @@ bool Hcf::hasFrameToTransmit(AccessCategory ac)
 
 bool Hcf::hasFrameToTransmit()
 {
+    if (auto twtManager = mac->getTwtManager(); twtManager != nullptr && !twtManager->isStationAwake())
+        return false;
     auto edcaf = edca->getChannelOwner();
     if (edcaf)
         return !edcaf->getPendingQueue()->isEmpty() || edcaf->getInProgressFrames()->hasInProgressFrames();

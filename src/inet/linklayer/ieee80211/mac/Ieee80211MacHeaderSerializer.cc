@@ -82,6 +82,10 @@ Register_Serializer(Ieee80211MultiTidBlockAck, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211MultiStaBlockAck, Ieee80211MacHeaderSerializer);
 
 Register_Serializer(Ieee80211ActionFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211TwtSetupFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211TwtTeardownFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211TwtInformationFrame, Ieee80211MacHeaderSerializer);
+Register_Serializer(Ieee80211PsPollFrame, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211AddbaRequest, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211AddbaResponse, Ieee80211MacHeaderSerializer);
 Register_Serializer(Ieee80211Delba, Ieee80211MacHeaderSerializer);
@@ -251,6 +255,41 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                             default:
                                 throw cRuntimeError("Ieee80211MacHeaderSerializer: cannot serialize the Ieee80211ActionFrame frame, blockAckAction %d not supported.", actionFrame->getBlockAckAction());
                         }
+                        break;
+                    }
+                    case 22: {
+                        stream.writeByte(actionFrame->getCategory());
+                        stream.writeByte(actionFrame->getS1gAction());
+                        if (auto twtSetup = dynamicPtrCast<const Ieee80211TwtSetupFrame>(chunk)) {
+                            stream.writeByte(twtSetup->getDialogToken());
+                            uint8_t control = (twtSetup->getTwtRequest() ? 1 : 0) |
+                                    ((twtSetup->getSetupCommand() & 0x7) << 1) |
+                                    (twtSetup->getTrigger() ? 0x10 : 0) |
+                                    (twtSetup->getImplicit() ? 0x20 : 0) |
+                                    (twtSetup->getAnnounced() ? 0x40 : 0) |
+                                    (twtSetup->getBroadcast() ? 0x80 : 0);
+                            stream.writeByte(control);
+                            stream.writeByte((twtSetup->getFlowId() & 0x7) | ((twtSetup->getBroadcastId() & 0x1f) << 3));
+                            stream.writeUint64Le(twtSetup->getTargetWakeTime());
+                            stream.writeByte(twtSetup->getWakeIntervalExponent());
+                            stream.writeUint16Le(twtSetup->getWakeIntervalMantissa());
+                            stream.writeByte(twtSetup->getNominalWakeDuration());
+                            stream.writeByte(twtSetup->getPersistence());
+                            ASSERT(stream.getLength() - startPos == twtSetup->getChunkLength());
+                        }
+                        else if (auto teardown = dynamicPtrCast<const Ieee80211TwtTeardownFrame>(chunk)) {
+                            stream.writeByte((teardown->getFlowId() & 0x7) | ((teardown->getBroadcastId() & 0x1f) << 3) |
+                                    (teardown->getBroadcast() ? 0x80 : 0));
+                            ASSERT(stream.getLength() - startPos == teardown->getChunkLength());
+                        }
+                        else if (auto information = dynamicPtrCast<const Ieee80211TwtInformationFrame>(chunk)) {
+                            stream.writeByte(information->getFlowId() & 0x7);
+                            stream.writeByte(information->getNextWakeTimePresent() ? 1 : 0);
+                            stream.writeUint64Le(information->getNextWakeTime());
+                            ASSERT(stream.getLength() - startPos == information->getChunkLength());
+                        }
+                        else
+                            throw cRuntimeError("Unsupported S1G action frame");
                         break;
                     }
                     default:
@@ -456,6 +495,16 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             break;
         }
         case ST_PSPOLL:
+        {
+            auto psPoll = dynamicPtrCast<const Ieee80211PsPollFrame>(chunk);
+            if (psPoll == nullptr)
+                throw cRuntimeError("Ieee80211Serializer: PS-Poll must use Ieee80211PsPollFrame");
+            stream.writeUint16Le(psPoll->getAID());
+            stream.writeMacAddress(psPoll->getReceiverAddress());
+            stream.writeMacAddress(psPoll->getTransmitterAddress());
+            ASSERT(stream.getLength() - startPos == psPoll->getChunkLength());
+            break;
+        }
         case ST_LBMS_REQUEST:
         case ST_LBMS_REPORT: {
             break;
@@ -567,6 +616,55 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                             return actionFrame;
                     }
                     break;
+                }
+                case 22: {
+                    uint8_t s1gAction = stream.readByte();
+                    if (s1gAction == 6) {
+                        auto frame = makeShared<Ieee80211TwtSetupFrame>();
+                        copyBasicFields(frame, macHeader);
+                        copyActionFrameFields(frame, actionFrame);
+                        frame->setS1gAction(s1gAction);
+                        frame->setDialogToken(stream.readByte());
+                        uint8_t control = stream.readByte();
+                        uint8_t flow = stream.readByte();
+                        frame->setTwtRequest(control & 1);
+                        frame->setSetupCommand((control >> 1) & 0x7);
+                        frame->setTrigger(control & 0x10);
+                        frame->setImplicit(control & 0x20);
+                        frame->setAnnounced(control & 0x40);
+                        frame->setBroadcast(control & 0x80);
+                        frame->setFlowId(flow & 0x7);
+                        frame->setBroadcastId((flow >> 3) & 0x1f);
+                        frame->setTargetWakeTime(stream.readUint64Le());
+                        frame->setWakeIntervalExponent(stream.readByte());
+                        frame->setWakeIntervalMantissa(stream.readUint16Le());
+                        frame->setNominalWakeDuration(stream.readByte());
+                        frame->setPersistence(stream.readByte());
+                        return frame;
+                    }
+                    else if (s1gAction == 7) {
+                        auto frame = makeShared<Ieee80211TwtTeardownFrame>();
+                        copyBasicFields(frame, macHeader);
+                        copyActionFrameFields(frame, actionFrame);
+                        frame->setS1gAction(s1gAction);
+                        uint8_t flow = stream.readByte();
+                        frame->setFlowId(flow & 0x7);
+                        frame->setBroadcastId((flow >> 3) & 0x1f);
+                        frame->setBroadcast(flow & 0x80);
+                        return frame;
+                    }
+                    else if (s1gAction == 11) {
+                        auto frame = makeShared<Ieee80211TwtInformationFrame>();
+                        copyBasicFields(frame, macHeader);
+                        copyActionFrameFields(frame, actionFrame);
+                        frame->setS1gAction(s1gAction);
+                        frame->setFlowId(stream.readByte() & 0x7);
+                        frame->setNextWakeTimePresent(stream.readByte() != 0);
+                        frame->setNextWakeTime(stream.readUint64Le());
+                        return frame;
+                    }
+                    actionFrame->markIncorrect();
+                    return actionFrame;
                 }
                 default: {
                     actionFrame->markIncorrect();
@@ -800,6 +898,14 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             return dataHeader;
         }
         case ST_PSPOLL:
+        {
+            auto psPoll = makeShared<Ieee80211PsPollFrame>();
+            copyBasicFields(psPoll, macHeader);
+            psPoll->setAID(stream.readUint16Le() & 0x3fff);
+            psPoll->setReceiverAddress(stream.readMacAddress());
+            psPoll->setTransmitterAddress(stream.readMacAddress());
+            return psPoll;
+        }
         case ST_LBMS_REQUEST:
         case ST_LBMS_REPORT: {
             return macHeader;

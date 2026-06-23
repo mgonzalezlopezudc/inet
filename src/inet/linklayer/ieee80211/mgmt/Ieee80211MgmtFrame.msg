@@ -135,6 +135,9 @@ struct Ieee80211HeMcsNssMapElement
 //
 struct Ieee80211HeCapabilitiesElement
 {
+    bool twtRequester;
+    bool twtResponder;
+    bool broadcastTwt;
     bool supportedChannelWidth40MHz;
     bool supportedChannelWidth80MHz;
     bool supportedChannelWidth160MHz;
@@ -194,6 +197,21 @@ struct Ieee80211He6GhzBandCapabilitiesElement
     int maxMpduLength;
 }
 
+// Compact packet representation of one parameter set in an IEEE 802.11
+// Broadcast TWT element. Times are represented as simulation time at the
+// management boundary and converted to TSF microseconds by the serializer.
+struct Ieee80211BroadcastTwtScheduleElement
+{
+    short broadcastId;
+    bool implicit;
+    bool announced;
+    bool triggerEnabled;
+    short persistence;
+    simtime_t targetWakeTime;
+    simtime_t wakeInterval;
+    simtime_t wakeDuration;
+}
+
 //
 // Frame body base class used to hide various frame body types
 //
@@ -205,6 +223,8 @@ class Ieee80211MgmtFrame extends FieldsChunk
     Ieee80211HeOperationElement heOperation;
     bool he6GhzBandCapabilitiesPresent;
     Ieee80211He6GhzBandCapabilitiesElement he6GhzBandCapabilities;
+    bool broadcastTwtPresent;
+    Ieee80211BroadcastTwtScheduleElement broadcastTwtSchedules[];
 }
 
 //

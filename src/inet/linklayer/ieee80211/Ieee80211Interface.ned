@@ -13,6 +13,7 @@ import inet.linklayer.ieee80211.llc.IIeee80211Llc;
 import inet.linklayer.ieee80211.mgmt.IIeee80211Agent;
 import inet.linklayer.ieee80211.mgmt.IIeee80211Mgmt;
 import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+import inet.linklayer.ieee80211.twt.IIeee80211TwtManager;
 import inet.networklayer.common.NetworkInterface;
 import inet.physicallayer.wireless.common.contract.packetlevel.IRadio;
 
@@ -75,6 +76,7 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         mac.*.rateSelection.dataFrameBitrate = default(this.bitrate);
         *.macModule = default(absPath(".mac"));
         *.mibModule = default(absPath(".mib"));
+        *.twtModule = default(absPath(".twt"));
         *.interfaceTableModule = default(absPath(this.interfaceTableModule));
         *.energySourceModule = default(absPath(this.energySourceModule));
     gates:
@@ -85,6 +87,10 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         mib: Ieee80211Mib {
             parameters:
                 @display("p=100,300;is=s");
+        }
+        twt: <default("Ieee80211TwtManager")> like IIeee80211TwtManager {
+            parameters:
+                @display("p=100,400;is=s");
         }
         llc: <default(opMode == "p" ? "Ieee80211LlcEpd" : "Ieee80211LlcLpd")> like IIeee80211Llc {
             parameters:
@@ -129,4 +135,3 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
 
         classifier.in <-- { @display("m=n"); } <-- upperLayerIn;
 }
-
