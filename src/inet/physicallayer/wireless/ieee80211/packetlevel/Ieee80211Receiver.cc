@@ -307,8 +307,10 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
         auto networkInterface = getContainingNicModule(this);
         auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
         if (mib != nullptr && heMuPhyHeader->getBssColor() != mib->heOperation.bssColor) {
-            if (!getAnalogModel()->computeIsReceptionPossible(listening, reception, obssPdThreshold))
+            if (!getAnalogModel()->computeIsReceptionPossible(listening, reception, obssPdThreshold)) {
+                EV_INFO << "Reception of frame with BSS color=" << (int)heMuPhyHeader->getBssColor() << " is not possible due to OBSS PD threshold, our BSS color=" << (int)mib->heOperation.bssColor << "\n";
                 return false;
+            }
         }
     }
     if (heMuPhyHeader != nullptr)
@@ -326,8 +328,10 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
         auto networkInterface = getContainingNicModule(this);
         auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
         if (mib != nullptr && heMuPhyHeader->getBssColor() != mib->heOperation.bssColor) {
-            if (!getAnalogModel()->computeIsReceptionPossible(listening, reception, obssPdThreshold))
+            if (!getAnalogModel()->computeIsReceptionPossible(listening, reception, obssPdThreshold)) {
+                EV_INFO << "Reception of frame with BSS color=" << (int)heMuPhyHeader->getBssColor() << " is not attempted due to OBSS PD threshold, our BSS color=" << (int)mib->heOperation.bssColor << "\n";
                 return false;
+            }
         }
     }
     if (heMuPhyHeader == nullptr || heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)

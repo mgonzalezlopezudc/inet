@@ -39,6 +39,7 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         apMib->setPeerHeCapabilities(mib->address, mib->localHeCapabilities, apMib->heOperation);
         mib->setPeerHeCapabilities(apMib->address, apMib->localHeCapabilities, apMib->heOperation);
         mib->heOperation.bssColor = apMib->heOperation.bssColor;
+        EV_INFO << "Peer HE capabilities set for AP address=" << apMib->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
     }
 }
 

@@ -673,15 +673,18 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
                     (ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation);
             mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(heCapabilities), apHeOperation);
             mib->heOperation.bssColor = apHeOperation.bssColor;
+            EV_INFO << "Peer HE capabilities set for AP address=" << ap->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
         }
         else if (ap->heCapabilitiesPresent) {
             auto apHeOperation = ap->heOperationPresent ? makeHeOperation(ap->heOperation) : mib->heOperation;
             mib->setPeerHeCapabilities(ap->address, makeHeCapabilities(ap->heCapabilities), apHeOperation);
             mib->heOperation.bssColor = apHeOperation.bssColor;
+            EV_INFO << "Peer HE capabilities set for AP address=" << ap->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
         }
         else {
             mib->removePeerHeCapabilities(ap->address);
             mib->heOperation.bssColor = 0;
+            EV_INFO << "Peer HE capabilities removed for AP address=" << ap->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
         }
 
         emit(l2AssociatedSignal, myIface, ap);
@@ -728,6 +731,7 @@ void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const
     mib->bssStationData.associationId = -1;
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
+    EV_INFO << "Beacon timeout timer canceled for AP address=" << assocAP.address << "\n";
 }
 
 void Ieee80211MgmtSta::handleBeaconFrame(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header)
