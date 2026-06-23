@@ -19,21 +19,21 @@ network TwtRegression
         configurator: Ipv4NetworkConfigurator {
             parameters:
                 config = xml("<config><interface hosts='*' address='10.0.x.x' netmask='255.255.0.0'/></config>");
-                @display("p=70,50");
+                @display("p=70,50;is=s");
         }
         radioMedium: Ieee80211ScalarRadioMedium {
-            @display("p=70,130");
+            @display("p=70,130;is=s");
         }
         ap: AccessPoint {
             parameters:
                 wlan[*].mgmt.typename = "Ieee80211TwtExampleMgmtAp";
-                @display("p=290,180");
+                @display("p=290,180;r=,,#707070");
         }
         sta[numStations]: WirelessHost {
             parameters:
                 wlan[*].mgmt.typename = "Ieee80211MgmtSta";
                 wlan[*].agent.typename = "Ieee80211TwtExampleAgent";
-                @display("p=160,280");
+                @display("r=,,#707070");
         }
         server: StandardHost {
             @display("p=500,180");
