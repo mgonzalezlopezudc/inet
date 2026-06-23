@@ -28,6 +28,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const Sche
     });
 
     int maxRus = physicallayer::getHeMaxRuCount(context.channelBandwidth);
+    ASSERT(maxRus >= 0);
     int raCount = computeRandomAccessRuCount(context, maxRus);
     int scheduledCount = std::min({(int)candidates.size(), maxMuStations,
             std::max(0, maxRus - raCount)});
@@ -71,6 +72,11 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const Sche
         }
     }
 
+    // allocateHeRus returns RUs in the same order as the surviving requests;
+    // retaining this correspondence is essential when requests are sorted and
+    // shrunk during fitting.
+    ASSERT(rus.size() == requested.size());
+
     int targetRssiDbm = computeTargetRssiDbm(context);
     for (size_t i = 0; i < rus.size(); i++) {
         int originalIndex = requested[i].second;
@@ -93,6 +99,9 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const Sche
         result.allocations.push_back(allocation);
     }
     result.commonDuration = computeCommonDuration(context, result.allocations);
+    EV_INFO << "HE UL backlog schedule: requested=" << scheduledCount
+             << ", allocated=" << result.allocations.size()
+             << ", randomAccessRequested=" << raCount << "\n";
     return result;
 }
 

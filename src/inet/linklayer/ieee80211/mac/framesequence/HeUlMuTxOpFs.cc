@@ -51,6 +51,9 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
             simtime_t timeout, simtime_t commonDuration, simtime_t phyRxStartDelay) :
         ReceiveCollectionStep(timeout), triggerId(triggerId), callback(callback), allocations(allocations)
     {
+        ASSERT(callback != nullptr);
+        ASSERT(!allocations.empty());
+        ASSERT(commonDuration > SIMTIME_ZERO);
         firstResponseTime = simTime();
         lastResponseTime = firstResponseTime + commonDuration + timeout + phyRxStartDelay;
     }
@@ -61,6 +64,10 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
         auto header = findDataHeader(frame);
         if (tag == nullptr || header == nullptr || tag->getPpduFormat() != physicallayer::HE_TRIGGER_BASED_UPLINK ||
                 tag->getTriggerId() != triggerId || simTime() < firstResponseTime || simTime() > lastResponseTime) {
+            // This collection window is intentionally strict: accepting a late
+            // or foreign HE-TB PPDU could acknowledge a different Trigger.
+            EV_INFO << "Discarding HE UL response outside Trigger " << triggerId
+                     << " collection window\n";
             delete frame;
             return;
         }
@@ -73,20 +80,28 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                     aid = callback->getAssociationId(header->getTransmitterAddress());
                 bool ruMatches = tag->getRuIndex() == allocation.ru.index;
                 if (!allocation.randomAccess && !ruMatches) {
+                    EV_INFO << "Discarding scheduled HE UL response with unexpected RU "
+                             << tag->getRuIndex() << " for AID " << aid << "\n";
                     delete frame;
                     return;
                 }
                 if (allocation.randomAccess && !ruMatches) {
+                    EV_INFO << "Discarding random-access HE UL response with unexpected RU "
+                             << tag->getRuIndex() << "\n";
                     delete frame;
                     return;
                 }
                 break;
             }
         if (aid == 0 || receivedAids.count(aid) != 0) {
+            EV_INFO << "Discarding " << (aid == 0 ? "unallocated" : "duplicate")
+                     << " HE UL response for Trigger " << triggerId << "\n";
             delete frame;
             return;
         }
         receivedAids.insert(aid);
+        EV_INFO << "Collected HE UL response: trigger=" << triggerId
+                 << ", aid=" << aid << ", RU=" << tag->getRuIndex() << "\n";
         ReceiveCollectionStep::setFrameToReceive(frame);
     }
 };
@@ -105,11 +120,20 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
     modeSet(modeSet),
     apAddress(apAddress)
 {
+    ASSERT(coordinator != nullptr);
+    ASSERT(callback != nullptr);
+    ASSERT(modeSet != nullptr);
+    ASSERT(!schedule.allocations.empty());
+    ASSERT(schedule.commonDuration > SIMTIME_ZERO);
+    ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ||
+            triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
     triggerId = coordinator->allocateTriggerId();
 }
 
 Packet *HeUlMuTxOpFs::buildTriggerPacket() const
 {
+    ASSERT(!schedule.allocations.empty());
+    ASSERT(schedule.commonDuration > SIMTIME_ZERO);
     auto header = makeShared<Ieee80211TriggerFrame>();
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);
@@ -148,6 +172,7 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
 
 void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     ackRecords.clear();
     for (const auto& allocation : schedule.allocations) {
         if (allocation.randomAccess)
@@ -235,6 +260,8 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
                 record.bitmap |= UINT64_C(1) << offset;
         }
     }
+    EV_INFO << "HE UL response processing: received=" << responders.size()
+             << ", block-ack records=" << ackRecords.size() << "\n";
 }
 
 Packet *HeUlMuTxOpFs::buildMultiStaBlockAckPacket() const
@@ -254,12 +281,16 @@ Packet *HeUlMuTxOpFs::buildMultiStaBlockAckPacket() const
 
 void HeUlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
+    ASSERT(context != nullptr);
     step = 0;
+    EV_INFO << "Starting HE UL " << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
+             << " Trigger " << triggerId << " with " << schedule.allocations.size() << " RU allocations\n";
     coordinator->noteTriggerSent(triggerType);
 }
 
 IFrameSequenceStep *HeUlMuTxOpFs::prepareStep(FrameSequenceContext *context)
 {
+    ASSERT(context != nullptr);
     switch (step) {
         case 0:
             return new TransmitStep(buildTriggerPacket(), context->getIfs(), true);
@@ -278,6 +309,7 @@ IFrameSequenceStep *HeUlMuTxOpFs::prepareStep(FrameSequenceContext *context)
 
 bool HeUlMuTxOpFs::completeStep(FrameSequenceContext *context)
 {
+    ASSERT(step >= 0 && step <= 2);
     if (step == 1)
         processResponses(context);
     step++;
