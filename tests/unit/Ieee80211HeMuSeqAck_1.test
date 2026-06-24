@@ -42,6 +42,7 @@ network TestNetwork
 %inifile: omnetpp.ini
 [General]
 network = TestNetwork
+allow-object-stealing-on-deletion = true
 
 %global:
 using namespace inet;
@@ -98,7 +99,7 @@ class MockScheduler : public IIeee80211HeDlScheduler
 class MockInProgressFrames : public InProgressFrames
 {
   public:
-    virtual ~MockInProgressFrames() { inProgressFrames.clear(); }
+    virtual ~MockInProgressFrames() {}
 };
 
 class MockOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreementHandler
@@ -432,6 +433,7 @@ EV << "Handler-level sequence finished count: " << mockHcf->numFinishedCalls << 
 delete handlerScheduler;
 delete handlerAckHandler;
 delete handlerInProgress;
+pendingQueue->removeAllPackets();
 
 %contains: stdout
 Step 0 prepared: Transmit container frame.
@@ -449,7 +451,7 @@ Step 3 prepared: Expect Block Ack with timeout.
 Expected timeout for step 3: 0.000237
 Step 3: Simulating timeout from STA2 to verify recovery path.
 Failures before timeout handling: 0
-HeDlMuTxOpFs: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
+HE DL MU TxOp FS: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, triggering failure recovery.
 Callback: ProcessFailedFrame data-sta2
 Timeout marked current receive step as rejected. Failures after: 1
 Step 4 continued with BAR to STA3 after STA2 timeout.
