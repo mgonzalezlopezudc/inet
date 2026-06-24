@@ -393,6 +393,24 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
             result.error = "invalid HE coding type";
             return result;
         }
+        // IEEE Std 802.11-2024 Clause 27.3.12.5 ("Coding"):
+        // "LDPC is the only FEC coding scheme in the HE PPDU Data field for a 484-, 996-, and 2x996-tone RU."
+        // "LDPC is the only FEC coding scheme in the HE PPDU Data field for HE-MCSs 10 and 11."
+        // "Support for BCC coding is limited to less than or equal to four spatial streams..."
+        if (user.coding == HE_CODING_BCC) {
+            if (user.mcs == 10 || user.mcs == 11) {
+                result.error = "HE BCC coding is not supported for MCS 10 or 11";
+                return result;
+            }
+            if (user.ru.toneSize >= 484) {
+                result.error = "HE BCC coding is not supported for 484-tone RUs or larger";
+                return result;
+            }
+            if (user.numberOfSpatialStreams > 4) {
+                result.error = "HE BCC coding is limited to less than or equal to 4 spatial streams";
+                return result;
+            }
+        }
         if (user.dcm && !isHeDcmCombinationSupported(user.mcs, user.numberOfSpatialStreams)) {
             result.error = "unsupported HE DCM combination";
             return result;
@@ -410,7 +428,13 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
             result.error = "HE user has no data bits per symbol";
             return result;
         }
-        user.numberOfEncoders = std::max(1, (user.dataBitsPerSymbol + 647) / 648);
+        // IEEE Std 802.11-2024 Clause 27.3.12.5.1 ("BCC coding and puncturing"):
+        // "When conducting BCC FEC encoding for an HE PPDU, the number of encoders is always 1."
+        if (user.coding == HE_CODING_BCC) {
+            user.numberOfEncoders = 1;
+        } else {
+            user.numberOfEncoders = std::max(1, (user.dataBitsPerSymbol + 647) / 648);
+        }
         user.tailBits = user.coding == HE_CODING_LDPC ? 0 : 6 * user.numberOfEncoders;
         int64_t uncodedBits = user.serviceBits + user.psduLength.get<B>() * 8 + user.tailBits;
         if (user.coding == HE_CODING_LDPC) {

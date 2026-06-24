@@ -84,6 +84,75 @@ inet::ieee80211::AccessCategory mapTidToAccessCategory(inet::ieee80211::Tid tid)
     }
 }
 
+// IEEE Std 802.11-2024 Table 27-21 ("HE-SIG-A field of an HE MU PPDU") describes the
+// permitted preamble puncturing patterns for HE 80 MHz and 160 MHz.
+bool isValidHePreamblePuncturing(const std::vector<bool>& mask, int widthMhz)
+{
+    if (mask.empty())
+        return true;
+    if (widthMhz != 80 && widthMhz != 160)
+        return false;
+    
+    // 1. Primary 20 MHz subchannel must not be punctured (mask[0] represents primary 20 MHz).
+    if (mask[0])
+        return false;
+
+    // 2. At least one subchannel must remain active.
+    if (std::all_of(mask.begin(), mask.end(), [](bool b) { return b; }))
+        return false;
+
+    if (widthMhz == 80) {
+        // Allowed 80 MHz patterns (Table 27-21, Bandwidth values 4 and 5):
+        // - Value 4: Secondary 20 MHz punctured (mask: 0100)
+        // - Value 5: One of two 20 MHz subchannels in secondary 40 MHz channel punctured (mask: 0010 or 0001)
+        int count = 0;
+        for (bool b : mask) if (b) count++;
+        if (count == 0) return true;
+        if (count == 1) {
+            return mask[1] || mask[2] || mask[3];
+        }
+        return false;
+    }
+    else { // 160 MHz (8 subchannels: b0, b1, b2, b3, b4, b5, b6, b7)
+        // b0: Primary 20 (always active / 0)
+        // b1: Secondary 20
+        // b2, b3: Secondary 40
+        // b4, b5, b6, b7: Secondary 80
+
+        // Table 27-21, Bandwidth values 6 and 7:
+        // "If two of the 20 MHz subchannels in the secondary 80 MHz channel are punctured,
+        // these are either the lower two or the higher two."
+        int sec80Count = (mask[4]?1:0) + (mask[5]?1:0) + (mask[6]?1:0) + (mask[7]?1:0);
+        if (sec80Count > 2)
+            return false;
+        if (sec80Count == 2) {
+            bool lowerTwo = mask[4] && mask[5];
+            bool higherTwo = mask[6] && mask[7];
+            if (!lowerTwo && !higherTwo)
+                return false;
+        }
+
+        // "No more than two adjacent 20 MHz subchannels are punctured across 160 MHz."
+        for (size_t i = 0; i + 2 < mask.size(); ++i) {
+            if (mask[i] && mask[i+1] && mask[i+2])
+                return false;
+        }
+
+        // - Value 6: Secondary 20 MHz is punctured (b1 = 1), secondary 40 MHz is not punctured (b2 = 0, b3 = 0).
+        bool isSet6 = mask[1] && !mask[2] && !mask[3];
+
+        // - Value 7: Secondary 20 MHz is not punctured (b1 = 0), and at least one 20 MHz subchannel is punctured.
+        int totalCount = 0;
+        for (bool b : mask) if (b) totalCount++;
+        bool isSet7 = !mask[1] && (totalCount >= 1);
+
+        if (!isSet6 && !isSet7)
+            return false;
+
+        return true;
+    }
+}
+
 std::vector<bool> parseHePreamblePuncturing(const char *value, inet::units::values::Hz bandwidth)
 {
     std::string mask(value == nullptr ? "" : value);
@@ -105,6 +174,8 @@ std::vector<bool> parseHePreamblePuncturing(const char *value, inet::units::valu
         throw omnetpp::cRuntimeError("The primary 20 MHz HE subchannel must not be punctured");
     if (std::all_of(result.begin(), result.end(), [] (bool value) { return value; }))
         throw omnetpp::cRuntimeError("At least one HE 20 MHz subchannel must remain active");
+    if (!isValidHePreamblePuncturing(result, widthMhz))
+        throw omnetpp::cRuntimeError("HE preamble puncturing mask '%s' is not a permitted standard pattern for %d MHz channel", value, widthMhz);
     return result;
 }
 
