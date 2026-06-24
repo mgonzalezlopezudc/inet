@@ -34,12 +34,14 @@ Ieee80211HeMode::Ieee80211HeMode(const char *name, const Ieee80211HePreambleMode
 
 const simtime_t Ieee80211HeMode::getSlotTime() const
 {
-    return 9E-6; // Slot time is 9µs for 802.11ax/HE
+    // HE Slot time is 9 µs (Table 27-61 "HE PHY characteristics")
+    return 9E-6;
 }
 
 const simtime_t Ieee80211HeMode::getSifsTime() const
 {
-    return 16E-6; // SIFS is 16µs for 802.11ax/HE 5GHz
+    // HE SIFS is 16 µs in 5 GHz / 10 µs in 2.4 GHz (Table 27-61 "HE PHY characteristics")
+    return 16E-6;
 }
 
 Ieee80211HeModeBase::Ieee80211HeModeBase(unsigned int modulationAndCodingScheme, unsigned int numberOfSpatialStreams, const Hz bandwidth, GuardIntervalType guardIntervalType) :
@@ -68,6 +70,11 @@ bps Ieee80211HeModeBase::getGrossBitrate() const
 
 int Ieee80211HeModeBase::getNumberOfDataSubcarriers() const
 {
+    // Grounded on IEEE 802.11-2024 Clause 27.3.2.2 data tone mapping (N_SD) for full bandwidth RUs:
+    // - 20 MHz (242-tone RU) has 234 data subcarriers.
+    // - 40 MHz (484-tone RU) has 468 data subcarriers.
+    // - 80 MHz (996-tone RU) has 980 data subcarriers.
+    // - 160 MHz (1992-tone RU) has 1960 data subcarriers.
     if (bandwidth == MHz(20))
         return 234;
     else if (bandwidth == MHz(40))
@@ -82,6 +89,11 @@ int Ieee80211HeModeBase::getNumberOfDataSubcarriers() const
 
 int Ieee80211HeModeBase::getNumberOfPilotSubcarriers() const
 {
+    // Grounded on IEEE 802.11-2024 Clause 27.3.2.4 pilot tone mapping (N_SP) for full bandwidth RUs:
+    // - 20 MHz (242-tone RU) has 8 pilot subcarriers.
+    // - 40 MHz (484-tone RU) has 16 pilot subcarriers.
+    // - 80 MHz (996-tone RU) has 16 pilot subcarriers.
+    // - 160 MHz (1992-tone RU) has 32 pilot subcarriers.
     if (bandwidth == MHz(20))
         return 8;
     else if (bandwidth == MHz(40))
@@ -141,20 +153,28 @@ Ieee80211HePreambleMode::Ieee80211HePreambleMode(const Ieee80211HeSignalMode *hi
 
 unsigned int Ieee80211HePreambleMode::computeNumberOfHELongTrainings(unsigned int numberOfSpatialStreams) const
 {
+    // Grounded on IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
     if (numberOfSpatialStreams == 1) return 1;
     if (numberOfSpatialStreams == 2) return 2;
-    return 4;
+    return 4; // Simplified mapping for simulation paths
 }
 
 const simtime_t Ieee80211HePreambleMode::getDuration() const
 {
-    // Return standard HE-SU/MU preamble duration
-    return getNonHTShortTrainingSequenceDuration() +
-           getNonHTLongTrainingFieldDuration() +
-           getNonHTSignalField() +
-           getHeSignalFieldA() +
-           getHeShortTrainingFieldDuration() +
-           numberOfHELongTrainings * 4E-6;
+    // Grounded on IEEE 802.11-2024 Clause 27.3.11 PPDU preamble field lengths:
+    // - L-STF: 8 µs
+    // - L-LTF: 8 µs
+    // - L-SIG: 4 µs
+    // - RL-SIG (Repeated L-SIG): 4 µs
+    // - HE-SIG-A: 8 µs
+    // - HE-STF: 4 µs
+    // - HE-LTFs: numberOfHELongTrainings * 4 µs (each symbol duration under 1x HE-LTF mode)
+    return getNonHTShortTrainingSequenceDuration() + // L-STF (8 µs)
+           getNonHTLongTrainingFieldDuration() +     // L-LTF (8 µs)
+           getNonHTSignalField() +                   // L-SIG (4 µs)
+           getHeSignalFieldA() +                     // RL-SIG (4 µs) + HE-SIG-A (8 µs) = 12 µs
+           getHeShortTrainingFieldDuration() +       // HE-STF (4 µs)
+           numberOfHELongTrainings * 4E-6;           // HE-LTFs
 }
 
 static int getNumberOfTotalSubcarriers(Hz bandwidth) {

@@ -21,46 +21,70 @@ namespace physicallayer {
 using namespace inet::units::values;
 
 /** HE PPDU formats modelled by the common MU PHY calculator. */
+/**
+ * HE PPDU formats modelled by the common MU PHY calculator.
+ * Grounded on IEEE 802.11-2024 Clause 27.3.11 ("PPDU formats").
+ */
 enum Ieee80211HePpduFormat {
-    HE_MU_DOWNLINK = 0,
-    HE_TRIGGER_BASED_UPLINK = 1
+    HE_MU_DOWNLINK = 0,             // HE MU PPDU format (Clause 27.3.11.13) for DL OFDMA/MU-MIMO
+    HE_TRIGGER_BASED_UPLINK = 1     // HE TB PPDU format (Clause 27.3.11.14) for UL OFDMA/MU-MIMO triggered by AP
 };
 
-/** Guard-interval choices expressed by HE packet-level parameters. */
+/**
+ * Guard-interval choices expressed by HE packet-level parameters.
+ * Grounded on IEEE 802.11-2024 Table 27-61 ("HE PHY characteristics").
+ * - Short: 0.8 µs (1/16 of DFT period)
+ * - Medium: 1.6 µs (1/8 of DFT period)
+ * - Long: 3.2 µs (1/4 of DFT period)
+ */
 enum Ieee80211HeGuardInterval {
     HE_GI_0_8_US = 0,
     HE_GI_1_6_US = 1,
     HE_GI_3_2_US = 2
 };
 
-/** Forward-error-correction coding used by HE user payloads. */
+/**
+ * Forward-error-correction coding used by HE user payloads.
+ * Grounded on IEEE 802.11-2024 Clause 27.3.11.8 ("LDPC coding").
+ */
 enum Ieee80211HeCoding {
-    HE_CODING_BCC = 0,
-    HE_CODING_LDPC = 1
+    HE_CODING_BCC = 0,              // Binary Convolutional Coding
+    HE_CODING_LDPC = 1              // Low-Density Parity-Check Coding
 };
 
-/** HE long-training-field duration multiplier. */
+/**
+ * HE long-training-field (HE-LTF) duration multiplier.
+ * Grounded on IEEE 802.11-2024 Clause 27.3.4.7 ("HE-LTF field").
+ */
 enum Ieee80211HeLtfType {
-    HE_LTF_1X = 1,
-    HE_LTF_2X = 2,
-    HE_LTF_4X = 4
+    HE_LTF_1X = 1,                  // 3.2 µs DFT period
+    HE_LTF_2X = 2,                  // 6.4 µs DFT period
+    HE_LTF_4X = 4                   // 12.8 µs DFT period
 };
 
-/** Modelled HE-SIG-A fields shared by every user in the PPDU. */
+/**
+ * Modelled HE-SIG-A fields shared by every user in the PPDU.
+ * Grounded on IEEE 802.11-2024 Table 27-21 ("HE-SIG-A field of an HE MU PPDU").
+ * Carries common physical configuration such as BSS Color (6-bit field used for spatial reuse/OBSS PD detection).
+ */
 struct Ieee80211HeSigAFields
 {
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
-    uint8_t bssColor = 0;
+    uint8_t bssColor = 0;           // 6-bit BSS Color identifier (1-63, 0 means disabled)
     bool uplink = false;
-    int txopDurationUs = 0;
+    int txopDurationUs = 0;         // Remaining duration of the TXOP (NAV protection)
     bool doppler = false;
-    bool stbc = false;
+    bool stbc = false;              // Space-Time Block Coding indicator
 };
 
-/** Modelled HE-SIG-B parameters for a downlink MU PPDU. */
+/**
+ * Modelled HE-SIG-B parameters for a downlink MU PPDU.
+ * Grounded on IEEE 802.11-2024 Clause 27.3.11.13.2 ("HE-SIG-B field").
+ * The HE-SIG-B field contains a Common field (RU allocation mapping) and a User Block field (user specific MCS/NSS).
+ */
 struct Ieee80211HeSigBFields
 {
-    bool compression = false;
+    bool compression = false;       // Full channel MU-MIMO compression flag (bypasses RU allocation subfield)
     int mcs = 0;
     int numberOfSymbols = 0;
     int commonFieldBits = 0;
@@ -79,12 +103,12 @@ struct Ieee80211HeCommonPhyParameters
     int packetExtensionDurationUs = 0;
     Ieee80211HeSigAFields sigA;
     Ieee80211HeSigBFields sigB;
-    simtime_t legacyPreambleDuration = SimTime(20, SIMTIME_US);
-    simtime_t rlSigDuration = SimTime(4, SIMTIME_US);
-    simtime_t heSigADuration = SimTime(8, SIMTIME_US);
-    simtime_t heSigBDuration = SIMTIME_ZERO;
-    simtime_t heStfDuration = SimTime(4, SIMTIME_US);
-    simtime_t heLtfDuration = SIMTIME_ZERO;
+    simtime_t legacyPreambleDuration = SimTime(20, SIMTIME_US); // L-STF + L-LTF + L-SIG = 8 + 8 + 4 = 20 µs
+    simtime_t rlSigDuration = SimTime(4, SIMTIME_US);           // Repeated L-SIG (4 µs)
+    simtime_t heSigADuration = SimTime(8, SIMTIME_US);          // HE-SIG-A (8 µs)
+    simtime_t heSigBDuration = SIMTIME_ZERO;                    // Variable size (DL MU PPDU only)
+    simtime_t heStfDuration = SimTime(4, SIMTIME_US);           // HE-STF (4 µs)
+    simtime_t heLtfDuration = SIMTIME_ZERO;                    // HE-LTF (depends on spatial stream count)
     simtime_t commonPreambleDuration = SIMTIME_ZERO;
 };
 
@@ -94,7 +118,7 @@ struct Ieee80211HeUserPhyParameters
     Ieee80211HeRu ru;
     int mcs = 0;
     int numberOfSpatialStreams = 1;
-    bool dcm = false;
+    bool dcm = false;                                      // Dual Carrier Modulation
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US; // compatibility
     Ieee80211HeCoding coding = HE_CODING_BCC;
     B psduLength = B(0);
@@ -105,7 +129,7 @@ struct Ieee80211HeUserPhyParameters
     int dataBitsPerSymbol = 0;
     int serviceBits = 16;
     int tailBits = 6;
-    // Packet-level representation of the HE LDPC encoder.  These fields are
+    // Packet-level representation of the HE LDPC encoder. These fields are
     // deliberately retained in the common calculator result so scheduling,
     // transmission and reception cannot silently use different assumptions.
     int ldpcCodewordLength = 0;
@@ -176,6 +200,10 @@ inline bool isHeDcmCombinationSupported(int mcs, int numberOfSpatialStreams)
            numberOfSpatialStreams >= 1 && numberOfSpatialStreams <= 2;
 }
 
+/**
+ * Returns the HE-LTF symbol count based on space-time streams.
+ * Grounded on IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
+ */
 inline int getHeNumberOfLtfSymbols(int spaceTimeStreams)
 {
     if (spaceTimeStreams <= 1)
@@ -225,6 +253,8 @@ inline int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
 /**
  * Validates and calculates a common-duration HE MU or trigger-based PPDU.
  *
+ * Grounded on IEEE 802.11-2024 Clause 27.3.11.13 and Clause 27.3.11.14.
+ *
  * The returned result contains either a complete set of parameters used by
  * scheduling, transmission, and reception, or a diagnostic error string.
  */
@@ -243,7 +273,13 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
         return result;
     }
 
-    // Group users by RU index to detect and validate MU-MIMO
+    // Group users by RU index to detect and validate MU-MIMO.
+    // Grounded on IEEE 802.11-2024, Clause 27.3.11.13 ("HE MU PPDU").
+    // Validates standard spatial stream limits:
+    // - Maximum MU-MIMO group size is 8 users.
+    // - Maximum spatial streams per user is 4.
+    // - Total spatial streams (N_STS) in a group cannot exceed 8.
+    // - User spatial streams must be contiguous (no gaps or overlapping indices).
     std::map<int, std::vector<Ieee80211HeUserPhyParameters>> ruGroups;
     for (const auto& requested : requestedUsers) {
         ruGroups[requested.ru.index].push_back(requested);
@@ -379,12 +415,12 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
         user.tailBits = user.coding == HE_CODING_LDPC ? 0 : 6 * user.numberOfEncoders;
         int64_t uncodedBits = user.serviceBits + user.psduLength.get<B>() * 8 + user.tailBits;
         if (user.coding == HE_CODING_LDPC) {
-            // 802.11 LDPC uses 648/1296/1944-bit codewords.  At packet level
+            // 802.11 LDPC uses 648/1296/1944-bit codewords. At packet level
             // we model codeword selection, shortening and repetition while
             // retaining the standard NDBPS symbol rounding used by the PHY.
             // The largest legal codeword which can carry a single shortened
             // payload is chosen first; additional payload is split over equal
-            // codewords.  This makes the boundary behaviour deterministic and
+            // codewords. This makes the boundary behaviour deterministic and
             // keeps the accounting shared by DL and HE-TB calculations.
             const int candidates[] = {648, 1296, 1944};
             int codeRateNumerator = codeRate.first;
@@ -427,6 +463,9 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
     parameters.duration = parameters.common.commonPreambleDuration +
             parameters.commonNumberOfDataSymbols * symbolDuration +
             SimTime(packetExtensionDurationUs, SIMTIME_US);
+    
+    // IEEE 802.11ax imposes a strict physical limit of 5.484 ms (5484 µs) on total PPDU transmission duration
+    // to guarantee fair medium access and compatibility (Clause 27.3.11.8).
     if (enforceDurationLimit && parameters.duration > SimTime(5.484, SIMTIME_MS)) {
         result.error = "HE PPDU exceeds the 5.484 ms duration limit";
         return result;

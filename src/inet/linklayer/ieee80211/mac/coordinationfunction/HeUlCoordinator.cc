@@ -41,6 +41,10 @@ void HeUlCoordinator::initialize(int stage)
 void HeUlCoordinator::updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_t tid,
         int64_t backlogBytes, bool retryPending)
 {
+    // Grounded on IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
+    // HE STAs report their queue backlogs using Buffer Status Reports (BSRs)
+    // carried inside the HE Variant QoS Control fields or in BSRP trigger frame responses.
+    // The AP caches this AID backlog state to inform its uplink scheduler.
     ASSERT(aid != 0);
     ASSERT(ac >= AC_BK && ac <= AC_VO);
     auto& status = bufferStatusByAid[aid];
@@ -218,6 +222,10 @@ void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType t
 
 int HeUlCoordinator::selectRandomAccessRu(int randomAccessRuCount)
 {
+    // Grounded on IEEE 802.11-2024 Clause 26.5.4 ("Uplink OFDMA random access").
+    // HE STAs contend for Random Access RUs (AID=0) using the UORA procedure.
+    // The OFDMA Backoff (OBO) counter is decremented by the number of RA-RUs (randomAccessRuCount)
+    // present in the Trigger frame.
     if (randomAccessRuCount <= 0)
         return -1;
     ASSERT(ofdmaContentionWindow >= ocwMin && ofdmaContentionWindow <= ocwMax);
@@ -228,6 +236,7 @@ int HeUlCoordinator::selectRandomAccessRu(int randomAccessRuCount)
                  << ", advertisedRUs=" << randomAccessRuCount << "\n";
         return -1;
     }
+    // When OBO reaches 0, the STA attempts random access and selects one of the RA-RUs uniformly at random.
     emit(randomAccessAttemptSignal, 1L);
     auto selectedRu = intuniform(0, randomAccessRuCount - 1);
     EV_INFO << "HE UORA attempt: selected RU " << selectedRu
@@ -237,6 +246,10 @@ int HeUlCoordinator::selectRandomAccessRu(int randomAccessRuCount)
 
 void HeUlCoordinator::reportRandomAccessResult(bool success)
 {
+    // Grounded on IEEE 802.11-2024 Clause 26.5.4.3 ("OFDMA contention window (OCW) update").
+    // If the transmission succeeds, OCW is reset to OCW_min.
+    // If the transmission fails (collision/no ACK), OCW is doubled (OCW = min(OCW_max, 2 * OCW + 1)).
+    // A new random OBO is then selected in [0, OCW].
     if (success)
         ofdmaContentionWindow = ocwMin;
     else

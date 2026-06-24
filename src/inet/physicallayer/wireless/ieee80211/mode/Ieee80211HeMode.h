@@ -19,6 +19,16 @@ namespace inet {
 namespace physicallayer {
 
 /** HE OFDM timing constants for the 0.8, 1.6, and 3.2 microsecond guard intervals. */
+/**
+ * HE OFDM timing constants for the 0.8, 1.6, and 3.2 microsecond guard intervals.
+ * Grounded on IEEE 802.11-2024 Table 27-61 ("HE PHY characteristics").
+ * In 802.11ax HE, the FFT size is quadrupled to 256/512/1024/2048 points, which
+ * increases the DFT period (T_DFT) to 12.8 µs (4x the legacy 3.2 µs DFT period).
+ * This base class provides the standard timing equations:
+ * - T_DFT (DFT Period) = 12.8 µs
+ * - T_GI (Guard Interval): 3.2 µs (Long), 1.6 µs (Medium), 0.8 µs (Short)
+ * - T_SYM (Symbol Interval) = T_DFT + T_GI
+ */
 class INET_API Ieee80211HeTimingRelatedParametersBase
 {
   public:
@@ -36,16 +46,16 @@ class INET_API Ieee80211HeModeBase
 {
   public:
     enum GuardIntervalType {
-        HE_GUARD_INTERVAL_SHORT, // 0.8 µs
-        HE_GUARD_INTERVAL_MEDIUM, // 1.6 µs
-        HE_GUARD_INTERVAL_LONG   // 3.2 µs
+        HE_GUARD_INTERVAL_SHORT, // 0.8 µs (used in low-delay outdoor/indoor channels)
+        HE_GUARD_INTERVAL_MEDIUM, // 1.6 µs (good trade-off for typical indoor/outdoor)
+        HE_GUARD_INTERVAL_LONG   // 3.2 µs (default for outdoor high-multipath mitigation)
     };
 
   protected:
     const Hz bandwidth;
     const GuardIntervalType guardIntervalType;
     const unsigned int mcsIndex; // MCS index (0 to 11)
-    const unsigned int numberOfSpatialStreams; // N_SS
+    const unsigned int numberOfSpatialStreams; // N_SS (up to 8 spatial streams, Clause 27.3.11.13)
 
     mutable bps netBitrate; // cached
     mutable bps grossBitrate; // cached
@@ -68,7 +78,7 @@ class INET_API Ieee80211HeModeBase
     virtual bps getGrossBitrate() const;
 };
 
-/** HE signaling-field transmission mode. */
+/** HE signaling-field transmission mode (HE-SIG-A). */
 class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee80211HeModeBase, public Ieee80211HeTimingRelatedParametersBase
 {
   protected:
@@ -103,7 +113,16 @@ class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee8
     virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211HtPhyHeader>(); }
 };
 
-/** HE SU or MU preamble mode, including the legacy-compatible preamble portion. */
+/**
+ * HE SU or MU preamble mode, including the legacy-compatible preamble portion.
+ * Grounded on IEEE 802.11-2024, Clause 27.3.11 ("HE PPDU format").
+ * The HE preamble consists of:
+ * - Legacy parts (L-STF, L-LTF, L-SIG) to maintain backward compatibility.
+ * - Repeated L-SIG (RL-SIG) to signal HE PPDU presence.
+ * - HE-SIG-A (common parameters).
+ * - HE-SIG-B (optional, DL MU PPDU only).
+ * - HE-STF and multiple HE-LTFs for spatial channel training.
+ */
 class INET_API Ieee80211HePreambleMode : public IIeee80211PreambleMode, public Ieee80211HeTimingRelatedParametersBase
 {
   public:
@@ -116,7 +135,7 @@ class INET_API Ieee80211HePreambleMode : public IIeee80211PreambleMode, public I
     const Ieee80211HeSignalMode *highEfficiencySignalMode;
     const Ieee80211OfdmSignalMode *legacySignalMode;
     const HighEfficiencyPreambleFormat preambleFormat;
-    const unsigned int numberOfHELongTrainings;
+    const unsigned int numberOfHELongTrainings; // Depends on the number of spatial streams (N_STS)
 
   protected:
     virtual unsigned int computeNumberOfHELongTrainings(unsigned int numberOfSpatialStreams) const;
