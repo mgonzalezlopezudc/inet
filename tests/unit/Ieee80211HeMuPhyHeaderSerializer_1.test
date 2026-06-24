@@ -32,7 +32,7 @@ user2.mcs = 5;
 user2.numberOfSpatialStreams = 2;
 origHeader->appendUsers(user2);
 
-origHeader->setChunkLength(b(104 + origHeader->getUsersArraySize() * 137));
+origHeader->setChunkLength(b(506));
 
 EV << "Original Header:\n";
 EV << "users count = " << origHeader->getUsersArraySize() << "\n";
@@ -110,7 +110,7 @@ Original Header:
 users count = 2
   user[0]: ruIndex=2, staId=341, mcs=4, nss=1
   user[1]: ruIndex=4, staId=682, mcs=5, nss=2
-Serialized to 48 bytes
+Serialized to 64 bytes
 Deserialized Header:
 users count = 2
   user[0]: ruIndex=2, staId=341, mcs=4, nss=1

@@ -246,7 +246,7 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     ASSERT(commonDuration > SIMTIME_ZERO);
     header->setCommonDuration(commonDuration);
     header->setDurationField(modeSet->getSifsTime() + commonDuration);
-    header->setChunkLength(B(26 + 12 * targets.size()));
+    header->setChunkLength(B(24 + 6 * targets.size()));
 
     auto packet = new Packet("HE-BFRP-Trigger", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());

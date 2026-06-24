@@ -24,6 +24,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -384,11 +385,37 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             heMuPhyHeader->setTotalNsts(maxTotalNsts);
         }
         heMuPhyHeader->setCommonDuration(commonDuration);
-        bool extendedControls = heMuPhyHeader->getPacketExtensionDurationUs() != 0 ||
-                heMuPhyHeader->getPuncturedSubchannelMask() != 0 ||
-                heMuPhyHeader->getMuMimo();
-        phyHeader->setChunkLength(b((extendedControls ? 120 : 104) +
-                heMuPhyHeader->getUsersArraySize() * 137));
+        int64_t totalBits = 64; // HE-SIG-A
+        if (heMuPhyHeader->getPpduFormat() == 0) {
+            // HE-SIG-B
+            uint32_t maxToneIndex = 0;
+            unsigned int numUsers = heMuPhyHeader->getUsersArraySize();
+            for (unsigned int i = 0; i < numUsers; ++i) {
+                const auto& u = heMuPhyHeader->getUsers(i);
+                maxToneIndex = std::max(maxToneIndex, (uint32_t)(u.ruToneOffset + u.ruToneSize));
+            }
+            uint8_t bwField = 0;
+            if (maxToneIndex > 996) bwField = 3;
+            else if (maxToneIndex > 484) bwField = 2;
+            else if (maxToneIndex > 242) bwField = 1;
+
+            Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
+            std::vector<Ieee80211HeRu> rus;
+            for (unsigned int i = 0; i < numUsers; ++i) {
+                const auto& user = heMuPhyHeader->getUsers(i);
+                Ieee80211HeRu ru;
+                ru.index = user.ruIndex;
+                ru.toneSize = user.ruToneSize;
+                ru.toneOffset = user.ruToneOffset;
+                rus.push_back(ru);
+            }
+            auto codecResult = encodeHeSigBRuAllocation(rus, channelBw);
+            uint8_t numCodes = codecResult ? codecResult.allocation.allocationCodes.size() : 0;
+            totalBits += 8 + numCodes * 8 + numUsers * 20;
+        }
+        // Simulator Extension
+        totalBits += 32 + 32 + 8 + heMuPhyHeader->getUsersArraySize() * 161;
+        phyHeader->setChunkLength(b(totalBits));
     }
     else
         phyHeader->setChunkLength(b(mode->getHeaderMode()->getLength()));

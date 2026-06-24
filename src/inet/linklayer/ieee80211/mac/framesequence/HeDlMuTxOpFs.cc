@@ -371,7 +371,7 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
         }
         header->setCommonDuration(commonDuration);
         header->setDurationField(owner->modeSet->getSifsTime() + commonDuration);
-        header->setChunkLength(B(26 + 12 * owner->activeAllocations.size()));
+        header->setChunkLength(B(24 + 6 * owner->activeAllocations.size()));
         auto packet = new Packet("HE-MU-BAR-Trigger", header);
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
         EV_INFO << "HE DL MU-BAR FS: built MU-BAR trigger for " << owner->activeAllocations.size()

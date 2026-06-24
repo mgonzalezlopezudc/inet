@@ -1,0 +1,153 @@
+%description:
+Test serialization and deserialization of standard-compliant Ieee80211TriggerFrame with golden vectors.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+{
+    // Create Basic Trigger Frame (Trigger Type = 0)
+    auto trigger = makeShared<Ieee80211TriggerFrame>();
+    trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    trigger->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
+    trigger->setTriggerType(0);
+    trigger->setTriggerId(0x12345678);
+    trigger->setDurationField(SimTime(800, SIMTIME_US)); // Explicitly set duration field
+    trigger->setCommonDuration(SimTime(800, SIMTIME_US)); // 800 us -> ulLength = 800
+    trigger->setGuardInterval(2); // GI = 2
+    trigger->setCoding(1); // LDPC = 1
+    trigger->setUsersArraySize(1);
+
+    Ieee80211HeTriggerUserInfo user;
+    user.aid = 7;
+    user.ruIndex = 4;
+    user.ruToneSize = 106;
+    user.ruToneOffset = 0;
+    user.mcs = 3;
+    user.tid = 5;
+    user.targetRssiDbm = -70; // Target Rssi = -70 dBm -> PTARGET = -70 + 110 = 40
+    trigger->setUsers(0, user);
+
+    trigger->setChunkLength(B(24 + 6)); // Basic trigger frame header + 1 user info field
+
+    auto pk = new Packet("trigger-packet", trigger);
+    auto bytes = pk->peekDataAsBytes();
+
+    std::string hexStr = "";
+    for (int i = 0; i < (int)bytes->getChunkLength().get<B>(); ++i) {
+        char buf[8];
+        sprintf(buf, "%02X", bytes->getByte(i));
+        hexStr += buf;
+    }
+    EV << "Basic Trigger Serialized hex: " << hexStr << "\n";
+    ASSERT(hexStr == "24002003FFFFFFFFFFFF1000000000000320481242B3C0680076A9805014");
+
+    // Deserialize and check
+    auto pk2 = new Packet("recv-packet", bytes);
+    auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
+
+    ASSERT(recvTrigger->getTriggerType() == 0);
+    ASSERT(recvTrigger->getTriggerId() == 0x12345678);
+    ASSERT(recvTrigger->getDurationField() == SimTime(800, SIMTIME_US));
+    ASSERT(recvTrigger->getCommonDuration() == SimTime(800, SIMTIME_US));
+    ASSERT(recvTrigger->getGuardInterval() == 2);
+    ASSERT(recvTrigger->getCoding() == 1);
+    ASSERT(recvTrigger->getUsersArraySize() == 1);
+    ASSERT(recvTrigger->getUsers(0).aid == 7);
+    ASSERT(recvTrigger->getUsers(0).ruToneSize == 106);
+    ASSERT(recvTrigger->getUsers(0).ruToneOffset == 0);
+    ASSERT(recvTrigger->getUsers(0).mcs == 3);
+    ASSERT(recvTrigger->getUsers(0).tid == 5);
+    ASSERT(recvTrigger->getUsers(0).targetRssiDbm == -70);
+
+    delete pk;
+    delete pk2;
+    EV << "Basic Trigger Frame round-trip verified successfully.\n";
+}
+
+{
+    // Create BSRP Trigger Frame (Trigger Type = 4)
+    auto trigger = makeShared<Ieee80211TriggerFrame>();
+    trigger->setReceiverAddress(MacAddress("02:00:00:00:00:01"));
+    trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:02"));
+    trigger->setTriggerType(4);
+    trigger->setTriggerId(0xABCDEF01);
+    trigger->setDurationField(SimTime(400, SIMTIME_US)); // Explicitly set duration field
+    trigger->setCommonDuration(SimTime(400, SIMTIME_US)); // 400 us
+    trigger->setGuardInterval(1);
+    trigger->setCoding(0); // BCC = 0
+    trigger->setUsersArraySize(2);
+
+    Ieee80211HeTriggerUserInfo user1;
+    user1.aid = 100;
+    user1.ruIndex = 0;
+    user1.ruToneSize = 26;
+    user1.ruToneOffset = 0;
+    user1.mcs = 7;
+    user1.targetRssiDbm = -60; // -60 + 110 = 50
+    trigger->setUsers(0, user1);
+
+    Ieee80211HeTriggerUserInfo user2;
+    user2.aid = 200;
+    user2.ruIndex = 1;
+    user2.ruToneSize = 26;
+    user2.ruToneOffset = 6;
+    user2.mcs = 6;
+    user2.targetRssiDbm = -65; // -65 + 110 = 45
+    trigger->setUsers(1, user2);
+
+    trigger->setChunkLength(B(24 + 5 * 2)); // BSRP trigger frame header (24) + 2 user info fields (5 bytes each)
+
+    auto pk = new Packet("bsrp-packet", trigger);
+    auto bytes = pk->peekDataAsBytes();
+
+    std::string hexStr = "";
+    for (int i = 0; i < (int)bytes->getChunkLength().get<B>(); ++i) {
+        char buf[8];
+        sprintf(buf, "%02X", bytes->getByte(i));
+        hexStr += buf;
+    }
+    EV << "BSRP Trigger Serialized hex: " << hexStr << "\n";
+    ASSERT(hexStr == "24009001020000000001020000000002419044054F780B9A06400380640C8003005A");
+
+    // Deserialize and check
+    auto pk2 = new Packet("recv-packet-bsrp", bytes);
+    auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
+
+    ASSERT(recvTrigger->getTriggerType() == 4);
+    ASSERT(recvTrigger->getTriggerId() == 0xABCDEF01);
+    ASSERT(recvTrigger->getDurationField() == SimTime(400, SIMTIME_US));
+    ASSERT(recvTrigger->getCommonDuration() == SimTime(400, SIMTIME_US));
+    ASSERT(recvTrigger->getGuardInterval() == 1);
+    ASSERT(recvTrigger->getCoding() == 0);
+    ASSERT(recvTrigger->getUsersArraySize() == 2);
+    ASSERT(recvTrigger->getUsers(0).aid == 100);
+    ASSERT(recvTrigger->getUsers(0).ruToneSize == 26);
+    ASSERT(recvTrigger->getUsers(0).ruToneOffset == 0);
+    ASSERT(recvTrigger->getUsers(0).mcs == 7);
+    ASSERT(recvTrigger->getUsers(0).targetRssiDbm == -60);
+    ASSERT(recvTrigger->getUsers(1).aid == 200);
+    ASSERT(recvTrigger->getUsers(1).ruToneSize == 26);
+    ASSERT(recvTrigger->getUsers(1).ruToneOffset == 6);
+    ASSERT(recvTrigger->getUsers(1).mcs == 6);
+    ASSERT(recvTrigger->getUsers(1).targetRssiDbm == -65);
+
+    delete pk;
+    delete pk2;
+    EV << "BSRP Trigger Frame round-trip verified successfully.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF1000000000000320481242B3C0680076A9805014
+Basic Trigger Frame round-trip verified successfully.
+BSRP Trigger Serialized hex: 24009001020000000001020000000002419044054F780B9A06400380640C8003005A
+BSRP Trigger Frame round-trip verified successfully.
+.

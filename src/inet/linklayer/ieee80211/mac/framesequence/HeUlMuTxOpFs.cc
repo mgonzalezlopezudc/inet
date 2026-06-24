@@ -165,10 +165,8 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     }
     auto responseDuration = modeSet->getSifsTime() + schedule.commonDuration;
     header->setDurationField(responseDuration + modeSet->getSifsTime());
-    bool extendedControls = schedule.guardInterval != physicallayer::HE_GI_3_2_US ||
-            schedule.coding != physicallayer::HE_CODING_BCC || schedule.packetExtensionDurationUs != 0 ||
-            schedule.puncturedSubchannelMask != 0;
-    header->setChunkLength(B((extendedControls ? 30 : 26) + 12 * schedule.allocations.size()));
+    int userInfoSize = (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) ? 5 : 6;
+    header->setChunkLength(B(24 + userInfoSize * schedule.allocations.size()));
     auto packet = new Packet(triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
             "HE-BSRP-Trigger" : "HE-Basic-Trigger", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());

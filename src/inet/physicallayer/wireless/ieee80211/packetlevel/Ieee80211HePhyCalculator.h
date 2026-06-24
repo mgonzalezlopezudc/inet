@@ -535,8 +535,9 @@ inline simtime_t estimateHeMuUserDuration(B psduLength, int toneSize, int mcs,
     ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
     ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
     ru.bandwidth = Hz(ru.toneSize * 78125.0);
+    Ieee80211HeCoding coding = (ru.toneSize >= 484 || mcs >= 10) ? HE_CODING_LDPC : HE_CODING_BCC;
     return computeHeUserPhyParameters(psduLength, ru, mcs,
-            numberOfSpatialStreams, dcm, guardInterval).duration;
+            numberOfSpatialStreams, dcm, guardInterval, coding).duration;
 }
 
 } // namespace physicallayer
