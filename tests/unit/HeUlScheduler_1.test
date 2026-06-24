@@ -129,6 +129,9 @@ EV << ".\n";
 
 %contains: stdout
 UL scheduled and UORA layouts passed for 20/40/80/160 MHz.
+
+%contains: stdout
 Collision feedback did not reduce UORA capacity.
+
+%contains: stdout
 Backlog fitting preserved mandatory UORA capacity.
-.

@@ -80,6 +80,7 @@ class INET_API HeHcf : public Hcf
   protected:
     virtual void initialize(int stage) override;
     virtual void handleMessage(cMessage *msg) override;
+    virtual void finish() override;
     virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac) override;
 
   public:

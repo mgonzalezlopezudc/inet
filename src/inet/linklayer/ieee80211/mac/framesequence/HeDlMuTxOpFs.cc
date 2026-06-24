@@ -27,6 +27,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -151,6 +152,23 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
             }
         }
 
+        auto hcfModule = dynamic_cast<cModule *>(owner->callback);
+        auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
+        auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
+        auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddress) : nullptr;
+        if (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx) {
+            auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
+            multiTidReq->setReceiverAddress(receiverAddress);
+            multiTidReq->setTransmitterAddress(macModule->getAddress());
+            multiTidReq->setRecordsArraySize(1);
+            Ieee80211MultiTidBlockAckReqRecord rec;
+            rec.tid = tid;
+            rec.startingSequenceNumber = startingSequenceNumber.get();
+            multiTidReq->setRecords(0, rec);
+            multiTidReq->setChunkLength(B(22));
+            return multiTidReq;
+        }
+
         auto qosContext = context->getQoSContext();
         if (qosContext != nullptr && qosContext->blockAckProcedure != nullptr)
             return qosContext->blockAckProcedure->buildBasicBlockAckReqFrame(receiverAddress, tid, startingSequenceNumber);
@@ -164,19 +182,44 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
 
     simtime_t computeRemainingBarDuration(const IIeee80211Mode *responseMode) const
     {
-        auto blockAckDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);
-        auto barDuration = responseMode->getDuration(B(38));
+        auto hcfModule = dynamic_cast<cModule *>(owner->callback);
+        auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
+        auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
+        auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(getActiveAllocation().staAddress) : nullptr;
+        bool multiTid = (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx);
+
+        auto blockAckDuration = responseMode->getDuration(multiTid ? b(B(29)) : LENGTH_BASIC_BLOCKACK);
+        auto barDuration = responseMode->getDuration(multiTid ? B(22) : B(38));
         auto remainingDuration = owner->modeSet->getSifsTime() + blockAckDuration;
-        for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++)
-            remainingDuration += owner->modeSet->getSifsTime() + barDuration + owner->modeSet->getSifsTime() + blockAckDuration;
+        for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++) {
+            auto nextNegotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(owner->activeAllocations.at(nextIndex).staAddress) : nullptr;
+            bool nextMultiTid = (nextNegotiated != nullptr && nextNegotiated->intersection.multiTidAggregationTx);
+            auto nextBlockAckDuration = responseMode->getDuration(nextMultiTid ? b(B(29)) : LENGTH_BASIC_BLOCKACK);
+            auto nextBarDuration = responseMode->getDuration(nextMultiTid ? B(22) : B(38));
+            remainingDuration += owner->modeSet->getSifsTime() + nextBarDuration + owner->modeSet->getSifsTime() + nextBlockAckDuration;
+        }
         return remainingDuration;
     }
 
     simtime_t computeBlockAckTimeout(Packet *lastTransmittedPacket) const
     {
-        auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+        auto hcfModule = dynamic_cast<cModule *>(owner->callback);
+        auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
+        auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
+        auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(getActiveAllocation().staAddress) : nullptr;
+        bool multiTid = (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx);
+
+        Ptr<Ieee80211BlockAckReq> dummyReq;
+        if (multiTid) {
+            auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
+            multiTidReq->setRecordsArraySize(1);
+            dummyReq = multiTidReq;
+        } else {
+            dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+        }
+
         auto responseMode = getRateSelection()->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
-        return owner->modeSet->getSifsTime() + responseMode->getDuration(LENGTH_BASIC_BLOCKACK) + owner->modeSet->getSlotTime();
+        return owner->modeSet->getSifsTime() + responseMode->getDuration(multiTid ? b(B(29)) : LENGTH_BASIC_BLOCKACK) + owner->modeSet->getSlotTime();
     }
 
     IFrameSequenceStep *prepareBarStep(FrameSequenceContext *context)
@@ -186,7 +229,7 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
         auto responseMode = getRateSelection()->computeResponseBlockAckFrameMode(
                 transmittedPacket != nullptr ? transmittedPacket : owner->containerPacket, blockAckReq);
         blockAckReq->setDurationField(computeRemainingBarDuration(responseMode));
-        auto blockAckPacket = new Packet("BasicBlockAckReq", blockAckReq);
+        auto blockAckPacket = new Packet(dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq) ? "MultiTidBlockAckReq" : "BasicBlockAckReq", blockAckReq);
         blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
         return new TransmitStep(blockAckPacket, context->getIfs(), true);
     }

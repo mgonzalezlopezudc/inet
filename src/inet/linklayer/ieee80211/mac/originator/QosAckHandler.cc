@@ -136,22 +136,26 @@ std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> QosAckHand
             }
         }
     }
-    else if (auto compressedBlockAck = dynamicPtrCast<const Ieee80211CompressedBlockAck>(blockAck)) {
-        auto startingSeqNum = compressedBlockAck->getStartingSequenceNumber();
-        BitVector bitmap = compressedBlockAck->getBlockAckBitmap();
-        for (int seqNum = 0; seqNum < 64; seqNum++) {
-            auto id = std::make_pair(receiverAddr, std::make_pair(compressedBlockAck->getTidInfo(), SequenceControlField((startingSeqNum + seqNum).get(), 0)));
-            auto status = getQoSDataAckStatus(id);
-            if (status == Status::WAITING_FOR_BLOCK_ACK) {
-                bool acked = bitmap.getBit(seqNum) == 1;
-                ackStatuses[id] = acked ? Status::BLOCK_ACK_ARRIVED_ACKED : Status::BLOCK_ACK_ARRIVED_UNACKED;
-                if (acked) ackedFrames.insert(id);
+    else if (auto multiTidBlockAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(blockAck)) {
+        unsigned int numRecords = multiTidBlockAck->getRecordsArraySize();
+        for (unsigned int i = 0; i < numRecords; ++i) {
+            const auto& rec = multiTidBlockAck->getRecords(i);
+            auto startingSeqNum = SequenceNumberCyclic(rec.startingSequenceNumber);
+            uint64_t bitmap = rec.bitmap;
+            for (int seqNum = 0; seqNum < 64; seqNum++) {
+                auto id = std::make_pair(receiverAddr, std::make_pair(rec.tid, SequenceControlField((startingSeqNum + seqNum).get(), 0)));
+                auto status = getQoSDataAckStatus(id);
+                if (status == Status::WAITING_FOR_BLOCK_ACK) {
+                    bool acked = ((bitmap >> seqNum) & 1ULL) == 1ULL;
+                    ackStatuses[id] = acked ? Status::BLOCK_ACK_ARRIVED_ACKED : Status::BLOCK_ACK_ARRIVED_UNACKED;
+                    if (acked) ackedFrames.insert(id);
+                }
+                else ; // TODO erroneous BlockAck
             }
-            else ; // TODO erroneous BlockAck
         }
     }
     else {
-        throw cRuntimeError("Multi-TID BlockReq is unimplemented");
+        throw cRuntimeError("Unsupported BlockAck type");
     }
     return ackedFrames;
 }
@@ -178,6 +182,20 @@ void QosAckHandler::processFailedBlockAckReq(const Ptr<const Ieee80211BlockAckRe
             auto status = getQoSDataAckStatus(id);
             if (status == Status::WAITING_FOR_BLOCK_ACK)
                 ackStatuses[id] = Status::BLOCK_ACK_NOT_ARRIVED;
+        }
+    }
+    else if (auto multiTidBlockAckReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+        unsigned int numRecords = multiTidBlockAckReq->getRecordsArraySize();
+        for (unsigned int i = 0; i < numRecords; ++i) {
+            const auto& rec = multiTidBlockAckReq->getRecords(i);
+            auto startingSeqNum = SequenceNumberCyclic(rec.startingSequenceNumber);
+            for (int seqNum = 0; seqNum < 64; seqNum++) {
+                MacAddress receiverAddr = blockAckReq->getReceiverAddress();
+                auto id = std::make_pair(receiverAddr, std::make_pair(rec.tid, SequenceControlField((startingSeqNum + seqNum).get(), 0)));
+                auto status = getQoSDataAckStatus(id);
+                if (status == Status::WAITING_FOR_BLOCK_ACK)
+                    ackStatuses[id] = Status::BLOCK_ACK_NOT_ARRIVED;
+            }
         }
     }
     else
@@ -214,15 +232,19 @@ void QosAckHandler::processTransmittedBlockAckReq(const Ptr<const Ieee80211Block
                     status = Status::WAITING_FOR_BLOCK_ACK;
             }
         }
-        else if (auto compressedBlockAckReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
-            if (compressedBlockAckReq->getTidInfo() == tid) {
-                auto startingSeqNum = compressedBlockAckReq->getStartingSequenceNumber();
-                if (status == Status::BLOCK_ACK_NOT_YET_REQUESTED && SequenceNumberCyclic(seqCtrlField.getSequenceNumber()) >= startingSeqNum && seqCtrlField.getFragmentNumber() == 0) // TODO ASSERT(seqCtrlField.second == 0)?
-                    status = Status::WAITING_FOR_BLOCK_ACK;
+        else if (auto multiTidBlockAckReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+            unsigned int numRecords = multiTidBlockAckReq->getRecordsArraySize();
+            for (unsigned int i = 0; i < numRecords; ++i) {
+                const auto& rec = multiTidBlockAckReq->getRecords(i);
+                if (rec.tid == tid) {
+                    auto startingSeqNum = SequenceNumberCyclic(rec.startingSequenceNumber);
+                    if (status == Status::BLOCK_ACK_NOT_YET_REQUESTED && SequenceNumberCyclic(seqCtrlField.getSequenceNumber()) >= startingSeqNum && seqCtrlField.getFragmentNumber() == 0)
+                        status = Status::WAITING_FOR_BLOCK_ACK;
+                }
             }
         }
         else
-            throw cRuntimeError("Multi-TID BlockReq is unimplemented");
+            throw cRuntimeError("Unsupported BlockAckReq type");
     }
 }
 

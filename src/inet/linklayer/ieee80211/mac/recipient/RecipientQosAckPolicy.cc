@@ -24,7 +24,11 @@ void RecipientQosAckPolicy::initialize(int stage)
 
 simtime_t RecipientQosAckPolicy::computeBasicBlockAckDuration(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) const
 {
-    return rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getDuration(LENGTH_BASIC_BLOCKACK);
+    b length = LENGTH_BASIC_BLOCKACK;
+    if (auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+        length = B(18 + multiTidReq->getRecordsArraySize() * 11);
+    }
+    return rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getDuration(length);
 }
 
 simtime_t RecipientQosAckPolicy::computeAckDuration(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) const
@@ -66,6 +70,9 @@ bool RecipientQosAckPolicy::isBlockAckNeeded(const Ptr<const Ieee80211BlockAckRe
         // TODO The Basic BlockAckReq frame shall be discarded if all MSDUs referenced by this
         // frame have been discarded from the transmit buffer due to expiry of their lifetime limit.
     }
+    else if (dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+        return true;
+    }
     else
         throw cRuntimeError("Unsupported BlockAckReq");
 }
@@ -89,7 +96,7 @@ simtime_t RecipientQosAckPolicy::computeAckDurationField(Packet *packet, const P
 // the PPDU carrying the frame that elicited the response and the end of the PPDU carrying the BlockAck
 // frame.
 //
-simtime_t RecipientQosAckPolicy::computeBasicBlockAckDurationField(Packet *packet, const Ptr<const Ieee80211BasicBlockAckReq>& basicBlockAckReq) const
+simtime_t RecipientQosAckPolicy::computeBasicBlockAckDurationField(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& basicBlockAckReq) const
 {
     return basicBlockAckReq->getDurationField() - modeSet->getSifsTime() - computeBasicBlockAckDuration(packet, basicBlockAckReq);
 }

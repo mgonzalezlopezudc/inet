@@ -4,7 +4,7 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-readonly OFDMA_EXAMPLE_DIR="${REPO_ROOT}/examples/ieee80211/ofdma"
+readonly OFDMA_EXAMPLE_DIR="${REPO_ROOT}/examples/ieee80211/dl_ofdma"
 readonly OFDMA_RESULTS_FILE="${OFDMA_EXAMPLE_DIR}/results/General-#0.sca"
 
 fail()
@@ -61,23 +61,23 @@ run_ofdma_example()
     )
 
     require_file "$OFDMA_RESULTS_FILE"
-    assert_config_line "config sim-time-limit 2.0s" "$OFDMA_RESULTS_FILE"
+    assert_config_line "config sim-time-limit 0.6s" "$OFDMA_RESULTS_FILE"
     assert_zero_scalar "edcaCollisionDetected:count" "$OFDMA_RESULTS_FILE"
 }
 
 cd "$REPO_ROOT"
 
-require_file "/home/user/omnetpp-6.4.0/setenv"
+require_file "/home/user/omnetpp-6.4.0aipre2/setenv"
 require_file "setenv"
 require_executable "bin/inet_run_unit_tests"
 require_file "tests/unit/Ieee80211HeMuSeqAck_1.test"
-test -f examples/ieee80211/ofdma/omnetpp.ini || fail "required file is missing: examples/ieee80211/ofdma/omnetpp.ini"
+test -f examples/ieee80211/dl_ofdma/omnetpp.ini || fail "required file is missing: examples/ieee80211/dl_ofdma/omnetpp.ini"
 
 export IN_NIX_SHELL="${IN_NIX_SHELL:-}"
 
 set +u
 # shellcheck disable=SC1090
-source /home/user/omnetpp-6.4.0/setenv -f
+source /home/user/omnetpp-6.4.0aipre2/setenv -f
 # shellcheck disable=SC1091
 source setenv -q
 set -u

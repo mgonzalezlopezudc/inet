@@ -103,7 +103,7 @@ Bit 0 is the primary 20 MHz subchannel; `0100` disables subchannel index 1 only.
 
 * The scheduler cannot place the large requested RUs on the remaining three 20 MHz subchannels (a 484-tone RU needs two adjacent active 20 MHz subchannels). `fitRequestedRus()` downgrades one or more allocations to smaller RU sizes so that no RU overlaps the punctured subchannel.
 * No RU overlaps the punctured subchannel.
-* The HE MU signal details show `puncturedSubchannelMask = 0x4` (binary `0100`).
+* The HE MU signal details show `puncturedSubchannelMask = 0x2` (binary `0100` where character index 1 maps to bit 1).
 * The extended HE MU PHY header is emitted.
 
 ### Scenario E: `MixedLdpcSupport`
@@ -149,7 +149,7 @@ Bit 0 is the primary 20 MHz subchannel; `0100` disables subchannel index 1 only.
 
 **What to observe:**
 
-* Extended HE MU PHY header carrying `coding = LDPC`, `packetExtensionDurationUs = 8`, and `puncturedSubchannelMask = 0x4`.
+* Extended HE MU PHY header carrying `coding = LDPC`, `packetExtensionDurationUs = 8`, and `puncturedSubchannelMask = 0x2`.
 * PPDU duration includes the PE contribution.
 * The RU layout avoids the punctured subchannel.
 
@@ -160,7 +160,7 @@ Bit 0 is the primary 20 MHz subchannel; `0100` disables subchannel index 1 only.
 From the repository root, source OMNeT++ and INET, then run the desired configuration:
 
 ```sh
-source /home/user/omnetpp-6.4.0/setenv -f
+source /home/user/omnetpp-6.4.0aipre2/setenv -f
 source setenv -q
 bin/inet -u Qtenv -c HeLdpc examples/ieee80211/he_features/omnetpp.ini
 ```
