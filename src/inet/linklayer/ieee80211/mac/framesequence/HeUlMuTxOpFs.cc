@@ -132,7 +132,7 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
 
 Packet *HeUlMuTxOpFs::buildTriggerPacket() const
 {
-    // Grounded on IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
+    // IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
     // The AP builds and transmits a Trigger Frame (e.g. Basic or BSRP) to schedule STAs.
     // The Trigger frame specifies the exact RU size/offset (ruToneSize, ruToneOffset) and MCS
     // for each user to transmit an HE TB PPDU on the uplink. It also defines a target RSSI
@@ -177,7 +177,7 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
 
 void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
 {
-    // Grounded on IEEE 802.11-2024 Clause 26.5.2.
+    // IEEE 802.11-2024 Clause 26.5.2.
     // This collection step aggregates simultaneous uplink HE-TB frames received in response to the Trigger.
     // It verifies that each collected frame corresponds to the target Trigger ID and matching RU index,
     // then tracks successful frame sequence numbers to construct the Multi-STA BlockAck.
@@ -275,7 +275,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
 
 Packet *HeUlMuTxOpFs::buildMultiStaBlockAckPacket() const
 {
-    // Grounded on IEEE 802.11-2024 Clause 9.3.1.9 ("BlockAck frame format") and Clause 26.5.2.
+    // IEEE 802.11-2024 Clause 9.3.1.9 ("BlockAck frame format") and Clause 26.5.2.
     // The AP acknowledges uplink transmissions from multiple STAs simultaneously using a Multi-STA BlockAck
     // frame. The frame carries multiple BlockAck records, each identified by the target STA's AID and TID,
     // including a BlockAck starting sequence number and acknowledgement bitmap.

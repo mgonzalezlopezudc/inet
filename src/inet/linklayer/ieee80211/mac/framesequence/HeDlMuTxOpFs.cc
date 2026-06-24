@@ -548,7 +548,7 @@ HeDlMuTxOpFs::~HeDlMuTxOpFs()
 
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
-    // Grounded on IEEE 802.11-2024 Clause 27.3.11.13 ("HE MU PPDU").
+    // IEEE 802.11-2024 Clause 27.3.11.13 ("HE MU PPDU").
     // The AP schedules multiple users simultaneously in downlink by mapping their payloads (A-MPDUs)
     // to separate Resource Units (RUs) or spatial stream groups (DL MU-MIMO).
     // This method collects pending packets from STA queues, validates them, and builds a single
