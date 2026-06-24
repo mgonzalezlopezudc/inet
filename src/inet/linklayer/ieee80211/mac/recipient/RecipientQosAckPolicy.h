@@ -33,7 +33,7 @@ class INET_API RecipientQosAckPolicy : public ModeSetListener, public IRecipient
     virtual bool isBlockAckNeeded(const Ptr<const Ieee80211BlockAckReq>& blockAckReq, RecipientBlockAckAgreement *agreement) const override;
 
     virtual simtime_t computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override;
-    virtual simtime_t computeBasicBlockAckDurationField(Packet *packet, const Ptr<const Ieee80211BasicBlockAckReq>& basicBlockAckReq) const override;
+    virtual simtime_t computeBasicBlockAckDurationField(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& basicBlockAckReq) const override;
 };
 
 } /* namespace ieee80211 */
