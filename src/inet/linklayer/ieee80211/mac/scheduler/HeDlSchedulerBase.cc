@@ -48,6 +48,10 @@ void HeDlSchedulerBase::initialize(int stage)
 
 int HeDlSchedulerBase::requestRuForBytes(int64_t bytes, Hz channelBandwidth) const
 {
+    // Map queue backlog size to standard RU tone sizes (Clause 27.3.2.2).
+    // Larger queue backlogs warrant wider RUs to achieve higher throughput,
+    // while small payloads are scheduled on narrower RUs (e.g. 26-tone RUs)
+    // to maximize frequency-division multiplexing efficiency.
     ASSERT(bytes >= 0);
     ASSERT(!std::isnan(channelBandwidth.get()) && channelBandwidth > Hz(0));
     if (bytes <= smallBacklogThreshold)
@@ -93,7 +97,10 @@ double HeDlSchedulerBase::estimateSnrDb(const ScheduleContext& context, const Ca
     if (!candidate.hasFreshPathLoss || std::isnan(context.totalTransmitPower.get()) ||
             context.totalTransmitPower.get() <= 0)
         return NaN;
-    // Per-RU SNR: scale total TX power by RU bandwidth, subtract path loss and thermal noise.
+    // Per-RU SNR calculation:
+    // Scale total transmit power down to the RU bandwidth (assuming uniform power spectral density
+    // across all subcarriers, Clause 27.3.21).
+    // SNR = P_rx_RU - N_thermal_RU - NoiseFigure
     double totalDbm = 10 * std::log10(context.totalTransmitPower.get() / 1e-3);
     double ruPowerDbm = totalDbm + 10 * std::log10(ru.bandwidth.get() / context.channelBandwidth.get());
     double noiseDbm = thermalNoisePsdDbmHz + 10 * std::log10(ru.bandwidth.get()) + context.noiseFigureDb;
@@ -102,7 +109,7 @@ double HeDlSchedulerBase::estimateSnrDb(const ScheduleContext& context, const Ca
 
 int HeDlSchedulerBase::selectMcs(double snrDb, bool hasFreshPathLoss) const
 {
-    // Without fresh link information fall back to the most robust MCS for safety.
+    // Without fresh link information fall back to the most robust MCS (MCS 0) for safety.
     if (!hasFreshPathLoss || std::isnan(snrDb))
         return 0;
     int mcs = 0;
@@ -221,6 +228,8 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
 
     std::vector<RuAllocation> result;
     // Iteratively shrink the largest non-anchor RU request until a valid HE RU layout is found.
+    // If the combined requests exceed the channel's tone layout boundaries or overlap (Clause 27.3.2.2),
+    // we search for candidate RUs to downgrade to standard smaller tone sizes.
     while (!buildAllocations(requestedTones, result)) {
         int downgrade = -1;
         for (int i = 0; i < (int)requestedTones.size(); ++i) {
@@ -258,7 +267,13 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
     };
 
     int channelTones = getHeChannelToneCount(context.channelBandwidth);
-    // Reduce duration variance among users by moving RU bandwidth from fast users to slow users.
+    
+    // Duration Alignment (IEEE 802.11-2024 Clause 27.3.11.13):
+    // In HE MU-OFDMA, all users sharing the PPDU container must have identical transmission durations.
+    // However, users with different backlogs, MCS schemes, or stream counts will finish at different times,
+    // leading to channel waste (padding overhead) or synchronization issues.
+    // This optimization loop shifts RU bandwidth (tone sizes) from "fast" users (short duration)
+    // to "slow" users (long duration) to minimize the variance around the mean duration.
     for (int iteration = 0; iteration < maxDurationAlignmentIterations; ++iteration) {
         double mean = 0;
         for (const auto& allocation : result)
@@ -267,7 +282,6 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         double bestVariance = durationVariance(result);
         std::vector<int> bestTones = requestedTones;
         std::vector<RuAllocation> bestResult = result;
-
 
         EV_DEBUG << "HE DL base scheduler: duration alignment iteration " << iteration
                  << ", mean duration = " << mean << ", variance = " << bestVariance << "\n";
@@ -288,6 +302,7 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         std::vector<int> fastCandidates;
         for (int i = 0; i < (int)result.size(); ++i) {
             double duration = result[i].estimatedDuration.dbl();
+            // A "slow" candidate exceeds the high threshold ratio: attempt to expand its RU to speed it up.
             if (duration > highDurationRatio * mean) {
                 int larger = getNextLargerRu(requestedTones[i]);
                 if (larger != 0 && larger <= channelTones) {
@@ -297,6 +312,7 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
                     tryProposal(proposal);
                 }
             }
+            // A "fast" candidate is below the low threshold ratio: attempt to shrink its RU to slow it down.
             if (duration < lowDurationRatio * mean && requestedTones[i] > 26) {
                 fastCandidates.push_back(i);
                 auto proposal = requestedTones;
@@ -305,6 +321,7 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
             }
         }
 
+        // Try co-tuning: shrink a fast user and enlarge a slow user simultaneously.
         for (int slow : slowCandidates) {
             for (int fast : fastCandidates) {
                 if (slow == fast)
