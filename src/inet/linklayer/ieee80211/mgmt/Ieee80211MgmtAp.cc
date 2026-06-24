@@ -396,7 +396,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
         return;
     }
 
-    auto associationRequest = packet->peekAt<Ieee80211AssociationRequestFrame>(header->getChunkLength());
+    auto associationRequest = packet->peekData<Ieee80211AssociationRequestFrame>();
     mib->setStationTransmitPower(sta->address, associationRequest->getTransmitPowerDbm());
     if (associationRequest->getHeCapabilitiesPresent())
         mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(associationRequest->getHeCapabilities()), mib->heOperation);
@@ -452,7 +452,7 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
         return;
     }
 
-    auto reassociationRequest = packet->peekAt<Ieee80211ReassociationRequestFrame>(header->getChunkLength());
+    auto reassociationRequest = packet->peekData<Ieee80211ReassociationRequestFrame>();
     if (reassociationRequest->getHeCapabilitiesPresent())
         mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(reassociationRequest->getHeCapabilities()), mib->heOperation);
     else
