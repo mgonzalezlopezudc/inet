@@ -250,6 +250,16 @@ void HeHcf::initialize(int stage)
     }
 }
 
+void HeHcf::finish()
+{
+    if (queueBankManager != nullptr) {
+        for (const auto& pair : queueBankManager->getQueueBanks()) {
+            pair.second->clear();
+        }
+    }
+    cSimpleModule::finish();
+}
+
 void HeHcf::handleMessage(cMessage *msg)
 {
     if (msg != ulTriggerTimer) {
