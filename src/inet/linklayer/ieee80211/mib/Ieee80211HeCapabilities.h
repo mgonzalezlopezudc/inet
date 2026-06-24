@@ -52,7 +52,7 @@ struct Ieee80211HeCapabilities
     bool dcm = true;
     int maxDcmConstellation = 4;
     int maxDcmNss = 2;
-    bool ldpc = false;
+    bool ldpc = true;
     bool preamblePuncturing = true;
     bool multiTidAggregationRx = false;
     bool multiTidAggregationTx = false;

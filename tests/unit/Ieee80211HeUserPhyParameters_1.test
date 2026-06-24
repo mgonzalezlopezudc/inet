@@ -23,13 +23,58 @@ static void expectRuntimeError(const std::function<void()>& operation)
     ASSERT(rejected);
 }
 
+// Helper to validate preamble puncturing patterns in tests
+static bool isValidHePreamblePuncturing(const std::vector<bool>& mask, int widthMhz)
+{
+    if (mask.empty())
+        return true;
+    if (widthMhz != 80 && widthMhz != 160)
+        return false;
+    if (mask[0])
+        return false;
+    if (std::all_of(mask.begin(), mask.end(), [](bool b) { return b; }))
+        return false;
+
+    if (widthMhz == 80) {
+        int count = 0;
+        for (bool b : mask) if (b) count++;
+        if (count == 0) return true;
+        if (count == 1) {
+            return mask[1] || mask[2] || mask[3];
+        }
+        return false;
+    }
+    else {
+        int sec80Count = (mask[4]?1:0) + (mask[5]?1:0) + (mask[6]?1:0) + (mask[7]?1:0);
+        if (sec80Count > 2)
+            return false;
+        if (sec80Count == 2) {
+            bool lowerTwo = mask[4] && mask[5];
+            bool higherTwo = mask[6] && mask[7];
+            if (!lowerTwo && !higherTwo)
+                return false;
+        }
+        for (size_t i = 0; i + 2 < mask.size(); ++i) {
+            if (mask[i] && mask[i+1] && mask[i+2])
+                return false;
+        }
+        bool isSet6 = mask[1] && !mask[2] && !mask[3];
+        int totalCount = 0;
+        for (bool b : mask) if (b) totalCount++;
+        bool isSet7 = !mask[1] && (totalCount >= 1);
+        if (!isSet6 && !isSet7)
+            return false;
+        return true;
+    }
+}
+
 %activity:
 const std::vector<int> toneSizes = {26, 52, 106, 242, 484, 996, 1992};
 int previousDataSubcarriers = 0;
 simtime_t previousDuration = SIMTIME_MAX;
 for (int toneSize : toneSizes) {
     auto ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(160)), 0, toneSize, 0);
-    auto parameters = computeHeUserPhyParameters(B(1500), ru, 0);
+    auto parameters = computeHeUserPhyParameters(B(1500), ru, 0, 1, false, HE_GI_3_2_US, toneSize >= 484 ? HE_CODING_LDPC : HE_CODING_BCC);
     ASSERT(ru.dataSubcarriers == getHeRuDataSubcarrierCount(toneSize));
     ASSERT(parameters.dataBitsPerSymbol == ru.dataSubcarriers / 2);
     ASSERT(parameters.codedBitsPerSymbol == ru.dataSubcarriers);
@@ -45,7 +90,7 @@ for (int toneSize : toneSizes) {
 
 auto ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
 auto lowestMcs = computeHeUserPhyParameters(B(1500), ru, 0);
-auto highestMcs = computeHeUserPhyParameters(B(1500), ru, 11);
+auto highestMcs = computeHeUserPhyParameters(B(1500), ru, 11, 1, false, HE_GI_3_2_US, HE_CODING_LDPC);
 ASSERT(lowestMcs.mcs == 0);
 ASSERT(highestMcs.mcs == 11);
 ASSERT(highestMcs.dataBitsPerSymbol > lowestMcs.dataBitsPerSymbol);
@@ -63,7 +108,7 @@ ASSERT(mediumGi.duration < longGi.duration);
 
 auto oneStream = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_3_2_US);
 auto twoStreams = computeHeUserPhyParameters(B(1500), ru, 4, 2, false, HE_GI_3_2_US);
-auto eightStreams = computeHeUserPhyParameters(B(1500), ru, 4, 8, false, HE_GI_3_2_US);
+auto eightStreams = computeHeUserPhyParameters(B(1500), ru, 4, 8, false, HE_GI_3_2_US, HE_CODING_LDPC);
 ASSERT(twoStreams.dataBitsPerSymbol == 2 * oneStream.dataBitsPerSymbol);
 ASSERT(twoStreams.numberOfSymbols < oneStream.numberOfSymbols);
 ASSERT(eightStreams.dataBitsPerSymbol == 8 * oneStream.dataBitsPerSymbol);
@@ -72,7 +117,7 @@ expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 4, 9); });
 
 auto noDcm = computeHeUserPhyParameters(B(1500), ru, 0, 1, false, HE_GI_3_2_US);
 auto dcm = computeHeUserPhyParameters(B(1500), ru, 0, 1, true, HE_GI_3_2_US);
-ASSERT(dcm.dataBitsPerSymbol * 2 == noDcm.dataBitsPerSymbol);
+ASSERT(dcm.dataBitsPerSymbol == noDcm.dataBitsPerSymbol / 2);
 ASSERT(dcm.numberOfSymbols > noDcm.numberOfSymbols);
 for (int mcs : {0, 1, 3, 4}) {
     ASSERT(computeHeUserPhyParameters(B(1500), ru, mcs, 1, true).dcm);
@@ -81,8 +126,8 @@ for (int mcs : {0, 1, 3, 4}) {
 for (int mcs : {2, 5, 6, 7, 8, 9, 10, 11})
     expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, mcs, 1, true); });
 expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 0, 3, true); });
-expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru, 0, 1, false,
-        HE_GI_3_2_US, HE_CODING_LDPC); });
+auto ldpcUser = computeHeUserPhyParameters(B(1500), ru, 0, 1, false, HE_GI_3_2_US, HE_CODING_LDPC);
+ASSERT(ldpcUser.coding == HE_CODING_LDPC);
 
 // 106-tone, MCS 0, NSS 1 has N_DBPS=51. Service + 10-byte PSDU + BCC tail
 // is exactly 102 bits (two symbols); one more byte must round up to three.
@@ -101,6 +146,8 @@ shortUser.ru = ru;
 shortUser.mcs = 4;
 shortUser.psduLength = B(300);
 Ieee80211HeUserPhyParameters longUser = shortUser;
+longUser.staId = 1;
+longUser.streamStartIndex = 1;
 longUser.psduLength = B(3000);
 auto commonPpdu = computeHePpduParameters({shortUser, longUser}, Hz(20e6));
 ASSERT(commonPpdu);
@@ -116,17 +163,77 @@ Ieee80211HeUserPhyParameters encoderUser;
 encoderUser.ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(160)), 0, 1992, 0);
 encoderUser.mcs = 11;
 encoderUser.numberOfSpatialStreams = 2;
+encoderUser.coding = HE_CODING_LDPC;
 encoderUser.psduLength = B(1500);
 auto encoderPpdu = computeHePpduParameters({encoderUser}, Hz(160e6));
 ASSERT(encoderPpdu);
 ASSERT(encoderPpdu.parameters.users[0].numberOfEncoders > 1);
-ASSERT(encoderPpdu.parameters.users[0].tailBits ==
-        6 * encoderPpdu.parameters.users[0].numberOfEncoders);
+ASSERT(encoderPpdu.parameters.users[0].ldpcCodewordCount > 1);
+ASSERT(encoderPpdu.parameters.users[0].tailBits == 0);
 
 Ieee80211HeUserPhyParameters oversizedUser = shortUser;
 oversizedUser.mcs = 0;
 oversizedUser.psduLength = B(100000);
 ASSERT(!computeHePpduParameters({oversizedUser}, Hz(20e6)));
+
+// Standard FEC validation checks (BCC restrictions under Clause 27.3.12.5)
+// BCC is restricted to MCS 0-9, RU < 484 (i.e. <= 242), and NSS <= 4
+auto ru484 = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(40)), 0, 484, 0);
+auto ru242 = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 242, 0);
+
+// BCC with MCS 10/11 should throw runtime error
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru242, 10, 1, false, HE_GI_3_2_US, HE_CODING_BCC); });
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru242, 11, 1, false, HE_GI_3_2_US, HE_CODING_BCC); });
+
+// BCC with RU >= 484 should throw runtime error
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru484, 0, 1, false, HE_GI_3_2_US, HE_CODING_BCC); });
+
+// BCC with NSS > 4 should throw runtime error
+expectRuntimeError([&] { computeHeUserPhyParameters(B(1500), ru242, 0, 5, false, HE_GI_3_2_US, HE_CODING_BCC); });
+
+// LDPC is allowed for MCS 10/11, RU >= 484, and NSS > 4 (NSS up to 8)
+auto ldpcMcs10 = computeHeUserPhyParameters(B(1500), ru242, 10, 1, false, HE_GI_3_2_US, HE_CODING_LDPC);
+auto ldpcRu484 = computeHeUserPhyParameters(B(1500), ru484, 0, 1, false, HE_GI_3_2_US, HE_CODING_LDPC);
+auto ldpcNss5 = computeHeUserPhyParameters(B(1500), ru242, 0, 5, false, HE_GI_3_2_US, HE_CODING_LDPC);
+ASSERT(ldpcMcs10.coding == HE_CODING_LDPC);
+ASSERT(ldpcRu484.coding == HE_CODING_LDPC);
+ASSERT(ldpcNss5.coding == HE_CODING_LDPC);
+
+// Correct timing: check that HE BCC always uses exactly 1 encoder (tail bits = 6)
+// Even at high data rates (e.g. NSS=4, MCS=9 on 242-tone RU)
+auto bccHighRate = computeHeUserPhyParameters(B(1500), ru242, 9, 4, false, HE_GI_3_2_US, HE_CODING_BCC);
+ASSERT(bccHighRate.numberOfEncoders == 1);
+ASSERT(bccHighRate.tailBits == 6);
+
+// Preamble puncturing validator checks
+// 80 MHz valid: 0000, 0100, 0010, 0001. Invalid: 0110, 0101, 1000 (primary punctured), 1111 (all punctured).
+ASSERT(isValidHePreamblePuncturing({}, 80));
+ASSERT(isValidHePreamblePuncturing({0,0,0,0}, 80));
+ASSERT(isValidHePreamblePuncturing({0,1,0,0}, 80));
+ASSERT(isValidHePreamblePuncturing({0,0,1,0}, 80));
+ASSERT(isValidHePreamblePuncturing({0,0,0,1}, 80));
+ASSERT(!isValidHePreamblePuncturing({1,0,0,0}, 80)); // primary punctured
+ASSERT(!isValidHePreamblePuncturing({0,1,1,0}, 80));
+ASSERT(!isValidHePreamblePuncturing({0,0,1,1}, 80));
+ASSERT(!isValidHePreamblePuncturing({1,1,1,1}, 80)); // all punctured
+
+// 160 MHz valid Set 6:
+ASSERT(isValidHePreamblePuncturing({0,1,0,0, 0,0,0,0}, 160));
+ASSERT(isValidHePreamblePuncturing({0,1,0,0, 1,0,0,0}, 160));
+ASSERT(isValidHePreamblePuncturing({0,1,0,0, 1,1,0,0}, 160));
+// 160 MHz valid Set 7:
+ASSERT(isValidHePreamblePuncturing({0,0,1,0, 0,0,0,0}, 160));
+ASSERT(isValidHePreamblePuncturing({0,0,1,1, 0,0,0,0}, 160));
+ASSERT(isValidHePreamblePuncturing({0,0,1,1, 0,1,0,0}, 160));
+ASSERT(isValidHePreamblePuncturing({0,0,1,1, 0,0,1,1}, 160));
+// 160 MHz invalid (Set 6 but b2=1/b3=1):
+ASSERT(!isValidHePreamblePuncturing({0,1,1,0, 0,0,0,0}, 160));
+// 160 MHz invalid (Set 7 but b1=1):
+ASSERT(!isValidHePreamblePuncturing({0,1,1,1, 0,0,0,0}, 160));
+// 160 MHz invalid (3 adjacent):
+ASSERT(!isValidHePreamblePuncturing({0,0,1,1, 1,0,0,0}, 160)); // b2=1, b3=1, b4=1
+// 160 MHz invalid (invalid sec80 pattern):
+ASSERT(!isValidHePreamblePuncturing({0,0,0,0, 1,0,1,0}, 160)); // sec80 has two punctured but not lower/higher two
 
 auto mediumMode = Ieee80211HeCompliantModes::getCompliantMode(
         &Ieee80211HemcsTable::heMcs0BW20MHzNss1,
