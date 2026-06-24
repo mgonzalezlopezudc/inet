@@ -204,7 +204,7 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
         auto transmittedPacket = findTransmittedPacket(context);
         if (receivedPacket != nullptr) {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
-            EV_INFO << "HE DL MU TxOp FS: received BlockAck from STA " << getActiveAllocation().staAddress << "\n";
+            EV_DEBUG << "HE DL MU TxOp FS: received BlockAck from STA " << getActiveAllocation().staAddress << "\n";
         }
         else {
             receiveStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);

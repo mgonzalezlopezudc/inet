@@ -350,11 +350,11 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         }(), context.channelBandwidth))
         throw cRuntimeError("HE scheduler produced an invalid RU layout");
     ASSERT(result.empty() || result.size() == candidates.size());
-    EV_INFO << "HE DL base scheduler: produced " << result.size()
+    EV_DEBUG << "HE DL base scheduler: produced " << result.size()
             << " RU allocations, durations =";
     for (const auto& allocation : result)
-        EV_INFO << " " << allocation.estimatedDuration;
-    EV_INFO << "\n";
+        EV_DEBUG << " " << allocation.estimatedDuration;
+    EV_DEBUG << "\n";
 
     return result;
 }

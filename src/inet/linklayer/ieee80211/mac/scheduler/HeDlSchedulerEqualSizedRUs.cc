@@ -273,7 +273,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, ruCount);
     ASSERT((int)rus.size() == ruCount);
 
-    EV_INFO << "DL EqualSizedRUs scheduler: falling back to " << ruCount
+    EV_DEBUG << "DL EqualSizedRUs scheduler: falling back to " << ruCount
             << " equal-sized RUs, scheduling " << numSelected << " STAs\n";
 
     std::vector<RuAllocation> result;
