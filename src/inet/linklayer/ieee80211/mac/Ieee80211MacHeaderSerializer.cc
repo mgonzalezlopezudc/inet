@@ -8,6 +8,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211MacHeaderSerializer.h"
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
 namespace inet {
 
@@ -327,34 +328,201 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(chunk);
             if (trigger->getUsersArraySize() > 255)
                 throw cRuntimeError("Too many Trigger frame users");
+
+            // Duration and MAC addresses (standard MAC header fields)
             stream.writeUint16Le(trigger->getDurationField().inUnit(SIMTIME_US));
             stream.writeMacAddress(trigger->getReceiverAddress());
             stream.writeMacAddress(trigger->getTransmitterAddress());
-            bool extended = trigger->getGuardInterval() != 2 || trigger->getCoding() != 0 ||
-                    trigger->getPacketExtensionDurationUs() != 0 || trigger->getPuncturedSubchannelMask() != 0;
-            stream.writeByte(trigger->getTriggerType() | (extended ? 0x80 : 0));
-            stream.writeUint32Be(trigger->getTriggerId());
-            stream.writeUint16Be(trigger->getCommonDuration().inUnit(SIMTIME_US));
-            if (extended) {
-                stream.writeByte(trigger->getGuardInterval());
-                stream.writeByte(trigger->getCoding());
-                stream.writeByte(trigger->getPacketExtensionDurationUs());
-                stream.writeByte(trigger->getPuncturedSubchannelMask());
+
+            // --- Common Info Field (8 octets = 64 bits) - IEEE Std 802.11-2024 9.3.1.22.1 ---
+            // B0–B3: Trigger Type (4 bits)
+            stream.writeNBitsOfUint64Be(trigger->getTriggerType(), 4);
+
+            // B4–B15: UL Length (12 bits) - L-SIG LENGTH field of the response, mapped to commonDuration in us
+            uint32_t ulLength = static_cast<uint32_t>(trigger->getCommonDuration().inUnit(SIMTIME_US));
+            stream.writeNBitsOfUint64Be(ulLength & 0xFFF, 12);
+
+            // B16: More TF (1 bit) - 0
+            stream.writeBit(false);
+
+            // B17: CS Required (1 bit) - 1
+            stream.writeBit(true);
+
+            // B18-B19: UL BW (2 bits) - 0: 20MHz, 1: 40MHz, 2: 80MHz, 3: 160MHz
+            uint32_t maxToneIndex = 0;
+            for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
+                const auto& u = trigger->getUsers(i);
+                maxToneIndex = std::max(maxToneIndex, (uint32_t)(u.ruToneOffset + u.ruToneSize));
             }
-            stream.writeByte(trigger->getOcwMin());
-            stream.writeByte(trigger->getOcwMax());
-            stream.writeByte(trigger->getUsersArraySize());
+            uint8_t ulBw = 0;
+            if (maxToneIndex > 996)
+                ulBw = 3;
+            else if (maxToneIndex > 484)
+                ulBw = 2;
+            else if (maxToneIndex > 242)
+                ulBw = 1;
+            stream.writeNBitsOfUint64Be(ulBw, 2);
+
+            // B20–B21: GI And HE-LTF Type (2 bits)
+            uint8_t giAndHeLtf = (trigger->getGuardInterval() <= 2) ? trigger->getGuardInterval() : 2;
+            stream.writeNBitsOfUint64Be(giAndHeLtf, 2);
+
+            // B22: MU-MIMO HE-LTF Mode (1 bit)
+            stream.writeBit(false);
+
+            // B23–B25: Number Of HE-LTF Symbols And Midamble Periodicity (3 bits)
+            stream.writeNBitsOfUint64Be(0, 3);
+
+            // B26: UL STBC (1 bit)
+            stream.writeBit(false);
+
+            // B27: LDPC Extra Symbol Segment (1 bit)
+            stream.writeBit(trigger->getCoding() & 1);
+
+            // Pack 32-bit triggerId into remaining fields:
+            // B28–B33: AP Tx Power (6 bits)
+            // B34-B35: Pre-FEC Padding Factor (2 bits) - 0
+            // B36: PE Disambiguity (1 bit)
+            // B37–B52: UL Spatial Reuse (16 bits)
+            // B53: Doppler (1 bit) - 0
+            // B54–B62: UL HE-SIG-A2 Reserved (9 bits)
+            // B63: Reserved (1 bit) - 0
+            uint32_t tid = trigger->getTriggerId();
+            uint8_t apTxPower = (tid >> 25) & 0x3F;
+            bool peDisambiguity = (tid >> 31) & 1;
+            uint16_t ulSpatialReuse = tid & 0xFFFF;
+            uint16_t ulHeSigA2Reserved = (tid >> 16) & 0x1FF;
+
+            stream.writeNBitsOfUint64Be(apTxPower, 6);
+            stream.writeNBitsOfUint64Be(0, 2); // Pre-FEC padding factor
+            stream.writeBit(peDisambiguity);
+            stream.writeNBitsOfUint64Be(ulSpatialReuse, 16);
+            stream.writeBit(false); // Doppler
+            stream.writeNBitsOfUint64Be(ulHeSigA2Reserved, 9);
+            stream.writeBit(false); // Reserved bit B63
+
+            // --- User Info List ---
             for (unsigned int i = 0; i < trigger->getUsersArraySize(); i++) {
                 const auto& user = trigger->getUsers(i);
-                stream.writeUint16Be(user.aid);
-                stream.writeByte(user.ruIndex);
-                stream.writeUint16Be(user.ruToneSize);
-                stream.writeUint16Be(user.ruToneOffset);
-                stream.writeByte(user.mcs);
-                stream.writeByte(user.tid);
-                stream.writeByte(static_cast<uint8_t>(user.targetRssiDbm));
-                stream.writeBit(user.randomAccess);
-                stream.writeNBitsOfUint64Be(0, 7);
+
+                // B0–B11: AID12 (12 bits)
+                stream.writeNBitsOfUint64Be(user.aid, 12);
+
+                // B12–B19: RU Allocation (8 bits) - mapped using Table 9-53
+                Hz bw = (ulBw == 3) ? Hz(160e6) : ((ulBw == 2) ? Hz(80e6) : ((ulBw == 1) ? Hz(40e6) : Hz(20e6)));
+                uint8_t ruAllocation = 0;
+                uint8_t b0 = 0;
+                uint8_t b7_b1 = 0;
+                if (ulBw == 3) {
+                    if (user.ruToneSize == 1992) {
+                        b7_b1 = 68;
+                        b0 = 0;
+                    } else if (user.ruToneOffset >= 996) {
+                        b0 = 1;
+                        auto catalog = physicallayer::getHeRuAllocationCatalog(Hz(0), Hz(80e6));
+                        std::vector<physicallayer::Ieee80211HeRu> filtered;
+                        for (const auto& r : catalog) {
+                            if (r.toneSize == user.ruToneSize)
+                                filtered.push_back(r);
+                        }
+                        std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) { return a.toneOffset < b.toneOffset; });
+                        int idx = -1;
+                        int targetOffset = user.ruToneOffset - 996;
+                        for (size_t k = 0; k < filtered.size(); ++k) {
+                            if (filtered[k].toneOffset == targetOffset) {
+                                idx = k;
+                                break;
+                            }
+                        }
+                        if (idx != -1) {
+                            if (user.ruToneSize == 26) b7_b1 = idx;
+                            else if (user.ruToneSize == 52) b7_b1 = 37 + idx;
+                            else if (user.ruToneSize == 106) b7_b1 = 53 + idx;
+                            else if (user.ruToneSize == 242) b7_b1 = 61 + idx;
+                            else if (user.ruToneSize == 484) b7_b1 = 65 + idx;
+                            else if (user.ruToneSize == 996) b7_b1 = 67;
+                        }
+                    } else {
+                        b0 = 0;
+                        auto catalog = physicallayer::getHeRuAllocationCatalog(Hz(0), Hz(80e6));
+                        std::vector<physicallayer::Ieee80211HeRu> filtered;
+                        for (const auto& r : catalog) {
+                            if (r.toneSize == user.ruToneSize)
+                                filtered.push_back(r);
+                        }
+                        std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) { return a.toneOffset < b.toneOffset; });
+                        int idx = -1;
+                        for (size_t k = 0; k < filtered.size(); ++k) {
+                            if (filtered[k].toneOffset == user.ruToneOffset) {
+                                idx = k;
+                                break;
+                            }
+                        }
+                        if (idx != -1) {
+                            if (user.ruToneSize == 26) b7_b1 = idx;
+                            else if (user.ruToneSize == 52) b7_b1 = 37 + idx;
+                            else if (user.ruToneSize == 106) b7_b1 = 53 + idx;
+                            else if (user.ruToneSize == 242) b7_b1 = 61 + idx;
+                            else if (user.ruToneSize == 484) b7_b1 = 65 + idx;
+                            else if (user.ruToneSize == 996) b7_b1 = 67;
+                        }
+                    }
+                } else {
+                    b0 = 0;
+                    auto catalog = physicallayer::getHeRuAllocationCatalog(Hz(0), bw);
+                    std::vector<physicallayer::Ieee80211HeRu> filtered;
+                    for (const auto& r : catalog) {
+                        if (r.toneSize == user.ruToneSize)
+                            filtered.push_back(r);
+                    }
+                    std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) { return a.toneOffset < b.toneOffset; });
+                    int idx = -1;
+                    for (size_t k = 0; k < filtered.size(); ++k) {
+                        if (filtered[k].toneOffset == user.ruToneOffset) {
+                            idx = k;
+                            break;
+                        }
+                    }
+                    if (idx != -1) {
+                        if (user.ruToneSize == 26) b7_b1 = idx;
+                        else if (user.ruToneSize == 52) b7_b1 = 37 + idx;
+                        else if (user.ruToneSize == 106) b7_b1 = 53 + idx;
+                        else if (user.ruToneSize == 242) b7_b1 = 61 + idx;
+                        else if (user.ruToneSize == 484) b7_b1 = 65 + idx;
+                        else if (user.ruToneSize == 996) b7_b1 = 67;
+                    }
+                }
+                ruAllocation = (b7_b1 << 1) | b0;
+                stream.writeNBitsOfUint64Be(ruAllocation, 8);
+
+                // B20: UL FEC Coding Type (1 bit)
+                stream.writeBit(trigger->getCoding() & 1);
+
+                // B21–B24: UL HE-MCS (4 bits)
+                stream.writeNBitsOfUint64Be(user.mcs, 4);
+
+                // B25: UL DCM (1 bit) - 0
+                stream.writeBit(false);
+
+                // B26–B31: SS Allocation (6 bits) - starting stream = 0 (i.e. SS=1), number of SS = 0 (i.e. NSS=1)
+                stream.writeNBitsOfUint64Be(0, 6);
+
+                // B32–B38: UL Target Receive Power (7 bits) - PTARGET mapped to user.targetRssiDbm + 110
+                int fval = user.targetRssiDbm + 110;
+                if (fval < 0) fval = 0;
+                if (fval > 127) fval = 127;
+                stream.writeNBitsOfUint64Be(fval, 7);
+
+                // B39: Reserved (1 bit) - 0
+                stream.writeBit(false);
+
+                // --- Trigger Dependent User Info ---
+                if (trigger->getTriggerType() == 0) { // Basic Trigger: 1 octet (8 bits)
+                    // TID Aggregation Limit (B2-B4) packs user.tid
+                    uint8_t tidAggregationLimit = user.tid & 0x7;
+                    uint8_t basicUserInfo = (tidAggregationLimit << 2);
+                    stream.writeByte(basicUserInfo);
+                }
             }
             ASSERT(stream.getLength() - startPos == trigger->getChunkLength());
             break;
@@ -700,32 +868,136 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             trigger->setDurationField(SimTime(stream.readUint16Le(), SIMTIME_US));
             trigger->setReceiverAddress(stream.readMacAddress());
             trigger->setTransmitterAddress(stream.readMacAddress());
-            auto encodedTriggerType = stream.readByte();
-            bool extended = (encodedTriggerType & 0x80) != 0;
-            trigger->setTriggerType(encodedTriggerType & 0x7f);
-            trigger->setTriggerId(stream.readUint32Be());
-            trigger->setCommonDuration(SimTime(stream.readUint16Be(), SIMTIME_US));
-            if (extended) {
-                trigger->setGuardInterval(stream.readByte());
-                trigger->setCoding(stream.readByte());
-                trigger->setPacketExtensionDurationUs(stream.readByte());
-                trigger->setPuncturedSubchannelMask(stream.readByte());
+
+            // --- Common Info Field (8 octets = 64 bits) ---
+            auto triggerType = stream.readNBitsToUint64Be(4);
+            trigger->setTriggerType(triggerType);
+
+            auto ulLength = stream.readNBitsToUint64Be(12);
+            trigger->setCommonDuration(SimTime(ulLength, SIMTIME_US));
+
+            stream.readBit(); // More TF
+            stream.readBit(); // CS Required
+
+            auto ulBw = stream.readNBitsToUint64Be(2);
+
+            auto giAndHeLtf = stream.readNBitsToUint64Be(2);
+            trigger->setGuardInterval(giAndHeLtf);
+
+            stream.readBit(); // MU-MIMO HE-LTF Mode
+            stream.readNBitsToUint64Be(3); // Number Of HE-LTF Symbols And Midamble Periodicity
+            stream.readBit(); // UL STBC
+            auto coding = stream.readBit();
+            trigger->setCoding(coding);
+
+            auto apTxPower = stream.readNBitsToUint64Be(6);
+            stream.readNBitsToUint64Be(2); // Pre-FEC padding factor
+            auto peDisambiguity = stream.readBit();
+            auto ulSpatialReuse = stream.readNBitsToUint64Be(16);
+            stream.readBit(); // Doppler
+            auto ulHeSigA2Reserved = stream.readNBitsToUint64Be(9);
+            stream.readBit(); // Reserved bit B63
+
+            // Unpack 32-bit triggerId
+            uint32_t triggerId = ulSpatialReuse | (ulHeSigA2Reserved << 16) | (apTxPower << 25) | (peDisambiguity ? (1U << 31) : 0);
+            trigger->setTriggerId(triggerId);
+
+            // Determine number of users from remaining chunk length
+            int remainingBytes = trigger->getChunkLength().get<B>() - 24;
+            int userInfoSize = (triggerType == 4) ? 5 : 6;
+            int count = 0;
+            if (remainingBytes > 0 && userInfoSize > 0) {
+                count = remainingBytes / userInfoSize;
             }
-            trigger->setOcwMin(stream.readByte());
-            trigger->setOcwMax(stream.readByte());
-            auto count = stream.readByte();
             trigger->setUsersArraySize(count);
-            for (unsigned int i = 0; i < count; i++) {
+
+            for (unsigned int i = 0; i < (unsigned int)count; i++) {
                 Ieee80211HeTriggerUserInfo user;
-                user.aid = stream.readUint16Be();
-                user.ruIndex = stream.readByte();
-                user.ruToneSize = stream.readUint16Be();
-                user.ruToneOffset = stream.readUint16Be();
-                user.mcs = stream.readByte();
-                user.tid = stream.readByte();
-                user.targetRssiDbm = static_cast<int8_t>(stream.readByte());
-                user.randomAccess = stream.readBit();
-                stream.readNBitsToUint64Be(7);
+                user.aid = stream.readNBitsToUint64Be(12);
+
+                auto ruAllocation = stream.readNBitsToUint64Be(8);
+                uint8_t b0 = ruAllocation & 1;
+                uint8_t b7_b1 = (ruAllocation >> 1) & 0x7F;
+
+                Hz bw = (ulBw == 3) ? Hz(160e6) : ((ulBw == 2) ? Hz(80e6) : ((ulBw == 1) ? Hz(40e6) : Hz(20e6)));
+                Hz eff_bandwidth = bw;
+                if (bw == Hz(160e6)) {
+                    if (b7_b1 == 68) {
+                        user.ruToneSize = 1992;
+                        user.ruToneOffset = 0;
+                    } else {
+                        eff_bandwidth = Hz(80e6);
+                    }
+                }
+
+                if (bw != Hz(160e6) || b7_b1 != 68) {
+                    int toneSize = 0;
+                    int idx = 0;
+                    if (b7_b1 >= 0 && b7_b1 <= 36) {
+                        toneSize = 26;
+                        idx = b7_b1;
+                    } else if (b7_b1 >= 37 && b7_b1 <= 52) {
+                        toneSize = 52;
+                        idx = b7_b1 - 37;
+                    } else if (b7_b1 >= 53 && b7_b1 <= 60) {
+                        toneSize = 106;
+                        idx = b7_b1 - 53;
+                    } else if (b7_b1 >= 61 && b7_b1 <= 64) {
+                        toneSize = 242;
+                        idx = b7_b1 - 61;
+                    } else if (b7_b1 >= 65 && b7_b1 <= 66) {
+                        toneSize = 484;
+                        idx = b7_b1 - 65;
+                    } else if (b7_b1 == 67) {
+                        toneSize = 996;
+                        idx = 0;
+                    } else if (b7_b1 == 68) {
+                        toneSize = 1992;
+                        idx = 0;
+                    }
+
+                    auto catalog = physicallayer::getHeRuAllocationCatalog(Hz(0), eff_bandwidth);
+                    std::vector<physicallayer::Ieee80211HeRu> filtered;
+                    for (const auto& r : catalog) {
+                        if (r.toneSize == toneSize)
+                            filtered.push_back(r);
+                    }
+                    std::sort(filtered.begin(), filtered.end(), [](const auto& a, const auto& b) { return a.toneOffset < b.toneOffset; });
+                    if (idx >= 0 && idx < (int)filtered.size()) {
+                        user.ruToneSize = toneSize;
+                        user.ruToneOffset = filtered[idx].toneOffset;
+                        if (bw == Hz(160e6) && b0 == 1) {
+                            user.ruToneOffset += 996;
+                        }
+                    }
+                }
+
+                auto catalog = physicallayer::getHeRuAllocationCatalog(Hz(0), bw);
+                for (const auto& r : catalog) {
+                    if (r.toneSize == user.ruToneSize && r.toneOffset == user.ruToneOffset) {
+                        user.ruIndex = r.index;
+                        break;
+                    }
+                }
+
+                stream.readBit(); // UL FEC Coding Type
+                user.mcs = stream.readNBitsToUint64Be(4);
+                stream.readBit(); // UL DCM
+                stream.readNBitsToUint64Be(6); // SS Allocation
+
+                auto targetRssiVal = stream.readNBitsToUint64Be(7);
+                user.targetRssiDbm = static_cast<int8_t>(targetRssiVal - 110);
+                user.randomAccess = (user.aid == 0 || user.aid == 2045);
+
+                stream.readBit(); // Reserved B39
+
+                if (triggerType == 0) { // Basic Trigger
+                    auto basicUserInfo = stream.readByte();
+                    user.tid = (basicUserInfo >> 2) & 0x7;
+                } else {
+                    user.tid = 0;
+                }
+
                 trigger->setUsers(i, user);
             }
             return trigger;
