@@ -303,8 +303,22 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
     // receives authentication frame number 1 from STA, which will cause the AP to return an Auth-Error
     // making the MN STA to start the handover process all over again.
     if (frameAuthSeq == 1) {
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
+        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
             sendDisAssocNotification(sta->address);
+
+            // Destroy per-STA queue bank only for APs operating in ax mode.
+            try {
+                cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
+                if (macModule) {
+                    Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
+                    if (mac->isApInAxMode())
+                        mac->destroyStationQueueBank(sta->address);
+                }
+            }
+            catch (const cException &e) {
+                EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
+            }
+        }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
         mib->releaseAssociationId(sta->address);
         sta->authSeqExpected = 1;
@@ -339,8 +353,22 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
 
     // update status
     if (isLast) {
-        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED)
+        if (mib->bssAccessPointData.stations[sta->address] == Ieee80211Mib::ASSOCIATED) {
             sendDisAssocNotification(sta->address);
+
+            // Destroy per-STA queue bank only for APs operating in ax mode.
+            try {
+                cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
+                if (macModule) {
+                    Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
+                    if (mac->isApInAxMode())
+                        mac->destroyStationQueueBank(sta->address);
+                }
+            }
+            catch (const cException &e) {
+                EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
+            }
+        }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED; // TODO only when ACK of this frame arrives
         EV << "STA authenticated\n";
     }
@@ -414,7 +442,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
         cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
         if (macModule) {
             Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-            if (mac->isApInAxMode())
+            if (mac->isApInAxMode() && !mac->getStationQueueBank(sta->address))
                 mac->createStationQueueBank(sta->address);
         }
     }
@@ -461,6 +489,19 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
 
     // mark STA as associated
     mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::ASSOCIATED; // TODO this should only take place when MAC receives the ACK for the response
+
+    // Create per-STA queue bank only for APs operating in ax mode.
+    try {
+        cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
+        if (macModule) {
+            Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
+            if (mac->isApInAxMode() && !mac->getStationQueueBank(sta->address))
+                mac->createStationQueueBank(sta->address);
+        }
+    }
+    catch (const cException &e) {
+        EV_DEBUG << "Could not get MAC module for queue bank creation: " << e.what() << "\n";
+    }
 
     // send OK response
     const auto& body = makeShared<Ieee80211ReassociationResponseFrame>();
