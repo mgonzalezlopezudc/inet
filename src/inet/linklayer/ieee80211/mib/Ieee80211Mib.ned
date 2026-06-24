@@ -24,7 +24,7 @@ simple Ieee80211Mib extends SimpleModule
         bool htLdpc = default(false); // Advertises and enables HT LDPC when the peer also supports it
         // HE features are opt-in so existing configurations retain BCC and
         // the unextended PPDU geometry.
-        bool heLdpc = default(false); // Advertises and enables HE LDPC when the peer also supports it
+        bool heLdpc = default(true); // Advertises and enables HE LDPC when the peer also supports it
         bool heTwtRequester = default(false); // Advertises HE TWT requester support
         bool heTwtResponder = default(false); // Advertises HE TWT responder support
         bool heBroadcastTwt = default(false); // Advertises HE broadcast TWT support

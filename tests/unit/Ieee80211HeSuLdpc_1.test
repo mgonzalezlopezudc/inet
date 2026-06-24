@@ -15,7 +15,7 @@ using namespace inet::physicallayer;
 
 %activity:
 
-auto mcs = &Ieee80211HemcsTable::heMcs5BW80MHzNss1;
+auto mcs = &Ieee80211HemcsTable::heMcs5BW20MHzNss1;
 auto bcc = Ieee80211HeCompliantModes::getCompliantMode(mcs,
         Ieee80211HeMode::BAND_5GHZ,
         Ieee80211HePreambleMode::HE_PREAMBLE_SU,
@@ -50,9 +50,9 @@ EV << "HE SU LDPC bitrate parity passed.\n";
 Ieee80211HeRu ru;
 ru.index = 0;
 ru.toneOffset = 0;
-ru.toneSize = 996;
-ru.dataSubcarriers = 980;
-ru.pilotSubcarriers = 16;
+ru.toneSize = 242;
+ru.dataSubcarriers = 234;
+ru.pilotSubcarriers = 8;
 ru.bandwidth = Hz(ru.toneSize * 78125.0);
 auto reference = computeHeUserPhyParameters(dataLength, ru, mcs->getMcsIndex(),
         mcs->getNumNss(), false, HE_GI_3_2_US, HE_CODING_LDPC);
