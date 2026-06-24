@@ -303,6 +303,12 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
     auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    
+    // BSS Color OBSS PD spatial reuse check (IEEE 802.11-2024 Clause 27.9 "Spatial reuse (SR) operation"):
+    // If the BSS Color of the incoming frame is non-zero and does not match our own BSS Color,
+    // the frame is classified as an OBSS (Overlapping BSS) frame.
+    // If the signal strength of the OBSS frame is below the OBSS PD threshold, it is ignored
+    // to enable spatial reuse transmissions.
     if (enableSpatialReuse && heMuPhyHeader != nullptr && heMuPhyHeader->getBssColor() != 0) {
         auto networkInterface = getContainingNicModule(this);
         auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
@@ -324,6 +330,8 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
         IRadioSignal::SignalPart part, const IInterference *interference) const
 {
     auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    
+    // Repeat the BSS Color OBSS PD check for reception attempt filtering
     if (enableSpatialReuse && heMuPhyHeader != nullptr && heMuPhyHeader->getBssColor() != 0) {
         auto networkInterface = getContainingNicModule(this);
         auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
