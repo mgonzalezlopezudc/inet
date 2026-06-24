@@ -16,6 +16,8 @@
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/common/packet/chunk/SequenceChunk.h"
+#include "inet/common/packet/chunk/SliceChunk.h"
 
 namespace inet {
 
@@ -64,7 +66,34 @@ void Ieee80211MgmtBase::handleMessageWhenUp(cMessage *msg)
         // process incoming frame
         EV << "Frame arrived from MAC: " << msg << "\n";
         auto packet = check_and_cast<Packet *>(msg);
-        const Ptr<const Ieee80211DataOrMgmtHeader>& header = packet->peekAt<Ieee80211DataOrMgmtHeader>(packet->getFrontOffset() - B(24));
+        Ptr<const Ieee80211DataOrMgmtHeader> header = nullptr;
+        auto content = packet->peekAll();
+        b targetEnd = packet->getFrontOffset();
+        if (auto seq = dynamicPtrCast<const SequenceChunk>(content)) {
+            b offset = b(0);
+            for (const auto& chunk : seq->getChunks()) {
+                b length = chunk->getChunkLength();
+                if (offset + length == targetEnd) {
+                    header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(chunk);
+                    if (!header) {
+                        if (auto slice = dynamicPtrCast<const SliceChunk>(chunk))
+                            header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(slice->getChunk());
+                    }
+                    break;
+                }
+                offset += length;
+            }
+        }
+        else {
+            header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(content);
+            if (!header) {
+                if (auto slice = dynamicPtrCast<const SliceChunk>(content))
+                    header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(slice->getChunk());
+            }
+        }
+        if (!header) {
+            header = packet->peekAt<Ieee80211DataOrMgmtHeader>(packet->getFrontOffset() - B(24));
+        }
         processFrame(packet, header);
     }
     else if (msg->arrivedOn("agentIn")) {

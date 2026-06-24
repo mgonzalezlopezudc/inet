@@ -117,6 +117,7 @@ void Ieee80211TwtManager::expireBroadcastSchedules()
 
 void Ieee80211TwtManager::installAgreement(const TwtAgreement& agreement)
 {
+    Enter_Method("installAgreement");
     if (!enabled)
         throw cRuntimeError("Cannot install a TWT agreement while TWT is disabled");
     if (!agreement.broadcast) {
@@ -138,6 +139,7 @@ void Ieee80211TwtManager::installAgreement(const TwtAgreement& agreement)
 
 void Ieee80211TwtManager::removeAgreement(const MacAddress& peer, uint8_t flowId, bool broadcast, uint8_t broadcastId)
 {
+    Enter_Method("removeAgreement");
     agreements.erase(std::remove_if(agreements.begin(), agreements.end(), [&] (const auto& agreement) {
         return agreement.peerAddress == peer && agreement.flowId == flowId && agreement.broadcast == broadcast && agreement.broadcastId == broadcastId;
     }), agreements.end());
@@ -147,6 +149,7 @@ void Ieee80211TwtManager::removeAgreement(const MacAddress& peer, uint8_t flowId
 
 bool Ieee80211TwtManager::updateNextWakeTime(const MacAddress& peer, uint8_t flowId, simtime_t nextWakeTime)
 {
+    Enter_Method("updateNextWakeTime");
     auto *agreement = findAgreement(peer, flowId, false, 0);
     if (agreement == nullptr)
         return false;
@@ -181,6 +184,7 @@ bool Ieee80211TwtManager::isPeerEligible(const MacAddress& peer) const
 
 void Ieee80211TwtManager::notifyPeerAwake(const MacAddress& peer)
 {
+    Enter_Method("notifyPeerAwake");
     for (auto& agreement : agreements)
         if (agreement.peerAddress == peer && isAgreementActiveNow(agreement, simTime()))
             agreement.peerAwakeAnnounced = true;
@@ -191,6 +195,7 @@ void Ieee80211TwtManager::notifyPeerAwake(const MacAddress& peer)
 
 void Ieee80211TwtManager::installBroadcastSchedule(const TwtBroadcastSchedule& schedule)
 {
+    Enter_Method("installBroadcastSchedule");
     if (!enabled)
         throw cRuntimeError("Cannot install a broadcast TWT schedule while TWT is disabled");
     if (!schedule.active || schedule.wakeInterval <= SIMTIME_ZERO || schedule.wakeDuration <= SIMTIME_ZERO)
@@ -208,6 +213,7 @@ void Ieee80211TwtManager::installBroadcastSchedule(const TwtBroadcastSchedule& s
 
 void Ieee80211TwtManager::removeBroadcastSchedule(uint8_t broadcastId)
 {
+    Enter_Method("removeBroadcastSchedule");
     broadcastSchedules.erase(std::remove_if(broadcastSchedules.begin(), broadcastSchedules.end(), [=] (const auto& schedule) {
         return schedule.broadcastId == broadcastId;
     }), broadcastSchedules.end());
@@ -231,6 +237,7 @@ std::vector<TwtBroadcastSchedule> Ieee80211TwtManager::getBroadcastSchedules() c
 
 bool Ieee80211TwtManager::addBroadcastMember(uint8_t broadcastId, const MacAddress& peer)
 {
+    Enter_Method("addBroadcastMember");
     auto *schedule = findBroadcastScheduleForUpdate(broadcastId);
     if (schedule == nullptr)
         return false;
@@ -240,6 +247,7 @@ bool Ieee80211TwtManager::addBroadcastMember(uint8_t broadcastId, const MacAddre
 
 void Ieee80211TwtManager::removeBroadcastMember(uint8_t broadcastId, const MacAddress& peer)
 {
+    Enter_Method("removeBroadcastMember");
     if (auto *schedule = findBroadcastScheduleForUpdate(broadcastId))
         schedule->members.erase(peer);
 }

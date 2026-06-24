@@ -414,6 +414,7 @@ void Ieee80211Mac::sendDownFrame(Packet *frame)
 
 void Ieee80211Mac::setTwtRadioAwake(bool awake)
 {
+    Enter_Method("setTwtRadioAwake");
     if (radio != nullptr)
         configureRadioMode(awake ? IRadio::RADIO_MODE_RECEIVER : IRadio::RADIO_MODE_SLEEP);
 }
@@ -425,12 +426,22 @@ bool Ieee80211Mac::isTwtPeerEligible(const MacAddress& peer) const
 
 void Ieee80211Mac::sendTwtPsPoll(const MacAddress& peer)
 {
+    Enter_Method("sendTwtPsPoll");
     auto header = makeShared<Ieee80211PsPollFrame>();
     header->setAID(mib->bssStationData.associationId);
     header->setReceiverAddress(peer);
     header->setTransmitterAddress(mib->address);
     auto packet = new Packet("TwtPsPoll", header);
-    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    auto trailer = makeShared<Ieee80211MacTrailer>();
+    trailer->setFcsMode(getFcsMode());
+    packet->insertAtBack(trailer);
+
+    // Set a basic/mandatory rate for the control frame transmission
+    if (modeSet != nullptr) {
+        if (auto mode = modeSet->getSlowestMandatoryMode())
+            packet->addTagIfAbsent<Ieee80211ModeReq>()->setMode(mode);
+    }
+
     sendDownFrame(packet);
 }
 
