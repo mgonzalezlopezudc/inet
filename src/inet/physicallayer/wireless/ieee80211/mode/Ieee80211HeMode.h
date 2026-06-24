@@ -18,7 +18,6 @@
 namespace inet {
 namespace physicallayer {
 
-/** HE OFDM timing constants for the 0.8, 1.6, and 3.2 microsecond guard intervals. */
 /**
  * HE OFDM timing constants for the 0.8, 1.6, and 3.2 microsecond guard intervals.
  * IEEE 802.11-2024 Table 27-61 ("HE PHY characteristics").

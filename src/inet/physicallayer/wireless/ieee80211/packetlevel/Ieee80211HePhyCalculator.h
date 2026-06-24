@@ -20,7 +20,6 @@ namespace physicallayer {
 
 using namespace inet::units::values;
 
-/** HE PPDU formats modelled by the common MU PHY calculator. */
 /**
  * HE PPDU formats modelled by the common MU PHY calculator.
  * IEEE 802.11-2024 Clause 27.3.11 ("PPDU formats").
