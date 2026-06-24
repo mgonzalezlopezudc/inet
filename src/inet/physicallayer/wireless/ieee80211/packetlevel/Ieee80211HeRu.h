@@ -23,7 +23,13 @@ using namespace inet::units::values;
 namespace physicallayer {
 
 /**
- * IEEE 802.11ax resource unit description.
+ * IEEE 802.11ax resource unit (RU) description.
+ *
+ * Grounded on IEEE 802.11-2024, Clause 27.3.2.2 ("Resource unit, guard, and DC subcarriers").
+ * 802.11ax HE (High Efficiency) introduces narrower subcarrier tone spacing of 78.125 kHz,
+ * which is exactly 1/4 of the 312.5 kHz spacing used in 802.11a/g/n/ac. This increases
+ * the number of subcarrier tones by a factor of 4 for a given channel bandwidth, enabling
+ * fine-grained multi-user orthogonal frequency-division multiple access (OFDMA).
  *
  * The allocationIndex is local to the selected RU layout. The toneOffset is
  * measured from the first occupied HE tone of the channel and makes the
@@ -31,10 +37,10 @@ namespace physicallayer {
  */
 struct Ieee80211HeRu {
     int index = -1;
-    int toneSize = 0;
-    int toneOffset = 0;
-    int dataSubcarriers = 0;
-    int pilotSubcarriers = 0;
+    int toneSize = 0;              // Total tone size (26, 52, 106, 242, 484, 996, 1992)
+    int toneOffset = 0;            // Tone offset relative to the channel's starting subcarrier
+    int dataSubcarriers = 0;       // Number of data subcarriers in this RU (N_SD)
+    int pilotSubcarriers = 0;      // Number of pilot subcarriers in this RU (N_SP)
     Hz centerFrequency = Hz(NaN);
     Hz bandwidth = Hz(NaN);
 
@@ -46,7 +52,18 @@ struct Ieee80211HeRu {
     }
 };
 
-/** Returns the data-subcarrier count for a standard HE RU tone size. */
+/**
+ * Returns the data-subcarrier count (N_SD) for a standard HE RU tone size.
+ *
+ * Grounded on IEEE 802.11-2024, Clause 27.3.2.2.
+ * - 26-tone RU: 24 data subcarriers (24 data + 2 pilot = 26 tones)
+ * - 52-tone RU: 48 data subcarriers (48 data + 4 pilot = 52 tones)
+ * - 106-tone RU: 102 data subcarriers (102 data + 4 pilot = 106 tones)
+ * - 242-tone RU: 234 data subcarriers (234 data + 8 pilot = 242 tones, standard 20 MHz channel)
+ * - 484-tone RU: 468 data subcarriers (468 data + 16 pilot = 484 tones, standard 40 MHz channel)
+ * - 996-tone RU: 980 data subcarriers (980 data + 16 pilot = 996 tones, standard 80 MHz channel)
+ * - 1992-tone RU: 1960 data subcarriers (1960 data + 32 pilot = 1992 tones, standard 160 MHz channel)
+ */
 inline int getHeRuDataSubcarrierCount(int toneSize)
 {
     switch (toneSize) {
@@ -61,6 +78,13 @@ inline int getHeRuDataSubcarrierCount(int toneSize)
     }
 }
 
+/**
+ * Returns the pilot-subcarrier count (N_SP) for a standard HE RU tone size.
+ *
+ * Grounded on IEEE 802.11-2024, Clause 27.3.2.4 ("Pilot subcarriers").
+ * The pilots are used to estimate residual frequency offset and phase noise tracking during
+ * reception of the HE payload.
+ */
 inline int getHeRuPilotSubcarrierCount(int toneSize)
 {
     switch (toneSize) {
@@ -75,6 +99,14 @@ inline int getHeRuPilotSubcarrierCount(int toneSize)
     }
 }
 
+/**
+ * Returns the total tone size for the given channel bandwidth.
+ * Grounded on IEEE 802.11-2024, Clause 27.3.2.2, where:
+ * - 20 MHz bandwidth maps to a 242-tone RU.
+ * - 40 MHz bandwidth maps to a 484-tone RU.
+ * - 80 MHz bandwidth maps to a 996-tone RU.
+ * - 160 MHz (or 80+80 MHz) bandwidth maps to a 1992-tone RU.
+ */
 inline int getHeChannelToneCount(Hz bandwidth)
 {
     double mhz = bandwidth.get() / 1e6;
@@ -89,17 +121,19 @@ inline int getHeChannelToneCount(Hz bandwidth)
     throw std::invalid_argument("IEEE 802.11ax RU layouts require a 20, 40, 80, or 160 MHz channel");
 }
 
+/** Returns the maximum number of 26-tone RUs that can be fitted in the given bandwidth. */
 inline int getHeMaxRuCount(Hz bandwidth)
 {
     switch (getHeChannelToneCount(bandwidth)) {
-        case 242: return 9;
-        case 484: return 18;
-        case 996: return 37;
-        case 1992: return 74;
+        case 242: return 9;     // 9x 26-tone RUs + 26 guard/DC tones
+        case 484: return 18;    // 18x 26-tone RUs + guard/DC tones
+        case 996: return 37;    // 37x 26-tone RUs + guard/DC tones
+        case 1992: return 74;   // 74x 26-tone RUs + guard/DC tones
         default: return 0;
     }
 }
 
+/** Returns supported configurations of equal-sized RU allocations for the channel bandwidth. */
 inline std::vector<int> getHeEqualRuCounts(Hz bandwidth)
 {
     switch (getHeChannelToneCount(bandwidth)) {
@@ -111,6 +145,10 @@ inline std::vector<int> getHeEqualRuCounts(Hz bandwidth)
     }
 }
 
+/**
+ * Returns the RU tone size corresponding to the division of the channel into an equal-sized RU count.
+ * E.g., dividing 20 MHz (242 tones) into 9 RUs yields 26-tone RUs.
+ */
 inline int getHeEqualRuToneSize(Hz bandwidth, int count)
 {
     int channelTones = getHeChannelToneCount(bandwidth);
@@ -145,10 +183,11 @@ inline int getHeEqualRuToneSize(Hz bandwidth, int count)
     throw std::invalid_argument("The requested count is not a standard equal-sized HE RU layout");
 }
 
+/** Instantiates an RU structure, mapping physical center frequency and tone offset based on the HE subcarrier spacing. */
 inline Ieee80211HeRu makeHeRu(Hz centerFrequency, int channelTones,
         int index, int toneSize, int toneOffset)
 {
-    constexpr double HE_TONE_SPACING = 78125;
+    constexpr double HE_TONE_SPACING = 78125; // 78.125 kHz spacing (IEEE 802.11-2024, Clause 27.3.2.2)
     Ieee80211HeRu ru;
     ru.index = index;
     ru.toneSize = toneSize;
@@ -166,6 +205,7 @@ inline Ieee80211HeRu makeHeRu(Hz centerFrequency, int channelTones,
  * the DC/guard tones between standard sibling RUs. A node may be allocated as
  * a whole, or replaced by all of its children:
  *
+ * Grounded on IEEE 802.11-2024, Figure 27-5 through Figure 27-8 (RU allocation maps).
  * 2x996 -> 996 + 996
  * 996   -> 484 + central 26 + 484
  * 484   -> 242 + 242
@@ -277,6 +317,7 @@ inline bool validateHeRuLayout(const std::vector<Ieee80211HeRu>& layout, Hz chan
 /**
  * Allocates exact requested RU sizes at canonical, non-overlapping positions.
  * Requests should be ordered from largest to smallest for deterministic fitting.
+ * Includes subchannel puncturing masks mapping to punctured preamble subchannels (preamble puncturing, Clause 27.3.2.6).
  */
 inline bool allocateHeRus(Hz centerFrequency, Hz channelBandwidth,
         const std::vector<int>& requestedToneSizes, std::vector<Ieee80211HeRu>& allocations,
