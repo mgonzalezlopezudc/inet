@@ -21,7 +21,7 @@ namespace physicallayer {
 /** HE OFDM timing constants for the 0.8, 1.6, and 3.2 microsecond guard intervals. */
 /**
  * HE OFDM timing constants for the 0.8, 1.6, and 3.2 microsecond guard intervals.
- * Grounded on IEEE 802.11-2024 Table 27-61 ("HE PHY characteristics").
+ * IEEE 802.11-2024 Table 27-61 ("HE PHY characteristics").
  * In 802.11ax HE, the FFT size is quadrupled to 256/512/1024/2048 points, which
  * increases the DFT period (T_DFT) to 12.8 µs (4x the legacy 3.2 µs DFT period).
  * This base class provides the standard timing equations:
@@ -115,7 +115,7 @@ class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee8
 
 /**
  * HE SU or MU preamble mode, including the legacy-compatible preamble portion.
- * Grounded on IEEE 802.11-2024, Clause 27.3.11 ("HE PPDU format").
+ * IEEE 802.11-2024, Clause 27.3.11 ("HE PPDU format").
  * The HE preamble consists of:
  * - Legacy parts (L-STF, L-LTF, L-SIG) to maintain backward compatibility.
  * - Repeated L-SIG (RL-SIG) to signal HE PPDU presence.

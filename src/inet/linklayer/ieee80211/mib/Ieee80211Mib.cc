@@ -62,7 +62,7 @@ void Ieee80211Mib::initialize(int stage)
         heOperation.defaultPeDurationPresent = defaultPeDurationUs != 0;
         heOperation.defaultPeDurationUs = defaultPeDurationUs;
 
-        // Grounded on IEEE 802.11-2024 Clause 9.4.2.249 ("HE Operation element").
+        // IEEE 802.11-2024 Clause 9.4.2.249 ("HE Operation element").
         // HE BSS Color is a 6-bit identifier (valid range 1 to 63). A value of 0 indicates BSS Color is disabled.
         // It is advertised in beacons and association responses so associated stations can configure
         // their OBSS packet detection thresholds.
