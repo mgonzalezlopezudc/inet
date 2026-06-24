@@ -106,7 +106,7 @@ class MockRecipientAckPolicy : public IRecipientQosAckPolicy
     virtual simtime_t computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override {
         return SIMTIME_ZERO;
     }
-    virtual simtime_t computeBasicBlockAckDurationField(Packet *packet, const Ptr<const Ieee80211BasicBlockAckReq>& basicBlockAckReq) const override {
+    virtual simtime_t computeBasicBlockAckDurationField(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& basicBlockAckReq) const override {
         return SIMTIME_ZERO;
     }
 };

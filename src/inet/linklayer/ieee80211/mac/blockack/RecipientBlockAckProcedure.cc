@@ -31,6 +31,39 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
             callback->transmitControlResponseFrame(blockAckPacket, blockAck, blockAckPacketReq, basicBlockAckReq);
         }
     }
+    else if (auto multiTidBlockAckReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+        if (ackPolicy->isBlockAckNeeded(multiTidBlockAckReq, nullptr)) {
+            auto multiTidBlockAck = makeShared<Ieee80211MultiTidBlockAck>();
+            multiTidBlockAck->setReceiverAddress(multiTidBlockAckReq->getTransmitterAddress());
+            multiTidBlockAck->setTransmitterAddress(blockAckReq->getReceiverAddress());
+            unsigned int numRecords = multiTidBlockAckReq->getRecordsArraySize();
+            multiTidBlockAck->setRecordsArraySize(numRecords);
+            for (unsigned int i = 0; i < numRecords; ++i) {
+                const auto& reqRec = multiTidBlockAckReq->getRecords(i);
+                auto agreement = blockAckAgreementHandler->getAgreement(reqRec.tid, multiTidBlockAckReq->getTransmitterAddress());
+                Ieee80211MultiTidBlockAckRecord ackRec;
+                ackRec.tid = reqRec.tid;
+                ackRec.startingSequenceNumber = reqRec.startingSequenceNumber;
+                ackRec.bitmap = 0;
+                if (agreement != nullptr) {
+                    SequenceNumberCyclic startingSequenceNumber(reqRec.startingSequenceNumber);
+                    for (int j = 0; j < 64; ++j) {
+                        bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + j, 0);
+                        if (ackState) {
+                            ackRec.bitmap |= (1ULL << j);
+                        }
+                    }
+                }
+                multiTidBlockAck->setRecords(i, ackRec);
+            }
+            multiTidBlockAck->setChunkLength(B(18 + numRecords * 11));
+            auto duration = ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, multiTidBlockAckReq);
+            multiTidBlockAck->setDurationField(duration);
+            auto blockAckPacket = new Packet("MultiTidBlockAck", multiTidBlockAck);
+            EV_DEBUG << "Duration for " << blockAckPacket->getName() << " is set to " << duration << " s.\n";
+            callback->transmitControlResponseFrame(blockAckPacket, multiTidBlockAck, blockAckPacketReq, multiTidBlockAckReq);
+        }
+    }
     else
         throw cRuntimeError("Unsupported BlockAckReq");
 }
