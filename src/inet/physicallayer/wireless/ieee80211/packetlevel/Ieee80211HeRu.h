@@ -25,7 +25,7 @@ namespace physicallayer {
 /**
  * IEEE 802.11ax resource unit (RU) description.
  *
- * Grounded on IEEE 802.11-2024, Clause 27.3.2.2 ("Resource unit, guard, and DC subcarriers").
+ * IEEE 802.11-2024, Clause 27.3.2.2 ("Resource unit, guard, and DC subcarriers").
  * 802.11ax HE (High Efficiency) introduces narrower subcarrier tone spacing of 78.125 kHz,
  * which is exactly 1/4 of the 312.5 kHz spacing used in 802.11a/g/n/ac. This increases
  * the number of subcarrier tones by a factor of 4 for a given channel bandwidth, enabling
@@ -55,7 +55,7 @@ struct Ieee80211HeRu {
 /**
  * Returns the data-subcarrier count (N_SD) for a standard HE RU tone size.
  *
- * Grounded on IEEE 802.11-2024, Clause 27.3.2.2.
+ * IEEE 802.11-2024, Clause 27.3.2.2.
  * - 26-tone RU: 24 data subcarriers (24 data + 2 pilot = 26 tones)
  * - 52-tone RU: 48 data subcarriers (48 data + 4 pilot = 52 tones)
  * - 106-tone RU: 102 data subcarriers (102 data + 4 pilot = 106 tones)
@@ -81,7 +81,7 @@ inline int getHeRuDataSubcarrierCount(int toneSize)
 /**
  * Returns the pilot-subcarrier count (N_SP) for a standard HE RU tone size.
  *
- * Grounded on IEEE 802.11-2024, Clause 27.3.2.4 ("Pilot subcarriers").
+ * IEEE 802.11-2024, Clause 27.3.2.4 ("Pilot subcarriers").
  * The pilots are used to estimate residual frequency offset and phase noise tracking during
  * reception of the HE payload.
  */
@@ -101,7 +101,7 @@ inline int getHeRuPilotSubcarrierCount(int toneSize)
 
 /**
  * Returns the total tone size for the given channel bandwidth.
- * Grounded on IEEE 802.11-2024, Clause 27.3.2.2, where:
+ * IEEE 802.11-2024, Clause 27.3.2.2, where:
  * - 20 MHz bandwidth maps to a 242-tone RU.
  * - 40 MHz bandwidth maps to a 484-tone RU.
  * - 80 MHz bandwidth maps to a 996-tone RU.
@@ -205,7 +205,7 @@ inline Ieee80211HeRu makeHeRu(Hz centerFrequency, int channelTones,
  * the DC/guard tones between standard sibling RUs. A node may be allocated as
  * a whole, or replaced by all of its children:
  *
- * Grounded on IEEE 802.11-2024, Figure 27-5 through Figure 27-8 (RU allocation maps).
+ * IEEE 802.11-2024, Figure 27-5 through Figure 27-8 (RU allocation maps).
  * 2x996 -> 996 + 996
  * 996   -> 484 + central 26 + 484
  * 484   -> 242 + 242

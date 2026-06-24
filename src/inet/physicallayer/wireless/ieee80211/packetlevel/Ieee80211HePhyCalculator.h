@@ -23,7 +23,7 @@ using namespace inet::units::values;
 /** HE PPDU formats modelled by the common MU PHY calculator. */
 /**
  * HE PPDU formats modelled by the common MU PHY calculator.
- * Grounded on IEEE 802.11-2024 Clause 27.3.11 ("PPDU formats").
+ * IEEE 802.11-2024 Clause 27.3.11 ("PPDU formats").
  */
 enum Ieee80211HePpduFormat {
     HE_MU_DOWNLINK = 0,             // HE MU PPDU format (Clause 27.3.11.13) for DL OFDMA/MU-MIMO
@@ -32,7 +32,7 @@ enum Ieee80211HePpduFormat {
 
 /**
  * Guard-interval choices expressed by HE packet-level parameters.
- * Grounded on IEEE 802.11-2024 Table 27-61 ("HE PHY characteristics").
+ * IEEE 802.11-2024 Table 27-61 ("HE PHY characteristics").
  * - Short: 0.8 µs (1/16 of DFT period)
  * - Medium: 1.6 µs (1/8 of DFT period)
  * - Long: 3.2 µs (1/4 of DFT period)
@@ -45,7 +45,7 @@ enum Ieee80211HeGuardInterval {
 
 /**
  * Forward-error-correction coding used by HE user payloads.
- * Grounded on IEEE 802.11-2024 Clause 27.3.11.8 ("LDPC coding").
+ * IEEE 802.11-2024 Clause 27.3.11.8 ("LDPC coding").
  */
 enum Ieee80211HeCoding {
     HE_CODING_BCC = 0,              // Binary Convolutional Coding
@@ -54,7 +54,7 @@ enum Ieee80211HeCoding {
 
 /**
  * HE long-training-field (HE-LTF) duration multiplier.
- * Grounded on IEEE 802.11-2024 Clause 27.3.4.7 ("HE-LTF field").
+ * IEEE 802.11-2024 Clause 27.3.4.7 ("HE-LTF field").
  */
 enum Ieee80211HeLtfType {
     HE_LTF_1X = 1,                  // 3.2 µs DFT period
@@ -63,8 +63,8 @@ enum Ieee80211HeLtfType {
 };
 
 /**
- * Modelled HE-SIG-A fields shared by every user in the PPDU.
- * Grounded on IEEE 802.11-2024 Table 27-21 ("HE-SIG-A field of an HE MU PPDU").
+ * HE-SIG-A fields shared by every user in the PPDU.
+ * IEEE 802.11-2024 Table 27-21 ("HE-SIG-A field of an HE MU PPDU").
  * Carries common physical configuration such as BSS Color (6-bit field used for spatial reuse/OBSS PD detection).
  */
 struct Ieee80211HeSigAFields
@@ -78,8 +78,8 @@ struct Ieee80211HeSigAFields
 };
 
 /**
- * Modelled HE-SIG-B parameters for a downlink MU PPDU.
- * Grounded on IEEE 802.11-2024 Clause 27.3.11.13.2 ("HE-SIG-B field").
+ * HE-SIG-B parameters for a downlink MU PPDU.
+ * IEEE 802.11-2024 Clause 27.3.11.13.2 ("HE-SIG-B field").
  * The HE-SIG-B field contains a Common field (RU allocation mapping) and a User Block field (user specific MCS/NSS).
  */
 struct Ieee80211HeSigBFields
@@ -202,7 +202,7 @@ inline bool isHeDcmCombinationSupported(int mcs, int numberOfSpatialStreams)
 
 /**
  * Returns the HE-LTF symbol count based on space-time streams.
- * Grounded on IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
+ * IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
  */
 inline int getHeNumberOfLtfSymbols(int spaceTimeStreams)
 {
@@ -253,7 +253,7 @@ inline int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
 /**
  * Validates and calculates a common-duration HE MU or trigger-based PPDU.
  *
- * Grounded on IEEE 802.11-2024 Clause 27.3.11.13 and Clause 27.3.11.14.
+ * IEEE 802.11-2024 Clause 27.3.11.13 and Clause 27.3.11.14.
  *
  * The returned result contains either a complete set of parameters used by
  * scheduling, transmission, and reception, or a diagnostic error string.
@@ -274,7 +274,7 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
     }
 
     // Group users by RU index to detect and validate MU-MIMO.
-    // Grounded on IEEE 802.11-2024, Clause 27.3.11.13 ("HE MU PPDU").
+    // IEEE 802.11-2024, Clause 27.3.11.13 ("HE MU PPDU").
     // Validates standard spatial stream limits:
     // - Maximum MU-MIMO group size is 8 users.
     // - Maximum spatial streams per user is 4.

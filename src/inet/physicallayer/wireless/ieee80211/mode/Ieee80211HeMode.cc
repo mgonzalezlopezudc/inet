@@ -70,7 +70,7 @@ bps Ieee80211HeModeBase::getGrossBitrate() const
 
 int Ieee80211HeModeBase::getNumberOfDataSubcarriers() const
 {
-    // Grounded on IEEE 802.11-2024 Clause 27.3.2.2 data tone mapping (N_SD) for full bandwidth RUs:
+    // IEEE 802.11-2024 Clause 27.3.2.2 data tone mapping (N_SD) for full bandwidth RUs:
     // - 20 MHz (242-tone RU) has 234 data subcarriers.
     // - 40 MHz (484-tone RU) has 468 data subcarriers.
     // - 80 MHz (996-tone RU) has 980 data subcarriers.
@@ -89,7 +89,7 @@ int Ieee80211HeModeBase::getNumberOfDataSubcarriers() const
 
 int Ieee80211HeModeBase::getNumberOfPilotSubcarriers() const
 {
-    // Grounded on IEEE 802.11-2024 Clause 27.3.2.4 pilot tone mapping (N_SP) for full bandwidth RUs:
+    // IEEE 802.11-2024 Clause 27.3.2.4 pilot tone mapping (N_SP) for full bandwidth RUs:
     // - 20 MHz (242-tone RU) has 8 pilot subcarriers.
     // - 40 MHz (484-tone RU) has 16 pilot subcarriers.
     // - 80 MHz (996-tone RU) has 16 pilot subcarriers.
@@ -153,7 +153,7 @@ Ieee80211HePreambleMode::Ieee80211HePreambleMode(const Ieee80211HeSignalMode *hi
 
 unsigned int Ieee80211HePreambleMode::computeNumberOfHELongTrainings(unsigned int numberOfSpatialStreams) const
 {
-    // Grounded on IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
+    // IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
     if (numberOfSpatialStreams == 1) return 1;
     if (numberOfSpatialStreams == 2) return 2;
     return 4; // Simplified mapping for simulation paths
@@ -161,7 +161,7 @@ unsigned int Ieee80211HePreambleMode::computeNumberOfHELongTrainings(unsigned in
 
 const simtime_t Ieee80211HePreambleMode::getDuration() const
 {
-    // Grounded on IEEE 802.11-2024 Clause 27.3.11 PPDU preamble field lengths:
+    // IEEE 802.11-2024 Clause 27.3.11 PPDU preamble field lengths:
     // - L-STF: 8 µs
     // - L-LTF: 8 µs
     // - L-SIG: 4 µs
