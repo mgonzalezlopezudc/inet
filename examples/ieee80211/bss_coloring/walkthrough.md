@@ -95,27 +95,27 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.sta*"
 
 ```
 BssColoringDisabled-#0.sca:
-scalar  BssColoringNetwork.sta1[0].app[0]  packetReceived:count  171
-scalar  BssColoringNetwork.sta1[1].app[0]  packetReceived:count  171
-scalar  BssColoringNetwork.sta2[0].app[0]  packetReceived:count  2
-scalar  BssColoringNetwork.sta2[1].app[0]  packetReceived:count  1
+scalar  BssColoringNetwork.sta1[0].app[0]  packetReceived:count  4
+scalar  BssColoringNetwork.sta1[1].app[0]  packetReceived:count  3
+scalar  BssColoringNetwork.sta2[0].app[0]  packetReceived:count  166
+scalar  BssColoringNetwork.sta2[1].app[0]  packetReceived:count  178
 
 BssColoringEnabled-#0.sca:
-scalar  BssColoringNetwork.sta1[0].app[0]  packetReceived:count  121
-scalar  BssColoringNetwork.sta1[1].app[0]  packetReceived:count  107
-scalar  BssColoringNetwork.sta2[0].app[0]  packetReceived:count  145
-scalar  BssColoringNetwork.sta2[1].app[0]  packetReceived:count  144
+scalar  BssColoringNetwork.sta1[0].app[0]  packetReceived:count  143
+scalar  BssColoringNetwork.sta1[1].app[0]  packetReceived:count  142
+scalar  BssColoringNetwork.sta2[0].app[0]  packetReceived:count  92
+scalar  BssColoringNetwork.sta2[1].app[0]  packetReceived:count  99
 ```
 
 ### Interpretation of Results
 
 1. **BssColoringDisabled (Baseline)**:
-   - **BSS 1** (STA1[0..1]) receives **342 packets** (171 each).
-   - **BSS 2** (STA2[0..1]) receives **3 packets** (2 and 1).
-   - *Why?* AP1 and AP2 defer to each other because the OBSS signal is received at $-80$ dBm (above the $-85$ dBm sensitivity). Due to standard CSMA/CA backoff and channel access dynamics, BSS 1 dominates the channel and completely starves BSS 2. The aggregate throughput is capped by the single-channel capacity (345 packets total).
+   - **BSS 1** (STA1[0..1]) receives **7 packets** (4 and 3).
+   - **BSS 2** (STA2[0..1]) receives **344 packets** (166 and 178).
+   - *Why?* AP1 and AP2 defer to each other because the OBSS signal is received at $-80$ dBm (above the $-85$ dBm sensitivity). Due to standard CSMA/CA backoff and channel access dynamics, one BSS can dominate the channel while the other is nearly starved. The aggregate throughput is capped by the single-channel capacity (351 packets total in the current run).
 
 2. **BssColoringEnabled (Wi-Fi 6 Spatial Reuse)**:
-   - **BSS 1** (STA1[0..1]) receives **228 packets** (121 and 107).
-   - **BSS 2** (STA2[0..1]) receives **289 packets** (145 and 144).
+   - **BSS 1** (STA1[0..1]) receives **285 packets** (143 and 142).
+   - **BSS 2** (STA2[0..1]) receives **191 packets** (92 and 99).
    - *Why?* With BSS Coloring enabled, both BSSs identify each other's frames as OBSS (Inter-BSS). Since the $-80$ dBm signal power is below the OBSS/PD and energy detection thresholds of $-62$ dBm, they ignore each other and transmit concurrently.
-   - *Conclusion*: Neither BSS is starved, and the aggregate network throughput increases by **50%** (from 345 packets to 517 packets total), showing the clear benefits of 802.11ax BSS Coloring in dense environments.
+   - *Conclusion*: Neither BSS is starved, and the aggregate network throughput increases by about **36%** (from 351 packets to 476 packets total), showing the clear benefits of 802.11ax BSS Coloring in dense environments.

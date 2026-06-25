@@ -234,6 +234,7 @@ EV << ".\n";
 %contains: stdout
 Backlog fitting selected the central 26-tone RU without arbitrary placement.
 Backlog threshold boundaries mapped to 26/52/106/484-tone RUs.
+HeDlSchedulerHoLMinDelay::schedule: scheduling 2 STAs by head-of-line delay
 HoL scheduler sized RUs from the HoL MPDU instead of total backlog.
 Backlog path-loss grouping included 10 dB and excluded values above it.
 Duration alignment accepted only a standards-valid variance reduction.

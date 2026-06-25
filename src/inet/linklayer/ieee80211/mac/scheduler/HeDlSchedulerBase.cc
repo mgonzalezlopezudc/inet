@@ -165,6 +165,11 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         return {};
     if (requestedTones.size() != candidates.size() || payloadBytes.size() != candidates.size())
         throw cRuntimeError("HE scheduler fitting inputs have different sizes");
+    if (context.coding == HE_CODING_BCC) {
+        for (auto& tones : requestedTones)
+            if (tones >= 484)
+                tones = 242;
+    }
     std::vector<int> requestOrder(candidates.size());
     for (size_t i = 0; i < requestOrder.size(); ++i)
         requestOrder[i] = i;
@@ -212,6 +217,8 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
             allocation.ru = rusByCandidate[i];
             allocation.estimatedSnrDb = estimateSnrDb(context, candidates[i], allocation.ru);
             allocation.mcs = selectMcs(allocation.estimatedSnrDb, candidates[i].hasFreshPathLoss);
+            if (context.coding == HE_CODING_BCC)
+                allocation.mcs = std::min(allocation.mcs, 9);
             if (negotiated != nullptr) {
                 int maxMcs = negotiated->intersection.txMcsNss.maxMcsPerNss[0];
                 if (maxMcs < 0)

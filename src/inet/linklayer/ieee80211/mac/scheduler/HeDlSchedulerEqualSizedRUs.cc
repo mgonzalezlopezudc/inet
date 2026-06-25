@@ -46,16 +46,12 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     bool enableDlMuMimo = hcf != nullptr ? hcf->par("enableDlMuMimo").boolValue() : false;
     bool isApBeamformer = mib != nullptr ? (bool)mib->localHeCapabilities.dlMuMimoBeamformer : false;
 
-#ifndef NDEBUG
     EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: " << context.candidates.size()
              << " candidates, schedulingFunction = " << schedulingFunction
              << ", enableDlMuMimo = " << (enableDlMuMimo ? "true" : "false") << "\n";
-#endif
 
     if (enableDlMuMimo && isApBeamformer && mib != nullptr && context.csiManager != nullptr) {
-#ifndef NDEBUG
         EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: attempting DL MU-MIMO group selection\n";
-#endif
         // Collect MU-MIMO eligible candidates who have fresh CSI
         std::vector<CandidateInfo> eligibleCandidates;
         for (const auto& candidate : context.candidates) {
@@ -73,10 +69,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         }
 
         if (eligibleCandidates.size() >= 2) {
-#ifndef NDEBUG
             EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: " << eligibleCandidates.size()
                      << " backlogged candidates are MU-MIMO eligible\n";
-#endif
             // Retrieve stable list of all associated MU-MIMO eligible STAs
             std::vector<MacAddress> allEligibleStas;
             for (const auto& station : mib->bssAccessPointData.stations) {
@@ -116,10 +110,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             }
 
             if (selectedAnchorIdx != -1) {
-#ifndef NDEBUG
                 EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: selected anchor " << anchorAddress
                          << " (index " << selectedAnchorIdx << " in eligible list)\n";
-#endif
                 nextAnchorIndex = (selectedAnchorIdx + 1) % allEligibleStas.size();
 
                 // Order candidate list in stable round-robin sequence starting from anchor
@@ -138,6 +130,11 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                 // Get full channel RU
                 auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, 1);
                 Ieee80211HeRu fullChannelRu = rus[0];
+                if (context.coding == HE_CODING_BCC && fullChannelRu.toneSize >= 484) {
+                    EV_DEBUG << "DL EqualSizedRUs scheduler: skipping MU-MIMO full-channel RU because BCC is not legal for "
+                             << fullChannelRu.toneSize << "-tone RUs\n";
+                    return {};
+                }
                 int maxGroupNsts = std::min(8, context.numApAntennas);
 
                 // Build MU-MIMO group greedily
@@ -221,6 +218,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                         alloc.numberOfSpatialStreams = finalNss[i];
                         alloc.estimatedSnrDb = finalSnirDb[i];
                         alloc.mcs = selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss);
+                        if (context.coding == HE_CODING_BCC)
+                            alloc.mcs = std::min(alloc.mcs, 9);
                         int maxMcs = groupCandidates[i].negotiatedHeCapabilities->intersection.txMcsNss.maxMcsPerNss[finalNss[i] - 1];
                         if (maxMcs >= 0) {
                             alloc.mcs = std::min(alloc.mcs, maxMcs);
@@ -268,6 +267,15 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             }
         }
     }
+    if (context.coding == HE_CODING_BCC) {
+        for (int count : validCounts) {
+            auto layout = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, count);
+            if (!layout.empty() && layout.front().toneSize < 484 && count >= ruCount) {
+                ruCount = count;
+                break;
+            }
+        }
+    }
     int numSelected = std::min(candidates, ruCount);
     ASSERT(numSelected > 0);
     auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, ruCount);
@@ -284,6 +292,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         alloc.ru = rus[i];
         alloc.estimatedSnrDb = estimateSnrDb(context, selectedCandidates[i], alloc.ru);
         alloc.mcs = selectMcs(alloc.estimatedSnrDb, selectedCandidates[i].hasFreshPathLoss);
+        if (context.coding == HE_CODING_BCC)
+            alloc.mcs = std::min(alloc.mcs, 9);
         int maxMcs = -1;
         if (selectedCandidates[i].negotiatedHeCapabilities != nullptr) {
             maxMcs = selectedCandidates[i].negotiatedHeCapabilities->intersection.txMcsNss.maxMcsPerNss[0];

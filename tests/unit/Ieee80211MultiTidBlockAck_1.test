@@ -27,7 +27,7 @@ using namespace inet::ieee80211;
     rec2.startingSequenceNumber = 200;
     req->setRecords(1, rec2);
 
-    req->setChunkLength(b(196));
+    req->setChunkLength(B(18 + 4 * 2));
     
     auto packet = new Packet("multi-tid-bar", req);
     auto bytes = packet->peekDataAsBytes();
@@ -69,7 +69,7 @@ using namespace inet::ieee80211;
     rec2.bitmap = 0x0F0F0F0F0F0F0F0FULL;
     ack->setRecords(1, rec2);
 
-    ack->setChunkLength(b(324));
+    ack->setChunkLength(B(18 + 12 * 2));
     
     auto packet = new Packet("multi-tid-ba", ack);
     auto bytes = packet->peekDataAsBytes();
