@@ -64,19 +64,7 @@ struct Ieee80211HeRu {
  * - 996-tone RU: 980 data subcarriers (980 data + 16 pilot = 996 tones, standard 80 MHz channel)
  * - 1992-tone RU: 1960 data subcarriers (1960 data + 32 pilot = 1992 tones, standard 160 MHz channel)
  */
-inline int getHeRuDataSubcarrierCount(int toneSize)
-{
-    switch (toneSize) {
-        case 26: return 24;
-        case 52: return 48;
-        case 106: return 102;
-        case 242: return 234;
-        case 484: return 468;
-        case 996: return 980;
-        case 1992: return 1960;
-        default: throw std::invalid_argument("Unsupported IEEE 802.11ax RU tone size");
-    }
-}
+int getHeRuDataSubcarrierCount(int toneSize);
 
 /**
  * Returns the pilot-subcarrier count (N_SP) for a standard HE RU tone size.
@@ -85,19 +73,7 @@ inline int getHeRuDataSubcarrierCount(int toneSize)
  * The pilots are used to estimate residual frequency offset and phase noise tracking during
  * reception of the HE payload.
  */
-inline int getHeRuPilotSubcarrierCount(int toneSize)
-{
-    switch (toneSize) {
-        case 26: return 2;
-        case 52: return 4;
-        case 106: return 4;
-        case 242: return 8;
-        case 484: return 16;
-        case 996: return 16;
-        case 1992: return 32;
-        default: throw std::invalid_argument("Unsupported IEEE 802.11ax RU tone size");
-    }
-}
+int getHeRuPilotSubcarrierCount(int toneSize);
 
 /**
  * Returns the total tone size for the given channel bandwidth.

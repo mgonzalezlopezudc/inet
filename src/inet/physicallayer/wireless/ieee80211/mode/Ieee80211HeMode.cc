@@ -21,6 +21,8 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/common/radio/bitlevel/ConvolutionalCode.h"
 
+#define DI DelayedInitializer
+
 namespace inet {
 namespace physicallayer {
 
@@ -831,3 +833,5 @@ const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss8([](){ return n
 
 } // namespace physicallayer
 } // namespace inet
+
+#undef DI

@@ -318,23 +318,100 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
             ru.toneOffset = user.ruToneOffset;
             rus.push_back(ru);
         }
-        auto codecResult = encodeHeSigBRuAllocation(rus, channelBw);
+        auto codecResult = encodeHeSigBCommonField(rus, channelBw);
         if (!codecResult)
             throw cRuntimeError("Cannot serialize HE-SIG-B RU allocation: %s", codecResult.error.c_str());
-        for (uint8_t code : codecResult.allocation.allocationCodes) {
-            stream.writeByte(code);
+        
+        for (const auto& cc : codecResult.commonField.contentChannels) {
+            for (uint8_t code : cc.ruAllocationSubfields) {
+                stream.writeByte(code);
+            }
+        }
+        if (channelBw > Hz(40e6)) {
+            stream.writeBit(codecResult.commonField.contentChannels[0].hasCenterRu);
+            stream.writeBit(codecResult.commonField.contentChannels[1].hasCenterRu);
         }
 
-        // User Specific Field (20 bits per user)
+        std::vector<Ieee80211HeMuUserInfo> cc1Users;
+        std::vector<Ieee80211HeMuUserInfo> cc2Users;
+
+        std::map<int, std::vector<Ieee80211HeMuUserInfo>> usersByRuIndex;
         for (unsigned int i = 0; i < numUsers; ++i) {
             const auto& user = heMuPhyHeader->getUsers(i);
+            usersByRuIndex[user.ruIndex].push_back(user);
+        }
+
+        auto subchannelRUs = getHeRuAllocationCatalog(Hz(0), channelBw);
+        subchannelRUs.erase(std::remove_if(subchannelRUs.begin(), subchannelRUs.end(),
+            [](const Ieee80211HeRu& ru) { return ru.toneSize != 242; }), subchannelRUs.end());
+        std::sort(subchannelRUs.begin(), subchannelRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
+            return a.toneOffset < b.toneOffset;
+        });
+
+        int K = subchannelRUs.size();
+        for (int s = 0; s < K; ++s) {
+            int c = s % 2;
+            auto& ccUsers = (c == 0) ? cc1Users : cc2Users;
+
+            std::vector<Ieee80211HeRu> localRUs;
+            for (const auto& ru : codecResult.commonField.rus) {
+                if (ru.toneSize > 242) {
+                    if (ru.toneOffset <= subchannelRUs[s].toneOffset &&
+                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242) {
+                        localRUs.push_back(ru);
+                    }
+                } else if (ru.toneOffset >= subchannelRUs[s].toneOffset &&
+                           ru.toneOffset + ru.toneSize <= subchannelRUs[s].toneOffset + 242) {
+                    if (std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
+                        return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
+                    }) == localRUs.end()) {
+                        localRUs.push_back(ru);
+                    }
+                }
+            }
+            std::sort(localRUs.begin(), localRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
+                return a.toneOffset < b.toneOffset;
+            });
+
+            for (const auto& ru : localRUs) {
+                const auto& ruUsers = usersByRuIndex[ru.index];
+                if (ru.toneSize > 242) {
+                    int total = ruUsers.size();
+                    int n1 = (total + 1) / 2;
+                    if (c == 0) {
+                        for (int i = 0; i < n1; ++i) ccUsers.push_back(ruUsers[i]);
+                    } else {
+                        for (int i = n1; i < total; ++i) ccUsers.push_back(ruUsers[i]);
+                    }
+                } else {
+                    for (const auto& u : ruUsers) {
+                        ccUsers.push_back(u);
+                    }
+                }
+            }
+        }
+
+        for (const auto& ru : codecResult.commonField.rus) {
+            if (ru.toneSize == 26) {
+                if (ru.toneOffset == 485) {
+                    for (const auto& u : usersByRuIndex[ru.index]) cc1Users.push_back(u);
+                } else if (ru.toneOffset == 1481) {
+                    for (const auto& u : usersByRuIndex[ru.index]) cc2Users.push_back(u);
+                }
+            }
+        }
+
+        auto writeUser = [&](const Ieee80211HeMuUserInfo& user) {
             stream.writeNBitsOfUint64Be(user.staId, 11);
             stream.writeNBitsOfUint64Be(user.mcs, 4);
             stream.writeBit(heMuPhyHeader->getCoding() & 1);
             uint8_t nssField = (user.numberOfSpatialStreams > 0) ? (user.numberOfSpatialStreams - 1) & 0x7 : 0;
             stream.writeNBitsOfUint64Be(nssField, 3);
             stream.writeBit(user.dcm);
-        }
+        };
+
+        for (const auto& u : cc1Users) writeUser(u);
+        for (const auto& u : cc2Users) writeUser(u);
     }
 
     // Runtime-only fields such as triggerId, commonDuration, PSDU length and
@@ -378,24 +455,121 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
 
     // --- 2. HE-SIG-B (only if ppduFormat == 0) ---
     if (ppduFormat == 0) {
-        int numUsers = numUsersField + 1;
-        std::vector<uint8_t> codes;
-        for (int c = 0; c < numUsers; ++c) {
-            codes.push_back(stream.readByte());
-        }
         Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
-        auto decoded = decodeHeSigBRuAllocation(codes, Hz(0), channelBw);
+        int numContentChannels = (channelBw > Hz(20e6)) ? 2 : 1;
+        int N = (channelBw >= Hz(160e6)) ? 4 : (channelBw >= Hz(80e6)) ? 2 : 1;
+
+        Ieee80211HeSigBCommonField commonField;
+        commonField.contentChannels.resize(numContentChannels);
+        for (int c = 0; c < numContentChannels; ++c) {
+            for (int f = 0; f < N; ++f) {
+                commonField.contentChannels[c].ruAllocationSubfields.push_back(stream.readByte());
+            }
+        }
+        if (channelBw > Hz(40e6)) {
+            commonField.contentChannels[0].hasCenterRu = stream.readBit();
+            commonField.contentChannels[1].hasCenterRu = stream.readBit();
+        }
+
+        auto decoded = decodeHeSigBCommonField(commonField, Hz(0), channelBw);
         if (!decoded)
             throw cRuntimeError("Cannot deserialize HE-SIG-B RU allocation: %s", decoded.error.c_str());
-        heMuPhyHeader->setUsersArraySize(numUsers);
-        for (int i = 0; i < numUsers; ++i) {
-            Ieee80211HeMuUserInfo info;
-            if (i < (int)decoded.allocation.rus.size()) {
-                const auto& ru = decoded.allocation.rus[i];
-                info.ruIndex = ru.index;
-                info.ruToneSize = ru.toneSize;
-                info.ruToneOffset = ru.toneOffset;
+
+        std::vector<std::pair<Ieee80211HeRu, int>> cc1Allocations;
+        std::vector<std::pair<Ieee80211HeRu, int>> cc2Allocations;
+
+        auto subchannelRUs = getHeRuAllocationCatalog(Hz(0), channelBw);
+        subchannelRUs.erase(std::remove_if(subchannelRUs.begin(), subchannelRUs.end(),
+            [](const Ieee80211HeRu& ru) { return ru.toneSize != 242; }), subchannelRUs.end());
+        std::sort(subchannelRUs.begin(), subchannelRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
+            return a.toneOffset < b.toneOffset;
+        });
+
+        std::map<int, int> wideRuTotalUsers;
+        for (int s = 0; s < (int)subchannelRUs.size(); ++s) {
+            int c = s % 2;
+            int f = s / 2;
+            uint8_t code = commonField.contentChannels[c].ruAllocationSubfields[f];
+            if (code == 115) continue;
+            std::vector<std::pair<int, int>> decodedRUs;
+            std::vector<int> decodedUserCounts;
+            decodeTable27_27(code, decodedRUs, decodedUserCounts);
+            for (size_t i = 0; i < decodedRUs.size(); ++i) {
+                if (decodedRUs[i].first > 242) {
+                    auto it = std::find_if(decoded.commonField.rus.begin(), decoded.commonField.rus.end(), [&](const Ieee80211HeRu& r) {
+                        return r.toneSize == decodedRUs[i].first && r.toneOffset <= subchannelRUs[s].toneOffset &&
+                               r.toneOffset + r.toneSize >= subchannelRUs[s].toneOffset + 242;
+                    });
+                    if (it != decoded.commonField.rus.end()) {
+                        wideRuTotalUsers[it->index] += decodedUserCounts[i];
+                    }
+                }
             }
+        }
+
+        for (int s = 0; s < (int)subchannelRUs.size(); ++s) {
+            int c = s % 2;
+            auto& ccAllocations = (c == 0) ? cc1Allocations : cc2Allocations;
+
+            std::vector<Ieee80211HeRu> localRUs;
+            for (const auto& ru : decoded.commonField.rus) {
+                if (ru.toneSize > 242) {
+                    if (ru.toneOffset <= subchannelRUs[s].toneOffset &&
+                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242) {
+                        localRUs.push_back(ru);
+                    }
+                } else if (ru.toneOffset >= subchannelRUs[s].toneOffset &&
+                           ru.toneOffset + ru.toneSize <= subchannelRUs[s].toneOffset + 242) {
+                    if (std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
+                        return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
+                    }) == localRUs.end()) {
+                        localRUs.push_back(ru);
+                    }
+                }
+            }
+            std::sort(localRUs.begin(), localRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
+                return a.toneOffset < b.toneOffset;
+            });
+
+            for (const auto& ru : localRUs) {
+                if (ru.toneSize > 242) {
+                    int total = wideRuTotalUsers[ru.index];
+                    int n1 = (total + 1) / 2;
+                    int n2 = total / 2;
+                    int count = (c == 0) ? n1 : n2;
+                    if (count > 0) {
+                        ccAllocations.push_back({ru, count});
+                    }
+                } else {
+                    int count = std::count_if(decoded.commonField.rus.begin(), decoded.commonField.rus.end(), [&](const Ieee80211HeRu& r) {
+                        return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
+                    });
+                    ccAllocations.push_back({ru, count});
+                }
+            }
+        }
+
+        for (const auto& ru : decoded.commonField.rus) {
+            if (ru.toneSize == 26) {
+                if (ru.toneOffset == 485) {
+                    cc1Allocations.push_back({ru, 1});
+                } else if (ru.toneOffset == 1481) {
+                    cc2Allocations.push_back({ru, 1});
+                }
+            }
+        }
+
+        int numUsersCC1 = 0;
+        for (const auto& alloc : cc1Allocations) numUsersCC1 += alloc.second;
+        int numUsersCC2 = 0;
+        for (const auto& alloc : cc2Allocations) numUsersCC2 += alloc.second;
+        int totalUsersToRead = numUsersCC1 + numUsersCC2;
+
+        std::vector<Ieee80211HeMuUserInfo> cc1Users;
+        std::vector<Ieee80211HeMuUserInfo> cc2Users;
+
+        auto readUser = [&]() {
+            Ieee80211HeMuUserInfo info;
             info.staId = stream.readNBitsToUint64Be(11);
             info.mcs = stream.readNBitsToUint64Be(4);
             auto userCoding = stream.readBit();
@@ -403,7 +577,34 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
                 throw cRuntimeError("HE-SIG-B user coding does not match HE-SIG-A coding");
             info.numberOfSpatialStreams = stream.readNBitsToUint64Be(3) + 1;
             info.dcm = stream.readBit();
-            heMuPhyHeader->setUsers(i, info);
+            return info;
+        };
+
+        for (int i = 0; i < numUsersCC1; ++i) cc1Users.push_back(readUser());
+        for (int i = 0; i < numUsersCC2; ++i) cc2Users.push_back(readUser());
+
+        heMuPhyHeader->setUsersArraySize(totalUsersToRead);
+        int userIdx = 0;
+
+        int cc1Idx = 0;
+        for (const auto& alloc : cc1Allocations) {
+            for (int u = 0; u < alloc.second; ++u) {
+                auto info = cc1Users[cc1Idx++];
+                info.ruIndex = alloc.first.index;
+                info.ruToneSize = alloc.first.toneSize;
+                info.ruToneOffset = alloc.first.toneOffset;
+                heMuPhyHeader->setUsers(userIdx++, info);
+            }
+        }
+        int cc2Idx = 0;
+        for (const auto& alloc : cc2Allocations) {
+            for (int u = 0; u < alloc.second; ++u) {
+                auto info = cc2Users[cc2Idx++];
+                info.ruIndex = alloc.first.index;
+                info.ruToneSize = alloc.first.toneSize;
+                info.ruToneOffset = alloc.first.toneOffset;
+                heMuPhyHeader->setUsers(userIdx++, info);
+            }
         }
     }
 

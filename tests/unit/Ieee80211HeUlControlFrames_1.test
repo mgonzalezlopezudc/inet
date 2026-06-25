@@ -34,7 +34,7 @@ using namespace inet::ieee80211;
     randomAccess.ruToneSize = 26;
     randomAccess.ruToneOffset = 108;
     trigger->setUsers(1, randomAccess);
-    trigger->setChunkLength(B(50));
+    trigger->setChunkLength(B(42));
     auto packet = new Packet("trigger", trigger);
     auto bytes = packet->peekDataAsBytes();
     auto received = new Packet("trigger-rx", bytes);

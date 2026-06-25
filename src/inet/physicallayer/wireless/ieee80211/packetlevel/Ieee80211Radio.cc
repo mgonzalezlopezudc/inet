@@ -417,9 +417,17 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 ru.toneOffset = user.ruToneOffset;
                 rus.push_back(ru);
             }
-            auto codecResult = encodeHeSigBRuAllocation(rus, channelBw);
-            uint8_t numCodes = codecResult ? codecResult.allocation.allocationCodes.size() : 0;
-            totalBits += numCodes * 8 + numUsers * 20;
+            auto codecResult = encodeHeSigBCommonField(rus, channelBw);
+            int commonBits = 0;
+            if (codecResult) {
+                for (const auto& cc : codecResult.commonField.contentChannels) {
+                    commonBits += cc.ruAllocationSubfields.size() * 8;
+                }
+                if (channelBw > Hz(40e6)) {
+                    commonBits += 2; // 1 bit per content channel
+                }
+            }
+            totalBits += commonBits + numUsers * 20;
         }
         phyHeader->setChunkLength(b(totalBits));
     }

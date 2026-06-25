@@ -1,0 +1,577 @@
+                                                          IEEE Std 802.11-2024
+                IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                           Part 11: Wireless LAN MAC and PHY Specifications
+
+
+                                                    Table 27-25—Common field
+
+                                               Number of
+                              Number of
+             Subfield                           bits per                                   Description
+                               subfields
+                                                subfield
+
+         RU Allocation              N               8          N RU Allocation subfields are present in an HE-SIG-B content
+                                                               channel, where
+                                                                 N = 1 if the Bandwidth field in the HE-SIG-A field is 0 or 1
+                                                                    (indicating a 20 MHz or 40 MHz HE MU PPDU)
+                                                                 N = 2 if the Bandwidth field in the HE-SIG-A field is 2, 4, or 5
+                                                                    (indicating an 80 MHz HE MU PPDU)
+                                                                 N = 4 if the Bandwidth field in the HE-SIG-A field is 3, 6, or 7
+                                                                    (indicates a 160 MHz or 80+80 MHz HE MU PPDU)
+
+                                                               Each RU Allocation subfield in an HE-SIG-B content channel
+                                                               corresponding to a 20 MHz frequency subchannel indicates the
+                                                               RU assignment, including the size of the RU(s) and their
+                                                               placement in the frequency domain, to be used in the HE
+                                                               modulated fields of the HE MU PPDU in the frequency domain
+                                                               and indicates information needed to compute the number of users
+                                                               allocated to each RU, where the subcarrier indices of the RU(s)
+                                                               meet the conditions in Table 27-26.
+         Center 26-tone          0 or 1             1          The Center 26-tone RU field is present if the Bandwidth field in
+         RU                                                    the HE-SIG-A field indicates a bandwidth greater than 40 MHz
+                                                               and not present otherwise.
+
+                                                               If the Bandwidth field in the HE-SIG-A field is 2, 4, or 5
+                                                               (indicating 80 MHz):
+                                                                   Set to 1 to indicate that a user is allocated to the center 26-tone
+                                                                     RU (see Figure 27-7) and that its User field is present in HE-
+                                                                     SIG-B content channel 1; otherwise, set to 0. The same value
+                                                                     is applied to both HE-SIG-B content channels.
+
+                                                               If the Bandwidth field in the HE-SIG-A field is 3, 6, or 7
+                                                               (indicating 160 MHz or 80+80 MHz):
+                                                                   For HE-SIG-B content channel 1, set to 1 to indicate that a user
+                                                                     is allocated to the center 26-tone RU of the lower frequency
+                                                                     80 MHz; otherwise, set to 0.
+                                                                   For HE-SIG-B content channel 2, set to 1 to indicate that a user
+                                                                     is allocated to the center 26-tone RU of the higher frequency
+                                                                     80 MHz; otherwise, set to 0.
+         CRC                        1               4          The CRC is calculated over bits 0 to N × 8 if the Bandwidth field
+                                                               in the HE-SIG-A field indicates a bandwidth greater than 40 MHz,
+                                                               and bits 0 to N × 8 – 1 otherwise. See 27.3.11.7.3.
+         Tail                       1               6          Used to terminate the trellis of the convolutional decoder. Set to 0.
+
+
+
+       For an RU that is referred to by a first or only RU Allocation subfield in an HE-SIG-B content channel, the
+       RU Allocation subfield encodes the number of User fields per RU contributed to the User Specific field in
+       the same HE-SIG-B content channel as the RU Allocation subfield. This number is labeled Nuser(r, c) for
+       RU r and HE-SIG-B content channel c as described in Table 27-27.
+
+       For an RU that is referred to by two RU Allocation subfields in an HE-SIG-B content channel (i.e., a 996-
+       tone RU in a 160 MHz or 80+80 MHz PPDU), the second RU Allocation subfield in the HE-SIG-B content
+       channel encodes zero additional User fields per RU contributed to the User Specific field in the same HE-
+       SIG-B content channel as the RU Allocation subfield.
+
+
+
+
+                                                                    4232
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+                                                         IEEE Std 802.11-2024
+               IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                          Part 11: Wireless LAN MAC and PHY Specifications
+
+
+       In an HE MU PPDU, an RU that is not allocated to a user can be indicated as follows:
+          — The Center 26-tone RU subfield in the Common field of the HE-SIG-B field is set to 0 (see
+              Table 27-25).
+          — The RU Allocation subfield in the Common field of the HE-SIG-B field is set to a value between 16
+              and 31 or between 96 and 113 (see Table 27-27).
+          — Both RU Allocation subfields at the same position in each Common field of the two HE-SIG-B
+              content channels are set to 114 (see Table 27-27).
+          — The STA-ID subfield in the User field of the HE-SIG-B field is set to 2046 (see 26.11.1 and
+              27.3.11.8.4).
+
+       The subcarriers in the HE modulated fields of a PPDU that correspond to an unallocated RU shall not be
+       modulated.
+
+       If an RU is an unallocated RU, zero users are allocated to it. Otherwise, the number of users allocated to RU
+       r is determined from the RU size and Nuser(r, c) as follows:
+          —      If RU r is a 26-tone or 52-tone RU, then one user is allocated to the RU.
+          —      If RU r is a 106-tone or 242-tone RU, then the number of users allocated to the RU is Nuser(r, c).
+          —      If RU r is a 484-tone or larger RU, then the number of users allocated to the RU equals
+                 the number of User fields for the RU summed across both HE-SIG-B content channels,
+                 i.e., Nuser(r, 1) + Nuser(r, 2).
+
+       NOTE 1—The exact dynamic split of User fields between the two content channels, Nuser(r, 1) and Nuser(r, 2), is not
+       specified and might be used to reduce any disparity in the number of User fields between content channels.
+
+       NOTE 2—If the number of users per RU is greater than one, then the users in the RU are multiplexed using MU-MIMO.
+
+       For a 996-tone RU, for each HE-SIG-B content channel, the first 8-bit RU Allocation subfield referring to
+       the RU may use values in the range 208–215 (11010y2y1y0 in binary representation) as in Table 27-27 with
+       y2y1y0 indicating the number of User fields signaled in the corresponding content channel, while the second
+       8-bit RU Allocation subfield referring to the RU shall be set to 115 (01110011 in binary representation).
+
+       NOTE 3—Although there are two RU Allocation subfields per HE-SIG-B content channel for the users of a 996-tone
+       RU, each user is described by only one User field, which is located in one HE-SIG-B content channel.
+
+       As defined in Table 27-25 and Table 27-26, the Center 26-tone RU field carries the same value in both HE-
+       SIG-B content channels. The User field that corresponds to the center 26-tone RU is carried in HE-SIG-B
+       content channel 1.
+
+
+                         Table 27-26—RUs associated with each RU Allocation subfield for
+                               each HE-SIG-B content channel and PPDU bandwidth
+
+                                                                                            RUs in the subcarrier range, or
+            PPDU                      RU Allocation subfield and
+                                                                                        overlapping with the subcarrier range
+          bandwidth              Center 26-tone RU subfield (if present)
+                                                                                        if the RU is larger than a 242-tone RU
+
+            20 MHz         The RU Allocation subfield in a single HE-SIG-B                              [–122:122]
+                           content channel
+
+            40 MHz         The RU Allocation subfield in HE-SIG-B content                               [–244:–3]
+                           channel 1
+
+                           The RU Allocation subfield in HE-SIG-B content                                 [3:244]
+                           channel 2
+
+
+
+
+                                                                    4233
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+                                                         IEEE Std 802.11-2024
+               IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                          Part 11: Wireless LAN MAC and PHY Specifications
+
+
+                         Table 27-26—RUs associated with each RU Allocation subfield for
+                               each HE-SIG-B content channel and PPDU bandwidth
+
+                                                                                            RUs in the subcarrier range, or
+            PPDU                      RU Allocation subfield and
+                                                                                        overlapping with the subcarrier range
+          bandwidth              Center 26-tone RU subfield (if present)
+                                                                                        if the RU is larger than a 242-tone RU
+
+            80 MHz         The first RU Allocation subfield in HE-SIG-B                                [–500:–259]
+                           content channel 1
+
+                           The first RU Allocation subfield in HE-SIG-B                                 [–258:–17]
+                           content channel 2
+
+                           Center 26-tone RU subfield in HE-SIG-B content                             [–16:–4, 4:16]
+                           channel 1 and 2
+
+                           The second RU Allocation subfield in HE-SIG-B                                 [17:258]
+                           content channel 1
+
+                           The second RU Allocation subfield in HE-SIG-B                                [259:500]
+                           content channel 2
+          160 MHz or       The first RU Allocation subfield in HE-SIG-B                               [–1012:–771]
+          80+80 MHz        content channel 1
+
+                           The first RU Allocation subfield in HE-SIG-B                                [–770:–529]
+                           content channel 2
+
+                           Center 26-tone RU subfield for lower frequency                        [–528:–516, –508:–496]
+                           80 MHz in HE-SIG-B content channel 1
+
+                           The second RU Allocation subfield in HE-SIG-B                               [–495:–254]
+                           content channel 1
+
+                           The second RU Allocation subfield in HE-SIG-B                                [–253:–12]
+                           content channel 2
+
+                           The third RU Allocation subfield in HE-SIG-B                                  [12:253]
+                           content channel 1
+
+                           The third RU Allocation subfield in HE-SIG-B                                 [254:495]
+                           content channel 2
+
+                           Center 26-tone RU subfield for higher frequency                         [496:508, 516:528]
+                           80 MHz in HE-SIG-B content channel 2
+                           The fourth RU Allocation subfield in HE-SIG-B                                [529:770]
+                           content channel 1
+
+                           The fourth RU Allocation subfield in HE-SIG-B                                [771:1012]
+                           content channel 2
+
+
+
+       The mapping from the 8-bit RU Allocation subfield to the RU assignment and the number of User fields per
+       RU contributed to the User Specific field in the same HE-SIG-B content channel as the RU Allocation
+       subfield are defined in Table 27-27.
+
+       If a single RU in a 40 MHz PPDU overlaps the subcarrier ranges [–244:–3] and [3:244], the corresponding
+       RU Allocation subfields in the respective content channels shall both refer to the same RU.
+
+       If a single RU in an 80 MHz PPDU overlaps more than one of the subcarrier ranges [–500:–259], [–258:–
+       17], [17:258] or [259:500], the corresponding RU Allocation subfields in the respective content channels
+       shall all refer to the same RU.
+
+
+
+
+                                                                    4234
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+                                                         IEEE Std 802.11-2024
+               IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                          Part 11: Wireless LAN MAC and PHY Specifications
+
+
+                                              Table 27-27—RU Allocation subfield
+
+            RU Allocation
+               subfield                                                                                                  Number of
+                                    #1        #2         #3        #4      #5       #6        #7         #8        #9
+           (B7 B6 B5 B4 B3                                                                                                entries
+              B2 B1 B0)
+
+         0 (00000000)               26        26         26        26      26       26        26         26        26         1
+
+         1 (00000001)               26        26         26        26      26       26        26              52              1
+
+         2 (00000010)               26        26         26        26      26            52              26        26         1
+
+         3 (00000011)               26        26         26        26      26            52                   52              1
+
+         4 (00000100)               26        26              52           26       26        26         26        26         1
+
+         5 (00000101)               26        26              52           26       26        26              52              1
+
+         6 (00000110)               26        26              52           26            52              26        26         1
+
+         7 (00000111)               26        26              52           26            52                   52              1
+
+         8 (00001000)                    52              26        26      26       26        26         26        26         1
+
+         9 (00001001)                    52              26        26      26       26        26              52              1
+
+         10 (00001010)                   52              26        26      26            52              26        26         1
+
+         11 (00001011)                   52              26        26      26            52                   52              1
+
+         12 (00001100)                   52                   52           26       26        26         26        26         1
+
+         13 (00001101)                   52                   52           26       26        26              52              1
+
+         14 (00001110)                   52                   52           26            52              26        26         1
+
+         15 (00001111)                   52                   52           26            52                   52              1
+
+         16-23                           52                   52           —                       106                        8
+         (00010y2y1y0)
+
+         24-31                                     106                     —             52                   52              8
+         (00011y2y1y0)
+         32-39                      26        26         26        26      26                      106                        8
+         (00100y2y1y0)
+
+         40-47                      26        26              52           26                      106                        8
+         (00101y2y1y0)
+
+         48-55                           52              26        26      26                      106                        8
+         (00110y2y1y0)
+         56-63                           52                   52           26                      106                        8
+         (00111y2y1y0)
+
+         64-71                                     106                     26       26        26         26        26         8
+         (01000y2y1y0)
+
+         72-79                                     106                     26       26        26              52              8
+         (01001y2y1y0)
+
+         80-87                                     106                     26            52              26        26         8
+         (01010y2y1y0)
+         88-95                                     106                     26            52                   52              8
+         (01011y2y1y0)
+
+
+
+
+                                                                        4235
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+                                                         IEEE Std 802.11-2024
+               IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                          Part 11: Wireless LAN MAC and PHY Specifications
+
+
+                                              Table 27-27—RU Allocation subfield
+
+            RU Allocation
+               subfield                                                                                                  Number of
+                                    #1        #2         #3        #4      #5       #6        #7         #8        #9
+           (B7 B6 B5 B4 B3                                                                                                entries
+              B2 B1 B0)
+
+         96-111                                    106                     —                       106                        16
+         (0110y1y0z1z0)
+
+         112 (01110000)                  52                   52           —             52                   52              1
+
+         113 (01110001)                                  242-tone RU empty (with zero users)                                  1
+
+         114 (01110010)             484-tone RU; contributes zero User fields to the User Specific field in the               1
+                                         same HE-SIG-B content channel as this RU Allocation subfield
+
+         115 (01110011)             996-tone RU; contributes zero User fields to the User Specific field in the               1
+                                         same HE-SIG-B content channel as this RU Allocation subfield
+
+         116-119                                                         Reserved                                             4
+         (011101x1x0)
+
+         120-127                                                         Reserved                                             8
+         (01111y2y1y0)
+         128-191                                   106                     26                      106                        64
+         (10y2y1y0z2z1z0)
+
+         192-199                                                           242                                                8
+         (11000y2y1y0)
+
+         200-207                                                           484                                                8
+         (11001y2y1y0)
+         208-215                                                           996                                                8
+         (11010y2y1y0)
+
+         216-223                                                         Reserved                                             8
+         (11011y2y1y0)
+
+         224-255                                                         Reserved                                             32
+         (111x4x3x2x1x0)
+
+
+
+
+                                                                        4236
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+                                                         IEEE Std 802.11-2024
+               IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                          Part 11: Wireless LAN MAC and PHY Specifications
+
+
+                                              Table 27-27—RU Allocation subfield
+
+            RU Allocation
+               subfield                                                                                                  Number of
+                                    #1        #2       #3        #4       #5        #6        #7       #8        #9
+           (B7 B6 B5 B4 B3                                                                                                entries
+              B2 B1 B0)
+
+         If signaling RUs of size greater than 242 subcarriers, y2y1y0 = 000–111 indicates the number of User fields in the
+         HE-SIG-B content channel that contains the corresponding 8-bit RU Allocation subfield. Otherwise, y2y1y0 = 000–
+         111 indicates the number of users multiplexed in the 106-tone RU, 242-tone RU or the lower frequency 106-tone RU
+         if there are two 106-tone RUs and one 26-tone RU is assigned between two 106-tone RUs. The binary vector y2y1y0
+         indicates Nuser(r, c) = 22 × y2 + 21 × y1 + y0 + 1 users multiplexed in the RU.
+
+         z2z1z0 = 000–111 indicates the number of users multiplexed in the higher frequency 106-tone RU if there are two
+         106-tone RUs and one 26-tone RU is assigned between two 106-tone RUs. The binary vector z2z1z0 indicates
+         Nuser(r, c) = 22 × z2 + 21 × z1 + z0 + 1 users multiplexed in the RU.
+
+         Similarly, y1y0 = 00–11 indicates the number of users multiplexed in the lower frequency 106-tone RU. The binary
+         vector y1y0 indicates Nuser(r, c) = 21 × y1 + y0 + 1 users multiplexed in the RU.
+
+         Similarly, z1z0 = 00–11 indicates the number of users multiplexed in the higher frequency 106-tone RU. The binary
+         vector z1z0 indicates Nuser(r, c) = 21 × z1 + z0 + 1 users multiplexed in the RU.
+
+         #1 to #9 (from left to the right) is ordered in increasing order of the absolute frequency.
+
+         x1x0 = 00–11, x4x3x2x1x0 = 00000–11111.
+         ‘-’ means no user in that RU, i.e., Nuser(r, c) = 0.
+
+         For RU r that is a 106-tone or larger RU, Nuser(r, c) is indicated by the letters (such as y2y1y0 or z2z1z0) in the RU
+         allocation subfield above if the letters are present in the RU allocation subfield; otherwise Nuser(r, c) = 0.
+
+         For RU r that is a 26-tone or 52-tone RU, Nuser(r, c) = 1.
+
+
+
+       If a single RU in a 160 MHz or 80+80 MHz PPDU overlaps more than one of the subcarrier ranges [–1012:–
+       771], [–770:–529], [–495:–254], [–253:–12], [12:253], [254:495], [529:770] or [771:1012], the
+       corresponding RU Allocation subfields in the respective content channels shall all refer to the same RU.
+
+       In Table 27-27, the Number of entries column refers to the number of RU Allocation subfield values that
+       refer to the same RU assignment to be used in the frequency domain but differ in the number of User fields
+       per RU. The number of User fields per RU indicated by the RU Allocation subfields and the Center 26-tone
+       RU subfield of an HE-SIG-B content channel indicate the number of User fields in the User Specific field of
+       the HE-SIG-B content channel.
+
+       For an MU-MIMO allocation of RU size greater than 242 subcarriers, the dynamic split of User fields
+       between HE-SIG-B content channel 1 and HE-SIG-B content channel 2 is decided by the AP (on a per case
+       basis) and signaled by the AP using the RU Allocation subfields in each HE-SIG-B content channel. See
+       Annex Z for examples.
+
+       The pre-HE modulated fields (see Figure 27-23) are not transmitted in 20 MHz subchannels in which the
+       preamble is punctured (see 27.3.7).
+
+       If the Bandwidth field in the HE-SIG-A field of an HE MU PPDU is 4, 5, 6 or 7, then one or more 20 MHz
+       subchannels of the preamble are punctured, as defined in Table 27-21. If two adjacent 20 MHz subchannels
+       that constitute a 40 MHz subchannel in which a 484-tone RU is located are punctured, then B7–B0 of the
+       RU Allocation subfields corresponding to the two 20 MHz subchannels shall both be set to 113 (242-tone
+       RU is empty) or shall both be set to 114 (see Table 27-27) to indicate that the preamble is punctured in both
+
+
+
+                                                                      4237
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+                                                          IEEE Std 802.11-2024
+                IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                           Part 11: Wireless LAN MAC and PHY Specifications
+
+
+       the 20 MHz subchannels. Each punctured 20 MHz subchannel that does not have B7–B0 of its
+       corresponding RU Allocation subfield set to 114 shall have B7–B0 of its RU Allocation subfield set to 113.
+
+       The center 26-tone RU in a preamble punctured 80 MHz, 160 MHz, or 80+80 MHz HE MU PPDU shall not
+       be allocated to a user if either of the two 20 MHz subchannels that the center 26-tone RU straddles have the
+       preamble punctured.
+
+       27.3.11.8.4 User Specific field
+
+       The User Specific field of an HE-SIG-B content channel consists of zero or more User Block fields followed
+       by padding (if present) as shown in Figure 27-26. Each non-final User Block field is made up of two User
+       fields that contain information for two STAs that is used to decode their payloads. The final User Block field
+       contains information for one or two users depending on the number of users in the HE-SIG-B content
+       channel. If the HE-SIG-B Compression field in the HE-SIG-A field of an HE MU PPDU is 0, then the
+       number of User fields is indicated by the RU Allocation subfields and the Center 26-tone RU subfield in the
+       same HE-SIG-B content channel. If the HE-SIG-B Compression field in the HE-SIG-A field of an HE MU
+       PPDU is 1, then the number of users is indicated by the Number Of HE-SIG-B Symbols Or MU-MIMO
+       Users field in the HE-SIG-A field.
+
+       If the HE-SIG-B Compression field in the HE-SIG-A field of an HE MU PPDU is 1 (indicating full-
+       bandwidth MU-MIMO transmission) and the Number Of HE-SIG-B Symbols Or MU-MIMO Users field in
+       the HE-SIG-A field of an HE MU PPDU is 0 (indicating 1 user), then the User Specific field in the HE-SIG-
+       B field consists of a single User Block field containing one User field for a non-MU-MIMO allocation as
+       shown in Table 27-29.
+
+       The User Block field is defined in Table 27-28.
+
+
+                                                   Table 27-28—User Block field
+
+                                               Number of
+                              Number of
+                Field                           bits per                                   Description
+                                fields
+                                                 field
+
+         User field           N               21               N User fields are present, where
+                                                                 N = 1 if it is the final User Block field, and if there is only one
+                                                                   user in the final User Block field.
+                                                                 N = 2 otherwise.
+
+                                                               The User field format for a non-MU-MIMO allocation is defined
+                                                               in Table 27-29. The User field format for a MU-MIMO allocation
+                                                               is defined in Table 27-30.
+
+         CRC                  1               4                The CRC is calculated over bits 0 to 20 for a User Block field that
+                                                               contains one User field and bits 0 to 41 for a User Block field that
+                                                               contains two User fields. See 27.3.11.7.3.
+
+         Tail                 1               6                Used to terminate the trellis of the convolutional decoder. Set to 0.
+
+
+
+       If the HE-SIG-B Compression field in the HE-SIG-A field of an HE MU PPDU is 0, then for an MU-MIMO
+       allocation of RU size greater than 242 subcarriers, the AP performs a dynamic split of the User fields
+       between HE-SIG-B content channel 1 and HE-SIG-B content channel 2 as described in 27.3.11.8.3.
+
+       If the HE-SIG-B Compression field in the HE-SIG-A field of an HE MU PPDU is 1, for bandwidths larger
+       than 20 MHz, the AP performs an equitable split of the User fields between two HE-SIG-B content
+
+
+
+
+                                                                    4238
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+                                                         IEEE Std 802.11-2024
+               IEEE Standard for Information Technology—Local and Metropolitan Area Networks—Specific Requirements
+                                          Part 11: Wireless LAN MAC and PHY Specifications
+
+
+       channels, i.e., User field k of a K user MU-MIMO PPDU is carried in HE-SIG-B content channel c, where c
+       is defined in Equation (27-20).
+
+                1, if k ∈ 1, …, K ⁄ 2
+           c =                                                                                                               (27-20)
+                2, if ( k ∈ K ⁄ 2 + 1, …, K )
+
+       Since a single STA is not required to decode the data for more than one user (see 26.5.1.2), the signaling that
+       enables a STA to decode its data is carried in only one User field.
+
+       The ordering of User fields in the User Specific field in an HE-SIG-B content channel is determined using
+       the following three-step procedure:
+          a)     If the HE-SIG-B Compression field in the HE-SIG-A field of an HE MU PPDU is 1, this first step is
+                 bypassed. Otherwise, the User fields in the User Specific field of an HE-SIG-B content channel are
+                 grouped into sets of User fields, where each set comprises the User fields indicated by one RU
+                 Allocation subfield or the Center 26-tone RU. These sets shall be ordered as follows:
+                 1) If the Bandwidth field in the HE-SIG-A field is 0 or 1, then there is only one set; therefore, the
+                       need for ordering in this first step does not arise.
+                 2) If the Bandwidth field in the HE-SIG-A field is 2, 4, or 5, then the set of User fields indicated
+                       by the first RU Allocation subfield is followed by the set of the User fields indicated by the
+                       second RU Allocation subfield; in turn, if the center 26-tone RU is assigned, then its User field
+                       is appended as the last User field to HE-SIG-B content channel 1 only.
+                 3) If the Bandwidth field in the HE-SIG-A field is 3, 6, or 7, then the set of User fields indicated
+                       by the first RU Allocation subfield is followed by the set of the User fields indicated by the
+                       second RU Allocation subfield; in turn these are followed by the set of the User fields indicated
+                       by the third RU Allocation subfield and then by the set of the User fields indicated by the fourth
+                       RU Allocation subfield. If the center 26-tone RU that spans subcarriers [–528:–516, –508:–
+                       496] is assigned, then its User field is appended to HE-SIG-B content channel 1. If the center
+                       26-tone RU that spans subcarriers [496:508, 516:528] is assigned, then its User field is
+                       appended as the last User field to HE-SIG-B content channel 2.
+          b)     If the HE-SIG-B Compression field in the HE-SIG-A field of an HE MU PPDU is 1, then this
+                 second step is bypassed. Otherwise, each subset of User fields indicated by an RU Allocation
+                 subfield shall be ordered by increasing frequency of RU, i.e., #1 to #9 in Table 27-27.
+          c)     Without regard to the value of the HE-SIG-B Compression field, the ordering of User fields in the
+                 same RU shall follow the user ordering in Table 27-31.
+
+       In this way, RU Allocation subfields, Center 26-tone RU fields (if present), and the position of a user’s User
+       field in the User Specific field of an HE-SIG-B content channel indicate the user’s RU assignment.
+
+       If the Bandwidth field in the HE-SIG-A field of an HE MU PPDU (see Table 27-21) is 4 or 5 (preamble is
+       punctured), the content of HE-SIG-B content channels 1 and 2 shall be constructed as described above for an
+       80 MHz PPDU without preamble puncturing.
+
+       If the Bandwidth field in the HE-SIG-A field of an HE MU PPDU is 6 or 7 (preamble is punctured), the
+       content of HE-SIG-B content channels 1 and 2 shall be constructed as described above for an 160 MHz
+       PPDU without preamble puncturing.
+
+       An example for the mapping of the 8-bit RU Allocation subfield and the position of the User field to a user’s
+       data is illustrated in Figure 27-27. The RU Allocation subfield indicates an arrangement of one 106-tone RU
+       followed by five 26-tone RUs and indicates that the 106-tone RU contains three User fields, i.e., the 106-
+       tone RU supports multiplexing of three users using MU-MIMO. The 8 User fields in the User Specific field
+
+
+
+
+                                                                    4239
+                                                  Copyright
+Authorized licensed use limited to: UNIVERSIDADE DE A       © 2025
+                                                      CORUNA.      IEEE. All
+                                                               Downloaded onrights reserved.
+                                                                             June 06,2026 at 09:41:58 UTC from IEEE Xplore. Restrictions apply.
+

@@ -1,0 +1,69 @@
+%description:
+Test HE preamble puncturing pattern validation and parsing.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HePreamblePuncturing.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+%activity:
+
+// 1. Valid 80 MHz patterns
+{
+    std::vector<bool> p1 = {false, true, false, false}; // "0100"
+    EV << "0100 on 80MHz is valid: " << (isValidHePreamblePuncturing(p1, 80) ? "yes" : "no") << "\n";
+
+    std::vector<bool> p2 = {false, false, true, false}; // "0010"
+    EV << "0010 on 80MHz is valid: " << (isValidHePreamblePuncturing(p2, 80) ? "yes" : "no") << "\n";
+
+    std::vector<bool> p3 = {false, false, false, true}; // "0001"
+    EV << "0001 on 80MHz is valid: " << (isValidHePreamblePuncturing(p3, 80) ? "yes" : "no") << "\n";
+}
+
+// 2. Invalid 80 MHz patterns
+{
+    std::vector<bool> p1 = {true, false, false, false}; // "1000" (primary punctured)
+    EV << "1000 on 80MHz is valid: " << (isValidHePreamblePuncturing(p1, 80) ? "yes" : "no") << "\n";
+
+    std::vector<bool> p2 = {false, true, true, false}; // "0110" (multiple punctured in 80 MHz)
+    EV << "0110 on 80MHz is valid: " << (isValidHePreamblePuncturing(p2, 80) ? "yes" : "no") << "\n";
+}
+
+// 3. Valid 160 MHz patterns
+{
+    std::vector<bool> p1 = {false, true, false, false, false, false, false, false}; // "01000000"
+    EV << "01000000 on 160MHz is valid: " << (isValidHePreamblePuncturing(p1, 160) ? "yes" : "no") << "\n";
+}
+
+// 4. Parsing
+{
+    try {
+        auto parsed = parseHePreamblePuncturing("0100", Hz(80e6));
+        EV << "Parsed 0100 successfully: " << parsed.size() << " bits\n";
+    } catch (const std::exception& e) {
+        EV << "Parsed 0100 failed: " << e.what() << "\n";
+    }
+
+    try {
+        auto parsed = parseHePreamblePuncturing("1000", Hz(80e6));
+        EV << "Parsed 1000 succeeded unexpectedly\n";
+    } catch (const std::exception& e) {
+        EV << "Parsed 1000 failed expectedly\n";
+    }
+}
+
+EV << ".\n";
+
+%contains: stdout
+0100 on 80MHz is valid: yes
+0010 on 80MHz is valid: yes
+0001 on 80MHz is valid: yes
+1000 on 80MHz is valid: no
+0110 on 80MHz is valid: no
+01000000 on 160MHz is valid: yes
+Parsed 0100 successfully: 4 bits
+Parsed 1000 failed expectedly
+.
