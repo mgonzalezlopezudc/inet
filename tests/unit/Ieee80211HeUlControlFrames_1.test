@@ -91,15 +91,24 @@ using namespace inet::ieee80211;
     second.tid = 0;
     second.responseReceived = false;
     blockAck->setRecords(1, second);
-    blockAck->setChunkLength(b(376));
+    blockAck->setChunkLength(B(18 + 12 * 2));
     auto packet = new Packet("multi-sta-ba", blockAck);
     auto bytes = packet->peekDataAsBytes();
+    ASSERT(bytes->getChunkLength() == B(42));
+    // IEEE Std 802.11-2024 Figures 9-58..9-60: BA Information starts
+    // immediately after BA Control. There is no record-count octet, and
+    // bitmap bit 0 is carried in the least significant bit of the first
+    // bitmap octet.
+    ASSERT(bytes->getByte(18) == 0x07 && bytes->getByte(19) == 0x50);
+    ASSERT(bytes->getByte(20) == 0xC0 && bytes->getByte(21) == 0x00);
+    ASSERT(bytes->getByte(22) == 0x03 && bytes->getByte(23) == 0x00);
+    ASSERT(bytes->getByte(30) == 0x08 && bytes->getByte(31) == 0x00);
     auto received = new Packet("multi-sta-ba-rx", bytes);
-    auto decoded = received->popAtFront<Ieee80211MultiStaBlockAck>();
+    auto decoded = received->popAtFront<Ieee80211MultiStaBlockAck>(bytes->getChunkLength());
     ASSERT(decoded->getRecordsArraySize() == 2);
     ASSERT(decoded->getRecords(0).bitmap == 3);
     ASSERT(decoded->getRecords(0).responseReceived);
-    ASSERT(!decoded->getRecords(1).responseReceived);
+    ASSERT(decoded->getRecords(1).bitmap == 0);
     delete packet;
     delete received;
     EV << "Multi-STA Block Ack round trip passed.\n";
