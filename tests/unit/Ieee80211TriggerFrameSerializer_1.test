@@ -1,5 +1,5 @@
 %description:
-Test serialization and deserialization of the INET packet-level Trigger-frame model encoding.
+Test serialization and deserialization of IEEE 802.11 Trigger-frame fields modeled by INET.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -13,8 +13,6 @@ using namespace inet::ieee80211;
 %activity:
 {
     // Create Basic Trigger Frame (Trigger Type = 0).
-    // This is an INET model-encoding golden vector, not a complete IEEE
-    // 802.11 Trigger Common/User Info wire-format conformance vector.
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     trigger->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
@@ -75,7 +73,6 @@ using namespace inet::ieee80211;
 
 {
     // Create BSRP Trigger Frame (Trigger Type = 4).
-    // This vector guards the INET serializer's compact model fields.
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setReceiverAddress(MacAddress("02:00:00:00:00:01"));
     trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:02"));
@@ -146,6 +143,88 @@ using namespace inet::ieee80211;
     EV << "BSRP Trigger Frame round-trip verified successfully.\n";
 }
 
+{
+    // Create MU-BAR Trigger Frame (Trigger Type = 2).
+    auto trigger = makeShared<Ieee80211TriggerFrame>();
+    trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:03"));
+    trigger->setTriggerType(2);
+    trigger->setTriggerId(0x10203040);
+    trigger->setDurationField(SimTime(600, SIMTIME_US));
+    trigger->setCommonDuration(SimTime(600, SIMTIME_US));
+    trigger->setGuardInterval(2);
+    trigger->setCoding(0);
+    trigger->setUsersArraySize(2);
+
+    Ieee80211HeTriggerUserInfo user1;
+    user1.aid = 11;
+    user1.ruIndex = 0;
+    user1.ruToneSize = 26;
+    user1.ruToneOffset = 0;
+    user1.mcs = 0;
+    user1.tid = 3;
+    user1.targetRssiDbm = -55;
+    user1.muBarTidInfo = 3;
+    user1.muBarStartingSequenceNumber = 0x123;
+    trigger->setUsers(0, user1);
+
+    Ieee80211HeTriggerUserInfo user2;
+    user2.aid = 12;
+    user2.ruIndex = 1;
+    user2.ruToneSize = 26;
+    user2.ruToneOffset = 6;
+    user2.mcs = 1;
+    user2.targetRssiDbm = -58;
+    user2.muBarMultiTid = true;
+    user2.muBarRecordCount = 2;
+    user2.muBarRecords[0].tid = 1;
+    user2.muBarRecords[0].startingSequenceNumber = 0x456;
+    user2.muBarRecords[1].tid = 7;
+    user2.muBarRecords[1].startingSequenceNumber = 0x789;
+    trigger->setUsers(1, user2);
+
+    trigger->setChunkLength(B(24 + 9 + 15));
+
+    auto pk = new Packet("mu-bar-packet", trigger);
+    auto bytes = pk->peekDataAsBytes();
+
+    std::string hexStr = "";
+    for (int i = 0; i < (int)bytes->getChunkLength().get<B>(); ++i) {
+        char buf[8];
+        sprintf(buf, "%02X", bytes->getByte(i));
+        hexStr += buf;
+    }
+    EV << "MU-BAR Trigger Serialized hex: " << hexStr << "\n";
+    ASSERT(hexStr == "24005802FFFFFFFFFFFF02000000000382252200000000000B00000037043030120C0020003406100010604500709078");
+
+    auto pk2 = new Packet("recv-packet-mu-bar", bytes);
+    auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
+
+    ASSERT(recvTrigger->getTriggerType() == 2);
+    ASSERT(recvTrigger->getTriggerId() == 0);
+    ASSERT(recvTrigger->getDurationField() == SimTime(600, SIMTIME_US));
+    ASSERT(recvTrigger->getCommonDuration() == SimTime(600, SIMTIME_US));
+    ASSERT(recvTrigger->getUsersArraySize() == 2);
+    ASSERT(recvTrigger->getUsers(0).aid == 11);
+    ASSERT(recvTrigger->getUsers(0).tid == 3);
+    ASSERT(!recvTrigger->getUsers(0).muBarMultiTid);
+    ASSERT(recvTrigger->getUsers(0).muBarCompressedBitmap);
+    ASSERT(recvTrigger->getUsers(0).muBarTidInfo == 3);
+    ASSERT(recvTrigger->getUsers(0).muBarStartingSequenceNumber == 0x123);
+    ASSERT(recvTrigger->getUsers(1).aid == 12);
+    ASSERT(recvTrigger->getUsers(1).muBarMultiTid);
+    ASSERT(recvTrigger->getUsers(1).muBarCompressedBitmap);
+    ASSERT(recvTrigger->getUsers(1).muBarRecordCount == 2);
+    ASSERT(recvTrigger->getUsers(1).muBarRecords[0].tid == 1);
+    ASSERT(recvTrigger->getUsers(1).muBarRecords[0].startingSequenceNumber == 0x456);
+    ASSERT(recvTrigger->getUsers(1).muBarRecords[1].tid == 7);
+    ASSERT(recvTrigger->getUsers(1).muBarRecords[1].startingSequenceNumber == 0x789);
+
+    delete pk;
+    delete pk2;
+    EV << "MU-BAR Trigger Frame round-trip verified successfully.\n";
+}
+
 EV << ".\n";
 
 %contains: stdout
@@ -153,4 +232,6 @@ Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000003222080000000007
 Basic Trigger Frame round-trip verified successfully.
 BSRP Trigger Serialized hex: 2400900102000000000102000000000204191200000000006400E00032C800C0002D
 BSRP Trigger Frame round-trip verified successfully.
+MU-BAR Trigger Serialized hex: 24005802FFFFFFFFFFFF02000000000382252200000000000B00000037043030120C0020003406100010604500709078
+MU-BAR Trigger Frame round-trip verified successfully.
 .
