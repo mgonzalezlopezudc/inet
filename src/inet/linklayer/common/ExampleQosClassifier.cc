@@ -103,6 +103,8 @@ int ExampleQosClassifier::getUserPriority(cMessage *msg)
             return UP_VI;
         if (destPort == 5000 || srcPort == 5000)
             return UP_VO;
+        if (destPort == 5001 || srcPort == 5001)
+            return UP_NC;
         if (destPort == 6000 || srcPort == 6000) // not classified
             return -1;
     }
@@ -121,6 +123,8 @@ int ExampleQosClassifier::getUserPriority(cMessage *msg)
             return UP_VI;
         if (destPort == 5000 || srcPort == 5000)
             return UP_VO;
+        if (destPort == 5001 || srcPort == 5001)
+            return UP_NC;
         if (destPort == 6000 || srcPort == 6000) // not classified
             return -1;
     }
@@ -150,4 +154,3 @@ void ExampleQosClassifier::handleRegisterProtocol(const Protocol& protocol, cGat
 }
 
 } // namespace inet
-

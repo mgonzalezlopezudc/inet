@@ -33,16 +33,12 @@ HeDlSchedulerHoLMinDelay::schedule(const ScheduleContext& context)
     int limit = maxMuStations < 0 ? physicallayer::getHeMaxRuCount(context.channelBandwidth) :
             std::min(maxMuStations, physicallayer::getHeMaxRuCount(context.channelBandwidth));
     if ((int)selected.size() > limit) {
-#ifndef NDEBUG
         EV_DEBUG << "HeDlSchedulerHoLMinDelay::schedule: truncating candidate list from "
                  << selected.size() << " to " << limit << "\n";
-#endif
         selected.resize(limit);
     }
-#ifndef NDEBUG
     EV_INFO << "HeDlSchedulerHoLMinDelay::schedule: scheduling " << selected.size()
             << " STAs by head-of-line delay\n";
-#endif
     std::vector<int> requests;
     std::vector<int64_t> payloadBytes;
     for (const auto& candidate : selected)

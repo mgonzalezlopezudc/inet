@@ -5,10 +5,6 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerBase.h"
-
-#include <algorithm>
-#include <cmath>
-
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
 namespace inet {

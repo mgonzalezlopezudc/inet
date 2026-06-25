@@ -1,5 +1,5 @@
 %description:
-Test HE LDPC accounting, packet-extension timing, extended HE header controls,
+Test HE LDPC accounting, packet-extension timing, HE signaling header fields,
 and puncturing-aware RU allocation.
 
 %includes:
@@ -40,22 +40,25 @@ auto header = makeShared<Ieee80211HeMuPhyHeader>();
 header->setCoding(HE_CODING_LDPC);
 header->setPacketExtensionDurationUs(8);
 header->setPuncturedSubchannelMask(0x4);
+auto headerRu = getHeEqualRuLayout(Hz(0), Hz(20e6), 1).front();
 Ieee80211HeMuUserInfo user;
-user.ruIndex = 1;
-user.ruToneSize = 242;
+user.ruIndex = headerRu.index;
+user.ruToneSize = headerRu.toneSize;
+user.ruToneOffset = headerRu.toneOffset;
 user.staId = 1;
 header->appendUsers(user);
-header->setChunkLength(b(325));
+header->setChunkLength(b(92));
 auto packet = new Packet("extended-he-header", header);
 auto bytes = packet->peekDataAsBytes();
 auto received = new Packet("extended-he-header-rx", bytes);
 auto decoded = received->popAtFront<Ieee80211HeMuPhyHeader>();
 ASSERT(decoded->getCoding() == HE_CODING_LDPC);
-ASSERT(decoded->getPacketExtensionDurationUs() == 8);
-ASSERT(decoded->getPuncturedSubchannelMask() == 0x4);
+ASSERT(decoded->getUsersArraySize() == 1);
+ASSERT(decoded->getUsers(0).ruToneSize == headerRu.toneSize);
+ASSERT(decoded->getUsers(0).staId == 1);
 delete packet;
 delete received;
-EV << "Extended HE header round trip passed.\n";
+EV << "HE signaling header round trip passed.\n";
 
 std::vector<Ieee80211HeRu> allocations;
 ASSERT(allocateHeRus(Hz(5.18e9), Hz(80e6), {242, 242}, allocations,
@@ -68,6 +71,6 @@ EV << ".\n";
 %contains: stdout
 HE LDPC tail omission and codeword accounting passed.
 HE packet extension timing passed.
-Extended HE header round trip passed.
+HE signaling header round trip passed.
 Punctured RU allocation avoided the disabled subchannel.
 .

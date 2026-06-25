@@ -49,13 +49,11 @@ HeDlSchedulerBacklogBased::schedule(const ScheduleContext& context)
             rejectedByPathLoss++;
         }
     }
-#ifndef NDEBUG
     EV_DEBUG << "HeDlSchedulerBacklogBased::schedule: anchor = " << anchor.staAddress
              << ", pathLoss = " << (anchor.hasFreshPathLoss ? std::to_string(anchor.pathLossDb) : "N/A")
              << ", deltaPlMax = " << deltaPlMax
              << ", kept = " << selected.size() << ", rejected by path-loss spread = "
              << rejectedByPathLoss << "\n";
-#endif
     std::sort(selected.begin() + 1, selected.end(), [&] (const CandidateInfo& a, const CandidateInfo& b) {
         if (anchor.hasFreshPathLoss && a.hasFreshPathLoss && b.hasFreshPathLoss) {
             double aDelta = std::abs(a.pathLossDb - anchor.pathLossDb);
@@ -72,10 +70,8 @@ HeDlSchedulerBacklogBased::schedule(const ScheduleContext& context)
     int limit = maxMuStations < 0 ? physicallayer::getHeMaxRuCount(context.channelBandwidth) :
             std::min(maxMuStations, physicallayer::getHeMaxRuCount(context.channelBandwidth));
     if ((int)selected.size() > limit) {
-#ifndef NDEBUG
         EV_DEBUG << "HeDlSchedulerBacklogBased::schedule: truncating candidate list from "
                  << selected.size() << " to " << limit << "\n";
-#endif
         selected.resize(limit);
     }
     std::vector<int> requests;
