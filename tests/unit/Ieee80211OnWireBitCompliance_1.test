@@ -32,6 +32,38 @@ using namespace inet::physicallayer;
     ASSERT(bytes->getByte(22) == 0x32 && bytes->getByte(23) == 0x12); // Sequence Control: fragment 2, sequence 0x123
     delete packet;
     EV << "Data MAC Sequence Control is byte-exact.\n";
+
+    {
+        auto qosHeader = makeShared<Ieee80211DataHeader>();
+        qosHeader->setType(ST_DATA_WITH_QOS);
+        qosHeader->setOrder(true);
+        qosHeader->setDurationField(SimTime(0x1234, SIMTIME_US));
+        qosHeader->setReceiverAddress(MacAddress("10:20:30:40:50:60"));
+        qosHeader->setTransmitterAddress(MacAddress("11:22:33:44:55:66"));
+        qosHeader->setAddress3(MacAddress("aa:bb:cc:dd:ee:ff"));
+        qosHeader->setFragmentNumber(2);
+        qosHeader->setSequenceNumber(SequenceNumberCyclic(0x123));
+        qosHeader->setTid(6);
+        qosHeader->setAckPolicy(BLOCK_ACK);
+        qosHeader->setAMsduPresent(true);
+        qosHeader->setBufferStatusPresent(true);
+        qosHeader->setBufferStatusTid(5);
+        qosHeader->setBufferStatusAc(3);
+        qosHeader->setBufferStatusQueueSize(0x12345);
+        qosHeader->setChunkLength(B(30));
+
+        auto qosPacket = new Packet("qos-data", qosHeader);
+        auto qosBytes = qosPacket->peekDataAsBytes();
+        ASSERT(qosBytes->getChunkLength() == B(30));
+        ASSERT(qosBytes->getByte(0) == 0x88); // Frame Control: QoS data subtype, data type, version 0
+        ASSERT(qosBytes->getByte(1) == 0x80); // Frame Control flags: Order bit
+        ASSERT(qosBytes->getByte(2) == 0x34 && qosBytes->getByte(3) == 0x12); // Duration/ID, little endian
+        ASSERT(qosBytes->getByte(22) == 0x32 && qosBytes->getByte(23) == 0x12); // Sequence Control: fragment 2, sequence 0x123
+        ASSERT(qosBytes->getByte(24) == 0xF6 && qosBytes->getByte(25) == 0x00); // QoS Control: TID 6, EOSP, Block Ack, A-MSDU
+        ASSERT(qosBytes->getByte(26) == 0x53 && qosBytes->getByte(27) == 0x17 && qosBytes->getByte(28) == 0x8D && qosBytes->getByte(29) == 0x04); // HE BSR HT Control
+        delete qosPacket;
+    }
+    EV << "QoS data MAC bitfields are byte-exact.\n";
 }
 
 {
@@ -74,6 +106,7 @@ EV << ".\n";
 
 %contains: stdout
 Data MAC Sequence Control is byte-exact.
+QoS data MAC bitfields are byte-exact.
 DSSS PHY header is byte-exact.
 OFDM PHY SIGNAL and SERVICE fields are byte-exact.
 .

@@ -46,7 +46,7 @@ using namespace inet::ieee80211;
         hexStr += buf;
     }
     EV << "Basic Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24002003FFFFFFFFFFFF10000000000003204810000000000076A9805014");
+    ASSERT(hexStr == "24002003FFFFFFFFFFFF100000000000003222080000000007A076002814");
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet", bytes);
@@ -114,7 +114,7 @@ using namespace inet::ieee80211;
         hexStr += buf;
     }
     EV << "BSRP Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24009001020000000001020000000002419044000000000006400380640C8003005A");
+    ASSERT(hexStr == "2400900102000000000102000000000204191200000000006400E00032C800C0002D");
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet-bsrp", bytes);
@@ -146,8 +146,8 @@ using namespace inet::ieee80211;
 EV << ".\n";
 
 %contains: stdout
-Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF10000000000003204810000000000076A9805014
+Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000003222080000000007A076002814
 Basic Trigger Frame round-trip verified successfully.
-BSRP Trigger Serialized hex: 24009001020000000001020000000002419044000000000006400380640C8003005A
+BSRP Trigger Serialized hex: 2400900102000000000102000000000204191200000000006400E00032C800C0002D
 BSRP Trigger Frame round-trip verified successfully.
 .
