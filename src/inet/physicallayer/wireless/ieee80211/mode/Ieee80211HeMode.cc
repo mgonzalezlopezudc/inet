@@ -40,8 +40,9 @@ const simtime_t Ieee80211HeMode::getSlotTime() const
 
 const simtime_t Ieee80211HeMode::getSifsTime() const
 {
-    // HE SIFS is 16 µs in 5 GHz / 10 µs in 2.4 GHz (Table 27-61 "HE PHY characteristics")
-    return 16E-6;
+    // IEEE 802.11-2024 Table 27-61 "HE PHY characteristics":
+    //   aSIFSTime = 16 µs for 5 GHz; aSIFSTime = 10 µs for 2.4 GHz.
+    return centerFrequencyMode == BAND_2_4GHZ ? 10E-6 : 16E-6;
 }
 
 Ieee80211HeModeBase::Ieee80211HeModeBase(unsigned int modulationAndCodingScheme, unsigned int numberOfSpatialStreams, const Hz bandwidth, GuardIntervalType guardIntervalType) :

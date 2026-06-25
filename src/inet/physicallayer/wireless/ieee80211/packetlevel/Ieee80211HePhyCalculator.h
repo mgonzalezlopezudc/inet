@@ -200,6 +200,48 @@ inline bool isHeDcmCombinationSupported(int mcs, int numberOfSpatialStreams)
 }
 
 /**
+ * Returns false for <MCS, Nss> combinations that are marked N/A in the
+ * IEEE 802.11-2024 HE rate tables (Tables 27-62 through 27-117).
+ *
+ * Three classes of N/A entries exist across all RU sizes:
+ *
+ * 1. MCS 6, Nss in {3, 6}: The resulting coded bits per symbol is not an
+ *    integer multiple of the code-rate denominator for any BW.  These are
+ *    marked N/A throughout Tables 27-62..27-117.
+ *    (IEEE 802.11-2024 Clause 27.5, Tables 27-62..27-117)
+ *
+ * 2. MCS 9, Nss in {3, 6} at 20 MHz (242-tone full-BW RU only): the data
+ *    rate formula yields a non-integer number of data bits per symbol.
+ *    For wider channels the same Nss values are valid.
+ *    (IEEE 802.11-2024 Clause 27.5, Tables 27-74..27-81 onward)
+ *
+ * 3. MCS 10 and MCS 11 (1024-QAM) require a minimum of 106 data subcarriers
+ *    to achieve the smallest standardized data rate. 26-tone (12 data
+ *    subcarriers) and 52-tone (24 data subcarriers) RUs produce a zero or
+ *    non-standard number of data bits per symbol and are not listed in
+ *    Tables 27-62..27-69 (26-tone) or Tables 27-70..27-77 (52-tone).
+ *    (IEEE 802.11-2024 Clause 27.5)
+ *
+ * The ruToneSize argument is the number of tones of the RU to be used;
+ * pass 0 or a negative value to skip the tone-size check (e.g., when
+ * validating a (MCS, Nss) pair independent of RU geometry).
+ */
+inline bool isHeValidMcsNssCombination(int mcs, int nss, int ruToneSize = 0)
+{
+    // MCS 6, Nss=3 or Nss=6: N/A for all RU sizes and bandwidths.
+    if (mcs == 6 && (nss == 3 || nss == 6))
+        return false;
+    // MCS 9, Nss=3 or Nss=6: N/A for 20 MHz (242-tone full-BW) and smaller RUs.
+    if (mcs == 9 && (nss == 3 || nss == 6) && ruToneSize > 0 && ruToneSize <= 242)
+        return false;
+    // MCS 10/11: require at least 106 data subcarriers; 26-tone and 52-tone RUs
+    // are not listed in the standard's rate tables.
+    if ((mcs == 10 || mcs == 11) && ruToneSize > 0 && ruToneSize < 106)
+        return false;
+    return true;
+}
+
+/**
  * Returns the HE-LTF symbol count based on space-time streams.
  * IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
  */
@@ -238,15 +280,28 @@ inline int getHeSigBContentChannelCount(Hz channelBandwidth)
 
 inline int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
 {
+    // IEEE 802.11-2024 Clause 27.3.11.13.2 ("HE-SIG-B field"):
+    // HE-SIG-B is encoded with BPSK and code rate 1/2. Each content channel
+    // uses 52 OFDM subcarriers for data: 52 coded bits × 1/2 = 26 information
+    // bits per symbol.
+    constexpr int HE_SIG_B_DATA_BITS_PER_SYMBOL = 26;
+    // IEEE 802.11-2024 Table 27-26 ("Contents of the User Specific field"):
+    // each User Specific subfield is 21 bits wide.
+    constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
+    // Each content channel also carries a 10-bit tail/pad in both the Common
+    // field and the User field (6 tail bits + 4 pad bits, Clause 27.3.11.13.2).
+    constexpr int HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL = 10;
+
     int widthMhz = std::lround(channelBandwidth.get() / 1e6);
     int contentChannels = getHeSigBContentChannelCount(channelBandwidth);
     int twentyMhzChannels = widthMhz / 20;
-    int commonBitsPerContentChannel = 8 * ((twentyMhzChannels + contentChannels - 1) / contentChannels) + 10;
+    int commonBitsPerContentChannel = 8 * ((twentyMhzChannels + contentChannels - 1) / contentChannels)
+            + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL;
     int usersPerContentChannel = (numberOfUsers + contentChannels - 1) / contentChannels;
-    int userBitsPerContentChannel = usersPerContentChannel * 21 + 10;
-    constexpr int heSigBDataBitsPerSymbol = 26; // BPSK, rate 1/2
-    return std::max(1, (commonBitsPerContentChannel + userBitsPerContentChannel +
-            heSigBDataBitsPerSymbol - 1) / heSigBDataBitsPerSymbol);
+    int userBitsPerContentChannel = usersPerContentChannel * HE_SIG_B_USER_FIELD_BITS_PER_USER
+            + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL;
+    return std::max(1, (commonBitsPerContentChannel + userBitsPerContentChannel
+            + HE_SIG_B_DATA_BITS_PER_SYMBOL - 1) / HE_SIG_B_DATA_BITS_PER_SYMBOL);
 }
 
 /**
@@ -353,10 +408,13 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
     parameters.common.sigA.uplink = ppduFormat == HE_TRIGGER_BASED_UPLINK;
     parameters.common.sigB.numberOfSymbols = ppduFormat == HE_MU_DOWNLINK ?
             getHeSigBSymbolCount(channelBandwidth, requestedUsers.size()) : 0;
+    // See getHeSigBSymbolCount() for the origin of these constants.
+    constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
+    constexpr int HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL = 10;
     parameters.common.sigB.commonFieldBits = ppduFormat == HE_MU_DOWNLINK ?
-            8 * std::lround(channelBandwidth.get() / 20e6) + 10 : 0;
+            8 * std::lround(channelBandwidth.get() / 20e6) + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL : 0;
     parameters.common.sigB.userFieldBits = ppduFormat == HE_MU_DOWNLINK ?
-            21 * requestedUsers.size() + 10 : 0;
+            HE_SIG_B_USER_FIELD_BITS_PER_USER * (int)requestedUsers.size() + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL : 0;
     parameters.common.heSigBDuration =
             parameters.common.sigB.numberOfSymbols * SimTime(4, SIMTIME_US);
 
@@ -413,6 +471,14 @@ inline Ieee80211HePhyValidationResult computeHePpduParameters(
         }
         if (user.dcm && !isHeDcmCombinationSupported(user.mcs, user.numberOfSpatialStreams)) {
             result.error = "unsupported HE DCM combination";
+            return result;
+        }
+        // IEEE 802.11-2024 Tables 27-62..27-117: reject N/A (MCS, Nss, RU) triples.
+        if (!isHeValidMcsNssCombination(user.mcs, user.numberOfSpatialStreams, user.ru.toneSize)) {
+            result.error = std::string("HE MCS ") + std::to_string(user.mcs)
+                    + ", Nss=" + std::to_string(user.numberOfSpatialStreams)
+                    + ", RU=" + std::to_string(user.ru.toneSize)
+                    + "-tone is N/A per IEEE 802.11-2024 Tables 27-62..27-117";
             return result;
         }
         int dataSubcarriers = user.ru.dataSubcarriers > 0 ? user.ru.dataSubcarriers :

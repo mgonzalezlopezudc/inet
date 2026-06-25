@@ -1,0 +1,152 @@
+%description:
+Test HE implementation fixes:
+  (1) SIFS is 10 us for 2.4 GHz and 16 us for 5 GHz (IEEE 802.11-2024 Table 27-61)
+  (2) HE-SIG-B symbol count is unchanged after magic-number-to-named-constant refactor
+  (3) Invalid (MCS, Nss, RU) combinations are rejected by computeHePpduParameters()
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+static Ieee80211HeUserPhyParameters makeUser(int mcs, int nss, int toneSize, Ieee80211HeCoding coding = HE_CODING_LDPC)
+{
+    Ieee80211HeUserPhyParameters u;
+    u.mcs = mcs;
+    u.numberOfSpatialStreams = nss;
+    u.ru.toneSize = toneSize;
+    u.ru.dataSubcarriers = 0;
+    u.coding = coding;
+    u.psduLength = B(100);
+    return u;
+}
+
+%activity:
+
+// -----------------------------------------------------------------------
+// Fix 1: SIFS is band-aware
+// -----------------------------------------------------------------------
+{
+    // 5 GHz: getSifsTime() must return 16 us.
+    const Ieee80211Hemcs *mcs5 = Ieee80211HemcsTable::heMcs0BW20MHzNss1.get();
+    auto *sig5 = new Ieee80211HeSignalMode(0,
+        &Ieee80211OfdmCompliantModulations::subcarrierModulation13,
+        &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2,
+        MHz(20), Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+    auto *pre5 = new Ieee80211HePreambleMode(sig5, nullptr,
+        Ieee80211HePreambleMode::HE_PREAMBLE_SU, 1);
+    Ieee80211HeMode he5("test-5ghz", pre5, new Ieee80211HeDataMode(mcs5), Ieee80211HeMode::BAND_5GHZ);
+    EV << "5 GHz SIFS: " << he5.getSifsTime() * 1e6 << " us\n";
+    ASSERT(std::abs(he5.getSifsTime().dbl() - 16e-6) < 1e-9);
+
+    // 2.4 GHz: getSifsTime() must return 10 us.
+    const Ieee80211Hemcs *mcs24 = Ieee80211HemcsTable::heMcs0BW20MHzNss1.get();
+    auto *sig24 = new Ieee80211HeSignalMode(0,
+        &Ieee80211OfdmCompliantModulations::subcarrierModulation13,
+        &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2,
+        MHz(20), Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+    auto *pre24 = new Ieee80211HePreambleMode(sig24, nullptr,
+        Ieee80211HePreambleMode::HE_PREAMBLE_SU, 1);
+    Ieee80211HeMode he24("test-2.4ghz", pre24, new Ieee80211HeDataMode(mcs24), Ieee80211HeMode::BAND_2_4GHZ);
+    EV << "2.4 GHz SIFS: " << he24.getSifsTime() * 1e6 << " us\n";
+    ASSERT(std::abs(he24.getSifsTime().dbl() - 10e-6) < 1e-9);
+}
+
+// -----------------------------------------------------------------------
+// Fix 2: HE-SIG-B symbol count correctness
+// -----------------------------------------------------------------------
+{
+    // 1 user, 20 MHz: commonBits=8+10=18, userBits=21+10=31, total=49 => ceil(49/26)=2
+    int s1 = getHeSigBSymbolCount(MHz(20), 1);
+    EV << "SIG-B symbols (1 user, 20 MHz): " << s1 << "\n";
+    ASSERT(s1 == 2);
+
+    // 3 users, 40 MHz: contentChannels=2, common=18, usersPerCC=2, user=52, total=70 => ceil(70/26)=3
+    int s2 = getHeSigBSymbolCount(MHz(40), 3);
+    EV << "SIG-B symbols (3 users, 40 MHz): " << s2 << "\n";
+    ASSERT(s2 == 3);
+
+    // 8 users, 80 MHz: common=26, usersPerCC=4, user=94, total=120 => ceil(120/26)=5
+    int s3 = getHeSigBSymbolCount(MHz(80), 8);
+    EV << "SIG-B symbols (8 users, 80 MHz): " << s3 << "\n";
+    ASSERT(s3 == 5);
+}
+
+// -----------------------------------------------------------------------
+// Fix 3: Invalid (MCS, Nss, RU) combinations must be rejected
+// -----------------------------------------------------------------------
+{
+    auto tryUser = [](Ieee80211HeUserPhyParameters u) -> std::string {
+        auto result = computeHePpduParameters(
+            HE_MU_DOWNLINK, MHz(80), HE_GI_3_2_US, HE_LTF_4X, 0, {u});
+        return result ? std::string("") : result.error;
+    };
+
+    // Should be REJECTED
+    std::string e;
+
+    e = tryUser(makeUser(6, 3, 106));
+    EV << "MCS6 Nss3 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
+
+    e = tryUser(makeUser(6, 6, 106));
+    EV << "MCS6 Nss6 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
+
+    e = tryUser(makeUser(9, 3, 242));
+    EV << "MCS9 Nss3 242-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
+
+    e = tryUser(makeUser(9, 6, 106));
+    EV << "MCS9 Nss6 106-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
+
+    e = tryUser(makeUser(10, 1, 52));
+    EV << "MCS10 Nss1 52-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
+
+    e = tryUser(makeUser(11, 1, 26));
+    EV << "MCS11 Nss1 26-tone: " << (e.empty() ? "accepted (WRONG)" : "rejected") << "\n";
+    ASSERT(!e.empty());
+
+    // Should be ACCEPTED
+    e = tryUser(makeUser(6, 1, 106));
+    EV << "MCS6 Nss1 106-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
+
+    e = tryUser(makeUser(9, 3, 484));
+    EV << "MCS9 Nss3 484-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
+
+    e = tryUser(makeUser(10, 1, 106));
+    EV << "MCS10 Nss1 106-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
+
+    e = tryUser(makeUser(11, 1, 242));
+    EV << "MCS11 Nss1 242-tone: " << (e.empty() ? "accepted" : "rejected (WRONG)") << "\n";
+    ASSERT(e.empty());
+}
+
+EV << ".\n";
+
+%contains: stdout
+5 GHz SIFS: 16 us
+2.4 GHz SIFS: 10 us
+SIG-B symbols (1 user, 20 MHz): 2
+SIG-B symbols (3 users, 40 MHz): 3
+SIG-B symbols (8 users, 80 MHz): 5
+MCS6 Nss3 106-tone: rejected
+MCS6 Nss6 106-tone: rejected
+MCS9 Nss3 242-tone: rejected
+MCS9 Nss6 106-tone: rejected
+MCS10 Nss1 52-tone: rejected
+MCS11 Nss1 26-tone: rejected
+MCS6 Nss1 106-tone: accepted
+MCS9 Nss3 484-tone: accepted
+MCS10 Nss1 106-tone: accepted
+MCS11 Nss1 242-tone: accepted
+.
