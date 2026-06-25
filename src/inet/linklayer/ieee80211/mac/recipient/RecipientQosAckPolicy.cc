@@ -26,7 +26,7 @@ simtime_t RecipientQosAckPolicy::computeBasicBlockAckDuration(Packet *packet, co
 {
     b length = LENGTH_BASIC_BLOCKACK;
     if (auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
-        length = B(18 + multiTidReq->getRecordsArraySize() * 11);
+        length = B(18 + multiTidReq->getRecordsArraySize() * 12);
     }
     return rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getDuration(length);
 }
@@ -103,4 +103,3 @@ simtime_t RecipientQosAckPolicy::computeBasicBlockAckDurationField(Packet *packe
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

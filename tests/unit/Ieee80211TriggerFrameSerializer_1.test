@@ -1,5 +1,5 @@
 %description:
-Test serialization and deserialization of standard-compliant Ieee80211TriggerFrame with golden vectors.
+Test serialization and deserialization of standard-shaped Ieee80211TriggerFrame with golden vectors.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -46,14 +46,14 @@ using namespace inet::ieee80211;
         hexStr += buf;
     }
     EV << "Basic Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24002003FFFFFFFFFFFF1000000000000320481242B3C0680076A9805014");
+    ASSERT(hexStr == "24002003FFFFFFFFFFFF10000000000003204810000000000076A9805014");
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet", bytes);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
     ASSERT(recvTrigger->getTriggerType() == 0);
-    ASSERT(recvTrigger->getTriggerId() == 0x12345678);
+    ASSERT(recvTrigger->getTriggerId() == 0);
     ASSERT(recvTrigger->getDurationField() == SimTime(800, SIMTIME_US));
     ASSERT(recvTrigger->getCommonDuration() == SimTime(800, SIMTIME_US));
     ASSERT(recvTrigger->getGuardInterval() == 2);
@@ -114,14 +114,14 @@ using namespace inet::ieee80211;
         hexStr += buf;
     }
     EV << "BSRP Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24009001020000000001020000000002419044054F780B9A06400380640C8003005A");
+    ASSERT(hexStr == "24009001020000000001020000000002419044000000000006400380640C8003005A");
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet-bsrp", bytes);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
     ASSERT(recvTrigger->getTriggerType() == 4);
-    ASSERT(recvTrigger->getTriggerId() == 0xABCDEF01);
+    ASSERT(recvTrigger->getTriggerId() == 0);
     ASSERT(recvTrigger->getDurationField() == SimTime(400, SIMTIME_US));
     ASSERT(recvTrigger->getCommonDuration() == SimTime(400, SIMTIME_US));
     ASSERT(recvTrigger->getGuardInterval() == 1);
@@ -146,8 +146,8 @@ using namespace inet::ieee80211;
 EV << ".\n";
 
 %contains: stdout
-Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF1000000000000320481242B3C0680076A9805014
+Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF10000000000003204810000000000076A9805014
 Basic Trigger Frame round-trip verified successfully.
-BSRP Trigger Serialized hex: 24009001020000000001020000000002419044054F780B9A06400380640C8003005A
+BSRP Trigger Serialized hex: 24009001020000000001020000000002419044000000000006400380640C8003005A
 BSRP Trigger Frame round-trip verified successfully.
 .

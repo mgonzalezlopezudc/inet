@@ -831,9 +831,9 @@ The main tests are:
 - `tests/unit/Ieee80211HeMuPhyHeaderSerializer_1.test`
 - `tests/unit/Ieee80211HeMuBlockAckGating_1.test`
 
-The repository also contains an OFDMA example at:
+The repository also contains a DL OFDMA example at:
 
-- `examples/ieee80211/ofdma`
+- `examples/ieee80211/dl_ofdma`
 
 Its default configuration uses:
 
@@ -865,7 +865,7 @@ Result:
 
 - The sequential Block Ack timing test passed.
 - The `General` OFDMA simulation successfully reached its configured
-  2.0-second simulation limit.
+  0.6-second simulation limit.
 - The validation script exited successfully.
 
 ## 15. SWOT analysis
