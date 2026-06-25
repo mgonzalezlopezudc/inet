@@ -54,6 +54,7 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
 
   protected:
     virtual bool isAssignedHeMuRu(const ITransmission *transmission) const;
+    bool shouldIgnoreReceptionDueToHeSpatialReuse(const IListening *listening, const IReception *reception, bool logDecision) const;
     virtual HeSpatialReuseDecision computeHeSpatialReuseDecision(const IListening *listening, const IReception *reception) const;
     virtual W computeSpatialReuseTransmitPowerLimit(W threshold) const;
 

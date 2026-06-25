@@ -231,6 +231,9 @@ class Ieee80211DataHeader extends Ieee80211DataOrMgmtHeader
 struct Ieee80211HeTriggerUserInfo
 {
     uint16_t aid;
+    // INET model metadata used to bind the scheduled user to the RU catalog entry.
+    // The serializer derives the standard-shaped RU Allocation subfield from
+    // ruToneSize/ruToneOffset; ruIndex itself is not an 802.11 Trigger User Info field.
     int ruIndex = -1;
     uint16_t ruToneSize;
     uint16_t ruToneOffset;
@@ -244,10 +247,15 @@ class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
 {
     type = ST_TRIGGER;
     uint8_t triggerType = 0; // 0: Basic Trigger, 4: BSRP Trigger
+    // INET model correlation identifier. It is used to group simulated HE-TB
+    // responses and is intentionally not serialized as an 802.11 Trigger field.
     uint32_t triggerId;
     simtime_t commonDuration;
     uint8_t guardInterval = 2;
     uint8_t coding = 0;
+    // INET PHY request metadata copied to the HE-TB PPDU model. These fields
+    // summarize behavior that would be carried by several Trigger/HE-SIG
+    // subfields in a full bit-level implementation.
     uint8_t packetExtensionDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
     uint8_t ocwMin = 7;

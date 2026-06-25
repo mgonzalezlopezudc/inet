@@ -237,6 +237,11 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     if (numUsers > 255)
         throw cRuntimeError("Too many HE MU users: %u", numUsers);
 
+    // Packet-level HE signaling model. The serialized bytes cover the HE-SIG
+    // fields currently consumed by INET's HE MU PHY/MAC path; runtime-only
+    // metadata remains in the chunk object. This is not a complete bit-level
+    // PPDU preamble encoder.
+
     // --- 1. HE-SIG-A (8 bytes = 64 bits) - IEEE Std 802.11-2024 Table 27-21 ---
     // HE-SIG-A1 (26 bits):
     // B0: UL/DL (0 for DL, 1 for UL)
