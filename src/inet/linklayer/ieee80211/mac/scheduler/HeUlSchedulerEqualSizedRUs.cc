@@ -34,7 +34,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
         allocation.tid = candidate.selectedTid;
         allocation.accessCategory = candidate.selectedAccessCategory;
         allocation.ru = layout[i];
-        allocation.mcs = defaultMcs;
+        allocation.mcs = selectMcs(context, candidate, allocation.ru);
         allocation.targetRssiDbm = targetRssiDbm;
         allocation.estimatedDuration = physicallayer::estimateHeMuUserDuration(
                 B(std::max<int64_t>(1, candidate.getSelectedBacklogBytes())),
