@@ -1,0 +1,124 @@
+%description:
+Test the IEEE 802.11ax OFDMA Back-Off (OBO) counter and OFDMA Contention Window (OCW) updates for Uplink OFDMA Random Access (UORA).
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
+
+%file: TestNetwork.ned
+//
+// Copyright (C) 2026 INET Framework contributors
+//
+// SPDX-License-Identifier: LGPL-3.0-or-later
+//
+
+import inet.linklayer.ieee80211.mac.coordinationfunction.HeUlCoordinator;
+
+simple TestHeUlCoordinator extends HeUlCoordinator
+{
+    @class(TestHeUlCoordinator);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        ulCoordinator: TestHeUlCoordinator {
+            parameters:
+                enabled = true;
+                ocwMin = 7;
+                ocwMax = 31;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+class TestHeUlCoordinator : public HeUlCoordinator
+{
+  public:
+    virtual void initialize(int stage) override {
+        SimpleModule::initialize(stage);
+        if (stage == INITSTAGE_LOCAL) {
+            enabled = par("enabled");
+            reportMaxAge = par("reportMaxAge");
+            ocwMin = par("ocwMin");
+            ocwMax = par("ocwMax");
+            ASSERT(ocwMin >= 0);
+            ASSERT(ocwMin <= ocwMax);
+            ofdmaContentionWindow = ocwMin;
+            ofdmaBackoff = intuniform(0, ofdmaContentionWindow);
+            basicTriggerSentSignal = registerSignal("heUlBasicTriggerSent");
+            bsrpTriggerSentSignal = registerSignal("heUlBsrpTriggerSent");
+            bufferStatusUpdatedSignal = registerSignal("heUlBufferStatusUpdated");
+            scheduledUsersSignal = registerSignal("heUlScheduledUsers");
+            randomAccessRusSignal = registerSignal("heUlRandomAccessRus");
+            randomAccessAttemptSignal = registerSignal("heUlRandomAccessAttempt");
+            randomAccessSuccessSignal = registerSignal("heUlRandomAccessSuccess");
+        }
+    }
+
+    int getOcw() const { return ofdmaContentionWindow; }
+    void setOcw(int ocw) { ofdmaContentionWindow = ocw; }
+    int getObo() const { return ofdmaBackoff; }
+    void setObo(int obo) { ofdmaBackoff = obo; }
+    int getOcwMin() const { return ocwMin; }
+    int getOcwMax() const { return ocwMax; }
+};
+
+Define_Module(TestHeUlCoordinator);
+
+%activity:
+auto coord = check_and_cast<TestHeUlCoordinator *>(getParentModule()->getSubmodule("ulCoordinator"));
+
+// 1. Verify initial OBO assignment is in [0, ocwMin] (default 7)
+int initialObo = coord->getObo();
+ASSERT(initialObo >= 0 && initialObo <= coord->getOcwMin());
+ASSERT(coord->getOcw() == coord->getOcwMin());
+
+// 2. Verify decrement of OBO
+coord->setObo(10);
+int ruIndex = coord->selectRandomAccessRu(4); // OBO (10) >= 4 RA-RUs -> defer, OBO -> 6
+ASSERT(ruIndex == -1);
+ASSERT(coord->getObo() == 6);
+
+ruIndex = coord->selectRandomAccessRu(4); // OBO (6) >= 4 RA-RUs -> defer, OBO -> 2
+ASSERT(ruIndex == -1);
+ASSERT(coord->getObo() == 2);
+
+// 3. Verify random RA-RU selection and transmission when OBO reaches 0
+ruIndex = coord->selectRandomAccessRu(4); // OBO (2) < 4 RA-RUs -> transmit, OBO -> 0
+ASSERT(ruIndex >= 0 && ruIndex < 4);
+ASSERT(coord->getObo() == 0);
+
+// 4. Verify UORA failure doubles OCW and chooses a new OBO
+coord->reportRandomAccessResult(false);
+ASSERT(coord->getOcw() == 15); // doubled: min(31, 2 * 7 + 1) = 15
+int oboAfterFail1 = coord->getObo();
+ASSERT(oboAfterFail1 >= 0 && oboAfterFail1 <= 15);
+
+coord->reportRandomAccessResult(false);
+ASSERT(coord->getOcw() == 31); // doubled: min(31, 2 * 15 + 1) = 31
+int oboAfterFail2 = coord->getObo();
+ASSERT(oboAfterFail2 >= 0 && oboAfterFail2 <= 31);
+
+// Test upper bound capping on OCW
+coord->reportRandomAccessResult(false);
+ASSERT(coord->getOcw() == 31); // capped at ocwMax = 31
+
+// 5. Verify UORA success resets OCW to ocwMin (7)
+coord->reportRandomAccessResult(true);
+ASSERT(coord->getOcw() == 7);
+int oboAfterSuccess = coord->getObo();
+ASSERT(oboAfterSuccess >= 0 && oboAfterSuccess <= 7);
+
+EV << "RESULT: UORA OBO AND OCW VERIFIED SUCCESS\n";
+EV << ".\n";
+
+%contains: stdout
+RESULT: UORA OBO AND OCW VERIFIED SUCCESS
+.

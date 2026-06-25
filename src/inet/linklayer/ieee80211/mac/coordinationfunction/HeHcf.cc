@@ -116,6 +116,11 @@ Define_Module(HeHcf);
 HeHcf::~HeHcf()
 {
     cancelAndDelete(ulTriggerTimer);
+    for (auto& entry : triggeredUlExchanges) {
+        for (auto pkt : entry.second.packets) {
+            delete pkt;
+        }
+    }
 }
 
 void HeHcf::initialize(int stage)
@@ -473,9 +478,13 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         auto maxRus = physicallayer::getHeMaxRuCount(channelBandwidth);
         auto layout = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, maxRus);
         int index = 0;
+        auto ulScheduler = getSubmodule("ulScheduler");
+        int maxMuStations = ulScheduler ? ulScheduler->par("maxMuStations").intValue() : maxRus;
         for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
             if (station.second != Ieee80211Mib::ASSOCIATED || index >= maxRus)
                 continue;
+            if (index >= maxMuStations)
+                break;
             if (isTwtSleeping(mac, station.first)) {
                 EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.first << "\n";
                 continue;
@@ -483,6 +492,14 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             IIeee80211HeUlScheduler::RuAllocation allocation;
             allocation.staAddress = station.first;
             allocation.associationId = mac->getMib()->getAssociationId(station.first);
+            allocation.ru = layout[index++];
+            allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
+            ulSchedule.allocations.push_back(allocation);
+        }
+        while (index < maxRus) {
+            IIeee80211HeUlScheduler::RuAllocation allocation;
+            allocation.randomAccess = true;
+            allocation.associationId = 0;
             allocation.ru = layout[index++];
             allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
             ulSchedule.allocations.push_back(allocation);
@@ -801,9 +818,22 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             return;
         }
         if (!ulCoordinator->isEnabled() || mac->isApInAxMode() ||
-                mac->getMib()->bssStationData.associationId <= 0 || !triggeredUlExchanges.empty()) {
+                mac->getMib()->bssStationData.associationId <= 0) {
             delete packet;
             return;
+        }
+        if (!triggeredUlExchanges.empty()) {
+            for (auto& entry : triggeredUlExchanges) {
+                if (entry.second.randomAccess)
+                    ulCoordinator->reportRandomAccessResult(false);
+                for (auto pkt : entry.second.packets) {
+                    auto writableHeader = pkt->removeAtFront<Ieee80211DataHeader>();
+                    writableHeader->setRetry(true);
+                    pkt->insertAtFront(writableHeader);
+                    entry.second.sourceQueue->pushPacket(pkt, nullptr);
+                }
+            }
+            triggeredUlExchanges.clear();
         }
         auto myAid = mac->getMib()->bssStationData.associationId;
         const Ieee80211HeTriggerUserInfo *selected = nullptr;
@@ -851,30 +881,42 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                 }
             }
         }
-        else if (selected == nullptr && trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
-                !randomAccessUsers.empty()) {
-            for (int ac = AC_VO; ac >= AC_BK && sourcePacket == nullptr; ac--) {
+        else if (selected == nullptr && !randomAccessUsers.empty()) {
+            queueing::IPacketQueue *pendingQueue = nullptr;
+            Packet *pendingPacket = nullptr;
+            AccessCategory pendingAc = AC_BE;
+            int pendingTid = -1;
+            for (int ac = AC_VO; ac >= AC_BK && pendingPacket == nullptr; ac--) {
                 auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
                 for (int i = 0; i < queue->getNumPackets(); i++) {
                     auto candidate = queue->getPacket(i);
                     auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
                             candidate->peekAtFront<Ieee80211MacHeader>());
                     if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS) {
-                        sourcePacket = candidate;
-                        sourceQueue = queue;
-                        selectedAc = static_cast<AccessCategory>(ac);
+                        pendingPacket = candidate;
+                        pendingQueue = queue;
+                        pendingAc = static_cast<AccessCategory>(ac);
+                        pendingTid = dataHeader->getTid();
                         break;
                     }
                 }
             }
-            int raIndex = sourcePacket == nullptr ? -1 :
-                    ulCoordinator->selectRandomAccessRu(randomAccessUsers.size());
-            if (raIndex >= 0) {
-                selected = randomAccessUsers[raIndex];
-                randomAccess = true;
+            if (pendingQueue != nullptr) {
+                int raIndex = ulCoordinator->selectRandomAccessRu(randomAccessUsers.size());
+                if (raIndex >= 0) {
+                    selected = randomAccessUsers[raIndex];
+                    randomAccess = true;
+                    selectedAc = pendingAc;
+                    sourceQueue = pendingQueue;
+                    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
+                        bsrpTid = pendingTid;
+                        sourcePacket = nullptr;
+                    }
+                    else {
+                        sourcePacket = pendingPacket;
+                    }
+                }
             }
-            else
-                sourcePacket = nullptr;
         }
         if (selected == nullptr) {
             EV_INFO << "Ignoring HE UL Trigger " << trigger->getTriggerId()
@@ -1011,6 +1053,10 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                         responsePacket->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
                 }
             }
+            for (auto pkt : exchange.packets) {
+                exchange.sourceQueue->removePacket(pkt);
+                take(pkt);
+            }
             triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
         }
 
@@ -1074,8 +1120,6 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                     acknowledged = offset < 64 && (record->bitmap & (UINT64_C(1) << offset));
                 }
                 if (acknowledged) {
-                    exchange.sourceQueue->removePacket(exchange.packets[i]);
-                    take(exchange.packets[i]);
                     delete exchange.packets[i];
                     exchangeSuccess = true;
                 }
@@ -1083,6 +1127,7 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                     auto writableHeader = exchange.packets[i]->removeAtFront<Ieee80211DataHeader>();
                     writableHeader->setRetry(true);
                     exchange.packets[i]->insertAtFront(writableHeader);
+                    exchange.sourceQueue->pushPacket(exchange.packets[i], nullptr);
                 }
             }
             if (exchange.randomAccess)
