@@ -708,6 +708,8 @@ class INET_API Ieee80211HemcsTable
     static const DI<Ieee80211Hemcs> heMcs11BW160MHzNss8;
 };
 
+#undef DI   // was: #define DI DelayedInitializer — limit scope to this header
+
 /** Factory and cache for standard HE PHY modes. */
 class INET_API Ieee80211HeCompliantModes
 {

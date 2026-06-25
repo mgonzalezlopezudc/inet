@@ -32,26 +32,26 @@ static Ieee80211HeUserPhyParameters makeUser(int mcs, int nss, int toneSize, Iee
 // -----------------------------------------------------------------------
 {
     // 5 GHz: getSifsTime() must return 16 us.
-    const Ieee80211Hemcs *mcs5 = Ieee80211HemcsTable::heMcs0BW20MHzNss1.get();
+    const Ieee80211Hemcs *mcs5 = &Ieee80211HemcsTable::heMcs0BW20MHzNss1;
     auto *sig5 = new Ieee80211HeSignalMode(0,
-        &Ieee80211OfdmCompliantModulations::subcarrierModulation13,
+        &Ieee80211OfdmCompliantModulations::subcarriers52QbpskModulation,
         &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2,
         MHz(20), Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
     auto *pre5 = new Ieee80211HePreambleMode(sig5, nullptr,
         Ieee80211HePreambleMode::HE_PREAMBLE_SU, 1);
-    Ieee80211HeMode he5("test-5ghz", pre5, new Ieee80211HeDataMode(mcs5), Ieee80211HeMode::BAND_5GHZ);
+    Ieee80211HeMode he5("test-5ghz", pre5, new Ieee80211HeDataMode(mcs5, MHz(20), Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG), Ieee80211HeMode::BAND_5GHZ);
     EV << "5 GHz SIFS: " << he5.getSifsTime() * 1e6 << " us\n";
     ASSERT(std::abs(he5.getSifsTime().dbl() - 16e-6) < 1e-9);
 
     // 2.4 GHz: getSifsTime() must return 10 us.
-    const Ieee80211Hemcs *mcs24 = Ieee80211HemcsTable::heMcs0BW20MHzNss1.get();
+    const Ieee80211Hemcs *mcs24 = &Ieee80211HemcsTable::heMcs0BW20MHzNss1;
     auto *sig24 = new Ieee80211HeSignalMode(0,
-        &Ieee80211OfdmCompliantModulations::subcarrierModulation13,
+        &Ieee80211OfdmCompliantModulations::subcarriers52QbpskModulation,
         &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2,
         MHz(20), Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
     auto *pre24 = new Ieee80211HePreambleMode(sig24, nullptr,
         Ieee80211HePreambleMode::HE_PREAMBLE_SU, 1);
-    Ieee80211HeMode he24("test-2.4ghz", pre24, new Ieee80211HeDataMode(mcs24), Ieee80211HeMode::BAND_2_4GHZ);
+    Ieee80211HeMode he24("test-2.4ghz", pre24, new Ieee80211HeDataMode(mcs24, MHz(20), Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG), Ieee80211HeMode::BAND_2_4GHZ);
     EV << "2.4 GHz SIFS: " << he24.getSifsTime() * 1e6 << " us\n";
     ASSERT(std::abs(he24.getSifsTime().dbl() - 10e-6) < 1e-9);
 }
@@ -82,7 +82,7 @@ static Ieee80211HeUserPhyParameters makeUser(int mcs, int nss, int toneSize, Iee
 {
     auto tryUser = [](Ieee80211HeUserPhyParameters u) -> std::string {
         auto result = computeHePpduParameters(
-            HE_MU_DOWNLINK, MHz(80), HE_GI_3_2_US, HE_LTF_4X, 0, {u});
+            {u}, MHz(80), HE_MU_DOWNLINK, HE_GI_3_2_US, HE_LTF_4X, 0);
         return result ? std::string("") : result.error;
     };
 
