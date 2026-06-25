@@ -248,7 +248,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     // B5-B10: BSS Color (6 bits)
     stream.writeNBitsOfUint64Be(heMuPhyHeader->getBssColor() & 0x3F, 6);
     // B11-B14: Spatial Reuse (4 bits)
-    stream.writeNBitsOfUint64Be(0, 4);
+    stream.writeNBitsOfUint64Be(heMuPhyHeader->getSpatialReuse() & 0xF, 4);
     // B15-B17: Bandwidth (3 bits)
     uint32_t maxToneIndex = 0;
     for (unsigned int i = 0; i < numUsers; ++i) {
@@ -347,7 +347,7 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     stream.readNBitsToUint64Be(3); // HE-SIG-B MCS
     stream.readBit(); // HE-SIG-B DCM
     heMuPhyHeader->setBssColor(stream.readNBitsToUint64Be(6));
-    stream.readNBitsToUint64Be(4); // Spatial Reuse
+    heMuPhyHeader->setSpatialReuse(stream.readNBitsToUint64Be(4)); // Spatial Reuse
     auto bwField = stream.readNBitsToUint64Be(3);
     auto numUsersField = stream.readNBitsToUint64Be(4);
     stream.readBit(); // Compression
