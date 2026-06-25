@@ -670,16 +670,15 @@ void Ipv6::routeMulticastPacket(Packet *packet, const NetworkInterface *destIE, 
         return;
     }
 
-        // hop counter decrement: only if datagram arrived from network, and will be
-        // sent out to the network (hoplimit check will be done just before sending
-        // out datagram)
-        packet->trim();
-        ipv6Header = nullptr;
-        const auto& newIpv6Header = removeNetworkProtocolHeader<Ipv6Header>(packet);
-        newIpv6Header->setHopLimit(ipv6Header->getHopLimit() - 1);
-        insertNetworkProtocolHeader(packet, Protocol::ipv6, newIpv6Header);
-        ipv6Header = newIpv6Header;
-    }
+    // hop counter decrement: only if datagram arrived from network, and will be
+    // sent out to the network (hoplimit check will be done just before sending
+    // out datagram)
+    auto oldHopLimit = ipv6Header->getHopLimit();
+    packet->trim();
+    const auto& newIpv6Header = removeNetworkProtocolHeader<Ipv6Header>(packet);
+    newIpv6Header->setHopLimit(oldHopLimit - 1);
+    insertNetworkProtocolHeader(packet, Protocol::ipv6, newIpv6Header);
+    ipv6Header = newIpv6Header;
 
     // for now, we just send it out on every interface except on which it came. FIXME better!!!
     EV_INFO << "sending out datagram on every interface (except incoming one)\n";
@@ -729,6 +728,7 @@ void Ipv6::routeMulticastPacket(Packet *packet, const NetworkInterface *destIE, 
 
     emit(ipv6MdataRegisterSignal, packet, const_cast<NetworkInterface *>(fromIE)); // postRouting hook
     delete packet;
+*/
 }
 
 void Ipv6::localDeliver(Packet *packet)
@@ -1552,4 +1552,3 @@ void Ipv6::flush()
 }
 
 } // namespace inet
-

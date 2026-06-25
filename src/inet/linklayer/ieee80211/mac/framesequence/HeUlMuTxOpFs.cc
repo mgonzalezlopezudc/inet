@@ -284,7 +284,10 @@ Packet *HeUlMuTxOpFs::buildMultiStaBlockAckPacket() const
     header->setRecordsArraySize(ackRecords.size());
     for (size_t i = 0; i < ackRecords.size(); i++)
         header->setRecords(i, ackRecords[i]);
-    header->setChunkLength(b(152 + 112 * ackRecords.size()));
+    // IEEE Std 802.11-2024 Figures 9-58..9-60 encode each associated STA's
+    // block-ack context as a 12-octet Per AID TID Info subfield: AID/TID,
+    // Starting Sequence Control, and an 8-octet bitmap.
+    header->setChunkLength(B(18 + 12 * ackRecords.size()));
     auto packet = new Packet("HE-Multi-STA-BlockAck", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
     return packet;

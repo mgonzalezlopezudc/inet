@@ -631,18 +631,20 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(chunk);
                 if (multiStaBlockAck == nullptr)
                     throw cRuntimeError("Unsupported multi-STA Block Ack representation");
-                if (multiStaBlockAck->getRecordsArraySize() > 255)
-                    throw cRuntimeError("Too many Multi-STA Block Ack records");
                 stream.writeUint16Le(packBlockAckControl(blockAck->getBlockAckPolicy(), multiTid, compressedBitmap, blockAck->getReserved(), 0));
-                stream.writeByte(multiStaBlockAck->getRecordsArraySize());
                 for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {
                     const auto& record = multiStaBlockAck->getRecords(i);
-                    stream.writeUint16Be(record.aid);
-                    stream.writeByte(record.tid);
-                    stream.writeUint16Be(record.startingSequenceNumber);
-                    stream.writeUint64Be(record.bitmap);
-                    stream.writeBit(record.responseReceived);
-                    stream.writeNBitsOfUint64Be(0, 7);
+                    if (record.aid > 2047 || record.tid > 7)
+                        throw cRuntimeError("Unsupported Multi-STA Block Ack AID/TID tuple");
+                    // IEEE Std 802.11-2024 Figures 9-58..9-60: the BA
+                    // Information field is a list of Per AID TID Info
+                    // subfields.  For block-ack context (Ack Type = 0), each
+                    // tuple carries AID11, TID, Starting Sequence Control, and
+                    // the bitmap.  responseReceived is local simulation state;
+                    // it is intentionally not an on-wire bit.
+                    stream.writeUint16Le((record.aid & 0x7FF) | ((record.tid & 0xF) << 12));
+                    writeSequenceControl(stream, 0, record.startingSequenceNumber);
+                    stream.writeUint64Le(record.bitmap);
                 }
                 ASSERT(stream.getLength() - startPos == multiStaBlockAck->getChunkLength());
             }
@@ -1129,18 +1131,33 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
                 copyBasicFields(multiStaBlockAck, macHeader);
                 copyBlockAckFrameFields(multiStaBlockAck, blockAck);
-                auto count = stream.readByte();
-                multiStaBlockAck->setRecordsArraySize(count);
-                for (unsigned int i = 0; i < count; i++) {
+                std::vector<Ieee80211MultiStaBlockAckRecord> records;
+                auto remainingBits = stream.getRemainingLength().get<b>();
+                if (remainingBits % 96 != 0)
+                    multiStaBlockAck->markIncorrect();
+                auto count = remainingBits / 96;
+                for (int i = 0; i < count; i++) {
+                    auto aidTidInfo = stream.readUint16Le();
                     Ieee80211MultiStaBlockAckRecord record;
-                    record.aid = stream.readUint16Be();
-                    record.tid = stream.readByte();
-                    record.startingSequenceNumber = stream.readUint16Be();
-                    record.bitmap = stream.readUint64Be();
-                    record.responseReceived = stream.readBit();
-                    stream.readNBitsToUint64Be(7);
-                    multiStaBlockAck->setRecords(i, record);
+                    record.aid = aidTidInfo & 0x7FF;
+                    bool ackType = (aidTidInfo & 0x0800) != 0;
+                    record.tid = (aidTidInfo >> 12) & 0xF;
+                    record.responseReceived = true;
+                    if (!ackType && record.tid <= 7) {
+                        int fragmentNumber;
+                        SequenceNumberCyclic sequenceNumber;
+                        readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                        record.startingSequenceNumber = sequenceNumber.get();
+                        record.bitmap = stream.readUint64Le();
+                    }
+                    else
+                        multiStaBlockAck->markIncorrect();
+                    records.push_back(record);
                 }
+                multiStaBlockAck->setRecordsArraySize(records.size());
+                for (size_t i = 0; i < records.size(); i++)
+                    multiStaBlockAck->setRecords(i, records[i]);
+                multiStaBlockAck->setChunkLength(stream.getPosition());
                 return multiStaBlockAck;
             }
             else if (multiTid && compressedBitmap) {
