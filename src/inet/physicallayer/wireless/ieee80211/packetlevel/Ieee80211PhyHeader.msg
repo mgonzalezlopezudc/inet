@@ -194,7 +194,7 @@ struct Ieee80211HeMuUserInfo
 class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t bssColor = 0;
-    uint8_t ppduFormat = 0; // 0: HE MU downlink, 1: HE trigger-based uplink
+    uint8_t ppduFormat = 0; // 0: HE MU downlink, 1: HE trigger-based uplink, 2: HE SU, 3: HE ER SU
     uint8_t spatialReuse = 0; // HE-SIG-A Spatial Reuse field
     bool nonSrgObssPdDisallowed = false;
     bool srgObssPdDisallowed = false;

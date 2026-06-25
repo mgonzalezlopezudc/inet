@@ -16,4 +16,5 @@ simple HeUlSchedulerBacklogBased like IIeee80211HeUlScheduler
         int minRandomAccessRus = default(1); // Minimum RUs reserved for UORA when space permits
         int maxRandomAccessRus = default(4); // Maximum RUs reserved for UORA
         int defaultMcs = default(0); // MCS encoded for scheduled and random-access HE-TB responses
+        string heRateControlModule = default(""); // Optional IIeee80211HeRateControl provider for scheduled users
 }

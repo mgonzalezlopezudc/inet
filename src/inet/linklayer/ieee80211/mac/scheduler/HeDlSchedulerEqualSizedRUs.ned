@@ -28,5 +28,6 @@ simple HeDlSchedulerEqualSizedRUs like IIeee80211HeDlScheduler
         int maxDurationAlignmentIterations = default(0);
         double thermalNoisePsd = default(-174); // Thermal-noise PSD in dBm/Hz used for SNR estimation
         string heMcsSnrThresholds = default("4 7 10 13 16 19 21 24 27 30 33 36"); // Minimum SNRs in dB for HE MCS 0..11
+        string heRateControlModule = default(""); // Optional IIeee80211HeRateControl provider
         @display("i=block/app");
 }

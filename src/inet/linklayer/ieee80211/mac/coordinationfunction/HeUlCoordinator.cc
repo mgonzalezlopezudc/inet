@@ -31,6 +31,9 @@ void HeUlCoordinator::initialize(int stage)
         basicTriggerSentSignal = registerSignal("heUlBasicTriggerSent");
         bsrpTriggerSentSignal = registerSignal("heUlBsrpTriggerSent");
         bufferStatusUpdatedSignal = registerSignal("heUlBufferStatusUpdated");
+        bufferStatusReportedBytesSignal = registerSignal("heUlBufferStatusReportedBytes");
+        bufferStatusScheduledBytesSignal = registerSignal("heUlBufferStatusScheduledBytes");
+        staleReportSignal = registerSignal("heUlStaleBufferStatus");
         scheduledUsersSignal = registerSignal("heUlScheduledUsers");
         randomAccessRusSignal = registerSignal("heUlRandomAccessRus");
         randomAccessAttemptSignal = registerSignal("heUlRandomAccessAttempt");
@@ -53,6 +56,7 @@ void HeUlCoordinator::updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_
     status.retryPending = retryPending;
     status.updateTime = simTime();
     emit(bufferStatusUpdatedSignal, (long)aid);
+    emit(bufferStatusReportedBytesSignal, (long)status.backlogBytes[ac]);
 }
 
 void HeUlCoordinator::clearStation(uint16_t aid)
@@ -130,8 +134,10 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
             continue;
         auto aid = mib->getAssociationId(station.first);
         auto status = bufferStatusByAid.find(aid);
-        if (status == bufferStatusByAid.end() || simTime() - status->second.updateTime > reportMaxAge)
+        if (status == bufferStatusByAid.end() || simTime() - status->second.updateTime > reportMaxAge) {
+            emit(staleReportSignal, (long)aid);
             continue;
+        }
         IIeee80211HeUlScheduler::CandidateInfo candidate;
         candidate.staAddress = station.first;
         candidate.associationId = aid;
@@ -200,8 +206,12 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
     emit(scheduledUsersSignal, scheduledUsers);
     emit(randomAccessRusSignal, randomAccessRus);
     for (const auto& allocation : schedule.allocations)
-        if (!allocation.randomAccess)
-            bufferStatusByAid[allocation.associationId].lastService = simTime();
+        if (!allocation.randomAccess) {
+            auto& status = bufferStatusByAid[allocation.associationId];
+            status.lastService = simTime();
+            status.scheduledBytes[allocation.accessCategory] = status.backlogBytes[allocation.accessCategory];
+            emit(bufferStatusScheduledBytesSignal, (long)status.scheduledBytes[allocation.accessCategory]);
+        }
     EV_INFO << "HE UL schedule: candidates=" << context.candidates.size()
              << ", scheduledUsers=" << scheduledUsers
              << ", randomAccessRUs=" << randomAccessRus

@@ -18,6 +18,11 @@ void HeUlSchedulerBase::initialize(int stage)
         minRandomAccessRus = par("minRandomAccessRus");
         maxRandomAccessRus = par("maxRandomAccessRus");
         defaultMcs = par("defaultMcs");
+        const char *heRateControlModule = par("heRateControlModule");
+        heRateControl = *heRateControlModule == '\0' ? nullptr :
+                dynamic_cast<IIeee80211HeRateControl *>(getModuleByPath(heRateControlModule));
+        if (*heRateControlModule != '\0' && heRateControl == nullptr)
+            throw cRuntimeError("heRateControlModule '%s' is not an IIeee80211HeRateControl", heRateControlModule);
         ASSERT(maxMuStations >= 0);
         ASSERT(minRandomAccessRus >= 0);
         ASSERT(minRandomAccessRus <= maxRandomAccessRus);
@@ -41,6 +46,21 @@ int HeUlSchedulerBase::computeRandomAccessRuCount(const ScheduleContext& context
 int HeUlSchedulerBase::computeTargetRssiDbm(const ScheduleContext& context) const
 {
     return (int)std::round(context.apSensitivityDbm + context.targetRssiMarginDb);
+}
+
+int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
+        const physicallayer::Ieee80211HeRu& ru) const
+{
+    if (heRateControl == nullptr || candidate.associationId == 0)
+        return defaultMcs;
+    IIeee80211HeRateControl::Constraints constraints;
+    constraints.maxMcs = 9; // keep HE-TB robust unless LDPC/user constraints explicitly widen later
+    if (candidate.hasFreshPathLoss)
+        heRateControl->reportHeRxSnir(candidate.staAddress,
+                context.targetRssiMarginDb + context.apSensitivityDbm - context.apSensitivityDbm);
+    auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
+            ru.toneSize, physicallayer::HE_TRIGGER_BASED_UPLINK, 1, constraints);
+    return selection.mode == nullptr ? defaultMcs : selection.mcs;
 }
 
 simtime_t HeUlSchedulerBase::computeCommonDuration(const ScheduleContext& context,

@@ -23,6 +23,9 @@ simple HeUlCoordinator
         @signal[heUlBasicTriggerSent](type=long);
         @signal[heUlBsrpTriggerSent](type=long);
         @signal[heUlBufferStatusUpdated](type=long);
+        @signal[heUlBufferStatusReportedBytes](type=long);
+        @signal[heUlBufferStatusScheduledBytes](type=long);
+        @signal[heUlStaleBufferStatus](type=long);
         @signal[heUlScheduledUsers](type=long);
         @signal[heUlRandomAccessRus](type=long);
         @signal[heUlRandomAccessAttempt](type=long);
@@ -30,6 +33,9 @@ simple HeUlCoordinator
         @statistic[heUlBasicTriggerSent](source=heUlBasicTriggerSent; record=count);
         @statistic[heUlBsrpTriggerSent](source=heUlBsrpTriggerSent; record=count);
         @statistic[heUlBufferStatusUpdated](source=heUlBufferStatusUpdated; record=count);
+        @statistic[heUlBufferStatusReportedBytes](source=heUlBufferStatusReportedBytes; record=vector);
+        @statistic[heUlBufferStatusScheduledBytes](source=heUlBufferStatusScheduledBytes; record=vector);
+        @statistic[heUlStaleBufferStatus](source=heUlStaleBufferStatus; record=count);
         @statistic[heUlScheduledUsers](source=heUlScheduledUsers; record=count,sum,max);
         @statistic[heUlRandomAccessRus](source=heUlRandomAccessRus; record=count,sum,max);
         @statistic[heUlRandomAccessAttempt](source=heUlRandomAccessAttempt; record=count);

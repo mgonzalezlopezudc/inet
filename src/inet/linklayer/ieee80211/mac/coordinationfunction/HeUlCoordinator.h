@@ -36,6 +36,7 @@ class INET_API HeUlCoordinator : public SimpleModule
         simtime_t updateTime = SIMTIME_ZERO;
         bool retryPending = false;
         simtime_t lastService = SIMTIME_ZERO;
+        std::array<int64_t, 4> scheduledBytes = {};
     };
 
   protected:
@@ -54,6 +55,9 @@ class INET_API HeUlCoordinator : public SimpleModule
     simsignal_t basicTriggerSentSignal;
     simsignal_t bsrpTriggerSentSignal;
     simsignal_t bufferStatusUpdatedSignal;
+    simsignal_t bufferStatusReportedBytesSignal;
+    simsignal_t bufferStatusScheduledBytesSignal;
+    simsignal_t staleReportSignal;
     simsignal_t scheduledUsersSignal;
     simsignal_t randomAccessRusSignal;
     simsignal_t randomAccessAttemptSignal;

@@ -8,6 +8,7 @@
 #define __INET_HEULSCHEDULERBASE_H
 
 #include "inet/common/SimpleModule.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeUlScheduler.h"
 
 namespace inet {
@@ -26,11 +27,14 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     int minRandomAccessRus = 1;
     int maxRandomAccessRus = 4;
     int defaultMcs = 0;
+    IIeee80211HeRateControl *heRateControl = nullptr;
 
   protected:
     virtual void initialize(int stage) override;
     virtual int computeRandomAccessRuCount(const ScheduleContext& context, int availableRus) const;
     virtual int computeTargetRssiDbm(const ScheduleContext& context) const;
+    virtual int selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
+            const physicallayer::Ieee80211HeRu& ru) const;
     virtual simtime_t computeCommonDuration(const ScheduleContext& context,
             const std::vector<RuAllocation>& allocations) const;
 };

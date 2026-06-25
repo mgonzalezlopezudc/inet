@@ -26,7 +26,9 @@ using namespace inet::units::values;
  */
 enum Ieee80211HePpduFormat {
     HE_MU_DOWNLINK = 0,             // HE MU PPDU format (Clause 27.3.11.13) for DL OFDMA/MU-MIMO
-    HE_TRIGGER_BASED_UPLINK = 1     // HE TB PPDU format (Clause 27.3.11.14) for UL OFDMA/MU-MIMO triggered by AP
+    HE_TRIGGER_BASED_UPLINK = 1,    // HE TB PPDU format (Clause 27.3.11.14) for UL OFDMA/MU-MIMO triggered by AP
+    HE_SINGLE_USER = 2,             // HE SU PPDU format (Clause 27.3.11.11)
+    HE_EXTENDED_RANGE_SU = 3        // HE ER SU PPDU format (Clause 27.3.11.12)
 };
 
 /**

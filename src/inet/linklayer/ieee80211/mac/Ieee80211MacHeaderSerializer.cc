@@ -8,6 +8,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211MacHeaderSerializer.h"
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
 namespace inet {
@@ -124,14 +125,6 @@ uint16_t packQosControl(uint8_t tid, ieee80211::AckPolicy ackPolicy, bool aMsduP
             0x0010 | // EOSP
             ((static_cast<uint16_t>(ackPolicy) & 0x3) << 5) |
             (aMsduPresent ? 0x0080 : 0);
-}
-
-uint32_t packBufferStatusHtControl(uint8_t tid, uint8_t ac, uint32_t queueSize)
-{
-    return 3 |
-            ((tid & 0xF) << 4) |
-            ((ac & 0x3) << 8) |
-            ((std::min<uint32_t>(queueSize, 0x3FFFFF)) << 10);
 }
 
 uint64_t readLeBits(MemoryInputStream& stream, uint8_t numBits)
@@ -693,7 +686,11 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {
                 stream.writeUint16Le(packQosControl(dataHeader->getTid(), dataHeader->getAckPolicy(), dataHeader->getAMsduPresent()));
                 if (dataHeader->getBufferStatusPresent()) {
-                    stream.writeUint32Le(packBufferStatusHtControl(dataHeader->getBufferStatusTid(), dataHeader->getBufferStatusAc(), dataHeader->getBufferStatusQueueSize()));
+                    ieee80211::Ieee80211HeBufferStatus status;
+                    status.tid = dataHeader->getBufferStatusTid();
+                    status.accessCategory = dataHeader->getBufferStatusAc();
+                    status.queueSize = dataHeader->getBufferStatusQueueSize();
+                    stream.writeUint32Le(ieee80211::packHeBufferStatusHtControl(status));
                 }
             }
             ASSERT(stream.getLength() - startPos == dataHeader->getChunkLength());
@@ -1293,12 +1290,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 dataHeader->setAMsduPresent((qosControl & 0x0080) != 0);
                 if (order) {
                     auto htControl = stream.readUint32Le();
-                    auto controlId = htControl & 0xF;
-                    if (controlId == 3) {
+                    ieee80211::Ieee80211HeBufferStatus status;
+                    if (ieee80211::unpackHeBufferStatusHtControl(htControl, status)) {
                         dataHeader->setBufferStatusPresent(true);
-                        dataHeader->setBufferStatusTid((htControl >> 4) & 0xF);
-                        dataHeader->setBufferStatusAc((htControl >> 8) & 0x3);
-                        dataHeader->setBufferStatusQueueSize((htControl >> 10) & 0x3FFFFF);
+                        dataHeader->setBufferStatusTid(status.tid);
+                        dataHeader->setBufferStatusAc(status.accessCategory);
+                        dataHeader->setBufferStatusQueueSize(status.queueSize);
                     }
                     else {
                         dataHeader->markIncorrect();
