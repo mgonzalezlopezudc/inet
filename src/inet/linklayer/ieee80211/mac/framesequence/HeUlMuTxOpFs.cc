@@ -10,6 +10,25 @@
 #include <map>
 #include <set>
 
+// HE UL MU TXOP frame sequence.
+//
+// Implements the AP side of a Trigger-based UL OFDMA exchange:
+//   1. Transmit a Basic or BSRP Trigger frame (IEEE 802.11-2024 Clause 26.5.2).
+//   2. Collect simultaneous HE TB PPDU responses on the assigned RUs
+//      (Clause 27.3.11.12).
+//   3. Send a Multi-STA BlockAck acknowledging all received MPDUs
+//      (Clause 9.3.1.9).
+//
+// Implementation notes:
+//   - The response collection window is strict: it accepts only HE-TB frames
+//     whose Trigger ID and RU index match the outstanding Trigger.  Late
+//     responses are discarded, which is conservative with respect to the
+//     standard timing rules.
+//   - Per-MPDU receive status is taken from the PHY-layer MPDU receive
+//     indication tag when available; delimiters without such a tag are assumed
+//     successful if parseable.  This is an abstraction of the per-MPDU FCS
+//     checking defined in Clause 27.3.13.
+
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"

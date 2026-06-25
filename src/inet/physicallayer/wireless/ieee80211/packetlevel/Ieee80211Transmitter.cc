@@ -9,6 +9,29 @@
 
 #include <cmath>
 
+// IEEE 802.11ax HE transmitter.
+//
+// Builds Ieee80211Transmission objects and computes per-user RU parameters for
+// HE MU and HE TB PPDUs.  Uses the HE PHY calculator (Ieee80211HePhyCalculator)
+// to validate PPDU parameters and determine the common duration.
+// Relevant clauses:
+//   - Clause 27.3.11: HE PPDU formats.
+//   - Clause 27.3.11.12: HE TB PPDU format.
+//   - Clause 27.3.11.13: HE MU PPDU format and HE-SIG-B.
+//   - Clause 27.3.12: modulation and coding for the HE data field.
+//
+// Approximations / simplifications:
+//   - HE-LTF type is hardcoded to 4x for all HE MU/HE TB PPDUs.  The standard
+//     permits 1x/2x/4x HE-LTF modes; only 4x is currently supported.
+//   - The HE MU PHY header length is estimated as HE-SIG-A + HE-SIG-B common +
+//     20 bits per user, not a bit-exact serialization of Tables 27-21..27-24.
+//   - MU-MIMO grouping is detected only by checking whether multiple users
+//     share the same RU index.  Full standard MU-MIMO grouping constraints are
+//     enforced later in Ieee80211HePhyCalculator.
+//   - Single-user HE TB transmissions shift center frequency/power to the
+//     assigned RU; this approximates per-RU UL transmission without modeling
+//     trigger-based timing advance.
+
 #include "inet/mobility/contract/IMobility.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmitterAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
