@@ -5,8 +5,6 @@
 //
 
 
-#include <string.h>
-
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
 

@@ -379,26 +379,14 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             // B27: LDPC Extra Symbol Segment (1 bit)
             stream.writeBit(trigger->getCoding() & 1);
 
-            // Pack 32-bit triggerId into remaining fields:
-            // B28–B33: AP Tx Power (6 bits)
-            // B34-B35: Pre-FEC Padding Factor (2 bits) - 0
-            // B36: PE Disambiguity (1 bit)
-            // B37–B52: UL Spatial Reuse (16 bits)
-            // B53: Doppler (1 bit) - 0
-            // B54–B62: UL HE-SIG-A2 Reserved (9 bits)
-            // B63: Reserved (1 bit) - 0
-            uint32_t tid = trigger->getTriggerId();
-            uint8_t apTxPower = (tid >> 25) & 0x3F;
-            bool peDisambiguity = (tid >> 31) & 1;
-            uint16_t ulSpatialReuse = tid & 0xFFFF;
-            uint16_t ulHeSigA2Reserved = (tid >> 16) & 0x1FF;
-
-            stream.writeNBitsOfUint64Be(apTxPower, 6);
+            // Standard Trigger Common Info tail. triggerId is simulator correlation
+            // metadata and is carried by HE MU PHY tags/headers, not by these MAC bits.
+            stream.writeNBitsOfUint64Be(0, 6); // AP Tx Power
             stream.writeNBitsOfUint64Be(0, 2); // Pre-FEC padding factor
-            stream.writeBit(peDisambiguity);
-            stream.writeNBitsOfUint64Be(ulSpatialReuse, 16);
+            stream.writeBit(false); // PE Disambiguity
+            stream.writeNBitsOfUint64Be(0, 16); // UL Spatial Reuse
             stream.writeBit(false); // Doppler
-            stream.writeNBitsOfUint64Be(ulHeSigA2Reserved, 9);
+            stream.writeNBitsOfUint64Be(0, 9); // UL HE-SIG-A2 Reserved
             stream.writeBit(false); // Reserved bit B63
 
             // --- User Info List ---
@@ -556,11 +544,15 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             }
             else if (multiTid && compressedBitmap) {
                 auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(chunk);
-                stream.writeByte(multiTidReq->getRecordsArraySize());
+                if (multiTidReq->getRecordsArraySize() == 0 || multiTidReq->getRecordsArraySize() > 16)
+                    throw cRuntimeError("Multi-TID BlockAckReq must contain 1..16 records");
+                stream.writeUint4(multiTidReq->getRecordsArraySize() - 1);
                 for (unsigned int i = 0; i < multiTidReq->getRecordsArraySize(); ++i) {
                     const auto& rec = multiTidReq->getRecords(i);
-                    stream.writeByte(rec.tid);
-                    stream.writeUint16Be(rec.startingSequenceNumber);
+                    stream.writeNBitsOfUint64Be(0, 12);
+                    stream.writeUint4(rec.tid & 0xF);
+                    stream.writeNBitsOfUint64Be(0, 4);
+                    stream.writeNBitsOfUint64Be(rec.startingSequenceNumber & 0xFFF, 12);
                 }
                 ASSERT(stream.getLength() - startPos == multiTidReq->getChunkLength());
             }
@@ -600,11 +592,15 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             }
             else if (multiTid && compressedBitmap) {
                 auto multiTidAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(chunk);
-                stream.writeByte(multiTidAck->getRecordsArraySize());
+                if (multiTidAck->getRecordsArraySize() == 0 || multiTidAck->getRecordsArraySize() > 16)
+                    throw cRuntimeError("Multi-TID BlockAck must contain 1..16 records");
+                stream.writeUint4(multiTidAck->getRecordsArraySize() - 1);
                 for (unsigned int i = 0; i < multiTidAck->getRecordsArraySize(); ++i) {
                     const auto& rec = multiTidAck->getRecords(i);
-                    stream.writeByte(rec.tid);
-                    stream.writeUint16Be(rec.startingSequenceNumber);
+                    stream.writeNBitsOfUint64Be(0, 12);
+                    stream.writeUint4(rec.tid & 0xF);
+                    stream.writeNBitsOfUint64Be(0, 4);
+                    stream.writeNBitsOfUint64Be(rec.startingSequenceNumber & 0xFFF, 12);
                     stream.writeUint64Be(rec.bitmap);
                 }
                 ASSERT(stream.getLength() - startPos == multiTidAck->getChunkLength());
@@ -890,17 +886,14 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             auto coding = stream.readBit();
             trigger->setCoding(coding);
 
-            auto apTxPower = stream.readNBitsToUint64Be(6);
+            stream.readNBitsToUint64Be(6); // AP Tx Power
             stream.readNBitsToUint64Be(2); // Pre-FEC padding factor
-            auto peDisambiguity = stream.readBit();
-            auto ulSpatialReuse = stream.readNBitsToUint64Be(16);
+            stream.readBit(); // PE Disambiguity
+            stream.readNBitsToUint64Be(16); // UL Spatial Reuse
             stream.readBit(); // Doppler
-            auto ulHeSigA2Reserved = stream.readNBitsToUint64Be(9);
+            stream.readNBitsToUint64Be(9); // UL HE-SIG-A2 Reserved
             stream.readBit(); // Reserved bit B63
-
-            // Unpack 32-bit triggerId
-            uint32_t triggerId = ulSpatialReuse | (ulHeSigA2Reserved << 16) | (apTxPower << 25) | (peDisambiguity ? (1U << 31) : 0);
-            trigger->setTriggerId(triggerId);
+            trigger->setTriggerId(0);
 
             // Determine number of users from remaining chunk length
             int remainingBytes = trigger->getChunkLength().get<B>() - 24;
@@ -1014,11 +1007,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             blockAckReq->setMultiTid(multiTid);
             blockAckReq->setCompressedBitmap(compressedBitmap);
             blockAckReq->setReserved(stream.readNBitsToUint64Be(9));
+            auto tidInfo = stream.readUint4();
             if (!multiTid && !compressedBitmap) {
                 auto basicBlockAckReq = makeShared<Ieee80211BasicBlockAckReq>();
                 copyBasicFields(basicBlockAckReq, macHeader);
                 copyBlockAckReqFrameFields(basicBlockAckReq, blockAckReq);
-                basicBlockAckReq->setTidInfo(stream.readUint4());
+                basicBlockAckReq->setTidInfo(tidInfo);
                 basicBlockAckReq->setFragmentNumber(stream.readUint32Be());
                 stream.readUint64Be();
                 basicBlockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint64Be()));
@@ -1028,7 +1022,7 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 auto compressedBlockAckReq = makeShared<Ieee80211CompressedBlockAckReq>();
                 copyBasicFields(compressedBlockAckReq, macHeader);
                 copyBlockAckReqFrameFields(compressedBlockAckReq, blockAckReq);
-                compressedBlockAckReq->setTidInfo(stream.readUint4());
+                compressedBlockAckReq->setTidInfo(tidInfo);
                 compressedBlockAckReq->setFragmentNumber(stream.readUint32Be());
                 stream.readUint64Be();
                 compressedBlockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint64Be()));
@@ -1038,12 +1032,14 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
                 copyBasicFields(multiTidReq, macHeader);
                 copyBlockAckReqFrameFields(multiTidReq, blockAckReq);
-                auto count = stream.readByte();
+                auto count = tidInfo + 1;
                 multiTidReq->setRecordsArraySize(count);
                 for (unsigned int i = 0; i < count; ++i) {
                     Ieee80211MultiTidBlockAckReqRecord rec;
-                    rec.tid = stream.readByte();
-                    rec.startingSequenceNumber = stream.readUint16Be();
+                    stream.readNBitsToUint64Be(12);
+                    rec.tid = stream.readUint4();
+                    stream.readNBitsToUint64Be(4);
+                    rec.startingSequenceNumber = stream.readNBitsToUint64Be(12);
                     multiTidReq->setRecords(i, rec);
                 }
                 return multiTidReq;
@@ -1064,11 +1060,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             blockAck->setMultiTid(multiTid);
             blockAck->setCompressedBitmap(compressedBitmap);
             blockAck->setReserved(stream.readNBitsToUint64Be(9));
+            auto tidInfo = stream.readUint4();
             if (!multiTid && !compressedBitmap) {
                 auto basicBlockAck = makeShared<Ieee80211BasicBlockAck>();
                 copyBasicFields(basicBlockAck, macHeader);
                 copyBlockAckFrameFields(basicBlockAck, blockAck);
-                basicBlockAck->setTidInfo(stream.readUint4());
+                basicBlockAck->setTidInfo(tidInfo);
                 basicBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint16Be()));
                 for (size_t i = 0; i < 64; ++i) {
                     std::vector<uint8_t> bytes;
@@ -1084,7 +1081,7 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 copyBasicFields(compressedBlockAck, macHeader);
                 copyBlockAckFrameFields(compressedBlockAck, blockAck);
 
-                compressedBlockAck->setTidInfo(stream.readUint4());
+                compressedBlockAck->setTidInfo(tidInfo);
                 compressedBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint16Be()));
                 std::vector<uint8_t> bytes;
                 for (size_t i = 0; i < 8; ++i) {
@@ -1097,7 +1094,6 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
                 copyBasicFields(multiStaBlockAck, macHeader);
                 copyBlockAckFrameFields(multiStaBlockAck, blockAck);
-                stream.readUint4();
                 auto count = stream.readByte();
                 multiStaBlockAck->setRecordsArraySize(count);
                 for (unsigned int i = 0; i < count; i++) {
@@ -1116,12 +1112,14 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 auto multiTidAck = makeShared<Ieee80211MultiTidBlockAck>();
                 copyBasicFields(multiTidAck, macHeader);
                 copyBlockAckFrameFields(multiTidAck, blockAck);
-                auto count = stream.readByte();
+                auto count = tidInfo + 1;
                 multiTidAck->setRecordsArraySize(count);
                 for (unsigned int i = 0; i < count; ++i) {
                     Ieee80211MultiTidBlockAckRecord rec;
-                    rec.tid = stream.readByte();
-                    rec.startingSequenceNumber = stream.readUint16Be();
+                    stream.readNBitsToUint64Be(12);
+                    rec.tid = stream.readUint4();
+                    stream.readNBitsToUint64Be(4);
+                    rec.startingSequenceNumber = stream.readNBitsToUint64Be(12);
                     rec.bitmap = stream.readUint64Be();
                     multiTidAck->setRecords(i, rec);
                 }

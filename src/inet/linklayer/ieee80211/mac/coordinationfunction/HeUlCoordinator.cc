@@ -182,6 +182,14 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
                 negotiated->valid && negotiated->intersection.ldpc;
     }
     schedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
+    if (schedule.coding == physicallayer::HE_CODING_BCC) {
+        schedule.allocations.erase(std::remove_if(schedule.allocations.begin(), schedule.allocations.end(),
+                [] (const auto& allocation) {
+                    return allocation.ru.toneSize >= 484;
+                }), schedule.allocations.end());
+        for (auto& allocation : schedule.allocations)
+            allocation.mcs = std::min(allocation.mcs, 9);
+    }
     long scheduledUsers = 0;
     long randomAccessRus = 0;
     for (const auto& allocation : schedule.allocations)

@@ -668,7 +668,7 @@ Run from the repository root with:
 
 ```sh
 export CCACHE_DISABLE=1
-source /home/user/omnetpp-6.4.0/setenv -f
+source /home/user/omnetpp-6.4.0aipre2/setenv -f
 source setenv -q
 bin/inet_run_unit_tests -m release -f "(Ieee80211He|HeDlScheduler).*\\.test"
 ```

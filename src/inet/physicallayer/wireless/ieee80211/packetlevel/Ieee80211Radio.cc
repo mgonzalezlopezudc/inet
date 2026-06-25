@@ -411,10 +411,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             }
             auto codecResult = encodeHeSigBRuAllocation(rus, channelBw);
             uint8_t numCodes = codecResult ? codecResult.allocation.allocationCodes.size() : 0;
-            totalBits += 8 + numCodes * 8 + numUsers * 20;
+            totalBits += numCodes * 8 + numUsers * 20;
         }
-        // Simulator Extension
-        totalBits += 32 + 32 + 8 + heMuPhyHeader->getUsersArraySize() * 161;
         phyHeader->setChunkLength(b(totalBits));
     }
     else

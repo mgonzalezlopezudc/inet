@@ -1,10 +1,12 @@
-In this simulation the AP does not wait to receive the STAs ACKs after sending the HE-MU-BAR-Trigger at event #1003 before sending the next HE-MU-PPDU at event #1425. Is this standard-compliant?
+In this simulation the AP does not wait to receive the STAs ACKs after sending the HE-MU-BAR-Trigger at event #1003 before sending the next HE-MU-PPDU at event #1425. Is this response-timeout behavior standard-compliant?
 
-Yes, the behavior in the simulation is **fully standard-compliant**. 
+Yes for the MAC recovery behavior shown in this trace: the AP waits for the expected response window, times out, ends the TXOP, and then contends again before the next HE-MU-PPDU.
 
-The AP **did wait** for the STAs' BlockAck responses (uplink HE TB PPDUs). However, because the STAs dropped the trigger frame due to bit errors, no responses were sent. The AP waited for the full standard-compliant timeout duration, declared a transmission failure, ended the TXOP, and then performed a standard EDCA backoff contention before transmitting the next `HE-MU-PPDU`.
+Scope note: this report verifies the simulated MAC timing and failure-recovery sequence. It does not claim bit-level 802.11ax wire-format conformance. The current HE PHY header and trigger serialization still carry INET simulator metadata and are not a bit-exact HE-SIG/Trigger-frame encoding.
 
-Here is the exact microsecond-by-microsecond breakdown of the events in [compliance-sim.log](examples/ieee80211/ofdma/compliance-sim.log):
+The AP **did wait** for the STAs' BlockAck responses (uplink HE TB PPDUs). However, because the STAs dropped the trigger frame due to bit errors, no responses were sent. The AP waited for the response timeout duration, declared a transmission failure, ended the TXOP, and then performed EDCA backoff contention before transmitting the next `HE-MU-PPDU`.
+
+Here is the exact microsecond-by-microsecond breakdown of the events in [compliance-sim.log](compliance-sim.log):
 
 ### 1. Trigger Frame Transmission (Event #1003)
 * **Start Time (`t = 0.502713836666 s`)**: The AP begins transmitting the `HE-MU-BAR-Trigger` frame.
@@ -35,4 +37,4 @@ Here is the exact microsecond-by-microsecond breakdown of the events in [complia
 ---
 
 ### Conclusion
-The AP **did wait** for the STAs' responses. It only proceeded to transmit the next packet because the response collection timer expired without receiving any ACKs, and it successfully contended for the channel again. This behavior aligns precisely with the IEEE 802.11ax standard rules for transmission failure recovery.
+The AP **did wait** for the STAs' responses. It only proceeded to transmit the next packet because the response collection timer expired without receiving any ACKs, and it successfully contended for the channel again. This supports the intended 802.11ax MAC failure-recovery behavior in the simulator, while leaving wire-format conformance as a separate, currently partial area.

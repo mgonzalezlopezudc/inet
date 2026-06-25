@@ -277,8 +277,8 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
             rus.push_back(ru);
         }
         auto codecResult = encodeHeSigBRuAllocation(rus, channelBw);
-        uint8_t numCodes = codecResult ? codecResult.allocation.allocationCodes.size() : 0;
-        stream.writeByte(numCodes);
+        if (!codecResult)
+            throw cRuntimeError("Cannot serialize HE-SIG-B RU allocation: %s", codecResult.error.c_str());
         for (uint8_t code : codecResult.allocation.allocationCodes) {
             stream.writeByte(code);
         }
@@ -295,24 +295,9 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         }
     }
 
-    // --- 3. Simulator Extension Block (internal simulator state metadata) ---
-    stream.writeUint32Be(heMuPhyHeader->getTriggerId());
-    stream.writeUint32Be(heMuPhyHeader->getCommonDuration().inUnit(SIMTIME_NS));
-    stream.writeByte(numUsers);
-    for (unsigned int i = 0; i < numUsers; ++i) {
-        const auto& user = heMuPhyHeader->getUsers(i);
-        stream.writeByte(user.ruIndex);
-        stream.writeUint16Be(user.ruToneSize);
-        stream.writeUint16Be(user.ruToneOffset);
-        stream.writeUint16Be(user.staId);
-        stream.writeByte(user.mcs);
-        stream.writeByte(user.numberOfSpatialStreams);
-        stream.writeBit(user.dcm);
-        stream.writeByte(user.streamStartIndex);
-        stream.writeUint16Be((uint16_t)std::lround(user.leakageSum * 10000.0));
-        stream.writeUint32Be(user.psduLength.get<B>());
-        stream.writeUint32Be(user.duration.inUnit(SIMTIME_NS));
-    }
+    // Runtime-only fields such as triggerId, commonDuration, PSDU length and
+    // per-user resolved duration remain in the packet-level chunk object; they
+    // are not HE PHY signaling bits and are intentionally not serialized here.
 }
 
 const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
@@ -351,40 +336,33 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
 
     // --- 2. HE-SIG-B (only if ppduFormat == 0) ---
     if (ppduFormat == 0) {
-        uint8_t numCodes = stream.readByte();
+        int numUsers = numUsersField + 1;
         std::vector<uint8_t> codes;
-        for (uint8_t c = 0; c < numCodes; ++c) {
+        for (int c = 0; c < numUsers; ++c) {
             codes.push_back(stream.readByte());
         }
-        int numUsers = numUsersField + 1;
+        Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
+        auto decoded = decodeHeSigBRuAllocation(codes, Hz(0), channelBw);
+        if (!decoded)
+            throw cRuntimeError("Cannot deserialize HE-SIG-B RU allocation: %s", decoded.error.c_str());
+        heMuPhyHeader->setUsersArraySize(numUsers);
         for (int i = 0; i < numUsers; ++i) {
-            stream.readNBitsToUint64Be(11); // STA-ID
-            stream.readNBitsToUint64Be(4); // MCS
-            stream.readBit(); // Coding
-            stream.readNBitsToUint64Be(3); // NSS
-            stream.readBit(); // DCM
+            Ieee80211HeMuUserInfo info;
+            if (i < (int)decoded.allocation.rus.size()) {
+                const auto& ru = decoded.allocation.rus[i];
+                info.ruIndex = ru.index;
+                info.ruToneSize = ru.toneSize;
+                info.ruToneOffset = ru.toneOffset;
+            }
+            info.staId = stream.readNBitsToUint64Be(11);
+            info.mcs = stream.readNBitsToUint64Be(4);
+            auto userCoding = stream.readBit();
+            if (userCoding != coding)
+                throw cRuntimeError("HE-SIG-B user coding does not match HE-SIG-A coding");
+            info.numberOfSpatialStreams = stream.readNBitsToUint64Be(3) + 1;
+            info.dcm = stream.readBit();
+            heMuPhyHeader->setUsers(i, info);
         }
-    }
-
-    // --- 3. Simulator Extension Block ---
-    heMuPhyHeader->setTriggerId(stream.readUint32Be());
-    heMuPhyHeader->setCommonDuration(SimTime(stream.readUint32Be(), SIMTIME_NS));
-    unsigned int numUsers = stream.readByte();
-    heMuPhyHeader->setUsersArraySize(numUsers);
-    for (unsigned int i = 0; i < numUsers; ++i) {
-        Ieee80211HeMuUserInfo info;
-        info.ruIndex = stream.readByte();
-        info.ruToneSize = stream.readUint16Be();
-        info.ruToneOffset = stream.readUint16Be();
-        info.staId = stream.readUint16Be();
-        info.mcs = stream.readByte();
-        info.numberOfSpatialStreams = stream.readByte();
-        info.dcm = stream.readBit();
-        info.streamStartIndex = stream.readByte();
-        info.leakageSum = stream.readUint16Be() / 10000.0;
-        info.psduLength = B(stream.readUint32Be());
-        info.duration = SimTime(stream.readUint32Be(), SIMTIME_NS);
-        heMuPhyHeader->setUsers(i, info);
     }
 
     return heMuPhyHeader;

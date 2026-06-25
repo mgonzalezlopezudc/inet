@@ -17,28 +17,32 @@ using namespace inet::physicallayer;
 
 // Create original HeMuPhyHeader
 auto origHeader = makeShared<Ieee80211HeMuPhyHeader>();
+auto headerRus = getHeEqualRuLayout(Hz(0), Hz(20e6), 2);
 
 Ieee80211HeMuUserInfo user1;
-user1.ruIndex = 2;
+user1.ruIndex = headerRus[0].index;
+user1.ruToneSize = headerRus[0].toneSize;
+user1.ruToneOffset = headerRus[0].toneOffset;
 user1.staId = 0x155;
 user1.mcs = 4;
 user1.numberOfSpatialStreams = 1;
 origHeader->appendUsers(user1);
 
 Ieee80211HeMuUserInfo user2;
-user2.ruIndex = 4;
+user2.ruIndex = headerRus[1].index;
+user2.ruToneSize = headerRus[1].toneSize;
+user2.ruToneOffset = headerRus[1].toneOffset;
 user2.staId = 0x2aa;
 user2.mcs = 5;
 user2.numberOfSpatialStreams = 2;
 origHeader->appendUsers(user2);
 
-origHeader->setChunkLength(b(506));
+origHeader->setChunkLength(b(120));
 
 EV << "Original Header:\n";
 EV << "users count = " << origHeader->getUsersArraySize() << "\n";
 for (unsigned int i = 0; i < origHeader->getUsersArraySize(); ++i) {
-    EV << "  user[" << i << "]: ruIndex=" << origHeader->getUsers(i).ruIndex
-       << ", staId=" << origHeader->getUsers(i).staId
+    EV << "  user[" << i << "]: staId=" << origHeader->getUsers(i).staId
        << ", mcs=" << (int)origHeader->getUsers(i).mcs
        << ", nss=" << (int)origHeader->getUsers(i).numberOfSpatialStreams << "\n";
 }
@@ -61,11 +65,12 @@ auto recvHeader = pk2->popAtFront<Ieee80211HeMuPhyHeader>();
 EV << "Deserialized Header:\n";
 EV << "users count = " << recvHeader->getUsersArraySize() << "\n";
 for (unsigned int i = 0; i < recvHeader->getUsersArraySize(); ++i) {
-    EV << "  user[" << i << "]: ruIndex=" << recvHeader->getUsers(i).ruIndex
-       << ", staId=" << recvHeader->getUsers(i).staId
+    EV << "  user[" << i << "]: staId=" << recvHeader->getUsers(i).staId
        << ", mcs=" << (int)recvHeader->getUsers(i).mcs
        << ", nss=" << (int)recvHeader->getUsers(i).numberOfSpatialStreams << "\n";
 }
+ASSERT(recvHeader->getUsers(0).ruToneSize == headerRus[0].toneSize);
+ASSERT(recvHeader->getUsers(1).ruToneSize == headerRus[1].toneSize);
 
 auto rus = getHeEqualRuLayout(Hz(5.18e9), Hz(80e6), 4);
 auto encoded = encodeHeSigBRuAllocation(rus, Hz(80e6));
@@ -108,13 +113,13 @@ EV << ".\n";
 %contains: stdout
 Original Header:
 users count = 2
-  user[0]: ruIndex=2, staId=341, mcs=4, nss=1
-  user[1]: ruIndex=4, staId=682, mcs=5, nss=2
-Serialized to 64 bytes
+  user[0]: staId=341, mcs=4, nss=1
+  user[1]: staId=682, mcs=5, nss=2
+Serialized to 15 bytes
 Deserialized Header:
 users count = 2
-  user[0]: ruIndex=2, staId=341, mcs=4, nss=1
-  user[1]: ruIndex=4, staId=682, mcs=5, nss=2
+  user[0]: staId=341, mcs=4, nss=1
+  user[1]: staId=682, mcs=5, nss=2
 HE-SIG-B RU layout codec round-trip and overlap validation passed.
 A-MPDU delimiter EOF, length, CRC, and signature round-trip passed.
 .

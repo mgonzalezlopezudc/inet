@@ -56,7 +56,7 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
                 }
                 multiTidBlockAck->setRecords(i, ackRec);
             }
-            multiTidBlockAck->setChunkLength(B(18 + numRecords * 11));
+            multiTidBlockAck->setChunkLength(B(18 + numRecords * 12));
             auto duration = ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, multiTidBlockAckReq);
             multiTidBlockAck->setDurationField(duration);
             auto blockAckPacket = new Packet("MultiTidBlockAck", multiTidBlockAck);
@@ -104,4 +104,3 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

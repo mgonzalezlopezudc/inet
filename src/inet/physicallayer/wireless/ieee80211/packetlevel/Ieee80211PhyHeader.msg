@@ -184,8 +184,9 @@ struct Ieee80211HeMuUserInfo
 
 //
 // Packet-level common header of a HE downlink MU or trigger-based uplink
-// PPDU. It contains PHY settings shared by all users and a per-user RU list.
-// This is an INET model representation, not a bit-exact HE-SIG encoding.
+// PPDU. The serializer emits the HE signaling fields only; runtime-only model
+// state such as trigger correlation and resolved per-user durations stays in
+// the chunk object and is not part of the serialized PHY header.
 //
 class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 {

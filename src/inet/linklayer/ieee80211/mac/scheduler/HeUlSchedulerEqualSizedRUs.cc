@@ -5,9 +5,6 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerEqualSizedRUs.h"
-
-#include <algorithm>
-
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
 namespace inet {

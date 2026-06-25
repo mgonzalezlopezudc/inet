@@ -50,6 +50,20 @@ B calculateAmpduPsduLength(const std::vector<Packet *>& packets)
     return length;
 }
 
+std::map<Tid, SequenceNumberCyclic> collectStartingSequenceNumbersByTid(const std::vector<Packet *>& packets)
+{
+    std::map<Tid, SequenceNumberCyclic> records;
+    for (auto packet : packets) {
+        auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
+        if (header == nullptr)
+            continue;
+        auto it = records.find(header->getTid());
+        if (it == records.end() || header->getSequenceNumber().get() < it->second.get())
+            records[header->getTid()] = header->getSequenceNumber();
+    }
+    return records;
+}
+
 } // namespace
 
 class HeDlMuPpduFs : public IFrameSequence
@@ -157,15 +171,21 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
         auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddress) : nullptr;
         if (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx) {
+            auto recordsByTid = collectStartingSequenceNumbersByTid(getActiveAllocation().packets);
+            if (recordsByTid.empty())
+                recordsByTid[tid] = startingSequenceNumber;
             auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
             multiTidReq->setReceiverAddress(receiverAddress);
             multiTidReq->setTransmitterAddress(macModule->getAddress());
-            multiTidReq->setRecordsArraySize(1);
-            Ieee80211MultiTidBlockAckReqRecord rec;
-            rec.tid = tid;
-            rec.startingSequenceNumber = startingSequenceNumber.get();
-            multiTidReq->setRecords(0, rec);
-            multiTidReq->setChunkLength(B(22));
+            multiTidReq->setRecordsArraySize(recordsByTid.size());
+            unsigned int index = 0;
+            for (const auto& entry : recordsByTid) {
+                Ieee80211MultiTidBlockAckReqRecord rec;
+                rec.tid = entry.first;
+                rec.startingSequenceNumber = entry.second.get();
+                multiTidReq->setRecords(index++, rec);
+            }
+            multiTidReq->setChunkLength(B(18 + 4 * recordsByTid.size()));
             return multiTidReq;
         }
 
@@ -188,14 +208,16 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
         auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(getActiveAllocation().staAddress) : nullptr;
         bool multiTid = (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx);
 
-        auto blockAckDuration = responseMode->getDuration(multiTid ? b(B(29)) : LENGTH_BASIC_BLOCKACK);
-        auto barDuration = responseMode->getDuration(multiTid ? B(22) : B(38));
+        auto activeRecordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
+        auto blockAckDuration = responseMode->getDuration(multiTid ? b(B(18 + 12 * activeRecordCount)) : LENGTH_BASIC_BLOCKACK);
+        auto barDuration = responseMode->getDuration(multiTid ? B(18 + 4 * activeRecordCount) : B(38));
         auto remainingDuration = owner->modeSet->getSifsTime() + blockAckDuration;
         for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++) {
             auto nextNegotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(owner->activeAllocations.at(nextIndex).staAddress) : nullptr;
             bool nextMultiTid = (nextNegotiated != nullptr && nextNegotiated->intersection.multiTidAggregationTx);
-            auto nextBlockAckDuration = responseMode->getDuration(nextMultiTid ? b(B(29)) : LENGTH_BASIC_BLOCKACK);
-            auto nextBarDuration = responseMode->getDuration(nextMultiTid ? B(22) : B(38));
+            auto nextRecordCount = nextMultiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(owner->activeAllocations.at(nextIndex).packets).size()) : 0;
+            auto nextBlockAckDuration = responseMode->getDuration(nextMultiTid ? b(B(18 + 12 * nextRecordCount)) : LENGTH_BASIC_BLOCKACK);
+            auto nextBarDuration = responseMode->getDuration(nextMultiTid ? B(18 + 4 * nextRecordCount) : B(38));
             remainingDuration += owner->modeSet->getSifsTime() + nextBarDuration + owner->modeSet->getSifsTime() + nextBlockAckDuration;
         }
         return remainingDuration;
@@ -212,14 +234,15 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
         Ptr<Ieee80211BlockAckReq> dummyReq;
         if (multiTid) {
             auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
-            multiTidReq->setRecordsArraySize(1);
+            multiTidReq->setRecordsArraySize(std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()));
             dummyReq = multiTidReq;
         } else {
             dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
         }
 
         auto responseMode = getRateSelection()->computeResponseBlockAckFrameMode(lastTransmittedPacket, dummyReq);
-        return owner->modeSet->getSifsTime() + responseMode->getDuration(multiTid ? b(B(29)) : LENGTH_BASIC_BLOCKACK) + owner->modeSet->getSlotTime();
+        auto recordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
+        return owner->modeSet->getSifsTime() + responseMode->getDuration(multiTid ? b(B(18 + 12 * recordCount)) : LENGTH_BASIC_BLOCKACK) + owner->modeSet->getSlotTime();
     }
 
     IFrameSequenceStep *prepareBarStep(FrameSequenceContext *context)
@@ -613,6 +636,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         Packet *packet = nullptr;
         Ptr<const Ieee80211DataHeader> dataHeader;
         std::vector<Packet *> packets;
+        bool multiTidAggregation = false;
         B psduLength = B(0);
         uint16_t associationId = 0;
     };
@@ -774,6 +798,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         selectedAllocation.sourceQueue = sourceQueue;
         selectedAllocation.packet = staPacket;
         selectedAllocation.dataHeader = dataHeader;
+        auto hcfMacForCapabilities = hcf != nullptr ? dynamic_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule()) : nullptr;
+        auto negotiated = hcfMacForCapabilities != nullptr ? hcfMacForCapabilities->getMib()->findNegotiatedHeCapabilities(alloc.staAddress) : nullptr;
+        selectedAllocation.multiTidAggregation = negotiated != nullptr &&
+                negotiated->valid && negotiated->intersection.multiTidAggregationTx;
         if (hcf != nullptr) {
             auto hcfMac = check_and_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule());
             ASSERT(hcfMac != nullptr);
@@ -885,14 +913,15 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             continue;
         }
 
-        auto agreement = originatorBAHandler->getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
-        int blockAckWindowLimit = agreement == nullptr ? 0 : agreement->getBufferSize();
-        int occupiedSlots = ackHandler == nullptr ? 0 :
-                ackHandler->getOccupiedBlockAckSequenceNumbers(
-                        dataHeader->getReceiverAddress(), dataHeader->getTid()).size();
-        int availableSlots = std::max(0, blockAckWindowLimit - occupiedSlots);
-        int packetLimit = std::min(maxAmpduMpduCount, availableSlots);
-        if (packetLimit <= 0) {
+        auto getAvailableSlots = [&] (Tid tid) {
+            auto agreement = originatorBAHandler->getAgreement(dataHeader->getReceiverAddress(), tid);
+            int blockAckWindowLimit = agreement == nullptr ? 0 : agreement->getBufferSize();
+            int occupiedSlots = ackHandler == nullptr ? 0 :
+                    ackHandler->getOccupiedBlockAckSequenceNumbers(
+                            dataHeader->getReceiverAddress(), tid).size();
+            return std::max(0, blockAckWindowLimit - occupiedSlots);
+        };
+        if (getAvailableSlots(dataHeader->getTid()) <= 0) {
             warnIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
                     selectedAllocation.allocation.ru.index, "Block Ack window has no available entries");
             rejectedFinalValidation++;
@@ -903,16 +932,19 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         ASSERT(queueForPacking != nullptr);
         // Aggregate additional eligible MPDUs for this STA up to the Block Ack window,
         // A-MPDU MPDU count, PSDU length, and aligned-duration limits.
+        std::map<Tid, int> selectedPacketsByTid;
         for (int i = 0; i < queueForPacking->getNumPackets() &&
-                (int)selectedAllocation.packets.size() < packetLimit; ++i) {
+                (int)selectedAllocation.packets.size() < maxAmpduMpduCount; ++i) {
             Packet *candidatePacket = queueForPacking->getPacket(i);
             auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(
                     candidatePacket->peekAtFront<Ieee80211MacHeader>());
             if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||
                     candidateHeader->getReceiverAddress() != selectedAllocation.allocation.staAddress ||
-                    candidateHeader->getTid() != dataHeader->getTid() ||
+                    (!selectedAllocation.multiTidAggregation && candidateHeader->getTid() != dataHeader->getTid()) ||
                     !hasActiveOriginatorBlockAckAgreement(originatorBAHandler,
                             candidateHeader->getReceiverAddress(), candidateHeader->getTid()))
+                continue;
+            if (selectedPacketsByTid[candidateHeader->getTid()] >= getAvailableSlots(candidateHeader->getTid()))
                 continue;
 
             auto proposedPackets = selectedAllocation.packets;
@@ -927,6 +959,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                     scheduleContext.guardInterval) > packingDurationLimit)
                 break;
             selectedAllocation.packets = proposedPackets;
+            selectedPacketsByTid[candidateHeader->getTid()]++;
             selectedAllocation.psduLength = proposedLength;
         }
         if (selectedAllocation.packets.empty()) {
