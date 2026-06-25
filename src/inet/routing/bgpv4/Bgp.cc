@@ -7,7 +7,6 @@
 #include "inet/routing/bgpv4/Bgp.h"
 
 #include "inet/common/ModuleAccess.h"
-#include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/routing/bgpv4/BgpConfigReader.h"
 #include "inet/routing/bgpv4/BgpSession.h"
 
@@ -23,38 +22,34 @@ Bgp::Bgp()
 Bgp::~Bgp()
 {
     cancelAndDelete(startupTimer);
+    cancelAndDelete(shutdownTimer);
     delete bgpRouter;
 }
 
 void Bgp::initialize(int stage)
 {
-    SimpleModule::initialize(stage);
+    RoutingProtocolBase::initialize(stage);
 
     if (stage == INITSTAGE_LOCAL) {
         ift.reference(this, "interfaceTableModule", true);
         rt.reference(this, "routingTableModule", true);
 
-        startupTimer = new cMessage("BGP-startup");
+        const char *addressFamily = par("addressFamily");
+        if (!strcmp(addressFamily, "ipv4"))
+            networkProtocol = &Protocol::ipv4;
+        else if (!strcmp(addressFamily, "ipv6"))
+            networkProtocol = &Protocol::ipv6;
+        else
+            throw cRuntimeError("Bgp: invalid addressFamily '%s' (must be 'ipv4' or 'ipv6')", addressFamily);
 
-        WATCH(isUp);
-    }
-    else if (stage == INITSTAGE_ROUTING_PROTOCOLS) { // interfaces and static routes are already initialized
-        cModule *node = findContainingNode(this);
-        NodeStatus *nodeStatus = node ? check_and_cast_nullable<NodeStatus *>(node->getSubmodule("status")) : nullptr;
-        isUp = !nodeStatus || nodeStatus->getState() == NodeStatus::UP;
-        if (isUp) {
-            simtime_t startupTime = par("startupTime");
-            if (startupTime == 0)
-                createBgpRouter();
-            else
-                scheduleAfter(startupTime, startupTimer);
-        }
+        startupTimer = new cMessage("BGP-startup");
+        shutdownTimer = new cMessage("BGP-shutdown");
     }
 }
 
 void Bgp::finish()
 {
-    if (!isUp) {
+    if (!bgpRouter) {
         EV_ERROR << "Protocol is turned off. \n";
         return;
     }
@@ -62,34 +57,109 @@ void Bgp::finish()
     bgpRouter->recordStatistics();
 }
 
-void Bgp::handleMessage(cMessage *msg)
+void Bgp::handleMessageWhenUp(cMessage *msg)
 {
-    if (!isUp) {
-        if (msg->isSelfMessage())
-            throw cRuntimeError("Model error: self msg '%s' received when protocol is down", msg->getName());
-        EV_ERROR << "Protocol is turned off, dropping '" << msg->getName() << "' message\n";
-        delete msg;
-        return;
-    }
-
     if (msg == startupTimer)
         createBgpRouter();
-    else if (msg->isSelfMessage()) // BGP level
-        handleTimer(msg);
-    else if (!strcmp(msg->getArrivalGate()->getName(), "socketIn")) // TCP level
-        bgpRouter->processMessageFromTCP(msg);
+    else if (msg == shutdownTimer) {
+        // Graceful stop: TCP has had shutdownTime to flush the session teardown; now destroy
+        // the BGP state and let the lifecycle stop operation finish.
+        ASSERT(operationalState == State::STOPPING_OPERATION);
+        delete bgpRouter;
+        bgpRouter = nullptr;
+        finishActiveOperation();
+    }
+    else if (operationalState == State::STOPPING_OPERATION) {
+        // Graceful shutdown window: sessions are already closing and TCP finishes the teardown
+        // on its own. Ignore further BGP timers / TCP indications (no reconnect, no re-close);
+        // the BGP state is destroyed when shutdownTimer fires. Self-messages are owned by
+        // bgpRouter and cancelAndDelete'd then, so only delete foreign (TCP) messages here.
+        if (!msg->isSelfMessage())
+            delete msg;
+    }
+    else {
+        if (!bgpRouter) {
+            if (msg->isSelfMessage())
+                throw cRuntimeError("Model error: self msg '%s' received before BGP startup", msg->getName());
+            EV_WARN << "BGP has not started yet, dropping '" << msg->getName() << "' message\n";
+            delete msg;
+        }
+        else if (msg->isSelfMessage()) // BGP level
+            handleTimer(msg);
+        else if (!strcmp(msg->getArrivalGate()->getName(), "socketIn")) // TCP level
+            bgpRouter->processMessageFromTcp(msg);
+        else
+            delete msg;
+    }
+}
+
+void Bgp::handleStartOperation(LifecycleOperation *operation)
+{
+    startBgp();
+}
+
+void Bgp::handleStopOperation(LifecycleOperation *operation)
+{
+    // Graceful shutdown: close the sessions (TCP FIN) and give TCP shutdownTime to flush the
+    // teardown before the BGP state is destroyed (in the shutdownTimer handler). The stop
+    // operation finishes asynchronously, mirroring Rip::handleStopOperation.
+    cancelEvent(startupTimer);
+    removeBgpRoutes();
+    if (bgpRouter) {
+        bgpRouter->closeSessions(false);
+        scheduleAfter(par("shutdownTime"), shutdownTimer);
+        delayActiveOperationFinish(par("stopOperationTimeout"));
+    }
+    // else: BGP not started yet, nothing to flush; the operation finishes synchronously.
+}
+
+void Bgp::handleCrashOperation(LifecycleOperation *operation)
+{
+    stopBgp(true);
+}
+
+void Bgp::startBgp()
+{
+    ASSERT(bgpRouter == nullptr);
+    simtime_t startupTime = par("startupTime");
+    if (startupTime == 0)
+        createBgpRouter();
     else
-        delete msg;
+        scheduleAfter(startupTime, startupTimer);
+}
+
+void Bgp::stopBgp(bool abort)
+{
+    cancelEvent(startupTimer);
+    cancelEvent(shutdownTimer);
+    removeBgpRoutes();
+    if (bgpRouter)
+        bgpRouter->closeSessions(abort);
+    delete bgpRouter;
+    bgpRouter = nullptr;
+}
+
+void Bgp::removeBgpRoutes()
+{
+    for (int i = rt->getNumRoutes() - 1; i >= 0; i--) {
+        IRoute *route = rt->getRoute(i);
+        if (route->getSourceType() == IRoute::BGP) {
+            EV_INFO << "Removing BGP route to " << route->getDestinationAsGeneric()
+                    << "/" << route->getPrefixLength() << endl;
+            rt->deleteRoute(route);
+        }
+    }
 }
 
 void Bgp::createBgpRouter()
 {
-    bgpRouter = new BgpRouter(this, ift, rt);
+    ASSERT(bgpRouter == nullptr);
+    bgpRouter = new BgpRouter(this, ift, rt, networkProtocol);
 
     // read BGP configuration
     cXMLElement *bgpConfig = par("bgpConfig");
     BgpConfigReader configReader(this, ift);
-    configReader.loadConfigFromXML(bgpConfig, bgpRouter);
+    configReader.loadConfigFromXml(bgpConfig, bgpRouter);
 
     bgpRouter->printSessionSummary();
     bgpRouter->addWatches();
@@ -102,22 +172,22 @@ void Bgp::handleTimer(cMessage *timer)
         switch (timer->getKind()) {
             case START_EVENT_KIND:
                 EV_INFO << "Processing Start Event" << std::endl;
-                pSession->getFSM()->ManualStart();
+                pSession->getFsm()->ManualStart();
                 break;
 
             case CONNECT_RETRY_KIND:
                 EV_INFO << "Expiring Connect Retry Timer" << std::endl;
-                pSession->getFSM()->ConnectRetryTimer_Expires();
+                pSession->getFsm()->ConnectRetryTimer_Expires();
                 break;
 
             case HOLD_TIME_KIND:
                 EV_INFO << "Expiring Hold Timer" << std::endl;
-                pSession->getFSM()->HoldTimer_Expires();
+                pSession->getFsm()->HoldTimer_Expires();
                 break;
 
             case KEEP_ALIVE_KIND:
                 EV_INFO << "Expiring Keep Alive timer" << std::endl;
-                pSession->getFSM()->KeepaliveTimer_Expires();
+                pSession->getFsm()->KeepaliveTimer_Expires();
                 break;
 
             default:
@@ -128,4 +198,3 @@ void Bgp::handleTimer(cMessage *timer)
 
 } // namespace bgp
 } // namespace inet
-

@@ -22,12 +22,11 @@ BgpSession::BgpSession(BgpRouter& bgpRouter) : bgpRouter(bgpRouter)
 
 BgpSession::~BgpSession()
 {
-    bgpRouter.getCancelAndDelete(_ptrConnectRetryTimer);
-    bgpRouter.getCancelAndDelete(_ptrStartEvent);
-    bgpRouter.getCancelAndDelete(_ptrHoldTimer);
-    bgpRouter.getCancelAndDelete(_ptrKeepAliveTimer);
+    bgpRouter.cancelAndDelete(_ptrConnectRetryTimer);
+    bgpRouter.cancelAndDelete(_ptrStartEvent);
+    bgpRouter.cancelAndDelete(_ptrHoldTimer);
+    bgpRouter.cancelAndDelete(_ptrKeepAliveTimer);
     delete _info.socket;
-    delete _info.socketListen;
     delete _fsm;
 }
 
@@ -35,9 +34,9 @@ void BgpSession::setInfo(SessionInfo info)
 {
     _info.sessionType = info.sessionType;
     _info.ASValue = info.ASValue;
-    _info.routerID = info.routerID;
+    _info.routerId = info.routerId;
     _info.peerAddr = info.peerAddr;
-    _info.sessionID = info.sessionID;
+    _info.sessionId = info.sessionId;
     _info.linkIntf = info.linkIntf;
     _info.ebgpMultihop = info.ebgpMultihop;
     _info.socket = new TcpSocket();
@@ -53,14 +52,14 @@ void BgpSession::setTimers(simtime_t *delayTab)
         // if this BGP router does not establish any EGP connection, then start this IGP session
         if (bgpRouter.getNumEgpSessions() == 0) {
             _ptrStartEvent = new cMessage("BGP Start", START_EVENT_KIND);
-            bgpRouter.getScheduleAt(simTime() + _StartEventTime, _ptrStartEvent);
+            bgpRouter.scheduleAt(simTime() + _StartEventTime, _ptrStartEvent);
             _ptrStartEvent->setContextPointer(this);
         }
     }
     else if (delayTab[3] != SIMTIME_ZERO) {
         _StartEventTime = delayTab[3];
         _ptrStartEvent = new cMessage("BGP Start", START_EVENT_KIND);
-        bgpRouter.getScheduleAt(simTime() + _StartEventTime, _ptrStartEvent);
+        bgpRouter.scheduleAt(simTime() + _StartEventTime, _ptrStartEvent);
         _ptrStartEvent->setContextPointer(this);
     }
     _ptrConnectRetryTimer = new cMessage("BGP Connect Retry", CONNECT_RETRY_KIND);
@@ -77,35 +76,58 @@ void BgpSession::startConnection()
     if (_ptrStartEvent == nullptr)
         _ptrStartEvent = new cMessage("BGP Start", START_EVENT_KIND);
 
-    if (_info.sessionType == IGP) {
-        if (simTime() > _StartEventTime)
-            _StartEventTime = simTime();
-        if (!_ptrStartEvent->isScheduled())
-            bgpRouter.getScheduleAt(_StartEventTime, _ptrStartEvent);
-        _ptrStartEvent->setContextPointer(this);
-    }
+    if (simTime() > _StartEventTime)
+        _StartEventTime = simTime();
+    if (!_ptrStartEvent->isScheduled())
+        bgpRouter.scheduleAt(_StartEventTime, _ptrStartEvent);
+    _ptrStartEvent->setContextPointer(this);
 }
 
-void BgpSession::restartsHoldTimer()
+void BgpSession::scheduleReconnect()
+{
+    // Re-establish a dropped session after the ConnectRetryTimer interval (RFC 4271), NOT at
+    // the same instant as the loss. An instant reconnect makes two peers that both lost the
+    // session ping-pong: each re-opens, collides with the other, drops, and re-opens again at
+    // (nearly) the same simtime — a livelock that never reconverges. The delay spaces the
+    // retries so the session can actually come back up.
+    if (_ptrStartEvent == nullptr)
+        _ptrStartEvent = new cMessage("BGP Start", START_EVENT_KIND);
+    if (!_ptrStartEvent->isScheduled())
+        bgpRouter.scheduleAt(simTime() + _connectRetryTime, _ptrStartEvent);
+    _ptrStartEvent->setContextPointer(this);
+}
+
+void BgpSession::cancelReconnect()
+{
+    // Once (re-)established, drop any pending reconnect so a stale Start event cannot later
+    // disrupt the live session.
+    if (_ptrStartEvent != nullptr)
+        bgpRouter.cancelEvent(_ptrStartEvent);
+}
+
+void BgpSession::restartHoldTimer()
 {
     if (_holdTime != 0) {
-        bgpRouter.getCancelEvent(_ptrHoldTimer);
-        bgpRouter.getScheduleAt(simTime() + _holdTime, _ptrHoldTimer);
+        bgpRouter.cancelEvent(_ptrHoldTimer);
+        bgpRouter.scheduleAt(simTime() + _holdTime, _ptrHoldTimer);
     }
 }
 
-void BgpSession::restartsKeepAliveTimer()
+void BgpSession::restartKeepAliveTimer()
 {
-    bgpRouter.getCancelEvent(_ptrKeepAliveTimer);
-    bgpRouter.getScheduleAt(simTime() + _keepAliveTime, _ptrKeepAliveTimer);
+    bgpRouter.cancelEvent(_ptrKeepAliveTimer);
+    bgpRouter.scheduleAt(simTime() + _keepAliveTime, _ptrKeepAliveTimer);
 }
 
-void BgpSession::restartsConnectRetryTimer(bool start)
+void BgpSession::restartConnectRetryTimer()
 {
-    bgpRouter.getCancelEvent(_ptrConnectRetryTimer);
-    if (!start) {
-        bgpRouter.getScheduleAt(simTime() + _connectRetryTime, _ptrConnectRetryTimer);
-    }
+    bgpRouter.cancelEvent(_ptrConnectRetryTimer);
+    bgpRouter.scheduleAt(simTime() + _connectRetryTime, _ptrConnectRetryTimer);
+}
+
+void BgpSession::stopConnectRetryTimer()
+{
+    bgpRouter.cancelEvent(_ptrConnectRetryTimer);
 }
 
 void BgpSession::sendOpenMessage()
@@ -113,9 +135,10 @@ void BgpSession::sendOpenMessage()
     const auto& openMsg = makeShared<BgpOpenMessage>();
     openMsg->setMyAS(_info.ASValue);
     openMsg->setHoldTime(_holdTime);
-    openMsg->setBGPIdentifier(_info.socket->getLocalAddress().toIpv4());
+    // BGP Identifier is a 4-octet router id; for IPv6 it cannot be the (IPv6) local address
+    openMsg->setBgpIdentifier(bgpRouter.isIpv6() ? bgpRouter.getRouterId() : _info.socket->getLocalAddress().toIpv4());
 
-    EV_INFO << "Sending BGP Open message to " << _info.peerAddr.str(false)
+    EV_INFO << "Sending BGP Open message to " << _info.peerAddr.str()
             << " on interface " << _info.linkIntf->getInterfaceName()
             << "[" << _info.linkIntf->getInterfaceId() << "] with contents:\n";
     bgpRouter.printOpenMessage(*openMsg);
@@ -127,7 +150,7 @@ void BgpSession::sendOpenMessage()
     _openMsgSent++;
 }
 
-void BgpSession::sendUpdateMessage(std::vector<BgpUpdatePathAttributes *>& content, BgpUpdateNlri& NLRI)
+void BgpSession::sendUpdateMessage(std::vector<BgpUpdatePathAttributes *>& content, BgpUpdateNlri& nlri)
 {
     const auto& updateMsg = makeShared<BgpUpdateMessage>();
 
@@ -142,12 +165,42 @@ void BgpSession::sendUpdateMessage(std::vector<BgpUpdatePathAttributes *>& conte
     updateMsg->setTotalPathAttributeLength(attrLength);
     updateMsg->addChunkLength(B(attrLength));
 
-    updateMsg->setNLRIArraySize(1);
-    updateMsg->setNLRI(0, NLRI);
-    updateMsg->addChunkLength(B(1 + (NLRI.length + 7) / 8));
+    updateMsg->setNlriArraySize(1);
+    updateMsg->setNlri(0, nlri);
+    updateMsg->addChunkLength(B(1 + (nlri.length + 7) / 8));
     updateMsg->setTotalLength(updateMsg->getChunkLength().get<B>());
 
-    EV_INFO << "Sending BGP Update message to " << _info.peerAddr.str(false)
+    EV_INFO << "Sending BGP Update message to " << _info.peerAddr.str()
+            << " on interface " << _info.linkIntf->getInterfaceName()
+            << "[" << _info.linkIntf->getInterfaceId() << "] with contents:\n";
+    bgpRouter.printUpdateMessage(*updateMsg);
+
+    Packet *pk = new Packet("BgpUpdate");
+    pk->insertAtFront(updateMsg);
+
+    _info.socket->send(pk);
+    _updateMsgSent++;
+}
+
+void BgpSession::sendUpdateMessage(std::vector<BgpUpdatePathAttributes *>& content)
+{
+    // MP-BGP UPDATE (RFC 4760): reachability rides in an MP_REACH_NLRI path attribute, so the
+    // legacy NLRI field is left empty.
+    const auto& updateMsg = makeShared<BgpUpdateMessage>();
+
+    updateMsg->setWithDrawnRoutesLength(0);
+
+    size_t attrLength = 0;
+    updateMsg->setPathAttributesArraySize(content.size());
+    for (size_t i = 0; i < content.size(); i++) {
+        attrLength += computePathAttributeBytes(*content[i]);
+        updateMsg->setPathAttributes(i, content[i]);
+    }
+    updateMsg->setTotalPathAttributeLength(attrLength);
+    updateMsg->addChunkLength(B(attrLength));
+    updateMsg->setTotalLength(updateMsg->getChunkLength().get<B>());
+
+    EV_INFO << "Sending BGP Update message to " << _info.peerAddr.str()
             << " on interface " << _info.linkIntf->getInterfaceName()
             << "[" << _info.linkIntf->getInterfaceId() << "] with contents:\n";
     bgpRouter.printUpdateMessage(*updateMsg);
@@ -165,7 +218,7 @@ void BgpSession::sendNotificationMessage()
 
 //    const auto& updateMsg = makeShared<BgpNotificationMessage>();
 
-//    EV_INFO << "Sending BGP Notification message to " << _info.peerAddr.str(false)
+//    EV_INFO << "Sending BGP Notification message to " << _info.peerAddr.str()
 //            << " on interface " << _info.linkIntf->getInterfaceName()
 //            << "[" << _info.linkIntf->getInterfaceId() << "] with contents:\n";
 
@@ -180,7 +233,7 @@ void BgpSession::sendKeepAliveMessage()
 {
     const auto& keepAliveMsg = makeShared<BgpKeepAliveMessage>();
 
-    EV_INFO << "Sending BGP Keep-alive message to " << _info.peerAddr.str(false)
+    EV_INFO << "Sending BGP Keep-alive message to " << _info.peerAddr.str()
             << " on interface " << _info.linkIntf->getInterfaceName()
             << "[" << _info.linkIntf->getInterfaceId() << "] \n";
     bgpRouter.printKeepAliveMessage(*keepAliveMsg);
@@ -216,11 +269,11 @@ const std::string BgpSession::getTypeString(BgpSessionType sessionType)
 
 std::ostream& operator<<(std::ostream& out, const BgpSession& entry)
 {
-    out << "sessionId: " << entry.getSessionID() << " "
+    out << "sessionId: " << entry.getSessionId() << " "
         << "sessionType: " << entry.getTypeString(entry.getType()) << " "
         << "established: " << (entry.isEstablished() == true ? "true" : "false") << " "
-        << "state: " << entry.getFSM().currentState().name() << " "
-        << "peer: " << entry.getPeerAddr().str(false) << " "
+        << "state: " << entry.getFsm().currentState().name() << " "
+        << "peer: " << entry.getPeerAddr().str() << " "
         << "nextHopSelf: " << (entry.getNextHopSelf() == true ? "true" : "false") << " "
         << "startEventTime: " << entry.getStartEventTime() << " "
         << "connectionRetryTime: " << entry.getConnectionRetryTime() << " "
@@ -232,4 +285,3 @@ std::ostream& operator<<(std::ostream& out, const BgpSession& entry)
 
 } // namespace bgp
 } // namespace inet
-

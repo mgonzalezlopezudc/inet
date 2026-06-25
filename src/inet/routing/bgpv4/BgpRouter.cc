@@ -9,45 +9,53 @@
 #include <algorithm>
 
 #include "inet/common/ModuleAccess.h"
+#include "inet/networklayer/ipv6/Ipv6InterfaceData.h"
 #include "inet/routing/bgpv4/BgpSession.h"
 
 namespace inet {
 namespace bgp {
 
-BgpRouter::BgpRouter(cSimpleModule *bgpModule, IInterfaceTable *ift, IIpv4RoutingTable *rt)
+BgpRouter::BgpRouter(cSimpleModule *bgpModule, IInterfaceTable *ift, IRoutingTable *rt, const Protocol *networkProtocol)
 {
     this->bgpModule = bgpModule;
     this->ift = ift;
     this->rt = rt;
+    this->networkProtocol = networkProtocol;
+
+    const char *routerIdStr = bgpModule->par("routerId");
+    if (routerIdStr && *routerIdStr)
+        routerIdParam = Ipv4Address(routerIdStr);
 
     ospfModule = findModuleFromPar<ospfv2::Ospfv2>(bgpModule->par("ospfRoutingModule"), bgpModule);
 }
 
 BgpRouter::~BgpRouter(void)
 {
-    for (auto& elem : _BGPSessions)
+    for (auto& elem : _bgpSessions)
         delete (elem).second;
 
     for (auto& elem : _prefixListINOUT)
         delete elem;
+
+    delete listeningSocket;
 }
 
 void BgpRouter::printSessionSummary()
 {
     EV_DEBUG << "summary of BGP sessions: \n";
-    for (auto& entry : _BGPSessions) {
+    for (auto& entry : _bgpSessions) {
         BgpSession *session = entry.second;
         BgpSessionType type = session->getType();
         if (type == IGP) {
-            EV_DEBUG << "  IGP session to internal peer '" << session->getPeerAddr().str(false)
+            EV_DEBUG << "  IGP session to internal peer '" << session->getPeerAddr().str()
                      << "' starts at " << session->getStartEventTime() << "s \n";
         }
         else if (type == EGP) {
-            EV_DEBUG << "  EGP session to external peer '" << session->getPeerAddr().str(false)
+            EV_DEBUG << "  EGP session to external peer '" << session->getPeerAddr().str()
                      << "' starts at " << session->getStartEventTime() << "s \n";
         }
         else {
-            EV_DEBUG << "  Unknown session to peer '" << session->getPeerAddr().str(false)
+            EV_DEBUG << "  Unknown session to peer '" << session->getPeerAddr().str()
                      << "' starts at " << session->getStartEventTime() << "s \n";
         }
     }
@@ -56,7 +64,7 @@ void BgpRouter::printSessionSummary()
 void BgpRouter::addWatches()
 {
     WATCH(myAsId);
-    WATCH(_BGPSessions);
+    WATCH(_bgpSessions);
     WATCH(bgpRoutingTable);
     _socketMap.addWatch();
 }
@@ -67,7 +75,7 @@ void BgpRouter::recordStatistics()
         0, 0, 0, 0, 0, 0
     };
 
-    for (auto& elem : _BGPSessions)
+    for (auto& elem : _bgpSessions)
         (elem).second->getStatistics(statTab);
 
     bgpModule->recordScalar("OPENMsgSent", statTab[0]);
@@ -78,24 +86,39 @@ void BgpRouter::recordStatistics()
     bgpModule->recordScalar("UpdateMsgRcv", statTab[5]);
 }
 
+void BgpRouter::closeSessions(bool abort)
+{
+    for (auto& elem : _bgpSessions) {
+        TcpSocket *socket = elem.second->getSocket();
+        if (socket) {
+            _socketMap.removeSocket(socket);
+            abort ? socket->abort() : socket->close();
+        }
+    }
+    if (listeningSocket) {
+        _socketMap.removeSocket(listeningSocket);
+        abort ? listeningSocket->abort() : listeningSocket->close();
+    }
+}
+
 SessionId BgpRouter::createIbgpSession(const char *peerAddr)
 {
     SessionInfo info;
     info.sessionType = IGP;
     info.ASValue = myAsId;
-    info.routerID = rt->getRouterId();
-    info.peerAddr.set(peerAddr);
-    info.sessionID = info.peerAddr.getInt() + info.routerID.getInt();
+    info.routerId = getRouterId();
+    info.peerAddr = L3Address(peerAddr);
+    info.sessionId = addressKey(info.peerAddr) + info.routerId.getInt();
 
     numIgpSessions++;
 
     SessionId newSessionId;
-    newSessionId = info.sessionID;
+    newSessionId = info.sessionId;
 
     BgpSession *newSession = new BgpSession(*this);
     newSession->setInfo(info);
 
-    _BGPSessions[newSessionId] = newSession;
+    _bgpSessions[newSessionId] = newSession;
 
     return newSessionId;
 }
@@ -111,39 +134,33 @@ SessionId BgpRouter::createEbgpSession(const char *peerAddr, SessionInfo& extern
 
     info.sessionType = EGP;
     info.ASValue = myAsId;
-    info.routerID = rt->getRouterId();
-    info.peerAddr.set(peerAddr);
-    info.linkIntf = rt->getInterfaceForDestAddr(info.peerAddr);
+    info.routerId = getRouterId();
+    info.peerAddr = L3Address(peerAddr);
+    info.linkIntf = rt->getOutputInterfaceForDestination(info.peerAddr);
     if (!info.linkIntf) {
         if (info.checkConnection)
             throw cRuntimeError("BGP Error: External BGP neighbor at address %s is not directly connected to BGP router %s", peerAddr, bgpModule->getOwner()->getFullName());
         else
-            info.linkIntf = rt->getInterfaceForDestAddr(info.myAddr);
+            info.linkIntf = rt->getOutputInterfaceForDestination(info.myAddr);
     }
     ASSERT(info.linkIntf);
-    info.sessionID = info.peerAddr.getInt() + info.linkIntf->getProtocolData<Ipv4InterfaceData>()->getIPAddress().getInt();
+    info.sessionId = addressKey(info.peerAddr) + addressKey(getInterfaceAddress(info.linkIntf));
     numEgpSessions++;
 
     SessionId newSessionId;
-    newSessionId = info.sessionID;
+    newSessionId = info.sessionId;
 
     BgpSession *newSession = new BgpSession(*this);
     newSession->setInfo(info);
 
-    _BGPSessions[newSessionId] = newSession;
+    _bgpSessions[newSessionId] = newSession;
 
     return newSessionId;
 }
 
 void BgpRouter::setTimer(SessionId id, simtime_t *delayTab)
 {
-    _BGPSessions[id]->setTimers(delayTab);
-}
-
-void BgpRouter::setSocketListen(SessionId id)
-{
-    TcpSocket *socketListen = new TcpSocket();
-    _BGPSessions[id]->setSocketListen(socketListen);
+    _bgpSessions[id]->setTimers(delayTab);
 }
 
 void BgpRouter::setDefaultConfig()
@@ -159,40 +176,74 @@ void BgpRouter::setDefaultConfig()
     // per session params
     bool nextHopSelf = bgpModule->par("nextHopSelf").boolValue();
     int localPreference = bgpModule->par("localPreference").intValue();
-    for (auto& session : _BGPSessions) {
+    for (auto& session : _bgpSessions) {
         session.second->setNextHopSelf(nextHopSelf);
         session.second->setLocalPreference(localPreference);
     }
 }
 
-void BgpRouter::addToAdvertiseList(Ipv4Address address)
+BgpRouteInfo *BgpRouter::createBgpRoutingTableEntry()
+{
+    if (isIpv6())
+        return new BgpRoutingTableEntry6();
+    return new BgpRoutingTableEntry();
+}
+
+BgpRouteInfo *BgpRouter::createBgpRoutingTableEntry(const IRoute *from)
+{
+    if (isIpv6())
+        return new BgpRoutingTableEntry6(from);
+    return new BgpRoutingTableEntry(from);
+}
+
+uint32_t BgpRouter::addressKey(const L3Address& addr)
+{
+    // AF-safe key for the session id. For IPv4 this is exactly the 32-bit address value, so
+    // existing IPv4 session ids are unchanged; for IPv6 fold the 128-bit address into 32 bits.
+    if (addr.getType() == L3Address::IPv6) {
+        const uint32_t *w = addr.toIpv6().words();
+        return w[0] ^ w[1] ^ w[2] ^ w[3];
+    }
+    return addr.toIpv4().getInt();
+}
+
+L3Address BgpRouter::getInterfaceAddress(NetworkInterface *ie)
+{
+    // the local BGP source address on a link: IPv4 interface address, or (for IPv6) the
+    // preferred global address -- sessions need a routable address, not link-local.
+    if (isIpv6())
+        return ie->getProtocolData<Ipv6InterfaceData>()->getPreferredAddress();
+    return ie->getProtocolData<Ipv4InterfaceData>()->getIPAddress();
+}
+
+void BgpRouter::addToAdvertiseList(const L3Address& address)
 {
     bool routeFound = false;
-    const Ipv4Route *rtEntry = nullptr;
+    const IRoute *rtEntry = nullptr;
     for (int i = 0; i < rt->getNumRoutes(); i++) {
         rtEntry = rt->getRoute(i);
-        if (rtEntry->getDestination() == address) {
+        if (rtEntry->getDestinationAsGeneric() == address) {
             routeFound = true;
             break;
         }
     }
     if (!routeFound)
-        throw cRuntimeError("Network address '%s' is not found in the routing table of %s", address.str(false).c_str(), bgpModule->getOwner()->getFullName());
+        throw cRuntimeError("Network address '%s' is not found in the routing table of %s", address.str().c_str(), bgpModule->getOwner()->getFullName());
 
     auto position = std::find_if(advertiseList.begin(), advertiseList.end(),
-            [&] (const Ipv4Address m) -> bool { return m == address; });
+            [&] (const L3Address& m) -> bool { return m == address; });
     if (position != advertiseList.end())
-        throw cRuntimeError("Network address '%s' is already added to the advertised list of %s", address.str(false).c_str(), bgpModule->getOwner()->getFullName());
+        throw cRuntimeError("Network address '%s' is already added to the advertised list of %s", address.str().c_str(), bgpModule->getOwner()->getFullName());
     advertiseList.push_back(address);
 
-    BgpRoutingTableEntry *BGPEntry = new BgpRoutingTableEntry(rtEntry);
-    BGPEntry->addAS(myAsId);
-    BGPEntry->setPathType(IGP);
-    BGPEntry->setLocalPreference(bgpModule->par("localPreference").intValue());
-    bgpRoutingTable.push_back(BGPEntry);
+    BgpRouteInfo *bgpEntry = createBgpRoutingTableEntry(rtEntry);
+    bgpEntry->addAS(myAsId);
+    bgpEntry->setPathType(IGP);
+    bgpEntry->setLocalPreference(bgpModule->par("localPreference").intValue());
+    bgpRoutingTable.push_back(bgpEntry);
 }
 
-void BgpRouter::addToPrefixList(std::string nodeName, BgpRoutingTableEntry *entry)
+void BgpRouter::addToPrefixList(std::string nodeName, BgpRouteInfo *entry)
 {
     if (nodeName == "DenyRouteIN") {
         _prefixListIN.push_back(entry);
@@ -226,7 +277,7 @@ void BgpRouter::addToAsList(std::string nodeName, AsId id)
 void BgpRouter::setNextHopSelf(Ipv4Address peer, bool nextHopSelf)
 {
     bool found = false;
-    for (auto& session : _BGPSessions) {
+    for (auto& session : _bgpSessions) {
         if (session.second->getPeerAddr() == peer) {
             found = true;
             session.second->setNextHopSelf(nextHopSelf);
@@ -240,7 +291,7 @@ void BgpRouter::setNextHopSelf(Ipv4Address peer, bool nextHopSelf)
 void BgpRouter::setLocalPreference(Ipv4Address peer, int localPref)
 {
     bool found = false;
-    for (auto& session : _BGPSessions) {
+    for (auto& session : _bgpSessions) {
         if (session.second->getPeerAddr() == peer) {
             found = true;
             session.second->setLocalPreference(localPref);
@@ -276,14 +327,14 @@ void BgpRouter::setRedistributeOspf(std::string str)
     }
 }
 
-void BgpRouter::processMessageFromTCP(cMessage *msg)
+void BgpRouter::processMessageFromTcp(cMessage *msg)
 {
     TcpSocket *socket = check_and_cast_nullable<TcpSocket *>(_socketMap.findSocketFor(msg));
     if (!socket) {
         socket = new TcpSocket(msg);
         socket->setOutputGate(bgpModule->gate("socketOut"));
-        Ipv4Address peerAddr = socket->getRemoteAddress().toIpv4();
-        SessionId i = findIdFromPeerAddr(_BGPSessions, peerAddr);
+        L3Address peerAddr = socket->getRemoteAddress();
+        SessionId i = findIdFromPeerAddr(_bgpSessions, peerAddr);
         if (i == static_cast<SessionId>(-1)) {
             socket->close();
             _socketMap.removeSocket(socket);
@@ -292,70 +343,93 @@ void BgpRouter::processMessageFromTCP(cMessage *msg)
             delete msg;
             return;
         }
+
+        // RFC 4271 §6.8 connection collision detection: if we already have a live connection to
+        // this peer, the peer connected too — keep exactly one. The BGP Identifier is the
+        // connection's local address (see BgpSession::sendOpenMessage): ours is our source
+        // address for the session, the peer's is this incoming connection's remote address
+        // (== peerAddr). The connection opened by the higher-Identifier speaker survives; both
+        // ends compute the same winner, so they agree.
+        TcpSocket *current = _bgpSessions[i]->getSocket();
+        if (current && (current->getState() == TcpSocket::CONNECTING || current->getState() == TcpSocket::CONNECTED)) {
+            L3Address ourId = (_bgpSessions[i]->getType() == EGP)
+                ? getInterfaceAddress(_bgpSessions[i]->getLinkIntf())
+                : internalAddress;
+            // higher BGP Identifier wins; keep the IPv4 comparison exact (byte-identical)
+            bool weWin = isIpv6() ? (ourId > peerAddr)
+                                  : (ourId.toIpv4().getInt() > peerAddr.toIpv4().getInt());
+            if (weWin) {
+                // we win: keep our connection, reject the peer's colliding one
+                socket->abort();
+                delete socket;
+                delete msg;
+                return;
+            }
+            // else peer wins: fall through and adopt the incoming connection (dropping ours)
+        }
+
         socket->setCallback(this);
         socket->setUserData((void *)(uintptr_t)i);
 
         _socketMap.addSocket(socket);
-        _BGPSessions[i]->getSocket()->abort();
-        _socketMap.removeSocket(_BGPSessions[i]->getSocket());
-        _BGPSessions[i]->setSocket(socket);
+        _bgpSessions[i]->getSocket()->abort();
+        _socketMap.removeSocket(_bgpSessions[i]->getSocket());
+        _bgpSessions[i]->setSocket(socket);
     }
 
     socket->processMessage(msg);
 }
 
-void BgpRouter::listenConnectionFromPeer(SessionId sessionID)
+void BgpRouter::listenConnectionFromPeer(SessionId sessionId)
 {
-    if (_BGPSessions[sessionID]->getSocketListen()->getState() == TcpSocket::CLOSED) {
-        // session StartDelayTime error, it's anormal that listenSocket is closed.
-        _socketMap.removeSocket(_BGPSessions[sessionID]->getSocketListen());
-        _BGPSessions[sessionID]->getSocketListen()->abort();
-        _BGPSessions[sessionID]->getSocketListen()->renewSocket();
+    // Ensure the single shared listening socket is up. One wildcard listener per router
+    // accepts all incoming BGP connections on TCP_PORT; processMessageFromTcp() demuxes
+    // accepted connections to the right session by peer address. This replaces the former
+    // per-session listeners, which collided on the shared wildcard port when several
+    // sessions reconnected at once (see plan §4 Phase 0 result).
+    if (listeningSocket == nullptr)
+        listeningSocket = new TcpSocket();
+
+    if (listeningSocket->getState() == TcpSocket::CLOSED) {
+        _socketMap.removeSocket(listeningSocket);
+        listeningSocket->abort();
+        listeningSocket->renewSocket();
     }
 
-    if (_BGPSessions[sessionID]->getSocketListen()->getState() != TcpSocket::LISTENING) {
-        _BGPSessions[sessionID]->getSocketListen()->setOutputGate(bgpModule->gate("socketOut"));
-        if (_BGPSessions[sessionID]->getType() == EGP) {
-            NetworkInterface *intf = _BGPSessions[sessionID]->getLinkIntf();
-            ASSERT(intf);
-            Ipv4Address localAddr = intf->getProtocolData<Ipv4InterfaceData>()->getIPAddress();
-            _BGPSessions[sessionID]->getSocketListen()->bind(localAddr, TCP_PORT);
-        }
-        else
-            _BGPSessions[sessionID]->getSocketListen()->bind(TCP_PORT);
-        _BGPSessions[sessionID]->getSocketListen()->listen();
-        _socketMap.addSocket(_BGPSessions[sessionID]->getSocketListen());
+    if (listeningSocket->getState() != TcpSocket::LISTENING) {
+        listeningSocket->setOutputGate(bgpModule->gate("socketOut"));
+        listeningSocket->bind(TCP_PORT); // wildcard (address-family-unspecified) bind accepts IPv4 and IPv6
+        listeningSocket->listen();
+        _socketMap.addSocket(listeningSocket);
 
-        EV_DEBUG << "Start listening to incoming TCP connections on "
-                 << _BGPSessions[sessionID]->getSocketListen()->getLocalAddress()
-                 << ":" << (int)TCP_PORT
-                 << " for " << BgpSession::getTypeString(_BGPSessions[sessionID]->getType()) << " session"
-                 << " to peer " << _BGPSessions[sessionID]->getPeerAddr() << std::endl;
+        EV_DEBUG << "Start listening for incoming BGP connections on *:" << (int)TCP_PORT
+                 << " on " << bgpModule->getOwner()->getFullName() << std::endl;
     }
 }
 
-void BgpRouter::openTCPConnectionToPeer(SessionId sessionID)
+void BgpRouter::openTcpConnectionToPeer(SessionId sessionId)
 {
     EV_DEBUG << "Opening a TCP connection to "
-             << _BGPSessions[sessionID]->getPeerAddr()
+             << _bgpSessions[sessionId]->getPeerAddr()
              << ":" << (int)TCP_PORT << std::endl;
 
-    TcpSocket *socket = _BGPSessions[sessionID]->getSocket();
+    TcpSocket *socket = _bgpSessions[sessionId]->getSocket();
     if (socket->getState() != TcpSocket::NOT_BOUND) {
         _socketMap.removeSocket(socket);
         socket->abort();
         socket->renewSocket();
     }
     socket->setCallback(this);
-    socket->setUserData((void *)(uintptr_t)sessionID);
+    socket->setUserData((void *)(uintptr_t)sessionId);
     socket->setOutputGate(bgpModule->gate("socketOut"));
-    if (_BGPSessions[sessionID]->getType() == EGP) {
-        NetworkInterface *intfEntry = _BGPSessions[sessionID]->getLinkIntf();
+    if (_bgpSessions[sessionId]->getType() == EGP) {
+        NetworkInterface *intfEntry = _bgpSessions[sessionId]->getLinkIntf();
         if (intfEntry == nullptr)
-            throw cRuntimeError("No configuration interface for external peer address: %s", _BGPSessions[sessionID]->getPeerAddr().str().c_str());
-        socket->bind(intfEntry->getProtocolData<Ipv4InterfaceData>()->getIPAddress(), 0);
+            throw cRuntimeError("No configuration interface for external peer address: %s", _bgpSessions[sessionId]->getPeerAddr().str().c_str());
+        // note: port=-1 stands for ephemeral port (=0 would be literally port 0)
+        socket->bind(getInterfaceAddress(intfEntry), -1);
 
-        int ebgpMH = _BGPSessions[sessionID]->getEbgpMultihop();
+        int ebgpMH = _bgpSessions[sessionId]->getEbgpMultihop();
         if (ebgpMH > 1)
             socket->setTimeToLive(ebgpMH);
         else if (ebgpMH == 1)
@@ -363,56 +437,60 @@ void BgpRouter::openTCPConnectionToPeer(SessionId sessionID)
         else
             throw cRuntimeError("ebgpMultihop should be >=1");
     }
-    else if (_BGPSessions[sessionID]->getType() == IGP) {
-        NetworkInterface *intfEntry = _BGPSessions[sessionID]->getLinkIntf();
+    else if (_bgpSessions[sessionId]->getType() == IGP) {
+        NetworkInterface *intfEntry = _bgpSessions[sessionId]->getLinkIntf();
         if (!intfEntry)
-            intfEntry = rt->getInterfaceForDestAddr(_BGPSessions[sessionID]->getPeerAddr());
+            intfEntry = rt->getOutputInterfaceForDestination(_bgpSessions[sessionId]->getPeerAddr());
         if (intfEntry == nullptr)
-            throw cRuntimeError("No configuration interface for internal peer address: %s", _BGPSessions[sessionID]->getPeerAddr().str().c_str());
-        _BGPSessions[sessionID]->setlinkIntf(intfEntry);
-        if (internalAddress == Ipv4Address::UNSPECIFIED_ADDRESS)
+            throw cRuntimeError("No configuration interface for internal peer address: %s", _bgpSessions[sessionId]->getPeerAddr().str().c_str());
+        _bgpSessions[sessionId]->setlinkIntf(intfEntry);
+        if (internalAddress.isUnspecified())
             throw cRuntimeError("Internal address is not specified for router %s", bgpModule->getOwner()->getFullName());
-        socket->bind(internalAddress, 0);
+        // note: port=-1 stands for ephemeral port (=0 would be literally port 0)
+        socket->bind(internalAddress, -1);
     }
     _socketMap.addSocket(socket);
 
-    socket->connect(_BGPSessions[sessionID]->getPeerAddr(), TCP_PORT);
+    socket->connect(_bgpSessions[sessionId]->getPeerAddr(), TCP_PORT);
 }
 
 void BgpRouter::socketEstablished(TcpSocket *socket)
 {
     int connId = socket->getSocketId();
-    _currSessionId = findIdFromSocketConnId(_BGPSessions, connId);
+    _currSessionId = findIdFromSocketConnId(_bgpSessions, connId);
     if (_currSessionId == static_cast<SessionId>(-1)) {
         throw cRuntimeError("socket id=%d is not established", connId);
     }
 
     // if it's an IGP Session, TCPConnectionConfirmed only if all EGP Sessions established
-    if (_BGPSessions[_currSessionId]->getType() == IGP &&
+    if (_bgpSessions[_currSessionId]->getType() == IGP &&
         this->findNextSession(EGP) != static_cast<SessionId>(-1))
     {
-        _BGPSessions[_currSessionId]->getFSM()->TcpConnectionFails();
+        _bgpSessions[_currSessionId]->getFsm()->TcpConnectionFails();
     }
     else {
-        _BGPSessions[_currSessionId]->getFSM()->TcpConnectionConfirmed();
-        _BGPSessions[_currSessionId]->getSocketListen()->abort();
+        _bgpSessions[_currSessionId]->getFsm()->TcpConnectionConfirmed();
     }
-
-    if (_BGPSessions[_currSessionId]->getSocketListen()->getSocketId() != connId &&
-        _BGPSessions[_currSessionId]->getType() == EGP &&
-        this->findNextSession(EGP) != static_cast<SessionId>(-1))
-    {
-        _BGPSessions[_currSessionId]->getSocketListen()->abort();
-    }
+    // Note: the shared listening socket is intentionally left listening (it is not a
+    // per-session resource and must stay up to accept connections for other sessions).
 }
 
 void BgpRouter::socketFailure(TcpSocket *socket, int code)
 {
     int connId = socket->getSocketId();
-    _currSessionId = findIdFromSocketConnId(_BGPSessions, connId);
+    _currSessionId = findIdFromSocketConnId(_bgpSessions, connId);
     if (_currSessionId != static_cast<SessionId>(-1)) {
-        _BGPSessions[_currSessionId]->getFSM()->TcpConnectionFails();
+        _bgpSessions[_currSessionId]->getFsm()->TcpConnectionFails();
     }
+}
+
+void BgpRouter::socketPeerClosed(TcpSocket *socket)
+{
+    socket->close();
+    int connId = socket->getSocketId();
+    _currSessionId = findIdFromSocketConnId(_bgpSessions, connId);
+    if (_currSessionId != static_cast<SessionId>(-1))
+        _bgpSessions[_currSessionId]->getFsm()->TcpConnectionFails();
 }
 
 void BgpRouter::socketDataArrived(TcpSocket *socket)
@@ -426,7 +504,7 @@ void BgpRouter::socketDataArrived(TcpSocket *socket)
 
 void BgpRouter::socketDataArrived(TcpSocket *socket, Packet *packet, bool urgent)
 {
-    _currSessionId = findIdFromSocketConnId(_BGPSessions, socket->getSocketId());
+    _currSessionId = findIdFromSocketConnId(_bgpSessions, socket->getSocketId());
     if (_currSessionId != static_cast<SessionId>(-1))
         BufferingCallback::socketDataArrived(socket, packet, urgent);
     else
@@ -455,40 +533,52 @@ void BgpRouter::processChunks(const BgpHeader& ptrHdr)
 
 void BgpRouter::processMessage(const BgpOpenMessage& msg)
 {
-    BgpSession *session = _BGPSessions[_currSessionId];
+    BgpSession *session = _bgpSessions[_currSessionId];
     EV_INFO << "Processing BGP OPEN message from "
-            << session->getPeerAddr().str(false)
+            << session->getPeerAddr().str()
             << " with contents: \n";
     printOpenMessage(msg);
-    session->getFSM()->OpenMsgEvent();
+    session->getFsm()->OpenMsgEvent();
 }
 
 void BgpRouter::processMessage(const BgpKeepAliveMessage& msg)
 {
-    BgpSession *session = _BGPSessions[_currSessionId];
+    BgpSession *session = _bgpSessions[_currSessionId];
     EV_INFO << "Processing BGP Keep Alive message from "
-            << session->getPeerAddr().str(false)
+            << session->getPeerAddr().str()
             << " with contents: \n";
     printKeepAliveMessage(msg);
-    session->getFSM()->KeepAliveMsgEvent();
+    session->getFsm()->KeepAliveMsgEvent();
 }
 
 void BgpRouter::processMessage(const BgpUpdateMessage& msg)
 {
-    BgpSession *session = _BGPSessions[_currSessionId];
+    BgpSession *session = _bgpSessions[_currSessionId];
     EV_INFO << "Processing BGP Update message from "
-            << session->getPeerAddr().str(false)
+            << session->getPeerAddr().str()
             << " with contents: \n";
     printUpdateMessage(msg);
-    session->getFSM()->UpdateMsgEvent();
+    session->getFsm()->UpdateMsgEvent();
 
-    BgpRoutingTableEntry *entry = new BgpRoutingTableEntry();
+    BgpRouteInfo *entry = createBgpRoutingTableEntry();
     entry->setLocalPreference(bgpModule->par("localPreference").intValue());
-    entry->setDestination(msg.getNLRI(0).prefix);
-
-    Ipv4Address netMask(Ipv4Address::ALLONES_ADDRESS);
-    netMask = Ipv4Address::makeNetmask(msg.getNLRI(0).length);
-    entry->setNetmask(netMask);
+    if (isIpv6()) {
+        // RFC 4760: IPv6 reachability and the next hop arrive in MP_REACH_NLRI, not the legacy fields
+        for (size_t i = 0; i < msg.getPathAttributesArraySize(); i++) {
+            if (msg.getPathAttributes(i)->getTypeCode() == BgpUpdateAttributeTypeCode::MP_REACH_NLRI) {
+                auto& mp = *check_and_cast<const BgpUpdatePathAttributesMpReachNlri *>(msg.getPathAttributes(i));
+                if (mp.getNlriArraySize() > 0) {
+                    entry->setDestination(mp.getNlri(0).prefix);
+                    entry->setPrefixLength(mp.getNlri(0).length);
+                }
+                entry->setNextHop(mp.getNextHop());
+            }
+        }
+    }
+    else {
+        entry->setDestination(msg.getNlri(0).prefix);
+        entry->setPrefixLength(msg.getNlri(0).length);
+    }
 
     for (size_t i = 0; i < msg.getPathAttributesArraySize(); i++) {
         if (msg.getPathAttributes(i)->getTypeCode() == BgpUpdateAttributeTypeCode::AS_PATH) {
@@ -515,7 +605,7 @@ void BgpRouter::processMessage(const BgpUpdateMessage& msg)
         delete entry;
 }
 
-BgpProcessResult BgpRouter::asLoopDetection(BgpRoutingTableEntry *entry, AsId myAS)
+BgpProcessResult BgpRouter::asLoopDetection(BgpRouteInfo *entry, AsId myAS)
 {
     for (unsigned int i = 1; i < entry->getASCount(); i++) {
         if (myAS == entry->getAS(i))
@@ -525,7 +615,7 @@ BgpProcessResult BgpRouter::asLoopDetection(BgpRoutingTableEntry *entry, AsId my
 }
 
 /* add entry to routing table, or delete entry */
-BgpProcessResult BgpRouter::decisionProcess(const BgpUpdateMessage& msg, BgpRoutingTableEntry *entry, SessionId sessionIndex)
+BgpProcessResult BgpRouter::decisionProcess(const BgpUpdateMessage& msg, BgpRouteInfo *entry, SessionId sessionIndex)
 {
     // Don't add the route if it exists in PrefixListINTable or in ASListINTable
     if (isInTable(_prefixListIN, entry) != (unsigned long)-1 || isInASList(_ASListIN, entry)) {
@@ -550,7 +640,7 @@ BgpProcessResult BgpRouter::decisionProcess(const BgpUpdateMessage& msg, BgpRout
             }
             case BgpUpdateAttributeTypeCode::NEXT_HOP: {
                 auto attr = check_and_cast<const BgpUpdatePathAttributesNextHop *>(msg.getPathAttributes(i));
-                entry->setGateway(attr->getValue());
+                entry->setNextHop(attr->getValue());
                 break;
             }
             case BgpUpdateAttributeTypeCode::LOCAL_PREF: {
@@ -564,7 +654,7 @@ BgpProcessResult BgpRouter::decisionProcess(const BgpUpdateMessage& msg, BgpRout
     }
 #endif
 
-    BgpSessionType type = _BGPSessions[sessionIndex]->getType();
+    BgpSessionType type = _bgpSessions[sessionIndex]->getType();
     if (type == IGP) {
         entry->setAdminDist(Ipv4Route::dBGPInternal);
         entry->setIBgpLearned(true);
@@ -576,35 +666,35 @@ BgpProcessResult BgpRouter::decisionProcess(const BgpUpdateMessage& msg, BgpRout
 
     // if the route already exists in BGP routing table, tieBreakingProcess();
     // (RFC 4271: 9.1.2.2 Breaking Ties)
-    unsigned long BGPindex = isInTable(bgpRoutingTable, entry);
-    if (BGPindex != (unsigned long)-1) {
-        if (tieBreakingProcess(bgpRoutingTable[BGPindex], entry)) {
+    unsigned long bgpIndex = isInTable(bgpRoutingTable, entry);
+    if (bgpIndex != (unsigned long)-1) {
+        if (tieBreakingProcess(bgpRoutingTable[bgpIndex], entry)) {
             delete entry;
             return RESULT0;
         }
         else {
-            entry->setInterface(_BGPSessions[sessionIndex]->getLinkIntf());
+            entry->setInterface(_bgpSessions[sessionIndex]->getLinkIntf());
             bgpRoutingTable.push_back(entry);
-            rt->addRoute(entry);
+            rt->addRoute(entry->asRoute());
             return ROUTE_DESTINATION_CHANGED;
         }
     }
 
-    int indexIP = isInRoutingTable(rt, entry->getDestination());
+    int indexIp = isInRoutingTable(rt, entry->getDestinationAsGeneric());
     // if the route already exists in the IPv4 routing table
-    if (indexIP != -1) {
+    if (indexIp != -1) {
         // and it was not added by BGP before
-        if (rt->getRoute(indexIP)->getSourceType() != IRoute::BGP) {
+        if (rt->getRoute(indexIp)->getSourceType() != IRoute::BGP) {
             // and the Update msg is coming from IGP session
-            if (_BGPSessions[sessionIndex]->getType() == IGP) {
-                Ipv4Route *oldEntry = rt->getRoute(indexIP);
-                BgpRoutingTableEntry *BGPEntry = new BgpRoutingTableEntry(oldEntry);
-                BGPEntry->addAS(myAsId);
-                BGPEntry->setPathType(IGP);
-                BGPEntry->setAdminDist(Ipv4Route::dBGPInternal);
-                BGPEntry->setIBgpLearned(true);
-                BGPEntry->setLocalPreference(entry->getLocalPreference());
-                rt->addRoute(BGPEntry);
+            if (_bgpSessions[sessionIndex]->getType() == IGP) {
+                Ipv4Route *oldEntry = check_and_cast<Ipv4Route *>(rt->getRoute(indexIp));
+                BgpRouteInfo *bgpEntry = createBgpRoutingTableEntry(oldEntry);
+                bgpEntry->addAS(myAsId);
+                bgpEntry->setPathType(IGP);
+                bgpEntry->setAdminDist(Ipv4Route::dBGPInternal);
+                bgpEntry->setIBgpLearned(true);
+                bgpEntry->setLocalPreference(entry->getLocalPreference());
+                rt->addRoute(bgpEntry->asRoute());
                 // Note: No need to delete the existing route. Let the administrative distance decides.
 //                rt->deleteRoute(oldEntry);
             }
@@ -616,21 +706,21 @@ BgpProcessResult BgpRouter::decisionProcess(const BgpUpdateMessage& msg, BgpRout
     }
     else {
         // and the Update msg is coming from IGP session
-        if (_BGPSessions[sessionIndex]->getType() == IGP) {
+        if (_bgpSessions[sessionIndex]->getType() == IGP) {
             // if the next hop is reachable
-            if (isReachable(entry->getGateway())) {
-                entry->setInterface(_BGPSessions[sessionIndex]->getLinkIntf());
-                rt->addRoute(entry);
+            if (isReachable(entry->getNextHopAsGeneric())) {
+                entry->setInterface(_bgpSessions[sessionIndex]->getLinkIntf());
+                rt->addRoute(entry->asRoute());
             }
         }
     }
 
-    entry->setInterface(_BGPSessions[sessionIndex]->getLinkIntf());
+    entry->setInterface(_bgpSessions[sessionIndex]->getLinkIntf());
     bgpRoutingTable.push_back(entry);
 
-    if (_BGPSessions[sessionIndex]->getType() == EGP) {
-        if (isReachable(entry->getGateway()))
-            rt->addRoute(entry);
+    if (_bgpSessions[sessionIndex]->getType() == EGP) {
+        if (isReachable(entry->getNextHopAsGeneric()))
+            rt->addRoute(entry->asRoute());
 
         // if redistributeInternal is true, then insert the new external route into the OSPF (if exists).
         // The OSPF module then floods AS-External LSA into the AS and lets other routers know
@@ -639,21 +729,21 @@ BgpProcessResult BgpRouter::decisionProcess(const BgpUpdateMessage& msg, BgpRout
             NetworkInterface *ie = entry->getInterface();
             if (!ie)
                 throw cRuntimeError("Model error: interface entry is nullptr");
-            ospfv2::Ipv4AddressRange OSPFnetAddr;
-            OSPFnetAddr.address = entry->getDestination();
-            OSPFnetAddr.mask = entry->getNetmask();
+            ospfv2::Ipv4AddressRange ospfNetAddr;
+            ospfNetAddr.address = entry->getDestinationAsGeneric().toIpv4();
+            ospfNetAddr.mask = Ipv4Address::makeNetmask(entry->getPrefixLength());
             if (!ospfModule)
                 throw cRuntimeError("Cannot find the OSPF module on router %s", bgpModule->getFullName());
-            ospfModule->insertExternalRoute(ie->getInterfaceId(), OSPFnetAddr);
+            ospfModule->insertExternalRoute(ie->getInterfaceId(), ospfNetAddr);
         }
     }
     return NEW_ROUTE_ADDED; // FIXME model error: When returns NEW_ROUTE_ADDED then entry stored in bgpRoutingTable, but sometimes not stored in rt
 }
 
-bool BgpRouter::tieBreakingProcess(BgpRoutingTableEntry *oldEntry, BgpRoutingTableEntry *entry)
+bool BgpRouter::tieBreakingProcess(BgpRouteInfo *oldEntry, BgpRouteInfo *entry)
 {
     if (entry->getLocalPreference() > oldEntry->getLocalPreference()) {
-        deleteBGPRoutingEntry(oldEntry);
+        deleteBgpRoutingEntry(oldEntry);
         return false;
     }
 
@@ -661,28 +751,28 @@ bool BgpRouter::tieBreakingProcess(BgpRoutingTableEntry *oldEntry, BgpRoutingTab
          having the smallest number of AS numbers present in their
          AS_PATH attributes.*/
     if (entry->getASCount() < oldEntry->getASCount()) {
-        deleteBGPRoutingEntry(oldEntry);
+        deleteBgpRoutingEntry(oldEntry);
         return false;
     }
 
     /* Remove from consideration all routes that are not tied for
          having the lowest Origin number in their Origin attribute.*/
     if (entry->getPathType() < oldEntry->getPathType()) {
-        deleteBGPRoutingEntry(oldEntry);
+        deleteBgpRoutingEntry(oldEntry);
         return false;
     }
 
     return true;
 }
 
-void BgpRouter::updateSendProcess(BgpProcessResult type, SessionId sessionIndex, BgpRoutingTableEntry *entry)
+void BgpRouter::updateSendProcess(BgpProcessResult type, SessionId sessionIndex, BgpRouteInfo *entry)
 {
     // Don't send the update Message if the route exists in listOUTTable
     // SESSION = EGP : send an update message to all BGP Peer (EGP && IGP)
     // if it is not the currentSession and if the session is already established
     // SESSION = IGP : send an update message to External BGP Peer (EGP) only
     // if it is not the currentSession and if the session is already established
-    for (auto& elem : _BGPSessions) {
+    for (auto& elem : _bgpSessions) {
         if (isInTable(_prefixListOUT, entry) != (unsigned long)-1 || isInASList(_ASListOUT, entry) ||
             ((elem).first == sessionIndex && type != NEW_SESSION_ESTABLISHED) ||
             (type == NEW_SESSION_ESTABLISHED && (elem).first != sessionIndex) ||
@@ -692,16 +782,16 @@ void BgpRouter::updateSendProcess(BgpProcessResult type, SessionId sessionIndex,
         }
 
         // if the next hop is not reachable
-        if (!isReachable(entry->getGateway()))
+        if (!isReachable(entry->getNextHopAsGeneric()))
             continue;
 
-        BgpSessionType sType = _BGPSessions[sessionIndex]->getType();
+        BgpSessionType sType = _bgpSessions[sessionIndex]->getType();
 
         // BGP split horizon: skip if this prefix is learned over I-BGP and we are
         // advertising it to another internal peer.
         if (entry->isIBgpLearned() && sType == IGP && elem.second->getType() == IGP) {
             EV_INFO << "BGP Split Horizon: prevent advertisement of network "
-                    << entry->getDestination() << "\\" << entry->getNetmask();
+                    << entry->getDestinationAsGeneric() << "/" << entry->getPrefixLength();
             continue;
         }
 
@@ -710,7 +800,6 @@ void BgpRouter::updateSendProcess(BgpProcessResult type, SessionId sessionIndex,
             type == ROUTE_DESTINATION_CHANGED ||
             type == NEW_SESSION_ESTABLISHED)
         {
-            BgpUpdateNlri NLRI;
             std::vector<BgpUpdatePathAttributes *> content;
 
             unsigned int nbAS = entry->getASCount();
@@ -745,28 +834,52 @@ void BgpRouter::updateSendProcess(BgpProcessResult type, SessionId sessionIndex,
                 auto localPref = new BgpUpdatePathAttributesLocalPref();
                 content.push_back(localPref);
                 localPref->setLength(4);
-                localPref->setValue(_BGPSessions[sessionIndex]->getLocalPreference());
+                localPref->setValue(_bgpSessions[sessionIndex]->getLocalPreference());
             }
             asPath->setLength(2 + 2 * asPath->getValue(0).getAsValueArraySize());
 
-            auto nextHopAttr = new BgpUpdatePathAttributesNextHop;
-            content.push_back(nextHopAttr);
-            if (sType == EGP || _BGPSessions[sessionIndex]->getNextHopSelf()) {
-                NetworkInterface *iftEntry = (elem).second->getLinkIntf();
-                nextHopAttr->setValue(iftEntry->getProtocolData<Ipv4InterfaceData>()->getIPAddress());
+            // next hop: our own address on the link for EGP / next-hop-self, else the learned next hop
+            L3Address nextHop = (sType == EGP || _bgpSessions[sessionIndex]->getNextHopSelf())
+                ? getInterfaceAddress((elem).second->getLinkIntf())
+                : entry->getNextHopAsGeneric();
+
+            if (isIpv6()) {
+                // RFC 4760: carry the IPv6 next hop + reachability in MP_REACH_NLRI; ORIGIN stays
+                // a normal attribute. The legacy NEXT_HOP attribute and NLRI field are not used.
+                auto originAttr = new BgpUpdatePathAttributesOrigin;
+                content.push_back(originAttr);
+                originAttr->setValue((BgpSessionType)entry->getPathType());
+
+                auto mpReach = new BgpUpdatePathAttributesMpReachNlri();
+                mpReach->setAfi(2);  // IPv6
+                mpReach->setSafi(1); // unicast
+                mpReach->setNextHop(nextHop);
+                mpReach->setNextHopLength(16);
+                BgpUpdateNlri6 nlri6;
+                nlri6.prefix = entry->getDestinationAsGeneric().getPrefix(entry->getPrefixLength());
+                nlri6.length = entry->getPrefixLength();
+                mpReach->setNlriArraySize(1);
+                mpReach->setNlri(0, nlri6);
+                mpReach->setLength(computePathAttributeBytes(*mpReach) - 3); // attribute value length (1-octet length field)
+                content.push_back(mpReach);
+
+                (elem).second->sendUpdateMessage(content);
             }
-            else
-                nextHopAttr->setValue(entry->getGateway());
+            else {
+                auto nextHopAttr = new BgpUpdatePathAttributesNextHop;
+                content.push_back(nextHopAttr);
+                nextHopAttr->setValue(nextHop.toIpv4());
 
-            auto originAttr = new BgpUpdatePathAttributesOrigin;
-            content.push_back(originAttr);
-            originAttr->setValue((BgpSessionType)entry->getPathType());
+                auto originAttr = new BgpUpdatePathAttributesOrigin;
+                content.push_back(originAttr);
+                originAttr->setValue((BgpSessionType)entry->getPathType());
 
-            Ipv4Address netMask = entry->getNetmask();
-            NLRI.prefix = entry->getDestination().doAnd(netMask);
-            NLRI.length = (unsigned char)netMask.getNetmaskLength();
+                BgpUpdateNlri nlri;
+                nlri.prefix = entry->getDestinationAsGeneric().getPrefix(entry->getPrefixLength()).toIpv4();
+                nlri.length = (unsigned char)entry->getPrefixLength();
 
-            (elem).second->sendUpdateMessage(content, NLRI);
+                (elem).second->sendUpdateMessage(content, nlri);
+            }
         }
     }
 }
@@ -776,16 +889,16 @@ void BgpRouter::updateSendProcess(BgpProcessResult type, SessionId sessionIndex,
  *  Side effects when returns true:
  *      bgpRoutingTable changed, iterators on bgpRoutingTable will be invalid.
  */
-bool BgpRouter::deleteBGPRoutingEntry(BgpRoutingTableEntry *entry)
+bool BgpRouter::deleteBgpRoutingEntry(BgpRouteInfo *entry)
 {
     for (auto it = bgpRoutingTable.begin();
          it != bgpRoutingTable.end(); it++)
     {
-        if (((*it)->getDestination().getInt() & (*it)->getNetmask().getInt()) ==
-            (entry->getDestination().getInt() & entry->getNetmask().getInt()))
+        if ((*it)->getDestinationAsGeneric().getPrefix((*it)->getPrefixLength()) ==
+            entry->getDestinationAsGeneric().getPrefix(entry->getPrefixLength()))
         {
             bgpRoutingTable.erase(it);
-            rt->deleteRoute(entry);
+            rt->deleteRoute(entry->asRoute());
             return true;
         }
     }
@@ -793,12 +906,12 @@ bool BgpRouter::deleteBGPRoutingEntry(BgpRoutingTableEntry *entry)
 }
 
 /*return index of the Ipv4 table if the route is found, -1 else*/
-int BgpRouter::isInRoutingTable(IIpv4RoutingTable *rtTable, Ipv4Address addr)
+int BgpRouter::isInRoutingTable(IRoutingTable *rtTable, const L3Address& addr)
 {
     for (int i = 0; i < rtTable->getNumRoutes(); i++) {
-        const Ipv4Route *entry = rtTable->getRoute(i);
-        if (Ipv4Address::maskedAddrAreEqual(addr, entry->getDestination(), entry->getNetmask())) {
-            if (isDefaultRoute(entry) && addr.getInt() != 0)
+        const IRoute *entry = rtTable->getRoute(i);
+        if (addr.getPrefix(entry->getPrefixLength()) == entry->getDestinationAsGeneric().getPrefix(entry->getPrefixLength())) {
+            if (isDefaultRoute(entry) && !addr.isUnspecified())
                 continue;
             else
                 return i;
@@ -819,12 +932,12 @@ SessionId BgpRouter::findIdFromSocketConnId(std::map<SessionId, BgpSession *> se
 }
 
 /*return index of the table if the route is found, -1 else*/
-unsigned long BgpRouter::isInTable(std::vector<BgpRoutingTableEntry *> rtTable, BgpRoutingTableEntry *entry)
+unsigned long BgpRouter::isInTable(std::vector<BgpRouteInfo *> rtTable, BgpRouteInfo *entry)
 {
     for (unsigned long i = 0; i < rtTable.size(); i++) {
-        BgpRoutingTableEntry *entryCur = rtTable[i];
-        if ((entry->getDestination().getInt() & entry->getNetmask().getInt()) ==
-            (entryCur->getDestination().getInt() & entryCur->getNetmask().getInt()))
+        BgpRouteInfo *entryCur = rtTable[i];
+        if (entry->getDestinationAsGeneric().getPrefix(entry->getPrefixLength()) ==
+            entryCur->getDestinationAsGeneric().getPrefix(entryCur->getPrefixLength()))
         {
             return i;
         }
@@ -833,7 +946,7 @@ unsigned long BgpRouter::isInTable(std::vector<BgpRoutingTableEntry *> rtTable, 
 }
 
 /*return true if the AS is found, false else*/
-bool BgpRouter::isInASList(std::vector<AsId> ASList, BgpRoutingTableEntry *entry)
+bool BgpRouter::isInASList(std::vector<AsId> ASList, BgpRouteInfo *entry)
 {
     for (auto& elem : ASList) {
         for (unsigned int i = 0; i < entry->getASCount(); i++) {
@@ -846,7 +959,7 @@ bool BgpRouter::isInASList(std::vector<AsId> ASList, BgpRoutingTableEntry *entry
 }
 
 /*return true if OSPF exists, false else*/
-bool BgpRouter::ospfExist(IIpv4RoutingTable *rtTable)
+bool BgpRouter::ospfExist(IRoutingTable *rtTable)
 {
     for (int i = 0; i < rtTable->getNumRoutes(); i++) {
         if (rtTable->getRoute(i)->getSourceType() == IRoute::OSPF) {
@@ -856,33 +969,33 @@ bool BgpRouter::ospfExist(IIpv4RoutingTable *rtTable)
     return false;
 }
 
-/*return sessionID if the session is found, -1 else*/
+/*return sessionId if the session is found, -1 else*/
 SessionId BgpRouter::findNextSession(BgpSessionType type, bool startSession)
 {
-    SessionId sessionID = -1;
-    for (auto& elem : _BGPSessions) {
+    SessionId sessionId = -1;
+    for (auto& elem : _bgpSessions) {
         if ((elem).second->getType() == type && !(elem).second->isEstablished()) {
-            sessionID = (elem).first;
+            sessionId = (elem).first;
             break;
         }
     }
-    if (startSession == true && type == IGP && sessionID != static_cast<SessionId>(-1)) {
+    if (startSession == true && type == IGP && sessionId != static_cast<SessionId>(-1)) {
         // note: if the internal peer is not directly-connected to us, then we should know how to reach it.
         // this is done with the help of an intra-AS routing protocol (RIP, OSPF, EIGRP).
-        NetworkInterface *linkIntf = rt->getInterfaceForDestAddr(_BGPSessions[sessionID]->getPeerAddr());
+        NetworkInterface *linkIntf = rt->getOutputInterfaceForDestination(_bgpSessions[sessionId]->getPeerAddr());
         if (linkIntf == nullptr)
-            throw cRuntimeError("No configuration interface for peer address: %s", _BGPSessions[sessionID]->getPeerAddr().str().c_str());
+            throw cRuntimeError("No configuration interface for peer address: %s", _bgpSessions[sessionId]->getPeerAddr().str().c_str());
 
-        _BGPSessions[sessionID]->setlinkIntf(linkIntf);
-        _BGPSessions[sessionID]->startConnection();
+        _bgpSessions[sessionId]->setlinkIntf(linkIntf);
+        _bgpSessions[sessionId]->startConnection();
     }
-    return sessionID;
+    return sessionId;
 }
 
-SessionId BgpRouter::findIdFromPeerAddr(std::map<SessionId, BgpSession *> sessions, Ipv4Address peerAddr)
+SessionId BgpRouter::findIdFromPeerAddr(std::map<SessionId, BgpSession *> sessions, const L3Address& peerAddr)
 {
     for (auto& session : sessions) {
-        if ((session).second->getPeerAddr().equals(peerAddr))
+        if ((session).second->getPeerAddr() == peerAddr)
             return (session).first;
     }
     return -1;
@@ -892,7 +1005,7 @@ void BgpRouter::printOpenMessage(const BgpOpenMessage& openMsg)
 {
     EV_INFO << "  My AS: " << openMsg.getMyAS() << "\n";
     EV_INFO << "  Hold time: " << openMsg.getHoldTime() << "s \n";
-    EV_INFO << "  BGP Id: " << openMsg.getBGPIdentifier() << "\n";
+    EV_INFO << "  BGP Id: " << openMsg.getBgpIdentifier() << "\n";
     if (openMsg.getOptionalParameterArraySize() == 0)
         EV_INFO << "  Optional parameters: empty \n";
     for (size_t i = 0; i < openMsg.getOptionalParameterArraySize(); i++) {
@@ -962,14 +1075,26 @@ void BgpRouter::printUpdateMessage(const BgpUpdateMessage& updateMsg)
                 EV_INFO << "    MULTI_EXIT_DISC: " << attr.getValue() << "\n";
                 break;
             }
+            case BgpUpdateAttributeTypeCode::MP_REACH_NLRI: {
+                auto& attr = *check_and_cast<const BgpUpdatePathAttributesMpReachNlri *>(updateMsg.getPathAttributes(i));
+                EV_INFO << "    MP_REACH_NLRI: afi=" << attr.getAfi() << " safi=" << (int)attr.getSafi()
+                        << " nextHop=" << attr.getNextHop().str() << " (" << attr.getNlriArraySize() << " prefixes)\n";
+                break;
+            }
+            case BgpUpdateAttributeTypeCode::MP_UNREACH_NLRI: {
+                auto& attr = *check_and_cast<const BgpUpdatePathAttributesMpUnreachNlri *>(updateMsg.getPathAttributes(i));
+                EV_INFO << "    MP_UNREACH_NLRI: afi=" << attr.getAfi() << " safi=" << (int)attr.getSafi()
+                        << " (" << attr.getWithdrawnRoutesArraySize() << " prefixes)\n";
+                break;
+            }
         }
     }
 
-    if (updateMsg.getNLRIArraySize() > 0) {
-        auto NLRI_Base = updateMsg.getNLRI(0);
+    if (updateMsg.getNlriArraySize() > 0) {
+        auto nlriBase = updateMsg.getNlri(0);
         EV_INFO << "  Network Layer Reachability Information (NLRI): \n";
-        EV_INFO << "    NLRI length: " << (int)NLRI_Base.length << "\n";
-        EV_INFO << "    NLRI prefix: " << NLRI_Base.prefix << "\n";
+        EV_INFO << "    NLRI length: " << (int)nlriBase.length << "\n";
+        EV_INFO << "    NLRI prefix: " << nlriBase.prefix << "\n";
     }
 }
 
@@ -983,10 +1108,10 @@ void BgpRouter::printKeepAliveMessage(const BgpKeepAliveMessage& keepAliveMsg)
     // TODO add code once implemented
 }
 
-bool BgpRouter::isRouteExcluded(const Ipv4Route& rtEntry)
+bool BgpRouter::isRouteExcluded(const IRoute& rtEntry)
 {
-    // all host-specific routes are excluded
-    if (rtEntry.getNetmask() == Ipv4Address::ALLONES_ADDRESS)
+    // all host-specific routes are excluded (/32 for IPv4, /128 for IPv6)
+    if (rtEntry.getPrefixLength() == (rtEntry.getDestinationAsGeneric().getType() == L3Address::IPv6 ? 128 : 32))
         return true;
 
     // all static routes are excluded
@@ -1010,7 +1135,7 @@ bool BgpRouter::isRouteExcluded(const Ipv4Route& rtEntry)
         if (!redistributeOspf)
             return true;
 
-        auto entry = static_cast<const ospfv2::Ospfv2RoutingTableEntry *>(&rtEntry);
+        auto entry = check_and_cast<const ospfv2::Ospfv2RoutingTableEntry *>(&rtEntry);
         ASSERT(entry);
 
         if (entry->getPathType() == ospfv2::Ospfv2RoutingTableEntry::INTRAAREA) {
@@ -1027,7 +1152,7 @@ bool BgpRouter::isRouteExcluded(const Ipv4Route& rtEntry)
                 return true;
         }
 
-        int externalType = checkExternalRoute(&rtEntry);
+        int externalType = checkExternalRoute(entry);
 
         if (externalType == 1) {
             if (redistributeOspfType.externalType1)
@@ -1060,11 +1185,11 @@ bool BgpRouter::isRouteExcluded(const Ipv4Route& rtEntry)
     return true;
 }
 
-bool BgpRouter::isExternalAddress(const Ipv4Route& rtEntry)
+bool BgpRouter::isExternalAddress(const IRoute& rtEntry)
 {
-    for (auto& session : _BGPSessions) {
+    for (auto& session : _bgpSessions) {
         if (session.second->getType() == EGP) {
-            NetworkInterface *exIntf = rt->getInterfaceForDestAddr(session.second->getPeerAddr());
+            NetworkInterface *exIntf = rt->getOutputInterfaceForDestination(session.second->getPeerAddr());
             if (exIntf == rtEntry.getInterface())
                 return true;
         }
@@ -1073,22 +1198,20 @@ bool BgpRouter::isExternalAddress(const Ipv4Route& rtEntry)
     return false;
 }
 
-bool BgpRouter::isDefaultRoute(const Ipv4Route *entry) const
+bool BgpRouter::isDefaultRoute(const IRoute *entry) const
 {
-    if (entry->getDestination().getInt() == 0 && entry->getNetmask().getInt() == 0)
-        return true;
-    return false;
+    return entry->getDestinationAsGeneric().isUnspecified() && entry->getPrefixLength() == 0;
 }
 
-bool BgpRouter::isReachable(const Ipv4Address addr) const
+bool BgpRouter::isReachable(const L3Address& addr) const
 {
     if (addr.isUnspecified())
         return true;
 
     for (int i = 0; i < rt->getNumRoutes(); i++) {
-        Ipv4Route *route = rt->getRoute(i);
+        IRoute *route = rt->getRoute(i);
         if (!isDefaultRoute(route) && route->getSourceType() != IRoute::BGP) {
-            if (addr.doAnd(route->getNetmask()) == route->getDestination().doAnd(route->getNetmask()))
+            if (addr.getPrefix(route->getPrefixLength()) == route->getDestinationAsGeneric().getPrefix(route->getPrefixLength()))
                 return true;
         }
     }
@@ -1099,4 +1222,3 @@ bool BgpRouter::isReachable(const Ipv4Address addr) const
 } // namespace bgp
 
 } // namespace inet
-
