@@ -8,6 +8,8 @@
 #ifndef __INET_IEEE80211RECEIVER_H
 #define __INET_IEEE80211RECEIVER_H
 
+#include <set>
+
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -25,9 +27,35 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     const Ieee80211Channel *channel = nullptr;
     bool enableSpatialReuse = false;
     W obssPdThreshold = W(NaN);
+    W nonSrgObssPdThreshold = W(NaN);
+    W srgObssPdThreshold = W(NaN);
+    bool enableNonSrgSpatialReuse = true;
+    bool enableSrgSpatialReuse = true;
+    bool enableParameterizedSpatialReuse = false;
+    double obssPdMinThresholdDbm = NaN;
+    double spatialReusePowerReferenceDbm = NaN;
+    std::set<int> srgBssColors;
+
+    enum class HeSpatialReuseBssType {
+        UNSPECIFIED,
+        INTRA_BSS,
+        INTER_BSS_NON_SRG,
+        INTER_BSS_SRG
+    };
+
+    struct HeSpatialReuseDecision {
+        HeSpatialReuseBssType bssType = HeSpatialReuseBssType::UNSPECIFIED;
+        bool eligible = false;
+        bool ignorePpdu = false;
+        W obssPdThreshold = W(NaN);
+        W transmitPowerLimit = W(NaN);
+        const char *reason = nullptr;
+    };
 
   protected:
     virtual bool isAssignedHeMuRu(const ITransmission *transmission) const;
+    virtual HeSpatialReuseDecision computeHeSpatialReuseDecision(const IListening *listening, const IReception *reception) const;
+    virtual W computeSpatialReuseTransmitPowerLimit(W threshold) const;
 
   protected:
     virtual void initialize(int stage) override;

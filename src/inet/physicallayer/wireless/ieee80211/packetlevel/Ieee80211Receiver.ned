@@ -30,8 +30,15 @@ module Ieee80211Receiver extends NarrowbandReceiverBase
         errorModel.typename = default("Ieee80211NistErrorModel");
         bool enableSpatialReuse = default(false);
         double obssPdThreshold @unit(dBm) = default(-62 dBm);
+        double nonSrgObssPdThreshold @unit(dBm) = default(this.obssPdThreshold);
+        double srgObssPdThreshold @unit(dBm) = default(this.obssPdThreshold);
+        bool enableNonSrgSpatialReuse = default(true);
+        bool enableSrgSpatialReuse = default(true);
+        string srgBssColors = default(""); // space/comma separated HE BSS colors treated as SRG members
+        bool enableParameterizedSpatialReuse = default(false); // allow PSR-governed HE TB reuse
+        double obssPdMinThreshold @unit(dBm) = default(-82 dBm);
+        double spatialReusePowerReference @unit(dBm) = default(21 dBm);
         // TODO remove when opMode is removed from the error model
         *.opMode = this.opMode;
         @class(Ieee80211Receiver);
 }
-
