@@ -505,7 +505,17 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         tag->setPuncturedSubchannelMask(heMuPhyHeader->getPuncturedSubchannelMask());
         tag->setRuIndex(-1);
         auto networkInterface = getContainingNicModule(this);
-        auto myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+        std::optional<uint16_t> myStaId;
+        if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+            MacAddress transmitterAddress;
+            if (auto macHeader = packet->peekAtFront<ieee80211::Ieee80211TwoAddressHeader>())
+                transmitterAddress = macHeader->getTransmitterAddress();
+            if (!transmitterAddress.isUnspecified())
+                myStaId = resolveHeMuStaIdForReception(networkInterface, transmitterAddress);
+        }
+        else {
+            myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+        }
         for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
             const auto& user = heMuPhyHeader->getUsers(i);
             Ieee80211HeMuRxAllocationInfo info;

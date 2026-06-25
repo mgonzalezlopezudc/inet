@@ -245,6 +245,7 @@ int HeUlCoordinator::selectRandomAccessRu(int randomAccessRuCount)
         return -1;
     }
     // When OBO reaches 0, the STA attempts random access and selects one of the RA-RUs uniformly at random.
+    ofdmaBackoff = 0;
     emit(randomAccessAttemptSignal, 1L);
     auto selectedRu = intuniform(0, randomAccessRuCount - 1);
     EV_INFO << "HE UORA attempt: selected RU " << selectedRu
