@@ -331,13 +331,8 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
     auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
-    auto spatialReuseDecision = computeHeSpatialReuseDecision(listening, reception);
-    if (spatialReuseDecision.ignorePpdu) {
-        EV_DEBUG << "HE spatial reuse ignores PPDU: " << spatialReuseDecision.reason
-                 << ", OBSS/PD=" << math::mW2dBmW(spatialReuseDecision.obssPdThreshold.get<mW>()) << " dBm"
-                 << ", coupled TX power limit=" << math::mW2dBmW(spatialReuseDecision.transmitPowerLimit.get<mW>()) << " dBm\n";
+    if (shouldIgnoreReceptionDueToHeSpatialReuse(listening, reception, true))
         return false;
-    }
     if (heMuPhyHeader != nullptr)
         return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
                getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
@@ -349,7 +344,7 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
         IRadioSignal::SignalPart part, const IInterference *interference) const
 {
     auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
-    if (computeHeSpatialReuseDecision(listening, reception).ignorePpdu)
+    if (shouldIgnoreReceptionDueToHeSpatialReuse(listening, reception, false))
         return false;
     if (heMuPhyHeader == nullptr || heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)
         return FlatReceiverBase::computeIsReceptionAttempted(listening, reception, part, interference);
@@ -367,6 +362,19 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
     return currentHeader != nullptr &&
            currentHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
            currentHeader->getTriggerId() == heMuPhyHeader->getTriggerId();
+}
+
+bool Ieee80211Receiver::shouldIgnoreReceptionDueToHeSpatialReuse(const IListening *listening, const IReception *reception, bool logDecision) const
+{
+    auto spatialReuseDecision = computeHeSpatialReuseDecision(listening, reception);
+    if (!spatialReuseDecision.ignorePpdu)
+        return false;
+    if (logDecision) {
+        EV_DEBUG << "HE spatial reuse ignores PPDU: " << spatialReuseDecision.reason
+                 << ", OBSS/PD=" << math::mW2dBmW(spatialReuseDecision.obssPdThreshold.get<mW>()) << " dBm"
+                 << ", coupled TX power limit=" << math::mW2dBmW(spatialReuseDecision.transmitPowerLimit.get<mW>()) << " dBm\n";
+    }
+    return true;
 }
 
 Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReuseDecision(const IListening *listening, const IReception *reception) const

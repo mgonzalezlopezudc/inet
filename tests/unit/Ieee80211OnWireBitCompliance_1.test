@@ -5,13 +5,37 @@ Validate byte-exact 802.11 MAC and PHY bitfield packing for on-wire fields.
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include <iomanip>
+#include <sstream>
+#include <vector>
 
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
+static std::string bytesToHex(const std::vector<uint8_t>& bytes)
+{
+    std::ostringstream os;
+    os << std::hex << std::setfill('0');
+    for (auto byte : bytes)
+        os << std::setw(2) << (int)byte;
+    return os.str();
+}
+
 %activity:
+{
+    // IEEE Std 802.11-2024 Annex Z, Table Z-4, HE-SIG-B example 2.
+    // The current INET HE-SIG-B helper only covers RU allocation geometry, so
+    // this standard-derived fixture records the full content-channel octets as
+    // a regression target for future full HE-SIG-B field encoding.
+    const std::vector<uint8_t> contentChannel1 = {0xa9, 0x0d, 0x53, 0xb5, 0x71, 0x32, 0x00};
+    const std::vector<uint8_t> contentChannel2 = {0xab, 0x0d, 0x54, 0x01, 0x00, 0x00, 0x00};
+    ASSERT(bytesToHex(contentChannel1) == "a90d53b5713200");
+    ASSERT(bytesToHex(contentChannel2) == "ab0d5401000000");
+    EV << "IEEE 802.11-2024 Annex Z HE-SIG-B example 2 golden octets are recorded.\n";
+}
+
 {
     auto header = makeShared<Ieee80211DataHeader>();
     header->setType(ST_DATA_WITH_QOS);
@@ -83,6 +107,7 @@ using namespace inet::physicallayer;
 EV << ".\n";
 
 %contains: stdout
+IEEE 802.11-2024 Annex Z HE-SIG-B example 2 golden octets are recorded.
 QoS data MAC bitfields are byte-exact.
 DSSS PHY header is byte-exact.
 OFDM PHY SIGNAL and SERVICE fields are byte-exact.

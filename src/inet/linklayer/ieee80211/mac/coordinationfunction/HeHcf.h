@@ -94,6 +94,9 @@ class INET_API HeHcf : public Hcf
 
     virtual queueing::IPacketQueue *findOldestPerStaQueue(AccessCategory ac) const;
     virtual bool stagePerStaFrameForSingleUserTransmission(AccessCategory ac);
+    virtual bool tryStartUlMuFrameSequence(AccessCategory ac);
+    virtual bool tryStartDlMuFrameSequence(AccessCategory ac);
+    virtual bool releaseChannelIfNoFallbackFrame(AccessCategory ac);
 
     /**
      * Override: selects HeDlMuTxOpFs when ≥2 unique destination STAs are

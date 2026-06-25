@@ -5,10 +5,22 @@ Test HE Capabilities, HE Operation, and HE 6 GHz Band Capabilities management el
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include <iomanip>
+#include <sstream>
+#include <vector>
 
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
+
+static std::string bytesToHex(const std::vector<uint8_t>& bytes)
+{
+    std::ostringstream os;
+    os << std::hex << std::setfill('0');
+    for (auto byte : bytes)
+        os << std::setw(2) << (int)byte;
+    return os.str();
+}
 
 %activity:
 auto request = makeShared<Ieee80211AssociationRequestFrame>();
@@ -86,6 +98,9 @@ ASSERT(raw[44] == 36);
 ASSERT(raw[51] == 255);
 ASSERT(raw[52] == 3);
 ASSERT(raw[53] == 59);
+ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 14, raw.begin() + 17)) == "ff1a23");
+ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 42, raw.begin() + 45)) == "ff0724");
+ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 51, raw.begin() + 54)) == "ff033b");
 
 auto received = new Packet("he-mgmt-rx", bytes);
 auto decoded = received->popAtFront<Ieee80211AssociationRequestFrame>();
@@ -139,7 +154,7 @@ ASSERT(decoded6GhzCapabilities.maxMpduLength == 11454);
 
 delete packet;
 delete received;
-EV << "HE management elements round trip passed.\n";
+EV << "HE management element extension-ID golden octets and round trip passed.\n";
 
 %contains: stdout
-HE management elements round trip passed.
+HE management element extension-ID golden octets and round trip passed.
