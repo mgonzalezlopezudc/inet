@@ -322,6 +322,14 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 commonRequest != nullptr ? commonRequest->getPacketExtensionDurationUs() : 0);
         heMuPhyHeader->setPuncturedSubchannelMask(request != nullptr ? request->getPuncturedSubchannelMask() :
                 commonRequest != nullptr ? commonRequest->getPuncturedSubchannelMask() : 0);
+        heMuPhyHeader->setSpatialReuse(request != nullptr ? request->getSpatialReuse() :
+                commonRequest != nullptr ? commonRequest->getSpatialReuse() : 0);
+        heMuPhyHeader->setNonSrgObssPdDisallowed(request != nullptr ? request->getNonSrgObssPdDisallowed() :
+                commonRequest != nullptr ? commonRequest->getNonSrgObssPdDisallowed() : false);
+        heMuPhyHeader->setSrgObssPdDisallowed(request != nullptr ? request->getSrgObssPdDisallowed() :
+                commonRequest != nullptr ? commonRequest->getSrgObssPdDisallowed() : false);
+        heMuPhyHeader->setPsrDisallowed(request != nullptr ? request->getPsrDisallowed() :
+                commonRequest != nullptr ? commonRequest->getPsrDisallowed() : false);
         std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
         for (auto& user : heMuUsers) {
             Ieee80211HeRu ru;

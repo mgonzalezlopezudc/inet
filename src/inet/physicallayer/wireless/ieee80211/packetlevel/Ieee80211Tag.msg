@@ -71,6 +71,10 @@ class Ieee80211HeMuReq extends TagBase
     uint8_t coding = 0;
     uint8_t packetExtensionDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
+    uint8_t spatialReuse = 0;
+    bool nonSrgObssPdDisallowed = false;
+    bool srgObssPdDisallowed = false;
+    bool psrDisallowed = false;
     simtime_t commonDuration;
     W transmitPower = W(NaN);
 }
@@ -86,6 +90,10 @@ class Ieee80211HeMuCommonReq extends TagBase
     uint8_t coding = 0;
     uint8_t packetExtensionDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
+    uint8_t spatialReuse = 0;
+    bool nonSrgObssPdDisallowed = false;
+    bool srgObssPdDisallowed = false;
+    bool psrDisallowed = false;
 }
 
 //

@@ -1,8 +1,7 @@
 %description:
-Test HE Spatial Reuse (BSS Color CCA tuning) logic at Ieee80211Receiver.
-Verifies that a station with spatial reuse enabled ignores OBSS frames (different BSS color)
-when their received power is below the OBSS PD threshold (-62 dBm), but still attempts
-reception if the power is above the threshold or if it is an intra-BSS frame (same BSS color).
+Test HE Spatial Reuse logic at Ieee80211Receiver.
+Verifies inter-BSS classification, SRG/non-SRG OBSS/PD policy, PPDU exclusion bits,
+HE TB/PSR handling, and threshold-based ignoring.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
@@ -113,6 +112,22 @@ class DummyReceiverModule : public Ieee80211Receiver {
     void setSpatialReuse(bool enable, W threshold) {
         enableSpatialReuse = enable;
         obssPdThreshold = threshold;
+        nonSrgObssPdThreshold = threshold;
+        srgObssPdThreshold = threshold;
+        enableNonSrgSpatialReuse = true;
+        enableSrgSpatialReuse = true;
+        enableParameterizedSpatialReuse = false;
+        obssPdMinThresholdDbm = -82;
+        spatialReusePowerReferenceDbm = 21;
+        srgBssColors.clear();
+    }
+    void configureSpatialReuse(W nonSrgThreshold, W srgThreshold, bool psrEnabled) {
+        nonSrgObssPdThreshold = nonSrgThreshold;
+        srgObssPdThreshold = srgThreshold;
+        enableParameterizedSpatialReuse = psrEnabled;
+    }
+    void addSrgBssColor(int color) {
+        srgBssColors.insert(color);
     }
 };
 
@@ -130,11 +145,17 @@ class MockNicModule : public NetworkInterface {
 Define_Module(DummyReceiverModule);
 Define_Module(MockNicModule);
 
-static Packet *makeHeMuPacketWithBssColor(const char *name, uint8_t bssColor)
+static Packet *makeHeMuPacketWithBssColor(const char *name, uint8_t bssColor, uint8_t ppduFormat = HE_MU_DOWNLINK,
+        bool nonSrgDisallowed = false, bool srgDisallowed = false, bool psrDisallowed = false, uint8_t spatialReuse = 0)
 {
     auto packet = new Packet(name);
     auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
     phyHeader->setBssColor(bssColor);
+    phyHeader->setPpduFormat(ppduFormat);
+    phyHeader->setNonSrgObssPdDisallowed(nonSrgDisallowed);
+    phyHeader->setSrgObssPdDisallowed(srgDisallowed);
+    phyHeader->setPsrDisallowed(psrDisallowed);
+    phyHeader->setSpatialReuse(spatialReuse);
     
     // Add one user so getUsersArraySize() > 0
     Ieee80211HeMuUserInfo user;
@@ -196,10 +217,14 @@ auto listening = rxModule->getAnalogModel()->createListening(
 // 3. Above OBSS PD threshold (e.g., -55 dBm)
 W pBelowSens = mW(math::dBmW2mW(-95));
 W pBetween = mW(math::dBmW2mW(-70));
+W pBelowSrg = mW(math::dBmW2mW(-75));
 W pAbove = mW(math::dBmW2mW(-55));
 
-auto runTestCase = [&](const char *label, bool enableSR, uint8_t frameBssColor, W rxPower, bool expectedPossible) {
-    auto packet = makeHeMuPacketWithBssColor("test-packet", frameBssColor);
+auto runTestCase = [&](const char *label, bool enableSR, uint8_t frameBssColor, W rxPower, bool expectedPossible,
+        uint8_t ppduFormat = HE_MU_DOWNLINK, bool nonSrgDisallowed = false, bool srgDisallowed = false,
+        bool psrDisallowed = false, uint8_t spatialReuse = 0, bool psrEnabled = false, bool srgColor = false) {
+    auto packet = makeHeMuPacketWithBssColor("test-packet", frameBssColor, ppduFormat,
+            nonSrgDisallowed, srgDisallowed, psrDisallowed, spatialReuse);
     auto trans = new MockIeee80211Transmission(radio, packet, mode, channel);
     
     auto analogModel = new ScalarReceptionAnalogModel(
@@ -210,6 +235,9 @@ auto runTestCase = [&](const char *label, bool enableSR, uint8_t frameBssColor, 
     );
     
     rxModule->setSpatialReuse(enableSR, mW(math::dBmW2mW(-62))); // threshold is -62 dBm
+    rxModule->configureSpatialReuse(mW(math::dBmW2mW(-62)), mW(math::dBmW2mW(-72)), psrEnabled);
+    if (srgColor)
+        rxModule->addSrgBssColor(frameBssColor);
     
     bool possible = rxModule->checkReceptionPossible(listening, reception, IRadioSignal::SIGNAL_PART_WHOLE);
     bool attempted = rxModule->checkReceptionAttempted(listening, reception, IRadioSignal::SIGNAL_PART_WHOLE);
@@ -244,6 +272,19 @@ runTestCase("SR_Enabled_OBSS_Above", true, 9, pAbove, true);
 // 6. Spatial Reuse Enabled, OBSS (color 9), power below sensitivity -> should be impossible
 runTestCase("SR_Enabled_OBSS_BelowSens", true, 9, pBelowSens, false);
 
+// 7. SRG OBSS uses its separate threshold (-72 dBm): -70 dBm is received, -75 dBm is ignored
+runTestCase("SR_Enabled_SRG_AboveSrg", true, 9, pBetween, true, HE_MU_DOWNLINK, false, false, false, 0, false, true);
+runTestCase("SR_Enabled_SRG_BelowSrg", true, 9, pBelowSrg, false, HE_MU_DOWNLINK, false, false, false, 0, false, true);
+
+// 8. PPDU exclusion bits prevent OBSS/PD ignoring and fall back to normal sensitivity
+runTestCase("SR_Enabled_NonSrg_Disallowed", true, 9, pBetween, true, HE_MU_DOWNLINK, true);
+runTestCase("SR_Enabled_SRG_Disallowed", true, 9, pBelowSrg, true, HE_MU_DOWNLINK, false, true, false, 0, false, true);
+
+// 9. HE trigger-based PPDUs are excluded from OBSS/PD unless PSR is enabled and permitted
+runTestCase("SR_Enabled_TB_Excluded", true, 9, pBetween, true, HE_TRIGGER_BASED_UPLINK);
+runTestCase("SR_Enabled_TB_PSR", true, 9, pBetween, false, HE_TRIGGER_BASED_UPLINK, false, false, false, 1, true);
+runTestCase("SR_Enabled_TB_PSR_Disallowed", true, 9, pBetween, true, HE_TRIGGER_BASED_UPLINK, false, false, true, 1, true);
+
 delete listening;
 delete channel;
 EV << ".\n";
@@ -255,4 +296,11 @@ SR_Enabled_Intra_Between -> possible: YES, attempted: YES (Expected: YES)
 SR_Enabled_OBSS_Between -> possible: NO, attempted: NO (Expected: NO)
 SR_Enabled_OBSS_Above -> possible: YES, attempted: YES (Expected: YES)
 SR_Enabled_OBSS_BelowSens -> possible: NO, attempted: NO (Expected: NO)
+SR_Enabled_SRG_AboveSrg -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_SRG_BelowSrg -> possible: NO, attempted: NO (Expected: NO)
+SR_Enabled_NonSrg_Disallowed -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_SRG_Disallowed -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_TB_Excluded -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_TB_PSR -> possible: NO, attempted: NO (Expected: NO)
+SR_Enabled_TB_PSR_Disallowed -> possible: YES, attempted: YES (Expected: YES)
 .

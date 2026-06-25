@@ -18,6 +18,8 @@ using namespace inet::physicallayer;
 // Create original HeMuPhyHeader
 auto origHeader = makeShared<Ieee80211HeMuPhyHeader>();
 auto headerRus = getHeEqualRuLayout(Hz(0), Hz(20e6), 2);
+origHeader->setBssColor(17);
+origHeader->setSpatialReuse(9);
 
 Ieee80211HeMuUserInfo user1;
 user1.ruIndex = headerRus[0].index;
@@ -64,6 +66,8 @@ auto recvHeader = pk2->popAtFront<Ieee80211HeMuPhyHeader>();
 
 EV << "Deserialized Header:\n";
 EV << "users count = " << recvHeader->getUsersArraySize() << "\n";
+ASSERT(recvHeader->getBssColor() == 17);
+ASSERT(recvHeader->getSpatialReuse() == 9);
 for (unsigned int i = 0; i < recvHeader->getUsersArraySize(); ++i) {
     EV << "  user[" << i << "]: staId=" << recvHeader->getUsers(i).staId
        << ", mcs=" << (int)recvHeader->getUsers(i).mcs

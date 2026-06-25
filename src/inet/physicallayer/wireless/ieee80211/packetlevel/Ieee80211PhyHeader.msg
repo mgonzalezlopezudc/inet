@@ -195,6 +195,10 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
 {
     uint8_t bssColor = 0;
     uint8_t ppduFormat = 0; // 0: HE MU downlink, 1: HE trigger-based uplink
+    uint8_t spatialReuse = 0; // HE-SIG-A Spatial Reuse field
+    bool nonSrgObssPdDisallowed = false;
+    bool srgObssPdDisallowed = false;
+    bool psrDisallowed = false;
     uint8_t guardInterval = 2; // 0: 0.8 us, 1: 1.6 us, 2: 3.2 us
     uint8_t coding = 0; // 0: BCC, 1: LDPC
     uint8_t packetExtensionDurationUs = 0;
