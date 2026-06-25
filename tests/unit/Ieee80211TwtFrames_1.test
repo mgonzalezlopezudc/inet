@@ -6,10 +6,22 @@ Test TWT action-frame and Broadcast-TWT Beacon-element serialization.
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include <iomanip>
+#include <sstream>
+#include <vector>
 
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
+
+static std::string bytesToHex(const std::vector<uint8_t>& bytes)
+{
+    std::ostringstream os;
+    os << std::hex << std::setfill('0');
+    for (auto byte : bytes)
+        os << std::setw(2) << (int)byte;
+    return os.str();
+}
 
 %activity:
 auto setup = makeShared<Ieee80211TwtSetupFrame>();
@@ -33,6 +45,10 @@ setup->setPersistence(7);
 auto actionPacket = new Packet("twt-setup", setup);
 auto actionBytes = actionPacket->peekDataAsBytes();
 ASSERT(actionBytes->getChunkLength() == B(42));
+std::vector<uint8_t> twtSetupBody;
+for (int i = 24; i < 42; ++i)
+    twtSetupBody.push_back(actionBytes->getByte(i));
+ASSERT(bytesToHex(twtSetupBody) == "160613550387d6120000000000046a180807");
 auto actionReceived = new Packet("twt-setup-rx", actionBytes);
 auto decodedSetup = actionReceived->popAtFront<Ieee80211TwtSetupFrame>();
 ASSERT(decodedSetup->getDialogToken() == 19);
@@ -100,7 +116,7 @@ delete psPollPacket;
 delete psPollReceived;
 delete beaconPacket;
 delete beaconReceived;
-EV << "TWT frame round trips passed.\n";
+EV << "TWT setup action-body golden octets and frame round trips passed.\n";
 
 %contains: stdout
-TWT frame round trips passed.
+TWT setup action-body golden octets and frame round trips passed.

@@ -1,5 +1,5 @@
 %description:
-Test serialization and deserialization of standard-shaped Ieee80211TriggerFrame with golden vectors.
+Test serialization and deserialization of the INET packet-level Trigger-frame model encoding.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -12,7 +12,9 @@ using namespace inet::ieee80211;
 
 %activity:
 {
-    // Create Basic Trigger Frame (Trigger Type = 0)
+    // Create Basic Trigger Frame (Trigger Type = 0).
+    // This is an INET model-encoding golden vector, not a complete IEEE
+    // 802.11 Trigger Common/User Info wire-format conformance vector.
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     trigger->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
@@ -72,7 +74,8 @@ using namespace inet::ieee80211;
 }
 
 {
-    // Create BSRP Trigger Frame (Trigger Type = 4)
+    // Create BSRP Trigger Frame (Trigger Type = 4).
+    // This vector guards the INET serializer's compact model fields.
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setReceiverAddress(MacAddress("02:00:00:00:00:01"));
     trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:02"));

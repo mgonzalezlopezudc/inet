@@ -11,13 +11,16 @@ below have been resolved:
   HE-MU symbol counts from live radio configuration.
 - Per-user MCS, NSS, RU, GI, and DCM are now used for both duration and
   packet-level error evaluation.
-- HE-SIG-A/HE-SIG-B signaling and RU allocation encoding are standards-shaped.
+- HE-SIG-A/HE-SIG-B signaling and RU allocation encoding are modeled with
+  standard-derived fields where the packet-level PHY consumes them, but they
+  are not complete on-air encodings.
 - Negotiated HE capabilities are stored per peer in the MIB and enforced by the
   scheduler and frame builder.
 - HE Capabilities, HE Operation, and HE 6 GHz Band Capabilities now have
   management-frame packet representations and serializer round-trip coverage for
   model-backed fields.
-- A-MPDU delimiters are standards-shaped and per-MPDU receive outcomes drive
+- A-MPDU delimiters follow the standard field layout used by the model, and
+  per-MPDU receive outcomes drive
   partial Block Ack bitmaps and selective retry.
 - MU-BAR Trigger plus simultaneous HE-TB BlockAck responses are the default
   acknowledgment sequence; an explicit sequential BAR/BA compatibility mode is
@@ -949,7 +952,7 @@ The highest-value next steps are:
 
 The implementation has a well-structured and extensible MAC design. It
 correctly addresses several difficult integration problems: destination-aware
-queueing, standards-shaped RU allocation, safe aggregation, common-PPDU
+queueing, standard-derived RU allocation, safe aggregation, common-PPDU
 representation, RU-specific propagation, receiver filtering, and per-user
 recovery.
 

@@ -429,7 +429,10 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 ulBw = 1;
             uint8_t giAndHeLtf = (trigger->getGuardInterval() <= 2) ? trigger->getGuardInterval() : 2;
 
-            // --- Common Info Field (8 octets = 64 bits) - IEEE Std 802.11-2024 9.3.1.22.1 ---
+            // --- Common Info Field subset (8 octets = 64 bits) ---
+            // Packet-level model: this packs the Trigger fields used by INET's
+            // HE-TB scheduler/receiver, but it is not a complete IEEE Std
+            // 802.11 Trigger Common Info/User Info encoder.
             uint64_t commonInfo =
                     (trigger->getTriggerType() & 0xF) |               // B0-B3: Trigger Type
                     ((ulLength & 0xFFFULL) << 4) |                    // B4-B15: UL Length
@@ -443,7 +446,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             for (unsigned int i = 0; i < trigger->getUsersArraySize(); i++) {
                 const auto& user = trigger->getUsers(i);
 
-                // B12–B19: RU Allocation (8 bits) - mapped using Table 9-53
+                // B12-B19: RU Allocation (8 bits), mapped through INET's RU catalog.
                 Hz bw = (ulBw == 3) ? Hz(160e6) : ((ulBw == 2) ? Hz(80e6) : ((ulBw == 1) ? Hz(40e6) : Hz(20e6)));
                 uint8_t ruAllocation = 0;
                 uint8_t b0 = 0;
@@ -539,7 +542,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                         ((static_cast<uint64_t>(fval) & 0x7F) << 32);    // B32-B38: UL Target Receive Power
                 writeLeBits(stream, userInfo, 40);
 
-                // --- Trigger Dependent User Info ---
+                // --- Trigger Dependent User Info subset ---
                 if (trigger->getTriggerType() == 0) { // Basic Trigger: 1 octet (8 bits)
                     // TID Aggregation Limit (B2-B4) packs user.tid
                     uint8_t tidAggregationLimit = user.tid & 0x7;

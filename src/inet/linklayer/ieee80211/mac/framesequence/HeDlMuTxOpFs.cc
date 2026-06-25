@@ -64,6 +64,39 @@ std::map<Tid, SequenceNumberCyclic> collectStartingSequenceNumbersByTid(const st
     return records;
 }
 
+struct SelectedDlMuAllocation {
+    IIeee80211HeDlScheduler::RuAllocation allocation;
+    queueing::IPacketQueue *sourceQueue = nullptr;
+    Packet *packet = nullptr;
+    Ptr<const Ieee80211DataHeader> dataHeader;
+    std::vector<Packet *> packets;
+    bool multiTidAggregation = false;
+    B psduLength = B(0);
+    uint16_t associationId = 0;
+};
+
+void warnDlMuIneligible(Packet *packet, const MacAddress& receiverAddress, Tid tid, int ruIndex, const char *reason)
+{
+    EV_WARN << "HE DL MU TXOP FS: skipping MU-ineligible packet "
+            << (packet == nullptr ? "<none>" : packet->getName())
+            << " for receiver " << receiverAddress
+            << ", TID " << (int)tid
+            << ", RU " << ruIndex
+            << ": " << reason << endl;
+}
+
+const char *getDlMuIneligibilityReason(IOriginatorBlockAckAgreementHandler *handler, const MacAddress& receiverAddress, Tid tid)
+{
+    if (handler == nullptr)
+        return "null originator Block Ack agreement handler";
+    auto agreement = handler->getAgreement(receiverAddress, tid);
+    if (agreement == nullptr)
+        return "missing originator Block Ack agreement";
+    if (!agreement->getIsAddbaResponseReceived())
+        return "ADDBA response not received";
+    return nullptr;
+}
+
 } // namespace
 
 class HeDlMuPpduFs : public IFrameSequence
@@ -630,17 +663,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             heHcf->handleDlMuPlanningFailure(ac);
         }
     };
-    struct SelectedAllocation {
-        IIeee80211HeDlScheduler::RuAllocation allocation;
-        queueing::IPacketQueue *sourceQueue = nullptr;
-        Packet *packet = nullptr;
-        Ptr<const Ieee80211DataHeader> dataHeader;
-        std::vector<Packet *> packets;
-        bool multiTidAggregation = false;
-        B psduLength = B(0);
-        uint16_t associationId = 0;
-    };
-
     // Obtain per-STA RU assignments from the scheduler.
     EV_INFO << "HE DL MU scheduling " << scheduleContext.candidates.size()
              << " candidates, ackMethod = "
@@ -700,26 +722,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto containerMode = rateSelection->computeMode(container, containerHdr, nullptr);
     RateSelection::setFrameMode(container, containerHdr, containerMode);
 
-    auto warnIneligible = [] (Packet *packet, const MacAddress& receiverAddress, Tid tid, int ruIndex, const char *reason) {
-        EV_WARN << "HE DL MU TXOP FS: skipping MU-ineligible packet "
-                << (packet == nullptr ? "<none>" : packet->getName())
-                << " for receiver " << receiverAddress
-                << ", TID " << (int)tid
-                << ", RU " << ruIndex
-                << ": " << reason << endl;
-    };
-
-    auto getIneligibilityReason = [] (IOriginatorBlockAckAgreementHandler *handler, const MacAddress& receiverAddress, Tid tid) -> const char * {
-        if (handler == nullptr)
-            return "null originator Block Ack agreement handler";
-        auto agreement = handler->getAgreement(receiverAddress, tid);
-        if (agreement == nullptr)
-            return "missing originator Block Ack agreement";
-        if (!agreement->getIsAddbaResponseReceived())
-            return "ADDBA response not received";
-        return nullptr;
-    };
-
     auto getCandidateAccessCategory = [&] (const MacAddress& staAddress, AccessCategory fallbackAc) {
         for (const auto& candidate : scheduleContext.candidates)
             if (candidate.staAddress == staAddress)
@@ -738,7 +740,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     };
 
     std::vector<Packet *> selectedPackets;
-    std::vector<SelectedAllocation> selectedAllocations;
+    std::vector<SelectedDlMuAllocation> selectedAllocations;
     int skippedAllocations = 0;
     for (size_t idx = 0; idx < allocations.size(); ++idx) {
         const auto& alloc = allocations[idx];
@@ -763,7 +765,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             }
         }
         if (staPacket == nullptr) {
-            warnIneligible(nullptr, alloc.staAddress, -1, alloc.ru.index, "no queued packet for scheduled receiver");
+            warnDlMuIneligible(nullptr, alloc.staAddress, -1, alloc.ru.index, "no queued packet for scheduled receiver");
             skippedAllocations++;
             continue;
         }
@@ -772,28 +774,28 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         auto macHdr = staPacket->peekAtFront<Ieee80211MacHeader>();
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(macHdr);
         if (dataHeader == nullptr) {
-            warnIneligible(staPacket, alloc.staAddress, -1, alloc.ru.index, "packet is not a data frame");
+            warnDlMuIneligible(staPacket, alloc.staAddress, -1, alloc.ru.index, "packet is not a data frame");
             skippedAllocations++;
             continue;
         }
         if (dataHeader->getType() != ST_DATA_WITH_QOS) {
-            warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index, "packet is not QoS data");
+            warnDlMuIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index, "packet is not QoS data");
             skippedAllocations++;
             continue;
         }
         if (dataHeader->getReceiverAddress() != alloc.staAddress) {
-            warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index, "packet receiver does not match scheduler allocation");
+            warnDlMuIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index, "packet receiver does not match scheduler allocation");
             skippedAllocations++;
             continue;
         }
         if (!hasActiveOriginatorBlockAckAgreement(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
-            warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index,
-                    getIneligibilityReason(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid()));
+            warnDlMuIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(), alloc.ru.index,
+                    getDlMuIneligibilityReason(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid()));
             skippedAllocations++;
             continue;
         }
 
-        SelectedAllocation selectedAllocation;
+        SelectedDlMuAllocation selectedAllocation;
         selectedAllocation.allocation = alloc;
         selectedAllocation.sourceQueue = sourceQueue;
         selectedAllocation.packet = staPacket;
@@ -807,7 +809,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             ASSERT(hcfMac != nullptr);
             auto aid = hcfMac->getMib()->getAssociationId(alloc.staAddress);
             if (aid <= 0) {
-                warnIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(),
+                warnDlMuIneligible(staPacket, dataHeader->getReceiverAddress(), dataHeader->getTid(),
                         alloc.ru.index, "scheduled receiver has no association ID");
                 skippedAllocations++;
                 continue;
@@ -828,10 +830,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         associationIdCounts[selectedAllocation.associationId]++;
     selectedAllocations.erase(
             std::remove_if(selectedAllocations.begin(), selectedAllocations.end(),
-                    [&] (const SelectedAllocation& selectedAllocation) {
+                    [&] (const SelectedDlMuAllocation& selectedAllocation) {
                         if (associationIdCounts[selectedAllocation.associationId] <= 1)
                             return false;
-                        warnIneligible(selectedAllocation.packet,
+                        warnDlMuIneligible(selectedAllocation.packet,
                                 selectedAllocation.dataHeader->getReceiverAddress(),
                                 selectedAllocation.dataHeader->getTid(),
                                 selectedAllocation.allocation.ru.index,
@@ -898,7 +900,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         ppduDurationLimit = std::min(ppduDurationLimit, txopPpduLimit);
     }
 
-    std::vector<SelectedAllocation> finalAllocations;
+    std::vector<SelectedDlMuAllocation> finalAllocations;
     int rejectedFinalValidation = 0;
     for (auto selectedAllocation : selectedAllocations) {
         auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(selectedAllocation.packet->peekAtFront<Ieee80211MacHeader>());
@@ -907,7 +909,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 !hasActiveOriginatorBlockAckAgreement(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
             Tid tid = dataHeader == nullptr ? -1 : dataHeader->getTid();
             auto receiverAddress = dataHeader == nullptr ? selectedAllocation.allocation.staAddress : dataHeader->getReceiverAddress();
-            warnIneligible(selectedAllocation.packet, receiverAddress, tid, selectedAllocation.allocation.ru.index,
+            warnDlMuIneligible(selectedAllocation.packet, receiverAddress, tid, selectedAllocation.allocation.ru.index,
                     "failed final validation before queue removal");
             rejectedFinalValidation++;
             continue;
@@ -922,7 +924,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             return std::max(0, blockAckWindowLimit - occupiedSlots);
         };
         if (getAvailableSlots(dataHeader->getTid()) <= 0) {
-            warnIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
+            warnDlMuIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
                     selectedAllocation.allocation.ru.index, "Block Ack window has no available entries");
             rejectedFinalValidation++;
             continue;
@@ -963,7 +965,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             selectedAllocation.psduLength = proposedLength;
         }
         if (selectedAllocation.packets.empty()) {
-            warnIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
+            warnDlMuIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
                     selectedAllocation.allocation.ru.index,
                     "HoL MPDU exceeds aligned, TXOP, or HE PPDU packing limit");
             rejectedFinalValidation++;
@@ -1017,7 +1019,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     while ((!plannedPpdu || plannedPpdu.parameters.duration > ppduDurationLimit) &&
             finalAllocations.size() >= 2) {
         auto longest = std::max_element(finalAllocations.begin(), finalAllocations.end(),
-                [] (const SelectedAllocation& a, const SelectedAllocation& b) {
+                [] (const SelectedDlMuAllocation& a, const SelectedDlMuAllocation& b) {
                     return a.psduLength < b.psduLength;
                 });
         ASSERT(longest != finalAllocations.end());

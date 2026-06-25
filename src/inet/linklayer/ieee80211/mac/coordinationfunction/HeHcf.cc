@@ -552,6 +552,246 @@ bool HeHcf::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
     return true;
 }
 
+bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
+{
+    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NO_TRIGGER ||
+            !mac->isApInAxMode() || !ulCoordinator->isEnabled())
+        return false;
+
+    ulTriggerAccessRequested = false;
+    auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
+    auto transmitter = check_and_cast<const physicallayer::NarrowbandTransmitterBase *>(radio->getTransmitter());
+    auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
+    auto centerFrequency = transmitter->getCenterFrequency();
+    Hz channelBandwidth = Hz(20e6);
+    if (modeSet->getNumModes() > 0)
+        if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0)))
+            channelBandwidth = heMode->getDataMode()->getBandwidth();
+    auto edcaf = edca->getEdcaf(ac);
+    simtime_t txopLimit = SIMTIME_ZERO;
+    if (edcaf->getTxopProcedure()->getLimit() > SIMTIME_ZERO)
+        txopLimit = std::max(SIMTIME_ZERO,
+                edcaf->getTxopProcedure()->getLimit() - edcaf->getTxopProcedure()->getDuration());
+    auto sensitivityDbm = math::mW2dBmW(receiver->getSensitivity().get<mW>());
+    IIeee80211HeUlScheduler::Schedule ulSchedule;
+    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
+        auto maxRus = physicallayer::getHeMaxRuCount(channelBandwidth);
+        auto layout = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, maxRus);
+        int index = 0;
+        for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
+            if (station.second != Ieee80211Mib::ASSOCIATED || index >= maxRus)
+                continue;
+            if (!mac->isTwtPeerEligible(station.first)) {
+                EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.first << "\n";
+                continue;
+            }
+            IIeee80211HeUlScheduler::RuAllocation allocation;
+            allocation.staAddress = station.first;
+            allocation.associationId = mac->getMib()->getAssociationId(station.first);
+            allocation.ru = layout[index++];
+            allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
+            ulSchedule.allocations.push_back(allocation);
+        }
+        ulSchedule.commonDuration = std::min(SimTime(par("maxHeTbPpduDuration")), txopLimit > SIMTIME_ZERO ?
+                txopLimit : SimTime(par("maxHeTbPpduDuration")));
+    }
+    else {
+        int staleOrUnknown = 0;
+        for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
+            if (station.second != Ieee80211Mib::ASSOCIATED)
+                continue;
+            auto aid = mac->getMib()->getAssociationId(station.first);
+            auto status = ulCoordinator->getBufferStatus().find(aid);
+            if (status == ulCoordinator->getBufferStatus().end() ||
+                    simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge())
+                staleOrUnknown++;
+        }
+        ulSchedule = ulCoordinator->createSchedule(mac->getMib(), centerFrequency, channelBandwidth,
+                txopLimit, sensitivityDbm, par("ulTargetRssiMargin"), staleOrUnknown, 0, 0);
+    }
+    ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
+            [this] (const auto& allocation) {
+                return !allocation.randomAccess && !mac->isTwtPeerEligible(allocation.staAddress);
+            }), ulSchedule.allocations.end());
+    auto puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(), channelBandwidth);
+    if (!puncturedSubchannels.empty()) {
+        for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
+            if (puncturedSubchannels[i])
+                ulSchedule.puncturedSubchannelMask |= 1U << i;
+        auto supportsPuncturing = [&] (const IIeee80211HeUlScheduler::RuAllocation& allocation) {
+            if (allocation.randomAccess)
+                return std::all_of(mac->getMib()->bssAccessPointData.stations.begin(),
+                        mac->getMib()->bssAccessPointData.stations.end(), [&] (const auto& station) {
+                            auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+                            return station.second != Ieee80211Mib::ASSOCIATED ||
+                                    (capabilities != nullptr && capabilities->valid &&
+                                     capabilities->intersection.preamblePuncturing);
+                        });
+            auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
+            return capabilities != nullptr && capabilities->valid && capabilities->intersection.preamblePuncturing;
+        };
+        ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
+                [&] (const auto& allocation) {
+                    return overlapsHePuncturedSubchannel(allocation.ru, puncturedSubchannels, channelBandwidth) ||
+                            !supportsPuncturing(allocation);
+                }), ulSchedule.allocations.end());
+    }
+    ulSchedule.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
+    if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0))) {
+        switch (heMode->getDataMode()->getGuardIntervalType()) {
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
+                ulSchedule.guardInterval = physicallayer::HE_GI_0_8_US;
+                break;
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
+                ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
+                break;
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
+                ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
+                break;
+        }
+    }
+    bool ldpcSupportedByAll = mac->getMib()->localHeCapabilities.ldpc;
+    for (const auto& allocation : ulSchedule.allocations) {
+        if (allocation.randomAccess)
+            continue;
+        auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
+        ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr && capabilities->valid &&
+                capabilities->intersection.ldpc;
+    }
+    ulSchedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
+    auto triggerType = pendingUlTrigger;
+    pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
+    if (ulSchedule.allocations.empty()) {
+        EV_WARN << "HE UL skipping Trigger because no usable RU allocations remain"
+                << " after scheduling and puncturing checks\n";
+        return false;
+    }
+
+    ASSERT(ulSchedule.commonDuration > SIMTIME_ZERO);
+    EV_INFO << "HE UL starting"
+             << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
+             << " exchange with " << ulSchedule.allocations.size()
+             << " RU allocations for " << ulSchedule.commonDuration << "\n";
+    frameSequenceHandler->startFrameSequence(
+            new HeUlMuTxOpFs(ulCoordinator, this, ulSchedule, triggerType,
+                    modeSet, mac->getAddress()),
+            buildContext(ac), this);
+    emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
+    return true;
+}
+
+bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
+{
+    auto edcaf = edca->getEdcaf(ac);
+    if (mac->isApInAxMode() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
+        auto scheduleContext = collectScheduleContext(ac);
+        int lackCsiCount = 0;
+        std::vector<HeSoundingFs::TargetSta> soundingStas;
+        for (const auto& candidate : scheduleContext.candidates) {
+            auto negotiated = candidate.negotiatedHeCapabilities;
+            if (negotiated == nullptr || !negotiated->valid)
+                continue;
+            auto mib = mac->getMib();
+            auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
+            const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
+            if (staCapabilities == nullptr)
+                continue;
+            if (isDlMuMimoEligible(mac->getMib()->localHeCapabilities, *staCapabilities, *negotiated, scheduleContext.channelBandwidth, scheduleContext.numApAntennas)) {
+                if (!csiManager.hasFreshCsi(candidate.staAddress, scheduleContext.channelBandwidth))
+                    lackCsiCount++;
+                HeSoundingFs::TargetSta target;
+                target.address = candidate.staAddress;
+                target.aid = mac->getMib()->getAssociationId(candidate.staAddress);
+                target.maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
+                soundingStas.push_back(target);
+            }
+        }
+        if (lackCsiCount >= 2) {
+            if (soundingStas.size() > 8)
+                soundingStas.resize(8);
+            EV_INFO << "At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << endl;
+            static uint8_t nextSoundingDialogToken = 1;
+            static uint32_t nextTriggerId = 1;
+            auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
+                                                     &csiManager, scheduleContext.channelBandwidth,
+                                                     nextSoundingDialogToken++, nextTriggerId++);
+            frameSequenceHandler->startFrameSequence(soundingSequence, buildContext(ac), this);
+            emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
+            return true;
+        }
+    }
+
+    auto pendingQueue = edcaf->getPendingQueue();
+    auto inProgress = edcaf->getInProgressFrames();
+    if (hasEligibleExistingFrame(inProgress, edcaf->getAckHandler())) {
+        EV_INFO << "Completing " << inProgress->getLength()
+                << " recovery/outstanding frames before opening a new MU transmission." << endl;
+        Hcf::startFrameSequence(ac);
+        return true;
+    }
+    auto headDataHeader = getEligibleHoLDataHeader(pendingQueue);
+    auto baHandler = getOriginatorBlockAckAgreementHandler();
+    if (!pendingQueue->isEmpty() && !isMuEligibleDataHeader(headDataHeader, baHandler)) {
+        if (headDataHeader != nullptr) {
+            EV_INFO << "Earliest SU-transmittable packet "
+                    << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
+                    << " is MU-ineligible, falling back to Hcf::startFrameSequence(ac)." << endl;
+        }
+        Hcf::startFrameSequence(ac);
+        return true;
+    }
+    auto scheduleContext = collectScheduleContext(ac);
+    if (scheduleContext.candidates.size() >= 2) {
+        auto previewAllocations = dlScheduler->schedule(scheduleContext);
+        if (previewAllocations.size() < 2) {
+            EV_INFO << "HE DL scheduler preview retained fewer than two MU users; falling back to SU." << endl;
+            if (pendingQueue->isEmpty())
+                stagePerStaFrameForSingleUserTransmission(ac);
+            Hcf::startFrameSequence(ac);
+            return true;
+        }
+        EV_INFO << "HE DL MU opportunity detected for " << scheduleContext.candidates.size()
+                << " STAs - starting HE DL MU TxOp FS." << endl;
+        auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
+                HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
+                HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
+        EV_INFO << "Start HE DL MU TxOp FS: using "
+                 << (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR")
+                 << " acknowledgment method\n";
+        frameSequenceHandler->startFrameSequence(
+                new HeDlMuTxOpFs(dlScheduler, scheduleContext, modeSet,
+                                 pendingQueue, edcaf->getAckHandler(), this,
+                                 par("maxAmpduMpduCount"),
+                                 par("maxHeMuPsduLength"),
+                                 par("maxHeMuPpduDuration"),
+                                 ackMethod),
+                buildContext(ac), this);
+        emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
+        return true;
+    }
+    if (pendingQueue->isEmpty())
+        stagePerStaFrameForSingleUserTransmission(ac);
+    else
+        EV_INFO << "Only " << scheduleContext.candidates.size()
+                 << " MU candidate(s), falling back to single-user\n";
+    return false;
+}
+
+bool HeHcf::releaseChannelIfNoFallbackFrame(AccessCategory ac)
+{
+    auto fallbackEdcaf = edca->getEdcaf(ac);
+    if (fallbackEdcaf->getPendingQueue()->isEmpty() &&
+            fallbackEdcaf->getInProgressFrames()->getLength() == 0)
+        stagePerStaFrameForSingleUserTransmission(ac);
+    if (fallbackEdcaf->getInProgressFrames()->getFrameToTransmit() != nullptr)
+        return false;
+
+    EV_WARN << "Channel granted without an eligible SU, DL-MU, or UL trigger frame; releasing channel.\n";
+    fallbackEdcaf->releaseChannel(this);
+    fallbackEdcaf->getTxopProcedure()->endTxop();
+    return true;
+}
+
 void HeHcf::startFrameSequence(AccessCategory ac)
 {
     if (forceNextSingleUser[ac]) {
@@ -560,239 +800,20 @@ void HeHcf::startFrameSequence(AccessCategory ac)
         Hcf::startFrameSequence(ac);
         return;
     }
-    // Check whether HE mode and multi-user conditions are met.
-    bool isHeMode = (modeSet != nullptr && strcmp(modeSet->getName(), "ax") == 0);
+
     ASSERT(modeSet != nullptr);
-    if (isHeMode && pendingUlTrigger != IIeee80211HeUlTriggerPolicy::NO_TRIGGER &&
-            mac->isApInAxMode() && ulCoordinator->isEnabled()) {
-        ulTriggerAccessRequested = false;
-        auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
-        auto transmitter = check_and_cast<const physicallayer::NarrowbandTransmitterBase *>(radio->getTransmitter());
-        auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
-        auto centerFrequency = transmitter->getCenterFrequency();
-        Hz channelBandwidth = Hz(20e6);
-        if (modeSet->getNumModes() > 0)
-            if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0)))
-                channelBandwidth = heMode->getDataMode()->getBandwidth();
-        auto edcaf = edca->getEdcaf(ac);
-        simtime_t txopLimit = SIMTIME_ZERO;
-        if (edcaf->getTxopProcedure()->getLimit() > SIMTIME_ZERO)
-            txopLimit = std::max(SIMTIME_ZERO,
-                    edcaf->getTxopProcedure()->getLimit() - edcaf->getTxopProcedure()->getDuration());
-        auto sensitivityDbm = math::mW2dBmW(receiver->getSensitivity().get<mW>());
-        IIeee80211HeUlScheduler::Schedule ulSchedule;
-        if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
-            auto maxRus = physicallayer::getHeMaxRuCount(channelBandwidth);
-            auto layout = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, maxRus);
-            int index = 0;
-            for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
-                if (station.second != Ieee80211Mib::ASSOCIATED || index >= maxRus)
-                    continue;
-                if (!mac->isTwtPeerEligible(station.first)) {
-                    EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.first << "\n";
-                    continue;
-                }
-                IIeee80211HeUlScheduler::RuAllocation allocation;
-                allocation.staAddress = station.first;
-                allocation.associationId = mac->getMib()->getAssociationId(station.first);
-                allocation.ru = layout[index++];
-                allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
-                ulSchedule.allocations.push_back(allocation);
-            }
-            ulSchedule.commonDuration = std::min(SimTime(par("maxHeTbPpduDuration")), txopLimit > SIMTIME_ZERO ?
-                    txopLimit : SimTime(par("maxHeTbPpduDuration")));
-        }
-        else {
-            int staleOrUnknown = 0;
-            for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
-                if (station.second != Ieee80211Mib::ASSOCIATED)
-                    continue;
-                auto aid = mac->getMib()->getAssociationId(station.first);
-                auto status = ulCoordinator->getBufferStatus().find(aid);
-                if (status == ulCoordinator->getBufferStatus().end() ||
-                        simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge())
-                    staleOrUnknown++;
-            }
-            ulSchedule = ulCoordinator->createSchedule(mac->getMib(), centerFrequency, channelBandwidth,
-                    txopLimit, sensitivityDbm, par("ulTargetRssiMargin"), staleOrUnknown, 0, 0);
-        }
-        ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
-                [this] (const auto& allocation) {
-                    return !allocation.randomAccess && !mac->isTwtPeerEligible(allocation.staAddress);
-                }), ulSchedule.allocations.end());
-        auto puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(), channelBandwidth);
-        if (!puncturedSubchannels.empty()) {
-            for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
-                if (puncturedSubchannels[i])
-                    ulSchedule.puncturedSubchannelMask |= 1U << i;
-            auto supportsPuncturing = [&] (const IIeee80211HeUlScheduler::RuAllocation& allocation) {
-                if (allocation.randomAccess)
-                    return std::all_of(mac->getMib()->bssAccessPointData.stations.begin(),
-                            mac->getMib()->bssAccessPointData.stations.end(), [&] (const auto& station) {
-                                auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
-                                return station.second != Ieee80211Mib::ASSOCIATED ||
-                                        (capabilities != nullptr && capabilities->valid &&
-                                         capabilities->intersection.preamblePuncturing);
-                            });
-                auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-                return capabilities != nullptr && capabilities->valid && capabilities->intersection.preamblePuncturing;
-            };
-            ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
-                    [&] (const auto& allocation) {
-                        return overlapsHePuncturedSubchannel(allocation.ru, puncturedSubchannels, channelBandwidth) ||
-                                !supportsPuncturing(allocation);
-                    }), ulSchedule.allocations.end());
-        }
-        ulSchedule.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
-        if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0))) {
-            switch (heMode->getDataMode()->getGuardIntervalType()) {
-                case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
-                    ulSchedule.guardInterval = physicallayer::HE_GI_0_8_US;
-                    break;
-                case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
-                    ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
-                    break;
-                case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
-                    ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
-                    break;
-            }
-        }
-        bool ldpcSupportedByAll = mac->getMib()->localHeCapabilities.ldpc;
-        for (const auto& allocation : ulSchedule.allocations) {
-            if (allocation.randomAccess)
-                continue;
-            auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-            ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr && capabilities->valid &&
-                    capabilities->intersection.ldpc;
-        }
-        ulSchedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
-        auto triggerType = pendingUlTrigger;
-        pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
-        if (!ulSchedule.allocations.empty()) {
-            ASSERT(ulSchedule.commonDuration > SIMTIME_ZERO);
-            EV_INFO << "HE UL starting"
-                     << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
-                     << " exchange with " << ulSchedule.allocations.size()
-                     << " RU allocations for " << ulSchedule.commonDuration << "\n";
-            frameSequenceHandler->startFrameSequence(
-                    new HeUlMuTxOpFs(ulCoordinator, this, ulSchedule, triggerType,
-                            modeSet, mac->getAddress()),
-                    buildContext(ac), this);
-            emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
-            return;
-        }
-        EV_WARN << "HE UL skipping Trigger because no usable RU allocations remain"
-                << " after scheduling and puncturing checks\n";
-    }
+    bool isHeMode = strcmp(modeSet->getName(), "ax") == 0;
     if (isHeMode) {
-        auto edcaf = edca->getEdcaf(ac);
-        // Sounding Check
-        if (mac->isApInAxMode() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
-            auto scheduleContext = collectScheduleContext(ac);
-            int lackCsiCount = 0;
-            std::vector<HeSoundingFs::TargetSta> soundingStas;
-            for (const auto& candidate : scheduleContext.candidates) {
-                auto negotiated = candidate.negotiatedHeCapabilities;
-                if (negotiated == nullptr || !negotiated->valid)
-                    continue;
-                auto mib = mac->getMib();
-                auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
-                const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
-                if (staCapabilities == nullptr)
-                    continue;
-                if (isDlMuMimoEligible(mac->getMib()->localHeCapabilities, *staCapabilities, *negotiated, scheduleContext.channelBandwidth, scheduleContext.numApAntennas)) {
-                    if (!csiManager.hasFreshCsi(candidate.staAddress, scheduleContext.channelBandwidth)) {
-                        lackCsiCount++;
-                    }
-                    HeSoundingFs::TargetSta target;
-                    target.address = candidate.staAddress;
-                    target.aid = mac->getMib()->getAssociationId(candidate.staAddress);
-                    target.maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
-                    soundingStas.push_back(target);
-                }
-            }
-            if (lackCsiCount >= 2) {
-                if (soundingStas.size() > 8)
-                    soundingStas.resize(8);
-                EV_INFO << "At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << endl;
-                static uint8_t nextSoundingDialogToken = 1;
-                static uint32_t nextTriggerId = 1;
-                auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
-                                                         &csiManager, scheduleContext.channelBandwidth,
-                                                         nextSoundingDialogToken++, nextTriggerId++);
-                frameSequenceHandler->startFrameSequence(soundingSequence, buildContext(ac), this);
-                emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
-                return;
-            }
-        }
-        auto pendingQueue = edcaf->getPendingQueue();
-        auto inProgress = edcaf->getInProgressFrames();
-        if (hasEligibleExistingFrame(inProgress, edcaf->getAckHandler())) {
-            EV_INFO << "Completing " << inProgress->getLength()
-                    << " recovery/outstanding frames before opening a new MU transmission." << endl;
-            Hcf::startFrameSequence(ac);
+        if (tryStartUlMuFrameSequence(ac))
             return;
-        }
-        auto headDataHeader = getEligibleHoLDataHeader(pendingQueue);
-        auto baHandler = getOriginatorBlockAckAgreementHandler();
-        if (!pendingQueue->isEmpty() && !isMuEligibleDataHeader(headDataHeader, baHandler)) {
-            if (headDataHeader != nullptr) {
-                EV_INFO << "Earliest SU-transmittable packet "
-                        << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
-                        << " is MU-ineligible, falling back to Hcf::startFrameSequence(ac)." << endl;
-            }
-            Hcf::startFrameSequence(ac);
+        if (tryStartDlMuFrameSequence(ac))
             return;
-        }
-        auto scheduleContext = collectScheduleContext(ac);
-        if (scheduleContext.candidates.size() >= 2) {
-            auto previewAllocations = dlScheduler->schedule(scheduleContext);
-            if (previewAllocations.size() < 2) {
-                EV_INFO << "HE DL scheduler preview retained fewer than two MU users; falling back to SU." << endl;
-                if (pendingQueue->isEmpty())
-                    stagePerStaFrameForSingleUserTransmission(ac);
-                Hcf::startFrameSequence(ac);
-                return;
-            }
-            EV_INFO << "HE DL MU opportunity detected for " << scheduleContext.candidates.size()
-                    << " STAs — starting HE DL MU TxOp FS." << endl;
-            auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
-                    HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
-                    HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
-            EV_INFO << "Start HE DL MU TxOp FS: using "
-                     << (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR")
-                     << " acknowledgment method\n";
-            frameSequenceHandler->startFrameSequence(
-                    new HeDlMuTxOpFs(dlScheduler, scheduleContext, modeSet,
-                                     pendingQueue, edcaf->getAckHandler(), this,
-                                     par("maxAmpduMpduCount"),
-                                     par("maxHeMuPsduLength"),
-                                     par("maxHeMuPpduDuration"),
-                                     ackMethod),
-                    buildContext(ac), this);
-            emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
-            return;
-        }
-        if (pendingQueue->isEmpty())
-            stagePerStaFrameForSingleUserTransmission(ac);
-        else
-            EV_INFO << "Only " << scheduleContext.candidates.size()
-                     << " MU candidate(s), falling back to single-user\n";
     }
-    else if (isHeMode) {
-        EV_INFO << "HE mode but no MU opportunity, falling back to SU\n";
-    }
-    // Fallback: standard single-user frame sequence.
-    auto fallbackEdcaf = edca->getEdcaf(ac);
-    if (fallbackEdcaf->getPendingQueue()->isEmpty() &&
-            fallbackEdcaf->getInProgressFrames()->getLength() == 0)
-        stagePerStaFrameForSingleUserTransmission(ac);
-    if (fallbackEdcaf->getInProgressFrames()->getFrameToTransmit() == nullptr) {
-        EV_WARN << "Channel granted without an eligible SU, DL-MU, or UL trigger frame; releasing channel.\n";
-        fallbackEdcaf->releaseChannel(this);
-        fallbackEdcaf->getTxopProcedure()->endTxop();
+    else
+        EV_INFO << "Non-HE mode, falling back to SU\n";
+
+    if (releaseChannelIfNoFallbackFrame(ac))
         return;
-    }
     Hcf::startFrameSequence(ac);
 }
 
