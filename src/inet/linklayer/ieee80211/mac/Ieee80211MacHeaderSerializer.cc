@@ -60,6 +60,96 @@ void copyBlockAckFrameFields(const Ptr<ieee80211::Ieee80211BlockAck> to, const P
     to->setReserved(from->getReserved());
 }
 
+uint16_t packSequenceControl(uint8_t fragmentNumber, uint16_t sequenceNumber)
+{
+    return (fragmentNumber & 0xF) | ((sequenceNumber & 0xFFF) << 4);
+}
+
+void writeSequenceControl(MemoryOutputStream& stream, uint8_t fragmentNumber, uint16_t sequenceNumber)
+{
+    stream.writeUint16Le(packSequenceControl(fragmentNumber, sequenceNumber));
+}
+
+void readSequenceControl(MemoryInputStream& stream, int& fragmentNumber, ieee80211::SequenceNumberCyclic& sequenceNumber)
+{
+    auto sequenceControl = stream.readUint16Le();
+    fragmentNumber = sequenceControl & 0xF;
+    sequenceNumber = ieee80211::SequenceNumberCyclic((sequenceControl >> 4) & 0xFFF);
+}
+
+uint16_t packBlockAckParameterSet(bool aMsduSupported, bool blockAckPolicy, uint8_t tid, uint16_t bufferSize)
+{
+    return (aMsduSupported ? 0x0001 : 0) |
+            (blockAckPolicy ? 0x0002 : 0) |
+            ((tid & 0xF) << 2) |
+            ((bufferSize & 0x3FF) << 6);
+}
+
+void unpackBlockAckParameterSet(uint16_t parameterSet, bool& aMsduSupported, bool& blockAckPolicy, uint8_t& tid, uint16_t& bufferSize)
+{
+    aMsduSupported = (parameterSet & 0x0001) != 0;
+    blockAckPolicy = (parameterSet & 0x0002) != 0;
+    tid = (parameterSet >> 2) & 0xF;
+    bufferSize = (parameterSet >> 6) & 0x3FF;
+}
+
+uint16_t packDelbaParameterSet(uint16_t reserved, bool initiator, uint8_t tid)
+{
+    return (reserved & 0x7FF) |
+            (initiator ? 0x0800 : 0) |
+            ((tid & 0xF) << 12);
+}
+
+uint16_t packBlockAckControl(bool ackPolicy, bool multiTid, bool compressedBitmap, uint16_t reserved, uint8_t tidInfo)
+{
+    return (ackPolicy ? 0x0001 : 0) |
+            (multiTid ? 0x0002 : 0) |
+            (compressedBitmap ? 0x0004 : 0) |
+            ((reserved & 0x1FF) << 3) |
+            ((tidInfo & 0xF) << 12);
+}
+
+void unpackBlockAckControl(uint16_t control, bool& ackPolicy, bool& multiTid, bool& compressedBitmap, uint16_t& reserved, uint8_t& tidInfo)
+{
+    ackPolicy = (control & 0x0001) != 0;
+    multiTid = (control & 0x0002) != 0;
+    compressedBitmap = (control & 0x0004) != 0;
+    reserved = (control >> 3) & 0x1FF;
+    tidInfo = (control >> 12) & 0xF;
+}
+
+uint16_t packQosControl(uint8_t tid, ieee80211::AckPolicy ackPolicy, bool aMsduPresent)
+{
+    return (tid & 0xF) |
+            0x0010 | // EOSP
+            ((static_cast<uint16_t>(ackPolicy) & 0x3) << 5) |
+            (aMsduPresent ? 0x0080 : 0);
+}
+
+uint32_t packBufferStatusHtControl(uint8_t tid, uint8_t ac, uint32_t queueSize)
+{
+    return 3 |
+            ((tid & 0xF) << 4) |
+            ((ac & 0x3) << 8) |
+            ((std::min<uint32_t>(queueSize, 0x3FFFFF)) << 10);
+}
+
+uint64_t readLeBits(MemoryInputStream& stream, uint8_t numBits)
+{
+    ASSERT(numBits <= 64);
+    uint64_t value = 0;
+    for (uint8_t bit = 0; bit < numBits; bit += 8)
+        value |= static_cast<uint64_t>(stream.readByte()) << bit;
+    return value;
+}
+
+void writeLeBits(MemoryOutputStream& stream, uint64_t value, uint8_t numBits)
+{
+    ASSERT(numBits <= 64);
+    for (uint8_t bit = 0; bit < numBits; bit += 8)
+        stream.writeByte((value >> bit) & 0xFF);
+}
+
 } // namespace
 
 namespace ieee80211 {
@@ -206,8 +296,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeMacAddress(mgmtHeader->getReceiverAddress());
             stream.writeMacAddress(mgmtHeader->getTransmitterAddress());
             stream.writeMacAddress(mgmtHeader->getAddress3());
-            stream.writeUint4(mgmtHeader->getFragmentNumber());
-            stream.writeNBitsOfUint64Be(mgmtHeader->getSequenceNumber().get(), 12);
+            writeSequenceControl(stream, mgmtHeader->getFragmentNumber(), mgmtHeader->getSequenceNumber().get());
             if (mgmtHeader->getOrder())
                 stream.writeUint32Be(0);
             if (type == ST_ACTION) {
@@ -220,13 +309,9 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                                 auto addbaRequest = dynamicPtrCast<const Ieee80211AddbaRequest>(chunk);
                                 stream.writeByte(addbaRequest->getBlockAckAction());
                                 stream.writeByte(addbaRequest->getDialogToken());
-                                stream.writeBit(addbaRequest->getAMsduSupported());
-                                stream.writeBit(addbaRequest->getBlockAckPolicy());
-                                stream.writeUint4(addbaRequest->getTid());
-                                stream.writeNBitsOfUint64Be(addbaRequest->getBufferSize(), 10);
-                                stream.writeUint16Be(addbaRequest->getBlockAckTimeoutValue().inUnit(SIMTIME_US) / 1024);
-                                stream.writeUint4(addbaRequest->get_fragmentNumber());
-                                stream.writeNBitsOfUint64Be(addbaRequest->getStartingSequenceNumber().get(), 12);
+                                stream.writeUint16Le(packBlockAckParameterSet(addbaRequest->getAMsduSupported(), addbaRequest->getBlockAckPolicy(), addbaRequest->getTid(), addbaRequest->getBufferSize()));
+                                stream.writeUint16Le(addbaRequest->getBlockAckTimeoutValue().inUnit(SIMTIME_US) / 1024);
+                                writeSequenceControl(stream, addbaRequest->get_fragmentNumber(), addbaRequest->getStartingSequenceNumber().get());
                                 ASSERT(stream.getLength() - startPos == addbaRequest->getChunkLength());
                                 break;
                             }
@@ -234,22 +319,17 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                                 auto addbaResponse = dynamicPtrCast<const Ieee80211AddbaResponse>(chunk);
                                 stream.writeByte(addbaResponse->getBlockAckAction());
                                 stream.writeByte(addbaResponse->getDialogToken());
-                                stream.writeUint16Be(addbaResponse->getStatusCode());
-                                stream.writeBit(addbaResponse->getAMsduSupported());
-                                stream.writeBit(addbaResponse->getBlockAckPolicy());
-                                stream.writeUint4(addbaResponse->getTid());
-                                stream.writeNBitsOfUint64Be(addbaResponse->getBufferSize(), 10);
-                                stream.writeUint16Be(addbaResponse->getBlockAckTimeoutValue().inUnit(SIMTIME_US) / 1024);
+                                stream.writeUint16Le(addbaResponse->getStatusCode());
+                                stream.writeUint16Le(packBlockAckParameterSet(addbaResponse->getAMsduSupported(), addbaResponse->getBlockAckPolicy(), addbaResponse->getTid(), addbaResponse->getBufferSize()));
+                                stream.writeUint16Le(addbaResponse->getBlockAckTimeoutValue().inUnit(SIMTIME_US) / 1024);
                                 ASSERT(stream.getLength() - startPos == addbaResponse->getChunkLength());
                                 break;
                             }
                             case 2: {
                                 auto delba = dynamicPtrCast<const Ieee80211Delba>(chunk);
                                 stream.writeByte(delba->getBlockAckAction());
-                                stream.writeNBitsOfUint64Be(delba->getReserved(), 11);
-                                stream.writeBit(delba->getInitiator());
-                                stream.writeUint4(delba->getTid());
-                                stream.writeUint16Be(delba->getReasonCode());
+                                stream.writeUint16Le(packDelbaParameterSet(delba->getReserved(), delba->getInitiator(), delba->getTid()));
+                                stream.writeUint16Le(delba->getReasonCode());
                                 ASSERT(stream.getLength() - startPos == delba->getChunkLength());
                                 break;
                             }
@@ -334,21 +414,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeMacAddress(trigger->getReceiverAddress());
             stream.writeMacAddress(trigger->getTransmitterAddress());
 
-            // --- Common Info Field (8 octets = 64 bits) - IEEE Std 802.11-2024 9.3.1.22.1 ---
-            // B0–B3: Trigger Type (4 bits)
-            stream.writeNBitsOfUint64Be(trigger->getTriggerType(), 4);
-
-            // B4–B15: UL Length (12 bits) - L-SIG LENGTH field of the response, mapped to commonDuration in us
             uint32_t ulLength = static_cast<uint32_t>(trigger->getCommonDuration().inUnit(SIMTIME_US));
-            stream.writeNBitsOfUint64Be(ulLength & 0xFFF, 12);
-
-            // B16: More TF (1 bit) - 0
-            stream.writeBit(false);
-
-            // B17: CS Required (1 bit) - 1
-            stream.writeBit(true);
-
-            // B18-B19: UL BW (2 bits) - 0: 20MHz, 1: 40MHz, 2: 80MHz, 3: 160MHz
             uint32_t maxToneIndex = 0;
             for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
                 const auto& u = trigger->getUsers(i);
@@ -361,40 +427,21 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 ulBw = 2;
             else if (maxToneIndex > 242)
                 ulBw = 1;
-            stream.writeNBitsOfUint64Be(ulBw, 2);
-
-            // B20–B21: GI And HE-LTF Type (2 bits)
             uint8_t giAndHeLtf = (trigger->getGuardInterval() <= 2) ? trigger->getGuardInterval() : 2;
-            stream.writeNBitsOfUint64Be(giAndHeLtf, 2);
 
-            // B22: MU-MIMO HE-LTF Mode (1 bit)
-            stream.writeBit(false);
-
-            // B23–B25: Number Of HE-LTF Symbols And Midamble Periodicity (3 bits)
-            stream.writeNBitsOfUint64Be(0, 3);
-
-            // B26: UL STBC (1 bit)
-            stream.writeBit(false);
-
-            // B27: LDPC Extra Symbol Segment (1 bit)
-            stream.writeBit(trigger->getCoding() & 1);
-
-            // Standard Trigger Common Info tail. triggerId is simulator correlation
-            // metadata and is carried by HE MU PHY tags/headers, not by these MAC bits.
-            stream.writeNBitsOfUint64Be(0, 6); // AP Tx Power
-            stream.writeNBitsOfUint64Be(0, 2); // Pre-FEC padding factor
-            stream.writeBit(false); // PE Disambiguity
-            stream.writeNBitsOfUint64Be(0, 16); // UL Spatial Reuse
-            stream.writeBit(false); // Doppler
-            stream.writeNBitsOfUint64Be(0, 9); // UL HE-SIG-A2 Reserved
-            stream.writeBit(false); // Reserved bit B63
+            // --- Common Info Field (8 octets = 64 bits) - IEEE Std 802.11-2024 9.3.1.22.1 ---
+            uint64_t commonInfo =
+                    (trigger->getTriggerType() & 0xF) |               // B0-B3: Trigger Type
+                    ((ulLength & 0xFFFULL) << 4) |                    // B4-B15: UL Length
+                    (1ULL << 17) |                                    // B17: CS Required
+                    ((static_cast<uint64_t>(ulBw) & 0x3) << 18) |     // B18-B19: UL BW
+                    ((static_cast<uint64_t>(giAndHeLtf) & 0x3) << 20) | // B20-B21: GI And HE-LTF Type
+                    ((static_cast<uint64_t>(trigger->getCoding() & 1)) << 27); // B27: LDPC Extra Symbol Segment
+            writeLeBits(stream, commonInfo, 64);
 
             // --- User Info List ---
             for (unsigned int i = 0; i < trigger->getUsersArraySize(); i++) {
                 const auto& user = trigger->getUsers(i);
-
-                // B0–B11: AID12 (12 bits)
-                stream.writeNBitsOfUint64Be(user.aid, 12);
 
                 // B12–B19: RU Allocation (8 bits) - mapped using Table 9-53
                 Hz bw = (ulBw == 3) ? Hz(160e6) : ((ulBw == 2) ? Hz(80e6) : ((ulBw == 1) ? Hz(40e6) : Hz(20e6)));
@@ -481,28 +528,16 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                     }
                 }
                 ruAllocation = (b7_b1 << 1) | b0;
-                stream.writeNBitsOfUint64Be(ruAllocation, 8);
-
-                // B20: UL FEC Coding Type (1 bit)
-                stream.writeBit(trigger->getCoding() & 1);
-
-                // B21–B24: UL HE-MCS (4 bits)
-                stream.writeNBitsOfUint64Be(user.mcs, 4);
-
-                // B25: UL DCM (1 bit) - 0
-                stream.writeBit(false);
-
-                // B26–B31: SS Allocation (6 bits) - starting stream = 0 (i.e. SS=1), number of SS = 0 (i.e. NSS=1)
-                stream.writeNBitsOfUint64Be(0, 6);
-
-                // B32–B38: UL Target Receive Power (7 bits) - PTARGET mapped to user.targetRssiDbm + 110
                 int fval = user.targetRssiDbm + 110;
                 if (fval < 0) fval = 0;
                 if (fval > 127) fval = 127;
-                stream.writeNBitsOfUint64Be(fval, 7);
-
-                // B39: Reserved (1 bit) - 0
-                stream.writeBit(false);
+                uint64_t userInfo =
+                        (user.aid & 0xFFFULL) |                         // B0-B11: AID12
+                        ((static_cast<uint64_t>(ruAllocation) & 0xFF) << 12) | // B12-B19: RU Allocation
+                        ((static_cast<uint64_t>(trigger->getCoding() & 1)) << 20) | // B20: UL FEC Coding Type
+                        ((static_cast<uint64_t>(user.mcs) & 0xF) << 21) | // B21-B24: UL HE-MCS
+                        ((static_cast<uint64_t>(fval) & 0x7F) << 32);    // B32-B38: UL Target Receive Power
+                writeLeBits(stream, userInfo, 40);
 
                 // --- Trigger Dependent User Info ---
                 if (trigger->getTriggerType() == 0) { // Basic Trigger: 1 octet (8 bits)
@@ -520,39 +555,29 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeUint16Le(blockAckReq->getDurationField().inUnit(SIMTIME_US));
             stream.writeMacAddress(blockAckReq->getReceiverAddress());
             stream.writeMacAddress(blockAckReq->getTransmitterAddress());
-            stream.writeBit(blockAckReq->getBarAckPolicy());
             bool multiTid = blockAckReq->getMultiTid();
             bool compressedBitmap = blockAckReq->getCompressedBitmap();
-            stream.writeBit(multiTid);
-            stream.writeBit(compressedBitmap);
-            stream.writeNBitsOfUint64Be(blockAckReq->getReserved(), 9);
             if (!multiTid && !compressedBitmap) {
                 auto basicBlockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(chunk);
-                stream.writeUint4(basicBlockAckReq->getTidInfo());
-                stream.writeUint32Be(basicBlockAckReq->getFragmentNumber());
-                stream.writeUint64Be(0);
-                stream.writeUint64Be(basicBlockAckReq->getStartingSequenceNumber().get());
+                stream.writeUint16Le(packBlockAckControl(blockAckReq->getBarAckPolicy(), multiTid, compressedBitmap, blockAckReq->getReserved(), basicBlockAckReq->getTidInfo()));
+                writeSequenceControl(stream, basicBlockAckReq->getFragmentNumber(), basicBlockAckReq->getStartingSequenceNumber().get());
                 ASSERT(stream.getLength() - startPos == basicBlockAckReq->getChunkLength());
             }
             else if (!multiTid && compressedBitmap) {
                 auto compressedBlockAckReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(chunk);
-                stream.writeUint4(compressedBlockAckReq->getTidInfo());
-                stream.writeUint32Be(compressedBlockAckReq->getFragmentNumber());
-                stream.writeUint64Be(0);
-                stream.writeUint64Be(compressedBlockAckReq->getStartingSequenceNumber().get());
+                stream.writeUint16Le(packBlockAckControl(blockAckReq->getBarAckPolicy(), multiTid, compressedBitmap, blockAckReq->getReserved(), compressedBlockAckReq->getTidInfo()));
+                writeSequenceControl(stream, compressedBlockAckReq->getFragmentNumber(), compressedBlockAckReq->getStartingSequenceNumber().get());
                 ASSERT(stream.getLength() - startPos == compressedBlockAckReq->getChunkLength());
             }
             else if (multiTid && compressedBitmap) {
                 auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(chunk);
                 if (multiTidReq->getRecordsArraySize() == 0 || multiTidReq->getRecordsArraySize() > 16)
                     throw cRuntimeError("Multi-TID BlockAckReq must contain 1..16 records");
-                stream.writeUint4(multiTidReq->getRecordsArraySize() - 1);
+                stream.writeUint16Le(packBlockAckControl(blockAckReq->getBarAckPolicy(), multiTid, compressedBitmap, blockAckReq->getReserved(), multiTidReq->getRecordsArraySize() - 1));
                 for (unsigned int i = 0; i < multiTidReq->getRecordsArraySize(); ++i) {
                     const auto& rec = multiTidReq->getRecords(i);
-                    stream.writeNBitsOfUint64Be(0, 12);
-                    stream.writeUint4(rec.tid & 0xF);
-                    stream.writeNBitsOfUint64Be(0, 4);
-                    stream.writeNBitsOfUint64Be(rec.startingSequenceNumber & 0xFFF, 12);
+                    stream.writeUint16Le((rec.tid & 0xF) << 12);
+                    writeSequenceControl(stream, 0, rec.startingSequenceNumber);
                 }
                 ASSERT(stream.getLength() - startPos == multiTidReq->getChunkLength());
             }
@@ -565,16 +590,12 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeUint16Le(blockAck->getDurationField().inUnit(SIMTIME_US));
             stream.writeMacAddress(blockAck->getReceiverAddress());
             stream.writeMacAddress(blockAck->getTransmitterAddress());
-            stream.writeBit(blockAck->getBlockAckPolicy());
             bool multiTid = blockAck->getMultiTid();
             bool compressedBitmap = blockAck->getCompressedBitmap();
-            stream.writeBit(multiTid);
-            stream.writeBit(compressedBitmap);
-            stream.writeNBitsOfUint64Be(blockAck->getReserved(), 9);
             if (!multiTid && !compressedBitmap) {
                 auto basicBlockAck = dynamicPtrCast<const Ieee80211BasicBlockAck>(chunk);
-                stream.writeUint4(basicBlockAck->getTidInfo());
-                stream.writeUint16Be(basicBlockAck->getStartingSequenceNumber().get());
+                stream.writeUint16Le(packBlockAckControl(blockAck->getBlockAckPolicy(), multiTid, compressedBitmap, blockAck->getReserved(), basicBlockAck->getTidInfo()));
+                writeSequenceControl(stream, basicBlockAck->getFragmentNumber(), basicBlockAck->getStartingSequenceNumber().get());
                 for (size_t i = 0; i < 64; ++i) {
                     stream.writeByte(basicBlockAck->getBlockAckBitmap(i).getBytes()[0]);
                     stream.writeByte(basicBlockAck->getBlockAckBitmap(i).getBytes()[1]);
@@ -583,8 +604,8 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             }
             else if (!multiTid && compressedBitmap) {
                 auto compressedBlockAck = dynamicPtrCast<const Ieee80211CompressedBlockAck>(chunk);
-                stream.writeUint4(compressedBlockAck->getTidInfo());
-                stream.writeUint16Be(compressedBlockAck->getStartingSequenceNumber().get());
+                stream.writeUint16Le(packBlockAckControl(blockAck->getBlockAckPolicy(), multiTid, compressedBitmap, blockAck->getReserved(), compressedBlockAck->getTidInfo()));
+                writeSequenceControl(stream, compressedBlockAck->getFragmentNumber(), compressedBlockAck->getStartingSequenceNumber().get());
                 for (size_t i = 0; i < 8; ++i) {
                     stream.writeByte(compressedBlockAck->getBlockAckBitmap().getBytes()[i]);
                 }
@@ -594,13 +615,11 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 auto multiTidAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(chunk);
                 if (multiTidAck->getRecordsArraySize() == 0 || multiTidAck->getRecordsArraySize() > 16)
                     throw cRuntimeError("Multi-TID BlockAck must contain 1..16 records");
-                stream.writeUint4(multiTidAck->getRecordsArraySize() - 1);
+                stream.writeUint16Le(packBlockAckControl(blockAck->getBlockAckPolicy(), multiTid, compressedBitmap, blockAck->getReserved(), multiTidAck->getRecordsArraySize() - 1));
                 for (unsigned int i = 0; i < multiTidAck->getRecordsArraySize(); ++i) {
                     const auto& rec = multiTidAck->getRecords(i);
-                    stream.writeNBitsOfUint64Be(0, 12);
-                    stream.writeUint4(rec.tid & 0xF);
-                    stream.writeNBitsOfUint64Be(0, 4);
-                    stream.writeNBitsOfUint64Be(rec.startingSequenceNumber & 0xFFF, 12);
+                    stream.writeUint16Le((rec.tid & 0xF) << 12);
+                    writeSequenceControl(stream, 0, rec.startingSequenceNumber);
                     stream.writeUint64Be(rec.bitmap);
                 }
                 ASSERT(stream.getLength() - startPos == multiTidAck->getChunkLength());
@@ -611,7 +630,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                     throw cRuntimeError("Unsupported multi-STA Block Ack representation");
                 if (multiStaBlockAck->getRecordsArraySize() > 255)
                     throw cRuntimeError("Too many Multi-STA Block Ack records");
-                stream.writeUint4(0);
+                stream.writeUint16Le(packBlockAckControl(blockAck->getBlockAckPolicy(), multiTid, compressedBitmap, blockAck->getReserved(), 0));
                 stream.writeByte(multiStaBlockAck->getRecordsArraySize());
                 for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {
                     const auto& record = multiStaBlockAck->getRecords(i);
@@ -638,21 +657,13 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeMacAddress(dataHeader->getReceiverAddress());
             stream.writeMacAddress(dataHeader->getTransmitterAddress());
             stream.writeMacAddress(dataHeader->getAddress3());
-            stream.writeUint4(dataHeader->getFragmentNumber());
-            stream.writeNBitsOfUint64Be(dataHeader->getSequenceNumber().get(), 12);
+            writeSequenceControl(stream, dataHeader->getFragmentNumber(), dataHeader->getSequenceNumber().get());
             if (dataHeader->getFromDS() && dataHeader->getToDS())
                 stream.writeMacAddress(dataHeader->getAddress4());
             if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {
-                stream.writeUint4(dataHeader->getTid());
-                stream.writeBit(true);
-                stream.writeUint2(dataHeader->getAckPolicy());
-                stream.writeBit(dataHeader->getAMsduPresent());
-                stream.writeByte(0);
+                stream.writeUint16Le(packQosControl(dataHeader->getTid(), dataHeader->getAckPolicy(), dataHeader->getAMsduPresent()));
                 if (dataHeader->getBufferStatusPresent()) {
-                    stream.writeUint4(3);
-                    stream.writeUint4(dataHeader->getBufferStatusTid());
-                    stream.writeUint2(dataHeader->getBufferStatusAc());
-                    stream.writeNBitsOfUint64Be(std::min<uint32_t>(dataHeader->getBufferStatusQueueSize(), 0x3fffff), 22);
+                    stream.writeUint32Le(packBufferStatusHtControl(dataHeader->getBufferStatusTid(), dataHeader->getBufferStatusAc(), dataHeader->getBufferStatusQueueSize()));
                 }
             }
             ASSERT(stream.getLength() - startPos == dataHeader->getChunkLength());
@@ -714,8 +725,11 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             mgmtHeader->setReceiverAddress(stream.readMacAddress());
             mgmtHeader->setTransmitterAddress(stream.readMacAddress());
             mgmtHeader->setAddress3(stream.readMacAddress());
-            mgmtHeader->setFragmentNumber(stream.readUint4());
-            mgmtHeader->setSequenceNumber(SequenceNumberCyclic(stream.readNBitsToUint64Be(12)));
+            int fragmentNumber;
+            SequenceNumberCyclic sequenceNumber;
+            readSequenceControl(stream, fragmentNumber, sequenceNumber);
+            mgmtHeader->setFragmentNumber(fragmentNumber);
+            mgmtHeader->setSequenceNumber(sequenceNumber);
             if (order)
                 stream.readUint32Be();
             return mgmtHeader;
@@ -727,8 +741,11 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             actionFrame->setReceiverAddress(stream.readMacAddress());
             actionFrame->setTransmitterAddress(stream.readMacAddress());
             actionFrame->setAddress3(stream.readMacAddress());
-            actionFrame->setFragmentNumber(stream.readUint4());
-            actionFrame->setSequenceNumber(SequenceNumberCyclic(stream.readNBitsToUint64Be(12)));
+            int fragmentNumber;
+            SequenceNumberCyclic sequenceNumber;
+            readSequenceControl(stream, fragmentNumber, sequenceNumber);
+            actionFrame->setFragmentNumber(fragmentNumber);
+            actionFrame->setSequenceNumber(sequenceNumber);
             if (order)
                 stream.readUint32Be();
             actionFrame->setCategory(stream.readByte());
@@ -742,13 +759,21 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                             copyActionFrameFields(addbaRequest, actionFrame);
                             addbaRequest->setBlockAckAction(blockAckAction);
                             addbaRequest->setDialogToken(stream.readByte());
-                            addbaRequest->setAMsduSupported(stream.readBit());
-                            addbaRequest->setBlockAckPolicy(stream.readBit());
-                            addbaRequest->setTid(stream.readUint4());
-                            addbaRequest->setBufferSize(stream.readNBitsToUint64Be(10));
-                            addbaRequest->setBlockAckTimeoutValue(SimTime(stream.readUint16Be() * 1024, SIMTIME_US));
-                            addbaRequest->set_fragmentNumber(stream.readUint4());
-                            addbaRequest->setStartingSequenceNumber(SequenceNumberCyclic(stream.readNBitsToUint64Be(12)));
+                            bool aMsduSupported;
+                            bool blockAckPolicy;
+                            uint8_t tid;
+                            uint16_t bufferSize;
+                            unpackBlockAckParameterSet(stream.readUint16Le(), aMsduSupported, blockAckPolicy, tid, bufferSize);
+                            addbaRequest->setAMsduSupported(aMsduSupported);
+                            addbaRequest->setBlockAckPolicy(blockAckPolicy);
+                            addbaRequest->setTid(tid);
+                            addbaRequest->setBufferSize(bufferSize);
+                            addbaRequest->setBlockAckTimeoutValue(SimTime(stream.readUint16Le() * 1024, SIMTIME_US));
+                            int fragmentNumber;
+                            SequenceNumberCyclic sequenceNumber;
+                            readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                            addbaRequest->set_fragmentNumber(fragmentNumber);
+                            addbaRequest->setStartingSequenceNumber(sequenceNumber);
                             return addbaRequest;
                         }
                         case 1: {
@@ -757,22 +782,28 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                             copyActionFrameFields(addbaResponse, actionFrame);
                             addbaResponse->setBlockAckAction(blockAckAction);
                             addbaResponse->setDialogToken(stream.readByte());
-                            addbaResponse->setStatusCode(stream.readUint16Be());
-                            addbaResponse->setAMsduSupported(stream.readBit());
-                            addbaResponse->setBlockAckPolicy(stream.readBit());
-                            addbaResponse->setTid(stream.readUint4());
-                            addbaResponse->setBufferSize(stream.readNBitsToUint64Be(10));
-                            addbaResponse->setBlockAckTimeoutValue(SimTime(stream.readUint16Be() * 1024, SIMTIME_US));
+                            addbaResponse->setStatusCode(stream.readUint16Le());
+                            bool aMsduSupported;
+                            bool blockAckPolicy;
+                            uint8_t tid;
+                            uint16_t bufferSize;
+                            unpackBlockAckParameterSet(stream.readUint16Le(), aMsduSupported, blockAckPolicy, tid, bufferSize);
+                            addbaResponse->setAMsduSupported(aMsduSupported);
+                            addbaResponse->setBlockAckPolicy(blockAckPolicy);
+                            addbaResponse->setTid(tid);
+                            addbaResponse->setBufferSize(bufferSize);
+                            addbaResponse->setBlockAckTimeoutValue(SimTime(stream.readUint16Le() * 1024, SIMTIME_US));
                             return addbaResponse;
                         }
                         case 2: {
                             auto delba = makeShared<Ieee80211Delba>();
                             copyBasicFields(delba, macHeader);
                             delba->setBlockAckAction(blockAckAction);
-                            delba->setReserved(stream.readNBitsToUint64Be(11));
-                            delba->setInitiator(stream.readBit());
-                            delba->setTid(stream.readUint4());
-                            delba->setReasonCode(stream.readUint16Be());
+                            auto parameterSet = stream.readUint16Le();
+                            delba->setReserved(parameterSet & 0x7FF);
+                            delba->setInitiator((parameterSet & 0x0800) != 0);
+                            delba->setTid((parameterSet >> 12) & 0xF);
+                            delba->setReasonCode(stream.readUint16Le());
                             return delba;
                         }
                         default:
@@ -866,33 +897,19 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             trigger->setTransmitterAddress(stream.readMacAddress());
 
             // --- Common Info Field (8 octets = 64 bits) ---
-            auto triggerType = stream.readNBitsToUint64Be(4);
+            auto commonInfo = readLeBits(stream, 64);
+            auto triggerType = commonInfo & 0xF;
             trigger->setTriggerType(triggerType);
 
-            auto ulLength = stream.readNBitsToUint64Be(12);
+            auto ulLength = (commonInfo >> 4) & 0xFFF;
             trigger->setCommonDuration(SimTime(ulLength, SIMTIME_US));
 
-            stream.readBit(); // More TF
-            stream.readBit(); // CS Required
-
-            auto ulBw = stream.readNBitsToUint64Be(2);
-
-            auto giAndHeLtf = stream.readNBitsToUint64Be(2);
+            auto ulBw = (commonInfo >> 18) & 0x3;
+            auto giAndHeLtf = (commonInfo >> 20) & 0x3;
             trigger->setGuardInterval(giAndHeLtf);
 
-            stream.readBit(); // MU-MIMO HE-LTF Mode
-            stream.readNBitsToUint64Be(3); // Number Of HE-LTF Symbols And Midamble Periodicity
-            stream.readBit(); // UL STBC
-            auto coding = stream.readBit();
+            auto coding = (commonInfo >> 27) & 0x1;
             trigger->setCoding(coding);
-
-            stream.readNBitsToUint64Be(6); // AP Tx Power
-            stream.readNBitsToUint64Be(2); // Pre-FEC padding factor
-            stream.readBit(); // PE Disambiguity
-            stream.readNBitsToUint64Be(16); // UL Spatial Reuse
-            stream.readBit(); // Doppler
-            stream.readNBitsToUint64Be(9); // UL HE-SIG-A2 Reserved
-            stream.readBit(); // Reserved bit B63
             trigger->setTriggerId(0);
 
             // Determine number of users from remaining chunk length
@@ -906,9 +923,10 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
 
             for (unsigned int i = 0; i < (unsigned int)count; i++) {
                 Ieee80211HeTriggerUserInfo user;
-                user.aid = stream.readNBitsToUint64Be(12);
+                auto userInfo = readLeBits(stream, 40);
+                user.aid = userInfo & 0xFFF;
 
-                auto ruAllocation = stream.readNBitsToUint64Be(8);
+                auto ruAllocation = (userInfo >> 12) & 0xFF;
                 uint8_t b0 = ruAllocation & 1;
                 uint8_t b7_b1 = (ruAllocation >> 1) & 0x7F;
 
@@ -973,16 +991,10 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     }
                 }
 
-                stream.readBit(); // UL FEC Coding Type
-                user.mcs = stream.readNBitsToUint64Be(4);
-                stream.readBit(); // UL DCM
-                stream.readNBitsToUint64Be(6); // SS Allocation
-
-                auto targetRssiVal = stream.readNBitsToUint64Be(7);
+                user.mcs = (userInfo >> 21) & 0xF;
+                auto targetRssiVal = (userInfo >> 32) & 0x7F;
                 user.targetRssiDbm = static_cast<int8_t>(targetRssiVal - 110);
                 user.randomAccess = (user.aid == 0 || user.aid == 2045);
-
-                stream.readBit(); // Reserved B39
 
                 if (triggerType == 0) { // Basic Trigger
                     auto basicUserInfo = stream.readByte();
@@ -1001,21 +1013,26 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             blockAckReq->setDurationField(SimTime(stream.readUint16Le(), SIMTIME_US));
             blockAckReq->setReceiverAddress(stream.readMacAddress());
             blockAckReq->setTransmitterAddress(stream.readMacAddress());
-            blockAckReq->setBarAckPolicy(stream.readBit());
-            bool multiTid = stream.readBit();
-            bool compressedBitmap = stream.readBit();
+            bool barAckPolicy;
+            bool multiTid;
+            bool compressedBitmap;
+            uint16_t reserved;
+            uint8_t tidInfo;
+            unpackBlockAckControl(stream.readUint16Le(), barAckPolicy, multiTid, compressedBitmap, reserved, tidInfo);
+            blockAckReq->setBarAckPolicy(barAckPolicy);
             blockAckReq->setMultiTid(multiTid);
             blockAckReq->setCompressedBitmap(compressedBitmap);
-            blockAckReq->setReserved(stream.readNBitsToUint64Be(9));
-            auto tidInfo = stream.readUint4();
+            blockAckReq->setReserved(reserved);
             if (!multiTid && !compressedBitmap) {
                 auto basicBlockAckReq = makeShared<Ieee80211BasicBlockAckReq>();
                 copyBasicFields(basicBlockAckReq, macHeader);
                 copyBlockAckReqFrameFields(basicBlockAckReq, blockAckReq);
                 basicBlockAckReq->setTidInfo(tidInfo);
-                basicBlockAckReq->setFragmentNumber(stream.readUint32Be());
-                stream.readUint64Be();
-                basicBlockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint64Be()));
+                int fragmentNumber;
+                SequenceNumberCyclic sequenceNumber;
+                readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                basicBlockAckReq->setFragmentNumber(fragmentNumber);
+                basicBlockAckReq->setStartingSequenceNumber(sequenceNumber);
                 return basicBlockAckReq;
             }
             else if (!multiTid && compressedBitmap) {
@@ -1023,9 +1040,11 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 copyBasicFields(compressedBlockAckReq, macHeader);
                 copyBlockAckReqFrameFields(compressedBlockAckReq, blockAckReq);
                 compressedBlockAckReq->setTidInfo(tidInfo);
-                compressedBlockAckReq->setFragmentNumber(stream.readUint32Be());
-                stream.readUint64Be();
-                compressedBlockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint64Be()));
+                int fragmentNumber;
+                SequenceNumberCyclic sequenceNumber;
+                readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                compressedBlockAckReq->setFragmentNumber(fragmentNumber);
+                compressedBlockAckReq->setStartingSequenceNumber(sequenceNumber);
                 return compressedBlockAckReq;
             }
             else if (multiTid && compressedBitmap) {
@@ -1036,10 +1055,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 multiTidReq->setRecordsArraySize(count);
                 for (unsigned int i = 0; i < count; ++i) {
                     Ieee80211MultiTidBlockAckReqRecord rec;
-                    stream.readNBitsToUint64Be(12);
-                    rec.tid = stream.readUint4();
-                    stream.readNBitsToUint64Be(4);
-                    rec.startingSequenceNumber = stream.readNBitsToUint64Be(12);
+                    auto perTidInfo = stream.readUint16Le();
+                    rec.tid = (perTidInfo >> 12) & 0xF;
+                    int fragmentNumber;
+                    SequenceNumberCyclic sequenceNumber;
+                    readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                    rec.startingSequenceNumber = sequenceNumber.get();
                     multiTidReq->setRecords(i, rec);
                 }
                 return multiTidReq;
@@ -1054,19 +1075,26 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             blockAck->setDurationField(SimTime(stream.readUint16Le(), SIMTIME_US));
             blockAck->setReceiverAddress(stream.readMacAddress());
             blockAck->setTransmitterAddress(stream.readMacAddress());
-            blockAck->setBlockAckPolicy(stream.readBit());
-            bool multiTid = stream.readBit();
-            bool compressedBitmap = stream.readBit();
+            bool blockAckPolicy;
+            bool multiTid;
+            bool compressedBitmap;
+            uint16_t reserved;
+            uint8_t tidInfo;
+            unpackBlockAckControl(stream.readUint16Le(), blockAckPolicy, multiTid, compressedBitmap, reserved, tidInfo);
+            blockAck->setBlockAckPolicy(blockAckPolicy);
             blockAck->setMultiTid(multiTid);
             blockAck->setCompressedBitmap(compressedBitmap);
-            blockAck->setReserved(stream.readNBitsToUint64Be(9));
-            auto tidInfo = stream.readUint4();
+            blockAck->setReserved(reserved);
             if (!multiTid && !compressedBitmap) {
                 auto basicBlockAck = makeShared<Ieee80211BasicBlockAck>();
                 copyBasicFields(basicBlockAck, macHeader);
                 copyBlockAckFrameFields(basicBlockAck, blockAck);
                 basicBlockAck->setTidInfo(tidInfo);
-                basicBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint16Be()));
+                int fragmentNumber;
+                SequenceNumberCyclic sequenceNumber;
+                readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                basicBlockAck->setFragmentNumber(fragmentNumber);
+                basicBlockAck->setStartingSequenceNumber(sequenceNumber);
                 for (size_t i = 0; i < 64; ++i) {
                     std::vector<uint8_t> bytes;
                     bytes.push_back(stream.readByte());
@@ -1082,7 +1110,11 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 copyBlockAckFrameFields(compressedBlockAck, blockAck);
 
                 compressedBlockAck->setTidInfo(tidInfo);
-                compressedBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(stream.readUint16Be()));
+                int fragmentNumber;
+                SequenceNumberCyclic sequenceNumber;
+                readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                compressedBlockAck->setFragmentNumber(fragmentNumber);
+                compressedBlockAck->setStartingSequenceNumber(sequenceNumber);
                 std::vector<uint8_t> bytes;
                 for (size_t i = 0; i < 8; ++i) {
                     bytes.push_back(stream.readByte());
@@ -1116,10 +1148,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 multiTidAck->setRecordsArraySize(count);
                 for (unsigned int i = 0; i < count; ++i) {
                     Ieee80211MultiTidBlockAckRecord rec;
-                    stream.readNBitsToUint64Be(12);
-                    rec.tid = stream.readUint4();
-                    stream.readNBitsToUint64Be(4);
-                    rec.startingSequenceNumber = stream.readNBitsToUint64Be(12);
+                    auto perTidInfo = stream.readUint16Le();
+                    rec.tid = (perTidInfo >> 12) & 0xF;
+                    int fragmentNumber;
+                    SequenceNumberCyclic sequenceNumber;
+                    readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                    rec.startingSequenceNumber = sequenceNumber.get();
                     rec.bitmap = stream.readUint64Be();
                     multiTidAck->setRecords(i, rec);
                 }
@@ -1141,26 +1175,28 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             dataHeader->setReceiverAddress(stream.readMacAddress());
             dataHeader->setTransmitterAddress(stream.readMacAddress());
             dataHeader->setAddress3(stream.readMacAddress());
-            dataHeader->setFragmentNumber(stream.readUint4());
-            dataHeader->setSequenceNumber(SequenceNumberCyclic(stream.readNBitsToUint64Be(12)));
+            int fragmentNumber;
+            SequenceNumberCyclic sequenceNumber;
+            readSequenceControl(stream, fragmentNumber, sequenceNumber);
+            dataHeader->setFragmentNumber(fragmentNumber);
+            dataHeader->setSequenceNumber(sequenceNumber);
             if (dataHeader->getFromDS() && dataHeader->getToDS())
                 dataHeader->setAddress4(stream.readMacAddress());
             if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {
-                dataHeader->setTid(stream.readUint4());
-                stream.readBit();
-                dataHeader->setAckPolicy(static_cast<AckPolicy>(stream.readUint2()));
-                dataHeader->setAMsduPresent(stream.readBit());
-                stream.readByte();
+                auto qosControl = stream.readUint16Le();
+                dataHeader->setTid(qosControl & 0xF);
+                dataHeader->setAckPolicy(static_cast<AckPolicy>((qosControl >> 5) & 0x3));
+                dataHeader->setAMsduPresent((qosControl & 0x0080) != 0);
                 if (order) {
-                    auto controlId = stream.readUint4();
+                    auto htControl = stream.readUint32Le();
+                    auto controlId = htControl & 0xF;
                     if (controlId == 3) {
                         dataHeader->setBufferStatusPresent(true);
-                        dataHeader->setBufferStatusTid(stream.readUint4());
-                        dataHeader->setBufferStatusAc(stream.readUint2());
-                        dataHeader->setBufferStatusQueueSize(stream.readNBitsToUint64Be(22));
+                        dataHeader->setBufferStatusTid((htControl >> 4) & 0xF);
+                        dataHeader->setBufferStatusAc((htControl >> 8) & 0x3);
+                        dataHeader->setBufferStatusQueueSize((htControl >> 10) & 0x3FFFFF);
                     }
                     else {
-                        stream.readNBitsToUint64Be(28);
                         dataHeader->markIncorrect();
                     }
                 }

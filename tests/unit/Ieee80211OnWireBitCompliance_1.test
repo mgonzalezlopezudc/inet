@@ -1,0 +1,89 @@
+%description:
+Validate byte-exact 802.11 MAC and PHY bitfield packing for on-wire fields.
+
+%includes:
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%activity:
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setOrder(true);
+    header->setDurationField(SimTime(0x1234, SIMTIME_US));
+    header->setReceiverAddress(MacAddress("10:20:30:40:50:60"));
+    header->setTransmitterAddress(MacAddress("11:22:33:44:55:66"));
+    header->setAddress3(MacAddress("aa:bb:cc:dd:ee:ff"));
+    header->setFragmentNumber(2);
+    header->setSequenceNumber(SequenceNumberCyclic(0x123));
+    header->setTid(6);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setAMsduPresent(true);
+    header->setBufferStatusPresent(true);
+    header->setBufferStatusTid(5);
+    header->setBufferStatusAc(3);
+    header->setBufferStatusQueueSize(0x12345);
+    header->setChunkLength(B(30));
+
+    auto packet = new Packet("qos-data", header);
+    auto bytes = packet->peekDataAsBytes();
+    ASSERT(bytes->getChunkLength() == B(30));
+    ASSERT(bytes->getByte(0) == 0x88); // Frame Control: QoS data subtype, data type, version 0
+    ASSERT(bytes->getByte(1) == 0x80); // Frame Control flags: Order bit
+    ASSERT(bytes->getByte(2) == 0x34 && bytes->getByte(3) == 0x12); // Duration/ID, little endian
+    ASSERT(bytes->getByte(22) == 0x32 && bytes->getByte(23) == 0x12); // Sequence Control: fragment 2, sequence 0x123
+    ASSERT(bytes->getByte(24) == 0xF6 && bytes->getByte(25) == 0x00); // QoS Control: TID 6, EOSP, Block Ack, A-MSDU
+    ASSERT(bytes->getByte(26) == 0x53 && bytes->getByte(27) == 0x17 && bytes->getByte(28) == 0x8D && bytes->getByte(29) == 0x04); // HE BSR HT Control
+    delete packet;
+    EV << "QoS data MAC bitfields are byte-exact.\n";
+}
+
+{
+    auto header = makeShared<Ieee80211DsssPhyHeader>();
+    header->setSignal(0x0A);
+    header->setService(0x04);
+    header->setLengthField(B(0x1234));
+    header->setFcs(0xABCD);
+
+    auto packet = new Packet("dsss", header);
+    auto bytes = packet->peekDataAsBytes();
+    ASSERT(bytes->getChunkLength() == B(6));
+    ASSERT(bytes->getByte(0) == 0x0A);
+    ASSERT(bytes->getByte(1) == 0x04);
+    ASSERT(bytes->getByte(2) == 0x34 && bytes->getByte(3) == 0x12);
+    ASSERT(bytes->getByte(4) == 0xCD && bytes->getByte(5) == 0xAB);
+    delete packet;
+    EV << "DSSS PHY header is byte-exact.\n";
+}
+
+{
+    auto header = makeShared<Ieee80211OfdmPhyHeader>();
+    header->setRate(0x0B);
+    header->setReserved(true);
+    header->setLengthField(B(0x123));
+    header->setParity(true);
+    header->setTail(0x2A);
+    header->setService(0xBEEF);
+
+    auto packet = new Packet("ofdm", header);
+    auto bytes = packet->peekDataAsBytes();
+    ASSERT(bytes->getChunkLength() == B(5));
+    ASSERT(bytes->getByte(0) == 0x7B && bytes->getByte(1) == 0x24 && bytes->getByte(2) == 0xAA);
+    ASSERT(bytes->getByte(3) == 0xEF && bytes->getByte(4) == 0xBE);
+    delete packet;
+    EV << "OFDM PHY SIGNAL and SERVICE fields are byte-exact.\n";
+}
+
+EV << ".\n";
+
+%contains: stdout
+QoS data MAC bitfields are byte-exact.
+DSSS PHY header is byte-exact.
+OFDM PHY SIGNAL and SERVICE fields are byte-exact.
+.
