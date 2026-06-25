@@ -9,6 +9,18 @@
 #include <algorithm>
 #include <set>
 
+// HE UL coordinator.
+//
+// Implements the AP-side state-keeping and scheduling support for UL OFDMA:
+//   - Buffer Status Report caching (IEEE 802.11-2024 Clause 26.5.2).
+//   - Trigger-type selection (Basic / BSRP) via a pluggable policy.
+//   - Uplink OFDMA Random Access (UORA) state machine (Clause 26.5.4).
+//
+// The UORA model in this file is a conservative approximation: it uses a single
+// OFDMA contention window (OCW) and backoff counter shared across all access
+// categories, whereas the standard maintains per-AC OCW/OBO state.  The OCW
+// update rule (reset on success, double on failure) follows Clause 26.5.4.3.
+
 namespace inet {
 namespace ieee80211 {
 

@@ -8,6 +8,29 @@
 
 #include <algorithm>
 
+// IEEE 802.11ax RU-aware radio medium.
+//
+// Extends the generic radio medium to compute per-RU receptions and
+// interference for HE MU and HE TB PPDUs.  It resolves the receiver's assigned
+// RU from the HE MU PHY header, creates a narrowband reception analog model
+// centered on that RU, and limits interference to frequency-overlapping signals.
+// Relevant clauses:
+//   - Clause 27.3.2: HE subcarriers and RUs.
+//   - Clause 27.3.11.13: HE MU PPDU reception.
+//   - Clause 27.3.11.12: HE TB PPDU reception.
+//
+// Approximations / simplifications:
+//   - Per-RU receive power is approximated as total transmit power scaled by
+//     RU bandwidth over channel bandwidth.  The standard specifies per-
+//     subcarrier power and does not scale total TX power linearly with RU size.
+//   - Single-user HE TB transmissions intentionally skip bandwidth scaling and
+//     use the full aggregate power, which is inconsistent with multi-RU UL.
+//   - Perfect RU isolation is assumed; adjacent-RU leakage and in-band
+//     emissions are not modeled.
+//   - Multiple simultaneous HE TB users are treated as independent receptions;
+//     multi-user synchronization, CFO, and timing misalignment impairments are
+//     not modeled.
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"

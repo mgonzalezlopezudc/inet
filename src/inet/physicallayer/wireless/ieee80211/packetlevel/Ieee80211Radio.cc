@@ -8,6 +8,29 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 
 #include "inet/common/packet/chunk/BitCountChunk.h"
+
+// IEEE 802.11 radio with HE MU/HE TB header handling.
+//
+// Encapsulates upper-layer packets with the appropriate IEEE 802.11 PHY header
+// and decapsulates received packets.  For HE MU it collects per-user RU info,
+// fills the HE MU PHY header (BSS color, PPDU format, Trigger ID, GI/coding,
+// spatial reuse), computes the common PPDU duration, and exposes allocation
+// info on reception via Ieee80211HeMuRxTag.
+// Relevant clauses:
+//   - Clause 27.3.11: HE PPDU formats.
+//   - Clause 27.3.11.13: HE MU PPDU and HE-SIG-A/B fields.
+//   - Clause 27.3.11.12: HE TB PPDU.
+//
+// Approximations / simplifications:
+//   - DL MU user durations are first estimated with estimateHeMuUserDuration()
+//     and later recomputed with computeHeUserPhyParameters(); the two paths may
+//     differ slightly.
+//   - HE MU PHY header length is estimated rather than bit-exact (see
+//     Ieee80211Transmitter for the same approximation).
+//   - MU-MIMO grouping uses the same simplified same-RU-index heuristic as the
+//     transmitter; full validation is delegated to Ieee80211HePhyCalculator.
+//   - FCS handling for HE MU relies on higher-layer bit-error flags rather than
+//     a per-MPDU FCS field in the PHY header.
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"

@@ -12,6 +12,26 @@
 #include <vector>
 #include <map>
 
+// HE-SIG-B Common field codec.
+//
+// Encodes and decodes the RU allocation subfields of the HE-SIG-B Common field
+// as defined in IEEE 802.11-2024 Clause 27.3.11.13.2 and Table 27-27.  The
+// codec maps between a concrete Ieee80211HeRu layout and the compact 8-bit
+// allocation codes carried in HE-SIG-B content channels.
+//
+// Approximations / limitations:
+//   - Punctured subchannels are accepted as a parameter but are not currently
+//     incorporated into the encoded common field.
+//   - Code points 116-127 of Table 27-27 are treated as invalid.  If the
+//     standard assigns meaning to any of these reserved codes, the codec should
+//     be updated.
+//   - Encoding is performed by brute-force search over all codes 0-215 rather
+//     than a direct inverse table lookup.  This works for standard HE RU layouts
+//     but is fragile if the table is extended.
+//   - Bandwidth support is limited to 20/40/80/160 MHz (no 320 MHz / EHT).
+//   - HE-SIG-B modulation/coding constraints (BPSK, DCM, etc.) are not modeled
+//     here; only the RU allocation semantics are handled.
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
 namespace inet {

@@ -8,6 +8,24 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderSerializer.h"
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+
+// IEEE 802.11 PHY header serializer, including HE MU/HE TB headers.
+//
+// This file serializes/deserializes the HE-SIG-A and HE-SIG-B fields for HE MU
+// PPDUs and the HE-SIG-A field for HE TB PPDUs.  The bit layouts follow
+// IEEE 802.11-2024 Tables 27-21 (HE MU HE-SIG-A), 27-22 (HE TB HE-SIG-A) and
+// Clause 27.3.11.13.2 (HE-SIG-B).
+//
+// Approximations / simplifications:
+//   - Several reserved/constant fields are written as fixed values (e.g. TXOP
+//     = 127, HE-SIG-B MCS = 0, DCM = false, Doppler = false) rather than being
+//     derived from the actual transmission parameters.
+//   - CRC, tail and padding bits in HE-SIG-A/B are written as zeros; the model
+//     does not perform bit-level CRC verification on the preamble.
+//   - HE-SIG-B user-specific fields are encoded with a simplified fixed-length
+//     representation; the full 21-bit user field format of Table 27-26 is
+//     approximated.
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"

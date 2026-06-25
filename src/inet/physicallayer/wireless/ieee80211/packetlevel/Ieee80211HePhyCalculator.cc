@@ -11,6 +11,22 @@
 #include <stdexcept>
 #include <algorithm>
 
+// HE PHY parameter and duration calculator.
+//
+// Computes per-user and common PHY parameters for HE SU, HE ER SU, HE MU and
+// HE TB PPDUs based on IEEE 802.11-2024:
+//   - Clause 27.3.2: RU tone sizes, data/pilot subcarriers.
+//   - Clause 27.3.11: preamble durations and HE-SIG-B field sizing.
+//   - Clause 27.3.12: modulation, coding, number of symbols, padding.
+//   - Clause 27.3.12.5: BCC/LDPC coding rules and constraints.
+//
+// Approximations:
+//   - LDPC shortening and repetition are modeled at packet level using the
+//     standard codeword lengths (648/1296/1944 bits), but the exact bit-level
+//     shortening/repetition procedure of Clause 27.3.12.5.2 is approximated.
+//   - HE-SIG-B symbol count uses a closed-form estimate of Clause 27.3.11.13.2
+//     rather than bit-level encoder emulation.
+
 namespace inet {
 namespace physicallayer {
 
