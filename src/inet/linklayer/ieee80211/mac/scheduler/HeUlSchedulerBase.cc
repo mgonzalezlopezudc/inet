@@ -7,6 +7,21 @@
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerBase.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
+// Base class for HE UL OFDMA schedulers.
+//
+// Common helpers for UL scheduler implementations:
+//   - Computing the number of random-access RUs for UORA (Clause 26.5.4).
+//   - Selecting the target RSSI for triggered STAs (Clause 26.5.2.3).
+//   - Computing the common HE-TB PPDU duration (Clause 27.3.11.12).
+//
+// Implementation notes:
+//   - computeRandomAccessRuCount() uses a heuristic feedback formula based on
+//     estimated contenders, collision rate and idle rate.  IEEE 802.11-2024 does
+//     not specify how many RA-RUs an AP should advertise.
+//   - computeTargetRssiDbm() is a simple sensitivity-plus-margin approximation
+//     of the Target RSSI field defined in Clause 26.5.2.3; it does not implement
+//     the full TPC/TMI handling described in the standard.
+
 namespace inet {
 namespace ieee80211 {
 
@@ -36,6 +51,9 @@ int HeUlSchedulerBase::computeRandomAccessRuCount(const ScheduleContext& context
     ASSERT(context.estimatedRandomAccessContenders >= 0);
     ASSERT(context.recentRandomAccessCollisionRate >= 0 && context.recentRandomAccessCollisionRate <= 1);
     ASSERT(context.recentRandomAccessIdleRate >= 0 && context.recentRandomAccessIdleRate <= 1);
+    // Heuristic: increase RA-RUs when collisions dominate, decrease when many
+    // RA-RUs are idle.  The standard leaves the number of advertised RA-RUs to
+    // the AP's discretion (Clause 26.5.4); this is one possible policy.
     int demand = context.estimatedRandomAccessContenders;
     int feedback = (int)std::round(context.recentRandomAccessCollisionRate * 2 -
             context.recentRandomAccessIdleRate * 2);
@@ -45,6 +63,9 @@ int HeUlSchedulerBase::computeRandomAccessRuCount(const ScheduleContext& context
 
 int HeUlSchedulerBase::computeTargetRssiDbm(const ScheduleContext& context) const
 {
+    // Approximation of the Target RSSI subfield in the Trigger frame user info
+    // (Clause 26.5.2.3).  The standard allows the AP to request a specific
+    // received RSSI at the AP; here we approximate it as sensitivity + margin.
     return (int)std::round(context.apSensitivityDbm + context.targetRssiMarginDb);
 }
 
@@ -72,8 +93,9 @@ simtime_t HeUlSchedulerBase::computeCommonDuration(const ScheduleContext& contex
     if (duration <= SIMTIME_ZERO) {
         duration = SIMTIME_ZERO;
         for (const auto& allocation : allocations)
-            // All user PPDUs are padded to this duration; the slowest selected
-            // user therefore determines the common HE-TB PPDU duration.
+            // IEEE 802.11-2024 Clause 27.3.11.12: all HE-TB users transmit with
+            // the same number of symbols and are padded to the common duration.
+            // The slowest selected user therefore determines that duration.
             duration = std::max(duration, allocation.estimatedDuration);
     }
     if (context.txopLimit > SIMTIME_ZERO)

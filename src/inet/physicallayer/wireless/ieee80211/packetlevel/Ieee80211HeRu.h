@@ -34,6 +34,12 @@ namespace physicallayer {
  * The allocationIndex is local to the selected RU layout. The toneOffset is
  * measured from the first occupied HE tone of the channel and makes the
  * frequency placement independent of the number of scheduled users.
+ *
+ * Implementation note: the RU allocation tree models the standard RU splits
+ * from Figures 27-5..27-8.  The small fixed gaps (e.g. the central 26-tone DC/
+ * guard between two 484-tone RUs) are hard-coded; this is faithful to the
+ * standard layout but does not attempt to model every possible puncturing or
+ * partial-bandwidth configuration.
  */
 struct Ieee80211HeRu {
     int index = -1;

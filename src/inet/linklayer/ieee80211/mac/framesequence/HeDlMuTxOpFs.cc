@@ -10,6 +10,29 @@
 #include <atomic>
 #include <map>
 
+// HE DL MU TXOP frame sequence.
+//
+// Builds and transmits an HE MU PPDU carrying downlink A-MPDUs for multiple
+// STAs, then collects acknowledgments.  Relevant clauses:
+//   - IEEE 802.11-2024 Clause 26.3.3: A-MPDU aggregation.
+//   - Clause 26.4.4: response rules for HE MU PPDUs.
+//   - Clause 27.3.11.13: HE MU PPDU format.
+//   - Clause 9.3.1.9: Multi-STA BlockAck and BlockAckReq formats.
+//
+// Implementation notes:
+//   - The HE MU PPDU is represented as a single container Packet with a
+//     broadcast QoS data header so that it can reuse the existing MAC/PHY
+//     transmit path.  The container header is not a user payload.
+//   - Two acknowledgment modes are supported:
+//       * MU-BAR trigger: the AP sends a Trigger frame that solicits a
+//         Multi-STA BlockAck in an HE TB PPDU (Clause 26.5.2).
+//       * Sequential BAR: the AP sends individual BlockAckReq frames and
+//         receives per-STA BlockAcks sequentially.  This is valid but less
+//         efficient than the MU-BAR method.
+//   - Multi-TID aggregation is advertised in capabilities and used when
+//     building BARs, but the per-user PSDU packing inside the HE MU PPDU is
+//     currently single-TID.
+
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"

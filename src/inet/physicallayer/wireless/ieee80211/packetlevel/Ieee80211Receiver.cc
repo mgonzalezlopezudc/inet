@@ -10,6 +10,27 @@
 #include <algorithm>
 #include <cstdlib>
 
+// IEEE 802.11ax HE receiver.
+//
+// Handles HE MU and HE TB PPDU reception, RU/STA-ID resolution, per-MPDU
+// success/failure reporting, and HE spatial reuse (BSS color / OBSS/PD).
+// Relevant normative clauses:
+//   - Clause 26.4.4: response rules and reception procedures for HE MU/HE TB.
+//   - Clause 27.3.2.5: resource indication and user identification in HE MU.
+//   - Clause 27.3.11: HE PPDU formats.
+//   - Clause 27.3.13: PHY receive procedure.
+//   - Clause 26.11: HE spatial reuse.
+//
+// Approximations / simplifications:
+//   - Per-MPDU failure injection inside an unsuccessful HE MU payload is
+//     randomized (one random MPDU is marked failed) rather than modeling the
+//     exact FCS/delimiter decoding outcome of each subframe.
+//   - Concurrent HE TB reception is admitted only when the transmissions share
+//     the same Trigger ID.  Real multi-user UL depends on tight timing/frequency
+//     synchronization, which is not modeled here.
+//   - HE-SIG-A and HE-SIG-B are not decoded with separate SNIR thresholds; the
+//     whole PPDU is evaluated using the data-field error model.
+
 #include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"

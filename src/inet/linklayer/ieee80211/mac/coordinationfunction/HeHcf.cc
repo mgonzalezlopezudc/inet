@@ -40,6 +40,36 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTwtGating.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingCoordinator.h"
 
+// HE HCF coordination function.
+//
+// This module implements the 802.11ax AP and non-AP STA behavior for DL/UL OFDMA
+// and MU-MIMO TXOPs.  The relevant normative text is in IEEE 802.11-2024:
+//   - Clause 26.1 / 26.2: HE introduction, channel access and TXOP rules.
+//   - Clause 26.5: UL multi-user operation (Trigger frames, HE TB PPDU response).
+//   - Clause 26.5.4: Uplink OFDMA random access (UORA).
+//   - Clause 26.4.4: frame exchange rules for HE MU and HE TB PPDUs.
+//   - Clause 27.3.11: HE PPDU formats (HE SU, HE ER SU, HE MU, HE TB).
+//   - Clause 27.3.11.13: HE MU PPDU format and HE-SIG-B.
+//   - Clause 27.3.11.12: HE TB PPDU format.
+//
+// Implementation notes / deviations from the standard:
+//   - DL MU scheduling is restricted to QoS data frames that already have an
+//     active originator Block Ack agreement.  The standard does not require a
+//     Block Ack agreement before scheduling a DL MU PPDU, but INET's model
+//     uses A-MPDU aggregation and per-TID reordering, so this is an
+//     implementation-enforced precondition, not a normative one.
+//   - Per-STA queue banks are used to keep frames destined to different STAs
+//     separable; this is an INET-specific queuing architecture.
+//   - The BSRP trigger allocation assigns one RU per associated STA plus the
+//     remaining RUs as random-access RUs.  The standard permits many other RU
+//     allocation strategies for BSRP; this is a simple approximation.
+//   - UORA is modeled with a per-BSS global OCW and uniform RA-RU selection.
+//     The standard uses per-AC OCW state and a more involved selection rule;
+//     the current model is conservative in that it follows the OCW update
+//     procedure but collapses per-AC state.
+//   - UL basic trigger responses use single-TID A-MPDUs only; multi-TID
+//     aggregation in HE TB PPDUs is not implemented.
+
 namespace {
 
 inet::Ptr<const inet::ieee80211::Ieee80211DataHeader> getEligibleHoLDataHeader(inet::queueing::IPacketQueue *queue)
@@ -57,6 +87,11 @@ inet::Ptr<const inet::ieee80211::Ieee80211DataHeader> getEligibleHoLDataHeader(i
 
 bool isMuEligibleDataHeader(const inet::Ptr<const inet::ieee80211::Ieee80211DataHeader>& dataHeader, inet::ieee80211::IOriginatorBlockAckAgreementHandler *baHandler)
 {
+    // INET-specific precondition: DL MU candidates must be QoS data frames with
+    // an active Block Ack agreement so that A-MPDU aggregation and bitmap-based
+    // acknowledgment can be used.  IEEE 802.11-2024 does not normatively require
+    // a Block Ack agreement for DL MU, but without one this implementation
+    // cannot perform the required A-MPDU aggregation (Clause 26.3.3).
     return dataHeader != nullptr &&
            dataHeader->getType() == inet::ieee80211::ST_DATA_WITH_QOS &&
            inet::ieee80211::hasActiveOriginatorBlockAckAgreement(baHandler, dataHeader->getReceiverAddress(), dataHeader->getTid());
@@ -312,6 +347,8 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             // status lookup; retried/in-progress entries retain a sequence
             // number and must still be checked by the ACK handler.
             if (!isMuEligibleDataHeader(dataHeader, baHandler)) {
+                // See isMuEligibleDataHeader() above: this is an implementation
+                // precondition, not a normative requirement of Clause 26.5.
                 EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " — not a QoS data frame or no active originator Block Ack agreement\n";
                 continue;
@@ -475,6 +512,11 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     auto sensitivityDbm = math::mW2dBmW(receiver->getSensitivity().get<mW>());
     IIeee80211HeUlScheduler::Schedule ulSchedule;
     if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
+        // IEEE 802.11-2024 Clause 26.5.2: a BSRP Trigger solicits Buffer Status
+        // Reports from one or more STAs.  The standard does not mandate a
+        // particular RU allocation; here we simply give every associated STA
+        // its own RU and advertise the rest as random-access RUs.  This is an
+        // approximation of the full scheduler freedom allowed by the standard.
         auto maxRus = physicallayer::getHeMaxRuCount(channelBandwidth);
         auto layout = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, maxRus);
         int index = 0;
@@ -778,6 +820,8 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
         return;
 
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {
+        // IEEE 802.11-2024 Clause 26.5.2: processing of a received Trigger frame.
+        // Trigger type 2 corresponds to a Basic Trigger (solicited HE TB PPDU).
         if (trigger->getTriggerType() == 2) {
             auto myAid = mac->getMib()->bssStationData.associationId;
             const Ieee80211HeTriggerUserInfo *selected = nullptr;
@@ -1080,6 +1124,9 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                 transmitPower = std::min(requestedPower, transmitter->getMaxPower());
             }
         }
+        // Tag the response as an HE TB PPDU (IEEE 802.11-2024 Clause 27.3.11.12).
+        // The PHY layer uses these parameters to build the HE-SIG-A field and
+        // place the PSDU on the assigned RU.
         auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
         request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
         request->setTriggerId(trigger->getTriggerId());

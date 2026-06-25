@@ -12,6 +12,26 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
+// Base class for HE DL OFDMA schedulers.
+//
+// This file implements common helpers used by concrete DL schedulers:
+//   - Mapping backlog bytes to RU tone sizes (Clause 27.3.2.2).
+//   - Per-RU SNR estimation and MCS selection (Clause 27.3.12.2).
+//   - Fitting requested RU sizes into a valid non-overlapping channel layout
+//     (Clause 27.3.2.2, Figures 27-5..27-8).
+//   - Duration alignment so that all users in an HE MU PPDU share the same
+//     number of data symbols (Clause 27.3.11.13).
+//
+// Several parts of this code are implementation heuristics, not normative:
+//   - requestRuForBytes() uses configured byte thresholds; the standard does not
+//     specify how an AP maps queue backlogs to RU sizes.
+//   - estimateSnrDb() assumes uniform power spectral density over the channel;
+//     real devices may apply per-RU power boosting.
+//   - The duration-alignment loop trades RU bandwidth among users to balance
+//     their transmission times.  This is an optimization added by INET and is
+//     not described in the standard, although the equal-duration result is
+//     required by Clause 27.3.11.13.
+
 namespace inet {
 namespace ieee80211 {
 
@@ -54,6 +74,8 @@ void HeDlSchedulerBase::initialize(int stage)
 int HeDlSchedulerBase::requestRuForBytes(int64_t bytes, Hz channelBandwidth) const
 {
     // Map queue backlog size to standard RU tone sizes (Clause 27.3.2.2).
+    // NOTE: this is an INET heuristic; the standard does not define a backlog
+    // to-RU mapping.
     // Larger queue backlogs warrant wider RUs to achieve higher throughput,
     // while small payloads are scheduled on narrower RUs (e.g. 26-tone RUs)
     // to maximize frequency-division multiplexing efficiency.
@@ -102,9 +124,11 @@ double HeDlSchedulerBase::estimateSnrDb(const ScheduleContext& context, const Ca
     if (!candidate.hasFreshPathLoss || std::isnan(context.totalTransmitPower.get()) ||
             context.totalTransmitPower.get() <= 0)
         return NaN;
-    // Per-RU SNR calculation:
-    // Scale total transmit power down to the RU bandwidth (assuming uniform power spectral density
-    // across all subcarriers, Clause 27.3.21).
+    // Per-RU SNR calculation (approximation):
+    // Scale total transmit power down to the RU bandwidth assuming uniform power
+    // spectral density across all subcarriers.  Clause 27.3.21 defines per-RU
+    // TX power constraints, but actual devices may apply per-RU power boosting
+    // that is not modeled here.
     // SNR = P_rx_RU - N_thermal_RU - NoiseFigure
     double totalDbm = 10 * std::log10(context.totalTransmitPower.get() / 1e-3);
     double ruPowerDbm = totalDbm + 10 * std::log10(ru.bandwidth.get() / context.channelBandwidth.get());
@@ -303,11 +327,14 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
     int channelTones = getHeChannelToneCount(context.channelBandwidth);
     
     // Duration Alignment (IEEE 802.11-2024 Clause 27.3.11.13):
-    // In HE MU-OFDMA, all users sharing the PPDU container must have identical transmission durations.
-    // However, users with different backlogs, MCS schemes, or stream counts will finish at different times,
-    // leading to channel waste (padding overhead) or synchronization issues.
-    // This optimization loop shifts RU bandwidth (tone sizes) from "fast" users (short duration)
-    // to "slow" users (long duration) to minimize the variance around the mean duration.
+    // In HE MU-OFDMA, all users sharing the PPDU container must have identical
+    // transmission durations (the common number of data symbols is set by the
+    // slowest user and shorter users are padded).
+    //
+    // This loop is an INET optimization heuristic: it shifts RU bandwidth from
+    // "fast" users to "slow" users to reduce padding overhead.  The standard
+    // does not prescribe such reallocation; any valid RU layout that respects
+    // the common-symbol requirement is compliant.
     for (int iteration = 0; iteration < maxDurationAlignmentIterations; ++iteration) {
         double mean = 0;
         for (const auto& allocation : result)

@@ -36,6 +36,11 @@ struct Ieee80211HeMcsNssMap
  * It covers the subset of IEEE 802.11ax capabilities that affects the INET
  * packet-level model: channel widths, MCS/NSS maps, OFDMA, coding, A-MPDU,
  * Block Ack, puncturing, and supported RU sizes.
+ *
+ * This is not an exhaustive reproduction of the HE Capabilities element
+ * (Clause 9.4.2.247).  Fields that have no corresponding model behavior (e.g.
+ * SU/MU beamforming feedback thresholds, Max NC, RX/TX HE Supp PPDU BW) are
+ * omitted or represented by simplified parameters.
  */
 struct Ieee80211HeCapabilities
 {
