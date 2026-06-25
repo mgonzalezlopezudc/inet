@@ -30,6 +30,11 @@ void HeDlSchedulerBase::initialize(int stage)
         lowDurationRatio = par("lowDurationRatio");
         highDurationRatio = par("highDurationRatio");
         maxDurationAlignmentIterations = par("maxDurationAlignmentIterations");
+        const char *heRateControlModule = par("heRateControlModule");
+        heRateControl = *heRateControlModule == '\0' ? nullptr :
+                dynamic_cast<IIeee80211HeRateControl *>(getModuleByPath(heRateControlModule));
+        if (*heRateControlModule != '\0' && heRateControl == nullptr)
+            throw cRuntimeError("heRateControlModule '%s' is not an IIeee80211HeRateControl", heRateControlModule);
         if (lowDurationRatio < 0 || highDurationRatio <= lowDurationRatio)
             throw cRuntimeError("Invalid HE duration alignment ratios");
         if (maxDurationAlignmentIterations < 0)
@@ -117,6 +122,27 @@ int HeDlSchedulerBase::selectMcs(double snrDb, bool hasFreshPathLoss) const
         if (snrDb >= mcsSnrThresholds[i])
             mcs = i;
     return mcs;
+}
+
+int HeDlSchedulerBase::selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
+        const Ieee80211HeRu& ru, int fallbackMcs, int maxNss) const
+{
+    if (heRateControl == nullptr)
+        return fallbackMcs;
+    IIeee80211HeRateControl::Constraints constraints;
+    constraints.ldpc = context.coding == HE_CODING_LDPC;
+    constraints.maxMcs = context.coding == HE_CODING_BCC ? 9 : 11;
+    if (candidate.negotiatedHeCapabilities != nullptr &&
+            candidate.negotiatedHeCapabilities->valid) {
+        int peerMaxMcs = candidate.negotiatedHeCapabilities->intersection.txMcsNss.maxMcsPerNss[0];
+        if (peerMaxMcs >= 0)
+            constraints.maxMcs = std::min(constraints.maxMcs, peerMaxMcs);
+    }
+    if (candidate.hasFreshPathLoss && !std::isnan(context.totalTransmitPower.get()))
+        heRateControl->reportHeRxSnir(candidate.staAddress, estimateSnrDb(context, candidate, ru));
+    auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
+            ru.toneSize, HE_MU_DOWNLINK, maxNss, constraints);
+    return selection.mode == nullptr ? fallbackMcs : selection.mcs;
 }
 
 simtime_t HeDlSchedulerBase::estimateDuration(int64_t bytes, int toneSize, int mcs,
@@ -216,7 +242,8 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
             allocation.staAddress = candidates[i].staAddress;
             allocation.ru = rusByCandidate[i];
             allocation.estimatedSnrDb = estimateSnrDb(context, candidates[i], allocation.ru);
-            allocation.mcs = selectMcs(allocation.estimatedSnrDb, candidates[i].hasFreshPathLoss);
+            allocation.mcs = selectMcs(context, candidates[i], allocation.ru,
+                    selectMcs(allocation.estimatedSnrDb, candidates[i].hasFreshPathLoss));
             if (context.coding == HE_CODING_BCC)
                 allocation.mcs = std::min(allocation.mcs, 9);
             if (negotiated != nullptr) {

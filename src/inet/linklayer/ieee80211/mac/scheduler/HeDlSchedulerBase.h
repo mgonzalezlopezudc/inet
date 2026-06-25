@@ -8,6 +8,7 @@
 #define __INET_HEDLSCHEDULERBASE_H
 
 #include "inet/common/SimpleModule.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 
 namespace inet {
@@ -33,6 +34,7 @@ class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public Simple
     double highDurationRatio = 1.5;
     int maxDurationAlignmentIterations = 16;
     std::vector<double> mcsSnrThresholds;
+    IIeee80211HeRateControl *heRateControl = nullptr;
 
   protected:
     virtual void initialize(int stage) override;
@@ -44,6 +46,8 @@ class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public Simple
     virtual double estimateSnrDb(const ScheduleContext& context, const CandidateInfo& candidate,
             const physicallayer::Ieee80211HeRu& ru) const;
     virtual int selectMcs(double snrDb, bool hasFreshPathLoss) const;
+    virtual int selectMcs(const ScheduleContext& context, const CandidateInfo& candidate,
+            const physicallayer::Ieee80211HeRu& ru, int fallbackMcs, int maxNss = 1) const;
     virtual simtime_t estimateDuration(int64_t bytes, int toneSize, int mcs,
             physicallayer::Ieee80211HeGuardInterval guardInterval) const;
 

@@ -160,6 +160,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     parameters.common.guardInterval = guardInterval;
     parameters.common.ltfType = ltfType;
     parameters.common.packetExtensionDurationUs = packetExtensionDurationUs;
+    parameters.common.heSigADuration = ppduFormat == HE_EXTENDED_RANGE_SU ?
+            SimTime(16, SIMTIME_US) : SimTime(8, SIMTIME_US);
     parameters.common.sigA.ppduFormat = ppduFormat;
     parameters.common.sigA.uplink = ppduFormat == HE_TRIGGER_BASED_UPLINK;
     parameters.common.sigB.numberOfSymbols = ppduFormat == HE_MU_DOWNLINK ?

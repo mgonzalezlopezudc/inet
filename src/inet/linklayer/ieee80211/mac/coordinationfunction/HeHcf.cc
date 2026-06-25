@@ -700,11 +700,15 @@ void HeHcf::startFrameSequence(AccessCategory ac)
 
 void HeHcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 {
+    std::vector<Edcaf *> collidedEdcafsWithFrame;
     for (auto edcaf : internallyCollidedEdcafs) {
         if (edcaf->getPendingQueue()->isEmpty() && edcaf->getInProgressFrames()->getLength() == 0)
             stagePerStaFrameForSingleUserTransmission(edcaf->getAccessCategory());
+        if (edcaf->getInProgressFrames()->getFrameToTransmit() != nullptr)
+            collidedEdcafsWithFrame.push_back(edcaf);
     }
-    Hcf::handleInternalCollision(internallyCollidedEdcafs);
+    if (!collidedEdcafsWithFrame.empty())
+        Hcf::handleInternalCollision(collidedEdcafsWithFrame);
 }
 
 bool HeHcf::hasFrameToTransmit(AccessCategory ac)
@@ -952,9 +956,6 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             if (queuedHeader != nullptr && queuedHeader->getTid() == selectedTid)
                 queueBytes += queuedPacket->getByteLength();
         }
-        if (sourcePacket != nullptr)
-            queueBytes = std::max<int64_t>(0, queueBytes - sourcePacket->getByteLength());
-
         Packet *responsePacket = nullptr;
         if (sourcePacket != nullptr) {
             auto writableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
@@ -1039,6 +1040,12 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                 exchange.packets.push_back(candidate);
                 exchange.sequenceNumbers.push_back(writableCandidateHeader->getSequenceNumber().get());
             }
+            int64_t reportedQueueBytes = queueBytes;
+            for (auto pkt : exchange.packets)
+                reportedQueueBytes = std::max<int64_t>(0, reportedQueueBytes - pkt->getByteLength());
+            auto firstHeader = exchange.packets.front()->removeAtFront<Ieee80211DataHeader>();
+            firstHeader->setBufferStatusQueueSize(reportedQueueBytes);
+            exchange.packets.front()->insertAtFront(firstHeader);
             if (exchange.packets.size() > 1) {
                 delete responsePacket;
                 responsePacket = new Packet("HE-TB-A-MPDU");
@@ -1052,6 +1059,10 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                     if (i + 1 != exchange.packets.size() && padding != 0)
                         responsePacket->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
                 }
+            }
+            else {
+                delete responsePacket;
+                responsePacket = exchange.packets.front()->dup();
             }
             for (auto pkt : exchange.packets) {
                 exchange.sourceQueue->removePacket(pkt);

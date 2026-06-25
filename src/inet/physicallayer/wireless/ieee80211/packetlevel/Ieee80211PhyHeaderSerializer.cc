@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderSerializer.h"
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
@@ -242,19 +243,9 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     // metadata remains in the chunk object. This is not a complete bit-level
     // PPDU preamble encoder.
 
-    // --- 1. HE-SIG-A (8 bytes = 64 bits) - IEEE Std 802.11-2024 Table 27-21 ---
-    // HE-SIG-A1 (26 bits):
-    // B0: UL/DL (0 for DL, 1 for UL)
-    stream.writeBit(heMuPhyHeader->getPpduFormat() & 1);
-    // B1-B3: HE-SIG-B MCS (3 bits)
-    stream.writeNBitsOfUint64Be(0, 3);
-    // B4: HE-SIG-B DCM (1 bit)
-    stream.writeBit(false);
-    // B5-B10: BSS Color (6 bits)
-    stream.writeNBitsOfUint64Be(heMuPhyHeader->getBssColor() & 0x3F, 6);
-    // B11-B14: Spatial Reuse (4 bits)
-    stream.writeNBitsOfUint64Be(heMuPhyHeader->getSpatialReuse() & 0xF, 4);
-    // B15-B17: Bandwidth (3 bits)
+    const uint8_t ppduFormat = heMuPhyHeader->getPpduFormat();
+    const bool extendedRangeSu = ppduFormat == HE_EXTENDED_RANGE_SU;
+
     uint32_t maxToneIndex = 0;
     for (unsigned int i = 0; i < numUsers; ++i) {
         const auto& u = heMuPhyHeader->getUsers(i);
@@ -264,50 +255,46 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     if (maxToneIndex > 996) bwField = 3;
     else if (maxToneIndex > 484) bwField = 2;
     else if (maxToneIndex > 242) bwField = 1;
-    stream.writeNBitsOfUint64Be(bwField, 3);
 
-    // B18-B21: Number of HE-SIG-B Symbols or MU-MIMO Users (4 bits)
     uint8_t numUsersField = (numUsers > 0) ? (numUsers - 1) & 0xF : 0;
-    stream.writeNBitsOfUint64Be(numUsersField, 4);
-
-    // B22: HE-SIG-B Compression (1 bit)
-    stream.writeBit(false);
-
-    // B23-B24: GI+HE-LTF Size (2 bits) - maps guardInterval
     uint8_t giLtf = 2;
     if (heMuPhyHeader->getGuardInterval() == 0) giLtf = 1;
     else if (heMuPhyHeader->getGuardInterval() == 1) giLtf = 2;
     else if (heMuPhyHeader->getGuardInterval() == 2) giLtf = 3;
-    stream.writeNBitsOfUint64Be(giLtf, 2);
 
-    // B25: Doppler (1 bit)
-    stream.writeBit(false);
+    auto writeHeSigA = [&]() {
+        // --- HE-SIG-A (8 bytes = 64 bits) - IEEE Std 802.11-2024 Table 27-21 ---
+        // HE-SIG-A1 (26 bits):
+        stream.writeBit(ppduFormat == HE_TRIGGER_BASED_UPLINK); // B0: UL/DL
+        stream.writeNBitsOfUint64Be(0, 3); // B1-B3: HE-SIG-B MCS
+        stream.writeBit(false); // B4: HE-SIG-B DCM
+        stream.writeNBitsOfUint64Be(heMuPhyHeader->getBssColor() & 0x3F, 6); // B5-B10: BSS Color
+        stream.writeNBitsOfUint64Be(heMuPhyHeader->getSpatialReuse() & 0xF, 4); // B11-B14: Spatial Reuse
+        stream.writeNBitsOfUint64Be(bwField, 3); // B15-B17: Bandwidth
+        stream.writeNBitsOfUint64Be(numUsersField, 4); // B18-B21: Number of HE-SIG-B Symbols or MU-MIMO Users
+        stream.writeBit(extendedRangeSu); // B22: HE-SIG-B Compression; also marks serialized ER SU
+        stream.writeNBitsOfUint64Be(giLtf, 2); // B23-B24: GI+HE-LTF Size
+        stream.writeBit(false); // B25: Doppler
 
-    // HE-SIG-A2 (26 bits):
-    // B0-B6: TXOP (7 bits)
-    stream.writeNBitsOfUint64Be(127, 7);
-    // B7: Reserved (1 bit) - set to 1
-    stream.writeBit(true);
-    // B8-B10: Number of HE-LTF Symbols and Midamble Periodicity (3 bits)
-    stream.writeNBitsOfUint64Be(0, 3);
-    // B11: LDPC Extra Symbol Segment (1 bit)
-    stream.writeBit(heMuPhyHeader->getCoding() & 1);
-    // B12: STBC (1 bit)
-    stream.writeBit(false);
-    // B13-B14: Pre-FEC Padding Factor (2 bits)
-    stream.writeNBitsOfUint64Be(0, 2);
-    // B15: PE Disambiguity (1 bit)
-    stream.writeBit(false);
-    // B16-B19: CRC (4 bits)
-    stream.writeNBitsOfUint64Be(0, 4);
-    // B20-B25: Tail (6 bits)
-    stream.writeNBitsOfUint64Be(0, 6);
+        // HE-SIG-A2 (26 bits):
+        stream.writeNBitsOfUint64Be(127, 7); // B0-B6: TXOP
+        stream.writeBit(true); // B7: Reserved
+        stream.writeNBitsOfUint64Be(0, 3); // B8-B10: Number of HE-LTF Symbols and Midamble Periodicity
+        stream.writeBit(heMuPhyHeader->getCoding() & 1); // B11: LDPC Extra Symbol Segment
+        stream.writeBit(false); // B12: STBC
+        stream.writeNBitsOfUint64Be(0, 2); // B13-B14: Pre-FEC Padding Factor
+        stream.writeBit(false); // B15: PE Disambiguity
+        stream.writeNBitsOfUint64Be(0, 4); // B16-B19: CRC
+        stream.writeNBitsOfUint64Be(0, 6); // B20-B25: Tail
+        stream.writeNBitsOfUint64Be(0, 12); // Pad HE-SIG-A to 8 bytes
+    };
 
-    // Pad HE-SIG-A to 8 bytes (12 bits)
-    stream.writeNBitsOfUint64Be(0, 12);
+    writeHeSigA();
+    if (extendedRangeSu)
+        writeHeSigA();
 
     // --- 2. HE-SIG-B (only if ppduFormat == 0, i.e. DL MU) ---
-    if (heMuPhyHeader->getPpduFormat() == 0) {
+    if (ppduFormat == HE_MU_DOWNLINK) {
         Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
         std::vector<Ieee80211HeRu> rus;
         for (unsigned int i = 0; i < numUsers; ++i) {
@@ -424,15 +411,15 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     auto heMuPhyHeader = makeShared<Ieee80211HeMuPhyHeader>();
 
     // --- 1. HE-SIG-A (8 bytes = 64 bits) ---
-    auto ppduFormat = stream.readBit();
-    heMuPhyHeader->setPpduFormat(ppduFormat);
+    auto uplink = stream.readBit();
+    heMuPhyHeader->setPpduFormat(uplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
     stream.readNBitsToUint64Be(3); // HE-SIG-B MCS
     stream.readBit(); // HE-SIG-B DCM
     heMuPhyHeader->setBssColor(stream.readNBitsToUint64Be(6));
     heMuPhyHeader->setSpatialReuse(stream.readNBitsToUint64Be(4)); // Spatial Reuse
     auto bwField = stream.readNBitsToUint64Be(3);
     auto numUsersField = stream.readNBitsToUint64Be(4);
-    stream.readBit(); // Compression
+    auto compression = stream.readBit();
     auto giLtf = stream.readNBitsToUint64Be(2);
     uint8_t gi = 2;
     if (giLtf == 1) gi = 0;
@@ -453,8 +440,15 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     stream.readNBitsToUint64Be(6); // Tail
     stream.readNBitsToUint64Be(12); // Padding
 
+    auto ppduFormat = heMuPhyHeader->getPpduFormat();
+    if (!uplink && compression && numUsersField == 0) {
+        ppduFormat = HE_EXTENDED_RANGE_SU;
+        heMuPhyHeader->setPpduFormat(ppduFormat);
+        stream.readNBitsToUint64Be(64); // duplicated HE-SIG-A
+    }
+
     // --- 2. HE-SIG-B (only if ppduFormat == 0) ---
-    if (ppduFormat == 0) {
+    if (ppduFormat == HE_MU_DOWNLINK) {
         Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
         int numContentChannels = (channelBw > Hz(20e6)) ? 2 : 1;
         int N = (channelBw >= Hz(160e6)) ? 4 : (channelBw >= Hz(80e6)) ? 2 : 1;

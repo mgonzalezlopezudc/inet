@@ -79,7 +79,6 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const Sche
         int originalIndex = requested[i].second;
         RuAllocation allocation;
         allocation.ru = rus[i];
-        allocation.mcs = defaultMcs;
         allocation.targetRssiDbm = targetRssiDbm;
         if (originalIndex < scheduledCount) {
             const auto& candidate = candidates[originalIndex];
@@ -87,12 +86,15 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const Sche
             allocation.associationId = candidate.associationId;
             allocation.tid = candidate.selectedTid;
             allocation.accessCategory = candidate.selectedAccessCategory;
+            allocation.mcs = selectMcs(context, candidate, allocation.ru);
             allocation.estimatedDuration = physicallayer::estimateHeMuUserDuration(
                     B(std::max<int64_t>(1, candidate.getSelectedBacklogBytes())),
                     allocation.ru.toneSize, allocation.mcs);
         }
-        else
+        else {
+            allocation.mcs = defaultMcs;
             allocation.randomAccess = true;
+        }
         result.allocations.push_back(allocation);
     }
     result.commonDuration = computeCommonDuration(context, result.allocations);

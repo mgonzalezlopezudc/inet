@@ -1,0 +1,57 @@
+%description:
+Test HE ER SU preamble duration and HE BSR HT Control helpers.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%activity:
+
+Ieee80211HeBufferStatus status;
+status.tid = 5;
+status.accessCategory = 3;
+status.queueSize = 0x12345;
+
+auto packed = packHeBufferStatusHtControl(status);
+Ieee80211HeBufferStatus unpacked;
+ASSERT(unpackHeBufferStatusHtControl(packed, unpacked));
+ASSERT(unpacked.tid == status.tid);
+ASSERT(unpacked.accessCategory == status.accessCategory);
+ASSERT(unpacked.queueSize == status.queueSize);
+
+Ieee80211HeBufferStatus clippedStatus;
+clippedStatus.tid = 1;
+clippedStatus.accessCategory = 2;
+clippedStatus.queueSize = IEEE80211_HE_BSR_MAX_QUEUE_SIZE + 1;
+auto clippedPacked = packHeBufferStatusHtControl(clippedStatus);
+ASSERT(unpackHeBufferStatusHtControl(clippedPacked, unpacked));
+ASSERT(unpacked.queueSize == IEEE80211_HE_BSR_MAX_QUEUE_SIZE);
+
+ASSERT(!unpackHeBufferStatusHtControl(packed ^ 0x1, unpacked));
+EV << "BSR helper round-trip and invalid control-id handling passed.\n";
+
+const Ieee80211Hemcs *mcs = &Ieee80211HemcsTable::heMcs0BW20MHzNss1;
+auto suMode = Ieee80211HeCompliantModes::getCompliantMode(mcs,
+        Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+auto erSuMode = Ieee80211HeCompliantModes::getCompliantMode(mcs,
+        Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+
+ASSERT(erSuMode->getPreambleMode()->getPreambleFormat() == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU);
+ASSERT(erSuMode->getPreambleMode()->getDuration() ==
+        suMode->getPreambleMode()->getDuration() + SimTime(8, SIMTIME_US));
+EV << "HE ER SU preamble duration includes duplicated HE-SIG-A.\n";
+
+EV << ".\n";
+
+%contains: stdout
+BSR helper round-trip and invalid control-id handling passed.
+HE ER SU preamble duration includes duplicated HE-SIG-A.
+.

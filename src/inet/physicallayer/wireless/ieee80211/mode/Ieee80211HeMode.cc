@@ -172,10 +172,13 @@ const simtime_t Ieee80211HePreambleMode::getDuration() const
     // - HE-SIG-A: 8 µs
     // - HE-STF: 4 µs
     // - HE-LTFs: numberOfHELongTrainings * 4 µs (each symbol duration under 1x HE-LTF mode)
+    auto erSuRepeatedHeSigA = preambleFormat == HE_PREAMBLE_ER_SU ?
+            getHeSignalFieldA() : SIMTIME_ZERO;
     return getNonHTShortTrainingSequenceDuration() + // L-STF (8 µs)
            getNonHTLongTrainingFieldDuration() +     // L-LTF (8 µs)
            getNonHTSignalField() +                   // L-SIG (4 µs)
-           getHeSignalFieldA() +                     // RL-SIG (4 µs) + HE-SIG-A (8 µs) = 12 µs
+           getHeSignalFieldA() +                     // Existing RL-SIG + HE-SIG-A model
+           erSuRepeatedHeSigA +                      // Duplicated HE-SIG-A for ER SU
            getHeShortTrainingFieldDuration() +       // HE-STF (4 µs)
            numberOfHELongTrainings * 4E-6;           // HE-LTFs
 }

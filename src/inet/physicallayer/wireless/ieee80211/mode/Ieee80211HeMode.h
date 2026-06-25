@@ -127,7 +127,8 @@ class INET_API Ieee80211HePreambleMode : public IIeee80211PreambleMode, public I
   public:
     enum HighEfficiencyPreambleFormat {
         HE_PREAMBLE_SU,
-        HE_PREAMBLE_MU
+        HE_PREAMBLE_MU,
+        HE_PREAMBLE_ER_SU
     };
 
   protected:

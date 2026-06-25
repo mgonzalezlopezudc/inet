@@ -217,7 +217,9 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                         alloc.ru = fullChannelRu;
                         alloc.numberOfSpatialStreams = finalNss[i];
                         alloc.estimatedSnrDb = finalSnirDb[i];
-                        alloc.mcs = selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss);
+                        alloc.mcs = selectMcs(context, groupCandidates[i], alloc.ru,
+                                selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss),
+                                finalNss[i]);
                         if (context.coding == HE_CODING_BCC)
                             alloc.mcs = std::min(alloc.mcs, 9);
                         int maxMcs = groupCandidates[i].negotiatedHeCapabilities->intersection.txMcsNss.maxMcsPerNss[finalNss[i] - 1];
@@ -291,7 +293,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         alloc.staAddress = selectedCandidates[i].staAddress;
         alloc.ru = rus[i];
         alloc.estimatedSnrDb = estimateSnrDb(context, selectedCandidates[i], alloc.ru);
-        alloc.mcs = selectMcs(alloc.estimatedSnrDb, selectedCandidates[i].hasFreshPathLoss);
+        alloc.mcs = selectMcs(context, selectedCandidates[i], alloc.ru,
+                selectMcs(alloc.estimatedSnrDb, selectedCandidates[i].hasFreshPathLoss));
         if (context.coding == HE_CODING_BCC)
             alloc.mcs = std::min(alloc.mcs, 9);
         int maxMcs = -1;
