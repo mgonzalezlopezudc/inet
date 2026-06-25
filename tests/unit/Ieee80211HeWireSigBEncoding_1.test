@@ -1,0 +1,140 @@
+%description:
+Test IEEE 802.11 HE-SIG-B RU allocation encoding and decoding.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+Hz centerFrequency(5.18e9);
+
+// 1. 20 MHz all-26-tone layout
+{
+    Hz bandwidth(20e6);
+    std::vector<Ieee80211HeRu> rus = getHeEqualRuLayout(centerFrequency, bandwidth, 9);
+    auto res = encodeHeSigBCommonField(rus, bandwidth);
+    if (!res) {
+        EV << "Failed to encode 20 MHz all-26: " << res.error << "\n";
+    } else {
+        EV << "20MHz all-26: CCs=" << res.commonField.contentChannels.size()
+           << ", subfields=" << res.commonField.contentChannels[0].ruAllocationSubfields.size()
+           << ", code=" << (int)res.commonField.contentChannels[0].ruAllocationSubfields[0] << "\n";
+           
+        // Decode back
+        auto dec = decodeHeSigBCommonField(res.commonField, centerFrequency, bandwidth);
+        if (dec && dec.commonField.rus.size() == 9) {
+            EV << "20MHz all-26 decode success\n";
+        }
+    }
+}
+
+// 2. 20 MHz mixed layout (e.g. 52, 52, 26, 52, 52 -> code 15)
+{
+    Hz bandwidth(20e6);
+    std::vector<Ieee80211HeRu> rus;
+    if (allocateHeRus(centerFrequency, bandwidth, {52, 52, 26, 52, 52}, rus)) {
+        auto res = encodeHeSigBCommonField(rus, bandwidth);
+        if (res) {
+            EV << "20MHz mixed code: " << (int)res.commonField.contentChannels[0].ruAllocationSubfields[0] << "\n";
+            auto dec = decodeHeSigBCommonField(res.commonField, centerFrequency, bandwidth);
+            if (dec && dec.commonField.rus.size() == 5) {
+                EV << "20MHz mixed decode success\n";
+            }
+        }
+    }
+}
+
+// 3. 80 MHz layout (4 subchannels)
+{
+    Hz bandwidth(80e6);
+    std::vector<Ieee80211HeRu> rus = getHeEqualRuLayout(centerFrequency, bandwidth, 4); // 4x 242-tone RUs
+    auto res = encodeHeSigBCommonField(rus, bandwidth);
+    if (res) {
+        EV << "80MHz equal-242: CC1 subfields=" << res.commonField.contentChannels[0].ruAllocationSubfields.size()
+           << ", CC2 subfields=" << res.commonField.contentChannels[1].ruAllocationSubfields.size() << "\n";
+        EV << "CC1 codes: " << (int)res.commonField.contentChannels[0].ruAllocationSubfields[0]
+           << ", " << (int)res.commonField.contentChannels[0].ruAllocationSubfields[1] << "\n";
+        EV << "CC2 codes: " << (int)res.commonField.contentChannels[1].ruAllocationSubfields[0]
+           << ", " << (int)res.commonField.contentChannels[1].ruAllocationSubfields[1] << "\n";
+        auto dec = decodeHeSigBCommonField(res.commonField, centerFrequency, bandwidth);
+        if (dec && dec.commonField.rus.size() == 4) {
+            EV << "80MHz equal-242 decode success\n";
+        }
+    }
+}
+
+// 4. 80 MHz with 484-tone RU (spans 2 subchannels)
+{
+    Hz bandwidth(80e6);
+    std::vector<Ieee80211HeRu> rus;
+    if (allocateHeRus(centerFrequency, bandwidth, {484, 242, 242}, rus)) {
+        auto res = encodeHeSigBCommonField(rus, bandwidth);
+        if (res) {
+            EV << "80MHz 484-tone CC1 codes: "
+               << (int)res.commonField.contentChannels[0].ruAllocationSubfields[0] << ", "
+               << (int)res.commonField.contentChannels[0].ruAllocationSubfields[1] << "\n";
+            EV << "80MHz 484-tone CC2 codes: "
+               << (int)res.commonField.contentChannels[1].ruAllocationSubfields[0] << ", "
+               << (int)res.commonField.contentChannels[1].ruAllocationSubfields[1] << "\n";
+            auto dec = decodeHeSigBCommonField(res.commonField, centerFrequency, bandwidth);
+            if (dec && dec.commonField.rus.size() == 3) {
+                EV << "80MHz 484-tone decode success\n";
+            }
+        }
+    }
+}
+
+// 5. Center 26-tone RU
+{
+    Hz bandwidth(80e6);
+    std::vector<Ieee80211HeRu> rus;
+    // 242 + 242 + center 26 + 242 + 242
+    if (allocateHeRus(centerFrequency, bandwidth, {242, 242, 26, 242, 242}, rus)) {
+        auto res = encodeHeSigBCommonField(rus, bandwidth);
+        if (res) {
+            EV << "Center RU present in CC1: " << (res.commonField.contentChannels[0].hasCenterRu ? "yes" : "no") << "\n";
+            EV << "Center RU present in CC2: " << (res.commonField.contentChannels[1].hasCenterRu ? "yes" : "no") << "\n";
+            auto dec = decodeHeSigBCommonField(res.commonField, centerFrequency, bandwidth);
+            if (dec && dec.commonField.rus.size() == 5) {
+                EV << "Center RU decode success\n";
+            }
+        }
+    }
+}
+
+// 6. Invalid/reserved code
+{
+    Hz bandwidth(20e6);
+    Ieee80211HeSigBCommonField cf;
+    cf.contentChannels.resize(1);
+    cf.contentChannels[0].ruAllocationSubfields.push_back(220); // reserved
+    auto dec = decodeHeSigBCommonField(cf, centerFrequency, bandwidth);
+    if (!dec) {
+        EV << "Reserved code decode failed as expected\n";
+    }
+}
+
+EV << ".\n";
+
+%contains: stdout
+20MHz all-26: CCs=1, subfields=1, code=0
+20MHz all-26 decode success
+20MHz mixed code: 15
+20MHz mixed decode success
+80MHz equal-242: CC1 subfields=2, CC2 subfields=2
+CC1 codes: 192, 192
+CC2 codes: 192, 192
+80MHz equal-242 decode success
+80MHz 484-tone CC1 codes: 200, 192
+80MHz 484-tone CC2 codes: 114, 192
+80MHz 484-tone decode success
+Center RU present in CC1: yes
+Center RU present in CC2: yes
+Center RU decode success
+Reserved code decode failed as expected
+.

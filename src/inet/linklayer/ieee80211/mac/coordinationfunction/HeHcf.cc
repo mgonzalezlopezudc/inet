@@ -36,6 +36,9 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HePreamblePuncturing.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTwtGating.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingCoordinator.h"
 
 namespace {
 
@@ -84,114 +87,6 @@ inet::ieee80211::AccessCategory mapTidToAccessCategory(inet::ieee80211::Tid tid)
     }
 }
 
-// IEEE Std 802.11-2024 Table 27-21 ("HE-SIG-A field of an HE MU PPDU") describes the
-// permitted preamble puncturing patterns for HE 80 MHz and 160 MHz.
-bool isValidHePreamblePuncturing(const std::vector<bool>& mask, int widthMhz)
-{
-    if (mask.empty())
-        return true;
-    if (widthMhz != 80 && widthMhz != 160)
-        return false;
-    
-    // 1. Primary 20 MHz subchannel must not be punctured (mask[0] represents primary 20 MHz).
-    if (mask[0])
-        return false;
-
-    // 2. At least one subchannel must remain active.
-    if (std::all_of(mask.begin(), mask.end(), [](bool b) { return b; }))
-        return false;
-
-    if (widthMhz == 80) {
-        // Allowed 80 MHz patterns (Table 27-21, Bandwidth values 4 and 5):
-        // - Value 4: Secondary 20 MHz punctured (mask: 0100)
-        // - Value 5: One of two 20 MHz subchannels in secondary 40 MHz channel punctured (mask: 0010 or 0001)
-        int count = 0;
-        for (bool b : mask) if (b) count++;
-        if (count == 0) return true;
-        if (count == 1) {
-            return mask[1] || mask[2] || mask[3];
-        }
-        return false;
-    }
-    else { // 160 MHz (8 subchannels: b0, b1, b2, b3, b4, b5, b6, b7)
-        // b0: Primary 20 (always active / 0)
-        // b1: Secondary 20
-        // b2, b3: Secondary 40
-        // b4, b5, b6, b7: Secondary 80
-
-        // Table 27-21, Bandwidth values 6 and 7:
-        // "If two of the 20 MHz subchannels in the secondary 80 MHz channel are punctured,
-        // these are either the lower two or the higher two."
-        int sec80Count = (mask[4]?1:0) + (mask[5]?1:0) + (mask[6]?1:0) + (mask[7]?1:0);
-        if (sec80Count > 2)
-            return false;
-        if (sec80Count == 2) {
-            bool lowerTwo = mask[4] && mask[5];
-            bool higherTwo = mask[6] && mask[7];
-            if (!lowerTwo && !higherTwo)
-                return false;
-        }
-
-        // "No more than two adjacent 20 MHz subchannels are punctured across 160 MHz."
-        for (size_t i = 0; i + 2 < mask.size(); ++i) {
-            if (mask[i] && mask[i+1] && mask[i+2])
-                return false;
-        }
-
-        // - Value 6: Secondary 20 MHz is punctured (b1 = 1), secondary 40 MHz is not punctured (b2 = 0, b3 = 0).
-        bool isSet6 = mask[1] && !mask[2] && !mask[3];
-
-        // - Value 7: Secondary 20 MHz is not punctured (b1 = 0), and at least one 20 MHz subchannel is punctured.
-        int totalCount = 0;
-        for (bool b : mask) if (b) totalCount++;
-        bool isSet7 = !mask[1] && (totalCount >= 1);
-
-        if (!isSet6 && !isSet7)
-            return false;
-
-        return true;
-    }
-}
-
-std::vector<bool> parseHePreamblePuncturing(const char *value, inet::units::values::Hz bandwidth)
-{
-    std::string mask(value == nullptr ? "" : value);
-    if (mask.empty())
-        return {};
-    int widthMhz = std::lround(bandwidth.get() / 1e6);
-    if (widthMhz != 80 && widthMhz != 160)
-        throw omnetpp::cRuntimeError("HE preamble puncturing is supported only for 80 and 160 MHz channels");
-    int expectedBits = widthMhz / 20;
-    if ((int)mask.size() != expectedBits)
-        throw omnetpp::cRuntimeError("HE preamble puncturing mask must contain %d bits", expectedBits);
-    std::vector<bool> result;
-    for (char bit : mask) {
-        if (bit != '0' && bit != '1')
-            throw omnetpp::cRuntimeError("HE preamble puncturing mask must contain only 0 and 1");
-        result.push_back(bit == '1');
-    }
-    if (result.front())
-        throw omnetpp::cRuntimeError("The primary 20 MHz HE subchannel must not be punctured");
-    if (std::all_of(result.begin(), result.end(), [] (bool value) { return value; }))
-        throw omnetpp::cRuntimeError("At least one HE 20 MHz subchannel must remain active");
-    if (!isValidHePreamblePuncturing(result, widthMhz))
-        throw omnetpp::cRuntimeError("HE preamble puncturing mask '%s' is not a permitted standard pattern for %d MHz channel", value, widthMhz);
-    return result;
-}
-
-bool overlapsHePuncturedSubchannel(const inet::physicallayer::Ieee80211HeRu& ru,
-        const std::vector<bool>& puncturedSubchannels, inet::units::values::Hz bandwidth)
-{
-    if (puncturedSubchannels.empty())
-        return false;
-    int channelTones = inet::physicallayer::getHeChannelToneCount(bandwidth);
-    int first = ru.toneOffset * puncturedSubchannels.size() / channelTones;
-    int last = (ru.toneOffset + ru.toneSize - 1) * puncturedSubchannels.size() / channelTones;
-    for (int subchannel = first; subchannel <= last; ++subchannel)
-        if (puncturedSubchannels.at(subchannel))
-            return true;
-    return false;
-}
 
 } // namespace
 
@@ -401,7 +296,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             }
             if (std::find(seenDestinations.begin(), seenDestinations.end(), dest) != seenDestinations.end())
                 continue;
-            if (!mac->isTwtPeerEligible(dest)) {
+            if (isTwtSleeping(mac, dest)) {
                 EV_DEBUG << "HE DL schedule context: skipping sleeping TWT STA " << dest << "\n";
                 continue;
             }
@@ -581,7 +476,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
             if (station.second != Ieee80211Mib::ASSOCIATED || index >= maxRus)
                 continue;
-            if (!mac->isTwtPeerEligible(station.first)) {
+            if (isTwtSleeping(mac, station.first)) {
                 EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.first << "\n";
                 continue;
             }
@@ -611,7 +506,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     }
     ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
             [this] (const auto& allocation) {
-                return !allocation.randomAccess && !mac->isTwtPeerEligible(allocation.staAddress);
+                return !allocation.randomAccess && isTwtSleeping(mac, allocation.staAddress);
             }), ulSchedule.allocations.end());
     auto puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(), channelBandwidth);
     if (!puncturedSubchannels.empty()) {
@@ -685,40 +580,9 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
     auto edcaf = edca->getEdcaf(ac);
     if (mac->isApInAxMode() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
         auto scheduleContext = collectScheduleContext(ac);
-        int lackCsiCount = 0;
-        std::vector<HeSoundingFs::TargetSta> soundingStas;
-        for (const auto& candidate : scheduleContext.candidates) {
-            auto negotiated = candidate.negotiatedHeCapabilities;
-            if (negotiated == nullptr || !negotiated->valid)
-                continue;
-            auto mib = mac->getMib();
-            auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
-            const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
-            if (staCapabilities == nullptr)
-                continue;
-            if (isDlMuMimoEligible(mac->getMib()->localHeCapabilities, *staCapabilities, *negotiated, scheduleContext.channelBandwidth, scheduleContext.numApAntennas)) {
-                if (!csiManager.hasFreshCsi(candidate.staAddress, scheduleContext.channelBandwidth))
-                    lackCsiCount++;
-                HeSoundingFs::TargetSta target;
-                target.address = candidate.staAddress;
-                target.aid = mac->getMib()->getAssociationId(candidate.staAddress);
-                target.maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
-                soundingStas.push_back(target);
-            }
-        }
-        if (lackCsiCount >= 2) {
-            if (soundingStas.size() > 8)
-                soundingStas.resize(8);
-            EV_INFO << "At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << endl;
-            static uint8_t nextSoundingDialogToken = 1;
-            static uint32_t nextTriggerId = 1;
-            auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
-                                                     &csiManager, scheduleContext.channelBandwidth,
-                                                     nextSoundingDialogToken++, nextTriggerId++);
-            frameSequenceHandler->startFrameSequence(soundingSequence, buildContext(ac), this);
-            emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
+        auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
+        if (soundingCoordinator->tryStartSoundingSequence(ac, scheduleContext, frameSequenceHandler, mac, modeSet, csiManager, buildContext(ac), this))
             return true;
-        }
     }
 
     auto pendingQueue = edcaf->getPendingQueue();
@@ -888,115 +752,12 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 
 void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (dynamicPtrCast<const Ieee80211MgmtHeader>(header) && header->getType() == ST_ACTION) {
-        if (auto ndpa = findPacketChunk<Ieee80211HeNdpAnnouncement>(packet)) {
-            soundingTargets.clear();
-            ndpAnnouncementReceived = false;
-            ndpReceived = false;
-            soundingDialogToken = ndpa->getDialogToken();
-
-            auto myAid = mac->getMib()->bssStationData.associationId;
-            bool targeted = false;
-            if (myAid > 0) {
-                for (unsigned int i = 0; i < ndpa->getStationsArraySize(); ++i) {
-                    const auto& staInfo = ndpa->getStations(i);
-                    if (staInfo.aid == myAid) {
-                        targeted = true;
-                    }
-                    SoundingTarget target;
-                    target.aid = staInfo.aid;
-                    target.maxNss = staInfo.nc;
-                    soundingTargets.push_back(target);
-                }
-            }
-            if (targeted) {
-                ndpAnnouncementReceived = true;
-            }
-            delete packet;
-            return;
-        }
-
-        if (auto feedback = findPacketChunk<Ieee80211HeCompressedBeamformingFeedback>(packet)) {
-            if (feedback->getValid()) {
-                std::vector<MacAddress> allAssociatedStations;
-                for (const auto& entry : mac->getMib()->bssAccessPointData.associationIds) {
-                    allAssociatedStations.push_back(entry.first);
-                }
-                auto getAid = [this](const MacAddress& addr) {
-                    return mac->getMib()->getAssociationId(addr);
-                };
-                auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
-                auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
-                Hz bw = Hz(20e6);
-                if (transmitter && transmitter->getMode()) {
-                    bw = transmitter->getMode()->getDataMode()->getBandwidth();
-                }
-                auto twoAddrHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header);
-                if (twoAddrHeader != nullptr) {
-                    csiManager.updateCsi(twoAddrHeader->getTransmitterAddress(), bw, allAssociatedStations, getAid);
-                }
-            }
-            delete packet;
-            return;
-        }
-    }
+    auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
+    if (soundingCoordinator->processSoundingFrame(packet, header, mac, modeSet, csiManager, tx, this))
+        return;
 
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {
         if (trigger->getTriggerType() == 2) {
-            if (ndpAnnouncementReceived && ndpReceived) {
-                auto myAid = mac->getMib()->bssStationData.associationId;
-                const Ieee80211HeTriggerUserInfo *selected = nullptr;
-                for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
-                    if (trigger->getUsers(i).aid == myAid) {
-                        selected = &trigger->getUsers(i);
-                        break;
-                    }
-                }
-                if (selected != nullptr) {
-                    int maxNss = 1;
-                    auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(trigger->getTransmitterAddress());
-                    if (negotiated != nullptr && negotiated->valid) {
-                        maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
-                    }
-
-                    auto feedback = makeShared<Ieee80211HeCompressedBeamformingFeedback>();
-                    feedback->setDialogToken(soundingDialogToken);
-                    feedback->setAid(myAid);
-                    feedback->setFeedbackBandwidth(20e6);
-                    feedback->setNc(maxNss);
-                    feedback->setNr(mac->getMib()->localHeCapabilities.soundingDimensions);
-                    feedback->setValid(true);
-                    feedback->setChunkLength(B(42));
-
-                    auto responseHeader = makeShared<Ieee80211MgmtHeader>();
-                    responseHeader->setType(ST_ACTION);
-                    responseHeader->setReceiverAddress(trigger->getTransmitterAddress());
-                    responseHeader->setTransmitterAddress(mac->getAddress());
-                    responseHeader->setAddress3(trigger->getTransmitterAddress()); // BSSID
-
-                    auto response = new Packet("HE-Feedback", responseHeader);
-                    response->insertAtBack(feedback);
-                    response->insertAtBack(makeShared<Ieee80211MacTrailer>());
-
-                    auto request = response->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
-                    request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
-                    request->setTriggerId(trigger->getTriggerId());
-                    request->setRuIndex(selected->ruIndex);
-                    request->setRuToneSize(selected->ruToneSize);
-                    request->setRuToneOffset(selected->ruToneOffset);
-                    request->setStaId(myAid);
-                    request->setMcs(selected->mcs);
-                    request->setCommonDuration(trigger->getCommonDuration());
-
-                    tx->transmitFrame(response, responseHeader, modeSet->getSifsTime(), this);
-                    delete response;
-                }
-                ndpAnnouncementReceived = false;
-                ndpReceived = false;
-                delete packet;
-                return;
-            }
-
             auto myAid = mac->getMib()->bssStationData.associationId;
             const Ieee80211HeTriggerUserInfo *selected = nullptr;
             for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i)
@@ -1451,9 +1212,8 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 
 void HeHcf::legacyPreambleReceived(Packet *packet)
 {
-    if (ndpAnnouncementReceived) {
-        ndpReceived = true;
-    }
+    auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
+    soundingCoordinator->processLegacyPreamble(packet);
 }
 
 } // namespace ieee80211

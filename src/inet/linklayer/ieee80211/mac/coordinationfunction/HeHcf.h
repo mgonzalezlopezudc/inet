@@ -66,16 +66,6 @@ class INET_API HeHcf : public Hcf
     double defaultCsiLeakage = 0.1;
     std::string csiLeakageOverrides = "";
 
-    // SOUNDING STATE (STA side)
-    bool ndpAnnouncementReceived = false;
-    bool ndpReceived = false;
-    uint8_t soundingDialogToken = 0;
-    struct SoundingTarget {
-        MacAddress address;
-        uint16_t aid = 0;
-        int maxNss = 1;
-    };
-    std::vector<SoundingTarget> soundingTargets;
 
   protected:
     virtual void initialize(int stage) override;

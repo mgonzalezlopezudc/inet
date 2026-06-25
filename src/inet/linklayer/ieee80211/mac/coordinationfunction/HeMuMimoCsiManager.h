@@ -35,10 +35,13 @@ class HeMuMimoCsiManager
     double defaultLeakage = 0.1;
     std::map<std::pair<int, int>, double> overridesMap;
     std::map<std::pair<MacAddress, Hz>, CsiEntry> csiTable;
+    std::function<simtime_t()> timeProvider = []() { return simTime(); };
 
   public:
     HeMuMimoCsiManager() {}
     virtual ~HeMuMimoCsiManager() {}
+
+    void setTimeProvider(std::function<simtime_t()> provider) { timeProvider = provider; }
 
     void configure(simtime_t validityDuration, double defaultLeakage, const std::string& overridesStr)
     {
@@ -64,8 +67,8 @@ class HeMuMimoCsiManager
                    const std::function<int(const MacAddress&)>& getAid)
     {
         CsiEntry entry;
-        entry.acquisitionTime = simTime();
-        entry.expiryTime = simTime() + validityDuration;
+        entry.acquisitionTime = timeProvider();
+        entry.expiryTime = timeProvider() + validityDuration;
         entry.valid = true;
         int aidU = getAid(address);
         for (const auto& other : allAssociatedStations) {
@@ -92,7 +95,7 @@ class HeMuMimoCsiManager
         auto it = csiTable.find({address, bandwidth});
         if (it == csiTable.end())
             return false;
-        return it->second.valid && simTime() <= it->second.expiryTime;
+        return it->second.valid && timeProvider() <= it->second.expiryTime;
     }
 
     double getLeakage(const MacAddress& selectedSta, const MacAddress& coScheduledSta, Hz bandwidth) const

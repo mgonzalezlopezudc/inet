@@ -70,4 +70,8 @@ module HeHcf extends Hcf
             parameters:
                 @display("p=750,250;i=block/queue");
         }
+        soundingCoordinator: HeSoundingCoordinator {
+            parameters:
+                @display("p=600,100");
+        }
 }
