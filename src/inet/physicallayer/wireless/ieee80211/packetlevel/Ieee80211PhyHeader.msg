@@ -17,7 +17,8 @@ class Ieee80211PhyPreamble extends FieldsChunk
 
 class Ieee80211PhyHeader extends FieldsChunk
 {
-    // TODO remove this, because not all subtypes have lengthField
+    // Common packet-level PSDU length metadata used by the radio model. Some
+    // PHY variants serialize it as an on-wire LENGTH field, while others do not.
     B lengthField;
 }
 
@@ -47,7 +48,9 @@ class Ieee80211IrPhyPreamble extends Ieee80211PhyPreamble
 
 class Ieee80211IrPhyHeader extends Ieee80211PhyHeader
 {
-    // TODO B lengthField;
+    // The legacy IR PHY PLCP header is not fully modeled at bit level here.
+    // The inherited lengthField remains packet-level metadata, not serialized
+    // as an IR on-wire LENGTH field by the current serializer.
     uint16_t fcs;
     ChecksumMode fcsMode = FCS_MODE_UNDEFINED;  // should be FcsMode, but OMMeT++ bug #1351 prevents that (fixed in OMNeT++ 6.2)
 }
@@ -65,7 +68,7 @@ class Ieee80211DsssPhyHeader extends Ieee80211PhyHeader
     chunkLength = B(6);
     uint8_t signal;
     uint8_t service;
-    // TODO B lengthField;
+    // The inherited lengthField is serialized as the 16-bit PLCP LENGTH field.
     uint16_t fcs;
     ChecksumMode fcsMode = FCS_MODE_UNDEFINED;  // should be FcsMode, but OMMeT++ bug #1351 prevents that (fixed in OMNeT++ 6.2)
 }
@@ -111,7 +114,7 @@ class Ieee80211OfdmPhyHeader extends Ieee80211PhyHeader
     chunkLength = B(5);
     uint8_t rate;
     bool reserved = false;
-    // TODO B lengthField;
+    // The inherited lengthField is serialized as the 12-bit SIGNAL LENGTH field.
     bool parity = false;
     uint8_t tail = 0;
     uint16_t service;
