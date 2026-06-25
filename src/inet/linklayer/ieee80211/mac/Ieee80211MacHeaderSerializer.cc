@@ -429,10 +429,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 ulBw = 1;
             uint8_t giAndHeLtf = (trigger->getGuardInterval() <= 2) ? trigger->getGuardInterval() : 2;
 
-            // --- Common Info Field subset (8 octets = 64 bits) ---
-            // Packet-level model: this packs the Trigger fields used by INET's
-            // HE-TB scheduler/receiver, but it is not a complete IEEE Std
-            // 802.11 Trigger Common Info/User Info encoder.
+            // --- Common Info Field (8 octets = 64 bits) ---
             uint64_t commonInfo =
                     (trigger->getTriggerType() & 0xF) |               // B0-B3: Trigger Type
                     ((ulLength & 0xFFFULL) << 4) |                    // B4-B15: UL Length
@@ -542,12 +539,40 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                         ((static_cast<uint64_t>(fval) & 0x7F) << 32);    // B32-B38: UL Target Receive Power
                 writeLeBits(stream, userInfo, 40);
 
-                // --- Trigger Dependent User Info subset ---
                 if (trigger->getTriggerType() == 0) { // Basic Trigger: 1 octet (8 bits)
                     // TID Aggregation Limit (B2-B4) packs user.tid
                     uint8_t tidAggregationLimit = user.tid & 0x7;
                     uint8_t basicUserInfo = (tidAggregationLimit << 2);
                     stream.writeByte(basicUserInfo);
+                }
+                else if (trigger->getTriggerType() == 1) { // BFRP Trigger: 1 octet
+                    stream.writeByte(user.bfrpFeedbackSegmentRetransmissionBitmap);
+                }
+                else if (trigger->getTriggerType() == 2) { // MU-BAR Trigger: BAR Control + BAR Information
+                    if (!user.muBarCompressedBitmap)
+                        throw cRuntimeError("MU-BAR Trigger User Info must use Compressed or Multi-TID BlockAckReq BAR Control");
+                    if (user.muBarMultiTid) {
+                        auto recordCount = user.muBarRecordCount;
+                        if (recordCount == 0 && user.muBarTidInfo != 255)
+                            recordCount = user.muBarTidInfo + 1;
+                        if (recordCount == 0 || recordCount > 16)
+                            throw cRuntimeError("Invalid MU-BAR Trigger Multi-TID record count %u", recordCount);
+                        stream.writeUint16Le(packBlockAckControl(user.muBarBarAckPolicy, true, true,
+                                user.muBarReserved, recordCount - 1));
+                        for (unsigned int j = 0; j < recordCount; ++j) {
+                            const auto& record = user.muBarRecords[j];
+                            stream.writeUint16Le((record.reserved & 0x0FFF) |
+                                    ((record.tid & 0xF) << 12));
+                            writeSequenceControl(stream, 0, record.startingSequenceNumber);
+                        }
+                    }
+                    else {
+                        auto tidInfo = user.muBarTidInfo == 255 ? user.tid : user.muBarTidInfo;
+                        stream.writeUint16Le(packBlockAckControl(user.muBarBarAckPolicy, false, true,
+                                user.muBarReserved, tidInfo));
+                        writeSequenceControl(stream, user.muBarFragmentNumber,
+                                user.muBarStartingSequenceNumber);
+                    }
                 }
             }
             ASSERT(stream.getLength() - startPos == trigger->getChunkLength());
@@ -917,18 +942,18 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             trigger->setCoding(coding);
             trigger->setTriggerId(0);
 
-            // Determine number of users from remaining chunk length
-            int remainingBytes = trigger->getChunkLength().get<B>() - 24;
-            int userInfoSize = (triggerType == 4) ? 5 : 6;
-            int count = 0;
-            if (remainingBytes > 0 && userInfoSize > 0) {
-                count = remainingBytes / userInfoSize;
-            }
-            trigger->setUsersArraySize(count);
+            // Determine users from remaining chunk length. MU-BAR has variable-size
+            // BAR Information, so parse user records sequentially.
+            int remainingBytes = stream.getRemainingLength().get<B>();
 
-            for (unsigned int i = 0; i < (unsigned int)count; i++) {
+            std::vector<Ieee80211HeTriggerUserInfo> users;
+            int consumedBytes = 0;
+            while (consumedBytes < remainingBytes) {
+                if (remainingBytes - consumedBytes < 5)
+                    throw cRuntimeError("Truncated Trigger User Info field");
                 Ieee80211HeTriggerUserInfo user;
                 auto userInfo = readLeBits(stream, 40);
+                consumedBytes += 5;
                 user.aid = userInfo & 0xFFF;
 
                 auto ruAllocation = (userInfo >> 12) & 0xFF;
@@ -1002,14 +1027,73 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 user.randomAccess = (user.aid == 0 || user.aid == 2045);
 
                 if (triggerType == 0) { // Basic Trigger
+                    if (remainingBytes - consumedBytes < 1)
+                        throw cRuntimeError("Truncated Basic Trigger dependent User Info field");
                     auto basicUserInfo = stream.readByte();
+                    consumedBytes += 1;
                     user.tid = (basicUserInfo >> 2) & 0x7;
-                } else {
+                }
+                else if (triggerType == 1) { // BFRP Trigger
+                    if (remainingBytes - consumedBytes < 1)
+                        throw cRuntimeError("Truncated BFRP Trigger dependent User Info field");
+                    user.bfrpFeedbackSegmentRetransmissionBitmap = stream.readByte();
+                    consumedBytes += 1;
+                    user.tid = 0;
+                }
+                else if (triggerType == 2) { // MU-BAR Trigger
+                    if (remainingBytes - consumedBytes < 4)
+                        throw cRuntimeError("Truncated MU-BAR Trigger dependent User Info field");
+                    bool barAckPolicy;
+                    bool multiTid;
+                    bool compressedBitmap;
+                    uint16_t reserved;
+                    uint8_t tidInfo;
+                    unpackBlockAckControl(stream.readUint16Le(), barAckPolicy, multiTid,
+                            compressedBitmap, reserved, tidInfo);
+                    consumedBytes += 2;
+                    user.muBarBarAckPolicy = barAckPolicy;
+                    user.muBarMultiTid = multiTid;
+                    user.muBarCompressedBitmap = compressedBitmap;
+                    user.muBarReserved = reserved;
+                    user.muBarTidInfo = tidInfo;
+                    if (!compressedBitmap)
+                        throw cRuntimeError("Invalid MU-BAR Trigger BAR Control variant");
+                    if (multiTid) {
+                        auto recordCount = tidInfo + 1;
+                        if (remainingBytes - consumedBytes < 4 * recordCount)
+                            throw cRuntimeError("Truncated MU-BAR Trigger Multi-TID BAR Information field");
+                        user.muBarRecordCount = recordCount;
+                        for (unsigned int j = 0; j < recordCount; ++j) {
+                            auto perTidInfo = stream.readUint16Le();
+                            user.muBarRecords[j].reserved = perTidInfo & 0x0FFF;
+                            user.muBarRecords[j].tid = (perTidInfo >> 12) & 0xF;
+                            int fragmentNumber;
+                            SequenceNumberCyclic sequenceNumber;
+                            readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                            user.muBarRecords[j].startingSequenceNumber = sequenceNumber.get();
+                            consumedBytes += 4;
+                        }
+                    }
+                    else {
+                        int fragmentNumber;
+                        SequenceNumberCyclic sequenceNumber;
+                        readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                        consumedBytes += 2;
+                        user.tid = tidInfo;
+                        user.muBarFragmentNumber = fragmentNumber;
+                        user.muBarStartingSequenceNumber = sequenceNumber.get();
+                    }
+                }
+                else {
                     user.tid = 0;
                 }
 
-                trigger->setUsers(i, user);
+                users.push_back(user);
             }
+            trigger->setUsersArraySize(users.size());
+            for (unsigned int i = 0; i < users.size(); i++)
+                trigger->setUsers(i, users[i]);
+            trigger->setChunkLength(B(stream.getPosition().get<B>()));
             return trigger;
         }
         case ST_BLOCKACK_REQ: {

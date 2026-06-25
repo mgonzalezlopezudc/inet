@@ -209,7 +209,7 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
 {
     ASSERT(context != nullptr);
     auto header = makeShared<Ieee80211TriggerFrame>();
-    header->setTriggerType(2); // BFRP Trigger type
+    header->setTriggerType(1); // BFRP Trigger type
     header->setTriggerId(triggerId);
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);

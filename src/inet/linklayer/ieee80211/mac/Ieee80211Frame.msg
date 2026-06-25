@@ -228,6 +228,13 @@ class Ieee80211DataHeader extends Ieee80211DataOrMgmtHeader
     uint32_t bufferStatusQueueSize = 0;
 }
 
+struct Ieee80211MuBarTriggerUserInfoRecord
+{
+    uint16_t reserved = 0;
+    uint8_t tid = 0;
+    uint16_t startingSequenceNumber = 0;
+}
+
 struct Ieee80211HeTriggerUserInfo
 {
     uint16_t aid;
@@ -241,12 +248,22 @@ struct Ieee80211HeTriggerUserInfo
     uint8_t tid = 0;
     int8_t targetRssiDbm = -60;
     bool randomAccess = false;
+    uint8_t bfrpFeedbackSegmentRetransmissionBitmap = 0;
+    bool muBarBarAckPolicy = false;
+    bool muBarMultiTid = false;
+    bool muBarCompressedBitmap = true;
+    uint16_t muBarReserved = 0;
+    uint8_t muBarTidInfo = 255;
+    uint8_t muBarFragmentNumber = 0;
+    uint16_t muBarStartingSequenceNumber = 0;
+    uint8_t muBarRecordCount = 0;
+    Ieee80211MuBarTriggerUserInfoRecord muBarRecords[16];
 }
 
 class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
 {
     type = ST_TRIGGER;
-    uint8_t triggerType = 0; // 0: Basic Trigger, 4: BSRP Trigger
+    uint8_t triggerType = 0; // 0: Basic, 1: BFRP, 2: MU-BAR, 4: BSRP Trigger
     // INET model correlation identifier. It is used to group simulated HE-TB
     // responses and is intentionally not serialized as an 802.11 Trigger field.
     uint32_t triggerId;

@@ -463,6 +463,32 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
             user.ruToneOffset = allocation.ru.toneOffset;
             user.mcs = 0;
             user.tid = allocation.tid;
+            SequenceNumberCyclic startingSequenceNumber;
+            auto tid = allocation.tid;
+            if (allocation.packet != nullptr) {
+                auto macHeader = allocation.packet->peekAtFront<Ieee80211MacHeader>();
+                if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(macHeader)) {
+                    tid = dataHeader->getTid();
+                    startingSequenceNumber = dataHeader->getSequenceNumber();
+                }
+            }
+            else {
+                auto recordsByTid = collectStartingSequenceNumbersByTid(allocation.packets);
+                auto it = recordsByTid.find(tid);
+                if (it == recordsByTid.end())
+                    it = recordsByTid.begin();
+                if (it != recordsByTid.end()) {
+                    tid = it->first;
+                    startingSequenceNumber = it->second;
+                }
+            }
+            user.tid = tid;
+            user.muBarBarAckPolicy = false;
+            user.muBarMultiTid = false;
+            user.muBarCompressedBitmap = true;
+            user.muBarTidInfo = tid;
+            user.muBarFragmentNumber = 0;
+            user.muBarStartingSequenceNumber = startingSequenceNumber.get();
             header->setUsers(i, user);
             commonDuration = std::max(commonDuration,
                     estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK,
@@ -470,7 +496,7 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
         }
         header->setCommonDuration(commonDuration);
         header->setDurationField(owner->modeSet->getSifsTime() + commonDuration);
-        header->setChunkLength(B(24 + 6 * owner->activeAllocations.size()));
+        header->setChunkLength(B(24 + 9 * owner->activeAllocations.size()));
         auto packet = new Packet("HE-MU-BAR-Trigger", header);
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
         EV_INFO << "HE DL MU-BAR FS: built MU-BAR trigger for " << owner->activeAllocations.size()
