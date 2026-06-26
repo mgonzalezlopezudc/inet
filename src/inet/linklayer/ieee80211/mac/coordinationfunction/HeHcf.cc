@@ -1196,6 +1196,18 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
         delete packet;
         return;
     }
+    if (ulCoordinator->isEnabled()) {
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+            if (dataHeader->getBufferStatusPresent()) {
+                auto aid = getAssociationId(dataHeader->getTransmitterAddress());
+                if (aid > 0) {
+                    ulCoordinator->updateBufferStatus(aid,
+                            static_cast<AccessCategory>(dataHeader->getBufferStatusAc()),
+                            dataHeader->getBufferStatusTid(), dataHeader->getBufferStatusQueueSize(), dataHeader->getRetry());
+                }
+            }
+        }
+    }
     Hcf::recipientProcessReceivedFrame(packet, header);
 }
 
@@ -1242,6 +1254,63 @@ void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
     else {
         Hcf::originatorProcessTransmittedFrame(packet);
     }
+}
+
+void HeHcf::originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac)
+{
+    // IEEE 802.11ax MU-BAR responses:
+    // When a STA transmits a BlockAck response (specifically basic/compressed BlockAck) as a SIFS
+    // reply to a MU-BAR trigger frame, the TX complete path invokes originatorProcessTransmittedControlFrame.
+    // Base HCF only expects control frames that request a response (like RTS/BlockAckReq) to schedule
+    // timeouts/recovery and throws "Unknown control frame" for a sent BlockAck. Since BlockAck is terminal
+    // and does not expect SIFS feedback, we explicitly bypass it here.
+    if (dynamicPtrCast<const Ieee80211BlockAck>(controlHeader) != nullptr) {
+        return;
+    }
+    Hcf::originatorProcessTransmittedControlFrame(controlHeader, ac);
+}
+
+void HeHcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket)
+{
+    Enter_Method("originatorProcessReceivedFrame");
+    auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
+    // IEEE 802.11ax Multi-STA Block Ack support:
+    // In HE simulations, the AP aggregates block ACKs for multiple STAs in a single Multi-STA Block Ack frame.
+    // When received by a STA after sending SU data via EDCA, HCF fails to process this new frame format,
+    // throwing "Unknown control frame".
+    // We intercept the Multi-STA Block Ack and translate it into a dummy standard BasicBlockAck so that
+    // the existing QosAckHandler and OriginatorBlockAckAgreementHandler process the sequence bitmap correctly.
+    if (auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(receivedHeader)) {
+        auto edcaf = edca->getChannelOwner();
+        if (edcaf) {
+            auto myAid = mac->getMib()->bssStationData.associationId;
+            const Ieee80211MultiStaBlockAckRecord *myRecord = nullptr;
+            for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); ++i) {
+                if (multiStaBlockAck->getRecords(i).aid == myAid) {
+                    myRecord = &multiStaBlockAck->getRecords(i);
+                    break;
+                }
+            }
+            if (myRecord && myRecord->responseReceived) {
+                auto dummyBlockAck = makeShared<Ieee80211BasicBlockAck>();
+                dummyBlockAck->setReceiverAddress(multiStaBlockAck->getReceiverAddress());
+                dummyBlockAck->setTransmitterAddress(multiStaBlockAck->getTransmitterAddress());
+                dummyBlockAck->setTidInfo(myRecord->tid);
+                dummyBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(myRecord->startingSequenceNumber));
+                
+                // Map the Multi-STA record's 64-bit bitmap to the BasicBlockAck bitmap (Fragment 0).
+                for (int seqOffset = 0; seqOffset < 64; ++seqOffset) {
+                    bool acked = ((myRecord->bitmap >> seqOffset) & 1ULL) == 1ULL;
+                    auto& bitmap = dummyBlockAck->getBlockAckBitmapForUpdate(seqOffset);
+                    bitmap.setBit(0, acked);
+                }
+                EV_INFO << "MultiStaBlockAck matching our AID " << myAid << " converted to dummy BasicBlockAck" << std::endl;
+                originatorProcessReceivedControlFrame(receivedPacket, dummyBlockAck, lastTransmittedPacket, lastTransmittedPacket->peekAtFront<Ieee80211MacHeader>(), edcaf->getAccessCategory());
+            }
+        }
+        return;
+    }
+    Hcf::originatorProcessReceivedFrame(receivedPacket, lastTransmittedPacket);
 }
 
 void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
@@ -1311,6 +1380,39 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
     else {
         Hcf::originatorProcessFailedFrame(failedPacket);
     }
+}
+
+void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
+{
+    Enter_Method("transmitFrame");
+    if (mac->getMib()->bssStationData.associationId > 0) {
+        auto header = packet->peekAtFront<Ieee80211MacHeader>();
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+            if (dataHeader->getType() == ST_DATA_WITH_QOS) {
+                auto tid = dataHeader->getTid();
+                auto ac = mapTidToAccessCategory(tid);
+                auto pendingQueue = edca->getEdcaf(ac)->getPendingQueue();
+                int64_t queueBytes = 0;
+                for (int i = 0; i < pendingQueue->getNumPackets(); i++) {
+                    auto queuedPacket = pendingQueue->getPacket(i);
+                    auto queuedHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                            queuedPacket->peekAtFront<Ieee80211MacHeader>());
+                    if (queuedHeader != nullptr && queuedHeader->getTid() == tid)
+                        queueBytes += queuedPacket->getByteLength();
+                }
+                auto writableHeader = packet->removeAtFront<Ieee80211DataHeader>();
+                if (!writableHeader->getBufferStatusPresent())
+                    writableHeader->setChunkLength(writableHeader->getChunkLength() + B(4));
+                writableHeader->setOrder(true);
+                writableHeader->setBufferStatusPresent(true);
+                writableHeader->setBufferStatusTid(tid);
+                writableHeader->setBufferStatusAc(ac);
+                writableHeader->setBufferStatusQueueSize(queueBytes);
+                packet->insertAtFront(writableHeader);
+            }
+        }
+    }
+    Hcf::transmitFrame(packet, ifs);
 }
 
 void HeHcf::legacyPreambleReceived(Packet *packet)
