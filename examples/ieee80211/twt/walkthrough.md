@@ -24,7 +24,7 @@ The network [TwtRegression.ned](TwtRegression.ned) consists of:
 - **`ap`**: An Access Point located at `(300, 180)`.
 - **`sta[0..1]`**: Two wireless stations located at `(170, 130)` and `(170, 230)` (approx. 140 meters from the AP).
 - **`server`**: A wired server connected to the AP.
-- **Traffic**: The `server` generates downlink UDP traffic destined for `sta[0]` and `sta[1]` (200B packets sent every 5ms, starting at `0.5s`).
+- **Traffic**: The `server` generates downlink UDP traffic destined for `sta[0]` and `sta[1]` (200B packets sent every 2s, starting at `0.5s`).
 
 ```
        [sta[0]] (Color 1)
@@ -108,17 +108,20 @@ scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               0
 IndividualUnannounced-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtAgreementCount          2
 scalar  TwtRegression.sta[0].wlan[0].twt  twtAgreementCount          1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               0.0098 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.2467 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.7533 s
 
 IndividualAnnounced-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtAgreementCount          2
 scalar  TwtRegression.sta[0].wlan[0].twt  twtAgreementCount          1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               0.0098 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.2467 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.7533 s
 
 Broadcast-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtBroadcastScheduleCount  1
 scalar  TwtRegression.sta[0].wlan[0].twt  twtBroadcastScheduleCount  1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               0
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               85.6826 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               14.3174 s
 ```
 
 ### Interpretation of Results
@@ -129,7 +132,9 @@ scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               0
    - In `Broadcast`, the AP and STAs register **1 Broadcast Schedule** (`twtBroadcastScheduleCount = 1`).
 
 2. **Sleep Duration**:
-   - In `Baseline` and `Broadcast`, the stations sleep for **0 seconds**.
-   - In both `Individual` configs, the stations sleep for **0.0098 seconds** (approx. 9.8 ms).
-   - *Why is the sleep time so short?* The UDP downlink application generates a packet every 5ms, which is much faster than the 100ms TWT wake interval. During the active traffic phase (from 0.5s to 2s), there is always downlink data queued at the AP, forcing the stations to remain awake to clear the queue backlog. The 9.8 ms sleep time represents the brief period before traffic started at 0.5s when the stations entered sleep mode immediately after completing association and TWT setup.
-   - To maximize energy savings in real-world deployments, TWT is best matched with low-duty-cycle traffic (e.g., IoT sensors reporting data every few minutes) rather than continuous high-speed streaming.
+   - In `Baseline`, the stations sleep for **0 seconds** because TWT is disabled.
+   - In both `Individual` configs, the stations sleep for **~89.25 seconds** out of the 100-second simulation (spending only about 10.75s awake).
+   - In the `Broadcast` config, the stations sleep for **~85.68 seconds** (spending about 14.32s awake).
+   - *Why do they sleep so much?* The UDP downlink application generates a packet every 2 seconds (`sendInterval = 2000ms`), which is much slower than the TWT wake interval (100ms). This allows the stations to remain in a low-power sleep state for the vast majority of the time, waking up only during their negotiated TWT service periods (SPs) to receive packets.
+   - *Why is Broadcast sleep time slightly shorter than Individual?* In Broadcast TWT, stations wake up at the start of the broadcast SP. If they miss Beacons due to sleeping, the broadcast schedule can expire and they must wake up, listen for a Beacon to resynchronize, and then return to sleep. This synchronization overhead results in slightly higher awake times (~14.3s vs ~10.7s in Individual configs).
+   - This simulation clearly demonstrates the massive energy-saving benefits of TWT, especially in low-duty-cycle traffic scenarios (like IoT sensors or background updates) where stations can sleep for most of the time.
