@@ -561,7 +561,9 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
             }
             responded.insert(expected->staAddress);
             EV_INFO << "HE DL MU-BAR FS: accepted BlockAck from " << expected->staAddress << "\n";
-            owner->callback->originatorProcessReceivedFrame(packet->dup(), owner->containerPacket);
+            auto blockAckPacket = packet->dup();
+            owner->callback->originatorProcessReceivedFrame(blockAckPacket, owner->containerPacket);
+            delete blockAckPacket;
         }
         for (const auto& allocation : owner->activeAllocations) {
             if (responded.count(allocation.staAddress) != 0)
