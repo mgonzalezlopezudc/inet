@@ -98,6 +98,7 @@ class INET_API HeHcf : public Hcf
     virtual bool hasFrameToTransmit(AccessCategory ac) override;
     virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
     virtual void transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
+    virtual void transmitFrame(Packet *packet, simtime_t ifs) override;
 
   public:
     virtual ~HeHcf();
@@ -105,6 +106,8 @@ class INET_API HeHcf : public Hcf
     virtual void destroyStationQueueBank(const MacAddress& staAddr) override;
     virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const override;
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
+    virtual void originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac) override;
+    virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
     uint16_t getAssociationId(const MacAddress& address) const;
     void handleDlMuPlanningFailure(AccessCategory ac);

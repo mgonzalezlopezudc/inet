@@ -100,6 +100,7 @@ simtime_t HeUlSchedulerBase::computeCommonDuration(const ScheduleContext& contex
     }
     if (context.txopLimit > SIMTIME_ZERO)
         duration = std::min(duration, context.txopLimit);
+    duration = std::min(duration, SimTime(5.484, SIMTIME_MS));
     return duration;
 }
 
