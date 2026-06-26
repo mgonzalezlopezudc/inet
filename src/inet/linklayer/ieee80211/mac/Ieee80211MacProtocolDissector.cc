@@ -29,6 +29,8 @@ const Protocol *Ieee80211MacProtocolDissector::computeLlcProtocol(Packet *packet
         if (channelTag->getChannel()->getBand() == &physicallayer::Ieee80211CompliantBands::band5_9GHz)
             return &Protocol::ieee802epd;
     }
+    if (packet->getDataLength() == b(0))
+        return nullptr;
     const auto& header = packet->peekAtFront();
     if (dynamicPtrCast<const Ieee8022LlcHeader>(header) != nullptr)
         return &Protocol::ieee8022llc;
@@ -46,7 +48,9 @@ void Ieee80211MacProtocolDissector::dissect(Packet *packet, const Protocol *prot
     callback.visitChunk(header, &Protocol::ieee80211Mac);
     // TODO fragmentation & aggregation
     if (auto dataHeader = dynamicPtrCast<const inet::ieee80211::Ieee80211DataHeader>(header)) {
-        if (dataHeader->getMoreFragments() || dataHeader->getFragmentNumber() != 0)
+        if (packet->getDataLength() == b(0))
+            ;
+        else if (dataHeader->getMoreFragments() || dataHeader->getFragmentNumber() != 0)
             callback.dissectPacket(packet, nullptr);
         else if (dataHeader->getAMsduPresent()) {
             auto originalTrailerPopOffset = packet->getBackOffset();
@@ -65,16 +69,20 @@ void Ieee80211MacProtocolDissector::dissect(Packet *packet, const Protocol *prot
         else
             callback.dissectPacket(packet, computeLlcProtocol(packet));
     }
-    else if (dynamicPtrCast<const inet::ieee80211::Ieee80211ActionFrame>(header))
-        ASSERT(packet->getDataLength() == b(0));
+    else if (dynamicPtrCast<const inet::ieee80211::Ieee80211ActionFrame>(header)) {
+        if (packet->getDataLength() != b(0)) {
+            const auto& body = packet->popAtFront(packet->getDataLength());
+            callback.visitChunk(body, &Protocol::ieee80211Mac);
+        }
+    }
     else if (dynamicPtrCast<const inet::ieee80211::Ieee80211MgmtHeader>(header))
         callback.dissectPacket(packet, &Protocol::ieee80211Mgmt);
-    // TODO else if (dynamicPtrCast<const inet::ieee80211::Ieee80211ControlFrame>(header))
-    else
-        ASSERT(packet->getDataLength() == b(0));
+    else if (packet->getDataLength() != b(0)) {
+        const auto& body = packet->popAtFront(packet->getDataLength());
+        callback.visitChunk(body, &Protocol::ieee80211Mac);
+    }
     callback.visitChunk(trailer, &Protocol::ieee80211Mac);
     callback.endProtocolDataUnit(&Protocol::ieee80211Mac);
 }
 
 } // namespace inet
-
