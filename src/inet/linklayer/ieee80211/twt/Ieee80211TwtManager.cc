@@ -100,7 +100,7 @@ bool Ieee80211TwtManager::isAgreementActiveNow(const TwtAgreement& agreement, si
     // successive TWT service periods start at periodic intervals of the TWT Wake Interval.
     simtime_t start = agreement.nextWakeTime;
     if (agreement.implicit && agreement.wakeInterval > SIMTIME_ZERO) {
-        auto intervals = (now - start) / agreement.wakeInterval;
+        int64_t intervals = (now - start) / agreement.wakeInterval;
         start += intervals * agreement.wakeInterval;
     }
 
@@ -120,7 +120,7 @@ simtime_t Ieee80211TwtManager::getNextEventTime(const TwtAgreement& agreement, s
     // Determine the start time of the relevant TWT Service Period (SP)
     simtime_t start = agreement.nextWakeTime;
     if (agreement.implicit && agreement.wakeInterval > SIMTIME_ZERO && now > start) {
-        auto intervals = (now - start) / agreement.wakeInterval;
+        int64_t intervals = (now - start) / agreement.wakeInterval;
         start += intervals * agreement.wakeInterval;
         // If we already passed the current SP duration, the next relevant SP is the subsequent interval
         if (now >= start + agreement.wakeDuration)
@@ -456,8 +456,8 @@ void Ieee80211TwtManager::updateServicePeriodState()
     if (!enabled)
         return;
 
-    bool awake = false;
     expireBroadcastSchedules();
+    bool awake = agreements.empty() && broadcastSchedules.empty();
 
     // IEEE 802.11ax-2024 Section 26.8.2.1:
     // - For an unannounced TWT agreement, the STA is assumed to be awake at the start of the SP.
