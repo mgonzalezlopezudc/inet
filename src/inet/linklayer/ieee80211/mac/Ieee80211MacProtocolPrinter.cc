@@ -103,9 +103,17 @@ void Ieee80211MacProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pro
                 context.typeColumn << "BlockAck"; // TODO
                 break;
 
+            case ST_TRIGGER:
+                context.typeColumn << "Trigger"; // TODO
+                break;
+
             case ST_DATA:
             case ST_DATA_WITH_QOS:
                 context.typeColumn << "DATA"; // TODO
+                break;
+
+            case ST_QOS_NULL:
+                context.typeColumn << "QoS Null"; // TODO
                 break;
 
             case ST_LBMS_REQUEST:
@@ -127,4 +135,3 @@ void Ieee80211MacProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pro
 
 } // namespace ieee80211
 } // namespace inet
-
