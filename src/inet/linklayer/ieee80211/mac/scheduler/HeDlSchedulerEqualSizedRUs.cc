@@ -37,8 +37,10 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
 {
     ASSERT(!std::isnan(context.channelCenterFrequency.get()) && context.channelCenterFrequency > Hz(0));
     ASSERT(!std::isnan(context.channelBandwidth.get()) && context.channelBandwidth > Hz(0));
-    if (context.candidates.empty())
+    if (context.candidates.empty()) {
+        recordSchedule(context, {}, {}, false, "no DL MU candidates");
         return {};
+    }
 
     auto hcf = dynamic_cast<HeHcf *>(getParentModule());
     auto mac = hcf != nullptr ? dynamic_cast<Ieee80211Mac *>(hcf->getParentModule()) : nullptr;
@@ -133,6 +135,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                 if (context.coding == HE_CODING_BCC && fullChannelRu.toneSize >= 484) {
                     EV_DEBUG << "DL EqualSizedRUs scheduler: skipping MU-MIMO full-channel RU because BCC is not legal for "
                              << fullChannelRu.toneSize << "-tone RUs\n";
+                    recordSchedule(context, eligibleCandidates, {}, true, "MU-MIMO full-channel RU rejected by BCC coding");
                     return {};
                 }
                 int maxGroupNsts = std::min(8, context.numApAntennas);
@@ -233,6 +236,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     }
                     EV_INFO << "DL EqualSizedRUs scheduler: selected DL MU-MIMO group of "
                             << result.size() << " STAs on full-channel RU\n";
+                    recordSchedule(context, groupCandidates, result, true, "DL MU-MIMO group");
                     return result;
                 }
                 EV_DEBUG << "DL EqualSizedRUs scheduler: no compatible MU-MIMO group found\n";
@@ -252,8 +256,10 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
     auto validCounts = getHeEqualRuCounts(context.channelBandwidth);
     int candidateLimit = maxMuStations < 0 ? getHeMaxRuCount(context.channelBandwidth) : maxMuStations;
     int candidates = std::min((int)selectedCandidates.size(), candidateLimit);
-    if (candidates <= 0)
+    if (candidates <= 0) {
+        recordSchedule(context, selectedCandidates, {}, false, "no candidates within DL MU station limit");
         return {};
+    }
     int ruCount = validCounts.front();
     if (schedulingFunction == "fBW") {
         for (int count : validCounts)
@@ -309,6 +315,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                 alloc.ru.toneSize, alloc.mcs, context.guardInterval);
         result.push_back(alloc);
     }
+    recordSchedule(context, selectedCandidates, result, false, schedulingFunction.c_str());
     return result;
 }
 

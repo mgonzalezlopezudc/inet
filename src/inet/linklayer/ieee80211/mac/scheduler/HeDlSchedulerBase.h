@@ -7,6 +7,8 @@
 #ifndef __INET_HEDLSCHEDULERBASE_H
 #define __INET_HEDLSCHEDULERBASE_H
 
+#include <string>
+
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
@@ -35,6 +37,16 @@ class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public Simple
     int maxDurationAlignmentIterations = 16;
     std::vector<double> mcsSnrThresholds;
     IIeee80211HeRateControl *heRateControl = nullptr;
+    int lastCandidateCount = 0;
+    int lastSelectedCount = 0;
+    int lastRejectedCandidateCount = 0;
+    int lastPuncturedSubchannelCount = 0;
+    bool lastUsedMuMimo = false;
+    simtime_t lastCommonDuration = SIMTIME_ZERO;
+    Hz lastChannelBandwidth = Hz(NaN);
+    std::string lastSchedulingReason = "not scheduled yet";
+    std::vector<CandidateInfo> lastCandidates;
+    std::vector<RuAllocation> lastRuAllocations;
 
   protected:
     virtual void initialize(int stage) override;
@@ -54,6 +66,9 @@ class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public Simple
     std::vector<RuAllocation> fitRequestedRus(const ScheduleContext& context,
             const std::vector<CandidateInfo>& candidates, std::vector<int> requestedTones,
             const std::vector<int64_t>& payloadBytes) const;
+    void recordSchedule(const ScheduleContext& context, const std::vector<CandidateInfo>& candidates,
+            const std::vector<RuAllocation>& allocations, bool usedMuMimo, const char *reason);
+    std::string getLastScheduleSummary() const;
     static bool defaultCandidateLess(const CandidateInfo& a, const CandidateInfo& b);
 
   public:

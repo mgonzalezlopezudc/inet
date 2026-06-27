@@ -203,6 +203,8 @@ The following log or signal fields are useful for verifying each mechanism:
 | Puncture-aware allocation | RU indices in the HE MU signal details should avoid the punctured 20 MHz subchannel |
 | Capability negotiation | Per-peer negotiated capabilities in `Ieee80211Mib` and the resulting `coding` field per frame |
 
+In Qtenv, inspect the AP `mib` module for `heCapabilitiesSummary`, `heOperationSummary`, `negotiatedHePeers`, and the HE capability maps. Inspect `wlan[0].mac.hcf.dlScheduler` for `lastScheduleSummary` and `lastRuAllocations`, and inspect the radio transmitter for `lastHeTransmissionSummary` and `lastHeUserPhyParameters`.
+
 ---
 
 ## 5. Code Pointers

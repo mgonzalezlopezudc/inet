@@ -7,6 +7,7 @@
 #ifndef __INET_IIEE80211HEDLSCHEDULER_H
 #define __INET_IIEE80211HEDLSCHEDULER_H
 
+#include <ostream>
 #include <vector>
 
 #include "inet/common/Units.h"
@@ -101,6 +102,30 @@ class INET_API IIeee80211HeDlScheduler
         return schedule(candidates, context.channelCenterFrequency, context.channelBandwidth);
     }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeDlScheduler::CandidateInfo& candidate)
+{
+    os << "sta=" << candidate.staAddress
+       << " ac=" << (int)candidate.accessCategory
+       << " anchor=" << (candidate.anchor ? "yes" : "no")
+       << " backlog=" << candidate.backlogBytes
+       << " holBytes=" << candidate.holPacketBytes
+       << " holDelay=" << candidate.holDelay
+       << " pathLoss=" << (candidate.hasFreshPathLoss ? candidate.pathLossDb : NaN);
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeDlScheduler::RuAllocation& allocation)
+{
+    os << "sta=" << allocation.staAddress
+       << " ru={" << allocation.ru << "}"
+       << " mcs=" << allocation.mcs
+       << " nss=" << allocation.numberOfSpatialStreams
+       << " dcm=" << (allocation.dcm ? "yes" : "no")
+       << " snr=" << allocation.estimatedSnrDb
+       << " duration=" << allocation.estimatedDuration;
+    return os;
+}
 
 } // namespace ieee80211
 } // namespace inet
