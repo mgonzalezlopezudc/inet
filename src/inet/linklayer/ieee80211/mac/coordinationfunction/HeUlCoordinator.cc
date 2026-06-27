@@ -55,7 +55,7 @@ void HeUlCoordinator::initialize(int stage)
         WATCH(ofdmaContentionWindow);
         WATCH(ofdmaBackoff);
         WATCH(nextTriggerId);
-        WATCH(lastTriggerTime);
+        WATCH_EXPR("lastTriggerTime", lastTriggerTime.str());
         WATCH(hasSentTrigger);
         WATCH_MAP(bufferStatusByAid);
         WATCH_EXPR("freshReports", getFreshReportCount());

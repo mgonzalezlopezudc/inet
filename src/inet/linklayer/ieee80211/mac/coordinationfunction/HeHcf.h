@@ -84,6 +84,7 @@ class INET_API HeHcf : public Hcf
     virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac) override;
     virtual const char *getPendingUlTriggerName() const;
     virtual int getStationQueueBankCount() const;
+    virtual std::string getCsiTableSummary() const;
     virtual std::string getHeHcfSummary() const;
 
   public:

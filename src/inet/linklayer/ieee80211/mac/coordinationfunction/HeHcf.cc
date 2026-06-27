@@ -193,7 +193,7 @@ void HeHcf::initialize(int stage)
             if (station.second == Ieee80211Mib::ASSOCIATED)
                 queueBankManager->createQueueBank(station.first);
         }
-        WATCH_MAP(csiManager.csiTable);
+        WATCH_EXPR("csiTableSummary", getCsiTableSummary());
         if (ulCoordinator->isEnabled())
             scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
     }
@@ -212,6 +212,18 @@ const char *HeHcf::getPendingUlTriggerName() const
 int HeHcf::getStationQueueBankCount() const
 {
     return queueBankManager == nullptr ? 0 : queueBankManager->getQueueBanks().size();
+}
+
+std::string HeHcf::getCsiTableSummary() const
+{
+    int validEntries = 0;
+    for (const auto& entry : csiManager.csiTable)
+        if (entry.second.valid && simTime() <= entry.second.expiryTime)
+            validEntries++;
+    std::stringstream stream;
+    stream << "entries=" << csiManager.csiTable.size()
+           << ", valid=" << validEntries;
+    return stream.str();
 }
 
 std::string HeHcf::getHeHcfSummary() const
