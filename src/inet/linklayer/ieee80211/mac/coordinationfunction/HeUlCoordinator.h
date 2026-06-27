@@ -9,6 +9,7 @@
 
 #include <array>
 #include <map>
+#include <ostream>
 
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -84,6 +85,14 @@ class INET_API HeUlCoordinator : public SimpleModule
     void reportRandomAccessResult(bool success);
     const std::map<uint16_t, BufferStatus>& getBufferStatus() const { return bufferStatusByAid; }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const HeUlCoordinator::BufferStatus& status)
+{
+    os << "backlog=[" << status.backlogBytes[0] << "," << status.backlogBytes[1] << "," 
+       << status.backlogBytes[2] << "," << status.backlogBytes[3] << "]"
+       << " update=" << status.updateTime << " retry=" << (status.retryPending ? "yes" : "no");
+    return os;
+}
 
 } // namespace ieee80211
 } // namespace inet
