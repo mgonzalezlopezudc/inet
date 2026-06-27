@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <sstream>
 
 // IEEE 802.11ax HE receiver.
 //
@@ -311,7 +312,68 @@ void Ieee80211Receiver::initialize(int stage)
                 throw cRuntimeError("Invalid HE SRG BSS color '%s', expected 1..63", token);
             srgBssColors.insert(color);
         }
+        WATCH_PTR(modeSet);
+        WATCH_PTR(band);
+        WATCH_PTR(channel);
+        WATCH(enableSpatialReuse);
+        WATCH(obssPdThreshold);
+        WATCH(nonSrgObssPdThreshold);
+        WATCH(srgObssPdThreshold);
+        WATCH(enableNonSrgSpatialReuse);
+        WATCH(enableSrgSpatialReuse);
+        WATCH(enableParameterizedSpatialReuse);
+        WATCH(obssPdMinThresholdDbm);
+        WATCH(spatialReusePowerReferenceDbm);
+        WATCH_SET(srgBssColors);
+        WATCH(lastHeReception);
+        WATCH(lastHePpduFormat);
+        WATCH(lastHeUserCount);
+        WATCH(lastHeBssColor);
+        WATCH(lastHeRuAssigned);
+        WATCH(lastSpatialReuseBssType);
+        WATCH(lastSpatialReuseEligible);
+        WATCH(lastSpatialReuseIgnoredPpdu);
+        WATCH(lastSpatialReuseObssPdThreshold);
+        WATCH(lastSpatialReuseTransmitPowerLimit);
+        WATCH(lastSpatialReuseReason);
+        WATCH_EXPR("lastSpatialReuseBssTypeName", getLastSpatialReuseBssTypeName());
+        WATCH_EXPR("lastHeReceptionSummary", getLastHeReceptionSummary());
     }
+}
+
+void Ieee80211Receiver::recordHeSpatialReuseDecision(const HeSpatialReuseDecision& decision) const
+{
+    lastSpatialReuseBssType = (int)decision.bssType;
+    lastSpatialReuseEligible = decision.eligible;
+    lastSpatialReuseIgnoredPpdu = decision.ignorePpdu;
+    lastSpatialReuseObssPdThreshold = decision.obssPdThreshold;
+    lastSpatialReuseTransmitPowerLimit = decision.transmitPowerLimit;
+    lastSpatialReuseReason = decision.reason == nullptr ? "" : decision.reason;
+}
+
+const char *Ieee80211Receiver::getLastSpatialReuseBssTypeName() const
+{
+    switch ((HeSpatialReuseBssType)lastSpatialReuseBssType) {
+        case HeSpatialReuseBssType::UNSPECIFIED: return "UNSPECIFIED";
+        case HeSpatialReuseBssType::INTRA_BSS: return "INTRA_BSS";
+        case HeSpatialReuseBssType::INTER_BSS_NON_SRG: return "INTER_BSS_NON_SRG";
+        case HeSpatialReuseBssType::INTER_BSS_SRG: return "INTER_BSS_SRG";
+        default: return "UNKNOWN";
+    }
+}
+
+std::string Ieee80211Receiver::getLastHeReceptionSummary() const
+{
+    std::stringstream stream;
+    stream << "he=" << (lastHeReception ? "yes" : "no")
+           << ", format=" << lastHePpduFormat
+           << ", users=" << lastHeUserCount
+           << ", bssColor=" << lastHeBssColor
+           << ", assignedRu=" << (lastHeRuAssigned ? "yes" : "no")
+           << ", spatialReuse=" << getLastSpatialReuseBssTypeName()
+           << ", ignored=" << (lastSpatialReuseIgnoredPpdu ? "yes" : "no")
+           << ", reason=" << lastSpatialReuseReason;
+    return stream.str();
 }
 
 std::ostream& Ieee80211Receiver::printToStream(std::ostream& stream, int level, int evFlags) const
@@ -388,6 +450,7 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
 bool Ieee80211Receiver::shouldIgnoreReceptionDueToHeSpatialReuse(const IListening *listening, const IReception *reception, bool logDecision) const
 {
     auto spatialReuseDecision = computeHeSpatialReuseDecision(listening, reception);
+    recordHeSpatialReuseDecision(spatialReuseDecision);
     if (!spatialReuseDecision.ignorePpdu)
         return false;
     if (logDecision) {
@@ -485,7 +548,12 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     auto transmittedPacket = transmission->getPacket();
     auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
     if (heMuPhyHeader != nullptr) {
+        lastHeReception = true;
+        lastHePpduFormat = heMuPhyHeader->getPpduFormat();
+        lastHeUserCount = heMuPhyHeader->getUsersArraySize();
+        lastHeBssColor = heMuPhyHeader->getBssColor();
         if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+            lastHeRuAssigned = true;
             auto packet = transmittedPacket->dup();
             if (!isReceptionSuccessful(decisions))
                 packet->setBitError(true);
@@ -496,6 +564,7 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         }
         auto networkInterface = getContainingNicModule(this);
         auto myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
+        lastHeRuAssigned = myStaId.has_value() && containsHeMuUser(heMuPhyHeader, *myStaId);
         auto packet = myStaId.has_value() && containsHeMuUser(heMuPhyHeader, *myStaId) &&
                 modeSet->containsMode(transmission->getMode())
                 ? buildHeMuPhyPacket(transmittedPacket, heMuPhyHeader, *myStaId)
@@ -509,6 +578,11 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
         return new ReceptionResult(reception, decisions, packet);
     }
+    lastHeReception = false;
+    lastHePpduFormat = -1;
+    lastHeUserCount = 0;
+    lastHeBssColor = 0;
+    lastHeRuAssigned = false;
 
     auto receptionResult = FlatReceiverBase::computeReceptionResult(listening, reception, interference, snir, decisions);
     auto packet = const_cast<Packet *>(receptionResult->getPacket());

@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
 #include <cmath>
+#include <sstream>
 
 // IEEE 802.11ax HE transmitter.
 //
@@ -73,7 +74,43 @@ void Ieee80211Transmitter::initialize(int stage)
         int channelNumber = par("channelNumber");
         if (channelNumber != -1)
             setChannelNumber(channelNumber);
+        WATCH_PTR(modeSet);
+        WATCH_PTR(mode);
+        WATCH_PTR(band);
+        WATCH_PTR(channel);
+        WATCH(lastHePpdu);
+        WATCH(lastHePpduFormat);
+        WATCH(lastHeMuMimo);
+        WATCH(lastHeUserCount);
+        WATCH(lastHeTotalNsts);
+        WATCH(lastHePacketExtensionDurationUs);
+        WATCH(lastHePuncturedSubchannelMask);
+        WATCH(lastHeDuration);
+        WATCH(lastHeCenterFrequency);
+        WATCH(lastHeBandwidth);
+        WATCH(lastHeTransmitPower);
+        WATCH_VECTOR(lastHeUserPhyParameters);
+        WATCH_EXPR("modeName", mode != nullptr ? mode->getName() : "none");
+        WATCH_EXPR("lastHeTransmissionSummary", getLastHeTransmissionSummary());
     }
+}
+
+std::string Ieee80211Transmitter::getLastHeTransmissionSummary() const
+{
+    if (!lastHePpdu)
+        return "last transmission was not an HE MU/TB PPDU";
+    std::stringstream stream;
+    stream << "format=" << lastHePpduFormat
+           << ", users=" << lastHeUserCount
+           << ", totalNsts=" << lastHeTotalNsts
+           << ", muMimo=" << (lastHeMuMimo ? "yes" : "no")
+           << ", pe=" << lastHePacketExtensionDurationUs << "us"
+           << ", punctureMask=0x" << std::hex << lastHePuncturedSubchannelMask << std::dec
+           << ", cf=" << lastHeCenterFrequency
+           << ", bw=" << lastHeBandwidth
+           << ", power=" << lastHeTransmitPower
+           << ", duration=" << lastHeDuration;
+    return stream.str();
 }
 
 const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet *packet) const
@@ -229,12 +266,13 @@ std::ostream& Ieee80211Transmitter::printToStream(std::ostream& stream, int leve
 const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *transmitter, const Packet *packet, simtime_t startTime) const
 {
     auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(packet);
+    auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader);
     const IIeee80211Mode *transmissionMode = computeTransmissionMode(packet);
     const Ieee80211Channel *transmissionChannel = computeTransmissionChannel(packet);
     W transmissionPower = computeTransmissionPower(packet);
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
     int requiredSpatialStreams = transmissionMode->getDataMode()->getNumberOfSpatialStreams();
-    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+    if (heMuHeader != nullptr) {
         if (heMuHeader->getMuMimo()) {
             requiredSpatialStreams = heMuHeader->getTotalNsts();
         } else {
@@ -251,7 +289,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     Hz transmissionCenterFrequency = centerFrequency;
     std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
     Ieee80211HePpduParameters hePpduParameters;
-    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+    if (heMuHeader != nullptr) {
         constexpr double HE_TONE_SPACING = 78125;
         std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
         for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i) {
@@ -311,6 +349,33 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     const Quaternion& endOrientation = mobility->getCurrentAngularPosition();
     const simtime_t dataDuration = std::max(SIMTIME_ZERO, duration - headerDuration - preambleDuration);
     auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, transmissionPower);
+    lastHePpdu = heMuHeader != nullptr;
+    if (lastHePpdu) {
+        lastHePpduFormat = heMuHeader->getPpduFormat();
+        lastHeMuMimo = heMuHeader->getMuMimo();
+        lastHeUserCount = heMuHeader->getUsersArraySize();
+        lastHeTotalNsts = heMuHeader->getTotalNsts();
+        lastHePacketExtensionDurationUs = heMuHeader->getPacketExtensionDurationUs();
+        lastHePuncturedSubchannelMask = heMuHeader->getPuncturedSubchannelMask();
+        lastHeDuration = duration;
+        lastHeCenterFrequency = transmissionCenterFrequency;
+        lastHeBandwidth = transmissionBandwidth;
+        lastHeTransmitPower = transmissionPower;
+        lastHeUserPhyParameters = heUserPhyParameters;
+    }
+    else {
+        lastHePpduFormat = -1;
+        lastHeMuMimo = false;
+        lastHeUserCount = 0;
+        lastHeTotalNsts = 0;
+        lastHePacketExtensionDurationUs = 0;
+        lastHePuncturedSubchannelMask = 0;
+        lastHeDuration = duration;
+        lastHeCenterFrequency = transmissionCenterFrequency;
+        lastHeBandwidth = transmissionBandwidth;
+        lastHeTransmitPower = transmissionPower;
+        lastHeUserPhyParameters.clear();
+    }
     return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heUserPhyParameters, hePpduParameters);
 }
 

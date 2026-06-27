@@ -32,7 +32,9 @@ void HeSoundingCoordinator::initialize(int stage)
         WATCH(soundingDialogToken);
         WATCH(nextSoundingDialogToken);
         WATCH(nextTriggerId);
-        WATCH(soundingTargets);
+        WATCH_VECTOR(soundingTargets);
+        WATCH_EXPR("soundingTargetCount", soundingTargets.size());
+        WATCH_EXPR("soundingState", ndpAnnouncementReceived ? (ndpReceived ? "NDP received" : "NDPA received") : "idle");
     }
 }
 

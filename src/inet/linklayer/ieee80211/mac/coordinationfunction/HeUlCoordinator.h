@@ -10,6 +10,7 @@
 #include <array>
 #include <map>
 #include <ostream>
+#include <string>
 
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -66,6 +67,9 @@ class INET_API HeUlCoordinator : public SimpleModule
 
   protected:
     virtual void initialize(int stage) override;
+    virtual int getFreshReportCount() const;
+    virtual int getBackloggedReportCount() const;
+    virtual std::string getBufferStatusSummary() const;
 
   public:
     bool isEnabled() const { return enabled; }

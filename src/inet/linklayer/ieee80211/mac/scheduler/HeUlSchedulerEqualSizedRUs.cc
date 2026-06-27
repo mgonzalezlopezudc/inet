@@ -54,6 +54,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
     EV_INFO << "HE UL equal-RU schedule: scheduled=" << scheduledCount
              << ", randomAccess=" << raCount
              << ", total=" << result.allocations.size() << "\n";
+    recordSchedule(context, result, "equal-sized trigger");
     return result;
 }
 

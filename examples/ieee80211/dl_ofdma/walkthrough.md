@@ -61,3 +61,11 @@ All simulations were run to completion with the current `sim-time-limit = 0.6s`.
 ### Wide Bandwidth 80 MHz Configuration
 - Scaling the channel to 80 MHz configures an 8-host, 8-RU scheduling case using separate 106-tone RUs.
 - The current `0.6s` result file should be treated as a configuration smoke test rather than a capacity benchmark: only `host[0]` and `host[1]` have delivered application packets. Longer seeded runs and broader metrics are needed before making throughput-scaling claims for this scenario.
+
+## 4. Qtenv WATCH Inspection
+
+Run any configuration with `-u Qtenv`, select the AP's `wlan[0].mac.hcf` module, and inspect `heHcfSummary`, `pendingUlTriggerName`, `stationQueueBanks`, `triggeredUlExchangeCount`, and `csiManager.csiTable`.
+
+For the AP scheduler submodule, inspect `lastScheduleSummary`, `lastCandidates`, and `lastRuAllocations`. These watches show whether the scheduler selected ordinary OFDMA or, in `DlMuMimo`, a full-channel MU-MIMO group with per-user NSS/MCS/SNR.
+
+For PHY details, inspect the AP radio transmitter's `lastHeTransmissionSummary` and `lastHeUserPhyParameters`. These expose the HE PPDU format, user count, RU layout, coding, packet extension, puncturing mask, LDPC accounting, and resolved PPDU duration.

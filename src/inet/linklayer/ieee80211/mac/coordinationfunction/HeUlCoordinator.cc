@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <set>
+#include <sstream>
 
 // HE UL coordinator.
 //
@@ -56,8 +57,52 @@ void HeUlCoordinator::initialize(int stage)
         WATCH(nextTriggerId);
         WATCH(lastTriggerTime);
         WATCH(hasSentTrigger);
-        WATCH(bufferStatusByAid);
+        WATCH_MAP(bufferStatusByAid);
+        WATCH_PTR(scheduler);
+        WATCH_PTR(triggerPolicy);
+        WATCH(enabled);
+        WATCH(reportMaxAge);
+        WATCH_EXPR("freshReports", getFreshReportCount());
+        WATCH_EXPR("backloggedReports", getBackloggedReportCount());
+        WATCH_EXPR("elapsedSinceLastTrigger", hasSentTrigger ? simTime() - lastTriggerTime : SIMTIME_MAX);
+        WATCH_EXPR("bufferStatusSummary", getBufferStatusSummary());
     }
+}
+
+int HeUlCoordinator::getFreshReportCount() const
+{
+    int count = 0;
+    for (const auto& entry : bufferStatusByAid)
+        if (simTime() - entry.second.updateTime <= reportMaxAge)
+            count++;
+    return count;
+}
+
+int HeUlCoordinator::getBackloggedReportCount() const
+{
+    int count = 0;
+    for (const auto& entry : bufferStatusByAid) {
+        bool backlogged = false;
+        for (auto bytes : entry.second.backlogBytes)
+            if (bytes > 0) {
+                backlogged = true;
+                break;
+            }
+        if (backlogged)
+            count++;
+    }
+    return count;
+}
+
+std::string HeUlCoordinator::getBufferStatusSummary() const
+{
+    std::stringstream stream;
+    stream << "reports=" << bufferStatusByAid.size()
+           << ", fresh=" << getFreshReportCount()
+           << ", backlogged=" << getBackloggedReportCount()
+           << ", ocw=" << ofdmaContentionWindow
+           << ", obo=" << ofdmaBackoff;
+    return stream.str();
 }
 
 void HeUlCoordinator::updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_t tid,

@@ -8,6 +8,7 @@
 #define __INET_IIEE80211HEULSCHEDULER_H
 
 #include <array>
+#include <ostream>
 #include <vector>
 
 #include "inet/common/Units.h"
@@ -88,6 +89,33 @@ class INET_API IIeee80211HeUlScheduler
     virtual ~IIeee80211HeUlScheduler() {}
     virtual Schedule schedule(const ScheduleContext& context) = 0;
 };
+
+inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeUlScheduler::CandidateInfo& candidate)
+{
+    os << "aid=" << candidate.associationId
+       << " sta=" << candidate.staAddress
+       << " ac=" << (int)candidate.selectedAccessCategory
+       << " tid=" << (int)candidate.selectedTid
+       << " backlog=" << candidate.getSelectedBacklogBytes()
+       << " reportAge=" << candidate.reportAge
+       << " retry=" << (candidate.retryPending ? "yes" : "no")
+       << " anchor=" << (candidate.anchor ? "yes" : "no");
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeUlScheduler::RuAllocation& allocation)
+{
+    os << (allocation.randomAccess ? "RA" : "scheduled")
+       << " aid=" << allocation.associationId
+       << " sta=" << allocation.staAddress
+       << " tid=" << (int)allocation.tid
+       << " ac=" << (int)allocation.accessCategory
+       << " ru={" << allocation.ru << "}"
+       << " mcs=" << allocation.mcs
+       << " targetRssi=" << allocation.targetRssiDbm
+       << " duration=" << allocation.estimatedDuration;
+    return os;
+}
 
 } // namespace ieee80211
 } // namespace inet

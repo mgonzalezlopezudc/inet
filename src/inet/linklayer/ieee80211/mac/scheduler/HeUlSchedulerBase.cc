@@ -5,6 +5,9 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerBase.h"
+
+#include <sstream>
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 
 // Base class for HE UL OFDMA schedulers.
@@ -42,6 +45,21 @@ void HeUlSchedulerBase::initialize(int stage)
         ASSERT(minRandomAccessRus >= 0);
         ASSERT(minRandomAccessRus <= maxRandomAccessRus);
         ASSERT(defaultMcs >= 0 && defaultMcs <= 11);
+        WATCH(maxMuStations);
+        WATCH(minRandomAccessRus);
+        WATCH(maxRandomAccessRus);
+        WATCH(defaultMcs);
+        WATCH_PTR(heRateControl);
+        WATCH(lastCandidateCount);
+        WATCH(lastScheduledUserCount);
+        WATCH(lastRandomAccessRuCount);
+        WATCH(lastTargetRssiDbm);
+        WATCH(lastCommonDuration);
+        WATCH(lastChannelBandwidth);
+        WATCH(lastSchedulingReason);
+        WATCH_VECTOR(lastCandidates);
+        WATCH_VECTOR(lastRuAllocations);
+        WATCH_EXPR("lastScheduleSummary", getLastScheduleSummary());
     }
 }
 
@@ -102,6 +120,38 @@ simtime_t HeUlSchedulerBase::computeCommonDuration(const ScheduleContext& contex
         duration = std::min(duration, context.txopLimit);
     duration = std::min(duration, SimTime(5.484, SIMTIME_MS));
     return duration;
+}
+
+void HeUlSchedulerBase::recordSchedule(const ScheduleContext& context, const Schedule& schedule, const char *reason)
+{
+    lastCandidateCount = context.candidates.size();
+    lastScheduledUserCount = 0;
+    lastRandomAccessRuCount = 0;
+    lastTargetRssiDbm = schedule.allocations.empty() ? computeTargetRssiDbm(context) : schedule.allocations.front().targetRssiDbm;
+    for (const auto& allocation : schedule.allocations) {
+        if (allocation.randomAccess)
+            lastRandomAccessRuCount++;
+        else
+            lastScheduledUserCount++;
+    }
+    lastCommonDuration = schedule.commonDuration;
+    lastChannelBandwidth = context.channelBandwidth;
+    lastSchedulingReason = reason == nullptr ? "" : reason;
+    lastCandidates = context.candidates;
+    lastRuAllocations = schedule.allocations;
+}
+
+std::string HeUlSchedulerBase::getLastScheduleSummary() const
+{
+    std::stringstream stream;
+    stream << lastSchedulingReason
+           << ": candidates=" << lastCandidateCount
+           << ", scheduled=" << lastScheduledUserCount
+           << ", randomAccessRUs=" << lastRandomAccessRuCount
+           << ", targetRssi=" << lastTargetRssiDbm
+           << " dBm, bandwidth=" << lastChannelBandwidth
+           << ", duration=" << lastCommonDuration;
+    return stream.str();
 }
 
 } // namespace ieee80211

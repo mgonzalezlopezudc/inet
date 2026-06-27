@@ -9,6 +9,7 @@
 #define __INET_IEEE80211RECEIVER_H
 
 #include <set>
+#include <string>
 
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
@@ -35,6 +36,17 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     double obssPdMinThresholdDbm = NaN;
     double spatialReusePowerReferenceDbm = NaN;
     std::set<int> srgBssColors;
+    mutable bool lastHeReception = false;
+    mutable int lastHePpduFormat = -1;
+    mutable int lastHeUserCount = 0;
+    mutable int lastHeBssColor = 0;
+    mutable bool lastHeRuAssigned = false;
+    mutable int lastSpatialReuseBssType = 0;
+    mutable bool lastSpatialReuseEligible = false;
+    mutable bool lastSpatialReuseIgnoredPpdu = false;
+    mutable W lastSpatialReuseObssPdThreshold = W(NaN);
+    mutable W lastSpatialReuseTransmitPowerLimit = W(NaN);
+    mutable std::string lastSpatialReuseReason = "";
 
     enum class HeSpatialReuseBssType {
         UNSPECIFIED,
@@ -60,6 +72,9 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
 
   protected:
     virtual void initialize(int stage) override;
+    virtual void recordHeSpatialReuseDecision(const HeSpatialReuseDecision& decision) const;
+    virtual const char *getLastSpatialReuseBssTypeName() const;
+    virtual std::string getLastHeReceptionSummary() const;
 
     virtual bool computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const override;
     virtual bool computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const override;

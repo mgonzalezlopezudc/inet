@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
 #include <algorithm>
+#include <sstream>
 
 #include "inet/common/INETMath.h"
 #include "inet/common/ModuleAccess.h"
@@ -174,13 +175,24 @@ void HeHcf::initialize(int stage)
         csiLeakageOverrides = par("csiLeakageOverrides").stdstringValue();
         csiManager.configure(csiValidityDuration, defaultCsiLeakage, csiLeakageOverrides);
 
+        WATCH_PTR(dlScheduler);
+        WATCH_PTR(ulCoordinator);
+        WATCH_PTR(ulTriggerTimer);
+        WATCH(enableDlMuMimo);
+        WATCH(csiValidityDuration);
+        WATCH(defaultCsiLeakage);
+        WATCH(csiLeakageOverrides);
         WATCH(pendingUlTrigger);
         WATCH(ulTriggerAccessRequested);
         WATCH(forceNextSingleUser[0]);
         WATCH(forceNextSingleUser[1]);
         WATCH(forceNextSingleUser[2]);
         WATCH(forceNextSingleUser[3]);
-        WATCH(triggeredUlExchanges);
+        WATCH_MAP(triggeredUlExchanges);
+        WATCH_EXPR("pendingUlTriggerName", getPendingUlTriggerName());
+        WATCH_EXPR("stationQueueBanks", getStationQueueBankCount());
+        WATCH_EXPR("triggeredUlExchangeCount", triggeredUlExchanges.size());
+        WATCH_EXPR("heHcfSummary", getHeHcfSummary());
     }
     else if (stage == INITSTAGE_LINK_LAYER && mac->isApInAxMode()) {
         queueBankManager = std::make_unique<StationQueueBankManager>(getSubmodule("queueBanks"));
@@ -188,10 +200,38 @@ void HeHcf::initialize(int stage)
             if (station.second == Ieee80211Mib::ASSOCIATED)
                 queueBankManager->createQueueBank(station.first);
         }
-        WATCH(csiManager.csiTable);
+        WATCH_MAP(csiManager.csiTable);
         if (ulCoordinator->isEnabled())
             scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
     }
+}
+
+const char *HeHcf::getPendingUlTriggerName() const
+{
+    switch (pendingUlTrigger) {
+        case IIeee80211HeUlTriggerPolicy::NO_TRIGGER: return "NO_TRIGGER";
+        case IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER: return "BASIC_TRIGGER";
+        case IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER: return "BSRP_TRIGGER";
+        default: return "UNKNOWN";
+    }
+}
+
+int HeHcf::getStationQueueBankCount() const
+{
+    return queueBankManager == nullptr ? 0 : queueBankManager->getQueueBanks().size();
+}
+
+std::string HeHcf::getHeHcfSummary() const
+{
+    std::stringstream stream;
+    stream << "DL scheduler=" << (dlScheduler == nullptr ? "none" : "configured")
+           << ", UL coordinator=" << (ulCoordinator != nullptr && ulCoordinator->isEnabled() ? "enabled" : "disabled")
+           << ", pendingTrigger=" << getPendingUlTriggerName()
+           << ", queueBanks=" << getStationQueueBankCount()
+           << ", triggeredUL=" << triggeredUlExchanges.size()
+           << ", dlMuMimo=" << (enableDlMuMimo ? "enabled" : "disabled")
+           << ", csiEntries=" << csiManager.csiTable.size();
+    return stream.str();
 }
 
 void HeHcf::finish()

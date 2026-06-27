@@ -7,6 +7,8 @@
 #ifndef __INET_HEULSCHEDULERBASE_H
 #define __INET_HEULSCHEDULERBASE_H
 
+#include <string>
+
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeUlScheduler.h"
@@ -28,6 +30,15 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
     int maxRandomAccessRus = 4;
     int defaultMcs = 0;
     IIeee80211HeRateControl *heRateControl = nullptr;
+    int lastCandidateCount = 0;
+    int lastScheduledUserCount = 0;
+    int lastRandomAccessRuCount = 0;
+    int lastTargetRssiDbm = 0;
+    simtime_t lastCommonDuration = SIMTIME_ZERO;
+    Hz lastChannelBandwidth = Hz(NaN);
+    std::string lastSchedulingReason = "not scheduled yet";
+    std::vector<CandidateInfo> lastCandidates;
+    std::vector<RuAllocation> lastRuAllocations;
 
   protected:
     virtual void initialize(int stage) override;
@@ -37,6 +48,8 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
             const physicallayer::Ieee80211HeRu& ru) const;
     virtual simtime_t computeCommonDuration(const ScheduleContext& context,
             const std::vector<RuAllocation>& allocations) const;
+    void recordSchedule(const ScheduleContext& context, const Schedule& schedule, const char *reason);
+    std::string getLastScheduleSummary() const;
 };
 
 } // namespace ieee80211

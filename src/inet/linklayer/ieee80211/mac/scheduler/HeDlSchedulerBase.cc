@@ -68,6 +68,27 @@ void HeDlSchedulerBase::initialize(int stage)
         for (size_t i = 1; i < mcsSnrThresholds.size(); ++i)
             if (mcsSnrThresholds[i] < mcsSnrThresholds[i - 1])
                 throw cRuntimeError("heMcsSnrThresholds must be nondecreasing");
+        WATCH(maxMuStations);
+        WATCH(smallBacklogThreshold);
+        WATCH(mediumBacklogThreshold);
+        WATCH(mtuBacklogThreshold);
+        WATCH(largeBacklogThreshold);
+        WATCH(lowDurationRatio);
+        WATCH(highDurationRatio);
+        WATCH(maxDurationAlignmentIterations);
+        WATCH_VECTOR(mcsSnrThresholds);
+        WATCH_PTR(heRateControl);
+        WATCH(lastCandidateCount);
+        WATCH(lastSelectedCount);
+        WATCH(lastRejectedCandidateCount);
+        WATCH(lastPuncturedSubchannelCount);
+        WATCH(lastUsedMuMimo);
+        WATCH(lastCommonDuration);
+        WATCH(lastChannelBandwidth);
+        WATCH(lastSchedulingReason);
+        WATCH_VECTOR(lastCandidates);
+        WATCH_VECTOR(lastRuAllocations);
+        WATCH_EXPR("lastScheduleSummary", getLastScheduleSummary());
     }
 }
 
@@ -203,6 +224,37 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::schedule(
     if (!candidates.empty())
         context.anchorSta = candidates.front();
     return schedule(context);
+}
+
+void HeDlSchedulerBase::recordSchedule(const ScheduleContext& context, const std::vector<CandidateInfo>& candidates,
+        const std::vector<RuAllocation>& allocations, bool usedMuMimo, const char *reason)
+{
+    lastCandidateCount = context.candidates.size();
+    lastSelectedCount = allocations.size();
+    lastRejectedCandidateCount = std::max(0, lastCandidateCount - (int)candidates.size());
+    lastPuncturedSubchannelCount = std::count(context.puncturedSubchannels.begin(), context.puncturedSubchannels.end(), true);
+    lastUsedMuMimo = usedMuMimo;
+    lastCommonDuration = SIMTIME_ZERO;
+    for (const auto& allocation : allocations)
+        lastCommonDuration = std::max(lastCommonDuration, allocation.estimatedDuration);
+    lastChannelBandwidth = context.channelBandwidth;
+    lastSchedulingReason = reason == nullptr ? "" : reason;
+    lastCandidates = candidates;
+    lastRuAllocations = allocations;
+}
+
+std::string HeDlSchedulerBase::getLastScheduleSummary() const
+{
+    std::stringstream stream;
+    stream << lastSchedulingReason
+           << ": candidates=" << lastCandidateCount
+           << ", selected=" << lastSelectedCount
+           << ", rejected=" << lastRejectedCandidateCount
+           << ", mode=" << (lastUsedMuMimo ? "MU-MIMO" : "OFDMA")
+           << ", punctured20MHz=" << lastPuncturedSubchannelCount
+           << ", bandwidth=" << lastChannelBandwidth
+           << ", duration=" << lastCommonDuration;
+    return stream.str();
 }
 
 std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequestedRus(

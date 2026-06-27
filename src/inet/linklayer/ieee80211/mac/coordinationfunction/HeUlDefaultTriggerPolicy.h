@@ -24,9 +24,12 @@ class INET_API HeUlDefaultTriggerPolicy : public IIeee80211HeUlTriggerPolicy, pu
 {
   protected:
     simtime_t minimumTriggerInterval;
+    mutable Context lastContext;
+    mutable TriggerType lastSelectedTrigger = NO_TRIGGER;
 
   protected:
     virtual void initialize(int stage) override;
+    virtual const char *getLastSelectedTriggerName() const;
 
   public:
     virtual TriggerType selectTrigger(const Context& context) const override;

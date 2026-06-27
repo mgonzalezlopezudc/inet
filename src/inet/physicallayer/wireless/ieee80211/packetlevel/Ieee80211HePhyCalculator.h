@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ostream>
 #include <string>
 #include <vector>
 
@@ -155,6 +156,25 @@ struct Ieee80211HePpduParameters
     int commonNumberOfDataSymbols = 0;
     simtime_t duration = SIMTIME_ZERO;
 };
+
+inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeUserPhyParameters& user)
+{
+    os << "staId=" << user.staId
+       << " ru={" << user.ru << "}"
+       << " mcs=" << user.mcs
+       << " nss=" << user.numberOfSpatialStreams
+       << " dcm=" << (user.dcm ? "yes" : "no")
+       << " coding=" << (user.coding == HE_CODING_LDPC ? "LDPC" : "BCC")
+       << " psdu=" << user.psduLength
+       << " dataBitsPerSymbol=" << user.dataBitsPerSymbol
+       << " symbols=" << user.numberOfDataSymbols
+       << " ldpcCwLen=" << user.ldpcCodewordLength
+       << " ldpcCwCount=" << user.ldpcCodewordCount
+       << " ldpcShortening=" << user.ldpcShorteningBits
+       << " tailBits=" << user.tailBits
+       << " duration=" << user.duration;
+    return os;
+}
 
 /** Result returned by the non-throwing HE PPDU validation/calculation API. */
 struct Ieee80211HePhyValidationResult

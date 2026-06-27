@@ -45,7 +45,9 @@ HeDlSchedulerHoLMinDelay::schedule(const ScheduleContext& context)
         requests.push_back(requestRuForBytes(candidate.holPacketBytes, context.channelBandwidth));
     for (const auto& candidate : selected)
         payloadBytes.push_back(candidate.holPacketBytes);
-    return fitRequestedRus(context, selected, requests, payloadBytes);
+    auto result = fitRequestedRus(context, selected, requests, payloadBytes);
+    recordSchedule(context, selected, result, false, "head-of-line-delay OFDMA");
+    return result;
 }
 
 } // namespace ieee80211

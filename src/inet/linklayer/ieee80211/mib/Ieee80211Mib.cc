@@ -8,6 +8,7 @@
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
 #include <cmath>
+#include <sstream>
 
 namespace inet {
 
@@ -74,7 +75,64 @@ void Ieee80211Mib::initialize(int stage)
         vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
         vhtOperation.ldpc = localVhtCapabilities.ldpc;
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
+
+        WATCH(localHtLdpc);
+        WATCH(localHeCapabilities.ldpc);
+        WATCH(localHeCapabilities.twtRequester);
+        WATCH(localHeCapabilities.twtResponder);
+        WATCH(localHeCapabilities.broadcastTwt);
+        WATCH(localHeCapabilities.multiTidAggregationRx);
+        WATCH(localHeCapabilities.multiTidAggregationTx);
+        WATCH(localHeCapabilities.dlMuMimoBeamformer);
+        WATCH(localHeCapabilities.dlMuMimoBeamformee);
+        WATCH(localHeCapabilities.soundingDimensions);
+        WATCH(localHeCapabilities.beamformeeSts20Mhz);
+        WATCH(localHeCapabilities.beamformeeStsAbove20Mhz);
+        WATCH(localHeCapabilities.feedbackMode);
+        WATCH(heOperation.bssColor);
+        WATCH(heOperation.defaultPeDurationPresent);
+        WATCH(heOperation.defaultPeDurationUs);
+        WATCH_MAP(bssAccessPointData.links);
+        WATCH_MAP(bssAccessPointData.advertisedHeCapabilities);
+        WATCH_MAP(bssAccessPointData.negotiatedHeCapabilities);
+        WATCH_EXPR("heCapabilitiesSummary", getHeCapabilitiesSummary());
+        WATCH_EXPR("heOperationSummary", getHeOperationSummary());
+        WATCH_EXPR("negotiatedHePeers", getNegotiatedHePeerCount());
     }
+}
+
+int Ieee80211Mib::getNegotiatedHePeerCount() const
+{
+    int count = 0;
+    for (const auto& entry : bssAccessPointData.negotiatedHeCapabilities)
+        if (entry.second.valid)
+            count++;
+    return count;
+}
+
+std::string Ieee80211Mib::getHeCapabilitiesSummary() const
+{
+    std::stringstream stream;
+    stream << "LDPC=" << (localHeCapabilities.ldpc ? "yes" : "no")
+           << ", DL-OFDMA=" << (localHeCapabilities.dlOfdma ? "yes" : "no")
+           << ", UL-OFDMA=" << (localHeCapabilities.ulOfdma ? "yes" : "no")
+           << ", TWT=" << (localHeCapabilities.twtRequester || localHeCapabilities.twtResponder || localHeCapabilities.broadcastTwt ? "yes" : "no")
+           << ", MU-MIMO BFer=" << (localHeCapabilities.dlMuMimoBeamformer ? "yes" : "no")
+           << ", BFmee=" << (localHeCapabilities.dlMuMimoBeamformee ? "yes" : "no")
+           << ", maxTxNss=" << getMaxNss(localHeCapabilities.txMcsNss)
+           << ", maxRxNss=" << getMaxNss(localHeCapabilities.rxMcsNss)
+           << ", peers=" << getNegotiatedHePeerCount();
+    return stream.str();
+}
+
+std::string Ieee80211Mib::getHeOperationSummary() const
+{
+    std::stringstream stream;
+    stream << "bssColor=" << (int)heOperation.bssColor
+           << ", width=" << heOperation.operatingChannelWidth
+           << ", defaultPE=" << heOperation.defaultPeDurationUs << "us"
+           << ", basicMcsNss=" << heOperation.basicHeMcsNss;
+    return stream.str();
 }
 
 std::string Ieee80211Mib::getSsidStr() const

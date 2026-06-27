@@ -101,6 +101,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const Sche
     EV_INFO << "HE UL backlog schedule: requested=" << scheduledCount
              << ", allocated=" << result.allocations.size()
              << ", randomAccessRequested=" << raCount << "\n";
+    recordSchedule(context, result, "backlog-based trigger");
     return result;
 }
 
