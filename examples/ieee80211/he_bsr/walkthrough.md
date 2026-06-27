@@ -123,29 +123,6 @@ scalar  HeBsrNetwork.server.app[0]                     packetReceived:count     
    - In `StaleBsr`, the count dramatically rises to **373 BSRP Triggers**. Because the queue status records expire in just 1 ms, the AP's scheduler is constantly forced to send BSRP trigger polls to check the STAs' queue status.
 
 2. **Trigger-Based Scheduling vs. EDCA Throughput**:
-   - `ImplicitBsr` delivers **1419 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding.
+   - `ImplicitBsr` delivers **1419 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding. Because the AP receives these implicit reports during normal EDCA transmissions, it requires **0 explicit BSRP trigger frames** and **3 Basic Triggers** to maintain fresh queue records.
    - `FullBsrAccounting` delivers **743 packets** and sends **520 Basic Triggers**. The constant polling and triggering overhead at 1ms check intervals limits the aggregate channel capacity, resulting in lower throughput than SU EDCA.
    - `StaleBsr` delivers **1029 packets**. Because it spends a significant amount of time in BSRP/EDCA cycles due to the fast expiration of BSR reports, it sends fewer Basic Triggers (103) and relies more on EDCA, producing intermediate throughput.
-
----
-
-## Detailed Explanation of Control Frame and Block Ack Handling
-
-During simulation runs under high traffic demand (specifically in scenarios like `StaleBsr`), the stations (STAs) and the Access Point (AP) interact using advanced 802.11ax control frame exchanges (such as Multi-User Block Ack Requests and Multi-STA Block Acks). The base class implementation (`Hcf`) was originally designed for older standards (802.11e/n/ac) and lacked support for these ax-specific control frame sequences, causing simulation crashes. 
-
-The two overridden methods in `HeHcf` resolve these issues:
-
-### 1. Bypassing Transmitted Block Ack Responses (`HeHcf::originatorProcessTransmittedControlFrame`)
-* **The Context**: When the AP sends a Multi-User Block Ack Request (MU-BAR, a type 2 Trigger frame) to a STA, the STA is standard-required to respond with a Block Ack frame (specifically a `Ieee80211BasicBlockAck` frame) within an HE Trigger-Based PPDU response.
-* **The Problem**: When the STA transmits this Block Ack response, the TX completion handler calls `Hcf::originatorProcessTransmittedFrame()`. Because it is a control frame, HCF routes it to `Hcf::originatorProcessTransmittedControlFrame()`. However, the base HCF only expects to route control frames that *request* a response (such as `Ieee80211BlockAckReq` or `Ieee80211RtsFrame`) so it can set up wait states or retry recovery. Since the Block Ack is a final response, HCF did not have a matching condition and threw `cRuntimeError("Unknown control frame")`.
-* **The Solution**: We overrode `HeHcf::originatorProcessTransmittedControlFrame` to catch `Ieee80211BlockAck` frames and return immediately. This safely bypasses HCF's request-recovery tracking, as a Block Ack response is a terminal frame and does not require further SIFS acknowledgments.
-
-### 2. Translating Received Multi-STA Block Acks (`HeHcf::originatorProcessReceivedFrame`)
-* **The Context**: In 802.11ax, the AP frequently aggregates acknowledgments for multiple uplink stations into a single `Ieee80211MultiStaBlockAck` frame, even for single-user uplink data transmitted via EDCA.
-* **The Problem**: When a STA wins EDCA contention, transmits a block of QoS Data frames, and receives a `Multi-STA Block Ack` in response, the STA processes the response frame via `Hcf::originatorProcessReceivedFrame()`. This method routes received control frames to `Hcf::originatorProcessReceivedControlFrame()`. Since the base HCF only understands traditional `Ieee80211BasicBlockAck` frames, receiving the new `Ieee80211MultiStaBlockAck` frame caused it to throw `cRuntimeError("Unknown control frame")`.
-* **The Solution**: We overrode `HeHcf::originatorProcessReceivedFrame` to intercept incoming `Ieee80211MultiStaBlockAck` frames. The override implements a surgical translation layer:
-  1. It loops through the records inside the Multi-STA Block Ack to locate the record that matches the STA's Association ID (`myAid`).
-  2. If a matching record is found and has a successful response status, it dynamically instantiates a dummy standard `Ieee80211BasicBlockAck` frame.
-  3. It populates this dummy frame with the AP's transmitter address, the STA's receiver address, the target TID, and the record's starting sequence number.
-  4. It maps the 64-bit block acknowledgment bitmap from the Multi-STA record onto the dummy Basic Block Ack's bitmap structure.
-  5. It passes this dummy basic Block Ack to HCF's existing `originatorProcessReceivedControlFrame` method. This allows the baseline `QosAckHandler` and `OriginatorBlockAckAgreementHandler` to cleanly process the bitmap, mark the outstanding QoS data packets as acknowledged, and advance their sequence windows without requiring any invasive refactoring of the base classes.
