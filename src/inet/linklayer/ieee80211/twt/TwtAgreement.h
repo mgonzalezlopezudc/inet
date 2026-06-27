@@ -8,6 +8,7 @@
 #define __INET_IEEE80211TWTAGREEMENT_H
 
 #include <set>
+#include <ostream>
 
 #include "inet/common/INETDefs.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -41,6 +42,23 @@ struct INET_API TwtBroadcastSchedule : public TwtAgreement
 
     TwtBroadcastSchedule() { broadcast = true; }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const TwtAgreement& agreement)
+{
+    os << "peer=" << agreement.peerAddress 
+       << " flowId=" << (int)agreement.flowId 
+       << " active=" << (agreement.active ? "yes" : "no") 
+       << " nextWake=" << agreement.nextWakeTime;
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const TwtBroadcastSchedule& schedule)
+{
+    os << "bcId=" << (int)schedule.broadcastId 
+       << " active=" << (schedule.active ? "yes" : "no") 
+       << " members=" << schedule.members.size();
+    return os;
+}
 
 } // namespace ieee80211
 } // namespace inet
