@@ -85,10 +85,10 @@ void Ieee80211Transmitter::initialize(int stage)
         WATCH(lastHeTotalNsts);
         WATCH(lastHePacketExtensionDurationUs);
         WATCH(lastHePuncturedSubchannelMask);
-        WATCH(lastHeDuration);
-        WATCH(lastHeCenterFrequency);
-        WATCH(lastHeBandwidth);
-        WATCH(lastHeTransmitPower);
+        WATCH_EXPR("lastHeDuration", lastHeDuration.str());
+        WATCH_EXPR("lastHeCenterFrequency", lastHeCenterFrequency.str());
+        WATCH_EXPR("lastHeBandwidth", lastHeBandwidth.str());
+        WATCH_EXPR("lastHeTransmitPower", lastHeTransmitPower.str());
         WATCH_VECTOR(lastHeUserPhyParameters);
         WATCH_EXPR("modeName", mode != nullptr ? mode->getName() : "none");
         WATCH_EXPR("lastHeTransmissionSummary", getLastHeTransmissionSummary());

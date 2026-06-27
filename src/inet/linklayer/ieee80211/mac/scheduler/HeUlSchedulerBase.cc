@@ -49,7 +49,7 @@ void HeUlSchedulerBase::initialize(int stage)
         WATCH(lastScheduledUserCount);
         WATCH(lastRandomAccessRuCount);
         WATCH(lastTargetRssiDbm);
-        WATCH(lastCommonDuration);
+        WATCH_EXPR("lastCommonDuration", lastCommonDuration.str());
         WATCH_EXPR("lastChannelBandwidth", lastChannelBandwidth.str());
         WATCH(lastSchedulingReason);
         WATCH_VECTOR(lastCandidates);

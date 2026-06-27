@@ -73,7 +73,7 @@ void HeDlSchedulerBase::initialize(int stage)
         WATCH(lastRejectedCandidateCount);
         WATCH(lastPuncturedSubchannelCount);
         WATCH(lastUsedMuMimo);
-        WATCH(lastCommonDuration);
+        WATCH_EXPR("lastCommonDuration", lastCommonDuration.str());
         WATCH_EXPR("lastChannelBandwidth", lastChannelBandwidth.str());
         WATCH(lastSchedulingReason);
         WATCH_VECTOR(lastCandidates);
