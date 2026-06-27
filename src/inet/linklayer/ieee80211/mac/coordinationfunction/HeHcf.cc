@@ -175,13 +175,6 @@ void HeHcf::initialize(int stage)
         csiLeakageOverrides = par("csiLeakageOverrides").stdstringValue();
         csiManager.configure(csiValidityDuration, defaultCsiLeakage, csiLeakageOverrides);
 
-        WATCH_PTR(dlScheduler);
-        WATCH_PTR(ulCoordinator);
-        WATCH_PTR(ulTriggerTimer);
-        WATCH(enableDlMuMimo);
-        WATCH(csiValidityDuration);
-        WATCH(defaultCsiLeakage);
-        WATCH(csiLeakageOverrides);
         WATCH(pendingUlTrigger);
         WATCH(ulTriggerAccessRequested);
         WATCH(forceNextSingleUser[0]);
