@@ -68,16 +68,6 @@ void HeDlSchedulerBase::initialize(int stage)
         for (size_t i = 1; i < mcsSnrThresholds.size(); ++i)
             if (mcsSnrThresholds[i] < mcsSnrThresholds[i - 1])
                 throw cRuntimeError("heMcsSnrThresholds must be nondecreasing");
-        WATCH(maxMuStations);
-        WATCH(smallBacklogThreshold);
-        WATCH(mediumBacklogThreshold);
-        WATCH(mtuBacklogThreshold);
-        WATCH(largeBacklogThreshold);
-        WATCH(lowDurationRatio);
-        WATCH(highDurationRatio);
-        WATCH(maxDurationAlignmentIterations);
-        WATCH_VECTOR(mcsSnrThresholds);
-        WATCH_PTR(heRateControl);
         WATCH(lastCandidateCount);
         WATCH(lastSelectedCount);
         WATCH(lastRejectedCandidateCount);

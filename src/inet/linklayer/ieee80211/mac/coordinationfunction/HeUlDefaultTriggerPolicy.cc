@@ -17,7 +17,6 @@ void HeUlDefaultTriggerPolicy::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         minimumTriggerInterval = par("minimumTriggerInterval");
         ASSERT(minimumTriggerInterval >= SIMTIME_ZERO);
-        WATCH(minimumTriggerInterval);
         WATCH(lastContext.associatedStations);
         WATCH(lastContext.freshReports);
         WATCH(lastContext.backloggedStations);

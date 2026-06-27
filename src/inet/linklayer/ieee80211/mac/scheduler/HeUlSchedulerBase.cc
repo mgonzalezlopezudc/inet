@@ -45,11 +45,6 @@ void HeUlSchedulerBase::initialize(int stage)
         ASSERT(minRandomAccessRus >= 0);
         ASSERT(minRandomAccessRus <= maxRandomAccessRus);
         ASSERT(defaultMcs >= 0 && defaultMcs <= 11);
-        WATCH(maxMuStations);
-        WATCH(minRandomAccessRus);
-        WATCH(maxRandomAccessRus);
-        WATCH(defaultMcs);
-        WATCH_PTR(heRateControl);
         WATCH(lastCandidateCount);
         WATCH(lastScheduledUserCount);
         WATCH(lastRandomAccessRuCount);
