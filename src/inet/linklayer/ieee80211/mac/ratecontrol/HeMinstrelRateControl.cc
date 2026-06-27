@@ -45,9 +45,6 @@ void HeMinstrelRateControl::initialize(int stage)
         selectedNssSignal = registerSignal("heRateSelectedNss");
         probeSignal = registerSignal("heRateProbe");
         successProbabilitySignal = registerSignal("heRateSuccessProbability");
-        WATCH(minMcs);
-        WATCH(maxMcs);
-        WATCH(maxNss);
     }
 }
 
