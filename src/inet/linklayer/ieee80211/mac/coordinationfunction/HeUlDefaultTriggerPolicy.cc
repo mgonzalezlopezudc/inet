@@ -21,7 +21,7 @@ void HeUlDefaultTriggerPolicy::initialize(int stage)
         WATCH(lastContext.freshReports);
         WATCH(lastContext.backloggedStations);
         WATCH(lastContext.retryStations);
-        WATCH(lastContext.elapsedSinceLastTrigger);
+        WATCH_EXPR("lastContext.elapsedSinceLastTrigger", lastContext.elapsedSinceLastTrigger.str());
         WATCH(lastSelectedTrigger);
         WATCH_EXPR("lastSelectedTriggerName", getLastSelectedTriggerName());
     }

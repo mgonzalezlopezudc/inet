@@ -14,7 +14,7 @@ cplusplus {{
 
 namespace inet::physicallayer;
 
-class IIeee80211Band
+class IIeee80211Band extends cObject
 {
     @existingClass;
     @descriptor(readonly);

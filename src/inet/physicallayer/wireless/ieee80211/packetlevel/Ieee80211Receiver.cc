@@ -323,8 +323,8 @@ void Ieee80211Receiver::initialize(int stage)
         WATCH(lastSpatialReuseBssType);
         WATCH(lastSpatialReuseEligible);
         WATCH(lastSpatialReuseIgnoredPpdu);
-        WATCH(lastSpatialReuseObssPdThreshold);
-        WATCH(lastSpatialReuseTransmitPowerLimit);
+        WATCH_EXPR("lastSpatialReuseObssPdThreshold", lastSpatialReuseObssPdThreshold.str());
+        WATCH_EXPR("lastSpatialReuseTransmitPowerLimit", lastSpatialReuseTransmitPowerLimit.str());
         WATCH(lastSpatialReuseReason);
         WATCH_EXPR("lastSpatialReuseBssTypeName", getLastSpatialReuseBssTypeName());
         WATCH_EXPR("lastHeReceptionSummary", getLastHeReceptionSummary());
