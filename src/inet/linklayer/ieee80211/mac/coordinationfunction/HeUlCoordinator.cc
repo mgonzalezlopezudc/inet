@@ -58,10 +58,6 @@ void HeUlCoordinator::initialize(int stage)
         WATCH(lastTriggerTime);
         WATCH(hasSentTrigger);
         WATCH_MAP(bufferStatusByAid);
-        WATCH_PTR(scheduler);
-        WATCH_PTR(triggerPolicy);
-        WATCH(enabled);
-        WATCH(reportMaxAge);
         WATCH_EXPR("freshReports", getFreshReportCount());
         WATCH_EXPR("backloggedReports", getBackloggedReportCount());
         WATCH_EXPR("elapsedSinceLastTrigger", hasSentTrigger ? simTime() - lastTriggerTime : SIMTIME_MAX);

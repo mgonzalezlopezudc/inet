@@ -315,16 +315,6 @@ void Ieee80211Receiver::initialize(int stage)
         WATCH_PTR(modeSet);
         WATCH_PTR(band);
         WATCH_PTR(channel);
-        WATCH(enableSpatialReuse);
-        WATCH(obssPdThreshold);
-        WATCH(nonSrgObssPdThreshold);
-        WATCH(srgObssPdThreshold);
-        WATCH(enableNonSrgSpatialReuse);
-        WATCH(enableSrgSpatialReuse);
-        WATCH(enableParameterizedSpatialReuse);
-        WATCH(obssPdMinThresholdDbm);
-        WATCH(spatialReusePowerReferenceDbm);
-        WATCH_SET(srgBssColors);
         WATCH(lastHeReception);
         WATCH(lastHePpduFormat);
         WATCH(lastHeUserCount);
