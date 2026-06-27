@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <ostream>
 #include <set>
 #include <stdexcept>
 #include <vector>
@@ -57,6 +58,17 @@ struct Ieee80211HeRu {
                 bandwidth == other.bandwidth;
     }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeRu& ru)
+{
+    os << "idx=" << ru.index
+       << " tones=" << ru.toneSize
+       << " offset=" << ru.toneOffset
+       << " data=" << ru.dataSubcarriers
+       << " pilots=" << ru.pilotSubcarriers
+       << " bw=" << ru.bandwidth;
+    return os;
+}
 
 /**
  * Returns the data-subcarrier count (N_SD) for a standard HE RU tone size.

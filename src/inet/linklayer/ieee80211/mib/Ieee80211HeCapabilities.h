@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <ostream>
 #include <set>
 
 #include "inet/common/Units.h"
@@ -166,6 +167,41 @@ inline int getMaxNss(const Ieee80211HeMcsNssMap& map)
             maxNss = i + 1;
     }
     return maxNss;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeCapabilities& capabilities)
+{
+    os << "ldpc=" << (capabilities.ldpc ? "yes" : "no")
+       << " dlOfdma=" << (capabilities.dlOfdma ? "yes" : "no")
+       << " ulOfdma=" << (capabilities.ulOfdma ? "yes" : "no")
+       << " twtReq=" << (capabilities.twtRequester ? "yes" : "no")
+       << " twtResp=" << (capabilities.twtResponder ? "yes" : "no")
+       << " bcastTwt=" << (capabilities.broadcastTwt ? "yes" : "no")
+       << " multiTidRx=" << (capabilities.multiTidAggregationRx ? "yes" : "no")
+       << " multiTidTx=" << (capabilities.multiTidAggregationTx ? "yes" : "no")
+       << " bf=" << (capabilities.dlMuMimoBeamformer ? "yes" : "no")
+       << " bfee=" << (capabilities.dlMuMimoBeamformee ? "yes" : "no")
+       << " maxTxNss=" << getMaxNss(capabilities.txMcsNss)
+       << " maxRxNss=" << getMaxNss(capabilities.rxMcsNss)
+       << " ruSizes=" << capabilities.supportedRuToneSizes.size();
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeOperation& operation)
+{
+    os << "bssColor=" << (int)operation.bssColor
+       << " width=" << operation.operatingChannelWidth
+       << " defaultPE=" << operation.defaultPeDurationUs << "us"
+       << " basicMcsNss=" << operation.basicHeMcsNss;
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Ieee80211NegotiatedHeCapabilities& capabilities)
+{
+    os << "valid=" << (capabilities.valid ? "yes" : "no")
+       << " {" << capabilities.intersection << "}"
+       << " operation={" << capabilities.operation << "}";
+    return os;
 }
 
 inline bool isDlMuMimoEligible(

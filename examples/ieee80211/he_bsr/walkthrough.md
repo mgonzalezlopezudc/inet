@@ -67,6 +67,8 @@ source /home/user/omnetpp-6.4.0aipre2/setenv && source /home/user/omnetpp_ws/ine
 opp_run -u Qtenv --ned-path=/home/user/omnetpp_ws/inet/src:/home/user/omnetpp_ws/inet/examples -l /home/user/omnetpp_ws/inet/src/libINET.so -c ImplicitBsr examples/ieee80211/he_bsr/omnetpp.ini
 ```
 
+While the simulation runs, inspect the AP `wlan[0].mac.hcf.ulCoordinator` module. The watches `bufferStatusSummary`, `freshReports`, `backloggedReports`, `bufferStatusByAid`, `ofdmaContentionWindow`, and `ofdmaBackoff` show how BSR information drives Trigger decisions. The AP `ulTriggerPolicy` watches `lastContext.*` and `lastSelectedTriggerName`, and the `ulScheduler` watches `lastScheduleSummary` and `lastRuAllocations`.
+
 ### Running with Cmdenv (Command Line)
 ```sh
 source /home/user/omnetpp-6.4.0aipre2/setenv && source /home/user/omnetpp_ws/inet/setenv

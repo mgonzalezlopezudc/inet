@@ -82,6 +82,9 @@ class INET_API HeHcf : public Hcf
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
     virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac) override;
+    virtual const char *getPendingUlTriggerName() const;
+    virtual int getStationQueueBankCount() const;
+    virtual std::string getHeHcfSummary() const;
 
   public:
     virtual void legacyPreambleReceived(Packet *packet);

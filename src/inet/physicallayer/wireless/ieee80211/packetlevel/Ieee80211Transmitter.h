@@ -8,12 +8,16 @@
 #ifndef __INET_IEEE80211TRANSMITTER_H
 #define __INET_IEEE80211TRANSMITTER_H
 
+#include <string>
+#include <vector>
+
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
 namespace inet {
 
@@ -26,9 +30,22 @@ class INET_API Ieee80211Transmitter : public FlatTransmitterBase
     const IIeee80211Mode *mode = nullptr;
     const IIeee80211Band *band = nullptr;
     const Ieee80211Channel *channel = nullptr;
+    mutable bool lastHePpdu = false;
+    mutable int lastHePpduFormat = -1;
+    mutable bool lastHeMuMimo = false;
+    mutable int lastHeUserCount = 0;
+    mutable int lastHeTotalNsts = 0;
+    mutable int lastHePacketExtensionDurationUs = 0;
+    mutable int lastHePuncturedSubchannelMask = 0;
+    mutable simtime_t lastHeDuration = SIMTIME_ZERO;
+    mutable Hz lastHeCenterFrequency = Hz(NaN);
+    mutable Hz lastHeBandwidth = Hz(NaN);
+    mutable W lastHeTransmitPower = W(NaN);
+    mutable std::vector<Ieee80211HeUserPhyParameters> lastHeUserPhyParameters;
 
   protected:
     virtual void initialize(int stage) override;
+    virtual std::string getLastHeTransmissionSummary() const;
 
   public:
     virtual ~Ieee80211Transmitter();

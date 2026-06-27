@@ -8,6 +8,8 @@
 #ifndef __INET_IEEE80211MIB_H
 #define __INET_IEEE80211MIB_H
 
+#include <ostream>
+
 #include "inet/common/SimpleModule.h"
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -85,6 +87,9 @@ class INET_API Ieee80211Mib : public SimpleModule
 
   protected:
     virtual void initialize(int stage) override;
+    virtual int getNegotiatedHePeerCount() const;
+    virtual std::string getHeCapabilitiesSummary() const;
+    virtual std::string getHeOperationSummary() const;
 
   public:
     static const char *getModeStr(Ieee80211Mib::Mode mode);
@@ -106,6 +111,16 @@ class INET_API Ieee80211Mib : public SimpleModule
     void removePeerVhtCapabilities(const MacAddress& address);
     const Ieee80211NegotiatedVhtCapabilities *findNegotiatedVhtCapabilities(const MacAddress& address) const;
 };
+
+inline std::ostream& operator<<(std::ostream& os, const Ieee80211Mib::BssAccessPointData::LinkData& link)
+{
+    os << "tx=" << link.transmitPowerDbm
+       << "dBm rx=" << link.receivedPowerDbm
+       << "dBm pathLoss=" << link.pathLossDb
+       << "dB updated=" << link.lastUpdate
+       << " valid=" << (link.valid ? "yes" : "no");
+    return os;
+}
 
 } // namespace ieee80211
 

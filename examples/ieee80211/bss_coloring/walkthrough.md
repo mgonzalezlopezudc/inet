@@ -70,6 +70,8 @@ opp_run -u Qtenv -l src/libINET.so -c BssColoringEnabled examples/ieee80211/bss_
 ```
 You can visually observe the concurrent transmissions in Qtenv when BSS Coloring is enabled.
 
+For the underlying spatial-reuse decisions, inspect any STA radio receiver. The watches `enableSpatialReuse`, `srgBssColors`, `lastHeReceptionSummary`, `lastSpatialReuseBssTypeName`, `lastSpatialReuseEligible`, `lastSpatialReuseIgnoredPpdu`, `lastSpatialReuseObssPdThreshold`, and `lastSpatialReuseReason` show whether an inter-BSS PPDU was ignored because it was below the applicable OBSS/PD threshold.
+
 ### Running with Cmdenv (Command Line)
 Run the configurations to generate results:
 ```sh
