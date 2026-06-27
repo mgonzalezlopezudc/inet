@@ -10,6 +10,7 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <ostream>
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
@@ -53,6 +54,15 @@ class INET_API HeHcf : public Hcf
         physicallayer::Ieee80211HeRu ru;
         bool randomAccess = false;
         simtime_t expectedResponseTime = SIMTIME_ZERO;
+
+        friend std::ostream& operator<<(std::ostream& os, const TriggeredUlExchange& exchange)
+        {
+            os << "tid=" << (int)exchange.tid 
+               << " packets=" << exchange.packets.size() 
+               << " randomAccess=" << (exchange.randomAccess ? "yes" : "no") 
+               << " expectedResponse=" << exchange.expectedResponseTime;
+            return os;
+        }
     };
     // A response is retained by Trigger ID until its Multi-STA Block Ack is
     // processed.  This is intentionally not a single global packet: an HE-TB

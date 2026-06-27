@@ -23,6 +23,19 @@ namespace ieee80211 {
 
 Define_Module(HeSoundingCoordinator);
 
+void HeSoundingCoordinator::initialize(int stage)
+{
+    cSimpleModule::initialize(stage);
+    if (stage == INITSTAGE_LOCAL) {
+        WATCH(ndpAnnouncementReceived);
+        WATCH(ndpReceived);
+        WATCH(soundingDialogToken);
+        WATCH(nextSoundingDialogToken);
+        WATCH(nextTriggerId);
+        WATCH(soundingTargets);
+    }
+}
+
 namespace {
 
 template <typename T>

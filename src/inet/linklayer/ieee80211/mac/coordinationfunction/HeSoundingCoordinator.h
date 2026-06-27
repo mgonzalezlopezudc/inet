@@ -8,6 +8,7 @@
 #define __INET_HESOUNDINGCOORDINATOR_H
 
 #include <vector>
+#include <ostream>
 #include "omnetpp.h"
 #include "inet/common/INETDefs.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -34,6 +35,8 @@ class INET_API HeSoundingCoordinator : public omnetpp::cSimpleModule
     };
 
   protected:
+    virtual void initialize(int stage) override;
+
     // State machine for the STA-side sounding protocol.
     bool ndpAnnouncementReceived = false;
     bool ndpReceived = false;
@@ -78,6 +81,12 @@ class INET_API HeSoundingCoordinator : public omnetpp::cSimpleModule
         ndpReceived = false;
     }
 };
+
+inline std::ostream& operator<<(std::ostream& os, const HeSoundingCoordinator::SoundingTarget& target)
+{
+    os << "address=" << target.address << " aid=" << target.aid << " maxNss=" << target.maxNss;
+    return os;
+}
 
 } // namespace ieee80211
 } // namespace inet

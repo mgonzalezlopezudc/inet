@@ -50,6 +50,13 @@ void HeUlCoordinator::initialize(int stage)
         randomAccessRusSignal = registerSignal("heUlRandomAccessRus");
         randomAccessAttemptSignal = registerSignal("heUlRandomAccessAttempt");
         randomAccessSuccessSignal = registerSignal("heUlRandomAccessSuccess");
+
+        WATCH(ofdmaContentionWindow);
+        WATCH(ofdmaBackoff);
+        WATCH(nextTriggerId);
+        WATCH(lastTriggerTime);
+        WATCH(hasSentTrigger);
+        WATCH(bufferStatusByAid);
     }
 }
 

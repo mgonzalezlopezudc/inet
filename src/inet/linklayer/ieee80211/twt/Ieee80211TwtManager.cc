@@ -31,6 +31,10 @@ void Ieee80211TwtManager::initialize(int stage)
         lastRadioStateChange = simTime();
         WATCH(enabled);
         WATCH(stationAwake);
+        WATCH(awakeTime);
+        WATCH(sleepTime);
+        WATCH(agreements);
+        WATCH(broadcastSchedules);
 
         // Assert that configuration parameters are valid
         ASSERT(maxIndividualAgreementsPerPeer > 0);

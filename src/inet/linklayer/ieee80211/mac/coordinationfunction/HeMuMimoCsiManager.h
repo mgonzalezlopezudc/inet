@@ -12,6 +12,7 @@
 #include <string>
 #include <sstream>
 #include <functional>
+#include <ostream>
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
 
@@ -20,9 +21,12 @@ namespace ieee80211 {
 
 using namespace inet::units::values;
 
-class HeMuMimoCsiManager
+class HeHcf;
+
+class INET_API HeMuMimoCsiManager
 {
   public:
+    friend class HeHcf;
     struct CsiEntry {
         simtime_t acquisitionTime = SIMTIME_ZERO;
         simtime_t expiryTime = SIMTIME_ZERO;
@@ -115,7 +119,22 @@ class HeMuMimoCsiManager
     }
 };
 
+inline std::ostream& operator<<(std::ostream& os, const HeMuMimoCsiManager::CsiEntry& entry)
+{
+    os << "acquired=" << entry.acquisitionTime << " expires=" << entry.expiryTime 
+       << " valid=" << (entry.valid ? "true" : "false") << " leakages=" << entry.leakages.size();
+    return os;
+}
+
 } // namespace ieee80211
 } // namespace inet
+
+namespace std {
+inline std::ostream& operator<<(std::ostream& os, const std::pair<inet::MacAddress, inet::units::values::Hz>& p)
+{
+    os << "(" << p.first << ", " << p.second << ")";
+    return os;
+}
+}
 
 #endif

@@ -173,6 +173,14 @@ void HeHcf::initialize(int stage)
         defaultCsiLeakage = par("defaultCsiLeakage");
         csiLeakageOverrides = par("csiLeakageOverrides").stdstringValue();
         csiManager.configure(csiValidityDuration, defaultCsiLeakage, csiLeakageOverrides);
+
+        WATCH(pendingUlTrigger);
+        WATCH(ulTriggerAccessRequested);
+        WATCH(forceNextSingleUser[0]);
+        WATCH(forceNextSingleUser[1]);
+        WATCH(forceNextSingleUser[2]);
+        WATCH(forceNextSingleUser[3]);
+        WATCH(triggeredUlExchanges);
     }
     else if (stage == INITSTAGE_LINK_LAYER && mac->isApInAxMode()) {
         queueBankManager = std::make_unique<StationQueueBankManager>(getSubmodule("queueBanks"));
@@ -180,6 +188,7 @@ void HeHcf::initialize(int stage)
             if (station.second == Ieee80211Mib::ASSOCIATED)
                 queueBankManager->createQueueBank(station.first);
         }
+        WATCH(csiManager.csiTable);
         if (ulCoordinator->isEnabled())
             scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
     }

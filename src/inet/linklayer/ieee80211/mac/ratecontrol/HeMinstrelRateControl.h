@@ -9,6 +9,7 @@
 
 #include <map>
 #include <vector>
+#include <ostream>
 
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
 #include "inet/linklayer/ieee80211/mac/ratecontrol/RateControlBase.h"
@@ -37,6 +38,12 @@ class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211
             return mcs < other.mcs ||
                     (mcs == other.mcs && numberOfSpatialStreams < other.numberOfSpatialStreams);
         }
+
+        friend std::ostream& operator<<(std::ostream& os, const RateKey& key)
+        {
+            os << "mcs=" << key.mcs << " nss=" << key.numberOfSpatialStreams;
+            return os;
+        }
     };
 
     struct RateStats {
@@ -45,11 +52,26 @@ class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211
         int successes = 0;
         simtime_t lastProbe = SIMTIME_ZERO;
         double lastSnirDb = NaN;
+
+        friend std::ostream& operator<<(std::ostream& os, const RateStats& stats)
+        {
+            os << "ewma=" << stats.ewmaSuccessProbability 
+               << " attempts=" << stats.attempts 
+               << " successes=" << stats.successes 
+               << " lastSnir=" << stats.lastSnirDb;
+            return os;
+        }
     };
 
     struct PeerState {
         std::map<RateKey, RateStats> rates;
         int selectionCount = 0;
+
+        friend std::ostream& operator<<(std::ostream& os, const PeerState& state)
+        {
+            os << "selections=" << state.selectionCount << " rates=" << state.rates.size();
+            return os;
+        }
     };
 
   protected:
