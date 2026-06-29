@@ -63,9 +63,9 @@ bool isMuEligibleDataHeader(const inet::Ptr<const Ieee80211DataHeader>& dataHead
 {
     // INET-specific precondition: DL MU candidates must be QoS data frames with
     // an active Block Ack agreement so that A-MPDU aggregation and bitmap-based
-    // acknowledgment can be used.  IEEE 802.11-2024 does not normatively require
-    // a Block Ack agreement for DL MU, but without one this implementation
-    // cannot perform the required A-MPDU aggregation (Clause 26.3.3).
+    // acknowledgment can be used.  IEEE 802.11-2024 26.5.1 permits DL MU
+    // operation more generally; this implementation narrows it to 26.6.2/
+    // 26.6.3-style A-MPDU packing and 26.4 BlockAck handling.
     return dataHeader != nullptr &&
            dataHeader->getType() == ST_DATA_WITH_QOS &&
            hasActiveOriginatorBlockAckAgreement(baHandler, dataHeader->getReceiverAddress(), dataHeader->getTid());
@@ -161,10 +161,10 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             }
 
             auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
-            // Fresh queue entries have not been assigned a sequence number
-            // yet. They are eligible to start a transmission without an ACK
-            // status lookup; retried/in-progress entries retain a sequence
-            // number and must still be checked by the ACK handler.
+            // Fresh queue entries have not been assigned a sequence number yet.
+            // They are eligible to start a transmission without a BlockAck
+            // scoreboard lookup; retried/in-progress entries retain a sequence
+            // number and must remain inside the 10.25.6 BlockAck window.
             if (!isMuEligibleDataHeader(dataHeader, baHandler)) {
                 // See isMuEligibleDataHeader() above: this is an implementation
                 // precondition, not a normative requirement of Clause 26.5.
@@ -207,6 +207,9 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                     dest, dataHeader->getTid()).size();
             int availableSlots = agreement == nullptr ? 0 :
                     std::max(0, agreement->getBufferSize() - occupiedSlots);
+            // 10.25.6 bounds the outstanding MPDUs by the negotiated BlockAck
+            // buffer/window.  The DL MU scheduler cannot select a user whose
+            // next MPDU would fall outside that window.
             if (availableSlots == 0) {
                 EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " TID " << (int)dataHeader->getTid()
@@ -312,6 +315,9 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
 {
     auto edcaf = edca->getEdcaf(ac);
     if (mac->isApInAxMode() && enableDlMuMimo && mac->getMib()->localHeCapabilities.dlMuMimoBeamformer) {
+        // 26.5.1 allows DL MU-MIMO only when the AP has the required HE
+        // beamformer capability and per-STA feedback; 26.7.3 defines the HE
+        // TB sounding exchange used here to refresh CSI before scheduling.
         auto scheduleContext = collectScheduleContext(ac);
         auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
         if (soundingCoordinator->tryStartSoundingSequence(ac, scheduleContext, frameSequenceHandler, mac, modeSet, csiManager, buildContext(ac), this))
@@ -321,6 +327,9 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
     auto pendingQueue = edcaf->getPendingQueue();
     auto inProgress = edcaf->getInProgressFrames();
     if (hasEligibleExistingFrame(inProgress, edcaf->getAckHandler())) {
+        // 10.23.2.8 allows multiple frame exchange sequences in an EDCA TXOP,
+        // but already outstanding frames keep their legacy recovery context.
+        // Complete those before starting a new HE MU PPDU.
         EV_INFO << "Completing " << inProgress->getLength()
                 << " recovery/outstanding frames before opening a new MU transmission." << endl;
         Hcf::startFrameSequence(ac);
@@ -352,6 +361,8 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
         auto ackMethod = par("dlMuAckMethod").stdstringValue() == "sequentialBar" ?
                 HeDlMuTxOpFs::AckMethod::EXPLICIT_SEQUENTIAL_BAR :
                 HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER;
+        // 26.4.4.3 permits SU BlockAck responses to an HE MU PPDU; 9.3.1.22.4
+        // plus 26.4.4.4/26.5.2 model the MU-BAR-triggered HE TB BlockAck path.
         EV_INFO << "Start HE DL MU TxOp FS: using "
                  << (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR")
                  << " acknowledgment method\n";

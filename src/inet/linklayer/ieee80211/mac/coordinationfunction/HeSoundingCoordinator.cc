@@ -162,7 +162,11 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
     }
 
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {
-        if (trigger->getTriggerType() == 2) {
+        // IEEE 802.11-2024 9.3.1.22 Table 9-47 defines BFRP as Trigger type 1.
+        // In the HE TB sounding sequence (26.7.3), the BFRP Trigger follows
+        // NDPA and NDP and solicits HE compressed beamforming/CQI feedback in
+        // an HE TB PPDU.
+        if (trigger->getTriggerType() == 1) {
             if (ndpAnnouncementReceived && ndpReceived) {
                 auto myAid = mac->getMib()->bssStationData.associationId;
                 const Ieee80211HeTriggerUserInfo *selected = nullptr;

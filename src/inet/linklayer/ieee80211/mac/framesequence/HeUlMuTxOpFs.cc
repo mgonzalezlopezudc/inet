@@ -13,11 +13,12 @@
 // HE UL MU TXOP frame sequence.
 //
 // Implements the AP side of a Trigger-based UL OFDMA exchange:
-//   1. Transmit a Basic or BSRP Trigger frame (IEEE 802.11-2024 Clause 26.5.2).
+//   1. Transmit a Basic or BSRP Trigger frame (IEEE 802.11-2024 26.5.2,
+//      with Trigger frame fields from 9.3.1.22).
 //   2. Collect simultaneous HE TB PPDU responses on the assigned RUs
-//      (Clause 27.3.11.12).
+//      (26.5.2.3 and 27.3.11.12).
 //   3. Send a Multi-STA BlockAck acknowledging all received MPDUs
-//      (Clause 9.3.1.9).
+//      (9.3.1.8 and 26.4.2).
 //
 // Implementation notes:
 //   - The response collection window is strict: it accepts only HE-TB frames
@@ -151,11 +152,10 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
 
 Packet *HeUlMuTxOpFs::buildTriggerPacket() const
 {
-    // IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
-    // The AP builds and transmits a Trigger Frame (e.g. Basic or BSRP) to schedule STAs.
-    // The Trigger frame specifies the exact RU size/offset (ruToneSize, ruToneOffset) and MCS
-    // for each user to transmit an HE TB PPDU on the uplink. It also defines a target RSSI
-    // so STAs can calculate and adjust their transmit power to arrive aligned at the AP.
+    // IEEE 802.11-2024 9.3.1.22 defines the Trigger Common/User Info fields:
+    // Trigger Type, UL Length/common duration, RU Allocation, UL HE-MCS, coding,
+    // and UL Target Receive Power.  26.5.2.2 allows the AP to solicit one or
+    // more HE TB PPDU responses by addressing User Info fields by AID or RA-RU.
     ASSERT(!schedule.allocations.empty());
     ASSERT(schedule.commonDuration > SIMTIME_ZERO);
     auto header = makeShared<Ieee80211TriggerFrame>();
@@ -182,6 +182,8 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.randomAccess = allocation.randomAccess;
         header->setUsers(i, user);
     }
+    // 9.3.1.22 says the Trigger Duration field follows 9.2.5.  Here it covers
+    // the SIFS-delayed HE TB response and the AP's following SIFS response.
     auto responseDuration = modeSet->getSifsTime() + schedule.commonDuration;
     header->setDurationField(responseDuration + modeSet->getSifsTime());
     int userInfoSize = (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) ? 5 : 6;
@@ -194,10 +196,10 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
 
 void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
 {
-    // IEEE 802.11-2024 Clause 26.5.2.
-    // This collection step aggregates simultaneous uplink HE-TB frames received in response to the Trigger.
-    // It verifies that each collected frame corresponds to the target Trigger ID and matching RU index,
-    // then tracks successful frame sequence numbers to construct the Multi-STA BlockAck.
+    // IEEE 802.11-2024 26.5.2.3 requires HE TB responses to use the Trigger's
+    // RU, MCS, coding, GI, and duration parameters.  The simulated Trigger ID is
+    // not a standard field; it is a model correlation key layered on top of the
+    // standard RU/AID matching rules.
     ASSERT(context != nullptr);
     ackRecords.clear();
     for (const auto& allocation : schedule.allocations) {
@@ -223,8 +225,10 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
         auto record = std::find_if(ackRecords.begin(), ackRecords.end(),
                 [aid] (const auto& value) { return value.aid == aid; });
         if (record == ackRecords.end()) {
-            // The collection step already checked that this is a usable RA
-            // allocation.  Only then may an unscheduled sender gain a record.
+            // 9.3.1.22 Table 9-52 allows AID12=0 RA-RUs for associated STAs.
+            // The collection step already checked that this response selected a
+            // usable RA allocation; only then may an unscheduled sender gain a
+            // Multi-STA BA record.
             Ieee80211MultiStaBlockAckRecord value;
             value.aid = aid;
             value.tid = header->getTid();
@@ -292,10 +296,10 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
 
 Packet *HeUlMuTxOpFs::buildMultiStaBlockAckPacket() const
 {
-    // IEEE 802.11-2024 Clause 9.3.1.9 ("BlockAck frame format") and Clause 26.5.2.
-    // The AP acknowledges uplink transmissions from multiple STAs simultaneously using a Multi-STA BlockAck
-    // frame. The frame carries multiple BlockAck records, each identified by the target STA's AID and TID,
-    // including a BlockAck starting sequence number and acknowledgement bitmap.
+    // IEEE 802.11-2024 26.4.4.5 says an AP receiving HE TB PPDUs from more
+    // than one STA may respond with a Multi-STA BlockAck carried in an SU PPDU.
+    // 26.4.2 defines the per-AID/TID acknowledgment context; 9.3.1.8 defines
+    // the BlockAck frame format.
     auto header = makeShared<Ieee80211MultiStaBlockAck>();
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);

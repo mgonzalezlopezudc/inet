@@ -199,6 +199,9 @@ void HeHcf::handleMessage(cMessage *msg)
         return;
     }
     scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
+    // 26.5.2.2 permits only an HE AP to solicit UL MU HE TB PPDUs.  The AP
+    // still has to obtain the medium through EDCA/HCF (10.23), so this timer
+    // only requests channel access; the Trigger is transmitted after EDCAF wins.
     if (!mac->isApInAxMode() || !ulCoordinator->isEnabled() ||
             frameSequenceHandler->isSequenceRunning() || edca->getChannelOwner() != nullptr ||
             tx->isBusy() || ulTriggerAccessRequested)
@@ -286,6 +289,9 @@ void HeHcf::startFrameSequence(AccessCategory ac)
     ASSERT(modeSet != nullptr);
     bool isHeMode = strcmp(modeSet->getName(), "ax") == 0;
     if (isHeMode) {
+        // HE additions are TXOP-local frame exchange choices layered on top of
+        // HCF: first honor any pending UL Trigger opportunity (26.5.2), then
+        // try DL MU (26.5.1), otherwise fall back to the legacy HCF sequence.
         if (tryStartUlMuFrameSequence(ac))
             return;
         if (tryStartDlMuFrameSequence(ac))
@@ -303,6 +309,9 @@ void HeHcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcaf
 {
     std::vector<Edcaf *> collidedEdcafsWithFrame;
     for (auto edcaf : internallyCollidedEdcafs) {
+        // 10.23 internal collision handling is still performed by HCF, but HE
+        // AP queues may be per-STA.  Stage the oldest per-STA fallback frame so
+        // the base HCF collision logic sees the same pending-frame surface.
         if (edcaf->getPendingQueue()->isEmpty() && edcaf->getInProgressFrames()->getLength() == 0)
             stagePerStaFrameForSingleUserTransmission(edcaf->getAccessCategory());
         if (edcaf->getInProgressFrames()->getFrameToTransmit() != nullptr)
