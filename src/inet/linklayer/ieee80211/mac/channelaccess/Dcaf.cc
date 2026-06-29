@@ -49,13 +49,12 @@ void Dcaf::calculateTimingParameters()
     slotTime = modeSet->getSlotTime();
     sifs = modeSet->getSifsTime();
     int difsNumber = par("difsn");
-    // The PIFS and DIFS are derived by the Equation (9-2) and Equation (9-3), as illustrated in Figure 9-14.
-    // PIFS = aSIFSTime + aSlotTime (9-2)
-    // DIFS = aSIFSTime + 2 × aSlotTime (9-3)
+    // IEEE Std 802.11-2024, 10.3.2.3.5 and 10.3.4.2: DCF transmits after
+    // DIFS when the medium is idle and the backoff counter is zero.
+    // For non-DMG PHYs, DIFS is aSIFSTime + 2 * aSlotTime.
     ifs = difsNumber == -1 ? sifs + 2 * slotTime : difsNumber * slotTime;
-    // The EIFS is derived from the SIFS and the DIFS and the length of time it takes to transmit an ACK frame at the
-    // lowest PHY mandatory rate by Equation (9-4).
-    // EIFS = aSIFSTime + DIFS + ACKTxTime
+    // IEEE Std 802.11-2024, 10.3.2.3.7: after an erroneous reception, DCF
+    // defers by EIFS before returning to normal DIFS/backoff medium access.
     eifs = sifs + ifs + modeSet->getSlowestMandatoryMode()->getDuration(LENGTH_ACK);
     EV_DEBUG << "Timing parameters are initialized: slotTime = " << slotTime << ", sifs = " << sifs << ", ifs = " << ifs << ", eifs = " << eifs << std::endl;
     ASSERT(ifs > sifs);
@@ -72,6 +71,8 @@ void Dcaf::calculateTimingParameters()
 void Dcaf::incrementCw()
 {
     Enter_Method("incrementCw");
+    // IEEE Std 802.11-2024, 10.3.3: CW advances through powers of two minus
+    // one after failed transmissions until capped by aCWmax.
     int newCw = 2 * cw + 1;
     if (newCw > cwMax)
         cw = cwMax;
@@ -83,6 +84,8 @@ void Dcaf::incrementCw()
 void Dcaf::resetCw()
 {
     Enter_Method("resetCw");
+    // IEEE Std 802.11-2024, 10.3.3 and 10.3.4.3: successful exchanges and
+    // retry-limit cases reset CW to aCWmin before the next random backoff.
     cw = cwMin;
     EV_DEBUG << "Contention window is reset: cw = " << cw << std::endl;
 }
@@ -112,6 +115,8 @@ void Dcaf::requestChannel(IChannelAccess::ICallback *callback)
     if (owning)
         callback->channelGranted(this);
     else if (!contention->isContentionInProgress())
+        // IEEE Std 802.11-2024, 10.3.4.3: random backoff uses a counter drawn
+        // uniformly from [0, CW] and decrements at idle DIFS/EIFS slot times.
         contention->startContention(cw, ifs, eifs, slotTime, this);
     else
         EV_DEBUG << "Contention has been already started.\n";
@@ -134,4 +139,3 @@ void Dcaf::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj,
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

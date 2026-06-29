@@ -31,7 +31,8 @@ AccessCategory Edca::classifyFrame(const Ptr<const Ieee80211DataHeader>& header)
 
 AccessCategory Edca::mapTidToAc(Tid tid)
 {
-    // standard static mapping (see "UP-to-AC mappings" table in the 802.11 spec.)
+    // IEEE Std 802.11-2024, 10.2.3.2 Table 10-1: static UP/TID to AC mapping
+    // when dot11AlternateEDCAActivated is false or not present.
     switch (tid) {
         case 1: case 2: return AC_BK;
         case 0: case 3: return AC_BE;
@@ -75,4 +76,3 @@ Edca::~Edca()
 
 } // namespace ieee80211
 } // namespace inet
-

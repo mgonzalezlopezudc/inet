@@ -63,8 +63,12 @@ void Edcaf::calculateTimingParameters()
     slotTime = modeSet->getSlotTime();
     sifs = modeSet->getSifsTime();
     int aifsn = par("aifsn");
+    // IEEE Std 802.11-2024, 10.3.2.3.6 and 10.23.2.4:
+    // AIFS[AC] = AIFSN[AC] * aSlotTime + aSIFSTime.
     simtime_t aifs = sifs + fallback(aifsn, getAifsNumber(ac)) * slotTime;
     ifs = aifs;
+    // IEEE Std 802.11-2024, 10.3.2.3.7: after erroneous reception, EDCA uses
+    // EIFS-DIFS+AIFS[AC]; this implementation folds that interval into eifs.
     eifs = sifs + aifs + modeSet->getSlowestMandatoryMode()->getDuration(LENGTH_ACK);
     EV_DEBUG << "Timing parameters are initialized: slotTime = " << slotTime << ", sifs = " << sifs << ", ifs = " << ifs << ", eifs = " << eifs << std::endl;
     ASSERT(ifs > sifs);
@@ -81,6 +85,8 @@ void Edcaf::calculateTimingParameters()
 void Edcaf::incrementCw()
 {
     Enter_Method("incrementCw");
+    // IEEE Std 802.11-2024, 10.23.2.2: failed EDCA attempts update CW[AC] to
+    // min(CWmax[AC], 2^QSRC[AC] * (CWmin[AC] + 1) - 1).
     int newCw = 2 * cw + 1;
     if (newCw > cwMax)
         cw = cwMax;
@@ -92,12 +98,16 @@ void Edcaf::incrementCw()
 void Edcaf::resetCw()
 {
     Enter_Method("resetCw");
+    // IEEE Std 802.11-2024, 10.23.2.2: successful final TXOP completion resets
+    // CW[AC] to CWmin[AC].
     cw = cwMin;
     EV_DEBUG << "Contention window is reset: cw = " << cw << std::endl;
 }
 
 int Edcaf::getAifsNumber(AccessCategory ac)
 {
+    // IEEE Std 802.11-2024, 9.4.2.27 and 10.3.2.3.6: defaults are used until
+    // EDCA Parameter Set values override dot11EDCATableAIFSN.
     switch (ac) {
         case AC_BK: return 7;
         case AC_BE: return 3;
@@ -151,6 +161,8 @@ void Edcaf::requestChannel(IChannelAccess::ICallback *callback)
     if (contention->isContentionInProgress())
         EV_DEBUG << "Contention has been already started.\n";
     else
+        // IEEE Std 802.11-2024, 10.23.2.4: an EDCAF with a queued frame starts
+        // contention using its AC-specific CW, AIFS and slot timing.
         contention->startContention(cw, ifs, eifs, slotTime, this);
 }
 
@@ -166,6 +178,8 @@ bool Edcaf::isInternalCollision()
 
 int Edcaf::getCwMax(AccessCategory ac, int aCwMax, int aCwMin)
 {
+    // IEEE Std 802.11-2024, default EDCA parameter tables define AC-specific
+    // CWmax values relative to aCWmax/aCWmin.
     switch (ac) {
         case AC_BK: return aCwMax;
         case AC_BE: return aCwMax;
@@ -177,6 +191,8 @@ int Edcaf::getCwMax(AccessCategory ac, int aCwMax, int aCwMin)
 
 int Edcaf::getCwMin(AccessCategory ac, int aCwMin)
 {
+    // IEEE Std 802.11-2024, default EDCA parameter tables define AC-specific
+    // CWmin values as fractions of aCWmin for AC_VI and AC_VO.
     switch (ac) {
         case AC_BK: return aCwMin;
         case AC_BE: return aCwMin;
@@ -198,4 +214,3 @@ void Edcaf::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj
 
 } // namespace ieee80211
 } // namespace inet
-
