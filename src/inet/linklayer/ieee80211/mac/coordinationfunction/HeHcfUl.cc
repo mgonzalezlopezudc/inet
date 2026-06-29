@@ -67,6 +67,9 @@ bool HeHcf::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocati
 
 bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
 {
+    // IEEE 802.11-2024 26.5.2.2: an AP that wins channel access may solicit
+    // HE TB PPDUs from one or more non-AP HE STAs by transmitting a Trigger
+    // frame.  EDCA/TXOP ownership is still inherited from HCF/EDCA (10.23).
     if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NO_TRIGGER ||
             !mac->isApInAxMode() || !ulCoordinator->isEnabled())
         return false;
@@ -88,11 +91,11 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     auto sensitivityDbm = math::mW2dBmW(receiver->getSensitivity().get<mW>());
     IIeee80211HeUlScheduler::Schedule ulSchedule;
     if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
-        // IEEE 802.11-2024 Clause 26.5.2: a BSRP Trigger solicits Buffer Status
-        // Reports from one or more STAs.  The standard does not mandate a
-        // particular RU allocation; here we simply give every associated STA
-        // its own RU and advertise the rest as random-access RUs.  This is an
-        // approximation of the full scheduler freedom allowed by the standard.
+        // IEEE 802.11-2024 9.3.1.22 Table 9-47 defines BSRP as Trigger type 4.
+        // 26.5.2 permits the AP to solicit HE TB responses via addressed User
+        // Info fields and RA-RUs.  The standard leaves scheduling policy open;
+        // this model gives each polled STA one RU and exposes the remainder as
+        // associated-STA RA-RUs, an implementation policy rather than a rule.
         auto maxRus = physicallayer::getHeMaxRuCount(channelBandwidth);
         auto layout = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, maxRus);
         int index = 0;
@@ -226,6 +229,10 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 }
 void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
 {
+    // 9.3.1.22.4 defines MU-BAR Trigger User Info as BAR Control plus BAR
+    // Information.  26.4.2 requires Ack Type=0 block-ack context for a
+    // Multi-STA BlockAck sent in response to MU-BAR; this helper models the
+    // single-STA Basic BlockAck response carried in the assigned HE TB PPDU.
     auto myAid = mac->getMib()->bssStationData.associationId;
     const Ieee80211HeTriggerUserInfo *selected = nullptr;
     for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i)
@@ -291,6 +298,9 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
 {
     Packet *responsePacket = nullptr;
     if (sourcePacket != nullptr) {
+        // 26.5.2.4: a Basic Trigger response can carry QoS Data in an A-MPDU.
+        // The Ack Policy is Block Ack/Implicit BAR style so the AP can return a
+        // Multi-STA BA context after collecting simultaneous HE TB responses.
         auto writableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
         if (!writableHeader->getRetry()) {
             auto qosDataService = check_and_cast<OriginatorQosMacDataService *>(originatorDataService);
@@ -308,6 +318,9 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         responsePacket = sourcePacket->dup();
     }
     else {
+        // 26.5.2.4 allows a triggered STA with no data fitting the allocation
+        // to carry a QoS Null-style response; we still include BSR so the AP's
+        // scheduler state is refreshed by the HE TB exchange.
         auto nullHeader = makeShared<Ieee80211DataHeader>();
         nullHeader->setType(ST_QOS_NULL);
         nullHeader->setReceiverAddress(mac->getMib()->bssData.bssid);
@@ -330,9 +343,11 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         exchange.packets.push_back(sourcePacket);
         exchange.sequenceNumbers.push_back(sourcePacket->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber().get());
 
-        // Basic Trigger UL aggregation is deliberately single-TID.  The
-        // retained packets remain in their EDCA queue until the bitmap
-        // arrives, so a partial Multi-STA BA can retry just the misses.
+        // 26.6.3 permits multi-TID HE TB A-MPDUs only within the negotiated
+        // Trigger TID Aggregation Limit.  This model deliberately restricts
+        // Basic Trigger UL aggregation to one TID; retained packets are removed
+        // from the EDCA queue only after the HE TB PSDU is built and are retried
+        // individually from the returned Multi-STA BA bitmap.
         int maximumMpduCount = std::min(64, availableSlots);
         for (int i = 0; availableSlots > 0 && (int)exchange.packets.size() < maximumMpduCount &&
                 i < sourceQueue->getNumPackets(); ++i) {
@@ -374,6 +389,9 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         if (exchange.packets.size() > 1) {
             delete responsePacket;
             responsePacket = new Packet("HE-TB-A-MPDU");
+            // 9.7.1 A-MPDU subframes are carried behind MPDU delimiters and
+            // padded to 4-octet boundaries; 26.5.2.4 and 26.6.2.3 apply that
+            // construction to A-MPDUs in HE TB PPDUs.
             for (size_t i = 0; i < exchange.packets.size(); ++i) {
                 auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
                 delimiter->setLength(exchange.packets[i]->getByteLength());
@@ -399,8 +417,9 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
 
 void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
 {
-    // IEEE 802.11-2024 Clause 26.5.2: processing of a received Trigger frame.
-    // Trigger type 2 corresponds to a Basic Trigger (solicited HE TB PPDU).
+    // IEEE 802.11-2024 9.3.1.22 Table 9-47: Trigger type 2 is MU-BAR.  A
+    // MU-BAR Trigger carries BAR control/information in each User Info field
+    // and solicits BlockAck responses in HE TB PPDUs.
     if (trigger->getTriggerType() == 2) {
         sendTriggeredBlockAckResponse(packet, trigger);
         return;
@@ -428,6 +447,10 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     bool randomAccess = false;
     int bsrpTid = -1;
     if (selected != nullptr && trigger->getTriggerType() != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
+        // 26.5.2.4: an associated non-AP STA responding to a Basic Trigger
+        // addressed to its AID constructs an HE TB A-MPDU using the Trigger's
+        // TID aggregation limit and the addressed User Info field.  INET keeps
+        // this path single-TID and chooses from the AC mapped from that TID.
         selectedAc = mapTidToAccessCategory(selected->tid);
         sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
         for (int i = 0; i < sourceQueue->getNumPackets(); i++) {
@@ -442,6 +465,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         }
     }
     else if (selected != nullptr && trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
+        // 9.3.1.22.6: BSRP Trigger has no trigger-dependent User Info; the
+        // HE TB response is used to report buffer status.  We choose the
+        // highest-priority queued TID to report when a directed BSRP RU exists.
         for (int ac = AC_VO; ac >= AC_BK && sourceQueue == nullptr; ac--) {
             auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
             for (int i = 0; i < queue->getNumPackets(); i++) {
@@ -458,6 +484,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         }
     }
     else if (selected == nullptr && !randomAccessUsers.empty()) {
+        // 9.3.1.22 Table 9-52 encodes AID12=0 as RA-RUs for associated STAs.
+        // 26.5.4 supplies the UORA access procedure; the coordinator chooses
+        // whether this STA wins one of the advertised RA-RUs.
         queueing::IPacketQueue *pendingQueue = nullptr;
         Packet *pendingPacket = nullptr;
         AccessCategory pendingAc = AC_BE;
@@ -550,9 +579,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
             transmitPower = std::min(requestedPower, transmitter->getMaxPower());
         }
     }
-    // Tag the response as an HE TB PPDU (IEEE 802.11-2024 Clause 27.3.11.12).
-    // The PHY layer uses these parameters to build the HE-SIG-A field and
-    // place the PSDU on the assigned RU.
+    // 26.5.2.3.3 and 27.3.11.12: the HE TB TXVECTOR is derived from the
+    // selected Trigger User Info and Common Info fields.  These request tags
+    // carry that standard information to INET's packet-level PHY.
     auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
     request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
     request->setTriggerId(trigger->getTriggerId());
@@ -581,6 +610,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
 
 void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck)
 {
+    // 26.4.2: a non-AP STA originator processes only the Per AID TID Info
+    // record matching its AID and TID, then applies the Block Ack starting
+    // sequence number and bitmap to the outstanding triggered MPDUs.
     auto myAid = mac->getMib()->bssStationData.associationId;
     bool success = false;
     for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {

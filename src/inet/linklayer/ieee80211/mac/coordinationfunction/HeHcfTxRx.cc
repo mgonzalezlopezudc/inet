@@ -53,10 +53,15 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
         return;
 
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {
+        // 9.3.1.22 Trigger frames are control frames that solicit HE TB
+        // responses; do not pass them through the legacy HCF recipient path.
         processReceivedTriggerFrame(packet, trigger);
         return;
     }
     if (auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header)) {
+        // 26.4.2 defines per-AID/TID Multi-STA BA records.  Triggered UL
+        // responses retain their own pending exchange state, so handle them
+        // before the base BlockAck path.
         processReceivedMultiStaBlockAck(packet, multiStaBlockAck);
         return;
     }
@@ -95,6 +100,9 @@ void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
     }
     auto heMuTxop = dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence());
     if (heMuTxop != nullptr && heMuTxop->isContainerPacket(packet)) {
+        // The HE MU PPDU is one PHY transmission but contains per-user MPDUs.
+        // 26.4/10.25 BlockAck state is per recipient/TID, so each contained
+        // MPDU must enter the normal originator in-progress and BA state.
         auto edcaf = edca->getChannelOwner();
         if (edcaf) {
             ASSERT(!heMuTxop->getActiveAllocations().empty());
@@ -122,9 +130,9 @@ void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
 
 void HeHcf::originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac)
 {
-    // IEEE 802.11ax MU-BAR responses:
-    // When a STA transmits a BlockAck response (specifically basic/compressed BlockAck) as a SIFS
-    // reply to a MU-BAR trigger frame, the TX complete path invokes originatorProcessTransmittedControlFrame.
+    // IEEE 802.11-2024 9.3.1.22.4 MU-BAR responses:
+    // When a STA transmits a BlockAck response as a SIFS reply to a MU-BAR
+    // Trigger, the TX complete path invokes originatorProcessTransmittedControlFrame.
     // Base HCF only expects control frames that request a response (like RTS/BlockAckReq) to schedule
     // timeouts/recovery and throws "Unknown control frame" for a sent BlockAck. Since BlockAck is terminal
     // and does not expect SIFS feedback, we explicitly bypass it here.
@@ -138,12 +146,11 @@ void HeHcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastT
 {
     Enter_Method("originatorProcessReceivedFrame");
     auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
-    // IEEE 802.11ax Multi-STA Block Ack support:
-    // In HE simulations, the AP aggregates block ACKs for multiple STAs in a single Multi-STA Block Ack frame.
-    // When received by a STA after sending SU data via EDCA, HCF fails to process this new frame format,
-    // throwing "Unknown control frame".
-    // We intercept the Multi-STA Block Ack and translate it into a dummy standard BasicBlockAck so that
-    // the existing QosAckHandler and OriginatorBlockAckAgreementHandler process the sequence bitmap correctly.
+    // IEEE 802.11-2024 26.4.2 Multi-STA BlockAck support:
+    // The standard says the originator examines the Per AID TID Info field
+    // matching its AID/TID and processes the Block Ack bitmap according to
+    // 10.25.6.  INET's base HCF understands BasicBlockAck, so this bridge
+    // converts the matching record into an equivalent BasicBlockAck bitmap.
     if (auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(receivedHeader)) {
         auto edcaf = edca->getChannelOwner();
         if (edcaf) {
@@ -162,7 +169,10 @@ void HeHcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastT
                 dummyBlockAck->setTidInfo(myRecord->tid);
                 dummyBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(myRecord->startingSequenceNumber));
                 
-                // Map the Multi-STA record's 64-bit bitmap to the BasicBlockAck bitmap (Fragment 0).
+                // 26.4.3 allows a 64-bit Multi-STA BA bitmap for buffer sizes
+                // up to 64.  Map it to the BasicBlockAck fragment-0 bitmap so
+                // the existing originator BA handler applies the same sequence
+                // acknowledgments.
                 for (int seqOffset = 0; seqOffset < 64; ++seqOffset) {
                     bool acked = ((myRecord->bitmap >> seqOffset) & 1ULL) == 1ULL;
                     auto& bitmap = dummyBlockAck->getBlockAckBitmapForUpdate(seqOffset);
@@ -184,10 +194,10 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
     EV_WARN << "HE MU: transmission failed for frame " << failedPacket->getName()
             << " type = " << (failedPacket->peekAtFront<Ieee80211MacHeader>() != nullptr ? (int)failedPacket->peekAtFront<Ieee80211MacHeader>()->getType() : -1) << endl;
     if (dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence()) != nullptr) {
-        // In an MU TXOP a failed sub-frame is re-queued to its per-STA queue bank
-        // instead of being retried inside the shared EDCAF pending queue. This keeps
-        // each destination's retries together and lets the next scheduler run select
-        // the best subset again.
+        // 26.5.1 extends EDCA success/failure semantics for DL MU, but retry
+        // state is still per MPDU/TID.  Requeue a failed subframe to the
+        // destination's per-STA queue so the next DL MU scheduler run can choose
+        // a standard-valid subset again.
         ASSERT(edca->getChannelOwner() != nullptr);
         auto failedHeader = failedPacket->peekAtFront<Ieee80211MacHeader>();
         auto edcaf = edca->getChannelOwner();
@@ -253,6 +263,9 @@ void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             if (dataHeader->getType() == ST_DATA_WITH_QOS) {
+                // HE non-AP STAs include BSR in QoS Control/HT Control style
+                // metadata so the AP can make 26.5.2.2 UL Trigger decisions.
+                // INET models that information directly on the data header.
                 auto tid = dataHeader->getTid();
                 auto ac = mapTidToAccessCategory(tid);
                 auto pendingQueue = edca->getEdcaf(ac)->getPendingQueue();
