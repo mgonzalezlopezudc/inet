@@ -23,6 +23,9 @@ class INET_API Ieee80211OfdmTimingRelatedParametersBase
   public:
     Ieee80211OfdmTimingRelatedParametersBase(Hz channelSpacing) : channelSpacing(channelSpacing) {}
 
+    // IEEE Std 802.11-2024 Table 17-5: subcarrier spacing is the channel
+    // spacing divided by 64; TFFT is its reciprocal, TGI is TFFT/4, and
+    // TSYM = TGI + TFFT for non-HT OFDM.
     Hz getSubcarrierFrequencySpacing() const { return channelSpacing / 64; }
     const simtime_t getFFTTransformPeriod() const { return simtime_t(1 / getSubcarrierFrequencySpacing().get<Hz>()); }
     const simtime_t getGIDuration() const { return getFFTTransformPeriod() / 4; }
@@ -48,6 +51,8 @@ class INET_API Ieee80211OfdmModeBase : public Ieee80211OfdmTimingRelatedParamete
     Ieee80211OfdmModeBase(const Ieee80211OfdmModulation *modulation, const Ieee80211OfdmCode *code, Hz channelSpacing, Hz bandwidth);
     virtual ~Ieee80211OfdmModeBase() {}
 
+    // IEEE Std 802.11-2024 17.3.5.9 and Figure 17-11: 48 data subcarriers and
+    // four pilots are used; DC and guard subcarriers are excluded from N_ST.
     int getNumberOfDataSubcarriers() const { return 48; }
     int getNumberOfPilotSubcarriers() const { return 4; }
     // The null subcarrier and the guard subcarriers at the sides are not included.
@@ -70,6 +75,8 @@ class INET_API Ieee80211OfdmPreambleMode : public IIeee80211PreambleMode, public
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
     const simtime_t getTrainingSymbolGIDuration() const { return getFFTTransformPeriod() / 2; }
+    // IEEE Std 802.11-2024 17.3.3: the OFDM preamble consists of ten short
+    // training symbols followed by GI2 and two long training symbols.
     const simtime_t getShortTrainingSequenceDuration() const { return 10 * getFFTTransformPeriod() / 4; }
     const simtime_t getLongTrainingSequenceDuration() const { return getTrainingSymbolGIDuration() + 2 * getFFTTransformPeriod(); }
     virtual const simtime_t getDuration() const override { return getShortTrainingSequenceDuration() + getLongTrainingSequenceDuration(); }
@@ -89,6 +96,9 @@ class INET_API Ieee80211OfdmSignalMode : public IIeee80211HeaderMode, public Iee
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
     unsigned int getRate() const { return rate; }
+    // IEEE Std 802.11-2024 Figure 17-1 and Table 17-6: the SIGNAL field has
+    // RATE, reserved, LENGTH, parity, and tail fields. SERVICE is the first
+    // field of DATA in the standard, but INET keeps it in the header chunk.
     b getRateFieldLength() const { return b(4); }
     b getReservedFieldLength() const { return b(1); }
     b getLengthFieldLength() const { return b(12); }
@@ -156,7 +166,7 @@ class INET_API Ieee80211OfdmMode : public Ieee80211ModeBase, public Ieee80211Ofd
 
     virtual inline const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + signalMode->getDuration() + dataMode->getDuration(dataLength); }
 
-    // Table 18-17—OFDM PHY characteristics
+    // IEEE Std 802.11-2024 Table 17-24: OFDM PHY characteristics.
     virtual const simtime_t getSlotTime() const override;
     virtual const simtime_t getSifsTime() const override;
     virtual const simtime_t getRifsTime() const override;
@@ -171,12 +181,12 @@ class INET_API Ieee80211OfdmMode : public Ieee80211ModeBase, public Ieee80211Ofd
 class INET_API Ieee80211OfdmCompliantModes
 {
   public:
-    // Preamble modes: 18.3.3 PLCS preamble (SYNC).
+    // Preamble modes: IEEE Std 802.11-2024 17.3.3 PLCP preamble.
     static const Ieee80211OfdmPreambleMode ofdmPreambleModeCS5MHz;
     static const Ieee80211OfdmPreambleMode ofdmPreambleModeCS10MHz;
     static const Ieee80211OfdmPreambleMode ofdmPreambleModeCS20MHz;
 
-    // Signal modes: Table 18-6—Contents of the SIGNAL field
+    // Signal modes: IEEE Std 802.11-2024 Table 17-6, contents of the SIGNAL field.
     static const Ieee80211OfdmSignalMode ofdmHeaderMode6MbpsRate13;
     static const Ieee80211OfdmSignalMode ofdmHeaderMode6MbpsRate15;
     static const Ieee80211OfdmSignalMode ofdmHeaderMode6MbpsRate5;
@@ -204,7 +214,7 @@ class INET_API Ieee80211OfdmCompliantModes
     static const Ieee80211OfdmSignalMode ofdmHeaderMode1_5MbpsRate1;
     static const Ieee80211OfdmSignalMode ofdmHeaderMode1_5MbpsRate3;
 
-    // Data modes: Table 18-4—Modulation-dependent parameters
+    // Data modes: IEEE Std 802.11-2024 Table 17-4, modulation-dependent parameters.
     static const Ieee80211OfdmDataMode ofdmDataMode1_5Mbps;
     static const Ieee80211OfdmDataMode ofdmDataMode2_25Mbps;
     static const Ieee80211OfdmDataMode ofdmDataMode3MbpsCS5MHz;
@@ -265,4 +275,3 @@ class INET_API Ieee80211OfdmCompliantModes
 } // namespace inet
 
 #endif
-

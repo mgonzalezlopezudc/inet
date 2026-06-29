@@ -400,6 +400,11 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
     if (heMuPhyHeader != nullptr)
         return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
                NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
+    // Non-HE PPDUs use the PHY-specific mode objects annotated in this package
+    // (DSSS Clause 15, HR/DSSS Clause 16, OFDM Clause 17, ERP Clause 18,
+    // HT Clause 19, VHT Clause 21). Reception is only possible for modes that
+    // belong to the configured 802.11 mode set; SNIR/sensitivity is then handled
+    // by the common narrowband receiver abstraction.
     return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
            NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
 }
@@ -413,6 +418,8 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
     if (heMuPhyHeader != nullptr)
         return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
                getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
+    // Same non-HE mode-set gate as above; this path evaluates the concrete
+    // reception interval against the receiver sensitivity.
     return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
            getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
 }
@@ -586,6 +593,10 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     lastHeBssColor = 0;
     lastHeRuAssigned = false;
 
+    // Non-HE PPDU reception is packet-level: the standard-specific durations,
+    // header fields, and padding are established in the mode/radio/transmitter
+    // code, while this receiver reports the selected PHY mode and channel with
+    // the decoded payload.
     auto receptionResult = FlatReceiverBase::computeReceptionResult(listening, reception, interference, snir, decisions);
     auto packet = const_cast<Packet *>(receptionResult->getPacket());
     packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());

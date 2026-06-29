@@ -31,6 +31,8 @@ class INET_API Ieee80211HrDsssPreambleMode : public IIeee80211PreambleMode
 
     Ieee80211HrDsssPreambleType getPreambleType() const { return preambleType; }
 
+    // IEEE Std 802.11-2024 16.2.2.2 and 16.2.2.3: the long PPDU uses a
+    // 128-bit SYNC; the short PPDU uses a 72-bit SYNC. Both retain a 16-bit SFD.
     b getSyncFieldLength() const { return preambleType == IEEE80211_HRDSSS_PREAMBLE_TYPE_SHORT ? b(72) : b(128); }
     b getSfdFieldLength() const { return b(16); }
     b getBitLength() const { return getSyncFieldLength() + getSfdFieldLength(); }
@@ -51,6 +53,9 @@ class INET_API Ieee80211HrDsssHeaderMode : public IIeee80211HeaderMode
   public:
     Ieee80211HrDsssHeaderMode(const Ieee80211HrDsssPreambleType preambleType);
 
+    // IEEE Std 802.11-2024 16.2.2.2 and 16.2.2.3: the HR/DSSS PLCP header
+    // contains SIGNAL, SERVICE, LENGTH, and CRC fields. Long headers are sent
+    // at 1 Mb/s DBPSK; short headers are sent at 2 Mb/s DQPSK.
     b getSignalFieldLength() const { return b(8); }
     b getServiceFieldLength() const { return b(8); }
     b getLengthFieldLength() const { return b(16); }
@@ -87,7 +92,7 @@ class INET_API Ieee80211HrDsssDataMode : public IIeee80211DataMode
 
 /**
  * Represents a High Rate Direct Sequence Spread Spectrum PHY mode as described
- * in the IEEE 802.11-2012 specification clause 17.
+ * in the IEEE 802.11-2024 specification clause 16.
  */
 class INET_API Ieee80211HrDsssMode : public Ieee80211ModeBase
 {
@@ -114,7 +119,7 @@ class INET_API Ieee80211HrDsssMode : public Ieee80211ModeBase
 
     virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + headerMode->getDuration() + dataMode->getDuration(dataLength); }
 
-    // TODO fill in
+    // IEEE Std 802.11-2024 Table 16-4: HR/DSSS PHY characteristics.
     virtual const simtime_t getSlotTime() const override { return 20E-6; }
     virtual const simtime_t getSifsTime() const override { return 10E-6; }
     virtual const simtime_t getCcaTime() const override { return 15E-6; }
@@ -128,7 +133,7 @@ class INET_API Ieee80211HrDsssMode : public Ieee80211ModeBase
 
 /**
  * Provides the compliant High Rate Direct Sequence Spread Spectrum PHY modes as
- * described in the IEEE 802.11-2012 specification clause 17.
+ * described in the IEEE 802.11-2024 specification clause 16.
  */
 class INET_API Ieee80211HrDsssCompliantModes
 {
@@ -177,4 +182,3 @@ class INET_API Ieee80211HrDsssCompliantModes
 } // namespace inet
 
 #endif
-

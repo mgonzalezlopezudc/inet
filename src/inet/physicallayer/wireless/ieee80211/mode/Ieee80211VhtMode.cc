@@ -259,29 +259,30 @@ const simtime_t Ieee80211VhtPreambleMode::getFirstHTLongTrainingFieldDuration() 
 
 unsigned int Ieee80211VhtPreambleMode::computeNumberOfSpaceTimeStreams(unsigned int numberOfSpatialStreams) const
 {
-    // Table 20-12—Determining the number of space-time streams
+    // IEEE Std 802.11-2024 Table 21-13 maps total space-time streams to
+    // N_VHT-LTF. STBC is not modeled, so N_STS follows NSS in practice.
     return numberOfSpatialStreams + highThroughputSignalMode->getSTBC();
 }
 
 unsigned int Ieee80211VhtPreambleMode::computeNumberOfHTLongTrainings(unsigned int numberOfSpaceTimeStreams) const
 {
-    // If the transmitter is providing training for exactly the space-time
-    // streams (spatial mapper inputs) used for the transmission of the PSDU,
-    // the number of training symbols, N_LTF, is equal to the number of space-time
-    // streams, N STS, except that for three space-time streams, four training symbols
-    // are required.
+    // IEEE Std 802.11-2024 21.3.2 and Table 21-13: N_VHT-LTF is 1, 2, 4, 6,
+    // or 8. The only nonidentity value below four streams is N_STS = 3 -> 4.
     return numberOfSpaceTimeStreams == 3 ? 4 : numberOfSpaceTimeStreams;
 }
 
 const simtime_t Ieee80211VhtPreambleMode::getDuration() const
 {
-    // 21.3.4 Mathematical description of signals
+    // IEEE Std 802.11-2024 Figure 21-4 and Table 21-4: L-STF, L-LTF, L-SIG,
+    // VHT-SIG-A, VHT-STF, N_VHT-LTF VHT-LTF symbols, and VHT-SIG-B.
     simtime_t sumOfHTLTFs = getSecondAndSubsequentHTLongTrainingFielDuration() * numberOfHTLongTrainings;
     return getNonHTShortTrainingSequenceDuration() + getNonHTLongTrainingFieldDuration() + getLSIGDuration() + getVHTSignalFieldA() + getVHTShortTrainingFieldDuration() + sumOfHTLTFs + getVHTSignalFieldB();
 }
 
 bps Ieee80211VhtSignalMode::computeGrossBitrate() const
 {
+    // IEEE Std 802.11-2024 Table 21-6 defines N_SD for VHT; the packet-level
+    // signal mode uses the same bandwidth-dependent subcarrier count.
     unsigned int numberOfCodedBitsPerSymbol = modulation->getSubcarrierModulation()->getCodeWordSize() * getNumberOfDataSubcarriers();
     if (guardIntervalType == HT_GUARD_INTERVAL_LONG)
         return bps(numberOfCodedBitsPerSymbol / getSymbolInterval());
@@ -346,6 +347,7 @@ bps Ieee80211VhtModeBase::getGrossBitrate() const
 
 int Ieee80211VhtModeBase::getNumberOfDataSubcarriers() const
 {
+    // IEEE Std 802.11-2024 Table 21-6: N_SD by VHT channel width.
     if (bandwidth == MHz(20))
         return 52;
     else if (bandwidth == MHz(40))
@@ -360,16 +362,17 @@ int Ieee80211VhtModeBase::getNumberOfDataSubcarriers() const
 
 int Ieee80211VhtModeBase::getNumberOfPilotSubcarriers() const
 {
+    // IEEE Std 802.11-2024 Table 21-6: N_SP by VHT channel width.
     if (bandwidth == MHz(20))
         return 4;
     else if (bandwidth == MHz(40))
-        // It is a spacial case, see the comment above.
+        // It is a special case, see the comment above.
         return 6;
     else if (bandwidth == MHz(80))
-        // It is a spacial case, see the comment above.
+        // It is a special case, see the comment above.
         return 8;
     else if (bandwidth == MHz(160))
-        // It is a spacial case, see the comment above.
+        // It is a special case, see the comment above.
         return 16;
     else
         throw cRuntimeError("Unsupported bandwidth");
@@ -377,7 +380,10 @@ int Ieee80211VhtModeBase::getNumberOfPilotSubcarriers() const
 
 b Ieee80211VhtDataMode::getCompleteLength(b dataLength) const
 {
-    return getServiceFieldLength() + getTailFieldLength() + dataLength; // TODO padding?
+    // IEEE Std 802.11-2024 21.3.10.5: SERVICE + PSDU + tail are used before
+    // padding. Padding is represented by the ceil(... / N_DBPS) duration below
+    // rather than by explicit packet bytes.
+    return getServiceFieldLength() + getTailFieldLength() + dataLength;
 }
 
 unsigned int Ieee80211VhtDataMode::computeNumberOfSpatialStreams(const Ieee80211Vhtmcs *vhtmcs) const
@@ -643,8 +649,8 @@ unsigned int Ieee80211VhtDataMode::getNumberOfBccEncoders160MHz() const
 
 unsigned int Ieee80211VhtDataMode::computeNumberOfBccEncoders() const
 {
-    // When the BCC FEC encoder is used, a single encoder is used, except that two encoders
-    // are used when the selected MCS has a PHY rate greater than 300 Mb/s (see 20.6).
+    // IEEE Std 802.11-2024 21.3.10.5.1 and Table 21-6 determine N_ES. The
+    // per-bandwidth helpers below encode the standard N_ES tables by MCS/NSS.
     if (getBandwidth() == MHz(20)) {
         return getNumberOfBccEncoders20MHz();
     }
@@ -663,6 +669,9 @@ unsigned int Ieee80211VhtDataMode::computeNumberOfBccEncoders() const
 
 const simtime_t Ieee80211VhtDataMode::getDuration(b dataLength) const
 {
+    // IEEE Std 802.11-2024 21.4.3: for BCC SU VHT, N_SYM is based on
+    // SERVICE + 8*APEP_LENGTH + N_tail*N_ES divided by N_DBPS. This simplified
+    // packet-level path treats LENGTH as PSDU bits and does not model STBC.
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
     const IForwardErrorCorrection *forwardErrorCorrection = getCode() ? getCode()->getForwardErrorCorrection() : nullptr;
@@ -1104,4 +1113,3 @@ const DI<Ieee80211Vhtmcs> Ieee80211VhtmcsTable::vhtMcs9BW160MHzNss8([](){ return
 
 } /* namespace physicallayer */
 } /* namespace inet */
-

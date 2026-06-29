@@ -138,10 +138,12 @@ Ieee80211Htmcs::Ieee80211Htmcs(unsigned int mcsIndex, const ApskModulationBase *
 
 int Ieee80211Htmcs::getNumberOfDataSubcarriers(Hz bandwidth, int mcsIndex)
 {
+    // IEEE Std 802.11-2024 Table 19-6 gives N_SD = 52 for 20 MHz and
+    // N_SD = 108 for 40 MHz; Table 19-35 gives the special MCS 32 format.
     if (bandwidth == MHz(20))
         return 52;
     else if (bandwidth == MHz(40))
-        // It is a special case, see Table 20-38—MCS parameters for
+        // It is a special case, see Table 19-35—MCS parameters for
         // optional 40 MHz MCS 32 format, N SS = 1, N ES = 1
         return mcsIndex == 32 ? 48 : 108;
     else
@@ -153,7 +155,7 @@ int Ieee80211Htmcs::getNumberOfPilotSubcarriers(Hz bandwidth, int mcsIndex)
     if (bandwidth == MHz(20))
         return 4;
     else if (bandwidth == MHz(40))
-        // It is a spacial case, see the comment above.
+        // It is a special case, see the comment above.
         return mcsIndex == 32 ? 4 : 6;
     else
         throw cRuntimeError("Unsupported bandwidth");
@@ -171,13 +173,13 @@ const simtime_t Ieee80211HtPreambleMode::getFirstHTLongTrainingFieldDuration() c
 
 unsigned int Ieee80211HtPreambleMode::computeNumberOfSpaceTimeStreams(unsigned int numberOfSpatialStreams) const
 {
-    // Table 20-12—Determining the number of space-time streams
+    // IEEE Std 802.11-2024 Table 19-12: N_STS is NSS plus the STBC expansion.
     return numberOfSpatialStreams + highThroughputSignalMode->getSTBC();
 }
 
 unsigned int Ieee80211HtPreambleMode::computeNumberOfHTLongTrainings(unsigned int numberOfSpaceTimeStreams) const
 {
-    // If the transmitter is providing training for exactly the space-time
+    // IEEE Std 802.11-2024 19.3.9.4.6 and Table 19-13: if the transmitter is providing training for exactly the space-time
     // streams (spatial mapper inputs) used for the transmission of the PSDU,
     // the number of training symbols, N_LTF, is equal to the number of space-time
     // streams, N STS, except that for three space-time streams, four training symbols
@@ -187,7 +189,8 @@ unsigned int Ieee80211HtPreambleMode::computeNumberOfHTLongTrainings(unsigned in
 
 const simtime_t Ieee80211HtPreambleMode::getDuration() const
 {
-    // 20.3.7 Mathematical description of signals
+    // IEEE Std 802.11-2024 19.3.9.2 and 19.3.9.5 define the mixed and
+    // greenfield preamble field order. Field durations come from Table 19-6.
     simtime_t sumOfHTLTFs = getFirstHTLongTrainingFieldDuration() + getSecondAndSubsequentHTLongTrainingFielDuration() * (numberOfHTLongTrainings - 1);
     if (preambleFormat == HT_PREAMBLE_MIXED)
         // L-STF -> L-LTF -> L-SIG -> HT-SIG -> HT-STF -> HT-LTF1 -> HT-LTF2 -> ... -> HT_LTFn
@@ -201,6 +204,8 @@ const simtime_t Ieee80211HtPreambleMode::getDuration() const
 
 bps Ieee80211HtSignalMode::computeGrossBitrate() const
 {
+    // IEEE Std 802.11-2024 Table 19-7: N_CBPS is the modulation bit count
+    // summed over spatial streams and multiplied by N_SD.
     unsigned int numberOfCodedBitsPerSymbol = modulation->getSubcarrierModulation()->getCodeWordSize() * getNumberOfDataSubcarriers();
     if (guardIntervalType == HT_GUARD_INTERVAL_LONG)
         return bps(numberOfCodedBitsPerSymbol / getSymbolInterval());
@@ -275,7 +280,10 @@ int Ieee80211HtModeBase::getNumberOfPilotSubcarriers() const
 
 b Ieee80211HtDataMode::getCompleteLength(b dataLength) const
 {
-    return getServiceFieldLength() + getTailFieldLength() + dataLength; // TODO padding?
+    // IEEE Std 802.11-2024 19.3.11 forms SERVICE + PSDU + tail before padding.
+    // Padding is not materialized as packet bytes here; getDuration() applies
+    // ceil(... / N_DBPS) to account for the occupied OFDM symbols.
+    return getServiceFieldLength() + getTailFieldLength() + dataLength;
 }
 
 unsigned int Ieee80211HtDataMode::computeNumberOfSpatialStreams(const Ieee80211OfdmModulation *stream1Modulation, const Ieee80211OfdmModulation *stream2Modulation, const Ieee80211OfdmModulation *stream3Modulation, const Ieee80211OfdmModulation *stream4Modulation) const
@@ -294,13 +302,18 @@ unsigned int Ieee80211HtDataMode::computeNumberOfCodedBitsPerSubcarrierSum() con
 
 unsigned int Ieee80211HtDataMode::computeNumberOfBccEncoders() const
 {
+    // IEEE Std 802.11-2024 19.3.11: one BCC encoder is used except at PHY
+    // rates greater than 300 Mb/s, where two encoders are used.
     // When the BCC FEC encoder is used, a single encoder is used, except that two encoders
-    // are used when the selected MCS has a PHY rate greater than 300 Mb/s (see 20.6).
+    // are used when the selected MCS has a PHY rate greater than 300 Mb/s.
     return getGrossBitrate() > Mbps(300) ? 2 : 1;
 }
 
 const simtime_t Ieee80211HtDataMode::getDuration(b dataLength) const
 {
+    // IEEE Std 802.11-2024 19.3.11 and 19.4.3: N_SYM is derived from
+    // SERVICE + 8*LENGTH + 6*N_ES tail bits divided by N_DBPS. This simplified
+    // packet-level path assumes m_STBC = 1 and no explicit signal extension.
     unsigned int numberOfCodedBitsPerSubcarrierSum = computeNumberOfCodedBitsPerSubcarrierSum();
     unsigned int numberOfCodedBitsPerSymbol = numberOfCodedBitsPerSubcarrierSum * getNumberOfDataSubcarriers();
     const IForwardErrorCorrection *forwardErrorCorrection = getCode() ? getCode()->getForwardErrorCorrection() : nullptr;
@@ -568,4 +581,3 @@ const DI<Ieee80211Htmcs> Ieee80211HtmcsTable::htMcs76BW40MHz([](){ return new Ie
 
 } /* namespace physicallayer */
 } /* namespace inet */
-

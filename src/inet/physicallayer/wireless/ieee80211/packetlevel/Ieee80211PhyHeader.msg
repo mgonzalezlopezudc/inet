@@ -56,7 +56,7 @@ class Ieee80211IrPhyHeader extends Ieee80211PhyHeader
 }
 
 //
-// IEEE 802.11 16. DSSS PHY
+// IEEE Std 802.11-2024 Clause 15 DSSS PHY
 //
 class Ieee80211DsssPhyPreamble extends Ieee80211PhyPreamble
 {
@@ -68,13 +68,15 @@ class Ieee80211DsssPhyHeader extends Ieee80211PhyHeader
     chunkLength = B(6);
     uint8_t signal;
     uint8_t service;
-    // The inherited lengthField is serialized as the 16-bit PLCP LENGTH field.
+    // IEEE Std 802.11-2024 15.3.3.6 defines PLCP LENGTH in microseconds.
+    // INET keeps the TXVECTOR LENGTH octet count here; see the serializer
+    // comment for the non-bit-exact DSSS/HR-DSSS conversion gap.
     uint16_t fcs;
     ChecksumMode fcsMode = FCS_MODE_UNDEFINED;  // should be FcsMode, but OMMeT++ bug #1351 prevents that (fixed in OMNeT++ 6.2)
 }
 
 //
-// IEEE 802.11 17. High Rate direct sequence spread spectrum (HR/DSSS)
+// IEEE Std 802.11-2024 Clause 16 High Rate DSSS PHY (HR/DSSS)
 //
 class Ieee80211HrDsssPhyPreamble extends Ieee80211DsssPhyPreamble
 {
@@ -85,7 +87,7 @@ class Ieee80211HrDsssPhyHeader extends Ieee80211DsssPhyHeader
 }
 
 //
-// IEEE 802.11 18. Orthogonal frequency division multiplexing (OFDM)
+// IEEE Std 802.11-2024 Clause 17 Orthogonal Frequency Division Multiplexing (OFDM) PHY
 //
 class Ieee80211OfdmPhyPreamble extends Ieee80211PhyPreamble
 {
@@ -95,7 +97,7 @@ class Ieee80211OfdmPhyPreamble extends Ieee80211PhyPreamble
 // octets in the PSDU that the MAC is currently requesting the PHY to
 // transmit.
 //
-// The rate field (18.3.4.2 RATE field) is a 4-bit integer carries
+// The rate field (17.3.4.2 RATE field) is a 4-bit integer carries
 // information about the modulation and coding.
 //
 // There are other fields which are not explicitly represented here,
@@ -104,8 +106,8 @@ class Ieee80211OfdmPhyPreamble extends Ieee80211PhyPreamble
 // The PSDU field must be contained as an encapsulated packet.
 //
 // This packet is intended to represent the whole PPDU frame in the
-// IEEE 802.11 PHY. For detailed description, you may refer to 18.3.2 PLCP
-// frame format, Figure 18-1—PPDU frame format in IEEE Std. 802.11-2012.
+// IEEE 802.11 PHY. For detailed description, see IEEE Std 802.11-2024
+// 17.3.2 PLCP frame format and Figure 17-1 PPDU frame format.
 //
 class Ieee80211OfdmPhyHeader extends Ieee80211PhyHeader
 {
@@ -121,7 +123,7 @@ class Ieee80211OfdmPhyHeader extends Ieee80211PhyHeader
 }
 
 //
-// IEEE 802.11 19. Extended Rate PHY (ERP) OFDM
+// IEEE Std 802.11-2024 Clause 18 Extended Rate PHY (ERP) OFDM
 //
 class Ieee80211ErpOfdmPhyPreamble extends Ieee80211OfdmPhyPreamble
 {
@@ -132,7 +134,7 @@ class Ieee80211ErpOfdmPhyHeader extends Ieee80211OfdmPhyHeader
 }
 
 //
-// IEEE 802.11 20. High Throughput (HT)
+// IEEE Std 802.11-2024 Clause 19 High Throughput (HT) PHY
 //
 class Ieee80211HtPhyPreamble extends Ieee80211PhyPreamble
 {
@@ -147,7 +149,7 @@ class Ieee80211HtPhyHeader extends Ieee80211PhyHeader
     uint8_t coding = 0; // 0: BCC, 1: LDPC
 }
 
-// IEEE 802.11 21. High Throughput (VHT)
+// IEEE Std 802.11-2024 Clause 21 Very High Throughput (VHT) PHY
 //
 class Ieee80211VhtPhyPreamble extends Ieee80211PhyPreamble
 {

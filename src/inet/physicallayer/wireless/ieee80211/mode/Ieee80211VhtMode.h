@@ -55,7 +55,13 @@ class INET_API Ieee80211VhtModeBase
     virtual bps getGrossBitrate() const;
 };
 
-/** VHT-SIG header transmission mode. */
+/** VHT packet-level signaling mode.
+ *
+ * IEEE Std 802.11-2024 21.3.2 defines the VHT PPDU fields. This class is used
+ * as the packet-level header mode for duration and coding-rate calculations;
+ * the serializer does not currently encode the full VHT-SIG-A/VHT-SIG-B bit
+ * layout.
+ */
 class INET_API Ieee80211VhtSignalMode : public IIeee80211HeaderMode, public Ieee80211VhtModeBase, public Ieee80211HtTimingRelatedParametersBase
 {
   protected:
@@ -71,7 +77,8 @@ class INET_API Ieee80211VhtSignalMode : public IIeee80211HeaderMode, public Ieee
     Ieee80211VhtSignalMode(unsigned int modulationAndCodingScheme, const Ieee80211OfdmModulation *modulation, const Ieee80211ConvolutionalCode *convolutionalCode, const Hz bandwidth, GuardIntervalType guardIntervalType);
     virtual ~Ieee80211VhtSignalMode();
 
-    /* Table 20-11—HT-SIG fields, 1699p */
+    // Packet-level field budget for the modeled VHT header. Full VHT-SIG-A/B
+    // bit layouts are specified by IEEE Std 802.11-2024 21.3.8 and 21.3.9.
 
     // HT-SIG_1 (24 bits)
     virtual b getMCSLength() const { return b(9); }
@@ -89,7 +96,7 @@ class INET_API Ieee80211VhtSignalMode : public IIeee80211HeaderMode, public Ieee
     virtual b getNumOfExtensionSpatialStreamsLength() const { return b(2); }
     virtual b getFCSLength() const { return b(8); }
     virtual b getTailBitsLength() const { return b(6); }
-    virtual unsigned int getSTBC() const { return 0; } // Limitation: We assume that STBC is not used
+    virtual unsigned int getSTBC() const { return 0; } // Packet-level limitation: STBC field is modeled as 0.
 
     virtual const simtime_t getHTSIGDuration() const { return 2 * getSymbolInterval(); } // HT-SIG
 
@@ -105,10 +112,6 @@ class INET_API Ieee80211VhtSignalMode : public IIeee80211HeaderMode, public Ieee
     virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211VhtPhyHeader>(); }
 };
 
-/*
- * The HT preambles are defined in HT-mixed format and in HT-greenfield format to carry the required
- * information to operate in a system with multiple transmit and multiple receive antennas. (20.3.9 HT preamble)
- */
 /** VHT preamble mode, including the legacy-compatible signaling fields. */
 class INET_API Ieee80211VhtPreambleMode : public IIeee80211PreambleMode, public Ieee80211HtTimingRelatedParametersBase
 {
@@ -119,10 +122,10 @@ class INET_API Ieee80211VhtPreambleMode : public IIeee80211PreambleMode, public 
     };
 
   protected:
-    const Ieee80211VhtSignalMode *highThroughputSignalMode; // In HT-terminology the HT-SIG (signal field) and L-SIG are part of the preamble
+    const Ieee80211VhtSignalMode *highThroughputSignalMode; // VHT-SIG-A/B packet-level signaling model
     const Ieee80211OfdmSignalMode *legacySignalMode; // L-SIG
     const HighTroughputPreambleFormat preambleFormat;
-    const unsigned int numberOfHTLongTrainings; // N_LTF, 20.3.9.4.6 HT-LTF definition
+    const unsigned int numberOfHTLongTrainings; // N_VHT-LTF, IEEE Std 802.11-2024 Table 21-13
 
   protected:
     virtual unsigned int computeNumberOfSpaceTimeStreams(unsigned int numberOfSpatialStreams) const;
@@ -145,7 +148,7 @@ class INET_API Ieee80211VhtPreambleMode : public IIeee80211PreambleMode, public 
     virtual const simtime_t getNonHTSignalField() const { return 4E-6; } // L-SIG
     virtual const simtime_t getVHTSignalFieldA() const { return 8E-6; } // VHT-SIG-A
     virtual const simtime_t getVHTShortTrainingFieldDuration() const { return 4E-6; } // VHT-STF
-    virtual const simtime_t getVHTSignalFieldB() const { return 4E-6; } // VHT-SIG-A
+    virtual const simtime_t getVHTSignalFieldB() const { return 4E-6; } // VHT-SIG-B
 
     virtual const simtime_t getFirstHTLongTrainingFieldDuration() const;
     virtual const simtime_t getSecondAndSubsequentHTLongTrainingFielDuration() const { return 4E-6; } // HT-LTFs, s = 2,3,..,n
@@ -203,8 +206,33 @@ class INET_API Ieee80211Vhtmcs
                + (stream7Modulation ? 1 : 0) + (stream8Modulation ? 1 : 0);
     }
 
-    static int getNumberOfDataSubcarriers(Hz bandwidth) { return 48; } // TODO
-    static int getNumberOfPilotSubcarriers(Hz bandwidth) { return 4; } // TODO
+    // IEEE Std 802.11-2024 Table 21-6: VHT N_SD and N_SP by channel width.
+    static int getNumberOfDataSubcarriers(Hz bandwidth)
+    {
+        if (bandwidth == MHz(20))
+            return 52;
+        else if (bandwidth == MHz(40))
+            return 108;
+        else if (bandwidth == MHz(80))
+            return 234;
+        else if (bandwidth == MHz(160))
+            return 468;
+        else
+            throw cRuntimeError("Unsupported VHT bandwidth");
+    }
+    static int getNumberOfPilotSubcarriers(Hz bandwidth)
+    {
+        if (bandwidth == MHz(20))
+            return 4;
+        else if (bandwidth == MHz(40))
+            return 6;
+        else if (bandwidth == MHz(80))
+            return 8;
+        else if (bandwidth == MHz(160))
+            return 16;
+        else
+            throw cRuntimeError("Unsupported VHT bandwidth");
+    }
 
     static int getNumberOfTotalSubcarriers(Hz bandwidth) { return getNumberOfDataSubcarriers(bandwidth) + getNumberOfPilotSubcarriers(bandwidth); }
 };
@@ -279,7 +307,7 @@ class INET_API Ieee80211VhtMode : public Ieee80211ModeBase
     virtual const Ieee80211VhtSignalMode *getHeaderMode() const override { return preambleMode->getSignalMode(); }
     virtual const Ieee80211OfdmSignalMode *getLegacySignalMode() const { return preambleMode->getLegacySignalMode(); }
 
-    // Table 20-25—MIMO PHY characteristics
+    // IEEE Std 802.11-2024 Table 21-28: VHT PHY characteristics.
     virtual const simtime_t getSlotTime() const override;
     virtual const simtime_t getShortSlotTime() const;
     virtual const simtime_t getSifsTime() const override;
@@ -303,7 +331,7 @@ class INET_API Ieee80211VhtMode : public Ieee80211ModeBase
 class INET_API Ieee80211VhtmcsTable
 {
   public:
-    // Table 20-30—MCS parameters for mandatory 20 MHz, N_SS = 1, N_ES = 1
+    // Table 21-29—VHT-MCSs for mandatory 20 MHz, N_SS = 1, N_ES = 1
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss1;
@@ -315,7 +343,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss1; // No valid
 
-    // Table 20-31—MCS parameters for optional 20 MHz, N_SS = 2
+    // Table 21-30—VHT-MCSs for optional 20 MHz, N_SS = 2
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss2;
@@ -327,7 +355,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss2; // No valid
 
-    // Table 20-32—MCS parameters for optional 20 MHz, N_SS = 3
+    // Table 21-31—VHT-MCSs for optional 20 MHz, N_SS = 3
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss3;
@@ -339,7 +367,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss3;
 
-    // Table 20-33—MCS parameters for optional 20 MHz, N_SS = 4
+    // Table 21-32—VHT-MCSs for optional 20 MHz, N_SS = 4
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss4;
@@ -351,7 +379,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss4; // No valid
 
-    // Table 20-33—MCS parameters for optional 20 MHz, N_SS = 5
+    // Table 21-33—VHT-MCSs for optional 20 MHz, N_SS = 5
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss5;
@@ -363,7 +391,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss5; // No valid
 
-    // Table 20-33—MCS parameters for optional 20 MHz, N_SS = 6
+    // Table 21-34—VHT-MCSs for optional 20 MHz, N_SS = 6
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss6;
@@ -375,7 +403,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss6;
 
-    // Table 20-33—MCS parameters for optional 20 MHz, N_SS = 7
+    // Table 21-35—VHT-MCSs for optional 20 MHz, N_SS = 7
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss7;
@@ -387,7 +415,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss7; // No valid
 
-    // Table 20-33—MCS parameters for optional 20 MHz, N_SS = 8
+    // Table 21-36—VHT-MCSs for optional 20 MHz, N_SS = 8
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW20MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW20MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW20MHzNss8;
@@ -399,7 +427,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW20MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW20MHzNss8; // No valid
 
-    // Table 20-30—MCS parameters for mandatory 40 MHz, N_SS = 1, N_ES = 1
+    // Table 21-37—VHT-MCSs for mandatory 40 MHz, N_SS = 1, N_ES = 1
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss1;
@@ -411,7 +439,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss1;
 
-    // Table 20-31—MCS parameters for optional 40 MHz, N_SS = 2
+    // Table 21-38—VHT-MCSs for optional 40 MHz, N_SS = 2
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss2;
@@ -423,7 +451,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss2;
 
-    // Table 20-32—MCS parameters for optional 40 MHz, N_SS = 3
+    // Table 21-39—VHT-MCSs for optional 40 MHz, N_SS = 3
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss3;
@@ -435,7 +463,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss3;
 
-    // Table 20-33—MCS parameters for optional 40 MHz, N_SS = 4
+    // Table 21-40—VHT-MCSs for optional 40 MHz, N_SS = 4
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss4;
@@ -447,7 +475,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss4;
 
-    // Table 20-33—MCS parameters for optional 40 MHz, N_SS = 5
+    // Table 21-41—VHT-MCSs for optional 40 MHz, N_SS = 5
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss5;
@@ -459,7 +487,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss5;
 
-    // Table 20-33—MCS parameters for optional 40 MHz, N_SS = 6
+    // Table 21-42—VHT-MCSs for optional 40 MHz, N_SS = 6
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss6;
@@ -471,7 +499,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss6;
 
-    // Table 20-33—MCS parameters for optional 40 MHz, N_SS = 7
+    // Table 21-43—VHT-MCSs for optional 40 MHz, N_SS = 7
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss7;
@@ -483,7 +511,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss7;
 
-    // Table 20-33—MCS parameters for optional 40 MHz, N_SS = 8
+    // Table 21-44—VHT-MCSs for optional 40 MHz, N_SS = 8
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW40MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW40MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW40MHzNss8;
@@ -494,7 +522,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs7BW40MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW40MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW40MHzNss8;
-    // Table 20-30—MCS parameters for mandatory 80 MHz, N_SS = 1, N_ES = 1
+    // Table 21-45—VHT-MCSs for mandatory 80 MHz, N_SS = 1, N_ES = 1
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss1;
@@ -506,7 +534,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss1;
 
-    // Table 20-31—MCS parameters for optional 80 MHz, N_SS = 2
+    // Table 21-46—VHT-MCSs for optional 80 MHz, N_SS = 2
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss2;
@@ -518,7 +546,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss2;
 
-    // Table 20-32—MCS parameters for optional 80 MHz, N_SS = 3
+    // Table 21-47—VHT-MCSs for optional 80 MHz, N_SS = 3
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss3;
@@ -530,7 +558,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss3;
 
-    // Table 20-33—MCS parameters for optional 80 MHz, N_SS = 4
+    // Table 21-48—VHT-MCSs for optional 80 MHz, N_SS = 4
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss4;
@@ -542,7 +570,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss4;
 
-    // Table 20-33—MCS parameters for optional 80 MHz, N_SS = 5
+    // Table 21-49—VHT-MCSs for optional 80 MHz, N_SS = 5
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss5;
@@ -554,7 +582,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss5;
 
-    // Table 20-33—MCS parameters for optional 80 MHz, N_SS = 6
+    // Table 21-50—VHT-MCSs for optional 80 MHz, N_SS = 6
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss6;
@@ -566,7 +594,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss6;
 
-    // Table 20-33—MCS parameters for optional 80 MHz, N_SS = 7
+    // Table 21-51—VHT-MCSs for optional 80 MHz, N_SS = 7
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss7;
@@ -578,7 +606,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss7;
 
-    // Table 20-33—MCS parameters for optional 80 MHz, N_SS = 8
+    // Table 21-52—VHT-MCSs for optional 80 MHz, N_SS = 8
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW80MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW80MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW80MHzNss8;
@@ -590,7 +618,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW80MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW80MHzNss8;
 
-    // Table 20-30—MCS parameters for mandatory 160 MHz, N_SS = 1, N_ES = 1
+    // Table 21-53—VHT-MCSs for mandatory 160 MHz, N_SS = 1, N_ES = 1
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss1;
@@ -602,7 +630,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW160MHzNss1;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss1;
 
-    // Table 20-31—MCS parameters for optional 160 MHz, N_SS = 2
+    // Table 21-54—VHT-MCSs for optional 160 MHz, N_SS = 2
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss2;
@@ -614,7 +642,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW160MHzNss2;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss2;
 
-    // Table 20-32—MCS parameters for optional 160 MHz, N_SS = 3
+    // Table 21-55—VHT-MCSs for optional 160 MHz, N_SS = 3
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss3;
@@ -626,7 +654,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW160MHzNss3;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss3;
 
-    // Table 20-33—MCS parameters for optional 160 MHz, N_SS = 4
+    // Table 21-56—VHT-MCSs for optional 160 MHz, N_SS = 4
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss4;
@@ -638,7 +666,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW160MHzNss4;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss4;
 
-    // Table 20-33—MCS parameters for optional 160 MHz, N_SS = 5
+    // Table 21-57—VHT-MCSs for optional 160 MHz, N_SS = 5
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss5;
@@ -650,7 +678,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW160MHzNss5;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss5;
 
-    // Table 20-33—MCS parameters for optional 160 MHz, N_SS = 6
+    // Table 21-58—VHT-MCSs for optional 160 MHz, N_SS = 6
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss6;
@@ -662,7 +690,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW160MHzNss6;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss6;
 
-    // Table 20-33—MCS parameters for optional 160 MHz, N_SS = 7
+    // Table 21-59—VHT-MCSs for optional 160 MHz, N_SS = 7
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss7;
@@ -674,7 +702,7 @@ class INET_API Ieee80211VhtmcsTable
     static const DI<Ieee80211Vhtmcs> vhtMcs8BW160MHzNss7;
     static const DI<Ieee80211Vhtmcs> vhtMcs9BW160MHzNss7;
 
-    // Table 20-33—MCS parameters for optional 160 MHz, N_SS = 8
+    // Table 21-60—VHT-MCSs for optional 160 MHz, N_SS = 8
     static const DI<Ieee80211Vhtmcs> vhtMcs0BW160MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs1BW160MHzNss8;
     static const DI<Ieee80211Vhtmcs> vhtMcs2BW160MHzNss8;
