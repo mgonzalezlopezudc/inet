@@ -72,6 +72,9 @@ void Dcf::channelGranted(IChannelAccess *channelAccess)
     Enter_Method("channelGranted");
     ASSERT(this->channelAccess == channelAccess);
     if (!frameSequenceHandler->isSequenceRunning()) {
+        // IEEE Std 802.11-2024, 10.3.4.2 and 10.3.4.3: the DCF may transmit
+        // after DIFS/EIFS and backoff reach zero; Dcaf owns that contention
+        // procedure, and this callback starts the resulting frame exchange.
         frameSequenceHandler->startFrameSequence(new DcfFs(), buildContext(), this);
         emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
     }
@@ -83,6 +86,8 @@ void Dcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
     take(packet);
     EV_INFO << "Processing upper frame: " << packet->getName() << endl;
     auto pendingQueue = channelAccess->getPendingQueue();
+    // IEEE Std 802.11-2024, 10.3.1 and 10.3.4.2: queued DCF traffic enters
+    // CSMA/CA contention; Dcaf applies DIFS/EIFS, random backoff and CW.
     pendingQueue->enqueuePacket(packet);
     if (!pendingQueue->isEmpty()) {
         EV_DETAIL << "Requesting channel" << endl;
@@ -101,6 +106,8 @@ void Dcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
         responseMode = rateSelection->computeResponseAckFrameMode(receivedPacket, dataOrMgmtHeader);
     else
         throw cRuntimeError("Unknown received frame type");
+    // IEEE Std 802.11-2024, 10.3.2.9 and 10.3.2.11: CTS/Ack responses are
+    // control responses transmitted after SIFS, using the response-rate rules.
     RateSelection::setFrameMode(responsePacket, responseHeader, responseMode);
     emit(IRateSelection::datarateSelectedSignal, responseMode->getDataMode()->getNetBitrate().get<bps>(), responsePacket);
     EV_DEBUG << "Datarate for " << responsePacket->getName() << " is set to " << responseMode->getDataMode()->getNetBitrate() << ".\n";
@@ -136,6 +143,9 @@ void Dcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     take(packet);
     EV_INFO << "Processing lower frame: " << packet->getName() << endl;
     if (frameSequenceHandler->isSequenceRunning()) {
+        // IEEE Std 802.11-2024, 10.3.2.9 and 10.3.2.11: while waiting for
+        // CTS/Ack, a matching response continues the exchange; an unexpected
+        // frame or timeout is handled as a failed transmission by the sequence.
         // TODO always call processResponses
         if ((!isForUs(header) && !startRxTimer->isScheduled()) || isForUs(header)) {
             auto receiveStep = dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep());
@@ -176,6 +186,8 @@ void Dcf::transmitFrame(Packet *packet, simtime_t ifs)
     auto pendingPacket = channelAccess->getInProgressFrames()->getPendingFrameFor(packet);
     auto duration = originatorProtectionMechanism->computeDurationField(packet, header, pendingPacket, pendingPacket == nullptr ? nullptr : pendingPacket->peekAtFront<Ieee80211DataOrMgmtHeader>());
     const auto& updatedHeader = packet->removeAtFront<Ieee80211MacHeader>();
+    // IEEE Std 802.11-2024, 10.3.1 and 10.3.2.6: RTS/CTS and individually
+    // addressed frames announce the remaining protected exchange via Duration.
     updatedHeader->setDurationField(duration);
     EV_DEBUG << "Duration for " << packet->getName() << " is set to " << duration << " s.\n";
     packet->insertAtFront(updatedHeader);
@@ -192,6 +204,8 @@ void Dcf::frameSequenceFinished()
 {
     Enter_Method("frameSequenceFinished");
     emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
+    // IEEE Std 802.11-2024, 10.3.4.3: after a frame exchange the DCF releases
+    // the current access and, if traffic remains, performs another contention.
     channelAccess->releaseChannel(this);
     if (hasFrameToTransmit())
         channelAccess->requestChannel(this);
@@ -207,6 +221,9 @@ void Dcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
 {
     EV_INFO << "Processing received frame " << packet->getName() << " as recipient.\n";
     emit(packetReceivedFromPeerSignal, packet);
+    // IEEE Std 802.11-2024, 10.3.2.11: individually addressed Data and
+    // Management frames that require immediate acknowledgment are acknowledged
+    // even if the payload is later discarded by higher MAC service logic.
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
         recipientAckProcedure->processReceivedFrame(packet, dataOrMgmtHeader, recipientAckPolicy, this);
     if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header))
@@ -228,6 +245,8 @@ void Dcf::sendUp(const std::vector<Packet *>& completeFrames)
 
 void Dcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
+    // IEEE Std 802.11-2024, 10.3.2.9: a non-VHT/non-S1G recipient of an RTS
+    // addressed to it responds with CTS after SIFS when the CTS policy permits.
     if (auto rtsFrame = dynamicPtrCast<const Ieee80211RtsFrame>(header))
         ctsProcedure->processReceivedRts(packet, rtsFrame, ctsPolicy, this);
     else
@@ -260,6 +279,9 @@ void Dcf::originatorProcessRtsProtectionFailed(Packet *packet)
     Enter_Method("originatorProcessRtsProtectionFailed");
     EV_INFO << "RTS frame transmission failed\n";
     auto protectedHeader = packet->peekAtFront<Ieee80211DataOrMgmtHeader>();
+    // IEEE Std 802.11-2024, 10.3.2.9 and 10.3.4.4: missing or invalid CTS
+    // after CTSTimeout fails the RTS exchange, increments SRC/SSRC and may hit
+    // dot11ShortRetryLimit for the protected MSDU/MMPDU.
     recoveryProcedure->rtsFrameTransmissionFailed(protectedHeader, stationRetryCounters);
     EV_INFO << "For the current frame exchange, we have CW = " << channelAccess->getCw() << " SRC = " << recoveryProcedure->getShortRetryCount(packet, protectedHeader) << " LRC = " << recoveryProcedure->getLongRetryCount(packet, protectedHeader) << " SSRC = " << stationRetryCounters->getStationShortRetryCount() << " and SLRC = " << stationRetryCounters->getStationLongRetryCount() << std::endl;
     if (recoveryProcedure->isRtsFrameRetryLimitReached(packet, protectedHeader)) {
@@ -284,9 +306,13 @@ void Dcf::originatorProcessTransmittedFrame(Packet *packet)
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(transmittedHeader)) {
         EV_INFO << "For the current frame exchange, we have CW = " << channelAccess->getCw() << " SRC = " << recoveryProcedure->getShortRetryCount(packet, dataOrMgmtHeader) << " LRC = " << recoveryProcedure->getLongRetryCount(packet, dataOrMgmtHeader) << " SSRC = " << stationRetryCounters->getStationShortRetryCount() << " and SLRC = " << stationRetryCounters->getStationLongRetryCount() << std::endl;
         if (originatorAckPolicy->isAckNeeded(dataOrMgmtHeader)) {
+            // IEEE Std 802.11-2024, 10.3.2.11: an originator that sends an
+            // MPDU requiring immediate Ack enters the AckTimeout wait state.
             ackHandler->processTransmittedDataOrMgmtFrame(dataOrMgmtHeader);
         }
         else if (dataOrMgmtHeader->getReceiverAddress().isMulticast()) {
+            // IEEE Std 802.11-2024, 10.3.2.11: group addressed frames do not
+            // solicit Ack and are implicitly considered acknowledged.
             recoveryProcedure->multicastFrameTransmitted(stationRetryCounters);
             channelAccess->getInProgressFrames()->dropFrame(packet);
         }
@@ -312,6 +338,9 @@ void Dcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
             int retryCount = lastTransmittedHeader->getRetry() ? recoveryProcedure->getRetryCount(lastTransmittedPacket, lastTransmittedDataOrMgmtHeader) : 0;
             dataAndMgmtRateControl->frameTransmitted(lastTransmittedPacket, retryCount, true, false);
         }
+        // IEEE Std 802.11-2024, 10.3.2.11 and 10.3.4.4: a valid Ack addressed
+        // to the originator completes the MPDU exchange and resets the relevant
+        // retry counters/CW in the recovery procedure.
         recoveryProcedure->ackFrameReceived(lastTransmittedPacket, lastTransmittedDataOrMgmtHeader, stationRetryCounters);
         ackHandler->processReceivedAck(dynamicPtrCast<const Ieee80211AckFrame>(receivedHeader), lastTransmittedDataOrMgmtHeader);
         channelAccess->getInProgressFrames()->dropFrame(lastTransmittedPacket);
@@ -332,6 +361,10 @@ void Dcf::originatorProcessFailedFrame(Packet *failedPacket)
     const auto& failedHeader = failedPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
     ASSERT(failedHeader->getType() != ST_DATA_WITH_QOS);
     ASSERT(ackHandler->getAckStatus(failedHeader) == AckHandler::Status::WAITING_FOR_ACK || ackHandler->getAckStatus(failedHeader) == AckHandler::Status::NO_ACK_REQUIRED);
+    // IEEE Std 802.11-2024, 10.3.2.11 and 10.3.4.4: failure of the Ack
+    // procedure increments SRC/LRC according to the MPDU length vs.
+    // dot11RTSThreshold; retransmissions carry Retry=1 until a retry limit or
+    // transmit lifetime causes discard.
     recoveryProcedure->dataOrMgmtFrameTransmissionFailed(failedPacket, failedHeader, stationRetryCounters);
     bool retryLimitReached = recoveryProcedure->isRetryLimitReached(failedPacket, failedHeader);
     if (dataAndMgmtRateControl) {
@@ -360,6 +393,9 @@ void Dcf::originatorProcessFailedFrame(Packet *failedPacket)
 
 bool Dcf::isForUs(const Ptr<const Ieee80211MacHeader>& header) const
 {
+    // IEEE Std 802.11-2024, 9.2.4.3.1 and Table 9-60: Address 1 is RA/DA for
+    // nonmesh data/control reception; multicast frames sent by this STA must
+    // not be looped back as received peer traffic.
     return header->getReceiverAddress() == mac->getAddress() || (header->getReceiverAddress().isMulticast() && !isSentByUs(header));
 }
 
@@ -367,7 +403,8 @@ bool Dcf::isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const
 {
     // FIXME
     // Check the roles of the Addr3 field when aggregation is applied
-    // Table 8-19—Address field contents
+    // IEEE Std 802.11-2024, Table 9-60: Address 3 can carry SA/BSSID/DA
+    // depending on To DS/From DS, so this shortcut is incomplete.
     if (auto dataOrMgmtHeader = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header))
         return dataOrMgmtHeader->getAddress3() == mac->getAddress();
     else
