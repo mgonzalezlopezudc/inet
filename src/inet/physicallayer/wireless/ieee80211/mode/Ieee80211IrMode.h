@@ -26,6 +26,9 @@ class INET_API Ieee80211IrPreambleMode : public IIeee80211PreambleMode
     int getSyncSlotLength() const { return syncSlotLength; }
     int getSFDSlotLength() const { return 4; }
     int getSlotLength() const { return getSyncSlotLength() + getSFDSlotLength(); }
+    // Legacy IR PHY uses 250 ns PPM slots. IEEE Std 802.11-2024 no longer
+    // contains an active IR PHY clause, so this is retained as an INET legacy
+    // mode constant rather than a 2024 clause reference.
     const simtime_t getSlotDuration() const { return 250E-9; }
 
     virtual const simtime_t getDuration() const override { return getSlotLength() * getSlotDuration(); }
@@ -41,6 +44,8 @@ class INET_API Ieee80211IrHeaderMode : public IIeee80211HeaderMode
   public:
     Ieee80211IrHeaderMode(const PpmModulationBase *modulation);
 
+    // Legacy IR PLCP header fields. Do not map these to IEEE Std 802.11-2024
+    // Clause 15: in the 2024 edition, Clause 15 is DSSS, not IR.
     int getDRSlotLength() const { return 3; }
     int getDCLASlotLength() const { return 32; }
     b getLengthFieldLength() const { return b(16); }
@@ -78,8 +83,9 @@ class INET_API Ieee80211IrDataMode : public IIeee80211DataMode
 };
 
 /**
- * Represents an Infrared PHY mode as described in IEEE 802.11-2012 specification
- * clause 15.
+ * Represents INET's legacy Infrared PHY mode. IEEE Std 802.11-2024 no longer
+ * provides a current IR PHY clause; Clause 15 is DSSS in that edition, so this
+ * class is outside the 2024 non-HE PHY conformance mapping.
  */
 class INET_API Ieee80211IrMode : public Ieee80211ModeBase
 {
@@ -103,7 +109,8 @@ class INET_API Ieee80211IrMode : public Ieee80211ModeBase
 
     virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + headerMode->getDuration() + dataMode->getDuration(dataLength); }
 
-    // TODO fill in
+    // Legacy IR PHY timing constants retained by INET; no IEEE Std 802.11-2024
+    // PHY table applies to these values.
     virtual const simtime_t getSlotTime() const override { return 8E-6; }
     virtual const simtime_t getSifsTime() const override { return 10E-6; }
     virtual const simtime_t getCcaTime() const override { return 5E-6; }
@@ -116,8 +123,8 @@ class INET_API Ieee80211IrMode : public Ieee80211ModeBase
 };
 
 /**
- * Provides the compliant Infrared PHY modes as described in the IEEE 802.11-2012
- * specification clause 15.
+ * Provides INET's legacy Infrared PHY modes. They are intentionally excluded
+ * from the IEEE Std 802.11-2024 non-HE PHY conformance mapping.
  */
 class INET_API Ieee80211IrCompliantModes
 {
@@ -143,4 +150,3 @@ class INET_API Ieee80211IrCompliantModes
 } // namespace inet
 
 #endif
-

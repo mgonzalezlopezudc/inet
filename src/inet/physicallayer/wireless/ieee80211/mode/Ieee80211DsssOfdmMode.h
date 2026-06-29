@@ -17,8 +17,12 @@ namespace physicallayer {
 
 /**
  * Represents a Direct Sequence Spread Spectrum with Orthogonal Frequency Division
- * Multiplexing PHY mode as described in IEEE 802.11-2012 specification subclause
- * 19.3.2.6.
+ * Multiplexing PHY mode.
+ *
+ * IEEE Std 802.11-2024 Clause 18 defines ERP operation in the 2.4 GHz band,
+ * including Clause 17 OFDM-based ERP-OFDM PPDU operation. This class is only a
+ * placeholder: it returns null header/preamble modes and zero timings, so it is
+ * not a standard-conformant transmit path.
  */
 class INET_API Ieee80211DsssOfdmMode : public Ieee80211ModeBase
 {
@@ -42,10 +46,12 @@ class INET_API Ieee80211DsssOfdmMode : public Ieee80211ModeBase
     virtual const IIeee80211HeaderMode *getHeaderMode() const override { return nullptr; }
     virtual const IIeee80211DataMode *getDataMode() const override { return ofdmDataMode; }
 
-    // TODO fill in
+    // Not implemented: Clause 18 ERP/DSSS-OFDM duration would have to combine
+    // DSSS-compatible PLCP portions with OFDM DATA timing and signal extension.
     virtual const simtime_t getDuration(b dataLength) const override { return 0; }
 
-    // TODO fill in
+    // Not implemented: use Ieee80211DsssMode, Ieee80211HrDsssMode, or
+    // Ieee80211ErpOfdmMode for the standard-backed non-HE PHY timings.
     virtual const simtime_t getSlotTime() const override { return 0; }
     virtual const simtime_t getSifsTime() const override { return 0; }
     virtual const simtime_t getRifsTime() const override;
@@ -62,4 +68,3 @@ class INET_API Ieee80211DsssOfdmMode : public Ieee80211ModeBase
 } // namespace inet
 
 #endif
-

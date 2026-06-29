@@ -28,6 +28,9 @@ Ieee80211HrDsssDataMode::Ieee80211HrDsssDataMode(bps bitrate) :
 
 const simtime_t Ieee80211HrDsssDataMode::getDuration(b length) const
 {
+    // IEEE Std 802.11-2024 16.3.4 defines HR/DSSS TXTIME as
+    // PreambleLength + PHYHeaderTime + LENGTH * 8 / DATARATE. This method
+    // returns only the PSDU term, rounded up to whole microseconds.
     return (simtime_t)(lrint(ceil((double)length.get() / bitrate.get() * 1E+6))) / 1E+6;
 }
 
@@ -82,4 +85,3 @@ const simtime_t Ieee80211HrDsssMode::getRifsTime() const
 } // namespace physicallayer
 
 } // namespace inet
-

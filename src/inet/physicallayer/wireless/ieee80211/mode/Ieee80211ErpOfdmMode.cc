@@ -11,7 +11,10 @@ namespace inet {
 namespace physicallayer {
 
 Ieee80211ErpOfdmMode::Ieee80211ErpOfdmMode(const char *name, bool isErpOnly, const Ieee80211OfdmPreambleMode *preambleMode, const Ieee80211OfdmSignalMode *signalMode, const Ieee80211OfdmDataMode *dataMode) :
-    Ieee80211OfdmMode(name, preambleMode, signalMode, dataMode, MHz(20), MHz(20)), // review the channel spacing
+    // IEEE Std 802.11-2024 18.3.2.4 defines ERP-OFDM PPDU format by reference
+    // to the Clause 17 OFDM PPDU, with the 2.4 GHz ERP signal extension rules.
+    // Table 18-5 lists a 20 MHz channel spacing for ERP in the 2.4 GHz band.
+    Ieee80211OfdmMode(name, preambleMode, signalMode, dataMode, MHz(20), MHz(20)),
     isErpOnly(isErpOnly)
 {
 
@@ -37,9 +40,10 @@ const Ieee80211ErpOfdmMode Ieee80211ErpOfdmCompliantModes::erpOnlyOfdmMode54Mbps
 
 const simtime_t Ieee80211ErpOfdmMode::getRifsTime() const
 {
+    // RIFS is introduced for HT operation, not the ERP PHY characteristics of
+    // IEEE Std 802.11-2024 Table 18-5.
     return -1;
 }
 
 } /* namespace physicallayer */
 } /* namespace inet */
-

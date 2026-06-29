@@ -20,6 +20,10 @@ class INET_API Ieee80211FhssPreambleMode : public IIeee80211PreambleMode
   public:
     Ieee80211FhssPreambleMode() {}
 
+    // Legacy FHSS PLCP preamble fields: 80-bit SYNC and 16-bit SFD. IEEE Std
+    // 802.11-2024 no longer contains an active FHSS PHY clause; Clause 14 is
+    // mesh networking in that edition, so these constants are retained only for
+    // INET's legacy FHSS model.
     b getSyncFieldLength() const { return b(80); }
     b getSfdFieldLength() const { return b(16); }
     b getLength() const { return getSyncFieldLength() + getSfdFieldLength(); }
@@ -36,6 +40,9 @@ class INET_API Ieee80211FhssHeaderMode : public IIeee80211HeaderMode
   public:
     Ieee80211FhssHeaderMode() {}
 
+    // Legacy FHSS PLCP header fields: PLW, PSF, and HEC. These are not mapped
+    // to IEEE Std 802.11-2024 clause numbers because FHSS is no longer specified
+    // as a current PHY in that edition.
     b getPlwFieldLength() const { return b(12); }
     b getPsfFieldLength() const { return b(4); }
     b getHecFieldLength() const { return b(16); }
@@ -70,8 +77,10 @@ class INET_API Ieee80211FhssDataMode : public IIeee80211DataMode
 };
 
 /**
- * Represents a Frequency-Hopping Spread Spectrum PHY mode as described in IEEE
- * 802.11-2012 specification clause 14.
+ * Represents INET's legacy Frequency-Hopping Spread Spectrum PHY mode. IEEE Std
+ * 802.11-2024 does not provide a current FHSS PHY clause; Clause 14 is mesh
+ * networking, so this class should not be cited as 802.11-2024-compliant PHY
+ * logic without checking an older edition that still specified FHSS.
  */
 class INET_API Ieee80211FhssMode : public Ieee80211ModeBase
 {
@@ -95,7 +104,8 @@ class INET_API Ieee80211FhssMode : public Ieee80211ModeBase
 
     virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + headerMode->getDuration() + dataMode->getDuration(dataLength); }
 
-    // TODO fill in
+    // Legacy FHSS PHY timing constants retained by INET; no IEEE Std
+    // 802.11-2024 PHY table applies to these values.
     virtual const simtime_t getSlotTime() const override { return 50E-6; }
     virtual const simtime_t getSifsTime() const override { return 28E-6; }
     virtual const simtime_t getRifsTime() const override;
@@ -108,8 +118,9 @@ class INET_API Ieee80211FhssMode : public Ieee80211ModeBase
 };
 
 /**
- * Provides the compliant Frequency-Hopping Spread Spectrum PHY modes as described
- * in the IEEE 802.11-2012 specification clause 14.
+ * Provides INET's legacy Frequency-Hopping Spread Spectrum PHY modes. They are
+ * intentionally excluded from the IEEE Std 802.11-2024 non-HE PHY conformance
+ * mapping because that edition no longer has an active FHSS PHY clause.
  */
 class INET_API Ieee80211FhssCompliantModes
 {
@@ -134,4 +145,3 @@ class INET_API Ieee80211FhssCompliantModes
 } // namespace inet
 
 #endif
-

@@ -22,6 +22,8 @@ namespace physicallayer {
 class INET_API Ieee80211HtTimingRelatedParametersBase
 {
   public:
+    // IEEE Std 802.11-2024 Table 19-6: HT uses a 3.2 us DFT period, 800 ns
+    // long GI, 400 ns short GI, and therefore 4 us / 3.6 us symbol intervals.
     const simtime_t getDFTPeriod() const { return 3.2E-6; } // DFT
     const simtime_t getGIDuration() const { return getDFTPeriod() / 4; } // GI
     const simtime_t getShortGIDuration() const { return getDFTPeriod() / 8; } // GIS
@@ -81,7 +83,7 @@ class INET_API Ieee80211HtSignalMode : public IIeee80211HeaderMode, public Ieee8
     Ieee80211HtSignalMode(unsigned int modulationAndCodingScheme, const Ieee80211OfdmModulation *modulation, const Ieee80211ConvolutionalCode *convolutionalCode, const Hz bandwidth, GuardIntervalType guardIntervalType);
     virtual ~Ieee80211HtSignalMode();
 
-    /* Table 20-11—HT-SIG fields, 1699p */
+    // IEEE Std 802.11-2024 Table 19-11: HT-SIG1 and HT-SIG2 field lengths.
 
     // HT-SIG_1 (24 bits)
     b getMCSLength() const { return b(7); }
@@ -99,7 +101,7 @@ class INET_API Ieee80211HtSignalMode : public IIeee80211HeaderMode, public Ieee8
     b getNumOfExtensionSpatialStreamsLength() const { return b(2); }
     b getFCSLength() const { return b(8); }
     b getTailBitsLength() const { return b(6); }
-    virtual unsigned int getSTBC() const { return 0; } // Limitation: We assume that STBC is not used
+    virtual unsigned int getSTBC() const { return 0; } // Packet-level limitation: STBC field is modeled as 0.
 
     virtual const simtime_t getHTSIGDuration() const { return 2 * getSymbolInterval(); } // HT-SIG
 
@@ -117,7 +119,7 @@ class INET_API Ieee80211HtSignalMode : public IIeee80211HeaderMode, public Ieee8
 
 /*
  * The HT preambles are defined in HT-mixed format and in HT-greenfield format to carry the required
- * information to operate in a system with multiple transmit and multiple receive antennas. (20.3.9 HT preamble)
+ * information to operate in a system with multiple transmit and multiple receive antennas. (19.3.9 HT preamble)
  */
 /** HT mixed-format or greenfield preamble mode, including legacy compatibility fields. */
 class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public Ieee80211HtTimingRelatedParametersBase
@@ -132,7 +134,7 @@ class INET_API Ieee80211HtPreambleMode : public IIeee80211PreambleMode, public I
     const Ieee80211HtSignalMode *highThroughputSignalMode; // In HT-terminology the HT-SIG (signal field) and L-SIG are part of the preamble
     const Ieee80211OfdmSignalMode *legacySignalMode; // L-SIG
     const HighTroughputPreambleFormat preambleFormat;
-    const unsigned int numberOfHTLongTrainings; // N_LTF, 20.3.9.4.6 HT-LTF definition
+    const unsigned int numberOfHTLongTrainings; // N_LTF, 19.3.9.4.6 HT-LTF definition
 
   protected:
     virtual unsigned int computeNumberOfSpaceTimeStreams(unsigned int numberOfSpatialStreams) const;
@@ -198,8 +200,9 @@ class INET_API Ieee80211Htmcs
 /**
  * HT PSDU data mode and airtime calculator.
  *
- * With ldpc enabled it applies the HT LDPC service/tail and codeword rules;
- * otherwise it retains the BCC encoder and tail-bit calculation.
+ * With ldpc enabled it removes the BCC tail contribution from this packet-level
+ * length model; otherwise it retains the BCC encoder and tail-bit calculation
+ * from IEEE Std 802.11-2024 19.3.11.
  */
 class INET_API Ieee80211HtDataMode : public IIeee80211DataMode, public Ieee80211HtModeBase, public Ieee80211HtTimingRelatedParametersBase
 {
@@ -264,7 +267,7 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
     virtual const Ieee80211HtSignalMode *getHeaderMode() const override { return preambleMode->getSignalMode(); }
     virtual const Ieee80211OfdmSignalMode *getLegacySignalMode() const { return preambleMode->getLegacySignalMode(); }
 
-    // Table 20-25—MIMO PHY characteristics
+    // IEEE Std 802.11-2024 Table 19-25: HT PHY characteristics.
     virtual const simtime_t getSlotTime() const override;
     virtual const simtime_t getShortSlotTime() const;
     virtual const simtime_t getSifsTime() const override;
@@ -288,7 +291,7 @@ class INET_API Ieee80211HtMode : public Ieee80211ModeBase
 class INET_API Ieee80211HtmcsTable
 {
   public:
-    // Table 20-30—MCS parameters for mandatory 20 MHz, N_SS = 1, N_ES = 1
+    // Table 19-27—MCS parameters for mandatory 20 MHz, N_SS = 1, N_ES = 1
     static const DI<Ieee80211Htmcs> htMcs0BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs1BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs2BW20MHz;
@@ -298,7 +301,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs6BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs7BW20MHz;
 
-    // Table 20-31—MCS parameters for optional 20 MHz, N_SS = 2, N_ES = 1, EQM
+    // Table 19-28—MCS parameters for optional 20 MHz, N_SS = 2, N_ES = 1, EQM
     static const DI<Ieee80211Htmcs> htMcs8BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs9BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs10BW20MHz;
@@ -308,7 +311,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs14BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs15BW20MHz;
 
-    // Table 20-32—MCS parameters for optional 20 MHz, N_SS = 3, N_ES = 1, EQM
+    // Table 19-29—MCS parameters for optional 20 MHz, N_SS = 3, N_ES = 1, EQM
     static const DI<Ieee80211Htmcs> htMcs16BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs17BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs18BW20MHz;
@@ -318,7 +321,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs22BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs23BW20MHz;
 
-    // Table 20-33—MCS parameters for optional 20 MHz, N_SS = 4, N_ES = 1, EQM
+    // Table 19-30—MCS parameters for optional 20 MHz, N_SS = 4, N_ES = 1, EQM
     static const DI<Ieee80211Htmcs> htMcs24BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs25BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs26BW20MHz;
@@ -328,7 +331,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs30BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs31BW20MHz;
 
-    // Table 20-34—MCS parameters for optional 40 MHz, N_SS = 1, N_ES = 1
+    // Table 19-31—MCS parameters for optional 40 MHz, N_SS = 1, N_ES = 1
     static const DI<Ieee80211Htmcs> htMcs0BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs1BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs2BW40MHz;
@@ -338,7 +341,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs6BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs7BW40MHz;
 
-    // Table 20-35—MCS parameters for optional 40 MHz, N_SS = 2, N_ES = 1, EQM
+    // Table 19-32—MCS parameters for optional 40 MHz, N_SS = 2, N_ES = 1, EQM
     static const DI<Ieee80211Htmcs> htMcs8BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs9BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs10BW40MHz;
@@ -348,7 +351,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs14BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs15BW40MHz;
 
-    // Table 20-36—MCS parameters for optional 40 MHz, N_SS = 3, EQM
+    // Table 19-33—MCS parameters for optional 40 MHz, N_SS = 3, EQM
     static const DI<Ieee80211Htmcs> htMcs16BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs17BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs18BW40MHz;
@@ -358,7 +361,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs22BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs23BW40MHz;
 
-    // Table 20-37—MCS parameters for optional 40 MHz, N_SS = 4, EQM
+    // Table 19-34—MCS parameters for optional 40 MHz, N_SS = 4, EQM
     static const DI<Ieee80211Htmcs> htMcs24BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs25BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs26BW40MHz;
@@ -368,10 +371,10 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs30BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs31BW40MHz;
 
-    // Table 20-38—MCS parameters for optional 40 MHz MCS 32 format, N_SS = 1, N_ES = 1
+    // Table 19-35—MCS parameters for optional 40 MHz MCS 32 format, N_SS = 1, N_ES = 1
     static const DI<Ieee80211Htmcs> htMcs32BW40MHz;
 
-    // Table 20-39—MCS parameters for optional 20 MHz, N_SS = 2, N_ES = 1, UEQM
+    // Table 19-36—MCS parameters for optional 20 MHz, N_SS = 2, N_ES = 1, UEQM
     static const DI<Ieee80211Htmcs> htMcs33BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs34BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs35BW20MHz;
@@ -379,7 +382,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs37BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs38BW20MHz;
 
-    // Table 20-40—MCS parameters for optional 20 MHz, N SS = 3, N ES = 1, UEQM
+    // Table 19-37—MCS parameters for optional 20 MHz, N SS = 3, N ES = 1, UEQM
     static const DI<Ieee80211Htmcs> htMcs39BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs40BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs41BW20MHz;
@@ -395,7 +398,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs51BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs52BW20MHz;
 
-    // Table 20-41—MCS parameters for optional 20 MHz, N_SS = 4, N_ES = 1, UEQM
+    // Table 19-38—MCS parameters for optional 20 MHz, N_SS = 4, N_ES = 1, UEQM
     static const DI<Ieee80211Htmcs> htMcs53BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs54BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs55BW20MHz;
@@ -421,7 +424,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs75BW20MHz;
     static const DI<Ieee80211Htmcs> htMcs76BW20MHz;
 
-    // Table 20-42—MCS parameters for optional 40 MHz, N_SS = 2, N_ES = 1, UEQM
+    // Table 19-39—MCS parameters for optional 40 MHz, N_SS = 2, N_ES = 1, UEQM
     static const DI<Ieee80211Htmcs> htMcs33BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs34BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs35BW40MHz;
@@ -429,7 +432,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs37BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs38BW40MHz;
 
-    // Table 20-43—MCS parameters for optional 40 MHz, N SS = 3, UEQM
+    // Table 19-40—MCS parameters for optional 40 MHz, N SS = 3, UEQM
     static const DI<Ieee80211Htmcs> htMcs39BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs40BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs41BW40MHz;
@@ -445,7 +448,7 @@ class INET_API Ieee80211HtmcsTable
     static const DI<Ieee80211Htmcs> htMcs51BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs52BW40MHz;
 
-    // Table 20-44—MCS parameters for optional 40 MHz, N_SS = 4, UEQM
+    // Table 19-41—MCS parameters for optional 40 MHz, N_SS = 4, UEQM
     static const DI<Ieee80211Htmcs> htMcs53BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs54BW40MHz;
     static const DI<Ieee80211Htmcs> htMcs55BW40MHz;
