@@ -16,7 +16,11 @@
 namespace inet {
 namespace physicallayer {
 
-/** Reserved HE station ID used for a broadcast/multicast MU allocation. */
+/**
+ * Reserved HE station ID used for a broadcast/multicast MU allocation.
+ * IEEE 802.11-2024 Clause 26.5.1.2 uses STA_ID 2047 for broadcast RUs; the
+ * HE-SIG-B User fields carrying STA-ID are defined in Tables 27-29 and 27-30.
+ */
 constexpr uint16_t HE_STA_ID_BROADCAST = 2047;
 
 /** Returns a deterministic fallback HE station ID when no association ID is available. */
@@ -24,6 +28,8 @@ inline uint16_t computeHeMuStaId(const MacAddress& address)
 {
     // TODO replace this fallback with the association ID when it is available
     // at the packet-level PHY boundary.
+    // The fallback is intentionally limited to the 11-bit STA-ID namespace used
+    // by HE-SIG-B User fields; associated STAs should use their AID instead.
     return address.isBroadcast() ? HE_STA_ID_BROADCAST : static_cast<uint16_t>(address.getInt() & 0x7ff);
 }
 

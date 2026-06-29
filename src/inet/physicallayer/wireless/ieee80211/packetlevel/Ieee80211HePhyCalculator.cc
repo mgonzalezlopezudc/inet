@@ -16,7 +16,8 @@
 // Computes per-user and common PHY parameters for HE SU, HE ER SU, HE MU and
 // HE TB PPDUs based on IEEE 802.11-2024:
 //   - Clause 27.3.2: RU tone sizes, data/pilot subcarriers.
-//   - Clause 27.3.11: preamble durations and HE-SIG-B field sizing.
+//   - Clause 27.3.4: HE PPDU formats and preamble field ordering.
+//   - Clause 27.3.11.8: HE-SIG-B field sizing and content channels.
 //   - Clause 27.3.12: modulation, coding, number of symbols, padding.
 //   - Clause 27.3.12.5: BCC/LDPC coding rules and constraints.
 //
@@ -24,7 +25,7 @@
 //   - LDPC shortening and repetition are modeled at packet level using the
 //     standard codeword lengths (648/1296/1944 bits), but the exact bit-level
 //     shortening/repetition procedure of Clause 27.3.12.5.2 is approximated.
-//   - HE-SIG-B symbol count uses a closed-form estimate of Clause 27.3.11.13.2
+//   - HE-SIG-B symbol count uses a closed-form estimate of Clause 27.3.11.8
 //     rather than bit-level encoder emulation.
 
 namespace inet {
@@ -60,16 +61,16 @@ int getHeRuPilotSubcarrierCount(int toneSize)
 
 int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
 {
-    // IEEE 802.11-2024 Clause 27.3.11.13.2 ("HE-SIG-B field"):
+    // IEEE 802.11-2024 Clause 27.3.11.8.5 ("Encoding and modulation"):
     // HE-SIG-B is encoded with BPSK and code rate 1/2. Each content channel
     // uses 52 OFDM subcarriers for data: 52 coded bits × 1/2 = 26 information
     // bits per symbol.
     constexpr int HE_SIG_B_DATA_BITS_PER_SYMBOL = 26;
-    // IEEE 802.11-2024 Table 27-26 ("Contents of the User Specific field"):
-    // each User Specific subfield is 21 bits wide.
+    // IEEE 802.11-2024 Tables 27-29 and 27-30 define 21-bit HE-SIG-B User
+    // fields for non-MU-MIMO and MU-MIMO allocations.
     constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
     // Each content channel also carries a 10-bit tail/pad in both the Common
-    // field and the User field (6 tail bits + 4 pad bits, Clause 27.3.11.13.2).
+    // field and the User field (6 tail bits + 4 pad bits, Clause 27.3.11.8.5).
     constexpr int HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL = 10;
 
     int widthMhz = std::lround(channelBandwidth.get() / 1e6);
@@ -100,7 +101,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     }
 
     // Group users by RU index to detect and validate MU-MIMO.
-    // IEEE 802.11-2024, Clause 27.3.11.13 ("HE MU PPDU").
+    // IEEE 802.11-2024 Clause 27.3.11.8 links HE-SIG-B User fields to an RU
+    // allocation; Clause 27.3.12.5 constrains per-user and per-RU FEC choices.
     // Validates standard spatial stream limits:
     // - Maximum MU-MIMO group size is 8 users.
     // - Maximum spatial streams per user is 4.
@@ -327,8 +329,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             parameters.commonNumberOfDataSymbols * symbolDuration +
             SimTime(packetExtensionDurationUs, SIMTIME_US);
     
-    // IEEE 802.11ax imposes a strict physical limit of 5.484 ms (5484 µs) on total PPDU transmission duration
-    // to guarantee fair medium access and compatibility (Clause 27.3.11.8).
+    // IEEE 802.11-2024 Table 27-61 defines aPPDUMaxTime = 5.484 ms; Clause 10.12
+    // forbids transmitting an HE PPDU whose PLME-TXTIME exceeds that limit.
     if (enforceDurationLimit && parameters.duration > SimTime(5.484, SIMTIME_MS)) {
         result.error = "HE PPDU exceeds the 5.484 ms duration limit";
         return result;

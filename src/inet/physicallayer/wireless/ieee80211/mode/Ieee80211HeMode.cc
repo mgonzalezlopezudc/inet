@@ -14,14 +14,15 @@
 // This file defines the HE preamble, signal and data modes used for HE SU,
 // HE ER SU, HE MU and HE TB PPDUs.  Relevant normative clauses are:
 //   - Clause 27.3.2: HE subcarrier spacing, RUs, pilots.
-//   - Clause 27.3.11: HE PPDU formats and preamble structures.
+//   - Clause 27.3.4: HE PPDU formats and preamble structures.
 //   - Clause 27.3.12: modulation, coding and data-field construction.
 //   - Clause 27.5: PHY characteristics (slot time, SIFS, etc.).
 //
 // Approximations / simplifications:
 //   - computeNumberOfHELongTrainings() collapses all NSS > 2 to 4 HE-LTF
-//     symbols.  IEEE 802.11-2024 Table 27-14 specifies values up to 8 spatial
-//     streams; the simplified mapping is conservative for typical simulations.
+//     symbols.  IEEE 802.11-2024 Clause 27.3.11.10 reuses Table 21-13 for
+//     values up to 8 spatial streams; the simplified mapping under-models
+//     5-8 stream preambles.
 //   - computeNumberOfBccEncoders() always returns 1 (Clause 27.3.12.5.1 allows
 //     multiple BCC encoders for large NSS/RU combinations).  LDPC paths use a
 //     packet-level codeword model rather than bit-exact encoder emulation.
@@ -176,9 +177,10 @@ Ieee80211HePreambleMode::Ieee80211HePreambleMode(const Ieee80211HeSignalMode *hi
 
 unsigned int Ieee80211HePreambleMode::computeNumberOfHELongTrainings(unsigned int numberOfSpatialStreams) const
 {
-    // IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
-    // NOTE: the table gives specific values for 1..8 streams; this collapses
-    // all cases above 2 streams to 4 symbols as a simulation simplification.
+    // IEEE 802.11-2024 Clause 27.3.11.10 reuses Table 21-13, replacing
+    // N_VHT-LTF with N_HE-LTF. NOTE: the table gives specific values for
+    // 1..8 streams; this packet-level mode path collapses all cases above
+    // 2 streams to 4 symbols as a simulation simplification.
     if (numberOfSpatialStreams == 1) return 1;
     if (numberOfSpatialStreams == 2) return 2;
     return 4; // Simplified mapping for simulation paths
@@ -186,7 +188,7 @@ unsigned int Ieee80211HePreambleMode::computeNumberOfHELongTrainings(unsigned in
 
 const simtime_t Ieee80211HePreambleMode::getDuration() const
 {
-    // IEEE 802.11-2024 Clause 27.3.11 PPDU preamble field lengths:
+    // IEEE 802.11-2024 Clause 27.3.4 and Table 27-13 PPDU preamble field lengths:
     // - L-STF: 8 µs
     // - L-LTF: 8 µs
     // - L-SIG: 4 µs
