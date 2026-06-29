@@ -17,9 +17,9 @@
 // spatial reuse), computes the common PPDU duration, and exposes allocation
 // info on reception via Ieee80211HeMuRxTag.
 // Relevant clauses:
-//   - Clause 27.3.11: HE PPDU formats.
-//   - Clause 27.3.11.13: HE MU PPDU and HE-SIG-A/B fields.
-//   - Clause 27.3.11.12: HE TB PPDU.
+//   - Clause 27.3.4: HE PPDU formats.
+//   - Clause 27.3.11.7: HE-SIG-A fields.
+//   - Clause 27.3.11.8: HE-SIG-B fields for HE MU PPDUs.
 //
 // Approximations / simplifications:
 //   - DL MU user durations are first estimated with estimateHeMuUserDuration()
@@ -65,6 +65,9 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
 {
     std::vector<Ieee80211HeMuUserInfo> users;
     if (auto request = packet->findTag<Ieee80211HeMuReq>()) {
+        // A direct HE MU/TB request already contains the TXVECTOR-like user
+        // parameters from Clause 27.3.11.7/27.3.11.8, so it is converted into
+        // one HE-SIG-B User field model entry.
         Ieee80211HeMuUserInfo user;
         user.ruIndex = request->getRuIndex();
         user.ruToneSize = request->getRuToneSize();
@@ -96,6 +99,9 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         auto payloadHeader = dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(packetCopy->peekAtFront());
         if (payloadHeader == nullptr)
             break;
+        // DL HE MU aggregate payloads are represented as per-RU payload
+        // descriptors; each descriptor becomes one HE-SIG-B User field for
+        // receiver-side RU filtering (Clause 27.3.11.8.4).
         packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
         Ieee80211HeMuUserInfo user;
         user.ruIndex = payloadHeader->getRuIndex();
@@ -127,6 +133,8 @@ bool Ieee80211Radio::supportsParallelReception(const ITransmission *transmission
     if (packet == nullptr || transmission->getPacketProtocol() != &Protocol::ieee80211HePhy ||
             !packet->hasAtFront<Ieee80211HeMuPhyHeader>())
         return false;
+    // HE TB PPDUs are trigger responses that may arrive concurrently on
+    // distinct RUs; non-TB formats use the normal single-reception path.
     return packet->peekAtFront<Ieee80211HeMuPhyHeader>()->getPpduFormat() == HE_TRIGGER_BASED_UPLINK;
 }
 

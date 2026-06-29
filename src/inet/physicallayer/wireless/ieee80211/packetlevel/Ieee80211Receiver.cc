@@ -18,7 +18,8 @@
 // Relevant normative clauses:
 //   - Clause 26.4.4: response rules and reception procedures for HE MU/HE TB.
 //   - Clause 27.3.2.5: resource indication and user identification in HE MU.
-//   - Clause 27.3.11: HE PPDU formats.
+//   - Clause 27.3.4: HE PPDU formats.
+//   - Clause 27.3.11.7 and 27.3.11.8: HE-SIG-A/B signaling used to identify users.
 //   - Clause 27.3.13: PHY receive procedure.
 //   - Clause 26.11: HE spatial reuse.
 //
@@ -382,6 +383,9 @@ bool Ieee80211Receiver::isAssignedHeMuRu(const ITransmission *transmission) cons
     auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
     if (heMuPhyHeader == nullptr)
         return true;
+    // HE TB is received by the AP as the addressed receiver of the Trigger
+    // exchange; DL HE MU needs the STA-ID match from HE-SIG-B User fields
+    // (Clause 27.3.2.5 and Clause 27.3.11.8.4).
     if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK)
         return true;
     auto networkInterface = getContainingNicModule(this);
@@ -424,6 +428,8 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
     if (!computeIsReceptionPossible(listening, reception, part))
         return false;
 
+    // Clause 27.3.4 defines HE TB PPDUs as trigger responses; multiple users
+    // may transmit concurrently on different RUs in the same Trigger exchange.
     // Propagation delay makes aligned STA responses arrive a few nanoseconds
     // apart, so ordinary single-reception arbitration would admit only the
     // first RU. Allow concurrent UL-TB reception only within one Trigger
@@ -464,6 +470,8 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
         return decision;
     }
     auto receivedBssColor = heMuPhyHeader->getBssColor();
+    // Table 27-21/27-22 carries BSS Color in HE-SIG-A. Color 0 disables BSS
+    // coloring, so OBSS/PD classification cannot be applied.
     if (receivedBssColor == 0) {
         decision.reason = "received BSS color disabled";
         return decision;
@@ -475,6 +483,8 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
         return decision;
     }
     if (receivedBssColor == mib->heOperation.bssColor) {
+        // Clause 26.11 spatial reuse applies to inter-BSS PPDUs; same-color
+        // PPDUs remain intra-BSS and are not ignored by OBSS/PD.
         decision.bssType = HeSpatialReuseBssType::INTRA_BSS;
         decision.reason = "intra-BSS PPDU";
         return decision;
@@ -506,6 +516,8 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
     }
 
     if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+        // Table 27-24 defines HE TB Spatial Reuse values. This branch models
+        // parameterized spatial reuse only when the PPDU permits it.
         if (!enableParameterizedSpatialReuse) {
             decision.reason = "HE TB PPDU excluded from OBSS/PD";
             return decision;

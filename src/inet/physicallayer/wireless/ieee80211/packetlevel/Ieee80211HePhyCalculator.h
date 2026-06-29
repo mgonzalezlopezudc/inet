@@ -23,13 +23,13 @@ using namespace inet::units::values;
 
 /**
  * HE PPDU formats modelled by the common MU PHY calculator.
- * IEEE 802.11-2024 Clause 27.3.11 ("PPDU formats").
+ * IEEE 802.11-2024 Clause 27.3.4 ("HE PPDU formats"), Figures 27-8 through 27-11.
  */
 enum Ieee80211HePpduFormat {
-    HE_MU_DOWNLINK = 0,             // HE MU PPDU format (Clause 27.3.11.13) for DL OFDMA/MU-MIMO
-    HE_TRIGGER_BASED_UPLINK = 1,    // HE TB PPDU format (Clause 27.3.11.14) for UL OFDMA/MU-MIMO triggered by AP
-    HE_SINGLE_USER = 2,             // HE SU PPDU format (Clause 27.3.11.11)
-    HE_EXTENDED_RANGE_SU = 3        // HE ER SU PPDU format (Clause 27.3.11.12)
+    HE_MU_DOWNLINK = 0,             // HE MU PPDU format (Figure 27-9) for DL OFDMA/MU-MIMO
+    HE_TRIGGER_BASED_UPLINK = 1,    // HE TB PPDU format (Figure 27-11) for UL OFDMA/MU-MIMO triggered by AP
+    HE_SINGLE_USER = 2,             // HE SU PPDU format (Figure 27-8)
+    HE_EXTENDED_RANGE_SU = 3        // HE ER SU PPDU format (Figure 27-10)
 };
 
 /**
@@ -47,7 +47,7 @@ enum Ieee80211HeGuardInterval {
 
 /**
  * Forward-error-correction coding used by HE user payloads.
- * IEEE 802.11-2024 Clause 27.3.11.8 ("LDPC coding").
+ * IEEE 802.11-2024 Clause 27.3.12.5 ("Coding").
  */
 enum Ieee80211HeCoding {
     HE_CODING_BCC = 0,              // Binary Convolutional Coding
@@ -56,7 +56,7 @@ enum Ieee80211HeCoding {
 
 /**
  * HE long-training-field (HE-LTF) duration multiplier.
- * IEEE 802.11-2024 Clause 27.3.4.7 ("HE-LTF field").
+ * IEEE 802.11-2024 Clause 27.3.11.10 and Table 27-32.
  */
 enum Ieee80211HeLtfType {
     HE_LTF_1X = 1,                  // 3.2 µs DFT period
@@ -81,7 +81,7 @@ struct Ieee80211HeSigAFields
 
 /**
  * HE-SIG-B parameters for a downlink MU PPDU.
- * IEEE 802.11-2024 Clause 27.3.11.13.2 ("HE-SIG-B field").
+ * IEEE 802.11-2024 Clause 27.3.11.8 ("HE-SIG-B field").
  * The HE-SIG-B field contains a Common field (RU allocation mapping) and a User Block field (user specific MCS/NSS).
  */
 struct Ieee80211HeSigBFields
@@ -265,7 +265,8 @@ inline bool isHeValidMcsNssCombination(int mcs, int nss, int ruToneSize = 0)
 
 /**
  * Returns the HE-LTF symbol count based on space-time streams.
- * IEEE 802.11-2024 Table 27-14 ("Number of HE-LTF symbols").
+ * IEEE 802.11-2024 Clause 27.3.11.10 reuses Table 21-13, replacing
+ * N_VHT-LTF with N_HE-LTF for the 1/2/4/6/8 symbol mapping.
  */
 inline int getHeNumberOfLtfSymbols(int spaceTimeStreams)
 {
@@ -305,7 +306,7 @@ int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers);
 /**
  * Validates and calculates a common-duration HE MU or trigger-based PPDU.
  *
- * IEEE 802.11-2024 Clause 27.3.11.13 and Clause 27.3.11.14.
+ * IEEE 802.11-2024 Clause 27.3.4, Clause 27.3.11.8, and Clause 27.3.12.5.
  *
  * The returned result contains either a complete set of parameters used by
  * scheduling, transmission, and reception, or a diagnostic error string.

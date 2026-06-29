@@ -15,7 +15,7 @@
 // HE-SIG-B Common field codec.
 //
 // Encodes and decodes the RU allocation subfields of the HE-SIG-B Common field
-// as defined in IEEE 802.11-2024 Clause 27.3.11.13.2 and Table 27-27.  The
+// as defined in IEEE 802.11-2024 Clause 27.3.11.8 and Table 27-27.  The
 // codec maps between a concrete Ieee80211HeRu layout and the compact 8-bit
 // allocation codes carried in HE-SIG-B content channels.
 //
@@ -265,6 +265,8 @@ inline Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
     });
 
     int K = subchannelRUs.size();
+    // IEEE 802.11-2024 Clause 27.3.11.8.2: 20 MHz HE MU has one
+    // HE-SIG-B content channel; 40/80/160 MHz HE MU has two.
     int numContentChannels = (channelBandwidth > Hz(20e6)) ? 2 : 1;
     result.commonField.contentChannels.resize(numContentChannels);
 
@@ -276,7 +278,10 @@ inline Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
         }
     }
 
-    // Set center 26-tone RU flags
+    // IEEE 802.11-2024 Clause 27.3.11.8.3 / Table 27-26:
+    // the center 26-tone RU is carried separately from the 8-bit RU
+    // Allocation subfields, and for 80 MHz it appears in both content
+    // channels while its User field is assigned by the tone range.
     for (const auto& ru : rus) {
         if (ru.toneSize == 26) {
             if (ru.toneOffset == 485) {
@@ -294,7 +299,8 @@ inline Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
         int c = s % 2;
         auto& cc = result.commonField.contentChannels[c];
 
-        // Find partitions in this 20-MHz subchannel
+        // Clause 27.3.11.8.3 maps one RU Allocation subfield to the RUs
+        // associated with each 20 MHz subchannel and content channel.
         std::vector<std::pair<int, int>> partitionKeys;
         std::vector<int> partitionUsers;
         bool isWide = false;
@@ -330,7 +336,9 @@ inline Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
                     code = 200 + (n_c - 1);
                 }
             } else { // >= 996
-                // Determine if this is the first subchannel of the wide RU in this CC
+                // Table 27-27 uses 115 for continuation subfields of a
+                // 996-tone or 2x996-tone RU after the first subfield that
+                // carries the associated user-count code.
                 bool isFirst = true;
                 for (int prev_s = c; prev_s < s; prev_s += 2) {
                     if (wideRU.toneOffset <= subchannelRUs[prev_s].toneOffset &&
@@ -369,7 +377,9 @@ inline Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
                 partitionUsers.push_back(userCount);
             }
 
-            // Search Table 27-27 for a matching code
+            // Search Table 27-27 for a matching code. This keeps the encoder
+            // strict: unsupported RU partitions fail instead of inventing a
+            // non-standard allocation value.
             uint8_t selectedCode = 113; // default empty/punctured
             bool found = false;
             for (int code = 0; code <= 215; ++code) {
@@ -394,7 +404,9 @@ inline Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
                     }
                 }
             }
-            // If the subchannel has no active RUs, it is punctured/empty -> code 113
+            // Code 113 is a 242-tone RU with zero user fields here, used by
+            // this packet-level model to represent an empty/punctured 20 MHz
+            // subchannel in the Common field.
             if (!found && partitionKeys.empty()) {
                 selectedCode = 113;
                 found = true;
@@ -558,6 +570,8 @@ inline Ieee80211HeSigCodecResult decodeHeSigBRuAllocation(
         Hz channelBandwidth)
 {
     Ieee80211HeSigCodecResult result;
+    // Clause 27.3.11.8.2: HE-SIG-B has one content channel for 20 MHz and two
+    // for wider HE MU PPDUs.
     int numContentChannels = (channelBandwidth > Hz(20e6)) ? 2 : 1;
     int N = (channelBandwidth >= Hz(160e6)) ? 4 : (channelBandwidth >= Hz(80e6)) ? 2 : 1;
     

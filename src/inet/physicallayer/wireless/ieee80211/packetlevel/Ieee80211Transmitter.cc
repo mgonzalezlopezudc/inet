@@ -16,9 +16,9 @@
 // HE MU and HE TB PPDUs.  Uses the HE PHY calculator (Ieee80211HePhyCalculator)
 // to validate PPDU parameters and determine the common duration.
 // Relevant clauses:
-//   - Clause 27.3.11: HE PPDU formats.
-//   - Clause 27.3.11.12: HE TB PPDU format.
-//   - Clause 27.3.11.13: HE MU PPDU format and HE-SIG-B.
+//   - Clause 27.3.4: HE PPDU formats.
+//   - Clause 27.3.11.7: HE-SIG-A.
+//   - Clause 27.3.11.8: HE-SIG-B for HE MU PPDUs.
 //   - Clause 27.3.12: modulation and coding for the HE data field.
 //
 // Approximations / simplifications:
@@ -290,6 +290,9 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
     Ieee80211HePpduParameters hePpduParameters;
     if (heMuHeader != nullptr) {
+        // Clause 27.3.2.2 fixes HE subcarrier spacing at 78.125 kHz. The PHY
+        // header carries canonical RU tone size/offset values; these are
+        // resolved into the calculator's RU model before duration validation.
         constexpr double HE_TONE_SPACING = 78125;
         std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
         for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i) {
@@ -331,6 +334,10 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         preambleDuration = hePpduParameters.common.commonPreambleDuration;
         headerDuration = SIMTIME_ZERO;
         if (heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK && heMuHeader->getUsersArraySize() == 1) {
+            // HE TB responses occupy the RU assigned by the Trigger frame
+            // User Info field (Clause 9.3.1.22 and Clause 27.3.4). The
+            // packet-level analog model narrows the transmit center
+            // frequency/bandwidth to that RU for single-user UL-TB transmissions.
             const auto& user = heMuHeader->getUsers(0);
             int channelTones = getHeChannelToneCount(transmissionBandwidth);
             transmissionBandwidth = Hz(user.ruToneSize * HE_TONE_SPACING);

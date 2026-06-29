@@ -54,7 +54,7 @@ class INET_API Ieee80211HeModeBase
     const Hz bandwidth;
     const GuardIntervalType guardIntervalType;
     const unsigned int mcsIndex; // MCS index (0 to 11)
-    const unsigned int numberOfSpatialStreams; // N_SS (up to 8 spatial streams, Clause 27.3.11.13)
+    const unsigned int numberOfSpatialStreams; // N_SS (up to 8 spatial streams; Clause 27.3.12.5)
 
     mutable bps netBitrate; // cached
     mutable bps grossBitrate; // cached
@@ -114,7 +114,7 @@ class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee8
 
 /**
  * HE SU or MU preamble mode, including the legacy-compatible preamble portion.
- * IEEE 802.11-2024, Clause 27.3.11 ("HE PPDU format").
+ * IEEE 802.11-2024, Clause 27.3.4 ("HE PPDU formats").
  * The HE preamble consists of:
  * - Legacy parts (L-STF, L-LTF, L-SIG) to maintain backward compatibility.
  * - Repeated L-SIG (RL-SIG) to signal HE PPDU presence.
