@@ -21,6 +21,7 @@ inline std::ostream& operator<<(std::ostream& os, const std::pair<Tid, SequenceC
 // Contention window management
 // ============================
 //
+// IEEE Std 802.11-2024, 10.23.2.2:
 // The CW shall take the next value in the series every time an
 // unsuccessful attempt to transmit an MPDU causes either STA retry
 // counter to increment, until the CW reaches the value of aCWmax.
@@ -49,7 +50,7 @@ void QosRecoveryProcedure::incrementStationSrc()
 {
     stationShortRetryCounter++;
     EV_INFO << "Incremented station SRC: stationShortRetryCounter = " << stationShortRetryCounter << ".\n";
-    if (stationShortRetryCounter == shortRetryLimit) // 9.3.3 Random backoff time
+    if (stationShortRetryCounter == shortRetryLimit) // 10.23.2.2 EDCA backoff procedure
         resetContentionWindow();
     else
         incrementContentionWindow();
@@ -59,7 +60,7 @@ void QosRecoveryProcedure::incrementStationLrc()
 {
     stationLongRetryCounter++;
     EV_INFO << "Incremented station LRC: stationLongRetryCounter = " << stationLongRetryCounter << ".\n";
-    if (stationLongRetryCounter == longRetryLimit) // 9.3.3 Random backoff time
+    if (stationLongRetryCounter == longRetryLimit) // 10.23.2.2 EDCA backoff procedure
         resetContentionWindow();
     else
         incrementContentionWindow();
@@ -75,6 +76,7 @@ void QosRecoveryProcedure::incrementCounter(const Ptr<const Ieee80211DataHeader>
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.2.11:
 // The SSRC shall be reset to 0 [...] when a frame with a group address in the
 // Address1 field is transmitted. The SLRC shall be reset to 0 when [...] a
 // frame with a group address in the Address1 field is transmitted.
@@ -86,6 +88,7 @@ void QosRecoveryProcedure::multicastFrameTransmitted()
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.2.9 and 10.23.2.2:
 // The SSRC shall be reset to 0 when a CTS frame is received in response to an RTS
 // frame, when a BlockAck frame is received in response to a BlockAckReq frame, when
 // an ACK frame is received in response to the transmission of a frame of length greater*
@@ -102,10 +105,13 @@ void QosRecoveryProcedure::ctsFrameReceived()
 
 void QosRecoveryProcedure::blockAckFrameReceived()
 {
+    // IEEE Std 802.11-2024, 10.25.3 and 10.23.2.2: a received BlockAck is a
+    // successful immediate response for the EDCAF's protected frame exchange.
     resetStationSrc();
 }
 
 //
+// IEEE Std 802.11-2024, 10.23.2.12.1:
 // This SRC and the SSRC shall be reset when a MAC frame of length less than or equal
 // to dot11RTSThreshold succeeds for that MPDU of type Data or MMPDU.
 
@@ -156,6 +162,7 @@ void QosRecoveryProcedure::retryLimitReached(Packet *packet, const Ptr<const Iee
 }
 
 //
+// IEEE Std 802.11-2024, 10.23.2.12.1:
 // The SRC for an MPDU of type Data or MMPDU and the SSRC shall be incremented every
 // time transmission of a MAC frame of length less than or equal to dot11RTSThreshold
 // fails for that MPDU of type Data or MMPDU.
@@ -177,6 +184,7 @@ void QosRecoveryProcedure::dataFrameTransmissionFailed(Packet *packet, const Ptr
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.2.9 and 10.23.2.2:
 // If the RTS transmission fails, the SRC for the MSDU or MMPDU and the SSRC are incremented.
 //
 void QosRecoveryProcedure::rtsFrameTransmissionFailed(const Ptr<const Ieee80211DataHeader>& protectedHeader)
@@ -186,6 +194,7 @@ void QosRecoveryProcedure::rtsFrameTransmissionFailed(const Ptr<const Ieee80211D
 }
 
 //
+// IEEE Std 802.11-2024, 10.23.2.12.1:
 // Retries for failed transmission attempts shall continue until the SRC for the MPDU of type
 // Data or MMPDU is equal to dot11ShortRetryLimit or until the LRC for the MPDU of type Data
 // or MMPDU is equal to dot11LongRetryLimit. When either of these limits is reached, retry attempts
@@ -249,4 +258,3 @@ bool QosRecoveryProcedure::isMulticastFrame(Packet *packet, const Ptr<const Ieee
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

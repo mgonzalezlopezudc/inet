@@ -19,6 +19,7 @@ Define_Module(NonQosRecoveryProcedure);
 // Contention window management
 // ============================
 //
+// IEEE Std 802.11-2024, 10.3.3 and 10.3.4.4:
 // The CW shall take the next value in the series every time an
 // unsuccessful attempt to transmit an MPDU causes either STA retry
 // counter to increment, until the CW reaches the value of aCWmax.
@@ -45,7 +46,7 @@ void NonQosRecoveryProcedure::incrementStationSrc(StationRetryCounters *stationC
 {
     stationCounters->incrementStationShortRetryCount();
     EV_INFO << "Incremented station SRC: stationShortRetryCounter = " << stationCounters->getStationShortRetryCount() << ".\n";
-    if (stationCounters->getStationShortRetryCount() == shortRetryLimit) // 9.3.3 Random backoff time
+    if (stationCounters->getStationShortRetryCount() == shortRetryLimit) // 10.3.3 Random backoff procedure
         resetContentionWindow();
     else
         incrementContentionWindow();
@@ -55,7 +56,7 @@ void NonQosRecoveryProcedure::incrementStationLrc(StationRetryCounters *stationC
 {
     stationCounters->incrementStationLongRetryCount();
     EV_INFO << "Incremented station LRC: stationLongRetryCounter = " << stationCounters->getStationLongRetryCount() << ".\n";
-    if (stationCounters->getStationLongRetryCount() == longRetryLimit) // 9.3.3 Random backoff time
+    if (stationCounters->getStationLongRetryCount() == longRetryLimit) // 10.3.3 Random backoff procedure
         resetContentionWindow();
     else
         incrementContentionWindow();
@@ -71,6 +72,7 @@ void NonQosRecoveryProcedure::incrementCounter(const Ptr<const Ieee80211DataOrMg
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.3:
 // The SSRC shall be reset to 0 [...] when a frame with a group address in the
 // Address1 field is transmitted. The SLRC shall be reset to 0 when [...] a
 // frame with a group address in the Address1 field is transmitted.
@@ -82,6 +84,7 @@ void NonQosRecoveryProcedure::multicastFrameTransmitted(StationRetryCounters *st
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.2.9 and 10.3.3:
 // The SSRC shall be reset to 0 when a CTS frame is received in response to an RTS
 // frame, when a BlockAck frame is received in response to a BlockAckReq frame, when
 // an ACK frame is received in response to the transmission of a frame of length greater*
@@ -97,6 +100,7 @@ void NonQosRecoveryProcedure::ctsFrameReceived(StationRetryCounters *stationCoun
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.4.4:
 // This SRC and the SSRC shall be reset when a MAC frame of length less than or equal
 // to dot11RTSThreshold succeeds for that MPDU of type Data or MMPDU.
 
@@ -148,6 +152,7 @@ void NonQosRecoveryProcedure::retryLimitReached(Packet *packet, const Ptr<const 
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.4.4:
 // The SRC for an MPDU of type Data or MMPDU and the SSRC shall be incremented every
 // time transmission of a MAC frame of length less than or equal to dot11RTSThreshold
 // fails for that MPDU of type Data or MMPDU.
@@ -169,6 +174,7 @@ void NonQosRecoveryProcedure::dataOrMgmtFrameTransmissionFailed(Packet *packet, 
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.2.9 and 10.3.4.4:
 // If the RTS transmission fails, the SRC for the MSDU or MMPDU and the SSRC are incremented.
 //
 void NonQosRecoveryProcedure::rtsFrameTransmissionFailed(const Ptr<const Ieee80211DataOrMgmtHeader>& protectedHeader, StationRetryCounters *stationCounters)
@@ -178,6 +184,7 @@ void NonQosRecoveryProcedure::rtsFrameTransmissionFailed(const Ptr<const Ieee802
 }
 
 //
+// IEEE Std 802.11-2024, 10.3.4.4:
 // Retries for failed transmission attempts shall continue until the SRC for the MPDU of type
 // Data or MMPDU is equal to dot11ShortRetryLimit or until the LRC for the MPDU of type Data
 // or MMPDU is equal to dot11LongRetryLimit. When either of these limits is reached, retry attempts
@@ -247,4 +254,3 @@ bool NonQosRecoveryProcedure::isMulticastFrame(const Ptr<const Ieee80211MacHeade
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-
