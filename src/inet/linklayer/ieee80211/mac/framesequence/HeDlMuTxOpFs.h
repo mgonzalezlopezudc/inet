@@ -7,6 +7,7 @@
 #ifndef __INET_HEDLMUTXOPFS_H
 #define __INET_HEDLMUTXOPFS_H
 
+#include <memory>
 #include <vector>
 
 #include "inet/common/Units.h"
@@ -26,9 +27,9 @@ using namespace inet::units::values;
 /**
  * Frame sequence for IEEE 802.11ax Downlink MU-OFDMA TXOP.
  *
- * Implements a sequential acknowledgment sequence where the AP transmits
- * the HE MU container frame in Step 0, and then sequentially waits for Block Ack
- * responses from each station in subsequent steps.
+ * The AP transmits the HE MU container frame, then either solicits HE TB
+ * BlockAck responses with an MU-BAR Trigger or polls the selected STAs with
+ * sequential BlockAckReq/BlockAck exchanges.
  */
 class INET_API HeDlMuTxOpFs : public IFrameSequence
 {
@@ -58,11 +59,11 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     queueing::IPacketQueue *pendingQueue = nullptr;
     IAckHandler *ackHandler = nullptr;
     IFrameSequenceHandler::ICallback *callback = nullptr;
-    IFrameSequence *sequence = nullptr;
     int maxAmpduMpduCount = 16;
     int maxHeMuPsduLength = 6500631;
     simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS);
     AckMethod ackMethod = AckMethod::EXPLICIT_SEQUENTIAL_BAR;
+    std::unique_ptr<IFrameSequence> sequence;
     uint32_t ackTriggerId = 0;
 
     std::vector<ActiveAllocation> activeAllocations;
@@ -74,8 +75,6 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     /** Build the MU container Packet from the scheduler allocation and pending queue. */
     Packet *buildMuContainerPacket(FrameSequenceContext *context);
 
-    friend class HeDlMuPpduFs;
-    friend class HeDlMuSequentialBlockAckFs;
     friend class HeDlMuPerStaBlockAckFs;
     friend class HeDlMuBarBlockAckFs;
 

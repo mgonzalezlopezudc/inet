@@ -35,6 +35,7 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/GenericFrameSequences.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
@@ -138,7 +139,35 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
     schedule(schedule),
     triggerType(triggerType),
     modeSet(modeSet),
-    apAddress(apAddress)
+    apAddress(apAddress),
+    // G.5 HE sequences
+    // he-ul-mu-sequence =
+    //   ( Basic Trigger ) |
+    //   ( Basic Trigger + a-mpdu + mu-user-respond + a-mpdu-end )
+    //   1{Data[+HTC] + QoS + (no-ack | block-ack) + a-mpdu} + a-mpdu-end |
+    //   MU-BAR Trigger BlockAck;
+    // Implemented AP-side exchange:
+    //   ( Basic Trigger | BSRP Trigger ) HE-TB-PPDU Multi-STA-BlockAck;
+    // The Trigger and HE TB PPDU exchange follows the G.5 UL MU sequence.  The
+    // following Multi-STA BlockAck is the AP response defined by 26.4.4.5.
+    sequence(new SequentialFs({new StepFs("HE-TRIGGER",
+                                          [this](StepFs *, FrameSequenceContext *context) {
+                                              return new TransmitStep(buildTriggerPacket(), context->getIfs(), true);
+                                          }),
+                               new StepFs("HE-TB-PPDU",
+                                          [this](StepFs *, FrameSequenceContext *context) {
+                                              return new HeUlReceiveCollectionStep(this->triggerId, this->callback, this->schedule.allocations,
+                                                      this->modeSet->getSifsTime() + this->schedule.commonDuration + this->modeSet->getSlotTime(),
+                                                      this->schedule.commonDuration, this->modeSet->getPhyRxStartDelay());
+                                          },
+                                          [this](StepFs *, FrameSequenceContext *context) {
+                                              processResponses(context);
+                                              return true;
+                                          }),
+                               new StepFs("MULTI-STA-BA",
+                                          [this](StepFs *, FrameSequenceContext *context) {
+                                              return new TransmitStep(buildMultiStaBlockAckPacket(), this->modeSet->getSifsTime(), true);
+                                          })}))
 {
     ASSERT(coordinator != nullptr);
     ASSERT(callback != nullptr);
@@ -319,7 +348,9 @@ Packet *HeUlMuTxOpFs::buildMultiStaBlockAckPacket() const
 void HeUlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
     ASSERT(context != nullptr);
+    ASSERT(sequence != nullptr);
     step = 0;
+    sequence->startSequence(context, firstStep);
     EV_INFO << "Starting HE UL " << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
              << " Trigger " << triggerId << " with " << schedule.allocations.size() << " RU allocations\n";
     coordinator->noteTriggerSent(triggerType);
@@ -328,39 +359,21 @@ void HeUlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 IFrameSequenceStep *HeUlMuTxOpFs::prepareStep(FrameSequenceContext *context)
 {
     ASSERT(context != nullptr);
-    switch (step) {
-        case 0:
-            return new TransmitStep(buildTriggerPacket(), context->getIfs(), true);
-        case 1:
-            return new HeUlReceiveCollectionStep(triggerId, callback, schedule.allocations,
-                    modeSet->getSifsTime() + schedule.commonDuration + modeSet->getSlotTime(),
-                    schedule.commonDuration, modeSet->getPhyRxStartDelay());
-        case 2:
-            return new TransmitStep(buildMultiStaBlockAckPacket(), modeSet->getSifsTime(), true);
-        case 3:
-            return nullptr;
-        default:
-            throw cRuntimeError("Invalid HE UL MU frame sequence step");
-    }
+    ASSERT(sequence != nullptr);
+    return sequence->prepareStep(context);
 }
 
 bool HeUlMuTxOpFs::completeStep(FrameSequenceContext *context)
 {
-    ASSERT(step >= 0 && step <= 2);
-    if (step == 1)
-        processResponses(context);
+    ASSERT(context != nullptr);
+    ASSERT(sequence != nullptr);
     step++;
-    return true;
+    return sequence->completeStep(context);
 }
 
 std::string HeUlMuTxOpFs::getHistory() const
 {
-    switch (step) {
-        case 0: return "HE-TRIGGER";
-        case 1: return "HE-TB-COLLECT";
-        case 2: return "MULTI-STA-BA";
-        default: return "HE-UL-MU";
-    }
+    return step == -1 ? "HE-UL-MU" : sequence->getHistory();
 }
 
 } // namespace ieee80211
