@@ -10,6 +10,9 @@
 
 #include <algorithm>
 #include <functional>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
@@ -39,6 +42,26 @@ class INET_API SequentialFs : public IFrameSequence
     virtual bool completeStep(FrameSequenceContext *context) override;
 
     virtual std::string getHistory() const override;
+};
+
+class INET_API StepFs : public IFrameSequence
+{
+  protected:
+    int step = -1;
+    std::string history;
+    std::function<IFrameSequenceStep *(StepFs *, FrameSequenceContext *)> prepare;
+    std::function<bool(StepFs *, FrameSequenceContext *)> complete;
+
+  public:
+    StepFs(std::string history,
+           std::function<IFrameSequenceStep *(StepFs *, FrameSequenceContext *)> prepare,
+           std::function<bool(StepFs *, FrameSequenceContext *)> complete = nullptr);
+
+    virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
+    virtual bool completeStep(FrameSequenceContext *context) override;
+
+    virtual std::string getHistory() const override { return history; }
 };
 
 class INET_API OptionalFs : public IFrameSequence
@@ -90,6 +113,37 @@ class INET_API RepeatingFs : public IFrameSequence
     virtual std::string getHistory() const override;
 };
 
+class INET_API IndexedRepeatingFs : public IFrameSequence
+{
+  protected:
+    int count = 0;
+    int firstStep = -1;
+    int step = -1;
+    int elementIndex = -1;
+    IFrameSequence *element = nullptr;
+    std::function<IFrameSequence *(IndexedRepeatingFs *, FrameSequenceContext *, int)> factory;
+    std::function<bool(IndexedRepeatingFs *, FrameSequenceContext *, int)> predicate;
+    std::vector<std::string> histories;
+
+  protected:
+    virtual bool startNextSequence(FrameSequenceContext *context);
+
+  public:
+    virtual ~IndexedRepeatingFs();
+    IndexedRepeatingFs(std::function<IFrameSequence *(IndexedRepeatingFs *, FrameSequenceContext *, int)> factory,
+                       std::function<bool(IndexedRepeatingFs *, FrameSequenceContext *, int)> predicate);
+
+    virtual int getCount() { return count; }
+    virtual int getStep() { return firstStep + step; }
+    virtual bool isSequenceApply(FrameSequenceContext *context, int index) { return predicate(this, context, index); }
+    virtual IFrameSequence *createSequence(FrameSequenceContext *context, int index) { return factory(this, context, index); }
+    virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
+    virtual bool completeStep(FrameSequenceContext *context) override;
+
+    virtual std::string getHistory() const override;
+};
+
 class INET_API AlternativesFs : public IFrameSequence
 {
   protected:
@@ -117,4 +171,3 @@ class INET_API AlternativesFs : public IFrameSequence
 } // namespace inet
 
 #endif
-

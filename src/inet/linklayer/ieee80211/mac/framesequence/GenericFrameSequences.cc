@@ -67,6 +67,42 @@ SequentialFs::~SequentialFs()
         delete element;
 }
 
+StepFs::StepFs(std::string history,
+               std::function<IFrameSequenceStep *(StepFs *, FrameSequenceContext *)> prepare,
+               std::function<bool(StepFs *, FrameSequenceContext *)> complete) :
+    history(std::move(history)),
+    prepare(prepare),
+    complete(complete)
+{
+}
+
+void StepFs::startSequence(FrameSequenceContext *context, int firstStep)
+{
+    ASSERT(context != nullptr);
+    step = 0;
+}
+
+IFrameSequenceStep *StepFs::prepareStep(FrameSequenceContext *context)
+{
+    ASSERT(context != nullptr);
+    switch (step) {
+        case 0:
+            return prepare == nullptr ? nullptr : prepare(this, context);
+        case 1:
+            return nullptr;
+        default:
+            throw cRuntimeError("StepFs: unknown step %d", step);
+    }
+}
+
+bool StepFs::completeStep(FrameSequenceContext *context)
+{
+    ASSERT(context != nullptr);
+    ASSERT(step == 0);
+    step++;
+    return complete == nullptr ? true : complete(this, context);
+}
+
 OptionalFs::OptionalFs(IFrameSequence *element, std::function<bool(OptionalFs *, FrameSequenceContext *)> predicate) :
     element(element),
     predicate(predicate)
@@ -167,6 +203,79 @@ std::string RepeatingFs::getHistory() const
     return "{" + history + "}";
 }
 
+IndexedRepeatingFs::IndexedRepeatingFs(std::function<IFrameSequence *(IndexedRepeatingFs *, FrameSequenceContext *, int)> factory,
+                                       std::function<bool(IndexedRepeatingFs *, FrameSequenceContext *, int)> predicate) :
+    factory(factory),
+    predicate(predicate)
+{
+}
+
+void IndexedRepeatingFs::startSequence(FrameSequenceContext *context, int firstStep)
+{
+    this->firstStep = firstStep;
+    step = 0;
+    count = 0;
+    elementIndex = -1;
+    histories.clear();
+    delete element;
+    element = nullptr;
+    startNextSequence(context);
+}
+
+bool IndexedRepeatingFs::startNextSequence(FrameSequenceContext *context)
+{
+    delete element;
+    element = nullptr;
+    if (!isSequenceApply(context, count))
+        return false;
+    elementIndex = count++;
+    element = createSequence(context, elementIndex);
+    element->startSequence(context, firstStep + step);
+    histories.push_back(element->getHistory());
+    return true;
+}
+
+IFrameSequenceStep *IndexedRepeatingFs::prepareStep(FrameSequenceContext *context)
+{
+    while (element != nullptr) {
+        auto elementStep = element->prepareStep(context);
+        if (elementStep != nullptr)
+            return elementStep;
+        histories.at(elementIndex) = element->getHistory();
+        startNextSequence(context);
+    }
+    return nullptr;
+}
+
+bool IndexedRepeatingFs::completeStep(FrameSequenceContext *context)
+{
+    ASSERT(element != nullptr);
+    step++;
+    bool complete = element->completeStep(context);
+    histories.at(elementIndex) = element->getHistory();
+    return complete;
+}
+
+std::string IndexedRepeatingFs::getHistory() const
+{
+    ASSERT(step != -1);
+    std::string history;
+    for (size_t i = 0; i < histories.size(); i++) {
+        auto elementHistory = histories.at(i);
+        if (!elementHistory.empty()) {
+            if (!history.empty())
+                history += " ";
+            history += elementHistory;
+        }
+    }
+    return "{" + history + "}";
+}
+
+IndexedRepeatingFs::~IndexedRepeatingFs()
+{
+    delete element;
+}
+
 AlternativesFs::AlternativesFs(std::vector<IFrameSequence *> elements, std::function<int(AlternativesFs *, FrameSequenceContext *)> selector) :
     elements(elements),
     selector(selector)
@@ -207,4 +316,3 @@ AlternativesFs::~AlternativesFs()
 
 } // namespace ieee80211
 } // namespace inet
-

@@ -123,59 +123,11 @@ const char *getDlMuIneligibilityReason(IOriginatorBlockAckAgreementHandler *hand
 
 } // namespace
 
-class HeDlMuPpduFs : public IFrameSequence
-{
-  protected:
-    HeDlMuTxOpFs *owner = nullptr;
-    int step = -1;
-
-  public:
-    explicit HeDlMuPpduFs(HeDlMuTxOpFs *owner) : owner(owner) { ASSERT(owner != nullptr); }
-
-    virtual void startSequence(FrameSequenceContext *context, int firstStep) override { ASSERT(context != nullptr); step = 0; }
-
-    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
-    {
-        ASSERT(context != nullptr);
-        switch (step) {
-            case 0:
-                owner->containerPacket = owner->buildMuContainerPacket(context);
-                if (owner->containerPacket == nullptr) {
-                    EV_WARN << "HeDlMuPpduFs: container packet build failed, aborting HE DL MU sequence\n";
-                    step = 1;
-                    return nullptr;
-                }
-                EV_DEBUG << "HeDlMuPpduFs: transmitting HE DL MU container packet\n";
-                return new TransmitStep(owner->containerPacket, context->getIfs(), true);
-            case 1:
-                return nullptr;
-            default:
-                throw cRuntimeError("HeDlMuPpduFs: unknown step %d", step);
-        }
-    }
-
-    virtual bool completeStep(FrameSequenceContext *context) override
-    {
-        ASSERT(context != nullptr);
-        switch (step) {
-            case 0:
-                step++;
-                return true;
-            default:
-                throw cRuntimeError("HeDlMuPpduFs: unknown step %d", step);
-        }
-    }
-
-    virtual std::string getHistory() const override { return "HE-MU-PPDU"; }
-};
-
-class HeDlMuPerStaBlockAckFs : public IFrameSequence
+class HeDlMuPerStaBlockAckFs : public SequentialFs
 {
   protected:
     HeDlMuTxOpFs *owner = nullptr;
     int allocationIndex = -1;
-    int firstStep = -1;
-    int step = -1;
 
   protected:
     const HeDlMuTxOpFs::ActiveAllocation& getActiveAllocation() const
@@ -332,7 +284,7 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
 
     bool completeBlockAckStep(FrameSequenceContext *context)
     {
-        auto receiveStep = check_and_cast<IReceiveStep *>(context->getStep(firstStep + step));
+        auto receiveStep = check_and_cast<IReceiveStep *>(context->getLastStep());
         auto receivedPacket = receiveStep->getReceivedFrame();
         auto transmittedPacket = findTransmittedPacket(context);
         if (receivedPacket != nullptr) {
@@ -354,125 +306,33 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
                         << " but no transmitted packet recorded" << endl;
             }
         }
-        step++;
         return true;
     }
 
   public:
     HeDlMuPerStaBlockAckFs(HeDlMuTxOpFs *owner, int allocationIndex) :
+        SequentialFs({new StepFs("BlockAckReq",
+                                 [this](StepFs *, FrameSequenceContext *context) {
+                                     return prepareBarStep(context);
+                                 }),
+                      new StepFs("BlockAck",
+                                 [this](StepFs *, FrameSequenceContext *context) {
+                                     return prepareBlockAckStep(context);
+                                 },
+                                 [this](StepFs *, FrameSequenceContext *context) {
+                                     return completeBlockAckStep(context);
+                                 })}),
         owner(owner),
         allocationIndex(allocationIndex)
     {
         ASSERT(owner != nullptr);
     }
-
-    virtual void startSequence(FrameSequenceContext *context, int firstStep) override
-    {
-        ASSERT(context != nullptr);
-        this->firstStep = firstStep;
-        step = 0;
-    }
-
-    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
-    {
-        ASSERT(context != nullptr);
-        switch (step) {
-            case 0:
-                return prepareBarStep(context);
-            case 1:
-                return prepareBlockAckStep(context);
-            case 2:
-                return nullptr;
-            default:
-                throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
-        }
-    }
-
-    virtual bool completeStep(FrameSequenceContext *context) override
-    {
-        ASSERT(context != nullptr);
-        switch (step) {
-            case 0:
-                step++;
-                return true;
-            case 1:
-                return completeBlockAckStep(context);
-            default:
-                throw cRuntimeError("HeDlMuPerStaBlockAckFs: unknown step %d", step);
-        }
-    }
-
-    virtual std::string getHistory() const override { return "BLOCKACKREQ BLOCKACK"; }
 };
 
-class HeDlMuSequentialBlockAckFs : public IFrameSequence
+class HeDlMuBarBlockAckFs : public OptionalFs
 {
   protected:
     HeDlMuTxOpFs *owner = nullptr;
-    int firstStep = -1;
-    int step = -1;
-    int allocationIndex = -1;
-    HeDlMuPerStaBlockAckFs *currentSequence = nullptr;
-
-  protected:
-    void startCurrentSequence(FrameSequenceContext *context)
-    {
-        delete currentSequence;
-        currentSequence = new HeDlMuPerStaBlockAckFs(owner, allocationIndex);
-        currentSequence->startSequence(context, firstStep + step);
-    }
-
-  public:
-    explicit HeDlMuSequentialBlockAckFs(HeDlMuTxOpFs *owner) : owner(owner) { ASSERT(owner != nullptr); }
-
-    virtual ~HeDlMuSequentialBlockAckFs() { delete currentSequence; }
-
-    virtual void startSequence(FrameSequenceContext *context, int firstStep) override
-    {
-        ASSERT(context != nullptr);
-        this->firstStep = firstStep;
-        step = 0;
-        allocationIndex = 0;
-        delete currentSequence;
-        currentSequence = nullptr;
-        if (!owner->activeAllocations.empty())
-            startCurrentSequence(context);
-    }
-
-    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
-    {
-        ASSERT(context != nullptr);
-        while (allocationIndex < (int)owner->activeAllocations.size()) {
-            ASSERT(currentSequence != nullptr);
-            auto nextStep = currentSequence->prepareStep(context);
-            if (nextStep != nullptr)
-                return nextStep;
-            allocationIndex++;
-            if (allocationIndex < (int)owner->activeAllocations.size())
-                startCurrentSequence(context);
-        }
-        return nullptr;
-    }
-
-    virtual bool completeStep(FrameSequenceContext *context) override
-    {
-        ASSERT(context != nullptr);
-        ASSERT(currentSequence != nullptr);
-        step++;
-        return currentSequence->completeStep(context);
-    }
-
-    virtual std::string getHistory() const override
-    {
-        return currentSequence == nullptr ? "SEQ-BLOCKACK" : currentSequence->getHistory();
-    }
-};
-
-class HeDlMuBarBlockAckFs : public IFrameSequence
-{
-  protected:
-    HeDlMuTxOpFs *owner = nullptr;
-    int step = -1;
 
     Packet *buildMuBarTrigger() const
     {
@@ -596,41 +456,29 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
     }
 
   public:
-    explicit HeDlMuBarBlockAckFs(HeDlMuTxOpFs *owner) : owner(owner) { ASSERT(owner != nullptr); }
-
-    virtual void startSequence(FrameSequenceContext *context, int firstStep) override { ASSERT(context != nullptr); step = 0; }
-
-    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override
+    explicit HeDlMuBarBlockAckFs(HeDlMuTxOpFs *owner) :
+        OptionalFs(new SequentialFs({new StepFs("MU-BAR Trigger",
+                                               [this](StepFs *, FrameSequenceContext *context) {
+                                                   return new TransmitStep(buildMuBarTrigger(), this->owner->modeSet->getSifsTime(), true);
+                                               }),
+                                    new StepFs("HE-TB-BlockAck",
+                                               [this](StepFs *, FrameSequenceContext *context) {
+                                                   auto trigger = check_and_cast<ITransmitStep *>(context->getLastStep())->getFrameToTransmit();
+                                                   auto header = trigger->peekAtFront<Ieee80211TriggerFrame>();
+                                                   return new ReceiveCollectionStep(this->owner->modeSet->getSifsTime() +
+                                                           header->getCommonDuration() + this->owner->modeSet->getSlotTime());
+                                               },
+                                               [this](StepFs *, FrameSequenceContext *context) {
+                                                   processResponses(context);
+                                                   return true;
+                                               })}),
+                   [this](OptionalFs *, FrameSequenceContext *) {
+                       return !this->owner->activeAllocations.empty();
+                   }),
+        owner(owner)
     {
-        ASSERT(context != nullptr);
-        if (owner->activeAllocations.empty())
-            return nullptr;
-        switch (step) {
-            case 0:
-                return new TransmitStep(buildMuBarTrigger(), owner->modeSet->getSifsTime(), true);
-            case 1: {
-                auto trigger = check_and_cast<ITransmitStep *>(context->getLastStep())->getFrameToTransmit();
-                auto header = trigger->peekAtFront<Ieee80211TriggerFrame>();
-                return new ReceiveCollectionStep(owner->modeSet->getSifsTime() +
-                        header->getCommonDuration() + owner->modeSet->getSlotTime());
-            }
-            case 2:
-                return nullptr;
-            default:
-                throw cRuntimeError("Invalid HE MU-BAR frame sequence step");
-        }
+        ASSERT(owner != nullptr);
     }
-
-    virtual bool completeStep(FrameSequenceContext *context) override
-    {
-        ASSERT(context != nullptr);
-        if (step == 1)
-            processResponses(context);
-        step++;
-        return true;
-    }
-
-    virtual std::string getHistory() const override { return "MU-BAR HE-TB-BLOCKACK"; }
 };
 
 HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
@@ -652,7 +500,44 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
       maxAmpduMpduCount(maxAmpduMpduCount),
       maxHeMuPsduLength(maxHeMuPsduLength),
       maxHeMuPpduDuration(maxHeMuPpduDuration),
-      ackMethod(ackMethod)
+      ackMethod(ackMethod),
+      // G.5 HE sequences
+      // he-txop-sequence =
+      //   he-nav-protected-sequence |
+      //   1{initiator-sequence};
+      // he-dl-mu-sequence =
+      //   ( BlockAck + delayed [+mu-users-respond] Ack |
+      //   ( BlockAckReq + delayed [+mu-users-respond] Ack ) |
+      //   ( Data[+HTC] + individual [+null] [+QoS+normal-ack] [+mu-user-respond] Ack |
+      //   Ack );
+      // he-ul-mu-sequence =
+      //   MU-BAR Trigger BlockAck;
+      // Implemented subset:
+      //   HE-MU-PPDU ( MU-BAR Trigger BlockAck | 1{BlockAckReq BlockAck} );
+      // The HE MU PPDU itself is built by the first StepFs; the acknowledgement
+      // tail is either the standard MU-BAR trigger exchange or a sequential
+      // BlockAckReq/BlockAck fallback for each selected STA.
+      sequence(new SequentialFs({new StepFs("HE-MU-PPDU",
+                                            [this](StepFs *, FrameSequenceContext *context) -> IFrameSequenceStep * {
+                                                containerPacket = buildMuContainerPacket(context);
+                                                if (containerPacket == nullptr) {
+                                                    EV_WARN << "HeDlMuTxOpFs: container packet build failed, aborting HE DL MU sequence\n";
+                                                    return static_cast<IFrameSequenceStep *>(nullptr);
+                                                }
+                                                EV_DEBUG << "HeDlMuTxOpFs: transmitting HE DL MU container packet\n";
+                                                return new TransmitStep(containerPacket, context->getIfs(), true);
+                                            }),
+                                 new AlternativesFs({new HeDlMuBarBlockAckFs(this),
+                                                     new IndexedRepeatingFs(
+                                                             [this](IndexedRepeatingFs *, FrameSequenceContext *, int index) {
+                                                                 return new HeDlMuPerStaBlockAckFs(this, index);
+                                                             },
+                                                             [this](IndexedRepeatingFs *, FrameSequenceContext *, int index) {
+                                                                 return index < (int)activeAllocations.size();
+                                                             })},
+                                                     [this](AlternativesFs *, FrameSequenceContext *) {
+                                                         return this->ackMethod == AckMethod::MU_BAR_TRIGGER ? 0 : 1;
+                                                     })}))
 {
     ASSERT(dlScheduler != nullptr);
     ASSERT(modeSet != nullptr);
@@ -667,9 +552,6 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
         throw cRuntimeError("maxHeMuPsduLength must be positive");
     if (maxHeMuPpduDuration <= SIMTIME_ZERO)
         throw cRuntimeError("maxHeMuPpduDuration must be positive");
-    sequence = ackMethod == AckMethod::MU_BAR_TRIGGER ?
-            static_cast<IFrameSequence *>(new SequentialFs({new HeDlMuPpduFs(this), new HeDlMuBarBlockAckFs(this)})) :
-            static_cast<IFrameSequence *>(new SequentialFs({new HeDlMuPpduFs(this), new HeDlMuSequentialBlockAckFs(this)}));
 }
 
 HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
@@ -711,10 +593,7 @@ void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
     EV_INFO << "Starting HE DL MU FS at step " << firstStep << "\n";
 }
 
-HeDlMuTxOpFs::~HeDlMuTxOpFs()
-{
-    delete sequence;
-}
+HeDlMuTxOpFs::~HeDlMuTxOpFs() = default;
 
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
