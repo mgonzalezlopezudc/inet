@@ -271,6 +271,10 @@ void Ieee80211Radio::insertFcs(const Ptr<Ieee80211PhyHeader>& phyHeader) const
         }
     }
     else if (auto header = dynamic_cast<Ieee80211DsssPhyHeader *>(phyHeader.get())) {
+        // IEEE Std 802.11-2024 15.3.3.7 and 16.2.3.7 specify CRC-16 over the
+        // SIGNAL/SERVICE/LENGTH fields for DSSS and HR/DSSS. The current
+        // packet-level model records declared correctness instead of computing
+        // the bit-level CRC.
         header->setFcsMode(fcsMode);
         switch (fcsMode) {
             case FCS_COMPUTED:
@@ -486,12 +490,19 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     }
 
     phyHeader->setLengthField(B((packet->getDataLength().get<b>() + 7) / 8));
+    // The inherited lengthField stores TXVECTOR LENGTH in octets for duration
+    // calculations. IEEE Std 802.11-2024 17.3.4.3 uses the same unit for
+    // OFDM/ERP L-SIG, while 15.3.3.6 and 16.2.3.6 convert DSSS/HR-DSSS PLCP
+    // LENGTH to microseconds; that conversion is not represented here.
     insertFcs(phyHeader);
     packet->insertAtFront(phyHeader);
 
     auto tailLength = dynamic_cast<const Ieee80211OfdmMode *>(mode) ? b(6) : b(0);
     auto paddingLength = mode->getDataMode()->getPaddingLength(B(phyHeader->getLengthField()));
     if (tailLength + paddingLength != b(0)) {
+        // IEEE Std 802.11-2024 17.3.5.3 and 17.3.5.4: non-HT OFDM DATA
+        // materializes six tail bits plus pad bits. HT/VHT padding is accounted
+        // for in airtime calculations, not as explicit packet trailer bits.
         const auto& phyTrailer = makeShared<BitCountChunk>(tailLength + paddingLength);
         packet->insertAtBack(phyTrailer);
     }

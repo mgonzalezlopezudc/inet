@@ -18,6 +18,9 @@ Ieee80211DsssDataMode::Ieee80211DsssDataMode(const DpskModulationBase *modulatio
 
 const simtime_t Ieee80211DsssDataMode::getDuration(b length) const
 {
+    // IEEE Std 802.11-2024 15.4.6.7 defines DSSS TXTIME as
+    // PreambleLength + PHYHeaderTime + LENGTH * 8 / DATARATE. This method
+    // returns only the PSDU term, rounded up to whole microseconds.
     return (simtime_t)(lrint(ceil((double)length.get() / getGrossBitrate().get<bps>() * 1E+6))) / 1E+6;
 }
 
@@ -51,4 +54,3 @@ const simtime_t Ieee80211DsssMode::getRifsTime() const
 } // namespace physicallayer
 
 } // namespace inet
-

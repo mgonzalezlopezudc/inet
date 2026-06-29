@@ -39,6 +39,9 @@ namespace {
 
 uint32_t packOfdmSignal(uint8_t rate, bool reserved, uint16_t length, bool parity, uint8_t tail)
 {
+    // IEEE Std 802.11-2024 Figure 17-5 and 17.3.4: SIGNAL bit 0 is RATE bit
+    // R1 and the LSB is transmitted first. Pack the 24 SIGNAL bits in that
+    // order before emitting the three octets below.
     return (rate & 0xF) |
             (reserved ? 0x10 : 0) |
             ((length & 0xFFF) << 5) |
@@ -122,6 +125,10 @@ const Ptr<Chunk> Ieee80211IrPhyHeaderSerializer::deserialize(MemoryInputStream& 
 void Ieee80211DsssPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto dsssPhyHeader = dynamicPtrCast<const Ieee80211DsssPhyHeader>(chunk);
+    // IEEE Std 802.11-2024 15.3.3.4..15.3.3.7: SIGNAL, SERVICE, LENGTH, CRC.
+    // NOTE: the standard PHY LENGTH field is in microseconds, converted from
+    // TXVECTOR LENGTH octets in 15.3.6. INET's lengthField is packet-level PSDU
+    // octets, so this serializer is not bit-exact for DSSS PLCP LENGTH.
     stream.writeByte(dsssPhyHeader->getSignal());
     stream.writeByte(dsssPhyHeader->getService());
     stream.writeUint16Le(dsssPhyHeader->getLengthField().get<B>());
@@ -131,6 +138,8 @@ void Ieee80211DsssPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
 const Ptr<Chunk> Ieee80211DsssPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto dsssPhyHeader = makeShared<Ieee80211DsssPhyHeader>();
+    // See the serialize-side note: the decoded LENGTH value is preserved in
+    // lengthField, but the packet-level receiver expects PSDU octets.
     dsssPhyHeader->setSignal(stream.readByte());
     dsssPhyHeader->setService(stream.readByte());
     dsssPhyHeader->setLengthField(B(stream.readUint16Le()));
@@ -145,6 +154,10 @@ const Ptr<Chunk> Ieee80211DsssPhyHeaderSerializer::deserialize(MemoryInputStream
 void Ieee80211HrDsssPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto hrDsssPhyHeader = dynamicPtrCast<const Ieee80211HrDsssPhyHeader>(chunk);
+    // IEEE Std 802.11-2024 16.2.3.4..16.2.3.7 and 16.2.3.11..16.2.3.14:
+    // long and short HR/DSSS headers carry SIGNAL, SERVICE, LENGTH, and CRC.
+    // The standard LENGTH field is in microseconds and may need the SERVICE
+    // length-extension bit (16.2.3.6); INET stores PSDU octets here.
     stream.writeByte(hrDsssPhyHeader->getSignal());
     stream.writeByte(hrDsssPhyHeader->getService());
     stream.writeUint16Le(hrDsssPhyHeader->getLengthField().get<B>());
@@ -154,6 +167,8 @@ void Ieee80211HrDsssPhyHeaderSerializer::serialize(MemoryOutputStream& stream, c
 const Ptr<Chunk> Ieee80211HrDsssPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
     auto hrDsssPhyHeader = makeShared<Ieee80211HrDsssPhyHeader>();
+    // See the serialize-side note: full HR/DSSS LENGTH/SERVICE conversion is
+    // outside this packet-level serializer.
     hrDsssPhyHeader->setSignal(stream.readByte());
     hrDsssPhyHeader->setService(stream.readByte());
     hrDsssPhyHeader->setLengthField(B(stream.readUint16Le()));
@@ -168,6 +183,9 @@ const Ptr<Chunk> Ieee80211HrDsssPhyHeaderSerializer::deserialize(MemoryInputStre
 void Ieee80211OfdmPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto ofdmPhyHeader = dynamicPtrCast<const Ieee80211OfdmPhyHeader>(chunk);
+    // IEEE Std 802.11-2024 17.3.4: RATE/reserved/LENGTH/parity/tail are the
+    // 24-bit SIGNAL field; the 16-bit SERVICE field starts the DATA field
+    // (17.3.5.2) but is kept in this header chunk in the packet-level model.
     writeOfdmSignal(stream, ofdmPhyHeader->getRate(), ofdmPhyHeader->getReserved(), ofdmPhyHeader->getLengthField().get<B>(), ofdmPhyHeader->getParity(), ofdmPhyHeader->getTail());
     stream.writeUint16Le(ofdmPhyHeader->getService());
 }
@@ -196,6 +214,8 @@ const Ptr<Chunk> Ieee80211OfdmPhyHeaderSerializer::deserialize(MemoryInputStream
 void Ieee80211ErpOfdmPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto erpOfdmPhyHeader = dynamicPtrCast<const Ieee80211ErpOfdmPhyHeader>(chunk);
+    // IEEE Std 802.11-2024 18.3.2.4: ERP-OFDM uses the Clause 17 OFDM SIGNAL
+    // format; the ERP signal extension is a timing property, not serialized here.
     writeOfdmSignal(stream, erpOfdmPhyHeader->getRate(), erpOfdmPhyHeader->getReserved(), erpOfdmPhyHeader->getLengthField().get<B>(), erpOfdmPhyHeader->getParity(), erpOfdmPhyHeader->getTail());
     stream.writeUint16Le(erpOfdmPhyHeader->getService());
 }
@@ -224,6 +244,8 @@ const Ptr<Chunk> Ieee80211ErpOfdmPhyHeaderSerializer::deserialize(MemoryInputStr
 void Ieee80211HtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto htPhyHeader = dynamicPtrCast<const Ieee80211HtPhyHeader>(chunk);
+    // IEEE Std 802.11-2024 19.3.9.4.3 defines HT-SIG. INET currently models
+    // HT signaling as packet metadata only; no HT-SIG bits are serialized here.
 }
 
 const Ptr<Chunk> Ieee80211HtPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
@@ -238,6 +260,9 @@ const Ptr<Chunk> Ieee80211HtPhyHeaderSerializer::deserialize(MemoryInputStream& 
 void Ieee80211VhtPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto vhtPhyHeader = dynamicPtrCast<const Ieee80211VhtPhyHeader>(chunk);
+    // IEEE Std 802.11-2024 21.3.2, 21.3.8, and 21.3.9 define VHT-SIG fields.
+    // INET currently models VHT signaling as packet metadata only; no VHT-SIG
+    // bits are serialized here.
 }
 
 const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const

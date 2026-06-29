@@ -50,12 +50,16 @@ Ieee80211OfdmDataMode::Ieee80211OfdmDataMode(const Ieee80211OfdmCode *code, cons
 
 bps Ieee80211OfdmModeBase::computeGrossBitrate(const Ieee80211OfdmModulation *modulation) const
 {
+    // IEEE Std 802.11-2024 Table 17-4 defines N_CBPS from the modulation and
+    // N_SD = 48. Gross bitrate is N_CBPS / T_SYM before applying the code rate.
     int codedBitsPerOFDMSymbol = modulation->getSubcarrierModulation()->getCodeWordSize() * getNumberOfDataSubcarriers();
     return bps(codedBitsPerOFDMSymbol / getSymbolInterval());
 }
 
 bps Ieee80211OfdmModeBase::computeNetBitrate(bps grossBitrate, const Ieee80211OfdmCode *code) const
 {
+    // IEEE Std 802.11-2024 Table 17-4 maps each RATE to a coding rate R; this
+    // applies R to N_CBPS to obtain N_DBPS / T_SYM.
     const ConvolutionalCode *convolutionalCode = code ? code->getConvolutionalCode() : nullptr;
     if (convolutionalCode)
         return grossBitrate * convolutionalCode->getCodeRatePuncturingK() / convolutionalCode->getCodeRatePuncturingN();
@@ -71,6 +75,9 @@ Hz Ieee80211OfdmModeBase::getSubcarrierStartFrequencyOffset(int subcarrierIndex)
 
     Hz spacing = getSubcarrierFrequencySpacing();
 
+    // IEEE Std 802.11-2024 Figure 17-11 uses subcarrier indexes -26..-1 and
+    // +1..+26, skipping DC. The half-subcarrier offsets describe each occupied
+    // bin's frequency interval in this packet-level model.
     if (subcarrierIndex < numSubcarriers / 2)
         return spacing * (subcarrierIndex - (numSubcarriers / 2) - 0.5);
     else
@@ -108,6 +115,7 @@ bps Ieee80211OfdmModeBase::getNetBitrate() const
 
 const simtime_t Ieee80211OfdmMode::getSlotTime() const
 {
+    // IEEE Std 802.11-2024 Table 17-24: slot time scales by channel spacing.
     if (channelSpacing == MHz(20))
         return 9E-6;
     else if (channelSpacing == MHz(10))
@@ -120,6 +128,8 @@ const simtime_t Ieee80211OfdmMode::getSlotTime() const
 
 const simtime_t Ieee80211OfdmMode::getSifsTime() const
 {
+    // IEEE Std 802.11-2024 Table 17-24: SIFS is 16 us at 20 MHz, doubled for
+    // 10 MHz and quadrupled for 5 MHz operation.
     if (channelSpacing == MHz(20))
         return 16E-6;
     else if (channelSpacing == MHz(10))
@@ -132,7 +142,8 @@ const simtime_t Ieee80211OfdmMode::getSifsTime() const
 
 const simtime_t Ieee80211OfdmMode::getCcaTime() const
 {
-    // < 4, < 8, < 16
+    // IEEE Std 802.11-2024 Table 17-24 lists aCCATime as less than these
+    // limits; INET uses the limiting value as the packet-level duration.
     if (channelSpacing == MHz(20))
         return 4E-6;
     else if (channelSpacing == MHz(10))
@@ -145,6 +156,7 @@ const simtime_t Ieee80211OfdmMode::getCcaTime() const
 
 const simtime_t Ieee80211OfdmMode::getPhyRxStartDelay() const
 {
+    // IEEE Std 802.11-2024 Table 17-24: aRxPHYStartDelay by channel spacing.
     if (channelSpacing == MHz(20))
         return 25E-6;
     else if (channelSpacing == MHz(10))
@@ -197,6 +209,8 @@ std::ostream& Ieee80211OfdmMode::printToStream(std::ostream& stream, int level, 
 
 b Ieee80211OfdmDataMode::getPaddingLength(b dataLength) const
 {
+    // IEEE Std 802.11-2024 17.3.5.4: DATA contains SERVICE (16), PSDU,
+    // six tail bits, and pad bits so that the total reaches N_SYM * N_DBPS.
     unsigned int codedBitsPerOFDMSymbol = modulation->getSubcarrierModulation()->getCodeWordSize() * NUMBER_OF_OFDM_DATA_SUBCARRIERS;
     unsigned int dataBitsPerOFDMSymbol = codedBitsPerOFDMSymbol; // N_DBPS
     if (code->getConvolutionalCode()) {
@@ -212,25 +226,27 @@ b Ieee80211OfdmDataMode::getPaddingLength(b dataLength) const
 
 b Ieee80211OfdmDataMode::getCompleteLength(b dataLength) const
 {
+    // The SERVICE field is accounted for by getDuration(); the complete length
+    // here is PSDU + tail + pad, matching the DATA-field split above.
     return dataLength + getTailFieldLength() + getPaddingLength(dataLength);
 }
 
 const simtime_t Ieee80211OfdmDataMode::getDuration(b dataLength) const
 {
-    // IEEE Std 802.11-2007, section 17.3.2.2, table 17-3
-    // corresponds to N_{DBPS} in the table
+    // IEEE Std 802.11-2024 Table 17-4 defines N_DBPS as the coded bits per
+    // OFDM symbol after the convolutional coding rate is applied.
     unsigned int codedBitsPerOFDMSymbol = modulation->getSubcarrierModulation()->getCodeWordSize() * getNumberOfDataSubcarriers();
     const ConvolutionalCode *convolutionalCode = code ? code->getConvolutionalCode() : nullptr;
     unsigned int dataBitsPerOFDMSymbol = convolutionalCode ? convolutionalCode->getDecodedLength(codedBitsPerOFDMSymbol) : codedBitsPerOFDMSymbol;
-    // IEEE Std 802.11-2007, section 17.3.5.3, equation (17-11)
+    // IEEE Std 802.11-2024 17.3.5.4: N_SYM = ceil((16 + 8*LENGTH + 6) / N_DBPS).
     unsigned int numberOfSymbols = lrint(ceil((double)(getServiceFieldLength() + getCompleteLength(dataLength)).get<b>() / dataBitsPerOFDMSymbol));
-    // Add signal extension for ERP PHY
     return numberOfSymbols * getSymbolInterval();
 }
 
 const Ieee80211OfdmMode *Ieee80211OfdmCompliantModes::findCompliantMode(unsigned int signalRateField, Hz channelSpacing)
 {
-    // Table 18-6—Contents of the SIGNAL field
+    // IEEE Std 802.11-2024 Table 17-6: RATE field values are the same bit
+    // patterns for 20/10/5 MHz spacing; the data rates scale with T_SYM.
     if (channelSpacing == MHz(20)) {
         switch (signalRateField) {
             case 13: // 1101
@@ -422,4 +438,3 @@ const Ieee80211OfdmMode Ieee80211OfdmCompliantModes::ofdmMode54Mbps("ofdmMode54M
 
 } // namespace physicallayer
 } // namespace inet
-

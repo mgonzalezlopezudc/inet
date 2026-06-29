@@ -118,6 +118,9 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
     const IIeee80211Mode *transmissionMode;
     const auto& modeReq = const_cast<Packet *>(packet)->findTag<Ieee80211ModeReq>();
     const auto& bitrateReq = const_cast<Packet *>(packet)->findTag<SignalBitrateReq>();
+    // IEEE Std 802.11-2024 PHY-TXSTART.request carries TXVECTOR parameters
+    // such as DATARATE/MCS/FORMAT (Clause 8.3.5.5, with PHY-specific tables in
+    // Clauses 15..21). INET maps those requests to a concrete IIeee80211Mode.
     if (modeReq != nullptr) {
         if (modeSet != nullptr && !modeSet->containsMode(modeReq->getMode()))
             throw cRuntimeError("Unsupported mode requested");
@@ -130,7 +133,10 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
     if (transmissionMode == nullptr)
         throw cRuntimeError("Transmission mode is undefined");
 
-    // Map to LDPC variant if enabled/negotiated
+    // Map to LDPC variant if enabled/negotiated. IEEE Std 802.11-2024 uses the
+    // HT FEC_CODING field (Table 19-11) and VHT/HE TXVECTOR FEC_CODING fields
+    // (Table 21-1 / Table 27-1); the packet-level model chooses the matching
+    // cached mode before airtime calculation.
     cModule *nic = getContainingNicModule(this);
     auto mib = nic ? dynamic_cast<const ieee80211::Ieee80211Mib *>(nic->getSubmodule("mib")) : nullptr;
     if (mib != nullptr) {
@@ -286,6 +292,10 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     simtime_t duration = transmissionMode->getDuration(B(phyHeader->getLengthField()));
     simtime_t preambleDuration = transmissionMode->getPreambleMode()->getDuration();
     simtime_t headerDuration = transmissionMode->getHeaderMode()->getDuration();
+    // For non-HE modes, the mode classes implement the PHY-specific TXTIME
+    // formulas: DSSS 15.4.6.7, HR/DSSS 16.3.4, OFDM 17.4.3, ERP 18.5.3.2,
+    // HT 19.4.3, and VHT 21.4.3. The analog model then splits the result into
+    // preamble, header/signaling, and DATA intervals.
     Hz transmissionCenterFrequency = centerFrequency;
     std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
     Ieee80211HePpduParameters hePpduParameters;

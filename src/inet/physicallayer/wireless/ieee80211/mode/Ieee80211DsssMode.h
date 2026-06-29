@@ -24,6 +24,8 @@ class INET_API Ieee80211DsssPreambleMode : public Ieee80211DsssChunkMode, public
   public:
     Ieee80211DsssPreambleMode() {}
 
+    // IEEE Std 802.11-2024 15.2.3.1 and Figure 15-1: the DSSS PLCP preamble
+    // is a 128-bit SYNC followed by a 16-bit SFD, transmitted at 1 Mb/s DBPSK.
     b getSyncFieldLength() const { return b(128); }
     b getSfdFieldLength() const { return b(16); }
     b getLength() const { return getSyncFieldLength() + getSfdFieldLength(); }
@@ -41,6 +43,8 @@ class INET_API Ieee80211DsssHeaderMode : public Ieee80211DsssChunkMode, public I
   public:
     Ieee80211DsssHeaderMode() {}
 
+    // IEEE Std 802.11-2024 15.2.3.1 / Figure 15-1: the DSSS PLCP header
+    // consists of SIGNAL, SERVICE, LENGTH, and CRC fields, all sent at 1 Mb/s.
     b getSignalFieldLength() const { return b(8); }
     b getServiceFieldLength() const { return b(8); }
     b getLengthFieldLength() const { return b(16); }
@@ -65,6 +69,8 @@ class INET_API Ieee80211DsssDataMode : public Ieee80211DsssChunkMode, public IIe
     Ieee80211DsssDataMode(const DpskModulationBase *modulation);
 
     virtual Hz getBandwidth() const override { return MHz(22); }
+    // IEEE Std 802.11-2024 Clause 15 DSSS supports 1 Mb/s DBPSK and
+    // 2 Mb/s DQPSK; the DPSK constellation size maps directly to those rates.
     virtual bps getNetBitrate() const override { return Mbps(1) * modulation->getConstellationSize() / 2; }
     virtual bps getGrossBitrate() const override { return getNetBitrate(); }
     virtual b getPaddingLength(b dataLength) const override { return b(0); }
@@ -77,7 +83,7 @@ class INET_API Ieee80211DsssDataMode : public Ieee80211DsssChunkMode, public IIe
 
 /**
  * Represents a Direct Sequence Spread Spectrum PHY mode as described in IEEE
- * 802.11-2012 specification clause 16.
+ * 802.11-2024 specification clause 15.
  */
 class INET_API Ieee80211DsssMode : public Ieee80211ModeBase
 {
@@ -104,7 +110,7 @@ class INET_API Ieee80211DsssMode : public Ieee80211ModeBase
 
     virtual const simtime_t getDuration(b dataLength) const override { return preambleMode->getDuration() + headerMode->getDuration() + dataMode->getDuration(dataLength); }
 
-    // Table 19-8—ERP characteristics
+    // IEEE Std 802.11-2024 Table 15-5: DSSS PHY characteristics.
     virtual const simtime_t getSlotTime() const override { return 20E-6; }
     virtual const simtime_t getShortSlotTime() const { return 9E-6; }
     virtual const simtime_t getSifsTime() const override { return 10E-6; }
@@ -119,7 +125,7 @@ class INET_API Ieee80211DsssMode : public Ieee80211ModeBase
 
 /**
  * Provides the compliant Direct Sequence Spread Spectrum PHY modes as described
- * in the IEEE 802.11-2012 specification clause 16.
+ * in the IEEE 802.11-2024 specification clause 15.
  */
 class INET_API Ieee80211DsssCompliantModes
 {
@@ -143,4 +149,3 @@ class INET_API Ieee80211DsssCompliantModes
 } // namespace inet
 
 #endif
-
