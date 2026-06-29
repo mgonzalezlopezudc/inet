@@ -7,6 +7,9 @@
 #ifndef __INET_HEULMUTXOPFS_H
 #define __INET_HEULMUTXOPFS_H
 
+#include <memory>
+#include <vector>
+
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/IIeee80211HeUlTriggerPolicy.h"
@@ -36,6 +39,7 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
     MacAddress apAddress;
     uint32_t triggerId = 0;
     int step = -1;
+    std::unique_ptr<IFrameSequence> sequence;
     std::vector<Ieee80211MultiStaBlockAckRecord> ackRecords;
 
   protected:
