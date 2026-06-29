@@ -86,6 +86,17 @@ class INET_API HeHcf : public Hcf
     virtual int getStationQueueBankCount() const;
     virtual std::string getCsiTableSummary() const;
     virtual std::string getHeHcfSummary() const;
+    virtual AccessCategory mapTidToAccessCategory(Tid tid) const;
+    virtual bool allAssociatedStationsSupportPreamblePuncturing() const;
+    virtual bool supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const;
+    virtual void retryPendingTriggeredUlExchanges();
+    virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
+    virtual Packet *buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
+            AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
+            const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
+            TriggeredUlExchange& exchange);
+    virtual void processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
+    virtual void processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck);
 
   public:
     virtual void legacyPreambleReceived(Packet *packet);
