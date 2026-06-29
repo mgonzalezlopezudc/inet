@@ -14,7 +14,7 @@
 // This file serializes/deserializes the HE-SIG-A and HE-SIG-B fields for HE MU
 // PPDUs and the HE-SIG-A field for HE TB PPDUs.  The bit layouts follow
 // IEEE 802.11-2024 Tables 27-21 (HE MU HE-SIG-A), 27-22 (HE TB HE-SIG-A) and
-// Clause 27.3.11.13.2 (HE-SIG-B).
+// Clause 27.3.11.8 (HE-SIG-B).
 //
 // Approximations / simplifications:
 //   - Several reserved/constant fields are written as fixed values (e.g. TXOP
@@ -23,7 +23,7 @@
 //   - CRC, tail and padding bits in HE-SIG-A/B are written as zeros; the model
 //     does not perform bit-level CRC verification on the preamble.
 //   - HE-SIG-B user-specific fields are encoded with a simplified fixed-length
-//     representation; the full 21-bit user field format of Table 27-26 is
+//     representation; the full User field format of Tables 27-29 and 27-30 is
 //     approximated.
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"

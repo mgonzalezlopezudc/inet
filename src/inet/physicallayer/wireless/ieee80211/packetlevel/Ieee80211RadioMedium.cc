@@ -16,8 +16,8 @@
 // centered on that RU, and limits interference to frequency-overlapping signals.
 // Relevant clauses:
 //   - Clause 27.3.2: HE subcarriers and RUs.
-//   - Clause 27.3.11.13: HE MU PPDU reception.
-//   - Clause 27.3.11.12: HE TB PPDU reception.
+//   - Clause 27.3.4: HE MU and HE TB PPDU formats.
+//   - Clause 27.3.11.8: HE-SIG-B RU allocation and user identification.
 //
 // Approximations / simplifications:
 //   - Per-RU receive power is approximated as total transmit power scaled by
@@ -67,6 +67,9 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         return false;
     if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
             heMuPhyHeader->getUsersArraySize() == 1) {
+        // HE TB transmitters are centered on their assigned RU by the
+        // transmitter model. Reconstruct the full-channel center from the RU
+        // offset, then return the user RU for reception/interference filtering.
         const auto& user = heMuPhyHeader->getUsers(0);
         constexpr double HE_TONE_SPACING = 78125;
         auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
@@ -86,6 +89,8 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
     for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
         const auto& user = heMuPhyHeader->getUsers(i);
         if (receiverStaId.has_value() && user.staId == *receiverStaId) {
+            // DL HE MU receiver filtering follows the STA-ID and RU location
+            // carried in the HE-SIG-B User field (Clause 27.3.11.8.4).
             constexpr double HE_TONE_SPACING = 78125;
             auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
             if (user.ruToneSize == 0) {
@@ -128,6 +133,9 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
             packet->peekAtFront<Ieee80211HeMuPhyHeader>() : nullptr;
     bool isTriggerBasedUplink = heMuHeader != nullptr &&
             heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK;
+    // The standard defines the RU's subcarrier allocation, not this packet-level
+    // power scaling. For DL MU, scale the aggregate receive power by occupied
+    // RU bandwidth; for UL TB, the transmitter already emits on the assigned RU.
     auto ruPower = isTriggerBasedUplink ? aggregatePower :
             aggregatePower * (ru.bandwidth.get() / totalBandwidth.get());
     auto ruAnalogModel = new ScalarReceptionAnalogModel(
@@ -159,6 +167,8 @@ const IInterference *Ieee80211RadioMedium::computeInterference(const IRadio *rec
     if (!findHeMuRuForReceiver(receiver, transmission, desiredRu))
         return RadioMedium::computeInterference(receiver, listening, transmission);
 
+    // Clause 27.3.2 makes HE RUs orthogonal in frequency. The model therefore
+    // admits only overlapping analog receptions as interference for this RU.
     interferenceComputationCount++;
     auto reception = getReception(receiver, transmission);
     auto allInterferingReceptions = computeInterferingReceptions(reception);
