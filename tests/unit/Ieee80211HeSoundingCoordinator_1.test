@@ -109,10 +109,10 @@ HeMuMimoCsiManager csiManager;
     EV << "NDP processed\n";
 }
 
-// 3. Receive Beamforming Report Poll (Trigger Frame type 2)
+// 3. Receive Beamforming Report Poll (BFRP Trigger, IEEE 802.11-2024 Table 9-47 type 1)
 {
     auto trigger = makeShared<Ieee80211TriggerFrame>();
-    trigger->setTriggerType(2); // Beamforming Report Poll
+    trigger->setTriggerType(1); // Beamforming Report Poll
     trigger->setUsersArraySize(1);
     Ieee80211HeTriggerUserInfo user;
     user.aid = 5;

@@ -83,6 +83,8 @@ IFrameSequenceStep *HeSoundingFs::prepareStep(FrameSequenceContext *context)
     if (targets.empty())
         return nullptr;
 
+    // IEEE 802.11-2024 26.7.3 HE TB sounding sequence:
+    // HE NDP Announcement, HE sounding NDP, BFRP Trigger, then HE TB feedback.
     switch (step) {
         case 0: {
             auto ndpa = buildNdpaFrame(context);
@@ -209,7 +211,9 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
 {
     ASSERT(context != nullptr);
     auto header = makeShared<Ieee80211TriggerFrame>();
-    header->setTriggerType(1); // BFRP Trigger type
+    // 9.3.1.22 Table 9-47: Trigger type 1 is BFRP.  9.3.1.22.3 says the
+    // BFRP Trigger-dependent User Info field is the feedback segment bitmap.
+    header->setTriggerType(1);
     header->setTriggerId(triggerId);
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);

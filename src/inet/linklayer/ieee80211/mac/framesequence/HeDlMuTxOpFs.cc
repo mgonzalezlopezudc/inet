@@ -14,10 +14,11 @@
 //
 // Builds and transmits an HE MU PPDU carrying downlink A-MPDUs for multiple
 // STAs, then collects acknowledgments.  Relevant clauses:
-//   - IEEE 802.11-2024 Clause 26.3.3: A-MPDU aggregation.
-//   - Clause 26.4.4: response rules for HE MU PPDUs.
-//   - Clause 27.3.11.13: HE MU PPDU format.
-//   - Clause 9.3.1.9: Multi-STA BlockAck and BlockAckReq formats.
+//   - IEEE 802.11-2024 26.5.1: HE DL MU operation.
+//   - 26.6.2/26.6.3: HE A-MPDU padding and multi-TID aggregation rules.
+//   - 26.4.2/26.4.4: Multi-STA BA context and HE PPDU response rules.
+//   - 27.3.11.13: HE MU PPDU format.
+//   - 9.3.1.7/9.3.1.8/9.3.1.22: BAR, BlockAck, and Trigger frame formats.
 //
 // Implementation notes:
 //   - The HE MU PPDU is represented as a single container Packet with a
@@ -211,6 +212,10 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
 
     Ptr<Ieee80211BlockAckReq> buildBlockAckReq(FrameSequenceContext *context, Packet *transmittedPacket) const
     {
+        // 9.3.1.7 defines Basic and Multi-TID BlockAckReq variants.  For
+        // sequential BAR acknowledgement, each selected STA is polled with a
+        // BAR whose starting sequence number matches the first MPDU sent to
+        // that STA in the HE MU PPDU.
         auto receiverAddress = getActiveAllocation().staAddress;
         Tid tid = getActiveAllocation().tid;
         SequenceNumberCyclic startingSequenceNumber;
@@ -227,6 +232,9 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
         auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddress) : nullptr;
         if (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx) {
+            // 26.6.3 allows DL HE MU multi-TID A-MPDUs when negotiated.  The
+            // matching Multi-TID BAR carries one record per TID included in the
+            // per-user A-MPDU.
             auto recordsByTid = collectStartingSequenceNumbersByTid(getActiveAllocation().packets);
             if (recordsByTid.empty())
                 recordsByTid[tid] = startingSequenceNumber;
@@ -258,6 +266,9 @@ class HeDlMuPerStaBlockAckFs : public IFrameSequence
 
     simtime_t computeRemainingBarDuration(const IIeee80211Mode *responseMode) const
     {
+        // 9.2.5 Duration fields reserve the remaining exchange.  For the
+        // sequential BAR method, each BAR protects its own BlockAck response
+        // plus any later BAR/BlockAck pairs in this TXOP.
         auto hcfModule = dynamic_cast<cModule *>(owner->callback);
         auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
@@ -465,6 +476,9 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
 
     Packet *buildMuBarTrigger() const
     {
+        // 9.3.1.22.4: MU-BAR is Trigger type 2 and carries BAR Control and BAR
+        // Information in each Trigger User Info field.  The Trigger solicits
+        // simultaneous BlockAck responses as HE TB PPDUs.
         ASSERT(!owner->activeAllocations.empty());
         auto header = makeShared<Ieee80211TriggerFrame>();
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
@@ -506,6 +520,9 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
                 }
             }
             user.tid = tid;
+            // 26.4.2 requires Ack Type 0 for Multi-STA BlockAck responses to
+            // MU-BAR.  This model solicits compressed single-TID BlockAcks per
+            // user, so the BAR-dependent fields mirror a Compressed BAR.
             user.muBarBarAckPolicy = false;
             user.muBarMultiTid = false;
             user.muBarCompressedBitmap = true;
@@ -529,6 +546,9 @@ class HeDlMuBarBlockAckFs : public IFrameSequence
 
     void processResponses(FrameSequenceContext *context)
     {
+        // 26.5.2.3.3 ties an HE TB response to the triggering RU and Trigger
+        // fields.  We accept only BlockAck frames whose simulated HE TB tag
+        // matches this MU-BAR Trigger and the expected RU allocation.
         auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
         std::set<MacAddress> responded;
         EV_INFO << "HE DL MU-BAR FS: processing MU-BAR responses, triggerId = " << owner->ackTriggerId << "\n";
@@ -698,11 +718,11 @@ HeDlMuTxOpFs::~HeDlMuTxOpFs()
 
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
-    // IEEE 802.11-2024 Clause 27.3.11.13 ("HE MU PPDU").
-    // The AP schedules multiple users simultaneously in downlink by mapping their payloads (A-MPDUs)
-    // to separate Resource Units (RUs) or spatial stream groups (DL MU-MIMO).
-    // This method collects pending packets from STA queues, validates them, and builds a single
-    // HE-MU-PPDU container frame wrapping all user payloads.
+    // IEEE 802.11-2024 26.5.1 / 27.3.11.13: an AP schedules one or more
+    // per-user PSDUs in an HE MU PPDU using OFDMA RUs and, optionally,
+    // MU-MIMO spatial streams.  This method builds INET's container Packet for
+    // that PPDU and annotates each user payload with the corresponding RU PHY
+    // parameters.
     ASSERT(context != nullptr);
     ASSERT(dlScheduler != nullptr);
     activeAllocations.clear();
@@ -746,9 +766,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // Assemble the HE MU PPDU container packet.
     auto container = new Packet("HE-MU-PPDU");
 
-    // Standard QoS data header — broadcast receiver signals HE MU frame.
-    // The container header is not itself a user payload; it carries the NAV
-    // duration and allows the packet to traverse the existing MAC/PHY transmit path.
+    // Standard-like QoS data header for the model container.  The real HE MU
+    // PPDU has per-user PSDUs selected by TXVECTOR STA_ID/RU allocation
+    // (26.5.1.2); this broadcast header is not a user payload.
     auto containerHdr = makeShared<Ieee80211DataHeader>();
     containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     containerHdr->setType(ST_DATA_WITH_QOS);
@@ -759,7 +779,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         originatorQosDataService->assignSequenceNumber(containerHdr);
     }
 
-    // 1. Calculate the total sequential ACK sequence duration
+    // Calculate the NAV-protecting Duration field.  9.2.5 and 26.4.3 require
+    // BAR/MU-BAR originators to account for the expected BlockAck response; the
+    // value here covers either sequential BAR/BA pairs or the MU-BAR HE TB BA.
     simtime_t totalDuration = simtime_t::ZERO;
     auto qosContext = context->getQoSContext();
     auto originatorBAHandler = qosContext != nullptr ? qosContext->blockAckAgreementHandler : nullptr;
@@ -924,7 +946,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 modeSet->getSifsTime() + responseDuration;
     }
 
-    // Set the totalDuration on the container header to protect the sequential responses
+    // Set the container Duration field before queue mutation so receivers that
+    // can decode only the MAC header still see NAV protection for the pending
+    // acknowledgement phase.
     containerHdr->setDurationField(totalDuration);
     container->insertAtBack(containerHdr);
 
@@ -983,8 +1007,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
         auto queueForPacking = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
         ASSERT(queueForPacking != nullptr);
-        // Aggregate additional eligible MPDUs for this STA up to the Block Ack window,
-        // A-MPDU MPDU count, PSDU length, and aligned-duration limits.
+        // 26.5.1 requires all per-user PSDUs in an HE MU PPDU to end together;
+        // 26.6.2/26.6.3 govern the A-MPDU contents.  Pack only MPDUs that fit
+        // the BlockAck window, configured MPDU count, PSDU length, and aligned
+        // PPDU duration limit.
         std::map<Tid, int> selectedPacketsByTid;
         for (int i = 0; i < queueForPacking->getNumPackets() &&
                 (int)selectedAllocation.packets.size() < maxAmpduMpduCount; ++i) {
@@ -1126,8 +1152,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     std::map<int, int> ruStreamStartIndex;
 
-    // 2. Build the final MU container packet and assign duration/sequence numbers to sub-packets.
-    // Each selected STA becomes one RU payload section with per-user PHY parameters.
+    // Build the final MU container packet and assign duration/sequence numbers.
+    // Each selected STA becomes one per-user PSDU section.  Multiple users on
+    // the same RU are represented as DL MU-MIMO with stream-start indices as in
+    // the HE MU TXVECTOR user parameters (26.5.1 and 27.3.11.13).
     for (const auto& selectedAllocation : finalAllocations) {
         const auto& alloc = selectedAllocation.allocation;
         Packet *firstPacket = selectedAllocation.packet;
@@ -1184,6 +1212,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         }
         container->insertAtBack(payloadHeader);
         for (size_t i = 0; i < staPackets.size(); ++i) {
+            // 9.7.1 A-MPDU subframes use MPDU delimiters and 4-octet padding;
+            // 26.6.2 applies that HE padding model to HE MU PPDUs.
             auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
             delimiter->setLength(staPackets[i]->getByteLength());
             container->insertAtBack(delimiter);
@@ -1211,6 +1241,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
 
     container->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    // The common request tag carries the HE MU PPDU common TXVECTOR fields
+    // that are not literal MAC header fields: GI, coding, PE duration, and
+    // preamble puncturing state (26.11 and 27.3.11.13).
     auto commonRequest = container->addTagIfAbsent<Ieee80211HeMuCommonReq>();
     commonRequest->setGuardInterval(scheduleContext.guardInterval);
     commonRequest->setCoding(scheduleContext.coding);
