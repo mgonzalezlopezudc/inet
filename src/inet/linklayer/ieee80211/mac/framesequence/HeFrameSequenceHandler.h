@@ -15,8 +15,7 @@ namespace ieee80211 {
 /**
  * HE-specific frame-sequence handler.
  *
- * It extends the generic receive-timeout handling so that an HE MU exchange
- * is cleaned up consistently when its expected response does not arrive.
+ * HE receive-timeout behavior is expressed by the active IReceiveStep.
  */
 class INET_API HeFrameSequenceHandler : public FrameSequenceHandler
 {

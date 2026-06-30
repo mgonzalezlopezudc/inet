@@ -50,12 +50,27 @@ class INET_API ITransmitStep : public IFrameSequenceStep
 class INET_API IReceiveStep : public IFrameSequenceStep
 {
   public:
+    enum class TimeoutHandling {
+        ABORT_SEQUENCE,
+        COMPLETE_STEP,
+    };
+
+    enum class UnexpectedResponseHandling {
+        IGNORE_RESPONSE,
+        REJECT_STEP,
+    };
+
+  public:
     virtual Type getType() override { return Type::RECEIVE; }
 
     virtual simtime_t getTimeout() = 0;
     virtual Packet *getReceivedFrame() = 0;
     virtual void setFrameToReceive(Packet *frame) = 0;
     virtual bool completesOnReception() const { return true; }
+    virtual TimeoutHandling getTimeoutHandling() const { return completesOnReception() ? TimeoutHandling::ABORT_SEQUENCE : TimeoutHandling::COMPLETE_STEP; }
+    virtual Completion getTimeoutCompletion() const { return Completion::EXPIRED; }
+    virtual bool isExpectedResponse(Packet *frame, FrameSequenceContext *context) const { return true; }
+    virtual UnexpectedResponseHandling getUnexpectedResponseHandling() const { return UnexpectedResponseHandling::REJECT_STEP; }
 };
 
 class INET_API IFrameSequence

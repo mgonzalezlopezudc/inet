@@ -8,6 +8,8 @@
 #ifndef __INET_FRAMESEQUENCESTEP_H
 #define __INET_FRAMESEQUENCESTEP_H
 
+#include <functional>
+
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 
 namespace inet {
@@ -56,10 +58,22 @@ class INET_API ReceiveStep : public IReceiveStep
     Completion completion = Completion::UNDEFINED;
     simtime_t timeout = -1;
     Packet *receivedFrame = nullptr;
+    TimeoutHandling timeoutHandling = TimeoutHandling::ABORT_SEQUENCE;
+    Completion timeoutCompletion = Completion::EXPIRED;
+    std::function<bool(Packet *, FrameSequenceContext *)> responseValidator = nullptr;
+    UnexpectedResponseHandling unexpectedResponseHandling = UnexpectedResponseHandling::REJECT_STEP;
 
   public:
-    ReceiveStep(simtime_t timeout = -1) :
-        timeout(timeout)
+    ReceiveStep(simtime_t timeout = -1,
+                TimeoutHandling timeoutHandling = TimeoutHandling::ABORT_SEQUENCE,
+                std::function<bool(Packet *, FrameSequenceContext *)> responseValidator = nullptr,
+                UnexpectedResponseHandling unexpectedResponseHandling = UnexpectedResponseHandling::REJECT_STEP,
+                Completion timeoutCompletion = Completion::EXPIRED) :
+        timeout(timeout),
+        timeoutHandling(timeoutHandling),
+        timeoutCompletion(timeoutCompletion),
+        responseValidator(responseValidator),
+        unexpectedResponseHandling(unexpectedResponseHandling)
     {}
     virtual ~ReceiveStep() { delete receivedFrame; }
 
@@ -68,6 +82,10 @@ class INET_API ReceiveStep : public IReceiveStep
     virtual simtime_t getTimeout() override { return timeout; }
     virtual Packet *getReceivedFrame() override { return receivedFrame; }
     virtual void setFrameToReceive(Packet *frame) override { this->receivedFrame = frame; }
+    virtual TimeoutHandling getTimeoutHandling() const override { return timeoutHandling; }
+    virtual Completion getTimeoutCompletion() const override { return timeoutCompletion; }
+    virtual bool isExpectedResponse(Packet *frame, FrameSequenceContext *context) const override { return responseValidator == nullptr || responseValidator(frame, context); }
+    virtual UnexpectedResponseHandling getUnexpectedResponseHandling() const override { return unexpectedResponseHandling; }
 };
 
 class INET_API ReceiveCollectionStep : public ReceiveStep
@@ -76,7 +94,9 @@ class INET_API ReceiveCollectionStep : public ReceiveStep
     std::vector<Packet *> receivedFrames;
 
   public:
-    using ReceiveStep::ReceiveStep;
+    ReceiveCollectionStep(simtime_t timeout = -1) :
+        ReceiveStep(timeout, TimeoutHandling::COMPLETE_STEP, nullptr, UnexpectedResponseHandling::IGNORE_RESPONSE, Completion::ACCEPTED)
+    {}
     virtual ~ReceiveCollectionStep()
     {
         for (auto frame : receivedFrames)

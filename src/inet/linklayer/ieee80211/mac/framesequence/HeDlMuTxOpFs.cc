@@ -279,7 +279,18 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
     IFrameSequenceStep *prepareBlockAckStep(FrameSequenceContext *context)
     {
         auto txStep = check_and_cast<ITransmitStep *>(context->getLastStep());
-        return new ReceiveStep(computeBlockAckTimeout(txStep->getFrameToTransmit()));
+        return new ReceiveStep(computeBlockAckTimeout(txStep->getFrameToTransmit()),
+                IReceiveStep::TimeoutHandling::COMPLETE_STEP,
+                [this](Packet *packet, FrameSequenceContext *context) {
+                    auto header = packet->peekAtFront<Ieee80211MacHeader>();
+                    auto blockAck = dynamicPtrCast<const Ieee80211BlockAck>(header);
+                    auto transmitterAddress = blockAck == nullptr ? MacAddress::UNSPECIFIED_ADDRESS : blockAck->getTransmitterAddress();
+                    return context->isForUs(header) &&
+                            blockAck != nullptr &&
+                            (transmitterAddress == MacAddress::UNSPECIFIED_ADDRESS ||
+                             transmitterAddress == getActiveAllocation().staAddress);
+                },
+                IReceiveStep::UnexpectedResponseHandling::IGNORE_RESPONSE);
     }
 
     bool completeBlockAckStep(FrameSequenceContext *context)
