@@ -46,8 +46,8 @@ class INET_API HeUlCoordinator : public SimpleModule
     simtime_t reportMaxAge;
     int ocwMin = 7;
     int ocwMax = 31;
-    int ofdmaContentionWindow = 7;
-    int ofdmaBackoff = 0;
+    std::array<int, 4> ofdmaContentionWindows = {};
+    std::array<int, 4> ofdmaBackoffs = {};
     uint32_t nextTriggerId = 1;
     simtime_t lastTriggerTime = SIMTIME_ZERO;
     bool hasSentTrigger = false;
@@ -67,6 +67,7 @@ class INET_API HeUlCoordinator : public SimpleModule
 
   protected:
     virtual void initialize(int stage) override;
+    static int getAccessCategoryIndex(AccessCategory ac);
     virtual int getFreshReportCount() const;
     virtual int getBackloggedReportCount() const;
     virtual std::string getBufferStatusSummary() const;
@@ -85,8 +86,10 @@ class INET_API HeUlCoordinator : public SimpleModule
             int estimatedRaContenders, double collisionRate, double idleRate);
     uint32_t allocateTriggerId();
     void noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
-    int selectRandomAccessRu(int randomAccessRuCount);
-    void reportRandomAccessResult(bool success);
+    int selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount);
+    int selectRandomAccessRu(int randomAccessRuCount) { return selectRandomAccessRu(AC_BE, randomAccessRuCount); }
+    void reportRandomAccessResult(AccessCategory ac, bool success);
+    void reportRandomAccessResult(bool success) { reportRandomAccessResult(AC_BE, success); }
     const std::map<uint16_t, BufferStatus>& getBufferStatus() const { return bufferStatusByAid; }
 };
 
