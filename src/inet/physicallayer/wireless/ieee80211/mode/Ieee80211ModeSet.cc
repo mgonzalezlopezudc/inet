@@ -18,12 +18,40 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 
 namespace inet {
 
 namespace physicallayer {
 
 Register_Abstract_Class(Ieee80211ModeSet);
+
+#define EHT_MODE_ENTRY(WIDTH, NSS, MCS, MANDATORY) \
+        { MANDATORY, Ieee80211EhtCompliantModes::getCompliantMode(&Ieee80211EhtmcsTable::ehtMcs##MCS##BW##WIDTH##MHzNss##NSS, Ieee80211EhtMode::BAND_6GHZ, Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU, Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG) },
+#define EHT_MODE_ENTRIES_FOR_NSS(WIDTH, NSS) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 0, NSS == 1) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 1, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 2, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 3, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 4, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 5, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 6, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 7, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 8, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 9, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 10, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 11, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 12, false) \
+    EHT_MODE_ENTRY(WIDTH, NSS, 13, false)
+#define EHT_MODE_ENTRIES_FOR_BW(WIDTH) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 1) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 2) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 3) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 4) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 5) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 6) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 7) \
+    EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 8)
 
 const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSets([]() { return new std::vector<Ieee80211ModeSet> {
     Ieee80211ModeSet("a", {
@@ -840,8 +868,19 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
         { false, Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs9BW160MHzNss8, Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU, Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG) },
         { false, Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs10BW160MHzNss8, Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU, Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG) },
         { false, Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs11BW160MHzNss8, Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU, Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG) }
+    }),
+    Ieee80211ModeSet("be", {
+        EHT_MODE_ENTRIES_FOR_BW(20)
+        EHT_MODE_ENTRIES_FOR_BW(40)
+        EHT_MODE_ENTRIES_FOR_BW(80)
+        EHT_MODE_ENTRIES_FOR_BW(160)
+        EHT_MODE_ENTRIES_FOR_BW(320)
     })
 }; });
+
+#undef EHT_MODE_ENTRIES_FOR_BW
+#undef EHT_MODE_ENTRIES_FOR_NSS
+#undef EHT_MODE_ENTRY
 
 Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> entries) :
     name(name),
@@ -918,6 +957,22 @@ bool isSameHeModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
            heA->getCenterFrequencyMode() == heB->getCenterFrequencyMode();
 }
 
+bool isSameEhtMode(const IIeee80211Mode *a, const IIeee80211Mode *b)
+{
+    auto ehtA = dynamic_cast<const Ieee80211EhtMode *>(a);
+    auto ehtB = dynamic_cast<const Ieee80211EhtMode *>(b);
+    if (ehtA == nullptr || ehtB == nullptr)
+        return false;
+    auto dataA = ehtA->getDataMode();
+    auto dataB = ehtB->getDataMode();
+    return dataA->getMcsIndex() == dataB->getMcsIndex() &&
+           dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
+           dataA->getBandwidth() == dataB->getBandwidth() &&
+           dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
+           ehtA->getPreambleMode()->getPreambleFormat() == ehtB->getPreambleMode()->getPreambleFormat() &&
+           ehtA->getCenterFrequencyMode() == ehtB->getCenterFrequencyMode();
+}
+
 } // namespace
 
 int Ieee80211ModeSet::findModeIndex(const IIeee80211Mode *mode) const
@@ -929,7 +984,8 @@ int Ieee80211ModeSet::findModeIndex(const IIeee80211Mode *mode) const
     for (size_t index = 0; index < entries.size(); index++)
         if (isSameHtModeIgnoringLdpc(entries[index].mode, mode) ||
             isSameVhtModeIgnoringLdpc(entries[index].mode, mode) ||
-            isSameHeModeIgnoringLdpc(entries[index].mode, mode))
+            isSameHeModeIgnoringLdpc(entries[index].mode, mode) ||
+            isSameEhtMode(entries[index].mode, mode))
             return index;
     return -1;
 }
@@ -1089,4 +1145,3 @@ const Ieee80211ModeSet *Ieee80211ModeSet::getModeSet(const char *mode)
 } // namespace physicallayer
 
 } // namespace inet
-
