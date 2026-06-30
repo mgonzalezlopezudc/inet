@@ -1,0 +1,358 @@
+%description:
+Test HeDlMuTxOpFs TXOP trimming, BA-window exhaustion, per-user packing, and fallback below two users.
+
+%includes:
+#include <map>
+#include <set>
+
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
+#include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+simple MockDlMuRateSelection
+{
+    parameters:
+        @class(MockDlMuRateSelection);
+}
+
+module MockDlMuCallback
+{
+    parameters:
+        @class(MockDlMuCallback);
+    submodules:
+        rateSelection: MockDlMuRateSelection;
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mockHcf: MockDlMuCallback;
+        pendingQueue: PacketQueue;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+allow-object-stealing-on-deletion = true
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class MockDlMuRateSelection : public cSimpleModule, public IQosRateSelection
+{
+  protected:
+    const IIeee80211Mode *getSlowHeMode() const
+    {
+        auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+        return modeSet->getMode(0);
+    }
+
+  public:
+    virtual const IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override { return nullptr; }
+    virtual const IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { return getSlowHeMode(); }
+    virtual const IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override { return getSlowHeMode(); }
+    virtual const IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override { return getSlowHeMode(); }
+};
+
+Define_Module(MockDlMuRateSelection);
+
+class MockDlMuCallback : public cSimpleModule, public IFrameSequenceHandler::ICallback
+{
+  public:
+    virtual void transmitFrame(Packet *packet, simtime_t ifs) override {}
+    virtual void scheduleStartRxTimer(simtime_t timeout) override {}
+    virtual void originatorProcessTransmittedFrame(Packet *packet) override {}
+    virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override {}
+    virtual void originatorProcessFailedFrame(Packet *failedPacket) override {}
+    virtual void originatorProcessRtsProtectionFailed(Packet *packet) override {}
+    virtual void frameSequenceFinished() override {}
+};
+
+Define_Module(MockDlMuCallback);
+
+class MockDlMuAckHandler : public IAckHandler
+{
+  public:
+    int inProgressCount = 0;
+    std::map<std::pair<MacAddress, Tid>, std::set<int>> occupied;
+
+    virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
+    virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
+    virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { inProgressCount++; }
+    virtual std::set<int> getOccupiedBlockAckSequenceNumbers(const MacAddress& receiverAddress, Tid tid) const override
+    {
+        auto it = occupied.find({receiverAddress, tid});
+        return it == occupied.end() ? std::set<int>() : it->second;
+    }
+};
+
+class MockDlMuScheduler : public IIeee80211HeDlScheduler
+{
+  public:
+    std::vector<RuAllocation> allocations;
+
+    MockDlMuScheduler(const std::vector<RuAllocation>& allocations) : allocations(allocations) {}
+
+    virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidates, Hz centerFrequency, Hz bandwidth) override { return allocations; }
+    virtual std::vector<RuAllocation> schedule(const ScheduleContext& context) override { return allocations; }
+};
+
+class MockDlMuInProgressFrames : public InProgressFrames
+{
+};
+
+class MockDlMuOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgreementHandler
+{
+  public:
+    std::vector<OriginatorBlockAckAgreement *> agreements;
+
+    virtual ~MockDlMuOriginatorBlockAckAgreementHandler()
+    {
+        for (auto agreement : agreements)
+            delete agreement;
+    }
+
+    void addAgreement(const MacAddress& receiver, Tid tid, int bufferSize = 64)
+    {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid, SequenceNumberCyclic(0), bufferSize, false, false);
+        agreement->setIsAddbaResponseReceived(true);
+        agreements.push_back(agreement);
+    }
+
+    virtual void processReceivedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck, IBlockAckAgreementHandlerCallback *callback) override {}
+    virtual void processTransmittedAddbaReq(const Ptr<const Ieee80211AddbaRequest>& addbaReq) override {}
+    virtual void processTransmittedDataFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& dataHeader, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override {}
+    virtual void processReceivedAddbaResp(const Ptr<const Ieee80211AddbaResponse>& addbaResp, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy, IBlockAckAgreementHandlerCallback *callback) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba, IOriginatorBlockAckAgreementPolicy *blockAckAgreementPolicy) override {}
+    virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>& delba) override {}
+    virtual void blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback) override {}
+
+    virtual OriginatorBlockAckAgreement *getAgreement(MacAddress receiverAddr, Tid tid) override
+    {
+        for (auto agreement : agreements)
+            if (agreement->getReceiverAddr() == receiverAddr && agreement->getTid() == tid)
+                return agreement;
+        return nullptr;
+    }
+};
+
+static Ieee80211HeRu makeRu(int index, int toneSize = 26)
+{
+    Ieee80211HeRu ru;
+    ru.index = index;
+    ru.toneSize = toneSize;
+    ru.dataSubcarriers = getHeRuDataSubcarrierCount(toneSize);
+    ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(toneSize);
+    ru.bandwidth = Hz(toneSize * 78125.0);
+    return ru;
+}
+
+static IIeee80211HeDlScheduler::RuAllocation makeAllocation(const MacAddress& sta, int index, int toneSize = 26)
+{
+    IIeee80211HeDlScheduler::RuAllocation allocation;
+    allocation.staAddress = sta;
+    allocation.ru = makeRu(index, toneSize);
+    allocation.mcs = 0;
+    allocation.numberOfSpatialStreams = 1;
+    allocation.estimatedDuration = SimTime(3, SIMTIME_MS);
+    return allocation;
+}
+
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
+static void clearQueue(queueing::IPacketQueue *queue)
+{
+    while (queue->getNumPackets() > 0) {
+        auto packet = queue->getPacket(0);
+        queue->removePacket(packet);
+        delete packet;
+    }
+}
+
+static IIeee80211HeDlScheduler::ScheduleContext makeScheduleContext(const std::vector<MacAddress>& stations, simtime_t txopLimit = SIMTIME_ZERO)
+{
+    IIeee80211HeDlScheduler::ScheduleContext context;
+    context.channelCenterFrequency = Hz(5.18e9);
+    context.channelBandwidth = Hz(20e6);
+    context.txopLimit = txopLimit;
+    for (size_t i = 0; i < stations.size(); i++) {
+        IIeee80211HeDlScheduler::CandidateInfo candidate;
+        candidate.staAddress = stations[i];
+        candidate.anchor = i == 0;
+        context.candidates.push_back(candidate);
+    }
+    if (!stations.empty())
+        context.anchorSta = stations.front();
+    return context;
+}
+
+static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid tid, int sequenceNumber, int payloadBytes)
+{
+    auto packet = new Packet(name);
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setReceiverAddress(receiver);
+    header->setType(ST_DATA_WITH_QOS);
+    header->setTid(tid);
+    header->setAckPolicy(BLOCK_ACK);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    packet->insertAtFront(header);
+    if (payloadBytes > 0)
+        packet->insertAtBack(makeShared<ByteCountChunk>(B(payloadBytes)));
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    return packet;
+}
+
+%activity:
+auto callback = check_and_cast<MockDlMuCallback *>(getParentModule()->getSubmodule("mockHcf"));
+auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
+auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+ASSERT(modeSet != nullptr);
+
+MacAddress sta1("02:00:00:00:20:01");
+MacAddress sta2("02:00:00:00:20:02");
+MacAddress sta3("02:00:00:00:20:03");
+Tid tid = 3;
+
+{
+    clearQueue(pendingQueue);
+    for (int i = 0; i < 3; i++)
+        pendingQueue->enqueuePacket(makeDataPacket(("pack-sta1-" + std::to_string(i)).c_str(), sta1, tid, i, 200));
+    for (int i = 0; i < 2; i++)
+        pendingQueue->enqueuePacket(makeDataPacket(("pack-sta2-" + std::to_string(i)).c_str(), sta2, tid, i, 200));
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242)});
+    MockDlMuAckHandler ackHandler;
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid);
+    baHandler.addAgreement(sta2, tid);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}), modeSet, pendingQueue, &ackHandler, callback, 8);
+    fs.startSequence(fsContext, 0);
+    auto step = fs.prepareStep(fsContext);
+    requireTrue(step != nullptr, "per-user packing should build a transmit step");
+    requireTrue(step->getType() == IFrameSequenceStep::Type::TRANSMIT, "per-user packing should transmit the container");
+    requireTrue(fs.getActiveAllocations().size() == 2, "per-user packing should keep two active allocations");
+    requireTrue(fs.getActiveAllocations()[0].packets.size() == 3, "STA1 should pack three MPDUs");
+    requireTrue(fs.getActiveAllocations()[1].packets.size() == 2, "STA2 should pack two MPDUs");
+    requireTrue(ackHandler.inProgressCount == 5, "all packed MPDUs should enter Block Ack tracking");
+    EV << "Per-user packet packing admitted multiple MPDUs per scheduled STA.\n";
+    delete step;
+    delete fsContext;
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("window-sta1", sta1, tid, 10, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("window-sta2", sta2, tid, 10, 200));
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242)});
+    MockDlMuAckHandler ackHandler;
+    for (int i = 0; i < 4; i++)
+        ackHandler.occupied[{sta2, tid}].insert(i);
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid, 4);
+    baHandler.addAgreement(sta2, tid, 4);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}), modeSet, pendingQueue, &ackHandler, callback);
+    fs.startSequence(fsContext, 0);
+    auto step = fs.prepareStep(fsContext);
+    requireTrue(step == nullptr, "BA-window exhaustion should abort MU container build");
+    requireTrue(fs.getActiveAllocations().empty(), "BA-window exhaustion should leave no active allocations");
+    requireTrue(pendingQueue->getNumPackets() == 2, "BA-window exhaustion should not dequeue packets");
+    EV << "BA-window exhaustion rejected a user before queue mutation and fell back.\n";
+    delete fsContext;
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("fallback-sta1", sta1, tid, 20, 200));
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242)});
+    MockDlMuAckHandler ackHandler;
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid);
+    baHandler.addAgreement(sta2, tid);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}), modeSet, pendingQueue, &ackHandler, callback);
+    fs.startSequence(fsContext, 0);
+    auto step = fs.prepareStep(fsContext);
+    requireTrue(step == nullptr, "single surviving user should abort MU container build");
+    requireTrue(pendingQueue->getNumPackets() == 1, "single surviving user should not dequeue packets");
+    EV << "Fewer than two surviving users aborted HE MU assembly without dequeueing.\n";
+    delete fsContext;
+}
+
+{
+    clearQueue(pendingQueue);
+    for (int i = 0; i < 4; i++) {
+        pendingQueue->enqueuePacket(makeDataPacket(("trim-sta1-" + std::to_string(i)).c_str(), sta1, tid, i, 200));
+        pendingQueue->enqueuePacket(makeDataPacket(("trim-sta2-" + std::to_string(i)).c_str(), sta2, tid, i, 200));
+        pendingQueue->enqueuePacket(makeDataPacket(("trim-sta3-" + std::to_string(i)).c_str(), sta3, tid, i, 200));
+    }
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242), makeAllocation(sta3, 2, 242)});
+    MockDlMuAckHandler ackHandler;
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid);
+    baHandler.addAgreement(sta2, tid);
+    baHandler.addAgreement(sta3, tid);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2, sta3}, SimTime(1800, SIMTIME_US)),
+            modeSet, pendingQueue, &ackHandler, callback, 8, 6500631, SimTime(900, SIMTIME_US));
+    fs.startSequence(fsContext, 0);
+    auto step = fs.prepareStep(fsContext);
+    requireTrue(step != nullptr, "TXOP trimming should still build a transmit step");
+    requireTrue(step->getType() == IFrameSequenceStep::Type::TRANSMIT, "TXOP trimming should transmit the container");
+    int packedPackets = 0;
+    for (const auto& allocation : fs.getActiveAllocations())
+        packedPackets += allocation.packets.size();
+    requireTrue(fs.getActiveAllocations().size() >= 2, "TXOP trimming should preserve at least two users");
+    requireTrue(packedPackets < 12, "TXOP trimming should reduce the packed MPDU set");
+    EV << "TXOP/PPDU duration trimming reduced the packed MPDU set while preserving MU operation.\n";
+    delete step;
+    delete fsContext;
+}
+
+clearQueue(pendingQueue);
+EV << ".\n";
+
+%contains: stdout
+Per-user packet packing admitted multiple MPDUs per scheduled STA.
+
+%contains: stdout
+BA-window exhaustion rejected a user before queue mutation and fell back.
+
+%contains: stdout
+Fewer than two surviving users aborted HE MU assembly without dequeueing.
+
+%contains: stdout
+TXOP/PPDU duration trimming reduced the packed MPDU set while preserving MU operation.
+
+%contains: stdout
+.

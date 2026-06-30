@@ -1,0 +1,191 @@
+%description:
+Test HE Minstrel rate-control candidate filtering, probing, EWMA, SNIR seeding, and HE constraints.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/ratecontrol/HeMinstrelRateControl.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.ratecontrol.HeMinstrelRateControl;
+
+simple TestableHeMinstrelRateControl extends HeMinstrelRateControl
+{
+    parameters:
+        @class(TestableHeMinstrelRateControl);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        normal: TestableHeMinstrelRateControl {
+            parameters:
+                maxNss = 2;
+                lookaroundRatio = 0;
+                ewmaWeight = 0.75;
+                seedFromSnir = true;
+        }
+        probe: TestableHeMinstrelRateControl {
+            parameters:
+                maxNss = 2;
+                lookaroundRatio = 1;
+                ewmaWeight = 0.75;
+                seedFromSnir = true;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TestableHeMinstrelRateControl : public HeMinstrelRateControl
+{
+  protected:
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            updateInterval = par("updateInterval");
+            ewmaWeight = par("ewmaWeight");
+            lookaroundRatio = par("lookaroundRatio");
+            initialSuccessProbability = par("initialSuccessProbability");
+            seedFromSnir = par("seedFromSnir");
+            enableExtendedRangeSu = par("enableExtendedRangeSu");
+            preferDcm = par("preferDcm");
+            snirMcs0ThresholdDb = par("snirMcs0Threshold");
+            snirMcsStepDb = par("snirMcsStep");
+            minMcs = par("minMcs");
+            maxMcs = par("maxMcs");
+            maxNss = par("maxNss");
+            selectedMcsSignal = registerSignal("heRateSelectedMcs");
+            selectedNssSignal = registerSignal("heRateSelectedNss");
+            probeSignal = registerSignal("heRateProbe");
+            successProbabilitySignal = registerSignal("heRateSuccessProbability");
+        }
+    }
+
+  public:
+    void setTestModeSet(Ieee80211ModeSet *testModeSet) { modeSet = testModeSet; }
+};
+
+Define_Module(TestableHeMinstrelRateControl);
+
+static const Ieee80211HeMode *asHeMode(const IIeee80211Mode *mode)
+{
+    auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode);
+    ASSERT(heMode != nullptr);
+    return heMode;
+}
+
+%activity:
+auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+ASSERT(modeSet != nullptr);
+auto normal = check_and_cast<TestableHeMinstrelRateControl *>(getParentModule()->getSubmodule("normal"));
+auto probe = check_and_cast<TestableHeMinstrelRateControl *>(getParentModule()->getSubmodule("probe"));
+normal->setTestModeSet(modeSet);
+probe->setTestModeSet(modeSet);
+
+IIeee80211HeRateControl::Constraints constraints;
+constraints.minMcs = 3;
+constraints.maxMcs = 4;
+auto filtered = normal->selectHeMode(MacAddress("02:00:00:00:00:01"),
+        Hz(20e6), 242, HE_MU_DOWNLINK, 2, constraints);
+ASSERT(filtered.mode != nullptr);
+ASSERT(filtered.mcs == 4);
+EV << "Candidate MCS min/max filtering selected MCS " << filtered.mcs << ".\n";
+
+constraints = {};
+constraints.maxMcs = 1;
+auto ewmaPeer = MacAddress("02:00:00:00:00:02");
+auto beforeFailures = normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(beforeFailures.mcs == 1);
+for (int i = 0; i < 8; i++)
+    normal->reportHeTxResult(ewmaPeer, 1, 1, 242, 0, false, 0);
+normal->reportHeTxResult(ewmaPeer, 0, 1, 242, 0, true, 1200);
+auto afterFailures = normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(afterFailures.mcs == 0);
+EV << "EWMA TX-result update demoted repeatedly failing MCS 1.\n";
+
+for (int i = 0; i < 8; i++) {
+    normal->reportHeRxSnir(ewmaPeer, 40);
+    normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+}
+auto afterSnir = normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(afterSnir.mcs == 1);
+EV << "SNIR seeding restored the higher MCS after high-SNIR observations.\n";
+
+auto probing = probe->selectHeMode(MacAddress("02:00:00:00:00:03"),
+        Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(probing.mode != nullptr);
+ASSERT(probing.probing);
+EV << "Lookaround probing path marked the selection as a probe.\n";
+
+constraints = {};
+auto smallRu = normal->selectHeMode(MacAddress("02:00:00:00:00:04"),
+        Hz(20e6), 52, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(smallRu.mode != nullptr);
+ASSERT(smallRu.mcs <= 9);
+EV << "Small-RU filtering excluded MCS 10/11.\n";
+
+constraints = {};
+constraints.extendedRangeSu = true;
+constraints.maxMcs = 11;
+auto erSu = normal->selectHeMode(MacAddress("02:00:00:00:00:05"),
+        Hz(20e6), 242, HE_EXTENDED_RANGE_SU, 2, constraints);
+ASSERT(erSu.mode != nullptr);
+ASSERT(erSu.mcs <= 2);
+ASSERT(erSu.numberOfSpatialStreams == 1);
+ASSERT(asHeMode(erSu.mode)->getPreambleMode()->getPreambleFormat() ==
+        Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU);
+EV << "ER SU constrained MCS and NSS and selected an ER SU preamble.\n";
+
+constraints = {};
+constraints.ldpc = true;
+auto ldpc = normal->selectHeMode(MacAddress("02:00:00:00:00:06"),
+        Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(ldpc.mode != nullptr);
+ASSERT(asHeMode(ldpc.mode)->getDataMode()->isLdpc());
+constraints.ldpc = false;
+auto bcc = normal->selectHeMode(MacAddress("02:00:00:00:00:07"),
+        Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(bcc.mode != nullptr);
+ASSERT(!asHeMode(bcc.mode)->getDataMode()->isLdpc());
+EV << "LDPC and BCC coding constraints selected matching HE modes.\n";
+
+constraints = {};
+constraints.dcm = true;
+auto dcm = normal->selectHeMode(MacAddress("02:00:00:00:00:08"),
+        Hz(20e6), 242, HE_MU_DOWNLINK, 2, constraints);
+ASSERT(dcm.mode != nullptr);
+ASSERT(dcm.dcm);
+ASSERT(dcm.mcs <= 4);
+EV << "DCM constraint capped the selected MCS.\n";
+
+constraints = {};
+auto nss1 = normal->selectHeMode(MacAddress("02:00:00:00:00:09"),
+        Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
+auto nss2 = normal->selectHeMode(MacAddress("02:00:00:00:00:0A"),
+        Hz(20e6), 242, HE_MU_DOWNLINK, 2, constraints);
+ASSERT(nss1.numberOfSpatialStreams == 1);
+ASSERT(nss2.numberOfSpatialStreams == 2);
+EV << "Requested NSS caps limited and enabled spatial-stream selection.\n";
+
+EV << ".\n";
+
+%contains: stdout
+Candidate MCS min/max filtering selected MCS 4.
+EWMA TX-result update demoted repeatedly failing MCS 1.
+SNIR seeding restored the higher MCS after high-SNIR observations.
+Lookaround probing path marked the selection as a probe.
+Small-RU filtering excluded MCS 10/11.
+ER SU constrained MCS and NSS and selected an ER SU preamble.
+LDPC and BCC coding constraints selected matching HE modes.
+DCM constraint capped the selected MCS.
+Requested NSS caps limited and enabled spatial-stream selection.
+.
