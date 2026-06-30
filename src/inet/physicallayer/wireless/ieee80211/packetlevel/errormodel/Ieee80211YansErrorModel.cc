@@ -16,6 +16,7 @@
 #include "inet/physicallayer/wireless/common/modulation/Qam1024Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam256Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam4096Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam64Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/QbpskModulation.h"
 #include "inet/physicallayer/wireless/common/modulation/QpskModulation.h"
@@ -172,6 +173,18 @@ double Ieee80211YansErrorModel::getOFDMAndERPOFDMChunkSuccessRate(const ApskModu
             return getFecQamBer(snr, bitLength, bandwidth, grossBitrate, 256, 4, 14, 69);
         else
             return getFecQamBer(snr, bitLength, bandwidth, grossBitrate, 256, 5, 8, 31);
+    }
+    else if (subcarrierModulation == &Qam1024Modulation::singleton) {
+        if (convolutionalCode->getCodeRatePuncturingK() == 5 && convolutionalCode->getCodeRatePuncturingN() == 6)
+            return getFecQamBer(snr, bitLength, bandwidth, grossBitrate, 1024, 4, 14, 69);
+        else
+            return getFecQamBer(snr, bitLength, bandwidth, grossBitrate, 1024, 5, 8, 31);
+    }
+    else if (subcarrierModulation == &Qam4096Modulation::singleton) {
+        if (convolutionalCode->getCodeRatePuncturingK() == 5 && convolutionalCode->getCodeRatePuncturingN() == 6)
+            return getFecQamBer(snr, bitLength, bandwidth, grossBitrate, 4096, 4, 14, 69);
+        else
+            return getFecQamBer(snr, bitLength, bandwidth, grossBitrate, 4096, 5, 8, 31);
     }
     else
         throw cRuntimeError("Unknown modulation");

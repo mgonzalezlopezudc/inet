@@ -16,6 +16,7 @@
 #include "inet/physicallayer/wireless/common/modulation/Qam1024Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam256Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam4096Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam64Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/QbpskModulation.h"
 #include "inet/physicallayer/wireless/common/modulation/QpskModulation.h"
@@ -78,6 +79,14 @@ double Ieee80211NistErrorModel::get1024QamBer(double snr) const
     double z = std::sqrt(snr / (341.0 * 2.0));
     double ber = 31.0 / 160.0 * 0.5 * erfc(z);
     EV << "1024-Qam" << " snr=" << snr << " ber=" << ber;
+    return ber;
+}
+
+double Ieee80211NistErrorModel::get4096QamBer(double snr) const
+{
+    double z = std::sqrt(snr / (1365.0 * 2.0));
+    double ber = 21.0 / 64.0 * 0.5 * erfc(z);
+    EV << "4096-Qam" << " snr=" << snr << " ber=" << ber;
     return ber;
 }
 
@@ -192,6 +201,18 @@ double Ieee80211NistErrorModel::getFec1024QamBer(double snr, uint64_t nbits, uin
     return pms;
 }
 
+double Ieee80211NistErrorModel::getFec4096QamBer(double snr, uint64_t nbits, uint32_t bValue) const
+{
+    double ber = get4096QamBer(snr);
+    if (ber == 0.0) {
+        return 1.0;
+    }
+    double pe = calculatePe(ber, bValue);
+    pe = math::minnan(pe, 1.0);
+    double pms = std::pow(1 - pe, nbits);
+    return pms;
+}
+
 double Ieee80211NistErrorModel::getOFDMAndERPOFDMChunkSuccessRate(const ApskModulationBase *subcarrierModulation, const ConvolutionalCode *convolutionalCode, unsigned int bitLength, double snr) const
 {
     if (subcarrierModulation == &BpskModulation::singleton || subcarrierModulation == &QbpskModulation::singleton) {
@@ -225,6 +246,11 @@ double Ieee80211NistErrorModel::getOFDMAndERPOFDMChunkSuccessRate(const ApskModu
         if (convolutionalCode->getCodeRatePuncturingK() == 5 && convolutionalCode->getCodeRatePuncturingN() == 6)
             return getFec1024QamBer(snr, bitLength, 5);
         return getFec1024QamBer(snr, bitLength, 3);
+    }
+    else if (subcarrierModulation == &Qam4096Modulation::singleton) {
+        if (convolutionalCode->getCodeRatePuncturingK() == 5 && convolutionalCode->getCodeRatePuncturingN() == 6)
+            return getFec4096QamBer(snr, bitLength, 5);
+        return getFec4096QamBer(snr, bitLength, 3);
     }
     else
         throw cRuntimeError("Unknown modulation");
