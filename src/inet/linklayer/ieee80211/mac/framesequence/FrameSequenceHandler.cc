@@ -18,15 +18,23 @@ void FrameSequenceHandler::handleStartRxTimeout()
 {
     auto lastStep = context->getLastStep();
     switch (lastStep->getType()) {
-        case IFrameSequenceStep::Type::RECEIVE:
-            if (!check_and_cast<IReceiveStep *>(lastStep)->completesOnReception()) {
-                finishFrameSequenceStep();
-                if (isSequenceRunning())
-                    startFrameSequenceStep();
+        case IFrameSequenceStep::Type::RECEIVE: {
+            auto receiveStep = check_and_cast<IReceiveStep *>(lastStep);
+            lastStep->setCompletion(receiveStep->getTimeoutCompletion());
+            switch (receiveStep->getTimeoutHandling()) {
+                case IReceiveStep::TimeoutHandling::COMPLETE_STEP:
+                    finishFrameSequenceStep();
+                    if (isSequenceRunning())
+                        startFrameSequenceStep();
+                    break;
+                case IReceiveStep::TimeoutHandling::ABORT_SEQUENCE:
+                    abortFrameSequence();
+                    break;
+                default:
+                    throw cRuntimeError("Unknown receive timeout handling");
             }
-            else
-                abortFrameSequence();
             break;
+        }
         case IFrameSequenceStep::Type::TRANSMIT:
             throw cRuntimeError("Received timeout while in transmit step");
         default:
@@ -40,8 +48,22 @@ void FrameSequenceHandler::processResponse(Packet *frame)
     auto lastStep = context->getLastStep();
     switch (lastStep->getType()) {
         case IFrameSequenceStep::Type::RECEIVE: {
-            // TODO check if not for us and abort
             auto receiveStep = check_and_cast<IReceiveStep *>(context->getLastStep());
+            if (!receiveStep->isExpectedResponse(frame, context)) {
+                switch (receiveStep->getUnexpectedResponseHandling()) {
+                    case IReceiveStep::UnexpectedResponseHandling::IGNORE_RESPONSE:
+                        delete frame;
+                        break;
+                    case IReceiveStep::UnexpectedResponseHandling::REJECT_STEP:
+                        delete frame;
+                        lastStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
+                        abortFrameSequence();
+                        break;
+                    default:
+                        throw cRuntimeError("Unknown unexpected response handling");
+                }
+                break;
+            }
             receiveStep->setFrameToReceive(frame);
             if (receiveStep->completesOnReception()) {
                 finishFrameSequenceStep();
@@ -118,11 +140,13 @@ void FrameSequenceHandler::finishFrameSequenceStep()
     auto stepResult = frameSequence->completeStep(context);
     EV_INFO << "Finishing last frame sequence step: history = " << frameSequence->getHistory() << "\n";
     if (!stepResult) {
-        lastStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
+        if (lastStep->getCompletion() == IFrameSequenceStep::Completion::UNDEFINED)
+            lastStep->setCompletion(IFrameSequenceStep::Completion::REJECTED);
         abortFrameSequence();
     }
     else {
-        lastStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+        if (lastStep->getCompletion() == IFrameSequenceStep::Completion::UNDEFINED)
+            lastStep->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
         switch (lastStep->getType()) {
             case IFrameSequenceStep::Type::TRANSMIT: {
                 auto transmitStep = static_cast<ITransmitStep *>(lastStep);
@@ -132,6 +156,8 @@ void FrameSequenceHandler::finishFrameSequenceStep()
             case IFrameSequenceStep::Type::RECEIVE: {
                 auto receiveStep = static_cast<IReceiveStep *>(lastStep);
                 if (!receiveStep->completesOnReception())
+                    break;
+                if (receiveStep->getCompletion() != IFrameSequenceStep::Completion::ACCEPTED || receiveStep->getReceivedFrame() == nullptr)
                     break;
                 ITransmitStep *transmitStep = nullptr;
                 for (int i = context->getNumSteps() - 2; i >= 0; --i) {
