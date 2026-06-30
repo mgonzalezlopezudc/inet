@@ -41,6 +41,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/GenericFrameSequences.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPackingPlanner.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
@@ -60,20 +61,6 @@ using namespace inet::physicallayer;
 
 namespace {
 
-B calculateAmpduPsduLength(const std::vector<Packet *>& packets)
-{
-    if (packets.empty())
-        return B(0);
-    B length(0);
-    for (size_t i = 0; i < packets.size(); ++i) {
-        B subframeLength = B(4) + B(packets[i]->getByteLength());
-        length += subframeLength;
-        if (i + 1 != packets.size())
-            length += B((4 - subframeLength.get<B>() % 4) % 4);
-    }
-    return length;
-}
-
 std::map<Tid, SequenceNumberCyclic> collectStartingSequenceNumbersByTid(const std::vector<Packet *>& packets)
 {
     std::map<Tid, SequenceNumberCyclic> records;
@@ -87,17 +74,6 @@ std::map<Tid, SequenceNumberCyclic> collectStartingSequenceNumbersByTid(const st
     }
     return records;
 }
-
-struct SelectedDlMuAllocation {
-    IIeee80211HeDlScheduler::RuAllocation allocation;
-    queueing::IPacketQueue *sourceQueue = nullptr;
-    Packet *packet = nullptr;
-    Ptr<const Ieee80211DataHeader> dataHeader;
-    std::vector<Packet *> packets;
-    bool multiTidAggregation = false;
-    B psduLength = B(0);
-    uint16_t associationId = 0;
-};
 
 void warnDlMuIneligible(Packet *packet, const MacAddress& receiverAddress, Tid tid, int ruIndex, const char *reason)
 {
@@ -692,7 +668,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     };
 
     std::vector<Packet *> selectedPackets;
-    std::vector<SelectedDlMuAllocation> selectedAllocations;
+    std::vector<HeDlMuPackingPlanner::SelectedAllocation> selectedAllocations;
     int skippedAllocations = 0;
     for (size_t idx = 0; idx < allocations.size(); ++idx) {
         const auto& alloc = allocations[idx];
@@ -747,7 +723,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             continue;
         }
 
-        SelectedDlMuAllocation selectedAllocation;
+        HeDlMuPackingPlanner::SelectedAllocation selectedAllocation;
         selectedAllocation.allocation = alloc;
         selectedAllocation.sourceQueue = sourceQueue;
         selectedAllocation.packet = staPacket;
@@ -776,23 +752,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     EV_DEBUG << "Building MU container packet: " << selectedAllocations.size()
              << " of " << allocations.size() << " scheduler allocations survived initial validation"
              << " (" << skippedAllocations << " skipped)\n";
-
-    std::map<uint16_t, int> associationIdCounts;
-    for (const auto& selectedAllocation : selectedAllocations)
-        associationIdCounts[selectedAllocation.associationId]++;
-    selectedAllocations.erase(
-            std::remove_if(selectedAllocations.begin(), selectedAllocations.end(),
-                    [&] (const SelectedDlMuAllocation& selectedAllocation) {
-                        if (associationIdCounts[selectedAllocation.associationId] <= 1)
-                            return false;
-                        warnDlMuIneligible(selectedAllocation.packet,
-                                selectedAllocation.dataHeader->getReceiverAddress(),
-                                selectedAllocation.dataHeader->getTid(),
-                                selectedAllocation.allocation.ru.index,
-                                "association ID collides with another scheduled receiver");
-                        return true;
-                    }),
-            selectedAllocations.end());
 
     if (selectedAllocations.size() < 2) {
         EV_WARN << "Aborting HE MU PPDU assembly because only "
@@ -854,155 +813,42 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         ppduDurationLimit = std::min(ppduDurationLimit, txopPpduLimit);
     }
 
-    std::vector<SelectedDlMuAllocation> finalAllocations;
-    int rejectedFinalValidation = 0;
-    for (auto selectedAllocation : selectedAllocations) {
-        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(selectedAllocation.packet->peekAtFront<Ieee80211MacHeader>());
-        if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS ||
-                dataHeader->getReceiverAddress() != selectedAllocation.allocation.staAddress ||
-                !hasActiveOriginatorBlockAckAgreement(originatorBAHandler, dataHeader->getReceiverAddress(), dataHeader->getTid())) {
-            Tid tid = dataHeader == nullptr ? -1 : dataHeader->getTid();
-            auto receiverAddress = dataHeader == nullptr ? selectedAllocation.allocation.staAddress : dataHeader->getReceiverAddress();
-            warnDlMuIneligible(selectedAllocation.packet, receiverAddress, tid, selectedAllocation.allocation.ru.index,
-                    "failed final validation before queue removal");
-            rejectedFinalValidation++;
-            continue;
-        }
-
-        auto getAvailableSlots = [&] (Tid tid) {
-            auto agreement = originatorBAHandler->getAgreement(dataHeader->getReceiverAddress(), tid);
-            int blockAckWindowLimit = agreement == nullptr ? 0 : agreement->getBufferSize();
-            int occupiedSlots = ackHandler == nullptr ? 0 :
-                    ackHandler->getOccupiedBlockAckSequenceNumbers(
-                            dataHeader->getReceiverAddress(), tid).size();
-            return std::max(0, blockAckWindowLimit - occupiedSlots);
-        };
-        if (getAvailableSlots(dataHeader->getTid()) <= 0) {
-            warnDlMuIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
-                    selectedAllocation.allocation.ru.index, "Block Ack window has no available entries");
-            rejectedFinalValidation++;
-            continue;
-        }
-
-        auto queueForPacking = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
-        ASSERT(queueForPacking != nullptr);
-        // 26.5.1 requires all per-user PSDUs in an HE MU PPDU to end together;
-        // 26.6.2/26.6.3 govern the A-MPDU contents.  Pack only MPDUs that fit
-        // the BlockAck window, configured MPDU count, PSDU length, and aligned
-        // PPDU duration limit.
-        std::map<Tid, int> selectedPacketsByTid;
-        for (int i = 0; i < queueForPacking->getNumPackets() &&
-                (int)selectedAllocation.packets.size() < maxAmpduMpduCount; ++i) {
-            Packet *candidatePacket = queueForPacking->getPacket(i);
-            auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                    candidatePacket->peekAtFront<Ieee80211MacHeader>());
-            if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||
-                    candidateHeader->getReceiverAddress() != selectedAllocation.allocation.staAddress ||
-                    (!selectedAllocation.multiTidAggregation && candidateHeader->getTid() != dataHeader->getTid()) ||
-                    !hasActiveOriginatorBlockAckAgreement(originatorBAHandler,
-                            candidateHeader->getReceiverAddress(), candidateHeader->getTid()))
-                continue;
-            if (selectedPacketsByTid[candidateHeader->getTid()] >= getAvailableSlots(candidateHeader->getTid()))
-                continue;
-
-            auto proposedPackets = selectedAllocation.packets;
-            proposedPackets.push_back(candidatePacket);
-            B proposedLength = calculateAmpduPsduLength(proposedPackets);
-            if (proposedLength.get<B>() > maxHeMuPsduLength)
-                break;
-            if (estimateHeMuUserDuration(proposedLength, selectedAllocation.allocation.ru.toneSize,
-                    selectedAllocation.allocation.mcs,
-                    selectedAllocation.allocation.numberOfSpatialStreams,
-                    selectedAllocation.allocation.dcm,
-                    scheduleContext.guardInterval) > packingDurationLimit)
-                break;
-            selectedAllocation.packets = proposedPackets;
-            selectedPacketsByTid[candidateHeader->getTid()]++;
-            selectedAllocation.psduLength = proposedLength;
-        }
-        if (selectedAllocation.packets.empty()) {
-            warnDlMuIneligible(selectedAllocation.packet, dataHeader->getReceiverAddress(), dataHeader->getTid(),
-                    selectedAllocation.allocation.ru.index,
-                    "HoL MPDU exceeds aligned, TXOP, or HE PPDU packing limit");
-            rejectedFinalValidation++;
-            continue;
-        }
-        finalAllocations.push_back(selectedAllocation);
-    }
-    EV_DEBUG << "Building MU container packet: " << finalAllocations.size()
-             << " allocations survived final validation (" << rejectedFinalValidation << " rejected)\n";
-
-    if (finalAllocations.size() < 2) {
-        EV_WARN << "Aborting HE MU PPDU assembly because only "
-                << finalAllocations.size() << " active Block Ack allocations remain after final validation." << endl;
-        delete container;
-        notifyPlanningFailure();
-        return nullptr;
-    }
-
-    auto calculatePlannedPpdu = [&] {
-        std::vector<Ieee80211HeUserPhyParameters> users;
-        std::map<int, int> ruStreamStartIndex;
-        for (const auto& selectedAllocation : finalAllocations) {
-            Ieee80211HeUserPhyParameters user;
-            user.ru = selectedAllocation.allocation.ru;
-            if (user.ru.toneSize <= 0) {
-                // Defensive fallback: a zero-sized RU should never reach this point.
-                EV_WARN << "Building MU container packet: zero RU tone size for "
-                        << selectedAllocation.allocation.staAddress << ", falling back to 26-tone RU\n";
-                user.ru.toneSize = 26;
-                user.ru.dataSubcarriers = getHeRuDataSubcarrierCount(26);
-                user.ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(26);
-                user.ru.bandwidth = Hz(26 * 78125.0);
-            }
-            user.mcs = selectedAllocation.allocation.mcs;
-            user.numberOfSpatialStreams = selectedAllocation.allocation.numberOfSpatialStreams;
-            user.dcm = selectedAllocation.allocation.dcm;
-            user.coding = scheduleContext.coding;
-            user.psduLength = selectedAllocation.psduLength;
-            user.staId = selectedAllocation.associationId;
-            user.streamStartIndex = ruStreamStartIndex[user.ru.index];
-            ruStreamStartIndex[user.ru.index] += user.numberOfSpatialStreams;
-            users.push_back(user);
-        }
-        return computeHePpduParameters(users, scheduleContext.channelBandwidth,
-                HE_MU_DOWNLINK, scheduleContext.guardInterval);
+    auto getAvailableSlots = [&] (const MacAddress& receiverAddress, Tid tid) {
+        auto agreement = originatorBAHandler->getAgreement(receiverAddress, tid);
+        int blockAckWindowLimit = agreement == nullptr ? 0 : agreement->getBufferSize();
+        int occupiedSlots = ackHandler == nullptr ? 0 :
+                ackHandler->getOccupiedBlockAckSequenceNumbers(receiverAddress, tid).size();
+        return std::max(0, blockAckWindowLimit - occupiedSlots);
     };
-    auto plannedPpdu = calculatePlannedPpdu();
-    if (!plannedPpdu)
-        EV_WARN << "HeDlMuTxOpFs::buildMuContainerPacket: computeHePpduParameters failed initially\n";
-    int durationTrimIterations = 0;
-    while ((!plannedPpdu || plannedPpdu.parameters.duration > ppduDurationLimit) &&
-            finalAllocations.size() >= 2) {
-        auto longest = std::max_element(finalAllocations.begin(), finalAllocations.end(),
-                [] (const SelectedDlMuAllocation& a, const SelectedDlMuAllocation& b) {
-                    return a.psduLength < b.psduLength;
-                });
-        ASSERT(longest != finalAllocations.end());
-        if (longest->packets.size() > 1) {
-            EV_DEBUG << "Building MU container packet: trimming last MPDU from "
-                     << longest->allocation.staAddress << " to fit duration limit\n";
-            longest->packets.pop_back();
-            longest->psduLength = calculateAmpduPsduLength(longest->packets);
-        }
-        else {
-            EV_DEBUG << "Building MU container packet: dropping " << longest->allocation.staAddress
-                     << " to fit duration limit\n";
-            finalAllocations.erase(longest);
-        }
-        if (finalAllocations.size() >= 2)
-            plannedPpdu = calculatePlannedPpdu();
-        durationTrimIterations++;
-    }
-    EV_DEBUG << "Building MU container packet: duration trim took " << durationTrimIterations
+
+    HeDlMuPackingPlanner::Parameters packingParameters;
+    packingParameters.selectedAllocations = selectedAllocations;
+    packingParameters.pendingQueue = pendingQueue;
+    packingParameters.scheduleContext = scheduleContext;
+    packingParameters.maxAmpduMpduCount = maxAmpduMpduCount;
+    packingParameters.maxHeMuPsduLength = maxHeMuPsduLength;
+    packingParameters.packingDurationLimit = packingDurationLimit;
+    packingParameters.ppduDurationLimit = ppduDurationLimit;
+    packingParameters.hasActiveBlockAckAgreement = [&] (const MacAddress& receiverAddress, Tid tid) {
+        return hasActiveOriginatorBlockAckAgreement(originatorBAHandler, receiverAddress, tid);
+    };
+    packingParameters.getAvailableBlockAckSlots = getAvailableSlots;
+    packingParameters.warnIneligible = warnDlMuIneligible;
+
+    HeDlMuPackingPlanner packingPlanner;
+    auto packingPlan = packingPlanner.plan(packingParameters);
+    const auto& finalAllocations = packingPlan.allocations;
+    EV_DEBUG << "Building MU container packet: " << finalAllocations.size()
+             << " allocations survived final validation (" << packingPlan.rejectedFinalValidation << " rejected)\n";
+    EV_DEBUG << "Building MU container packet: duration trim took " << packingPlan.durationTrimIterations
              << " iteration(s), final allocations = " << finalAllocations.size() << "\n";
-    if (finalAllocations.size() < 2 || !plannedPpdu ||
-            plannedPpdu.parameters.duration > ppduDurationLimit) {
-        EV_WARN << "Building MU container packet: no complete HE MU PPDU fits the PHY/TXOP duration limit." << endl;
+    if (!packingPlan) {
+        EV_WARN << "Building MU container packet: " << packingPlan.failureReason << endl;
         delete container;
         notifyPlanningFailure();
         return nullptr;
     }
+    const auto& plannedPpdu = packingPlan.ppdu;
     ASSERT(plannedPpdu);
     totalDuration = SIMTIME_ZERO;
     auto finalBarDuration = responseMode->getDuration(B(38));
@@ -1021,15 +867,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto finalContainerHdr = container->removeAtFront<Ieee80211DataHeader>();
     finalContainerHdr->setDurationField(totalDuration);
     container->insertAtFront(finalContainerHdr);
-
-    std::map<int, int> ruTotalNsts;
-    std::map<int, int> ruUserCount;
-    for (const auto& selectedAllocation : finalAllocations) {
-        ASSERT(selectedAllocation.allocation.ru.index >= 0);
-        ruTotalNsts[selectedAllocation.allocation.ru.index] += selectedAllocation.allocation.numberOfSpatialStreams;
-        ruUserCount[selectedAllocation.allocation.ru.index]++;
-    }
-    std::map<int, int> ruStreamStartIndex;
 
     // Build the final MU container packet and assign duration/sequence numbers.
     // Each selected STA becomes one per-user PSDU section.  Multiple users on
@@ -1070,11 +907,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             context->getInProgressFrames()->addInProgressFrame(staPacket);
         }
 
-        int ruIdx = alloc.ru.index;
-        int startIndex = ruStreamStartIndex[ruIdx];
-        ruStreamStartIndex[ruIdx] += alloc.numberOfSpatialStreams;
-        bool isRuMuMimo = ruUserCount[ruIdx] > 1;
-
         auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
         payloadHeader->setRuIndex(alloc.ru.index);
         payloadHeader->setRuToneSize(alloc.ru.toneSize);
@@ -1084,11 +916,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         payloadHeader->setNumberOfSpatialStreams(alloc.numberOfSpatialStreams);
         payloadHeader->setDcm(alloc.dcm);
         payloadHeader->setMpduLength(selectedAllocation.psduLength);
-        payloadHeader->setStreamStartIndex(startIndex);
-        payloadHeader->setMuMimo(isRuMuMimo);
-        if (isRuMuMimo) {
-            payloadHeader->setTotalNsts(ruTotalNsts[ruIdx]);
-        }
+        payloadHeader->setStreamStartIndex(selectedAllocation.streamStartIndex);
+        payloadHeader->setMuMimo(selectedAllocation.muMimo);
+        if (selectedAllocation.muMimo)
+            payloadHeader->setTotalNsts(selectedAllocation.totalNsts);
         container->insertAtBack(payloadHeader);
         for (size_t i = 0; i < staPackets.size(); ++i) {
             // 9.7.1 A-MPDU subframes use MPDU delimiters and 4-octet padding;

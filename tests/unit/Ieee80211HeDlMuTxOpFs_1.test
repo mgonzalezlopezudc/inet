@@ -15,6 +15,7 @@ Test HeDlMuTxOpFs TXOP trimming, BA-window exhaustion, per-user packing, and fal
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPackingPlanner.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
@@ -224,6 +225,28 @@ static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid 
     return packet;
 }
 
+static HeDlMuPackingPlanner::SelectedAllocation makePlannerSelection(const MacAddress& sta, int ruIndex, Packet *packet, uint16_t aid, bool multiTid = false)
+{
+    HeDlMuPackingPlanner::SelectedAllocation selected;
+    selected.allocation = makeAllocation(sta, ruIndex, 242);
+    selected.packet = packet;
+    selected.dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
+    selected.associationId = aid;
+    selected.multiTidAggregation = multiTid;
+    return selected;
+}
+
+static int countTid(const std::vector<Packet *>& packets, Tid tid)
+{
+    int count = 0;
+    for (auto packet : packets) {
+        auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
+        if (header != nullptr && header->getTid() == tid)
+            count++;
+    }
+    return count;
+}
+
 %activity:
 auto callback = check_and_cast<MockDlMuCallback *>(getParentModule()->getSubmodule("mockHcf"));
 auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
@@ -234,6 +257,132 @@ MacAddress sta1("02:00:00:00:20:01");
 MacAddress sta2("02:00:00:00:20:02");
 MacAddress sta3("02:00:00:00:20:03");
 Tid tid = 3;
+
+auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::SelectedAllocation>& selections,
+        const std::set<std::pair<MacAddress, Tid>>& inactiveAgreements = {},
+        const std::map<std::pair<MacAddress, Tid>, int>& slotLimits = {}) {
+    HeDlMuPackingPlanner::Parameters parameters;
+    parameters.selectedAllocations = selections;
+    parameters.pendingQueue = pendingQueue;
+    parameters.scheduleContext = makeScheduleContext({sta1, sta2, sta3}, SimTime(2, SIMTIME_MS));
+    parameters.maxAmpduMpduCount = 8;
+    parameters.maxHeMuPsduLength = 6500631;
+    parameters.packingDurationLimit = SimTime(2, SIMTIME_MS);
+    parameters.ppduDurationLimit = SimTime(2, SIMTIME_MS);
+    parameters.hasActiveBlockAckAgreement = [inactiveAgreements] (const MacAddress& receiver, Tid tid) {
+        return inactiveAgreements.find({receiver, tid}) == inactiveAgreements.end();
+    };
+    parameters.getAvailableBlockAckSlots = [slotLimits] (const MacAddress& receiver, Tid tid) {
+        auto it = slotLimits.find({receiver, tid});
+        return it == slotLimits.end() ? 64 : it->second;
+    };
+    parameters.warnIneligible = [] (Packet *, const MacAddress&, Tid, int, const char *) {};
+    return parameters;
+};
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("planner-pack-sta1-0", sta1, tid, 0, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-pack-sta1-1", sta1, tid, 1, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-pack-sta2-0", sta2, tid, 0, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-pack-sta2-1", sta2, tid, 1, 200));
+    HeDlMuPackingPlanner planner;
+    auto parameters = makePlannerParameters({
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 1),
+            makePlannerSelection(sta2, 1, pendingQueue->getPacket(2), 2)});
+    auto plan = planner.plan(parameters);
+    requireTrue(plan.valid, "planner should produce a valid multi-user packing plan");
+    requireTrue(plan.allocations.size() == 2, "planner should keep both scheduled users");
+    requireTrue(plan.allocations[0].packets.size() == 2, "planner should pack both STA1 MPDUs");
+    requireTrue(plan.allocations[1].packets.size() == 2, "planner should pack both STA2 MPDUs");
+    requireTrue(pendingQueue->getNumPackets() == 4, "planner must not mutate the source queue");
+    EV << "Planner produced deterministic multi-user packing without queue mutation.\n";
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("planner-ba-sta1", sta1, tid, 10, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-ba-sta2", sta2, tid, 10, 200));
+    HeDlMuPackingPlanner planner;
+    auto parameters = makePlannerParameters({
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 11),
+            makePlannerSelection(sta2, 1, pendingQueue->getPacket(1), 12)},
+            {}, {{{sta2, tid}, 0}});
+    auto plan = planner.plan(parameters);
+    requireTrue(!plan.valid, "planner should reject when BA-window exhaustion leaves one user");
+    requireTrue(plan.rejectedFinalValidation == 1, "planner should count the exhausted BA-window rejection");
+    requireTrue(pendingQueue->getNumPackets() == 2, "BA-window planning failure must not dequeue packets");
+    EV << "Planner rejected BA-window exhaustion before queue mutation.\n";
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("planner-single-sta1", sta1, tid, 20, 200));
+    HeDlMuPackingPlanner planner;
+    auto parameters = makePlannerParameters({
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 21)});
+    auto plan = planner.plan(parameters);
+    requireTrue(!plan.valid, "planner should reject a single surviving user");
+    requireTrue(plan.failureReason.find("fewer than two") != std::string::npos, "planner should explain single-survivor rejection");
+    requireTrue(pendingQueue->getNumPackets() == 1, "single-survivor planning failure must not dequeue packets");
+    EV << "Planner rejected fewer than two surviving users.\n";
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("planner-multitid-sta1-t3", sta1, tid, 30, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-multitid-sta1-t4", sta1, 4, 31, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-multitid-sta2", sta2, tid, 30, 200));
+    HeDlMuPackingPlanner planner;
+    auto parameters = makePlannerParameters({
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 31, true),
+            makePlannerSelection(sta2, 1, pendingQueue->getPacket(2), 32)});
+    auto plan = planner.plan(parameters);
+    requireTrue(plan.valid, "planner should allow negotiated multi-TID packing");
+    requireTrue(plan.allocations[0].packets.size() == 2, "planner should pack both eligible STA1 TIDs");
+    requireTrue(countTid(plan.allocations[0].packets, tid) == 1, "planner should include STA1 TID 3");
+    requireTrue(countTid(plan.allocations[0].packets, 4) == 1, "planner should include STA1 TID 4");
+    EV << "Planner honored multi-TID aggregation eligibility.\n";
+}
+
+{
+    clearQueue(pendingQueue);
+    for (int i = 0; i < 4; i++) {
+        pendingQueue->enqueuePacket(makeDataPacket(("planner-trim-sta1-" + std::to_string(i)).c_str(), sta1, tid, i, 200));
+        pendingQueue->enqueuePacket(makeDataPacket(("planner-trim-sta2-" + std::to_string(i)).c_str(), sta2, tid, i, 200));
+        pendingQueue->enqueuePacket(makeDataPacket(("planner-trim-sta3-" + std::to_string(i)).c_str(), sta3, tid, i, 200));
+    }
+    HeDlMuPackingPlanner planner;
+    auto parameters = makePlannerParameters({
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 41),
+            makePlannerSelection(sta2, 1, pendingQueue->getPacket(1), 42),
+            makePlannerSelection(sta3, 2, pendingQueue->getPacket(2), 43)});
+    parameters.ppduDurationLimit = SimTime(900, SIMTIME_US);
+    auto plan = planner.plan(parameters);
+    requireTrue(plan.valid, "planner should trim to a valid PPDU/TXOP duration");
+    int packedPackets = 0;
+    for (const auto& allocation : plan.allocations)
+        packedPackets += allocation.packets.size();
+    requireTrue(plan.allocations.size() >= 2, "duration trimming should preserve MU operation");
+    requireTrue(packedPackets < 12, "duration trimming should reduce the packed MPDU set");
+    requireTrue(plan.durationTrimIterations > 0, "duration trimming should report trim iterations");
+    EV << "Planner trimmed packed MPDUs to fit PPDU/TXOP duration.\n";
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("planner-dup-sta1", sta1, tid, 50, 200));
+    pendingQueue->enqueuePacket(makeDataPacket("planner-dup-sta2", sta2, tid, 50, 200));
+    HeDlMuPackingPlanner planner;
+    auto parameters = makePlannerParameters({
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 51),
+            makePlannerSelection(sta2, 1, pendingQueue->getPacket(1), 51)});
+    auto plan = planner.plan(parameters);
+    requireTrue(!plan.valid, "planner should reject duplicate association IDs");
+    requireTrue(plan.rejectedFinalValidation == 2, "planner should reject both duplicate-AID allocations");
+    requireTrue(pendingQueue->getNumPackets() == 2, "duplicate-AID planning failure must not dequeue packets");
+    EV << "Planner rejected duplicate association IDs deterministically.\n";
+}
 
 {
     clearQueue(pendingQueue);
@@ -341,6 +490,24 @@ Tid tid = 3;
 
 clearQueue(pendingQueue);
 EV << ".\n";
+
+%contains: stdout
+Planner produced deterministic multi-user packing without queue mutation.
+
+%contains: stdout
+Planner rejected BA-window exhaustion before queue mutation.
+
+%contains: stdout
+Planner rejected fewer than two surviving users.
+
+%contains: stdout
+Planner honored multi-TID aggregation eligibility.
+
+%contains: stdout
+Planner trimmed packed MPDUs to fit PPDU/TXOP duration.
+
+%contains: stdout
+Planner rejected duplicate association IDs deterministically.
 
 %contains: stdout
 Per-user packet packing admitted multiple MPDUs per scheduled STA.

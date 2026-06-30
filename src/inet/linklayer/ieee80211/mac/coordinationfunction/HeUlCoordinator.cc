@@ -17,10 +17,9 @@
 //   - Trigger-type selection (Basic / BSRP) via a pluggable policy.
 //   - Uplink OFDMA Random Access (UORA) state machine (Clause 26.5.4).
 //
-// The UORA model in this file is a conservative approximation: it uses a single
-// OFDMA contention window (OCW) and backoff counter shared across all access
-// categories, whereas the standard maintains per-AC OCW/OBO state.  The OCW
-// update rule (reset on success, double on failure) follows Clause 26.5.4.3.
+// The UORA model keeps per-AC OFDMA contention window (OCW) and backoff (OBO)
+// state.  The OCW update rule (reset on success, double on failure) follows
+// Clause 26.5.4.3.
 
 namespace inet {
 namespace ieee80211 {
@@ -37,8 +36,11 @@ void HeUlCoordinator::initialize(int stage)
         ocwMax = par("ocwMax");
         ASSERT(ocwMin >= 0);
         ASSERT(ocwMin <= ocwMax);
-        ofdmaContentionWindow = ocwMin;
-        ofdmaBackoff = intuniform(0, ofdmaContentionWindow);
+        for (int ac = AC_BK; ac <= AC_VO; ac++) {
+            int index = getAccessCategoryIndex(static_cast<AccessCategory>(ac));
+            ofdmaContentionWindows[index] = ocwMin;
+            ofdmaBackoffs[index] = intuniform(0, ocwMin);
+        }
         scheduler = check_and_cast<IIeee80211HeUlScheduler *>(getParentModule()->getSubmodule("ulScheduler"));
         triggerPolicy = check_and_cast<IIeee80211HeUlTriggerPolicy *>(getParentModule()->getSubmodule("ulTriggerPolicy"));
         basicTriggerSentSignal = registerSignal("heUlBasicTriggerSent");
@@ -52,8 +54,6 @@ void HeUlCoordinator::initialize(int stage)
         randomAccessAttemptSignal = registerSignal("heUlRandomAccessAttempt");
         randomAccessSuccessSignal = registerSignal("heUlRandomAccessSuccess");
 
-        WATCH(ofdmaContentionWindow);
-        WATCH(ofdmaBackoff);
         WATCH(nextTriggerId);
         WATCH_EXPR("lastTriggerTime", lastTriggerTime.str());
         WATCH(hasSentTrigger);
@@ -63,6 +63,12 @@ void HeUlCoordinator::initialize(int stage)
         WATCH_EXPR("elapsedSinceLastTrigger", hasSentTrigger ? simTime() - lastTriggerTime : SIMTIME_MAX);
         WATCH_EXPR("bufferStatusSummary", getBufferStatusSummary());
     }
+}
+
+int HeUlCoordinator::getAccessCategoryIndex(AccessCategory ac)
+{
+    ASSERT(ac >= AC_BK && ac <= AC_VO);
+    return static_cast<int>(ac);
 }
 
 int HeUlCoordinator::getFreshReportCount() const
@@ -96,8 +102,14 @@ std::string HeUlCoordinator::getBufferStatusSummary() const
     stream << "reports=" << bufferStatusByAid.size()
            << ", fresh=" << getFreshReportCount()
            << ", backlogged=" << getBackloggedReportCount()
-           << ", ocw=" << ofdmaContentionWindow
-           << ", obo=" << ofdmaBackoff;
+           << ", ocw=[" << ofdmaContentionWindows[AC_BK] << ","
+                         << ofdmaContentionWindows[AC_BE] << ","
+                         << ofdmaContentionWindows[AC_VI] << ","
+                         << ofdmaContentionWindows[AC_VO] << "]"
+           << ", obo=[" << ofdmaBackoffs[AC_BK] << ","
+                         << ofdmaBackoffs[AC_BE] << ","
+                         << ofdmaBackoffs[AC_VI] << ","
+                         << ofdmaBackoffs[AC_VO] << "]";
     return stream.str();
 }
 
@@ -298,7 +310,7 @@ void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType t
         emit(basicTriggerSentSignal, 1L);
 }
 
-int HeUlCoordinator::selectRandomAccessRu(int randomAccessRuCount)
+int HeUlCoordinator::selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount)
 {
     // IEEE 802.11-2024 Clause 26.5.4 ("Uplink OFDMA random access").
     // HE STAs contend for Random Access RUs (AID=0) using the UORA procedure.
@@ -306,11 +318,15 @@ int HeUlCoordinator::selectRandomAccessRu(int randomAccessRuCount)
     // present in the Trigger frame.
     if (randomAccessRuCount <= 0)
         return -1;
+    int acIndex = getAccessCategoryIndex(ac);
+    int& ofdmaContentionWindow = ofdmaContentionWindows[acIndex];
+    int& ofdmaBackoff = ofdmaBackoffs[acIndex];
     ASSERT(ofdmaContentionWindow >= ocwMin && ofdmaContentionWindow <= ocwMax);
     ASSERT(ofdmaBackoff >= 0 && ofdmaBackoff <= ofdmaContentionWindow);
     if (ofdmaBackoff >= randomAccessRuCount) {
         ofdmaBackoff -= randomAccessRuCount;
-        EV_INFO << "HE UORA deferred: backoff=" << ofdmaBackoff
+        EV_INFO << "HE UORA deferred: ac=" << (int)ac
+                 << ", backoff=" << ofdmaBackoff
                  << ", advertisedRUs=" << randomAccessRuCount << "\n";
         return -1;
     }
@@ -318,23 +334,28 @@ int HeUlCoordinator::selectRandomAccessRu(int randomAccessRuCount)
     ofdmaBackoff = 0;
     emit(randomAccessAttemptSignal, 1L);
     auto selectedRu = intuniform(0, randomAccessRuCount - 1);
-    EV_INFO << "HE UORA attempt: selected RU " << selectedRu
+    EV_INFO << "HE UORA attempt: ac=" << (int)ac
+             << ", selected RU " << selectedRu
              << " from " << randomAccessRuCount << " advertised RUs\n";
     return selectedRu;
 }
 
-void HeUlCoordinator::reportRandomAccessResult(bool success)
+void HeUlCoordinator::reportRandomAccessResult(AccessCategory ac, bool success)
 {
     // IEEE 802.11-2024 Clause 26.5.4.3 ("OFDMA contention window (OCW) update").
     // If the transmission succeeds, OCW is reset to OCW_min.
     // If the transmission fails (collision/no ACK), OCW is doubled (OCW = min(OCW_max, 2 * OCW + 1)).
     // A new random OBO is then selected in [0, OCW].
+    int acIndex = getAccessCategoryIndex(ac);
+    int& ofdmaContentionWindow = ofdmaContentionWindows[acIndex];
+    int& ofdmaBackoff = ofdmaBackoffs[acIndex];
     if (success)
         ofdmaContentionWindow = ocwMin;
     else
         ofdmaContentionWindow = std::min(ocwMax, 2 * ofdmaContentionWindow + 1);
     ofdmaBackoff = intuniform(0, ofdmaContentionWindow);
     EV_INFO << "HE UORA result: " << (success ? "success" : "failure")
+             << ", ac=" << (int)ac
              << ", OCW=" << ofdmaContentionWindow
              << ", nextBackoff=" << ofdmaBackoff << "\n";
     if (success)

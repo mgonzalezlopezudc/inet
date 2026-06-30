@@ -50,8 +50,11 @@ class TestHeUlCoordinator : public HeUlCoordinator
             ocwMax = par("ocwMax");
             ASSERT(ocwMin >= 0);
             ASSERT(ocwMin <= ocwMax);
-            ofdmaContentionWindow = ocwMin;
-            ofdmaBackoff = intuniform(0, ofdmaContentionWindow);
+            for (int ac = AC_BK; ac <= AC_VO; ac++) {
+                int index = getAccessCategoryIndex(static_cast<AccessCategory>(ac));
+                ofdmaContentionWindows[index] = ocwMin;
+                ofdmaBackoffs[index] = intuniform(0, ocwMin);
+            }
             basicTriggerSentSignal = registerSignal("heUlBasicTriggerSent");
             bsrpTriggerSentSignal = registerSignal("heUlBsrpTriggerSent");
             bufferStatusUpdatedSignal = registerSignal("heUlBufferStatusUpdated");
@@ -62,10 +65,10 @@ class TestHeUlCoordinator : public HeUlCoordinator
         }
     }
 
-    int getOcw() const { return ofdmaContentionWindow; }
-    void setOcw(int ocw) { ofdmaContentionWindow = ocw; }
-    int getObo() const { return ofdmaBackoff; }
-    void setObo(int obo) { ofdmaBackoff = obo; }
+    int getOcw(AccessCategory ac = AC_BE) const { return ofdmaContentionWindows[getAccessCategoryIndex(ac)]; }
+    void setOcw(int ocw, AccessCategory ac = AC_BE) { ofdmaContentionWindows[getAccessCategoryIndex(ac)] = ocw; }
+    int getObo(AccessCategory ac = AC_BE) const { return ofdmaBackoffs[getAccessCategoryIndex(ac)]; }
+    void setObo(int obo, AccessCategory ac = AC_BE) { ofdmaBackoffs[getAccessCategoryIndex(ac)] = obo; }
     int getOcwMin() const { return ocwMin; }
     int getOcwMax() const { return ocwMax; }
 };
@@ -116,9 +119,36 @@ ASSERT(coord->getOcw() == 7);
 int oboAfterSuccess = coord->getObo();
 ASSERT(oboAfterSuccess >= 0 && oboAfterSuccess <= 7);
 
-EV << "RESULT: UORA OBO AND OCW VERIFIED SUCCESS\n";
+// 6. Verify AC-specific overloads keep independent OCW/OBO state.
+coord->setOcw(7, AC_VO);
+coord->setObo(9, AC_VO);
+coord->setOcw(7, AC_BE);
+coord->setObo(1, AC_BE);
+ruIndex = coord->selectRandomAccessRu(AC_VO, 4);
+ASSERT(ruIndex == -1);
+ASSERT(coord->getObo(AC_VO) == 5);
+ASSERT(coord->getObo(AC_BE) == 1);
+
+coord->reportRandomAccessResult(AC_VO, false);
+ASSERT(coord->getOcw(AC_VO) == 15);
+ASSERT(coord->getOcw(AC_BE) == 7);
+ASSERT(coord->getObo(AC_VO) >= 0 && coord->getObo(AC_VO) <= 15);
+ASSERT(coord->getObo(AC_BE) == 1);
+
+coord->reportRandomAccessResult(AC_VO, true);
+ASSERT(coord->getOcw(AC_VO) == 7);
+ASSERT(coord->getOcw(AC_BE) == 7);
+
+coord->setObo(6, AC_BE);
+coord->setObo(6, AC_VI);
+ruIndex = coord->selectRandomAccessRu(2);
+ASSERT(ruIndex == -1);
+ASSERT(coord->getObo(AC_BE) == 4);
+ASSERT(coord->getObo(AC_VI) == 6);
+
+EV << "RESULT: UORA PER-AC OBO AND OCW VERIFIED SUCCESS\n";
 EV << ".\n";
 
 %contains: stdout
-RESULT: UORA OBO AND OCW VERIFIED SUCCESS
+RESULT: UORA PER-AC OBO AND OCW VERIFIED SUCCESS
 .
