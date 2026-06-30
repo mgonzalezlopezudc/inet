@@ -39,3 +39,18 @@ Once a simulation has finished and .sca and .vec files are available, use opp_sc
 ## Actual 802.11 standards documents
 They are available in the `standards` folder.
 
+Before reading or reprocessing the PDFs directly, prefer the generated standards corpus:
+
+```sh
+bin/inet_process_standards status
+bin/inet_process_standards search "Table 27-61"
+bin/inet_process_standards show 80211ax-2024:chunk:00001
+```
+
+If the corpus is missing or stale, rebuild it with:
+
+```sh
+bin/inet_process_standards build
+```
+
+Generated text, page files, chunks, and the SQLite FTS index live under `standards/processed/` and are intentionally ignored by git.

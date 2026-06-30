@@ -1,0 +1,13 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+
+
+ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), ".."))
+sys.path.insert(0, os.path.join(ROOT, "python", "inet", "standards"))
+
+from main import main
+
+
+sys.exit(main())
