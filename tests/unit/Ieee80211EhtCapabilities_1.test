@@ -1,0 +1,116 @@
+%description:
+Test EHT capability negotiation and MIB peer capability cache.
+
+%includes:
+#include "inet/linklayer/ieee80211/mib/Ieee80211EhtCapabilities.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mib: Ieee80211Mib;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.mib.ehtMaxNss = 2
+**.mib.ehtMaxMcs = 13
+**.mib.ehtOperatingChannelWidth = 320MHz
+**.mib.ehtDisabledSubchannelBitmap = 3
+**.mib.ehtMlo = true
+**.mib.ehtStr = false
+**.mib.ehtNstr = true
+**.mib.ehtEmlsr = true
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::units::values;
+
+static Ieee80211EhtCapabilities makePeerEhtCapabilities()
+{
+    Ieee80211EhtCapabilities peer;
+    peer.supportedChannelWidths = {Hz(80e6), Hz(160e6), Hz(320e6)};
+    peer.rxMcsNss.maxMcsPerNss.fill(-1);
+    peer.txMcsNss.maxMcsPerNss.fill(-1);
+    peer.rxMcsNss.maxMcsPerNss[0] = 13;
+    peer.rxMcsNss.maxMcsPerNss[1] = 11;
+    peer.txMcsNss.maxMcsPerNss[0] = 12;
+    peer.txMcsNss.maxMcsPerNss[1] = 10;
+    peer.ldpc = false;
+    peer.preamblePuncturing = false;
+    peer.mlo = true;
+    peer.str = false;
+    peer.nstr = true;
+    peer.emlsr = true;
+    peer.emlmr = false;
+    peer.maxBlockAckBufferSize = 64;
+    return peer;
+}
+
+%activity:
+auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+
+ASSERT(getMaxNss(mib->localEhtCapabilities.txMcsNss) == 2);
+ASSERT(mib->localEhtCapabilities.txMcsNss.maxMcsPerNss[0] == 13);
+ASSERT(mib->localEhtCapabilities.txMcsNss.maxMcsPerNss[1] == 13);
+ASSERT(mib->localEhtCapabilities.txMcsNss.maxMcsPerNss[2] == -1);
+ASSERT(mib->localEhtCapabilities.mlo);
+ASSERT(!mib->localEhtCapabilities.str);
+ASSERT(mib->localEhtCapabilities.nstr);
+ASSERT(mib->localEhtCapabilities.emlsr);
+ASSERT(mib->ehtOperation.operatingChannelWidth == Hz(320e6));
+ASSERT(mib->ehtOperation.disabledSubchannelBitmap == 3);
+
+auto peer = makePeerEhtCapabilities();
+auto negotiated = negotiateEhtCapabilities(mib->localEhtCapabilities, peer, mib->ehtOperation);
+ASSERT(negotiated.valid);
+ASSERT(negotiated.intersection.supportedChannelWidths.count(Hz(320e6)) == 1);
+ASSERT(negotiated.intersection.txMcsNss.maxMcsPerNss[0] == 13);
+ASSERT(negotiated.intersection.txMcsNss.maxMcsPerNss[1] == 11);
+ASSERT(negotiated.intersection.rxMcsNss.maxMcsPerNss[0] == 12);
+ASSERT(negotiated.intersection.rxMcsNss.maxMcsPerNss[1] == 10);
+ASSERT(negotiated.intersection.support4096Qam);
+ASSERT(!negotiated.intersection.ldpc);
+ASSERT(!negotiated.intersection.preamblePuncturing);
+ASSERT(negotiated.intersection.mlo);
+ASSERT(!negotiated.intersection.str);
+ASSERT(negotiated.intersection.nstr);
+ASSERT(negotiated.intersection.emlsr);
+ASSERT(!negotiated.intersection.emlmr);
+ASSERT(negotiated.intersection.maxBlockAckBufferSize == 64);
+
+auto no320 = peer;
+no320.supportedChannelWidths = {Hz(80e6), Hz(160e6)};
+ASSERT(!negotiateEhtCapabilities(mib->localEhtCapabilities, no320, mib->ehtOperation).valid);
+
+auto noMcs13 = peer;
+noMcs13.rxMcsNss.maxMcsPerNss[0] = 12;
+ASSERT(!negotiateEhtCapabilities(mib->localEhtCapabilities, noMcs13, mib->ehtOperation).intersection.support4096Qam);
+
+MacAddress sta("02:00:00:00:00:be");
+mib->setPeerEhtCapabilities(sta, peer, mib->ehtOperation);
+auto cached = mib->findNegotiatedEhtCapabilities(sta);
+ASSERT(cached != nullptr);
+ASSERT(cached->valid);
+ASSERT(cached->intersection.txMcsNss.maxMcsPerNss[1] == 11);
+ASSERT(mib->bssAccessPointData.advertisedEhtCapabilities.count(sta) == 1);
+
+mib->removePeerEhtCapabilities(sta);
+ASSERT(mib->findNegotiatedEhtCapabilities(sta) == nullptr);
+ASSERT(mib->bssAccessPointData.advertisedEhtCapabilities.count(sta) == 0);
+
+mib->allocateAssociationId(sta);
+mib->setPeerEhtCapabilities(sta, peer, mib->ehtOperation);
+mib->releaseAssociationId(sta);
+ASSERT(mib->findNegotiatedEhtCapabilities(sta) == nullptr);
+
+EV << "EHT capability negotiation and MIB peer cache passed.\n";
+
+%contains: stdout
+EHT capability negotiation and MIB peer cache passed.

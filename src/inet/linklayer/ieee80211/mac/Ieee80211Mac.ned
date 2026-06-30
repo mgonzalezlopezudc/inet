@@ -79,7 +79,7 @@ module Ieee80211Mac extends MacProtocolBase like IIeee80211Mac
     parameters:
         string mibModule;
         string twtModule = default("^.twt");
-        string modeSet @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","p","ac","ax") = default("g(mixed)");
+        string modeSet @enum("a","b","g(erp)","g(mixed)","n(mixed-2.4Ghz)","p","ac","ax","be") = default("g(mixed)");
         string fcsMode @enum("declared","computed") = default("declared");
         string initialRadioMode @enum("off","sleep","receiver","transmitter","transceiver") = default("receiver");
 
