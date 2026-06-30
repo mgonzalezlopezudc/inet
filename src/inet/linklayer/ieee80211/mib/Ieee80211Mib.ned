@@ -38,6 +38,24 @@ simple Ieee80211Mib extends SimpleModule
         int heBeamformeeSts20Mhz = default(0);
         int heBeamformeeStsAbove20Mhz = default(0);
         int heFeedbackMode = default(0); // 0=None, 1=SU, 2=MU, 3=Both
+        // EHT features are packet-level capability inputs for 802.11be negotiation.
+        bool ehtLdpc = default(true); // Advertises and enables EHT LDPC when the peer also supports it
+        bool ehtDlOfdma = default(true); // Advertises EHT downlink OFDMA support
+        bool ehtUlOfdma = default(true); // Advertises EHT uplink OFDMA support
+        bool ehtDlMuMimo = default(false); // Advertises EHT downlink MU-MIMO support
+        bool ehtUlMuMimo = default(false); // Advertises EHT uplink MU-MIMO support
+        bool eht4096Qam = default(true); // Advertises EHT 4096-QAM / MCS 12-13 support when MCS permits it
+        bool ehtPreamblePuncturing = default(true); // Advertises EHT puncturing support
+        bool ehtMlo = default(false); // Advertises EHT Multi-Link Operation support
+        bool ehtStr = default(true); // Advertises simultaneous transmit/receive support when MLO is enabled
+        bool ehtNstr = default(false); // Advertises non-simultaneous transmit/receive support when MLO is enabled
+        bool ehtEmlsr = default(false); // Advertises EHT enhanced multi-link single-radio support
+        bool ehtEmlmr = default(false); // Advertises EHT enhanced multi-link multi-radio support
+        int ehtMaxMcs = default(13); // Maximum EHT MCS advertised for each enabled spatial stream
+        int ehtMaxNss = default(8); // Maximum EHT spatial streams advertised by this MIB
+        double ehtOperatingChannelWidth @unit(Hz) = default(20MHz); // EHT operating width advertised to peers
+        int ehtDisabledSubchannelBitmap = default(0); // EHT Operation disabled 20 MHz subchannel bitmap
+        int ehtBasicMcsNss = default(0); // Basic EHT-MCS/NSS set advertised to peers
         int vhtMaxNss = default(8); // Maximum VHT spatial streams advertised by this MIB
         int vhtMaxAmpduLengthExponent = default(7); // VHT maximum A-MPDU-length exponent advertised to peers
         bool vhtBeamforming = default(false); // Enables VHT transmit beamforming capability negotiation

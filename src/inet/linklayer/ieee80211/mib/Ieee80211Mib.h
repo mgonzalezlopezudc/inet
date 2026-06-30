@@ -13,6 +13,7 @@
 #include "inet/common/SimpleModule.h"
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211EhtCapabilities.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211VhtCapabilities.h"
 
@@ -67,6 +68,8 @@ class INET_API Ieee80211Mib : public SimpleModule
         std::map<MacAddress, LinkData> links;
         std::map<MacAddress, Ieee80211HeCapabilities> advertisedHeCapabilities;
         std::map<MacAddress, Ieee80211NegotiatedHeCapabilities> negotiatedHeCapabilities;
+        std::map<MacAddress, Ieee80211EhtCapabilities> advertisedEhtCapabilities;
+        std::map<MacAddress, Ieee80211NegotiatedEhtCapabilities> negotiatedEhtCapabilities;
         std::map<MacAddress, Ieee80211VhtCapabilities> advertisedVhtCapabilities;
         std::map<MacAddress, Ieee80211NegotiatedVhtCapabilities> negotiatedVhtCapabilities;
     };
@@ -79,6 +82,8 @@ class INET_API Ieee80211Mib : public SimpleModule
     BssData bssData;
     BssStationData bssStationData;
     BssAccessPointData bssAccessPointData;
+    Ieee80211EhtCapabilities localEhtCapabilities;
+    Ieee80211EhtOperation ehtOperation;
     Ieee80211HeCapabilities localHeCapabilities;
     Ieee80211HeOperation heOperation;
     Ieee80211VhtCapabilities localVhtCapabilities;
@@ -88,8 +93,11 @@ class INET_API Ieee80211Mib : public SimpleModule
   protected:
     virtual void initialize(int stage) override;
     virtual int getNegotiatedHePeerCount() const;
+    virtual int getNegotiatedEhtPeerCount() const;
     virtual std::string getHeCapabilitiesSummary() const;
     virtual std::string getHeOperationSummary() const;
+    virtual std::string getEhtCapabilitiesSummary() const;
+    virtual std::string getEhtOperationSummary() const;
 
   public:
     static const char *getModeStr(Ieee80211Mib::Mode mode);
@@ -106,6 +114,10 @@ class INET_API Ieee80211Mib : public SimpleModule
             const Ieee80211HeOperation& operation);
     void removePeerHeCapabilities(const MacAddress& address);
     const Ieee80211NegotiatedHeCapabilities *findNegotiatedHeCapabilities(const MacAddress& address) const;
+    void setPeerEhtCapabilities(const MacAddress& address, const Ieee80211EhtCapabilities& capabilities,
+            const Ieee80211EhtOperation& operation);
+    void removePeerEhtCapabilities(const MacAddress& address);
+    const Ieee80211NegotiatedEhtCapabilities *findNegotiatedEhtCapabilities(const MacAddress& address) const;
     void setPeerVhtCapabilities(const MacAddress& address, const Ieee80211VhtCapabilities& capabilities,
             const Ieee80211VhtOperation& operation);
     void removePeerVhtCapabilities(const MacAddress& address);
