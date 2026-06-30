@@ -76,7 +76,30 @@ const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz80_80MHz("5 GHz
 
 const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5_9GHz("5.9 GHz", GHz(5.855), MHz(10), 7);
 
-const std::vector<const IIeee80211Band *> Ieee80211CompliantBands::bands = { &band2_4GHz, &band5GHz, &band5GHz20MHz, &band5GHz40MHz, &band5GHz80MHz, &band5GHz160MHz, &band5GHz80_80MHz, &band5_9GHz };
+// 6 GHz channel centers follow 80211ax-2024:chunk:10362.
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz("6 GHz", GHz(5.9525), MHz(5), 233);
+
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz20MHz("6 GHz (20 MHz)", GHz(5.945), MHz(20), 59);
+
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz40MHz("6 GHz (40 MHz)", GHz(5.945), MHz(40), 29);
+
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz80MHz("6 GHz (80 MHz)", GHz(5.945), MHz(80), 14);
+
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz160MHz("6 GHz (160 MHz)", GHz(5.945), MHz(160), 7);
+
+// 80211be-2024:chunk:01859 defines 320 MHz-1 and 320 MHz-2 center-frequency
+// channel numbers 31/95/159 and 63/127/191 respectively.
+const Ieee80211EnumeratedBand Ieee80211CompliantBands::band6GHz320MHz("6 GHz (320 MHz)",
+{
+    GHz(6.105),
+    GHz(6.265),
+    GHz(6.425),
+    GHz(6.585),
+    GHz(6.745),
+    GHz(6.905),
+});
+
+const std::vector<const IIeee80211Band *> Ieee80211CompliantBands::bands = { &band2_4GHz, &band5GHz, &band5GHz20MHz, &band5GHz40MHz, &band5GHz80MHz, &band5GHz160MHz, &band5GHz80_80MHz, &band5_9GHz, &band6GHz, &band6GHz20MHz, &band6GHz40MHz, &band6GHz80MHz, &band6GHz160MHz, &band6GHz320MHz };
 
 const IIeee80211Band *Ieee80211CompliantBands::findBand(const char *name)
 {
@@ -98,4 +121,3 @@ const IIeee80211Band *Ieee80211CompliantBands::getBand(const char *name)
 } // namespace physicallayer
 
 } // namespace inet
-

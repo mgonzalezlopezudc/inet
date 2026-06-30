@@ -3,6 +3,7 @@ Test IEEE 802.11be EHT mode-set bitrates, 320 MHz support, and 4096-QAM MCS entr
 
 %includes:
 #include "inet/physicallayer/wireless/common/modulation/Qam4096Modulation.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 
@@ -37,6 +38,10 @@ EV << "Mode 13 bandwidth: " << ehtMode13->getDataMode()->getBandwidth() << "\n";
 EV << "Mode 13 data subcarriers: " << ehtMode13->getDataMode()->getNumberOfDataSubcarriers() << "\n";
 EV << "4096-QAM code word size: " << Qam4096Modulation::singleton.getCodeWordSize() << "\n";
 
+auto band320 = Ieee80211CompliantBands::getBand("6 GHz (320 MHz)");
+EV << "6 GHz 320 MHz channels: " << band320->getNumChannels() << "\n";
+EV << "6 GHz 320 MHz first center frequency: " << band320->getCenterFrequency(0) << "\n";
+
 EV << ".\n";
 
 %contains: stdout
@@ -50,4 +55,6 @@ Mode 13 MCS index: 13
 Mode 13 bandwidth: 320 MHz
 Mode 13 data subcarriers: 3920
 4096-QAM code word size: 12
+6 GHz 320 MHz channels: 6
+6 GHz 320 MHz first center frequency: 6.105 GHz
 .
