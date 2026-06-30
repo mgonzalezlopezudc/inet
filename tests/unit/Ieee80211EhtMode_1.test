@@ -1,0 +1,53 @@
+%description:
+Test IEEE 802.11be EHT mode-set bitrates, 320 MHz support, and 4096-QAM MCS entries
+
+%includes:
+#include "inet/physicallayer/wireless/common/modulation/Qam4096Modulation.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+%activity:
+const Ieee80211ModeSet *modeSet = Ieee80211ModeSet::getModeSet("be");
+if (!modeSet) {
+    EV << "FAILED: modeSet 'be' not found\n";
+    return;
+}
+
+EV << "ModeSet name: " << modeSet->getName() << "\n";
+EV << "Slot time: " << modeSet->getSlotTime() << "\n";
+EV << "SIFS time: " << modeSet->getSifsTime() << "\n";
+EV << "Number of modes: " << modeSet->getNumModes() << "\n";
+
+const IIeee80211Mode *mode0 = modeSet->getMode(bps(7.3125e6), MHz(20), 1);
+EV << "Mode 0 (MCS 0 Nss=1): netBitrate=" << mode0->getDataMode()->getNetBitrate()
+   << " grossBitrate=" << mode0->getDataMode()->getGrossBitrate() << "\n";
+
+const IIeee80211Mode *mode13 = modeSet->getMode(bps(2.45e9), MHz(320), 1);
+EV << "Mode 13 (MCS 13 BW=320MHz Nss=1): netBitrate=" << mode13->getDataMode()->getNetBitrate()
+   << " grossBitrate=" << mode13->getDataMode()->getGrossBitrate() << "\n";
+
+auto ehtMode13 = check_and_cast<const Ieee80211EhtMode *>(mode13);
+EV << "Mode 13 MCS index: " << ehtMode13->getDataMode()->getMcsIndex() << "\n";
+EV << "Mode 13 bandwidth: " << ehtMode13->getDataMode()->getBandwidth() << "\n";
+EV << "Mode 13 data subcarriers: " << ehtMode13->getDataMode()->getNumberOfDataSubcarriers() << "\n";
+EV << "4096-QAM code word size: " << Qam4096Modulation::singleton.getCodeWordSize() << "\n";
+
+EV << ".\n";
+
+%contains: stdout
+ModeSet name: be
+Slot time: 0.000009
+SIFS time: 0.000016
+Number of modes: 560
+Mode 0 (MCS 0 Nss=1): netBitrate=7.3125 Mbps grossBitrate=14.625 Mbps
+Mode 13 (MCS 13 BW=320MHz Nss=1): netBitrate=2.45 Gbps grossBitrate=2.94 Gbps
+Mode 13 MCS index: 13
+Mode 13 bandwidth: 320 MHz
+Mode 13 data subcarriers: 3920
+4096-QAM code word size: 12
+.

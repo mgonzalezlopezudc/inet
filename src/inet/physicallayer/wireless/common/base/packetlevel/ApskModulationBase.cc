@@ -11,8 +11,10 @@
 #include "inet/physicallayer/wireless/common/modulation/DsssOqpsk16Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/MpskModulation.h"
 #include "inet/physicallayer/wireless/common/modulation/MqamModulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam1024Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam16Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam256Modulation.h"
+#include "inet/physicallayer/wireless/common/modulation/Qam4096Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/Qam64Modulation.h"
 #include "inet/physicallayer/wireless/common/modulation/QpskModulation.h"
 
@@ -47,6 +49,10 @@ const ApskModulationBase *ApskModulationBase::findModulation(const char *modulat
         return &Qam64Modulation::singleton;
     else if (!strcmp("QAM-256", modulation))
         return &Qam256Modulation::singleton;
+    else if (!strcmp("QAM-1024", modulation))
+        return &Qam1024Modulation::singleton;
+    else if (!strcmp("QAM-4096", modulation))
+        return &Qam4096Modulation::singleton;
     else if (!strncmp("MQAM-", modulation, 5))
         // TODO avoid allocation
         return new MqamModulation(atoi(modulation + 5));
@@ -91,4 +97,3 @@ ShortBitVector ApskModulationBase::demapToBitRepresentation(const ApskSymbol *sy
 } // namespace physicallayer
 
 } // namespace inet
-
