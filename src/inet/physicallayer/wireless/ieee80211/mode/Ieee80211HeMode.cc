@@ -443,422 +443,83 @@ const Ieee80211HeMode *Ieee80211HeCompliantModes::getCompliantMode(const Ieee802
 }
 
 // DI tables
-// BW=20MHz, NSS=1
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss1([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss1([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss1([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss1([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss1([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss1([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss1([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss1([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss1([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss1([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss1([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss1([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 1); });
-// BW=20MHz, NSS=2
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss2([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss2([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss2([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss2([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss2([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss2([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss2([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss2([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss2([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss2([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss2([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss2([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 2); });
-// BW=20MHz, NSS=3
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss3([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss3([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss3([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss3([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss3([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss3([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss3([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss3([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss3([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss3([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss3([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss3([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 3); });
-// BW=20MHz, NSS=4
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss4([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss4([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss4([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss4([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss4([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss4([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss4([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss4([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss4([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss4([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss4([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss4([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 4); });
-// BW=20MHz, NSS=5
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss5([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss5([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss5([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss5([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss5([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss5([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss5([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss5([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss5([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss5([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss5([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss5([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 5); });
-// BW=20MHz, NSS=6
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss6([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss6([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss6([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss6([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss6([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss6([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss6([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss6([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss6([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss6([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss6([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss6([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 6); });
-// BW=20MHz, NSS=7
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss7([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss7([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss7([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss7([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss7([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss7([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss7([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss7([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss7([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss7([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss7([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss7([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 7); });
-// BW=20MHz, NSS=8
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW20MHzNss8([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW20MHzNss8([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW20MHzNss8([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW20MHzNss8([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW20MHzNss8([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW20MHzNss8([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW20MHzNss8([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW20MHzNss8([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW20MHzNss8([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW20MHzNss8([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW20MHzNss8([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(20), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW20MHzNss8([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(20), 8); });
-// BW=40MHz, NSS=1
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss1([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss1([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss1([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss1([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss1([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss1([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss1([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss1([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss1([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss1([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss1([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss1([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 1); });
-// BW=40MHz, NSS=2
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss2([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss2([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss2([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss2([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss2([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss2([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss2([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss2([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss2([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss2([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss2([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss2([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 2); });
-// BW=40MHz, NSS=3
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss3([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss3([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss3([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss3([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss3([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss3([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss3([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss3([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss3([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss3([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss3([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss3([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 3); });
-// BW=40MHz, NSS=4
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss4([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss4([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss4([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss4([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss4([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss4([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss4([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss4([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss4([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss4([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss4([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss4([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 4); });
-// BW=40MHz, NSS=5
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss5([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss5([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss5([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss5([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss5([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss5([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss5([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss5([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss5([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss5([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss5([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss5([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 5); });
-// BW=40MHz, NSS=6
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss6([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss6([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss6([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss6([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss6([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss6([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss6([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss6([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss6([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss6([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss6([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss6([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 6); });
-// BW=40MHz, NSS=7
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss7([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss7([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss7([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss7([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss7([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss7([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss7([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss7([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss7([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss7([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss7([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss7([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 7); });
-// BW=40MHz, NSS=8
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW40MHzNss8([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW40MHzNss8([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW40MHzNss8([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW40MHzNss8([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW40MHzNss8([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW40MHzNss8([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW40MHzNss8([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW40MHzNss8([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW40MHzNss8([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW40MHzNss8([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW40MHzNss8([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(40), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW40MHzNss8([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(40), 8); });
-// BW=80MHz, NSS=1
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss1([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss1([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss1([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss1([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss1([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss1([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss1([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss1([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss1([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss1([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss1([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss1([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 1); });
-// BW=80MHz, NSS=2
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss2([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss2([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss2([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss2([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss2([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss2([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss2([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss2([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss2([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss2([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss2([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss2([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 2); });
-// BW=80MHz, NSS=3
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss3([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss3([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss3([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss3([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss3([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss3([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss3([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss3([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss3([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss3([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss3([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss3([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 3); });
-// BW=80MHz, NSS=4
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss4([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss4([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss4([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss4([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss4([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss4([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss4([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss4([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss4([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss4([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss4([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss4([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 4); });
-// BW=80MHz, NSS=5
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss5([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss5([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss5([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss5([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss5([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss5([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss5([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss5([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss5([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss5([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss5([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss5([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 5); });
-// BW=80MHz, NSS=6
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss6([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss6([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss6([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss6([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss6([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss6([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss6([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss6([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss6([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss6([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss6([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss6([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 6); });
-// BW=80MHz, NSS=7
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss7([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss7([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss7([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss7([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss7([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss7([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss7([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss7([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss7([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss7([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss7([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss7([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 7); });
-// BW=80MHz, NSS=8
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW80MHzNss8([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW80MHzNss8([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW80MHzNss8([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW80MHzNss8([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW80MHzNss8([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW80MHzNss8([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW80MHzNss8([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW80MHzNss8([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW80MHzNss8([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW80MHzNss8([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW80MHzNss8([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(80), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW80MHzNss8([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(80), 8); });
-// BW=160MHz, NSS=1
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss1([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss1([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss1([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss1([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss1([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss1([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss1([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss1([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss1([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss1([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss1([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 1); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss1([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 1); });
-// BW=160MHz, NSS=2
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss2([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss2([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss2([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss2([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss2([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss2([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss2([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss2([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss2([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss2([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss2([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 2); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss2([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 2); });
-// BW=160MHz, NSS=3
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss3([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss3([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss3([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss3([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss3([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss3([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss3([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss3([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss3([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss3([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss3([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 3); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss3([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 3); });
-// BW=160MHz, NSS=4
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss4([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss4([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss4([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss4([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss4([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss4([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss4([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss4([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss4([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss4([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss4([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 4); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss4([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 4); });
-// BW=160MHz, NSS=5
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss5([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss5([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss5([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss5([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss5([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss5([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss5([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss5([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss5([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss5([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss5([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 5); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss5([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 5); });
-// BW=160MHz, NSS=6
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss6([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss6([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss6([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss6([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss6([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss6([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss6([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss6([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss6([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss6([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss6([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 6); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss6([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 6); });
-// BW=160MHz, NSS=7
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss7([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss7([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss7([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss7([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss7([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss7([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss7([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss7([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss7([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss7([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss7([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 7); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss7([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 7); });
-// BW=160MHz, NSS=8
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs0BW160MHzNss8([](){ return new Ieee80211Hemcs(0, &BpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs1BW160MHzNss8([](){ return new Ieee80211Hemcs(1, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs2BW160MHzNss8([](){ return new Ieee80211Hemcs(2, &QpskModulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs3BW160MHzNss8([](){ return new Ieee80211Hemcs(3, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs4BW160MHzNss8([](){ return new Ieee80211Hemcs(4, &Qam16Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs5BW160MHzNss8([](){ return new Ieee80211Hemcs(5, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs6BW160MHzNss8([](){ return new Ieee80211Hemcs(6, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs7BW160MHzNss8([](){ return new Ieee80211Hemcs(7, &Qam64Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs8BW160MHzNss8([](){ return new Ieee80211Hemcs(8, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs9BW160MHzNss8([](){ return new Ieee80211Hemcs(9, &Qam256Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs10BW160MHzNss8([](){ return new Ieee80211Hemcs(10, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4, MHz(160), 8); });
-const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs11BW160MHzNss8([](){ return new Ieee80211Hemcs(11, &Qam1024Modulation::singleton, &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6, MHz(160), 8); });
+namespace {
+
+const ApskModulationBase *getHeMcsModulation(int mcs)
+{
+    switch (mcs) {
+        case 0: return &BpskModulation::singleton;
+        case 1: return &QpskModulation::singleton;
+        case 2: return &QpskModulation::singleton;
+        case 3: return &Qam16Modulation::singleton;
+        case 4: return &Qam16Modulation::singleton;
+        case 5: return &Qam64Modulation::singleton;
+        case 6: return &Qam64Modulation::singleton;
+        case 7: return &Qam64Modulation::singleton;
+        case 8: return &Qam256Modulation::singleton;
+        case 9: return &Qam256Modulation::singleton;
+        case 10: return &Qam1024Modulation::singleton;
+        case 11: return &Qam1024Modulation::singleton;
+        default: throw cRuntimeError("Invalid HE MCS: %d", mcs);
+    }
+}
+
+const Ieee80211ConvolutionalCode *getHeMcsConvolutionalCode(int mcs)
+{
+    switch (mcs) {
+        case 0: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2;
+        case 1: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2;
+        case 2: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4;
+        case 3: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode1_2;
+        case 4: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4;
+        case 5: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode2_3;
+        case 6: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4;
+        case 7: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6;
+        case 8: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4;
+        case 9: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6;
+        case 10: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode3_4;
+        case 11: return &Ieee80211OfdmCompliantCodes::ofdmConvolutionalCode5_6;
+        default: throw cRuntimeError("Invalid HE MCS: %d", mcs);
+    }
+}
+
+} // namespace
+
+#define HE_DEFINE_MCS(WIDTH, NSS, MCS) \
+const DI<Ieee80211Hemcs> Ieee80211HemcsTable::heMcs##MCS##BW##WIDTH##MHzNss##NSS([](){ \
+    return new Ieee80211Hemcs(MCS, getHeMcsModulation(MCS), getHeMcsConvolutionalCode(MCS), MHz(WIDTH), NSS); \
+});
+#define HE_DEFINE_MCS_FOR_NSS(WIDTH, NSS) \
+    HE_DEFINE_MCS(WIDTH, NSS, 0) \
+    HE_DEFINE_MCS(WIDTH, NSS, 1) \
+    HE_DEFINE_MCS(WIDTH, NSS, 2) \
+    HE_DEFINE_MCS(WIDTH, NSS, 3) \
+    HE_DEFINE_MCS(WIDTH, NSS, 4) \
+    HE_DEFINE_MCS(WIDTH, NSS, 5) \
+    HE_DEFINE_MCS(WIDTH, NSS, 6) \
+    HE_DEFINE_MCS(WIDTH, NSS, 7) \
+    HE_DEFINE_MCS(WIDTH, NSS, 8) \
+    HE_DEFINE_MCS(WIDTH, NSS, 9) \
+    HE_DEFINE_MCS(WIDTH, NSS, 10) \
+    HE_DEFINE_MCS(WIDTH, NSS, 11)
+#define HE_DEFINE_MCS_FOR_BW(WIDTH) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 1) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 2) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 3) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 4) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 5) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 6) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 7) \
+    HE_DEFINE_MCS_FOR_NSS(WIDTH, 8)
+
+HE_DEFINE_MCS_FOR_BW(20)
+HE_DEFINE_MCS_FOR_BW(40)
+HE_DEFINE_MCS_FOR_BW(80)
+HE_DEFINE_MCS_FOR_BW(160)
+
+#undef HE_DEFINE_MCS_FOR_BW
+#undef HE_DEFINE_MCS_FOR_NSS
+#undef HE_DEFINE_MCS
 
 } // namespace physicallayer
 } // namespace inet
