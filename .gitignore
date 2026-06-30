@@ -2,6 +2,8 @@
 .codex
 .github
 standards
+!python/inet/standards/
+!python/inet/standards/**
 
 # local and generated files not to be committed
 core.*
