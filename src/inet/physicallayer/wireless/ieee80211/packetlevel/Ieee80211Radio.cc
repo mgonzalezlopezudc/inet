@@ -45,6 +45,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211OfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
@@ -478,6 +479,11 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode)) {
             if (heMode->getDataMode()->getCode()) {
                 htPhyHeader->setCoding(heMode->getDataMode()->getCode()->isLdpc() ? 1 : 0);
+            }
+        }
+        else if (auto ehtMode = dynamic_cast<const Ieee80211EhtMode *>(mode)) {
+            if (ehtMode->getDataMode()->getCode()) {
+                htPhyHeader->setCoding(ehtMode->getDataMode()->getCode()->isLdpc() ? 1 : 0);
             }
         }
     }
