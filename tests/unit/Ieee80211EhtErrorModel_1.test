@@ -1,0 +1,82 @@
+%description:
+Test IEEE 802.11be EHT MCS 7/13 error-model paths in NIST and Yans.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211YansErrorModel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+class TestNistErrorModel : public Ieee80211NistErrorModel {
+  public:
+    using Ieee80211NistErrorModel::getHeaderSuccessRate;
+    using Ieee80211NistErrorModel::getDataSuccessRate;
+};
+
+class TestYansErrorModel : public Ieee80211YansErrorModel {
+  public:
+    using Ieee80211YansErrorModel::getHeaderSuccessRate;
+    using Ieee80211YansErrorModel::getDataSuccessRate;
+};
+
+template<typename ErrorModel>
+void assertEhtPairOrdering(const ErrorModel& model, const Ieee80211EhtMode *robustMode,
+        const Ieee80211EhtMode *fastMode, double snr, const char *label)
+{
+    auto bitLength = 8000;
+    auto headerLength = fastMode->getHeaderMode()->getLength().get<b>();
+    auto robustDataSuccess = model.getDataSuccessRate(robustMode, bitLength, snr);
+    auto fastDataSuccess = model.getDataSuccessRate(fastMode, bitLength, snr);
+    auto fastHeaderSuccess = model.getHeaderSuccessRate(fastMode, headerLength, snr);
+
+    EV << label << " robust data success: " << robustDataSuccess << "\n";
+    EV << label << " fast data success: " << fastDataSuccess << "\n";
+    EV << label << " fast header success is valid: " << (fastHeaderSuccess > 0 && fastHeaderSuccess <= 1) << "\n";
+
+    ASSERT(robustDataSuccess > fastDataSuccess);
+    ASSERT(fastHeaderSuccess > 0);
+    ASSERT(fastHeaderSuccess <= 1);
+}
+
+%activity:
+TestNistErrorModel nistModel;
+TestYansErrorModel yansModel;
+
+auto mcs6 = Ieee80211EhtCompliantModes::getCompliantMode(
+    &Ieee80211EhtmcsTable::ehtMcs6BW320MHzNss1,
+    Ieee80211EhtMode::BAND_6GHZ,
+    Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+    Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG);
+auto mcs7 = Ieee80211EhtCompliantModes::getCompliantMode(
+    &Ieee80211EhtmcsTable::ehtMcs7BW320MHzNss1,
+    Ieee80211EhtMode::BAND_6GHZ,
+    Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+    Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG);
+auto mcs12 = Ieee80211EhtCompliantModes::getCompliantMode(
+    &Ieee80211EhtmcsTable::ehtMcs12BW320MHzNss1,
+    Ieee80211EhtMode::BAND_6GHZ,
+    Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+    Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG);
+auto mcs13 = Ieee80211EhtCompliantModes::getCompliantMode(
+    &Ieee80211EhtmcsTable::ehtMcs13BW320MHzNss1,
+    Ieee80211EhtMode::BAND_6GHZ,
+    Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+    Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG);
+
+// 80211be-2024:chunk:01884 lists EHT-MCS 6/7 as 64-QAM 3/4 and 5/6,
+// and EHT-MCS 12/13 as 4096-QAM 3/4 and 5/6 for a 242-tone RU.
+assertEhtPairOrdering(nistModel, mcs6, mcs7, 200.0, "NIST EHT 64-QAM");
+assertEhtPairOrdering(yansModel, mcs6, mcs7, 200.0, "Yans EHT 64-QAM");
+assertEhtPairOrdering(nistModel, mcs12, mcs13, 40000.0, "NIST EHT 4096-QAM");
+assertEhtPairOrdering(yansModel, mcs12, mcs13, 40000.0, "Yans EHT 4096-QAM");
+
+EV << "EHT MCS 7 and MCS 13 use the packet-level error model paths.\n";
+EV << ".\n";
+
+%contains: stdout
+EHT MCS 7 and MCS 13 use the packet-level error model paths.
+.

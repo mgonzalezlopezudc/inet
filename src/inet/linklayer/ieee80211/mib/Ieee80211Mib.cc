@@ -72,6 +72,39 @@ void Ieee80211Mib::initialize(int stage)
             throw cRuntimeError("heBssColor must be between 0 and 63");
         heOperation.bssColor = heBssColor;
 
+        localEhtCapabilities.ldpc = par("ehtLdpc").boolValue();
+        localEhtCapabilities.dlOfdma = par("ehtDlOfdma").boolValue();
+        localEhtCapabilities.ulOfdma = par("ehtUlOfdma").boolValue();
+        localEhtCapabilities.dlMuMimo = par("ehtDlMuMimo").boolValue();
+        localEhtCapabilities.ulMuMimo = par("ehtUlMuMimo").boolValue();
+        localEhtCapabilities.support4096Qam = par("eht4096Qam").boolValue();
+        localEhtCapabilities.preamblePuncturing = par("ehtPreamblePuncturing").boolValue();
+        localEhtCapabilities.mlo = par("ehtMlo").boolValue();
+        localEhtCapabilities.str = par("ehtStr").boolValue();
+        localEhtCapabilities.nstr = par("ehtNstr").boolValue();
+        localEhtCapabilities.emlsr = par("ehtEmlsr").boolValue();
+        localEhtCapabilities.emlmr = par("ehtEmlmr").boolValue();
+        int ehtMaxMcs = par("ehtMaxMcs").intValue();
+        if (ehtMaxMcs < 0 || ehtMaxMcs > 13)
+            throw cRuntimeError("ehtMaxMcs must be between 0 and 13");
+        int ehtMaxNss = par("ehtMaxNss").intValue();
+        if (ehtMaxNss < 1 || ehtMaxNss > 8)
+            throw cRuntimeError("ehtMaxNss must be between 1 and 8");
+        localEhtCapabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+        localEhtCapabilities.txMcsNss.maxMcsPerNss.fill(-1);
+        for (int i = 0; i < ehtMaxNss; ++i) {
+            localEhtCapabilities.rxMcsNss.maxMcsPerNss[i] = ehtMaxMcs;
+            localEhtCapabilities.txMcsNss.maxMcsPerNss[i] = ehtMaxMcs;
+        }
+        ehtOperation.operatingChannelWidth = Hz(par("ehtOperatingChannelWidth").doubleValue());
+        if (localEhtCapabilities.supportedChannelWidths.count(ehtOperation.operatingChannelWidth) == 0)
+            throw cRuntimeError("ehtOperatingChannelWidth must be 20, 40, 80, 160, or 320 MHz");
+        int disabledSubchannelBitmap = par("ehtDisabledSubchannelBitmap").intValue();
+        if (disabledSubchannelBitmap < 0 || disabledSubchannelBitmap > 0xffff)
+            throw cRuntimeError("ehtDisabledSubchannelBitmap must be between 0 and 65535");
+        ehtOperation.disabledSubchannelBitmap = disabledSubchannelBitmap;
+        ehtOperation.basicEhtMcsNss = par("ehtBasicMcsNss").intValue();
+
         vhtOperation.operatingChannelWidth = Hz(par("vhtOperatingChannelWidth").doubleValue());
         vhtOperation.ldpc = localVhtCapabilities.ldpc;
         vhtOperation.numSpatialStreams = localVhtCapabilities.maxNss;
@@ -92,12 +125,30 @@ void Ieee80211Mib::initialize(int stage)
         WATCH(heOperation.bssColor);
         WATCH(heOperation.defaultPeDurationPresent);
         WATCH(heOperation.defaultPeDurationUs);
+        WATCH(localEhtCapabilities.ldpc);
+        WATCH(localEhtCapabilities.dlOfdma);
+        WATCH(localEhtCapabilities.ulOfdma);
+        WATCH(localEhtCapabilities.support4096Qam);
+        WATCH(localEhtCapabilities.preamblePuncturing);
+        WATCH(localEhtCapabilities.mlo);
+        WATCH(localEhtCapabilities.str);
+        WATCH(localEhtCapabilities.nstr);
+        WATCH(localEhtCapabilities.emlsr);
+        WATCH(localEhtCapabilities.emlmr);
+        WATCH(ehtOperation.operatingChannelWidth);
+        WATCH(ehtOperation.disabledSubchannelBitmap);
+        WATCH(ehtOperation.basicEhtMcsNss);
         WATCH_MAP(bssAccessPointData.links);
         WATCH_MAP(bssAccessPointData.advertisedHeCapabilities);
         WATCH_MAP(bssAccessPointData.negotiatedHeCapabilities);
+        WATCH_MAP(bssAccessPointData.advertisedEhtCapabilities);
+        WATCH_MAP(bssAccessPointData.negotiatedEhtCapabilities);
         WATCH_EXPR("heCapabilitiesSummary", getHeCapabilitiesSummary());
         WATCH_EXPR("heOperationSummary", getHeOperationSummary());
+        WATCH_EXPR("ehtCapabilitiesSummary", getEhtCapabilitiesSummary());
+        WATCH_EXPR("ehtOperationSummary", getEhtOperationSummary());
         WATCH_EXPR("negotiatedHePeers", getNegotiatedHePeerCount());
+        WATCH_EXPR("negotiatedEhtPeers", getNegotiatedEhtPeerCount());
     }
 }
 
@@ -105,6 +156,15 @@ int Ieee80211Mib::getNegotiatedHePeerCount() const
 {
     int count = 0;
     for (const auto& entry : bssAccessPointData.negotiatedHeCapabilities)
+        if (entry.second.valid)
+            count++;
+    return count;
+}
+
+int Ieee80211Mib::getNegotiatedEhtPeerCount() const
+{
+    int count = 0;
+    for (const auto& entry : bssAccessPointData.negotiatedEhtCapabilities)
         if (entry.second.valid)
             count++;
     return count;
@@ -125,6 +185,23 @@ std::string Ieee80211Mib::getHeCapabilitiesSummary() const
     return stream.str();
 }
 
+std::string Ieee80211Mib::getEhtCapabilitiesSummary() const
+{
+    std::stringstream stream;
+    stream << "LDPC=" << (localEhtCapabilities.ldpc ? "yes" : "no")
+           << ", DL-OFDMA=" << (localEhtCapabilities.dlOfdma ? "yes" : "no")
+           << ", UL-OFDMA=" << (localEhtCapabilities.ulOfdma ? "yes" : "no")
+           << ", 4096-QAM=" << (localEhtCapabilities.support4096Qam ? "yes" : "no")
+           << ", puncturing=" << (localEhtCapabilities.preamblePuncturing ? "yes" : "no")
+           << ", MLO=" << (localEhtCapabilities.mlo ? "yes" : "no")
+           << ", EMLSR=" << (localEhtCapabilities.emlsr ? "yes" : "no")
+           << ", EMLMR=" << (localEhtCapabilities.emlmr ? "yes" : "no")
+           << ", maxTxNss=" << getMaxNss(localEhtCapabilities.txMcsNss)
+           << ", maxRxNss=" << getMaxNss(localEhtCapabilities.rxMcsNss)
+           << ", peers=" << getNegotiatedEhtPeerCount();
+    return stream.str();
+}
+
 std::string Ieee80211Mib::getHeOperationSummary() const
 {
     std::stringstream stream;
@@ -132,6 +209,15 @@ std::string Ieee80211Mib::getHeOperationSummary() const
            << ", width=" << heOperation.operatingChannelWidth
            << ", defaultPE=" << heOperation.defaultPeDurationUs << "us"
            << ", basicMcsNss=" << heOperation.basicHeMcsNss;
+    return stream.str();
+}
+
+std::string Ieee80211Mib::getEhtOperationSummary() const
+{
+    std::stringstream stream;
+    stream << "width=" << ehtOperation.operatingChannelWidth
+           << ", disabledSubchannels=0x" << std::hex << ehtOperation.disabledSubchannelBitmap << std::dec
+           << ", basicMcsNss=" << ehtOperation.basicEhtMcsNss;
     return stream.str();
 }
 
@@ -193,6 +279,7 @@ void Ieee80211Mib::releaseAssociationId(const MacAddress& address)
 {
     bssAccessPointData.associationIds.erase(address);
     removePeerHeCapabilities(address);
+    removePeerEhtCapabilities(address);
     removePeerVhtCapabilities(address);
 }
 
@@ -229,6 +316,27 @@ const Ieee80211NegotiatedHeCapabilities *Ieee80211Mib::findNegotiatedHeCapabilit
 {
     auto it = bssAccessPointData.negotiatedHeCapabilities.find(address);
     return it == bssAccessPointData.negotiatedHeCapabilities.end() ? nullptr : &it->second;
+}
+
+void Ieee80211Mib::setPeerEhtCapabilities(const MacAddress& address,
+        const Ieee80211EhtCapabilities& capabilities, const Ieee80211EhtOperation& operation)
+{
+    bssAccessPointData.advertisedEhtCapabilities[address] = capabilities;
+    bssAccessPointData.negotiatedEhtCapabilities[address] =
+            negotiateEhtCapabilities(localEhtCapabilities, capabilities, operation);
+}
+
+void Ieee80211Mib::removePeerEhtCapabilities(const MacAddress& address)
+{
+    bssAccessPointData.advertisedEhtCapabilities.erase(address);
+    bssAccessPointData.negotiatedEhtCapabilities.erase(address);
+}
+
+const Ieee80211NegotiatedEhtCapabilities *Ieee80211Mib::findNegotiatedEhtCapabilities(
+        const MacAddress& address) const
+{
+    auto it = bssAccessPointData.negotiatedEhtCapabilities.find(address);
+    return it == bssAccessPointData.negotiatedEhtCapabilities.end() ? nullptr : &it->second;
 }
 
 void Ieee80211Mib::setPeerVhtCapabilities(const MacAddress& address,
