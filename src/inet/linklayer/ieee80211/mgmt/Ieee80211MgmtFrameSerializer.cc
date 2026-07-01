@@ -35,6 +35,10 @@ static const uint8_t ELEMENT_ID_EXTENSION = 255;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_CAPABILITIES = 35;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_OPERATION = 36;
 static const uint8_t ELEMENT_ID_EXTENSION_HE_6GHZ_BAND_CAPABILITIES = 59;
+static const uint8_t ELEMENT_ID_EXTENSION_EHT_OPERATION = 106;
+static const uint8_t ELEMENT_ID_EXTENSION_MULTI_LINK = 107;
+static const uint8_t ELEMENT_ID_EXTENSION_EHT_CAPABILITIES = 108;
+static const uint8_t ELEMENT_ID_EXTENSION_TID_TO_LINK_MAPPING = 111;
 static const uint8_t ELEMENT_ID_TWT = 216;
 
 static uint64_t getBits(uint64_t value, int offset, int length)
@@ -288,6 +292,66 @@ static void writeBroadcastTwtElement(MemoryOutputStream& stream, const Ptr<const
     }
 }
 
+static void writeEhtCapabilitiesElement(MemoryOutputStream& stream, const Ieee80211EhtCapabilitiesElement& capabilities)
+{
+    stream.writeByte(ELEMENT_ID_EXTENSION);
+    stream.writeByte(1 + 14); // Payload size approximated
+    stream.writeByte(ELEMENT_ID_EXTENSION_EHT_CAPABILITIES);
+    // EHT MAC capabilities (approximated)
+    uint64_t macCap = 0;
+    setBits(macCap, 0, 1, capabilities.support4096Qam ? 1 : 0);
+    setBits(macCap, 1, 1, capabilities.mlo ? 1 : 0);
+    setBits(macCap, 2, 1, capabilities.str ? 1 : 0);
+    setBits(macCap, 3, 1, capabilities.emlsr ? 1 : 0);
+    setBits(macCap, 4, 1, capabilities.emlmr ? 1 : 0);
+    setBits(macCap, 5, 2, capabilities.maxAmpduLengthExponent);
+    stream.writeUint16Le(macCap);
+    
+    // EHT PHY capabilities (approximated)
+    uint64_t phyCap = 0;
+    setBits(phyCap, 0, 1, capabilities.supportedChannelWidth320MHz ? 1 : 0);
+    setBits(phyCap, 1, 1, capabilities.preamblePuncturing ? 1 : 0);
+    setBits(phyCap, 2, 1, capabilities.dlOfdma ? 1 : 0);
+    setBits(phyCap, 3, 1, capabilities.ulOfdma ? 1 : 0);
+    setBits(phyCap, 4, 1, capabilities.dlMuMimo ? 1 : 0);
+    setBits(phyCap, 5, 1, capabilities.ulMuMimo ? 1 : 0);
+    setBits(phyCap, 6, 1, capabilities.ldpc ? 1 : 0);
+    stream.writeUint32Le(phyCap);
+    
+    // EHT MCS NSS (approximated)
+    stream.writeUint32Le(0); // rx
+    stream.writeUint32Le(0); // tx
+}
+
+static void writeEhtOperationElement(MemoryOutputStream& stream, const Ieee80211EhtOperationElement& operation)
+{
+    stream.writeByte(ELEMENT_ID_EXTENSION);
+    stream.writeByte(1 + 5);
+    stream.writeByte(ELEMENT_ID_EXTENSION_EHT_OPERATION);
+    stream.writeUint16Le(operation.operatingChannelWidthMHz);
+    stream.writeUint16Le(operation.disabledSubchannelBitmap);
+    stream.writeByte(operation.basicEhtMcsNss);
+}
+
+static void writeMultiLinkElement(MemoryOutputStream& stream, const Ieee80211MultiLinkElement& ml)
+{
+    stream.writeByte(ELEMENT_ID_EXTENSION);
+    stream.writeByte(1 + 6 + 1 + 2);
+    stream.writeByte(ELEMENT_ID_EXTENSION_MULTI_LINK);
+    stream.writeMacAddress(ml.mldMacAddress);
+    stream.writeByte(ml.isApMld ? 1 : 0);
+    stream.writeUint16Le(ml.linkId);
+}
+
+static void writeTidToLinkMappingElement(MemoryOutputStream& stream, const Ieee80211TidToLinkMappingElement& mapping)
+{
+    stream.writeByte(ELEMENT_ID_EXTENSION);
+    stream.writeByte(1 + 8 * 2);
+    stream.writeByte(ELEMENT_ID_EXTENSION_TID_TO_LINK_MAPPING);
+    for (int i = 0; i < 8; i++)
+        stream.writeUint16Le(mapping.mapping[i]);
+}
+
 static void writeHeMgmtElements(MemoryOutputStream& stream, const Ptr<const Ieee80211MgmtFrame>& frame)
 {
     if (frame->getHeCapabilitiesPresent())
@@ -296,6 +360,16 @@ static void writeHeMgmtElements(MemoryOutputStream& stream, const Ptr<const Ieee
         writeHeOperationElement(stream, frame->getHeOperation());
     if (frame->getHe6GhzBandCapabilitiesPresent())
         writeHe6GhzBandCapabilitiesElement(stream, frame->getHe6GhzBandCapabilities());
+        
+    if (frame->getEhtCapabilitiesPresent())
+        writeEhtCapabilitiesElement(stream, frame->getEhtCapabilities());
+    if (frame->getEhtOperationPresent())
+        writeEhtOperationElement(stream, frame->getEhtOperation());
+    if (frame->getMultiLinkElementPresent())
+        writeMultiLinkElement(stream, frame->getMultiLinkElement());
+    if (frame->getTidToLinkMappingPresent())
+        writeTidToLinkMappingElement(stream, frame->getTidToLinkMapping());
+        
     writeBroadcastTwtElement(stream, frame);
 }
 
@@ -418,6 +492,115 @@ static void readBroadcastTwtElement(MemoryInputStream& stream, int payloadLength
     }
 }
 
+static void readEhtCapabilitiesElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    // Minimal read for EHT Capabilities
+    stream.readUint16Le();
+    stream.readUint32Le();
+    stream.readUint32Le();
+    stream.readUint32Le();
+    // Assuming 14 bytes read, skip rest
+    int readLen = 14;
+    for (int i = 0; i < payloadLength - readLen; i++) stream.readByte();
+    
+    Ieee80211EhtCapabilitiesElement cap;
+    cap.support4096Qam = true;
+    cap.mlo = true;
+    cap.str = true;
+    cap.emlsr = false;
+    cap.emlmr = false;
+    cap.maxAmpduLengthExponent = 7;
+    cap.supportedChannelWidth320MHz = true;
+    cap.dlOfdma = true;
+    cap.ulOfdma = true;
+    cap.ldpc = true;
+    
+    frame->setEhtCapabilitiesPresent(true);
+    frame->setEhtCapabilities(cap);
+}
+
+static void readEhtOperationElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    Ieee80211EhtOperationElement op;
+    op.operatingChannelWidthMHz = stream.readUint16Le();
+    op.disabledSubchannelBitmap = stream.readUint16Le();
+    op.basicEhtMcsNss = stream.readByte();
+    for (int i = 0; i < payloadLength - 5; i++) stream.readByte();
+    
+    frame->setEhtOperationPresent(true);
+    frame->setEhtOperation(op);
+}
+
+static void readMultiLinkElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    Ieee80211MultiLinkElement ml;
+    ml.mldMacAddress = stream.readMacAddress();
+    ml.isApMld = stream.readByte() != 0;
+    ml.linkId = stream.readUint16Le();
+    for (int i = 0; i < payloadLength - 9; i++) stream.readByte();
+    
+    frame->setMultiLinkElementPresent(true);
+    frame->setMultiLinkElement(ml);
+}
+
+static void readTidToLinkMappingElement(MemoryInputStream& stream, int payloadLength, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    Ieee80211TidToLinkMappingElement mapping;
+    for (int i = 0; i < 8; i++) {
+        mapping.mapping[i] = stream.readUint16Le();
+    }
+    for (int i = 0; i < payloadLength - 16; i++) stream.readByte();
+    
+    frame->setTidToLinkMappingPresent(true);
+    frame->setTidToLinkMapping(mapping);
+}
+
+static void deserialize(MemoryInputStream& stream, const Ptr<Ieee80211MgmtFrame>& frame)
+{
+    while (stream.getRemainingLength() >= B(2)) {
+        int elementId = stream.readByte();
+        int length = stream.readByte();
+        if (stream.getRemainingLength() < B(length))
+            throw cRuntimeError("Malformed IEEE 802.11 management element: id=%d length=%d remaining=%" PRId64,
+                    elementId, length, stream.getRemainingLength().get<B>());
+        if (elementId == ELEMENT_ID_TWT) {
+            readBroadcastTwtElement(stream, length, frame);
+        }
+        else if (elementId == ELEMENT_ID_EXTENSION && length >= 1) {
+            int extensionId = stream.readByte();
+            int payloadLength = length - 1;
+            switch (extensionId) {
+                case ELEMENT_ID_EXTENSION_HE_CAPABILITIES:
+                    readHeCapabilitiesElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_HE_OPERATION:
+                    readHeOperationElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_HE_6GHZ_BAND_CAPABILITIES:
+                    readHe6GhzBandCapabilitiesElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_EHT_CAPABILITIES:
+                    readEhtCapabilitiesElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_EHT_OPERATION:
+                    readEhtOperationElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_MULTI_LINK:
+                    readMultiLinkElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_TID_TO_LINK_MAPPING:
+                    readTidToLinkMappingElement(stream, payloadLength, frame);
+                    break;
+                default:
+                    skipBytes(stream, payloadLength);
+                    break;
+            }
+        }
+        else
+            skipBytes(stream, length);
+    }
+}
+
 static void readHeMgmtElements(MemoryInputStream& stream, const Ptr<Ieee80211MgmtFrame>& frame)
 {
     while (stream.getRemainingLength() >= B(2)) {
@@ -441,6 +624,18 @@ static void readHeMgmtElements(MemoryInputStream& stream, const Ptr<Ieee80211Mgm
                     break;
                 case ELEMENT_ID_EXTENSION_HE_6GHZ_BAND_CAPABILITIES:
                     readHe6GhzBandCapabilitiesElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_EHT_CAPABILITIES:
+                    readEhtCapabilitiesElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_EHT_OPERATION:
+                    readEhtOperationElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_MULTI_LINK:
+                    readMultiLinkElement(stream, payloadLength, frame);
+                    break;
+                case ELEMENT_ID_EXTENSION_TID_TO_LINK_MAPPING:
+                    readTidToLinkMappingElement(stream, payloadLength, frame);
                     break;
                 default:
                     skipBytes(stream, payloadLength);

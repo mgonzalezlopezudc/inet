@@ -25,6 +25,7 @@ module Edcaf extends Module
         string rxModule;
         string collisionControllerModule;
         string originatorMacDataServiceModule;
+        string pendingQueueModule = default("");
         string accessCategory @enum("AC_BK","AC_BE","AC_VI","AC_VO");
         int aifsn = default(-1);
         int cwMin = default(-1);
@@ -42,13 +43,13 @@ module Edcaf extends Module
         @statistic[packetSentToPeerWithoutRetry](title="packets sent: without retry"; source=ieee80211NotRetry(packetSentToPeer); record=count,sum(packetBytes),vector(packetBytes); interpolationmode=none);
         @statistic[channelOwnershipChanged](title="channel ownership"; record=count,vector?; interpolationmode=sample-hold);
     submodules:
-        pendingQueue: <default("PendingQueue")> like IPacketQueue {
+        pendingQueue: <default(pendingQueueModule == "" ? "PendingQueue" : "")> like IPacketQueue if pendingQueueModule == "" {
             parameters:
                 @display("p=100,100");
         }
         inProgressFrames: InProgressFrames {
             parameters:
-                pendingQueueModule = default("^.pendingQueue");
+                pendingQueueModule = default(this.pendingQueueModule == "" ? "^.pendingQueue" : this.pendingQueueModule);
                 originatorMacDataServiceModule = default("^.^.^.originatorMacDataService");
                 ackHandlerModule = default("^.ackHandler");
                 @display("p=100,200");

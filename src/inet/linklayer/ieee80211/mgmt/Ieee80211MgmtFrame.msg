@@ -212,6 +212,68 @@ struct Ieee80211BroadcastTwtScheduleElement
     simtime_t wakeDuration;
 }
 
+struct Ieee80211EhtMcsNssMapElement
+{
+    short maxMcsPerNss[8];
+}
+
+//
+// Packet representation of the IEEE 802.11be EHT Capabilities element fields.
+//
+struct Ieee80211EhtCapabilitiesElement
+{
+    bool supportedChannelWidth20MHz;
+    bool supportedChannelWidth40MHz;
+    bool supportedChannelWidth80MHz;
+    bool supportedChannelWidth160MHz;
+    bool supportedChannelWidth320MHz;
+    Ieee80211EhtMcsNssMapElement rxMcsNss;
+    Ieee80211EhtMcsNssMapElement txMcsNss;
+    bool dlOfdma;
+    bool ulOfdma;
+    bool dlMuMimo;
+    bool ulMuMimo;
+    bool ldpc;
+    bool support4096Qam;
+    bool preamblePuncturing;
+    bool mlo;
+    bool str;
+    bool nstr;
+    bool emlsr;
+    bool emlmr;
+    short maxAmpduLengthExponent;
+    int maxMpduLength;
+    short maxBlockAckBufferSize;
+}
+
+//
+// Packet representation of the EHT Operation element fields.
+//
+struct Ieee80211EhtOperationElement
+{
+    int operatingChannelWidthMHz;
+    short disabledSubchannelBitmap;
+    short basicEhtMcsNss;
+}
+
+//
+// Packet representation of the Multi-Link Element.
+//
+struct Ieee80211MultiLinkElement
+{
+    MacAddress mldMacAddress;
+    bool isApMld;
+    short linkId;
+}
+
+//
+// Packet representation of the TID-to-Link Mapping Element.
+//
+struct Ieee80211TidToLinkMappingElement
+{
+    short mapping[8]; // Array of Link IDs mapped to TIDs 0..7
+}
+
 //
 // Frame body base class used to hide various frame body types
 //
@@ -223,6 +285,18 @@ class Ieee80211MgmtFrame extends FieldsChunk
     Ieee80211HeOperationElement heOperation;
     bool he6GhzBandCapabilitiesPresent;
     Ieee80211He6GhzBandCapabilitiesElement he6GhzBandCapabilities;
+    
+    bool ehtCapabilitiesPresent;
+    Ieee80211EhtCapabilitiesElement ehtCapabilities;
+    bool ehtOperationPresent;
+    Ieee80211EhtOperationElement ehtOperation;
+    
+    bool multiLinkElementPresent;
+    Ieee80211MultiLinkElement multiLinkElement;
+    
+    bool tidToLinkMappingPresent;
+    Ieee80211TidToLinkMappingElement tidToLinkMapping;
+
     bool broadcastTwtPresent;
     Ieee80211BroadcastTwtScheduleElement broadcastTwtSchedules[];
 }

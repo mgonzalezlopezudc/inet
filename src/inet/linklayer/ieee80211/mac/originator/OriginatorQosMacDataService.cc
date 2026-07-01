@@ -13,6 +13,7 @@
 #include "inet/linklayer/ieee80211/mac/aggregation/MsduAggregation.h"
 #include "inet/linklayer/ieee80211/mac/fragmentation/Fragmentation.h"
 #include "inet/linklayer/ieee80211/mac/sequencenumberassignment/QoSSequenceNumberAssignment.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -27,7 +28,18 @@ void OriginatorQosMacDataService::initialize()
     aMpduAggregationPolicy = dynamic_cast<IMpduAggregationPolicy *>(getSubmodule("mpduAggregationPolicy"));
     if (aMpduAggregationPolicy)
         aMpduAggregation = new MpduAggregation();
-    sequenceNumberAssignment = new QoSSequenceNumberAssignment();
+        
+    std::string mldMacModuleStr = par("mldMacModule").stringValue();
+    if (!mldMacModuleStr.empty()) {
+        auto mldMacModule = check_and_cast<Ieee80211MldMac *>(getModuleByPath(mldMacModuleStr.c_str()));
+        sequenceNumberAssignment = mldMacModule->getSequenceNumberAssignment();
+        ownsSequenceNumberAssignment = false;
+    }
+    else {
+        sequenceNumberAssignment = new QoSSequenceNumberAssignment();
+        ownsSequenceNumberAssignment = true;
+    }
+    
     fragmentationPolicy = dynamic_cast<IFragmentationPolicy *>(getSubmodule("fragmentationPolicy"));
     fragmentation = new Fragmentation();
 }
@@ -123,10 +135,11 @@ OriginatorQosMacDataService::~OriginatorQosMacDataService()
 {
     delete aMsduAggregation;
     delete aMpduAggregation;
-    delete sequenceNumberAssignment;
+    if (ownsSequenceNumberAssignment)
+        delete sequenceNumberAssignment;
     delete fragmentation;
 }
 
-} /* namespace ieee80211 */
-} /* namespace inet */
+} // namespace ieee80211
+} // namespace inet
 

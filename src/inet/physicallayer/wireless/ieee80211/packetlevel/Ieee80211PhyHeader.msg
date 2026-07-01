@@ -234,3 +234,58 @@ class Ieee80211HeMuRuPayloadHeader extends FieldsChunk
     int streamStartIndex = 0;
     double leakageSum = 0;
 }
+
+//
+// IEEE 802.11 36. Extremely High Throughput (EHT) PHY
+//
+class Ieee80211EhtPhyPreamble extends Ieee80211PhyPreamble
+{
+}
+
+struct Ieee80211EhtUserInfo
+{
+    int mruIndex;
+    uint16_t mruToneSize;
+    uint16_t mruToneOffset;
+    uint16_t staId;
+    uint8_t mcs = 0;
+    uint8_t numberOfSpatialStreams = 1;
+    B psduLength;
+    simtime_t duration;
+    int streamStartIndex = 0;
+    double leakageSum = 0;
+}
+
+class Ieee80211EhtPhyHeader extends Ieee80211PhyHeader
+{
+    uint8_t bssColor = 0;
+    uint8_t ppduFormat = 0; // 0: EHT MU, 1: EHT TB (Trigger-Based)
+    uint8_t spatialReuse = 0; 
+    uint8_t guardInterval = 2; // 0: 0.8 us, 1: 1.6 us, 2: 3.2 us
+    uint8_t coding = 0; // 0: BCC, 1: LDPC
+    uint8_t packetExtensionDurationUs = 0;
+    uint16_t puncturedSubchannelMask = 0; // 20 MHz subchannels
+    uint32_t triggerId = 0;
+    simtime_t commonDuration;
+    Ieee80211EhtUserInfo users[];
+    bool muMimo = false;
+    uint8_t spatialConfiguration = 0;
+    uint8_t totalNsts = 0;
+}
+
+class Ieee80211EhtRuPayloadHeader extends FieldsChunk
+{
+    chunkLength = B(12);
+    int mruIndex;
+    uint16_t mruToneSize;
+    uint16_t mruToneOffset;
+    uint16_t staId;
+    uint8_t mcs = 0;
+    uint8_t numberOfSpatialStreams = 1;
+    B mpduLength;
+    bool muMimo = false;
+    uint8_t spatialConfiguration = 0;
+    uint8_t totalNsts = 0;
+    int streamStartIndex = 0;
+    double leakageSum = 0;
+}

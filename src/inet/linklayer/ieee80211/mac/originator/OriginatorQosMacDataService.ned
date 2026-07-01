@@ -24,6 +24,7 @@ module OriginatorQosMacDataService extends Module
 {
     parameters:
         @class(OriginatorQosMacDataService);
+        string mldMacModule = default("");
         @display("i=block/fork");
         @signal[packetFragmented](type=inet::Packet);
         @signal[packetAggregated](type=inet::Packet);

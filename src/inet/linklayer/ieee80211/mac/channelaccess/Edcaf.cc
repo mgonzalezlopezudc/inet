@@ -33,7 +33,12 @@ void Edcaf::initialize(int stage)
         ac = getAccessCategory(par("accessCategory"));
         contention = check_and_cast<IContention *>(getSubmodule("contention"));
         collisionController = check_and_cast<IEdcaCollisionController *>(getModuleByPath(par("collisionControllerModule")));
-        pendingQueue = check_and_cast<queueing::IPacketQueue *>(getSubmodule("pendingQueue"));
+        std::string pendingQueueModuleStr = par("pendingQueueModule").stringValue();
+        if (pendingQueueModuleStr.empty()) {
+            pendingQueue = check_and_cast<queueing::IPacketQueue *>(getSubmodule("pendingQueue"));
+        } else {
+            pendingQueue = check_and_cast<queueing::IPacketQueue *>(getModuleByPath(pendingQueueModuleStr.c_str()));
+        }
         recoveryProcedure = check_and_cast<QosRecoveryProcedure *>(getSubmodule("recoveryProcedure"));
         ackHandler = check_and_cast<QosAckHandler *>(getSubmodule("ackHandler"));
         inProgressFrames = check_and_cast<InProgressFrames *>(getSubmodule("inProgressFrames"));

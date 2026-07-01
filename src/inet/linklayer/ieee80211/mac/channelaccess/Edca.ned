@@ -20,6 +20,7 @@ module Edca extends Module
 {
     parameters:
         int numEdcafs = default(4);
+        string mldMacModule = default("");
         string rxModule;
         string rateSelectionModule;
 
@@ -37,6 +38,7 @@ module Edca extends Module
     submodules:
         edcaf[numEdcafs]: Edcaf {
             parameters:
+                pendingQueueModule = default(mldMacModule == "" ? "" : mldMacModule + ".pendingQueue[" + string(index) + "]");
                 @display("p=100,100,row,150");
         }
         collisionController: <default("EdcaCollisionController")> like ICollisionController {
