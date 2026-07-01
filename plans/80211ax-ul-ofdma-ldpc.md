@@ -65,7 +65,7 @@ All new behavior remains disabled by default.
   - Exact response timing acceptance, last-in-window acceptance, first-out-of-window rejection, wrong Trigger ID, wrong RU, and duplicate response rejection.
   - Same-Trigger transmissions on distinct RUs decoding together; same-RU collision producing no acknowledgment; same-RU capture acknowledging only the stronger sender.
 
-- Extend `examples/ieee80211/ul_ofdma` with deterministic validation configurations for scheduled UL aggregation, partial loss/retry, UORA collision/capture, and timing-skew boundaries. Assert delivered MPDU counts, bitmap contents, retry flags, and OCW transitions.
+- Extend `examples/ieee80211ax/ul_ofdma` with deterministic validation configurations for scheduled UL aggregation, partial loss/retry, UORA collision/capture, and timing-skew boundaries. Assert delivered MPDU counts, bitmap contents, retry flags, and OCW transitions.
 
 - Add HE PHY tests covering:
   - LDPC calculator boundaries across HE MCS/RU/NSS combinations, codeword shortening/repetition/extra-symbol cases, and DL/UL duration equivalence.
