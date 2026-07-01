@@ -36,6 +36,7 @@ module Hcf extends Module like IHcf
         *.rateSelectionModule = "^.rateSelection";
         *.rxModule = "^." + this.rxModule;
         *.*.originatorMacDataServiceModule = "^.^.originatorMacDataService";
+        string mldMacModule = default("");
 
         @class(Hcf);
         displayStringTextFormat = default("{frameSequenceInfo}");
@@ -81,6 +82,7 @@ module Hcf extends Module like IHcf
     submodules:
         edca: Edca {
             parameters:
+                mldMacModule = mldMacModule;
                 @display("p=150,100");
         }
         hcca: Hcca {
@@ -89,6 +91,7 @@ module Hcf extends Module like IHcf
         }
         originatorMacDataService: OriginatorQosMacDataService {
             parameters:
+                mldMacModule = mldMacModule;
                 @display("p=150,300");
         }
         recipientMacDataService: RecipientQosMacDataService {
