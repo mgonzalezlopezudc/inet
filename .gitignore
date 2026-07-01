@@ -4,6 +4,9 @@
 standards
 !python/inet/standards/
 !python/inet/standards/**
+!python/inet/rfcs/
+!python/inet/rfcs/**
+!standards/RFCs/catalog.json
 
 # local and generated files not to be committed
 core.*
