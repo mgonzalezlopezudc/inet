@@ -8,9 +8,7 @@ package inet.examples.ieee80211be.mlo;
 import inet.linklayer.contract.IWirelessInterface;
 import inet.linklayer.ieee80211.Ieee80211Interface;
 import inet.linklayer.ieee80211.mac.Ieee80211MldMac;
-import inet.linklayer.ieee80211.llc.IIeee80211Llc;
 import inet.linklayer.common.IIeee8021dQosClassifier;
-import inet.linklayer.ieee80211.mac.Ieee80211MldMac;
 import inet.linklayer.ieee80211.mib.Ieee80211Mib;
 import inet.networklayer.common.NetworkInterface;
 
@@ -24,7 +22,7 @@ module MldInterface extends NetworkInterface
         string interfaceTableModule;
         int numLinks = default(2);
         string address @mutable = default("auto"); // MLD MAC address
-        
+
         **.interfaceTableModule = default(absPath(this.interfaceTableModule));
         *.energySourceModule = default(absPath("^.energySourceModule"));
         **.mobilityModule = default(absPath("^.mobility"));
@@ -40,25 +38,20 @@ module MldInterface extends NetworkInterface
         classifier: <default("OmittedIeee8021dQosClassifier")> like IIeee8021dQosClassifier {
             @display("p=100,100");
         }
-        llc: <default("Ieee80211LlcEpd")> like IIeee80211Llc {
-            @display("p=100,200");
-        }
         mldMac: Ieee80211MldMac {
             numLinks = parent.numLinks;
             @display("p=100,300");
         }
         link[numLinks]: Ieee80211Interface {
             mac.mldMacModule = default(absPath("^.mldMac"));
+            llc.typename = "Ieee80211LlcEpd";
             **.interfaceTableModule = default(absPath("^.^.^.interfaceTable"));
         }
     connections allowunconnected:
         classifier.in <-- upperLayerIn;
-        classifier.out --> llc.upperLayerIn;
-        llc.upperLayerOut --> upperLayerOut;
-        
-        llc.lowerLayerOut --> mldMac.upperLayerIn;
-        llc.lowerLayerIn <-- mldMac.upperLayerOut;
-        
+        classifier.out --> mldMac.upperLayerIn;
+        mldMac.upperLayerOut --> upperLayerOut;
+
         for i=0..numLinks-1 {
             mldMac.lowerLinkOut[i] --> link[i].upperLayerIn;
             mldMac.lowerLinkIn[i] <-- link[i].upperLayerOut;

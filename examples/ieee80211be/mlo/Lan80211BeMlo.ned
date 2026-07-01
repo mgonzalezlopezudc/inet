@@ -31,11 +31,19 @@ network Lan80211BeMlo
         configurator: Ipv4NetworkConfigurator {
             parameters:
                 @display("p=100,100;is=s");
-                config = xml("<config><interface hosts='*' interfaces='eth* mldWlan*' address='145.236.x.x' netmask='255.255.0.0'/></config>");
+                config = xml("<config>"
+                    + "<interface hosts='server ap' names='eth*' address='145.236.0.x' netmask='255.255.255.0'/>"
+                    + "<interface hosts='ap host' names='mldWlan' address='145.236.1.x' netmask='255.255.255.0'/>"
+                    + "<autoroute destinationInterfaces='*.server.eth0 *.ap.eth0 *.ap.mldWlan *.host.mldWlan'/>"
+                    + "</config>");
         }
-        radioMedium: Ieee80211ScalarRadioMedium {
+        radioMedium5GHz: Ieee80211ScalarRadioMedium {
             parameters:
                 @display("p=100,200;is=s");
+        }
+        radioMedium6GHz: Ieee80211ScalarRadioMedium {
+            parameters:
+                @display("p=100,300;is=s");
         }
         host: MldHost {
             @display("p=250,250;r=,,#707070");

@@ -24,5 +24,4 @@ module MldHost extends StandardHost
         // Connect the MLD interface to the link-layer message dispatcher
         mldWlan.upperLayerOut --> li.in++;
         mldWlan.upperLayerIn <-- li.out++;
-        
 }
