@@ -74,8 +74,13 @@ simtime_t SingleProtectionMechanism::computeBlockAckReqDurationField(Packet *pac
         simtime_t blockAckReqDurationPerId = blockAckFrameDuration + modeSet->getSifsTime();
         return blockAckReqDurationPerId;
     }
+    else if (dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
+        simtime_t blockAckFrameDuration = rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getDuration(B(32));
+        simtime_t blockAckReqDurationPerId = blockAckFrameDuration + modeSet->getSifsTime();
+        return blockAckReqDurationPerId;
+    }
     else
-        throw cRuntimeError("Compressed and Multi-Tid Block Ack Requests are not supported");
+        throw cRuntimeError("Multi-Tid Block Ack Requests are not supported");
 }
 
 //
@@ -183,4 +188,3 @@ simtime_t SingleProtectionMechanism::computeDurationField(Packet *packet, const 
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-
