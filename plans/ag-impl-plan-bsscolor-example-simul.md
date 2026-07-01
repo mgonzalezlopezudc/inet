@@ -35,11 +35,11 @@ This plan describes how to expose, configure, and serialize the HE BSS Color cap
 
 ### New BSS Coloring Example Simulation
 
-Create a new simulation folder under `examples/ieee80211/bss_coloring/`.
+Create a new simulation folder under `examples/ieee80211ax/bss_coloring/`.
 
 ---
 
-#### [NEW] [BssColoringNetwork.ned](file:///home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/BssColoringNetwork.ned)
+#### [NEW] [BssColoringNetwork.ned](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/BssColoringNetwork.ned)
 Define a new NED network `BssColoringNetwork` consisting of:
 - `radioMedium`: `Ieee80211ScalarRadioMedium`
 - `configurator`: `Ipv4NetworkConfigurator`
@@ -49,13 +49,13 @@ Define a new NED network `BssColoringNetwork` consisting of:
 - `sta2`: `WirelessHost` at coordinates `(400, 250)`, associated with `ap2`
 - `server1` and `server2`: `StandardHost` connected to `ap1` and `ap2` respectively to generate traffic.
 
-#### [NEW] [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/omnetpp.ini)
+#### [NEW] [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini)
 Define configurations:
 - `[General]`: Base 802.11ax settings on channel 36 (5.18 GHz). Traffic generation from `server1` -> `sta1` and `server2` -> `sta2`.
 - `[Config BssColoringDisabled]`: Set `ap1.wlan[*].mib.heBssColor = 1`, `ap2.wlan[*].mib.heBssColor = 2`, but disable spatial reuse `**.receiver.enableSpatialReuse = false`. This baseline config should show that since both BSSs overlap, they defer to each other (CSMA/CA CCA-CS/ED deferred transmission) and share the channel capacity.
 - `[Config BssColoringEnabled]`: Enable spatial reuse `**.receiver.enableSpatialReuse = true` and `**.receiver.obssPdThreshold = -62dBm`. AP1 and AP2 use different BSS Colors (1 and 2). This config should show concurrent transmissions and higher aggregated throughput since they ignore each other's transmissions if the received power is below the OBSS/PD threshold.
 
-#### [NEW] [walkthrough.md](file:///home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/walkthrough.md)
+#### [NEW] [walkthrough.md](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/walkthrough.md)
 - Provide a detailed explanation of the BSS coloring mechanism, configuration parameters, and how to observe spatial reuse in action.
 
 ---
@@ -78,6 +78,6 @@ Define configurations:
   ```
 - Run the simulation configs using Cmdenv to check for errors and output throughput:
   ```sh
-  opp_run -u Cmdenv -l src/libINET.so -c BssColoringDisabled examples/ieee80211/bss_coloring/omnetpp.ini
-  opp_run -u Cmdenv -l src/libINET.so -c BssColoringEnabled examples/ieee80211/bss_coloring/omnetpp.ini
+  opp_run -u Cmdenv -l src/libINET.so -c BssColoringDisabled examples/ieee80211ax/bss_coloring/omnetpp.ini
+  opp_run -u Cmdenv -l src/libINET.so -c BssColoringEnabled examples/ieee80211ax/bss_coloring/omnetpp.ini
   ```
