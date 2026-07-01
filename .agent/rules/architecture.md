@@ -29,7 +29,7 @@ The INET Framework is an open-source communication networks simulation package f
 
 ### Building the Project
 
-1.  **Environment Setup**: Ensure OMNeT++ and INET is in your PATH. i.e. `opp_run`, `inet` and `inet_dbg` are available in the PATH after sourcing the environment. If not, source them from the root of the repository and from ~/omnetpp-6.3.0
+1.  **Environment Setup**: Ensure OMNeT++ and INET is in your PATH. i.e. `opp_run`, `inet` and `inet_dbg` are available in the PATH after sourcing the environment. If not, notify the user.
 
 2.  **Compile**: Build the project using `make`. Use `MODE=debug` or `MODE=release` to
     select the build mode. Prefer debug mode for development.

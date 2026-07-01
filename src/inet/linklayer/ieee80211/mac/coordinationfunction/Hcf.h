@@ -8,6 +8,9 @@
 #ifndef __INET_HCF_H
 #define __INET_HCF_H
 
+#include <map>
+#include <string>
+
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Hcca.h"
 #include "inet/linklayer/ieee80211/mac/common/ModeSetListener.h"
@@ -104,6 +107,13 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     // Protection mechanisms
     SingleProtectionMechanism *singleProtectionMechanism = nullptr;
 
+    std::string lastSelectedModePacketName;
+    std::string lastSelectedModeName;
+    double lastSelectedModeNetBitrate = -1;
+    double lastSelectedModeBandwidth = -1;
+    int lastSelectedModeNumSpatialStreams = -1;
+    std::map<Packet *, std::vector<Packet *>> pendingAmpduSubframes;
+
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
@@ -136,6 +146,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void originatorProcessReceivedDataFrame(const Ptr<const Ieee80211DataHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
 
     virtual void setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, const physicallayer::IIeee80211Mode *mode) const;
+    virtual void recordSelectedMode(Packet *packet, const physicallayer::IIeee80211Mode *mode);
     virtual bool isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const;
     virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
 

@@ -92,7 +92,7 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         users.push_back(user);
         return users;
     }
-    if (!packet->hasAtFront<ieee80211::Ieee80211MacHeader>())
+    if (dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(packet->peekAtFront()) == nullptr)
         return users;
     auto packetCopy = packet->dup();
     packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>();
@@ -556,7 +556,7 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         std::optional<uint16_t> myStaId;
         if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
             MacAddress transmitterAddress;
-            if (auto macHeader = packet->peekAtFront<ieee80211::Ieee80211TwoAddressHeader>())
+            if (auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211TwoAddressHeader>(packet->peekAtFront()))
                 transmitterAddress = macHeader->getTransmitterAddress();
             if (!transmitterAddress.isUnspecified())
                 myStaId = resolveHeMuStaIdForReception(networkInterface, transmitterAddress);
