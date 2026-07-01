@@ -6,6 +6,10 @@
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
 
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/common/MacAddressTag_m.h"
+
 namespace inet {
 namespace ieee80211 {
 
@@ -57,6 +61,12 @@ void Ieee80211MldMac::handleUpperMessage(cMessage *message)
 {
     // Basic stub: For now, forward everything to link 0
     if (numLinks > 0) {
+        auto packet = check_and_cast<Packet *>(message);
+        auto macAddressReq = packet->addTagIfAbsent<MacAddressReq>();
+        if (macAddressReq->getSrcAddress().isUnspecified())
+            macAddressReq->setSrcAddress(mldMacAddress);
+        if (macAddressReq->getDestAddress().isUnspecified())
+            macAddressReq->setDestAddress(MacAddress::BROADCAST_ADDRESS);
         send(message, lowerLinkOutBaseGateId); // Send to lowerLinkOut[0]
     } else {
         delete message;
@@ -66,6 +76,13 @@ void Ieee80211MldMac::handleUpperMessage(cMessage *message)
 void Ieee80211MldMac::handleLowerMessage(cMessage *message)
 {
     // Forward from lower MAC to the upper layer
+    if (networkInterface != nullptr) {
+        auto packet = check_and_cast<Packet *>(message);
+        packet->addTagIfAbsent<InterfaceInd>()->setInterfaceId(networkInterface->getInterfaceId());
+        auto macAddressInd = packet->addTagIfAbsent<MacAddressInd>();
+        if (macAddressInd->getDestAddress().isUnspecified())
+            macAddressInd->setDestAddress(mldMacAddress);
+    }
     sendUp(message);
 }
 

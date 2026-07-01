@@ -6,8 +6,9 @@
 package inet.examples.ieee80211be.eht_dl_ofdma;
 
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
-import inet.node.ethernet.Eth1Gbps;
+import inet.node.ethernet.Eth1G;
 import inet.node.inet.StandardHost;
+import inet.node.inet.WirelessHost;
 import inet.node.wireless.AccessPoint;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 import inet.visualizer.contract.IIntegratedVisualizer;
@@ -34,15 +35,18 @@ network Lan80211BeDlOfdma
             parameters:
                 @display("p=100,200;is=s");
         }
-        host[numHosts]: StandardHost {
+        host[numHosts]: WirelessHost {
             @display("r=,,#707070");
+            wlan[*].mgmt.typename = "Ieee80211MgmtStaSimplified";
+            wlan[*].agent.typename = "";
         }
         ap: AccessPoint {
             @display("p=350,250;r=,,#707070");
+            wlan[*].mgmt.typename = "Ieee80211MgmtApSimplified";
         }
         server: StandardHost {
             @display("p=550,250");
         }
     connections:
-        server.ethg++ <--> Eth1Gbps <--> ap.ethg++;
+        server.ethg++ <--> Eth1G <--> ap.ethg++;
 }
