@@ -81,6 +81,14 @@ void OriginatorBlockAckAgreementHandler::processReceivedBlockAck(const Ptr<const
             scheduleInactivityTimer(callback);
         }
     }
+    else if (auto compressedBlockAck = dynamicPtrCast<const Ieee80211CompressedBlockAck>(blockAck)) {
+        auto agreement = getAgreement(compressedBlockAck->getTransmitterAddress(), compressedBlockAck->getTidInfo());
+        if (agreement) {
+            agreement->setStartingSequenceNumber(compressedBlockAck->getStartingSequenceNumber());
+            agreement->calculateExpirationTime();
+            scheduleInactivityTimer(callback);
+        }
+    }
     else
         throw cRuntimeError("Unsupported BlockAck");
 }
@@ -211,4 +219,3 @@ OriginatorBlockAckAgreementHandler::~OriginatorBlockAckAgreementHandler()
 
 } // namespace ieee80211
 } // namespace inet
-

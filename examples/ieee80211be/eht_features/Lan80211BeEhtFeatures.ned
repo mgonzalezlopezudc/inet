@@ -6,7 +6,7 @@
 package inet.examples.ieee80211be.eht_features;
 
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
-import inet.node.ethernet.Eth1G;
+import inet.node.ethernet.Eth10G;
 import inet.node.inet.StandardHost;
 import inet.node.inet.WirelessHost;
 import inet.node.wireless.AccessPoint;
@@ -52,5 +52,5 @@ network Lan80211BeEhtFeatures
             @display("p=550,250");
         }
     connections:
-        server.ethg++ <--> Eth1G <--> ap.ethg++;
+        server.ethg++ <--> Eth10G <--> ap.ethg++;
 }

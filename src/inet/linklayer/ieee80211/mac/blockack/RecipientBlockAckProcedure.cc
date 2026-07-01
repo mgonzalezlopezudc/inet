@@ -20,15 +20,26 @@ namespace ieee80211 {
 void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPacketReq, const Ptr<const Ieee80211BlockAckReq>& blockAckReq, IRecipientQosAckPolicy *ackPolicy, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler, IProcedureCallback *callback)
 {
     numReceivedBlockAckReq++;
-    if (auto basicBlockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq)) {
-        auto agreement = blockAckAgreementHandler->getAgreement(basicBlockAckReq->getTidInfo(), basicBlockAckReq->getTransmitterAddress());
-        if (ackPolicy->isBlockAckNeeded(basicBlockAckReq, agreement)) {
-            auto blockAck = buildBlockAck(basicBlockAckReq, agreement);
-            auto duration = ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, basicBlockAckReq);
+    if (auto singleTidBlockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq)) {
+        auto agreement = blockAckAgreementHandler->getAgreement(singleTidBlockAckReq->getTidInfo(), singleTidBlockAckReq->getTransmitterAddress());
+        if (ackPolicy->isBlockAckNeeded(singleTidBlockAckReq, agreement)) {
+            auto blockAck = buildBlockAck(singleTidBlockAckReq, agreement);
+            auto duration = ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, singleTidBlockAckReq);
             blockAck->setDurationField(duration);
-            auto blockAckPacket = new Packet("BasicBlockAck", blockAck);
+            auto blockAckPacket = new Packet(dynamicPtrCast<const Ieee80211CompressedBlockAck>(blockAck) ? "CompressedBlockAck" : "BasicBlockAck", blockAck);
             EV_DEBUG << "Duration for " << blockAckPacket->getName() << " is set to " << duration << " s.\n";
-            callback->transmitControlResponseFrame(blockAckPacket, blockAck, blockAckPacketReq, basicBlockAckReq);
+            callback->transmitControlResponseFrame(blockAckPacket, blockAck, blockAckPacketReq, singleTidBlockAckReq);
+        }
+    }
+    else if (auto compressedBlockAckReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
+        auto agreement = blockAckAgreementHandler->getAgreement(compressedBlockAckReq->getTidInfo(), compressedBlockAckReq->getTransmitterAddress());
+        if (ackPolicy->isBlockAckNeeded(compressedBlockAckReq, agreement)) {
+            auto blockAck = buildBlockAck(compressedBlockAckReq, agreement);
+            auto duration = ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, compressedBlockAckReq);
+            blockAck->setDurationField(duration);
+            auto blockAckPacket = new Packet("CompressedBlockAck", blockAck);
+            EV_DEBUG << "Duration for " << blockAckPacket->getName() << " is set to " << duration << " s.\n";
+            callback->transmitControlResponseFrame(blockAckPacket, blockAck, blockAckPacketReq, compressedBlockAckReq);
         }
     }
     else if (auto multiTidBlockAckReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
@@ -96,6 +107,23 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
         blockAck->setCompressedBitmap(false);
         blockAck->setStartingSequenceNumber(basicBlockAckReq->getStartingSequenceNumber());
         blockAck->setTidInfo(basicBlockAckReq->getTidInfo());
+        return blockAck;
+    }
+    else if (auto compressedBlockAckReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
+        ASSERT(agreement != nullptr);
+        auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+        blockAck->setChunkLength(B(28));
+        auto startingSequenceNumber = compressedBlockAckReq->getStartingSequenceNumber();
+        std::vector<uint8_t> bytes(8, 0);
+        BitVector bitmap(bytes);
+        for (int i = 0; i < 64; i++) {
+            bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, 0);
+            bitmap.setBit(i, ackState);
+        }
+        blockAck->setReceiverAddress(blockAckReq->getTransmitterAddress());
+        blockAck->setStartingSequenceNumber(compressedBlockAckReq->getStartingSequenceNumber());
+        blockAck->setTidInfo(compressedBlockAckReq->getTidInfo());
+        blockAck->setBlockAckBitmap(bitmap);
         return blockAck;
     }
     else

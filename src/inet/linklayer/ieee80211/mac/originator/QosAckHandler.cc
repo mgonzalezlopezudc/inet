@@ -136,6 +136,21 @@ std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> QosAckHand
             }
         }
     }
+    else if (auto compressedBlockAck = dynamicPtrCast<const Ieee80211CompressedBlockAck>(blockAck)) {
+        auto startingSeqNum = compressedBlockAck->getStartingSequenceNumber();
+        auto bitmap = compressedBlockAck->getBlockAckBitmap();
+        for (int seqNum = 0; seqNum < 64; seqNum++) {
+            auto id = std::make_pair(receiverAddr, std::make_pair(compressedBlockAck->getTidInfo(), SequenceControlField((startingSeqNum + seqNum).get(), 0)));
+            auto status = getQoSDataAckStatus(id);
+            if (status == Status::WAITING_FOR_BLOCK_ACK) {
+                bool acked = bitmap.getBit(seqNum) == 1;
+                ackStatuses[id] = acked ? Status::BLOCK_ACK_ARRIVED_ACKED : Status::BLOCK_ACK_ARRIVED_UNACKED;
+                if (acked)
+                    ackedFrames.insert(id);
+            }
+            else ; // TODO erroneous BlockAck
+        }
+    }
     else if (auto multiTidBlockAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(blockAck)) {
         unsigned int numRecords = multiTidBlockAck->getRecordsArraySize();
         for (unsigned int i = 0; i < numRecords; ++i) {
@@ -229,6 +244,14 @@ void QosAckHandler::processTransmittedBlockAckReq(const Ptr<const Ieee80211Block
             if (basicBlockAckReq->getTidInfo() == tid) {
                 auto startingSeqNum = basicBlockAckReq->getStartingSequenceNumber();
                 if (status == Status::BLOCK_ACK_NOT_YET_REQUESTED && SequenceNumberCyclic(seqCtrlField.getSequenceNumber()) >= startingSeqNum)
+                    status = Status::WAITING_FOR_BLOCK_ACK;
+            }
+        }
+        else if (auto compressedBlockAckReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
+            if (compressedBlockAckReq->getTidInfo() == tid) {
+                auto startingSeqNum = compressedBlockAckReq->getStartingSequenceNumber();
+                auto seqNum = SequenceNumberCyclic(seqCtrlField.getSequenceNumber());
+                if (status == Status::BLOCK_ACK_NOT_YET_REQUESTED && seqNum >= startingSeqNum && seqNum < startingSeqNum + 64 && seqCtrlField.getFragmentNumber() == 0)
                     status = Status::WAITING_FOR_BLOCK_ACK;
             }
         }

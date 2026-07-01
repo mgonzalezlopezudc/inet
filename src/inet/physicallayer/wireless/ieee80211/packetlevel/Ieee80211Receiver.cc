@@ -194,7 +194,9 @@ static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
             Chunk::PF_ALLOW_REINTERPRETATION;
     auto packetCopy = transmittedPacket->dup();
     packetCopy->popAtFront<Ieee80211HeMuPhyHeader>(b(-1), parsingFlags);
-    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>(b(-1), parsingFlags);
+    if (dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(
+            packetCopy->peekAtFront(b(-1), parsingFlags)) != nullptr)
+        packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>(b(-1), parsingFlags);
     while (packetCopy->getDataLength() > b(0) &&
             dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(
                     packetCopy->peekAtFront(b(-1), parsingFlags)) != nullptr) {

@@ -25,7 +25,9 @@ void RecipientQosAckPolicy::initialize(int stage)
 simtime_t RecipientQosAckPolicy::computeBasicBlockAckDuration(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) const
 {
     b length = LENGTH_BASIC_BLOCKACK;
-    if (auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+    if (dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq))
+        length = B(32);
+    else if (auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
         length = B(18 + multiTidReq->getRecordsArraySize() * 12);
     }
     return rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getDuration(length);
@@ -65,7 +67,8 @@ bool RecipientQosAckPolicy::isAckNeeded(const Ptr<const Ieee80211DataOrMgmtHeade
 //
 bool RecipientQosAckPolicy::isBlockAckNeeded(const Ptr<const Ieee80211BlockAckReq>& blockAckReq, RecipientBlockAckAgreement *agreement) const
 {
-    if (dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq)) {
+    if (dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq) ||
+            dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
         return agreement != nullptr;
         // TODO The Basic BlockAckReq frame shall be discarded if all MSDUs referenced by this
         // frame have been discarded from the transmit buffer due to expiry of their lifetime limit.

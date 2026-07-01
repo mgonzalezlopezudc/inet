@@ -27,8 +27,10 @@ class INET_API Tx : public SimpleModule, public ITx
     Ieee80211Mac *mac = nullptr;
     IRx *rx = nullptr;
     Packet *frame = nullptr;
+    Ptr<const Ieee80211MacHeader> frameHeader = nullptr;
     cMessage *endIfsTimer = nullptr;
     bool transmitting = false;
+    bool frameIsAmpdu = false;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -49,4 +51,3 @@ class INET_API Tx : public SimpleModule, public ITx
 } // namespace inet
 
 #endif
-

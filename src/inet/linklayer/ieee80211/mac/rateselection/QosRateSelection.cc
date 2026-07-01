@@ -39,6 +39,14 @@ void QosRateSelection::initialize(int stage)
         responseBlockAckFrameMode = (responseBlockAckFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(responseBlockAckFrameBitrate));
         double responseCtsFrameBitrate = par("responseCtsFrameBitrate");
         responseCtsFrameMode = (responseCtsFrameBitrate == -1) ? nullptr : modeSet->getMode(bps(responseCtsFrameBitrate));
+        WATCH_EXPR("dataFrameModeName", dataFrameMode ? dataFrameMode->getName() : "<null>");
+        WATCH_EXPR("dataFrameModeNetBitrate", dataFrameMode ? dataFrameMode->getDataMode()->getNetBitrate().get() : -1);
+        WATCH_EXPR("dataFrameModeBandwidth", dataFrameMode ? dataFrameMode->getDataMode()->getBandwidth().get() : -1);
+        WATCH_EXPR("dataFrameModeNumSpatialStreams", dataFrameMode ? dataFrameMode->getDataMode()->getNumberOfSpatialStreams() : -1);
+        WATCH_EXPR("fastestMandatoryModeName", fastestMandatoryMode ? fastestMandatoryMode->getName() : "<null>");
+        WATCH_EXPR("fastestMandatoryModeNetBitrate", fastestMandatoryMode ? fastestMandatoryMode->getDataMode()->getNetBitrate().get() : -1);
+        WATCH_EXPR("fastestMandatoryModeBandwidth", fastestMandatoryMode ? fastestMandatoryMode->getDataMode()->getBandwidth().get() : -1);
+        WATCH_EXPR("fastestMandatoryModeNumSpatialStreams", fastestMandatoryMode ? fastestMandatoryMode->getDataMode()->getNumberOfSpatialStreams() : -1);
     }
 }
 
@@ -113,7 +121,7 @@ const IIeee80211Mode *QosRateSelection::computeResponseCtsFrameMode(Packet *pack
 //
 const IIeee80211Mode *QosRateSelection::computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq)
 {
-    if (dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq))
+    if (dynamicPtrCast<const Ieee80211BlockAckReq>(blockAckReq))
         return responseBlockAckFrameMode ? responseBlockAckFrameMode : getMode(packet, blockAckReq);
     else
         throw cRuntimeError("Unknown BlockAckReq frame type");
@@ -180,7 +188,7 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
         // If a control frame other than a Basic BlockAckReq or Basic BlockAck is carried in a non-HT PPDU, the
         // transmitting STA shall transmit the frame using one of the rates in the BSSBasicRateSet parameter or a rate
         // from the mandatory rate set of the attached PHY if the BSSBasicRateSet is empty.
-        if (!dynamicPtrCast<const Ieee80211BasicBlockAck>(header) && !dynamicPtrCast<const Ieee80211BasicBlockAckReq>(header)) {
+        if (!dynamicPtrCast<const Ieee80211BlockAck>(header) && !dynamicPtrCast<const Ieee80211BlockAckReq>(header)) {
             // TODO BSSBasicRateSet
             return fastestMandatoryMode;
         }
@@ -206,7 +214,7 @@ const IIeee80211Mode *QosRateSelection::computeControlFrameMode(const Ptr<const 
         // the rate or non-HT reference rate (see 9.7.9) of the previously transmitted frame that was directed to the same
         // receiving STA.
         // TODO BSSBasicRateSet
-        if (!dynamicPtrCast<const Ieee80211BasicBlockAck>(header) && !dynamicPtrCast<const Ieee80211BasicBlockAckReq>(header)) {
+        if (!dynamicPtrCast<const Ieee80211BlockAck>(header) && !dynamicPtrCast<const Ieee80211BlockAckReq>(header)) {
             // TODO frame sequence context
             auto it = lastTransmittedFrameMode.find(header->getReceiverAddress());
             return (it != lastTransmittedFrameMode.end()) ? it->second : fastestMandatoryMode;
