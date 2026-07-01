@@ -1,11 +1,12 @@
 .agent
 .codex
 .github
-standards
+standards/**
 !python/inet/standards/
 !python/inet/standards/**
 !python/inet/rfcs/
 !python/inet/rfcs/**
+!standards/RFCs/
 !standards/RFCs/catalog.json
 
 # local and generated files not to be committed
