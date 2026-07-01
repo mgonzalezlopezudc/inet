@@ -35,7 +35,7 @@ No open questions.
 
 ### Component: OFDMA Simulation Examples
 
-#### [MODIFY] [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211/dl_ofdma/omnetpp.ini)
+#### [MODIFY] [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/dl_ofdma/omnetpp.ini)
 - Add a new config block `[Config MultiTidBlockAck]` inheriting from `[General]`:
   ```ini
   [Config MultiTidBlockAck]
@@ -46,7 +46,7 @@ No open questions.
   **.host[*].wlan[*].mib.heMultiTidAggregationTx = true
   ```
 
-#### [MODIFY] [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211/ul_ofdma/omnetpp.ini)
+#### [MODIFY] [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/omnetpp.ini)
 - Add a new config block `[Config MultiTidBlockAck]` inheriting from `[General]`:
   ```ini
   [Config MultiTidBlockAck]

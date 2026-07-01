@@ -4,7 +4,7 @@ set -euo pipefail
 
 readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-readonly OFDMA_EXAMPLE_DIR="${REPO_ROOT}/examples/ieee80211/dl_ofdma"
+readonly OFDMA_EXAMPLE_DIR="${REPO_ROOT}/examples/ieee80211ax/dl_ofdma"
 readonly OFDMA_RESULTS_FILE="${OFDMA_EXAMPLE_DIR}/results/General-#0.sca"
 
 fail()
@@ -71,7 +71,7 @@ require_file "/home/user/omnetpp-6.4.0aipre2/setenv"
 require_file "setenv"
 require_executable "bin/inet_run_unit_tests"
 require_file "tests/unit/Ieee80211HeMuSeqAck_1.test"
-test -f examples/ieee80211/dl_ofdma/omnetpp.ini || fail "required file is missing: examples/ieee80211/dl_ofdma/omnetpp.ini"
+test -f examples/ieee80211ax/dl_ofdma/omnetpp.ini || fail "required file is missing: examples/ieee80211ax/dl_ofdma/omnetpp.ini"
 
 export IN_NIX_SHELL="${IN_NIX_SHELL:-}"
 
