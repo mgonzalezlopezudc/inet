@@ -24,7 +24,7 @@ bin/inet_run_unit_tests -m release -f Ieee80211HeMuSeqAck_1.test
 
 `Ieee80211HeMuAddbaValidation_1.test` verifies active ADDBA agreement admission before HE MU container mutation. `Ieee80211HeMuSeqAck_1.test` verifies sequential Block Ack/BAR exchange behavior, timeout recovery, and SIFS-derived timing evidence.
 
-The contract also runs the OFDMA `General` example twice, once with `--**.server.app[*].sendInterval=0.2ms` and once with `--**.server.app[*].sendInterval=1ms`. For each load run it asserts `blockAckAgreementAdded:count > 0` and `edcaCollisionDetected:count == 0` in `examples/ieee80211/dl_ofdma/results/General-#0.sca`.
+The contract also runs the OFDMA `General` example twice, once with `--**.server.app[*].sendInterval=0.2ms` and once with `--**.server.app[*].sendInterval=1ms`. For each load run it asserts `blockAckAgreementAdded:count > 0` and `edcaCollisionDetected:count == 0` in `examples/ieee80211ax/dl_ofdma/results/General-#0.sca`.
 
 ## Local And CI Commands
 
@@ -64,11 +64,11 @@ The script bootstraps the OMNeT++ and INET environments, runs the deterministic 
 
 ```bash
 bin/inet_run_unit_tests -m release -f Ieee80211HeMuSeqAck_1.test
-cd examples/ieee80211/dl_ofdma
+cd examples/ieee80211ax/dl_ofdma
 inet -u Cmdenv -f omnetpp.ini -c General -r 0
 ```
 
-Expected output is a passing `Ieee80211HeMuSeqAck_1.test`, an OFDMA `General` run that reaches the 0.6s simulation limit, and a fresh `examples/ieee80211/dl_ofdma/results/General-#0.sca` artifact. Timing compliance is gated by `Ieee80211HeMuSeqAck_1.test`; the example-level timing proxy is asserted with `config sim-time-limit 0.6s`; collision compliance is gated by every `edcaCollisionDetected:count == 0`.
+Expected output is a passing `Ieee80211HeMuSeqAck_1.test`, an OFDMA `General` run that reaches the 0.6s simulation limit, and a fresh `examples/ieee80211ax/dl_ofdma/results/General-#0.sca` artifact. Timing compliance is gated by `Ieee80211HeMuSeqAck_1.test`; the example-level timing proxy is asserted with `config sim-time-limit 0.6s`; collision compliance is gated by every `edcaCollisionDetected:count == 0`.
 
 The command exits non-zero on missing prerequisites, failed unit timing oracle, failed simulation execution, missing `General-#0.sca`, missing `config sim-time-limit 0.6s`, missing `edcaCollisionDetected:count`, or any non-zero collision count.
 

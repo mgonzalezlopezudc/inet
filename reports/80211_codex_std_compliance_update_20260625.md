@@ -20,11 +20,11 @@ The calculator rejects BCC for MCS 10/11, 484+ tone RUs, and NSS > 4 in [Ieee802
 The parser now validates against constrained 80/160 MHz patterns in [HeHcf.cc](/home/user/omnetpp_ws/inet/src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc:87). The HE features docs also correctly state that `"0100"` maps to `0x2`.
 
 6. Documentation and result claims have now been narrowed.
-[dl_ofdma/compliance-report.md](/home/user/omnetpp_ws/inet/examples/ieee80211/dl_ofdma/compliance-report.md:3) now scopes the claim to MAC response-timeout recovery instead of full wire-format conformance, and links to the local `compliance-sim.log`. [dl_ofdma/walkthrough.md](/home/user/omnetpp_ws/inet/examples/ieee80211/dl_ofdma/walkthrough.md:11) now points at the `dl_ofdma` folder, uses the current 0.6 s run limit, records current packet counts, and calls the 80 MHz case a smoke test rather than a capacity benchmark. [bss_coloring/walkthrough.md](/home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/walkthrough.md:97) now reports 351 disabled and 476 enabled packets.
+[dl_ofdma/compliance-report.md](/home/user/omnetpp_ws/inet/examples/ieee80211ax/dl_ofdma/compliance-report.md:3) now scopes the claim to MAC response-timeout recovery instead of full wire-format conformance, and links to the local `compliance-sim.log`. [dl_ofdma/walkthrough.md](/home/user/omnetpp_ws/inet/examples/ieee80211ax/dl_ofdma/walkthrough.md:11) now points at the `dl_ofdma` folder, uses the current 0.6 s run limit, records current packet counts, and calls the 80 MHz case a smoke test rather than a capacity benchmark. [bss_coloring/walkthrough.md](/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/walkthrough.md:97) now reports 351 disabled and 476 enabled packets.
 
 **Fixed Items Confirmed**
 
-- Validation script now targets `examples/ieee80211/dl_ofdma` and `6.4.0aipre2`: [ofdma_example_validation.sh](/home/user/omnetpp_ws/inet/tests/validation/ieee80211/ofdma_example_validation.sh:7).
+- Validation script now targets `examples/ieee80211ax/dl_ofdma` and `6.4.0aipre2`: [ofdma_example_validation.sh](/home/user/omnetpp_ws/inet/tests/validation/ieee80211/ofdma_example_validation.sh:7).
 - `HeUlScheduler_1.test` now passes.
 - TWT broadcast scenario completes without the old undisposed-packet warning.
 - Spatial reuse exists, but remains a threshold-based OBSS/PD simplification in [Ieee80211Receiver.cc](/home/user/omnetpp_ws/inet/src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.cc:307), not the full SRG/non-SRG, dual-NAV, power-coupled spatial reuse model.

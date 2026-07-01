@@ -1,6 +1,6 @@
 # Walkthrough - TWT Example Simulation Fix
 
-This walkthrough describes the changes implemented to resolve the chunk conversion crash in the 802.11ax TWT example simulation under `examples/ieee80211/twt/` and the subsequent validation.
+This walkthrough describes the changes implemented to resolve the chunk conversion crash in the 802.11ax TWT example simulation under `examples/ieee80211ax/twt/` and the subsequent validation.
 
 ## Changes Made
 
@@ -22,7 +22,7 @@ This walkthrough describes the changes implemented to resolve the chunk conversi
 ## Verification
 
 ### Automated Simulations
-All 4 TWT example configurations under `examples/ieee80211/twt/omnetpp.ini` were run to completion successfully:
+All 4 TWT example configurations under `examples/ieee80211ax/twt/omnetpp.ini` were run to completion successfully:
 - **Baseline**: Ran to `t=2s` (event #30632) without issues.
 - **IndividualUnannounced**: Ran to `t=2s` (event #31616) without issues.
 - **IndividualAnnounced**: Ran to `t=2s` (event #31636) without issues.

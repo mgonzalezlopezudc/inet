@@ -120,7 +120,7 @@ TWT is disabled by default and requires `modeSet=ax` plus `qosStation=true`.
   - Request/Suggest/Demand admission outcomes;
   - explicit next-TWT updates, interval arithmetic, overlap merging, teardown, membership, and beacon-persistence expiry.
 
-- Integration scenarios under `examples/ieee80211/twt`:
+- Integration scenarios under `examples/ieee80211ax/twt`:
   - individual implicit/unannounced delivery and radio sleep;
   - individual explicit/announced delivery, proving no AP data precedes PS-Poll;
   - broadcast schedule advertisement, join/leave, persistence, and shared-SP delivery;

@@ -32,14 +32,14 @@ Uplink MU OFDMA is coordinated by the Access Point (AP), which schedules transmi
 ## Verification
 
 ### Automated Simulations
-The UL OFDMA examples are located under [examples/ieee80211/ul_ofdma/](file:///home/user/omnetpp_ws/inet/examples/ieee80211/ul_ofdma/).
+The UL OFDMA examples are located under [examples/ieee80211ax/ul_ofdma/](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/).
 You can run the regression scenarios (ScheduledOnly, MixedUora, EqualRus) using:
 
 ```sh
 export CCACHE_DISABLE=1
 source /home/user/omnetpp-6.4.0aipre2/setenv -f
 source setenv -q
-opp_run -u Cmdenv -l src/libINET.so -n src:examples:tutorials:showcases examples/ieee80211/ul_ofdma/omnetpp.ini -c MixedUora
+opp_run -u Cmdenv -l src/libINET.so -n src:examples:tutorials:showcases examples/ieee80211ax/ul_ofdma/omnetpp.ini -c MixedUora
 ```
 
 ### Unit Tests

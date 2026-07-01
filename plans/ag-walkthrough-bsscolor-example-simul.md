@@ -10,10 +10,10 @@ We have successfully implemented and verified the IEEE 802.11ax (Wi-Fi 6) BSS Co
 - **Dynamic BSS Color Sync**: Modified [Ieee80211MgmtSta.cc](file:///home/user/omnetpp_ws/inet/src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtSta.cc) and [Ieee80211MgmtStaSimplified.cc](file:///home/user/omnetpp_ws/inet/src/inet/linklayer/ieee80211/mgmt/Ieee80211MgmtStaSimplified.cc) to copy the associated AP's BSS Color dynamically upon connection and reset it to 0 upon disassociation.
 
 ### 2. New Simulation Example
-Created a complete demonstration simulation in [examples/ieee80211/bss_coloring/](file:///home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/):
-- [BssColoringNetwork.ned](file:///home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/BssColoringNetwork.ned): Two overlapping BSSs (AP1 at 150m, AP2 at 400m, and their associated STAs 50m away).
-- [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/omnetpp.ini): Configurations for the baseline (`BssColoringDisabled`) and Wi-Fi 6 spatial reuse (`BssColoringEnabled`) scenarios.
-- [walkthrough.md](file:///home/user/omnetpp_ws/inet/examples/ieee80211/bss_coloring/walkthrough.md): A detailed, user-facing explanation of the BSS Coloring theory, geometry, and expected simulation results.
+Created a complete demonstration simulation in [examples/ieee80211ax/bss_coloring/](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/):
+- [BssColoringNetwork.ned](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/BssColoringNetwork.ned): Two overlapping BSSs (AP1 at 150m, AP2 at 400m, and their associated STAs 50m away).
+- [omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini): Configurations for the baseline (`BssColoringDisabled`) and Wi-Fi 6 spatial reuse (`BssColoringEnabled`) scenarios.
+- [walkthrough.md](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/walkthrough.md): A detailed, user-facing explanation of the BSS Coloring theory, geometry, and expected simulation results.
 
 ---
 

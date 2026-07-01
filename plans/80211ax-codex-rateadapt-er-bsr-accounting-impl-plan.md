@@ -1,7 +1,7 @@
 # HE Rate Adaptation, ER SU, and BSR Accounting Plan
 
 ## Summary
-Implement three HE additions as first-class packet/bit-level features: a Minstrel-like HE rate controller, bit-exact HE Extended Range SU support, and complete BSR parsing/accounting. Add three focused examples under `examples/ieee80211/`: rate adaptation, ER SU range, and BSR-driven UL scheduling.
+Implement three HE additions as first-class packet/bit-level features: a Minstrel-like HE rate controller, bit-exact HE Extended Range SU support, and complete BSR parsing/accounting. Add three focused examples under `examples/ieee80211ax/`: rate adaptation, ER SU range, and BSR-driven UL scheduling.
 
 ## Key Changes
 - Add a reusable HE rate adaptation interface used by both SU rate selection and HE MU schedulers.

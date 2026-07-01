@@ -71,8 +71,8 @@ That is a real strength: the examples are executable, not merely configuration s
 
 ### Problems
 
-- The validation scripts are stale. Both [ofdma_example_validation.sh](/home/user/omnetpp_ws/inet/tests/validation/ieee80211/ofdma_example_validation.sh:1) and `he_mu_command_contract.sh` refer to a deleted `examples/ieee80211/ofdma` directory and `/home/user/omnetpp-6.4.0`, while the project now uses `dl_ofdma`/`ul_ofdma` and 6.4.0aipre2. They cannot validate the current examples.
-- The DL walkthrough and compliance report still point at `examples/ieee80211/ofdma`, claim 2-second runs while the current DL example runs 0.6 s, and report stale numerical results.
+- The validation scripts are stale. Both [ofdma_example_validation.sh](/home/user/omnetpp_ws/inet/tests/validation/ieee80211/ofdma_example_validation.sh:1) and `he_mu_command_contract.sh` refer to a deleted `examples/ieee80211ax/ofdma` directory and `/home/user/omnetpp-6.4.0`, while the project now uses `dl_ofdma`/`ul_ofdma` and 6.4.0aipre2. They cannot validate the current examples.
+- The DL walkthrough and compliance report still point at `examples/ieee80211ax/ofdma`, claim 2-second runs while the current DL example runs 0.6 s, and report stale numerical results.
 - The BSS-coloring walkthrough’s claimed totals (345 disabled, 517 enabled) do not match current runs. My current runs delivered 313 versus 327 packets respectively; moreover the scenario has no fixed seed or repetitions, so one-run performance claims are not defensible.
 - BSS coloring uses `sameTransmissionStartTimeCheck = "ignore"` and an aggressive receiver threshold override. That may be suitable as a model demonstration, but it must be described as a deliberate experimental simplification.
 - DL/UL/HE-feature/BSS examples have no controlled repetitions, confidence intervals, offered-load sweep, or fairness/delay metrics. Packet count alone is too thin for scheduler claims.

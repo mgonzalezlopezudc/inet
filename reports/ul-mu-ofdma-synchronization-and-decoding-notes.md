@@ -51,7 +51,7 @@ Relevant files:
 
 - `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc`
 - `src/inet/linklayer/ieee80211/mac/Tx.cc`
-- `examples/ieee80211/ul_ofdma/omnetpp.ini`
+- `examples/ieee80211ax/ul_ofdma/omnetpp.ini`
 
 ## Standards interpretation
 

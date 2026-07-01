@@ -11,9 +11,9 @@ Exposed the Multi-TID Block Ack capability parameters in the Management Informat
     *   Initialized `localHeCapabilities.multiTidAggregationRx` and `localHeCapabilities.multiTidAggregationTx` from the new NED parameters in `initialize(int stage)`.
 
 ### 2. Simulation Examples
-*   **Modified file**: [dl_ofdma/omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211/dl_ofdma/omnetpp.ini)
+*   **Modified file**: [dl_ofdma/omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/dl_ofdma/omnetpp.ini)
     *   Added `[Config MultiTidBlockAck]` configuring both the AP and hosts to support Multi-TID Aggregation (both Tx and Rx) to negotiate support for it during association.
-*   **Modified file**: [ul_ofdma/omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211/ul_ofdma/omnetpp.ini)
+*   **Modified file**: [ul_ofdma/omnetpp.ini](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/omnetpp.ini)
     *   Added `[Config MultiTidBlockAck]` with the same parameter configuration to support Multi-TID Aggregation.
 
 ## Verification & Test Results
@@ -30,9 +30,9 @@ bin/inet_run_unit_tests -m release -f "(Ieee80211He|HeDlScheduler|Ieee80211Multi
 Both configurations were verified by running the simulations locally using `Cmdenv`:
 ```sh
 # Downlink OFDMA
-opp_run -u Cmdenv -c MultiTidBlockAck -l src/libINET.so examples/ieee80211/dl_ofdma/omnetpp.ini
+opp_run -u Cmdenv -c MultiTidBlockAck -l src/libINET.so examples/ieee80211ax/dl_ofdma/omnetpp.ini
 
 # Uplink OFDMA
-opp_run -u Cmdenv -c MultiTidBlockAck -l src/libINET.so examples/ieee80211/ul_ofdma/omnetpp.ini
+opp_run -u Cmdenv -c MultiTidBlockAck -l src/libINET.so examples/ieee80211ax/ul_ofdma/omnetpp.ini
 ```
 Both simulations ran to completion (`t=0.6s` and `t=2s` respectively) without warnings or errors.

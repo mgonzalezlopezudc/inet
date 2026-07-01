@@ -836,7 +836,7 @@ The main tests are:
 
 The repository also contains a DL OFDMA example at:
 
-- `examples/ieee80211/dl_ofdma`
+- `examples/ieee80211ax/dl_ofdma`
 
 Its default configuration uses:
 
