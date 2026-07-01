@@ -117,7 +117,7 @@ module Ieee80211Mac extends MacProtocolBase like IIeee80211Mac
         }
         hcf: <default("Hcf")> like IHcf if qosStation {
             parameters:
-                mldMacModule = mldMacModule;
+                mldMacModule = parent.mldMacModule;
                 @display("p=250,100");
         }
         ds: <default("Ds")> like IDs {

@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
 
 namespace inet {
+namespace ieee80211 {
 
 Define_Module(Ieee80211MldMac);
 
@@ -68,4 +69,5 @@ void Ieee80211MldMac::handleLowerMessage(cMessage *message)
     sendUp(message);
 }
 
+} // namespace ieee80211
 } // namespace inet
