@@ -11,6 +11,7 @@
 #include "inet/linklayer/ieee80211/mac/sequencenumberassignment/QoSSequenceNumberAssignment.h"
 
 namespace inet {
+namespace ieee80211 {
 
 class INET_API Ieee80211MldMac : public MacProtocolBase
 {
@@ -38,6 +39,7 @@ class INET_API Ieee80211MldMac : public MacProtocolBase
     queueing::IPacketQueue* getPendingQueue(int ac) const { return pendingQueue[ac]; }
 };
 
+} // namespace ieee80211
 } // namespace inet
 
 #endif

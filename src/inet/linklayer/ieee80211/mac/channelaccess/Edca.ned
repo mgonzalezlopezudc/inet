@@ -38,7 +38,7 @@ module Edca extends Module
     submodules:
         edcaf[numEdcafs]: Edcaf {
             parameters:
-                pendingQueueModule = default(mldMacModule == "" ? "" : mldMacModule + ".pendingQueue[" + string(index) + "]");
+                pendingQueueModule = default(parent.mldMacModule == "" ? "" : parent.mldMacModule + ".pendingQueue[" + string(index) + "]");
                 @display("p=100,100,row,150");
         }
         collisionController: <default("EdcaCollisionController")> like ICollisionController {

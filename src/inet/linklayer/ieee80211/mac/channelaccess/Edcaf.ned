@@ -49,7 +49,7 @@ module Edcaf extends Module
         }
         inProgressFrames: InProgressFrames {
             parameters:
-                pendingQueueModule = default(this.pendingQueueModule == "" ? "^.pendingQueue" : this.pendingQueueModule);
+                pendingQueueModule = default(parent.pendingQueueModule == "" ? "^.pendingQueue" : parent.pendingQueueModule);
                 originatorMacDataServiceModule = default("^.^.^.originatorMacDataService");
                 ackHandlerModule = default("^.ackHandler");
                 @display("p=100,200");
