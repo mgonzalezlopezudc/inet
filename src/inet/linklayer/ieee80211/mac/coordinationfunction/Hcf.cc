@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/twt/ITwtManager.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
@@ -42,6 +43,35 @@ static bool isHeMuContainerPacket(Packet *packet)
            dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(packet->peekDataAt(payloadOffset)) != nullptr;
 }
 
+static Packet *buildAmpduPacket(const std::vector<Packet *>& frames)
+{
+    auto aggregatedPacket = new Packet();
+    std::string aggregatedName;
+    for (size_t i = 0; i < frames.size(); i++) {
+        auto frame = frames[i];
+        auto trailer = frame->removeAtBack<Ieee80211MacTrailer>(B(4));
+        trailer->setFcsMode(FCS_DECLARED_CORRECT);
+        frame->insertAtBack(trailer);
+        auto mpdu = frame->peekAll();
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setEof(false);
+        delimiter->setReserved(0);
+        delimiter->setLength(mpdu->getChunkLength().get<B>());
+        aggregatedPacket->insertAtBack(delimiter);
+        aggregatedPacket->insertAtBack(mpdu);
+        aggregatedPacket->getRegionTags().copyTags(frame->getRegionTags(), B(0),
+                aggregatedPacket->getFrontOffset() - frame->getDataLength(), frame->getDataLength());
+        int paddingLength = (4 - (delimiter->getChunkLength() + mpdu->getChunkLength()).get<B>() % 4) % 4;
+        if (i + 1 != frames.size() && paddingLength != 0)
+            aggregatedPacket->insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
+        if (i != 0)
+            aggregatedName.append("+");
+        aggregatedName.append(frame->getName());
+    }
+    aggregatedPacket->setName(aggregatedName.c_str());
+    return aggregatedPacket;
+}
+
 void Hcf::initialize(int stage)
 {
     ModeSetListener::initialize(stage);
@@ -59,6 +89,11 @@ void Hcf::initialize(int stage)
         rateSelection = check_and_cast<IQosRateSelection *>(getSubmodule("rateSelection"));
         frameSequenceHandler = new FrameSequenceHandler();
         WATCH_EXPR("frameSequenceInfo", getFrameSequenceInfo());
+        WATCH(lastSelectedModePacketName);
+        WATCH(lastSelectedModeName);
+        WATCH(lastSelectedModeNetBitrate);
+        WATCH(lastSelectedModeBandwidth);
+        WATCH(lastSelectedModeNumSpatialStreams);
         originatorDataService = check_and_cast<IOriginatorMacDataService *>(getSubmodule(("originatorMacDataService")));
         recipientDataService = check_and_cast<IRecipientQosMacDataService *>(getSubmodule("recipientMacDataService"));
         originatorAckPolicy = check_and_cast<IOriginatorQoSAckPolicy *>(getSubmodule("originatorAckPolicy"));
@@ -88,6 +123,15 @@ std::string Hcf::getFrameSequenceInfo() const
         history = "..." + history;
     }
     return "Fs: " + history;
+}
+
+void Hcf::recordSelectedMode(Packet *packet, const IIeee80211Mode *mode)
+{
+    lastSelectedModePacketName = packet ? packet->getName() : "";
+    lastSelectedModeName = mode ? mode->getName() : "";
+    lastSelectedModeNetBitrate = mode ? mode->getDataMode()->getNetBitrate().get() : -1;
+    lastSelectedModeBandwidth = mode ? mode->getDataMode()->getBandwidth().get() : -1;
+    lastSelectedModeNumSpatialStreams = mode ? mode->getDataMode()->getNumberOfSpatialStreams() : -1;
 }
 
 void Hcf::forEachChild(cVisitor *v)
@@ -517,7 +561,7 @@ void Hcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const I
         // IEEE Std 802.11-2024, 10.3.2.9: an RTS addressed to this STA can
         // solicit a CTS after SIFS when NAV/CTS policy allows the response.
         ctsProcedure->processReceivedRts(packet, rtsFrame, ctsPolicy, this);
-    else if (auto blockAckRequest = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(header)) {
+    else if (auto blockAckRequest = dynamicPtrCast<const Ieee80211BlockAckReq>(header)) {
         // IEEE Std 802.11-2024, 10.25.3 and 10.25.6: a BlockAckReq solicits
         // an immediate BlockAck for frames in the negotiated block ack window.
         if (recipientBlockAckProcedure)
@@ -622,11 +666,20 @@ void Hcf::originatorProcessTransmittedFrame(Packet *packet)
 {
     Enter_Method("originatorProcessTransmittedFrame");
     EV_INFO << "Processing transmitted frame " << packet->getName() << " as originator in frame sequence.\n";
-    auto transmittedHeader = packet->peekAtFront<Ieee80211MacHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         edcaf->emit(packetSentToPeerSignal, packet);
         AccessCategory ac = edcaf->getAccessCategory();
+        auto ampduIt = pendingAmpduSubframes.find(packet);
+        if (ampduIt != pendingAmpduSubframes.end()) {
+            for (auto subframe : ampduIt->second) {
+                auto dataHeader = subframe->peekAtFront<Ieee80211DataHeader>();
+                originatorProcessTransmittedDataFrame(subframe, dataHeader, ac);
+            }
+            pendingAmpduSubframes.erase(ampduIt);
+            return;
+        }
+        auto transmittedHeader = packet->peekAtFront<Ieee80211MacHeader>();
         if (transmittedHeader->getReceiverAddress().isMulticast()) {
             // IEEE Std 802.11-2024, 10.3.2.11: group addressed frames do not
             // solicit Ack/BlockAck and are considered acknowledged immediately.
@@ -828,8 +881,8 @@ void Hcf::originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const 
         edcaf->getInProgressFrames()->dropFrame(lastTransmittedPacket);
         edcaf->getAckHandler()->dropFrame(lastTransmittedDataOrMgmtHeader);
     }
-    else if (auto blockAck = dynamicPtrCast<const Ieee80211BasicBlockAck>(header)) {
-        EV_INFO << "BasicBlockAck has arrived" << std::endl;
+    else if (auto blockAck = dynamicPtrCast<const Ieee80211BlockAck>(header)) {
+        EV_INFO << blockAck->getClassName() << " has arrived" << std::endl;
         // IEEE Std 802.11-2024, 10.25.3 and 10.25.6.8: a received BlockAck
         // advances originator state and drops acknowledged MPDUs from the
         // retransmission window.
@@ -849,7 +902,7 @@ void Hcf::originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const 
         edcaf->getRecoveryProcedure()->ctsFrameReceived();
     else if (header->getType() == ST_DATA_WITH_QOS)
         ; // void
-    else if (dynamicPtrCast<const Ieee80211BasicBlockAckReq>(header))
+    else if (dynamicPtrCast<const Ieee80211BlockAckReq>(header))
         ; // void
     else
         throw cRuntimeError("Unknown control frame");
@@ -906,13 +959,44 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             // and any active block ack agreement.
             dataHeader->setAckPolicy(ackPolicy);
             packet->insertAtFront(dataHeader);
+            header = packet->peekAtFront<Ieee80211MacHeader>();
         }
-        auto mode = rateSelection->computeMode(packet, header, txop);
-        setFrameMode(packet, header, mode);
-        emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packet);
-        EV_DEBUG << "Datarate for " << packet->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
+
+        Packet *packetToTransmit = packet;
+        bool deletePacketToTransmit = false;
+        if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+            if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK && !rtsPolicy->isRtsNeeded(packet, header)) {
+                auto frames = channelOwner->getInProgressFrames()->getEligibleFramesLike(packet, 64, 1048575);
+                std::vector<Packet *> ampduFrames;
+                for (auto frame : frames) {
+                    auto frameHeader = frame->peekAtFront<Ieee80211DataHeader>();
+                    OriginatorBlockAckAgreement *agreement = nullptr;
+                    if (originatorBlockAckAgreementHandler)
+                        agreement = originatorBlockAckAgreementHandler->getAgreement(frameHeader->getReceiverAddress(), frameHeader->getTid());
+                    auto ackPolicy = originatorAckPolicy->computeAckPolicy(frame, frameHeader, agreement);
+                    if (ackPolicy != AckPolicy::BLOCK_ACK)
+                        break;
+                    auto mutableHeader = frame->removeAtFront<Ieee80211DataHeader>();
+                    mutableHeader->setAckPolicy(ackPolicy);
+                    mutableHeader->setDurationField(SIMTIME_ZERO);
+                    frame->insertAtFront(mutableHeader);
+                    ampduFrames.push_back(frame);
+                }
+                if (ampduFrames.size() > 1) {
+                    packetToTransmit = buildAmpduPacket(ampduFrames);
+                    deletePacketToTransmit = true;
+                    pendingAmpduSubframes[packet] = ampduFrames;
+                }
+            }
+        }
+
+        auto mode = rateSelection->computeMode(packetToTransmit, header, txop);
+        setFrameMode(packetToTransmit, header, mode);
+        recordSelectedMode(packetToTransmit, mode);
+        emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packetToTransmit);
+        EV_DEBUG << "Datarate for " << packetToTransmit->getName() << " is set to " << mode->getDataMode()->getNetBitrate() << ".\n";
         if (txop->getProtectionMechanism() == TxopProcedure::ProtectionMechanism::SINGLE_PROTECTION) {
-            if (!isHeMuContainerPacket(packet) &&
+            if (packetToTransmit == packet && !isHeMuContainerPacket(packet) &&
                     !dynamicPtrCast<const Ieee80211TriggerFrame>(header) &&
                     !dynamicPtrCast<const Ieee80211MultiStaBlockAck>(header)) {
                 auto pendingPacket = channelOwner->getInProgressFrames()->getPendingFrameFor(packet);
@@ -930,7 +1014,9 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             throw cRuntimeError("Multiple protection is unsupported");
         else
             throw cRuntimeError("Undefined protection mechanism");
-        tx->transmitFrame(packet, packet->peekAtFront<Ieee80211MacHeader>(), ifs, this);
+        tx->transmitFrame(packetToTransmit, header, ifs, this);
+        if (deletePacketToTransmit)
+            delete packetToTransmit;
     }
     else
         throw cRuntimeError("Hcca is unimplemented");
@@ -952,6 +1038,7 @@ void Hcf::transmitControlResponseFrame(Packet *responsePacket, const Ptr<const I
     // IEEE Std 802.11-2024, 10.3.2.9, 10.3.2.11 and 10.25.3: CTS, Ack and
     // BlockAck immediate responses are transmitted after SIFS.
     setFrameMode(responsePacket, responseHeader, responseMode);
+    recordSelectedMode(responsePacket, responseMode);
     emit(IRateSelection::datarateSelectedSignal, responseMode->getDataMode()->getNetBitrate().get<bps>(), responsePacket);
     EV_DEBUG << "Datarate for " << responsePacket->getName() << " is set to " << responseMode->getDataMode()->getNetBitrate() << ".\n";
     tx->transmitFrame(responsePacket, responseHeader, modeSet->getSifsTime(), this);

@@ -20,6 +20,13 @@ namespace ieee80211 {
 
 Define_Module(Tx);
 
+static bool isControlResponseFrame(const Ptr<const Ieee80211MacHeader>& header)
+{
+    return dynamicPtrCast<const Ieee80211AckFrame>(header) ||
+           dynamicPtrCast<const Ieee80211CtsFrame>(header) ||
+           dynamicPtrCast<const Ieee80211BlockAck>(header);
+}
+
 Tx::~Tx()
 {
     cancelAndDelete(endIfsTimer);
@@ -55,28 +62,35 @@ void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
     ASSERT(this->txCallback == nullptr);
     this->txCallback = txCallback;
     auto macAddressInd = packet->addTagIfAbsent<MacAddressInd>();
-    const auto& updatedHeader = packet->removeAtFront<Ieee80211MacHeader>();
-    if (auto oneAddressHeader = dynamicPtrCast<Ieee80211OneAddressHeader>(updatedHeader)) {
+    if (auto oneAddressHeader = dynamicPtrCast<const Ieee80211OneAddressHeader>(header)) {
         macAddressInd->setDestAddress(oneAddressHeader->getReceiverAddress());
     }
-    if (auto twoAddressHeader = dynamicPtrCast<Ieee80211TwoAddressHeader>(updatedHeader)) {
-        twoAddressHeader->setTransmitterAddress(mac->getAddress());
+    if (auto twoAddressHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header)) {
         macAddressInd->setSrcAddress(twoAddressHeader->getTransmitterAddress());
     }
-    packet->insertAtFront(updatedHeader);
-    const auto& updatedTrailer = packet->removeAtBack<Ieee80211MacTrailer>(B(4));
-    updatedTrailer->setFcsMode(mac->getFcsMode());
-    if (mac->getFcsMode() == FCS_COMPUTED) {
-        const auto& fcsBytes = packet->peekAllAsBytes();
-        auto bufferLength = fcsBytes->getChunkLength().get<B>();
-        auto buffer = new uint8_t[bufferLength];
-        fcsBytes->copyToBuffer(buffer, bufferLength);
-        auto fcs = ethernetFcs(buffer, bufferLength);
-        updatedTrailer->setFcs(fcs);
-        delete[] buffer;
+    frameIsAmpdu = dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
+    if (!frameIsAmpdu) {
+        const auto& updatedHeader = packet->removeAtFront<Ieee80211MacHeader>();
+        if (auto twoAddressHeader = dynamicPtrCast<Ieee80211TwoAddressHeader>(updatedHeader)) {
+            twoAddressHeader->setTransmitterAddress(mac->getAddress());
+            macAddressInd->setSrcAddress(twoAddressHeader->getTransmitterAddress());
+        }
+        packet->insertAtFront(updatedHeader);
+        const auto& updatedTrailer = packet->removeAtBack<Ieee80211MacTrailer>(B(4));
+        updatedTrailer->setFcsMode(mac->getFcsMode());
+        if (mac->getFcsMode() == FCS_COMPUTED) {
+            const auto& fcsBytes = packet->peekAllAsBytes();
+            auto bufferLength = fcsBytes->getChunkLength().get<B>();
+            auto buffer = new uint8_t[bufferLength];
+            fcsBytes->copyToBuffer(buffer, bufferLength);
+            auto fcs = ethernetFcs(buffer, bufferLength);
+            updatedTrailer->setFcs(fcs);
+            delete[] buffer;
+        }
+        packet->insertAtBack(updatedTrailer);
     }
-    packet->insertAtBack(updatedTrailer);
     this->frame = packet->dup();
+    frameHeader = frameIsAmpdu ? header : nullptr;
     ASSERT(!endIfsTimer->isScheduled() && !transmitting); // we are idle
     if (ifs == 0) {
         // do directly what handleMessage() would do
@@ -94,15 +108,18 @@ void Tx::radioTransmissionFinished()
         EV_DETAIL << "Tx: radioTransmissionFinished()\n";
         transmitting = false;
         ASSERT(txCallback != nullptr);
-        const auto& header = frame->peekAtFront<Ieee80211MacHeader>();
+        const auto& header = frameIsAmpdu ? frameHeader : frame->peekAtFront<Ieee80211MacHeader>();
         auto duration = header->getDurationField();
         auto tmpFrame = frame;
         auto tmpTxCallback = txCallback;
         frame = nullptr;
+        frameHeader = nullptr;
+        frameIsAmpdu = false;
         txCallback = nullptr;
-        tmpTxCallback->transmissionComplete(tmpFrame, tmpFrame->peekAtFront<Ieee80211MacHeader>());
+        tmpTxCallback->transmissionComplete(tmpFrame, header);
         delete tmpFrame;
-        rx->frameTransmitted(duration);
+        if (!isControlResponseFrame(header))
+            rx->frameTransmitted(duration);
     }
 }
 
@@ -119,4 +136,3 @@ void Tx::handleMessage(cMessage *msg)
 
 } // namespace ieee80211
 } // namespace inet
-

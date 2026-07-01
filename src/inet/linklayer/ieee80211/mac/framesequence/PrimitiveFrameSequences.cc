@@ -20,6 +20,21 @@ auto expectedResponse(Ieee80211FrameType type)
     };
 }
 
+bool canUseCompressedBlockAckReq(FrameSequenceContext *context, MacAddress receiverAddress, Tid tid)
+{
+    auto outstandingFrames = context->getInProgressFrames()->getOutstandingFrames();
+    bool hasMatchingOutstandingFrame = false;
+    for (auto frame : outstandingFrames) {
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(frame->peekAtFront<Ieee80211MacHeader>());
+        if (dataHeader == nullptr || dataHeader->getReceiverAddress() != receiverAddress || dataHeader->getTid() != tid)
+            continue;
+        hasMatchingOutstandingFrame = true;
+        if (dataHeader->getFragmentNumber() != 0 || dataHeader->getMoreFragments())
+            return false;
+    }
+    return hasMatchingOutstandingFrame;
+}
+
 } // namespace
 
 // TODO remove isForUs checks it's already done in framesequencehandler
@@ -414,8 +429,10 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
             auto receiverAddr = std::get<0>(blockAckReqParams);
             auto startingSequenceNumber = std::get<1>(blockAckReqParams);
             auto tid = std::get<2>(blockAckReqParams);
-            auto blockAckReq = context->getQoSContext()->blockAckProcedure->buildBasicBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber);
-            auto blockAckPacket = new Packet("BasicBlockAckReq", blockAckReq);
+            auto blockAckReq = canUseCompressedBlockAckReq(context, receiverAddr, tid) ?
+                    context->getQoSContext()->blockAckProcedure->buildCompressedBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber) :
+                    context->getQoSContext()->blockAckProcedure->buildBasicBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber);
+            auto blockAckPacket = new Packet(dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq) ? "CompressedBlockAckReq" : "BasicBlockAckReq", blockAckReq);
             blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
             return new TransmitStep(blockAckPacket, context->getIfs(), true);
         }
