@@ -10,7 +10,9 @@
 
 #include "inet/common/packet/recorder/PcapWriter.h"
 
+#include <algorithm>
 #include <cerrno>
+#include <limits>
 
 #include "inet/common/INETUtils.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
@@ -124,16 +126,20 @@ void PcapWriter::writePacket(simtime_t stime, const Packet *packet, b frontOffse
         default: throw cRuntimeError("Unsupported time precision (%d) in PcapWriter.", timePrecision);
     }
     b capturedLength = packet->getDataLength() - frontOffset - backOffset;
-    if (capturedLength != b(0)) {
-        auto data = packet->peekDataAt<BytesChunk>(frontOffset, capturedLength);
+    auto capturedBytes = capturedLength.get<B>();
+    if (capturedBytes < 0 || capturedBytes > std::numeric_limits<uint32_t>::max())
+        throw cRuntimeError("Invalid captured packet length: %ld bytes", capturedBytes);
+
+    ph.orig_len = capturedBytes;
+    ph.incl_len = std::min({ph.orig_len, snaplen, (unsigned int)MAXBUFLENGTH});
+
+    if (ph.incl_len != 0) {
+        auto data = packet->peekDataAt<BytesChunk>(frontOffset, B(ph.incl_len));
         auto bytes = data->getBytes();
         for (size_t i = 0; i < bytes.size(); i++) {
             buf[i] = bytes[i];
         }
     }
-    ph.orig_len = capturedLength.get<B>();
-
-    ph.incl_len = ph.orig_len > snaplen ? snaplen : ph.orig_len;
     fwrite(&ph, sizeof(ph), 1, dumpfile);
     fwrite(buf, ph.incl_len, 1, dumpfile);
     if (flush)
@@ -149,4 +155,3 @@ void PcapWriter::close()
 }
 
 } // namespace inet
-

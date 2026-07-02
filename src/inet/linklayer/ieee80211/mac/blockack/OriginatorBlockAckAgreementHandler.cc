@@ -135,31 +135,33 @@ void OriginatorBlockAckAgreementHandler::processTransmittedDataFrame(Packet *pac
     if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement == nullptr) {
         auto addbaReq = buildAddbaRequest(dataHeader->getReceiverAddress(), dataHeader->getTid(), dataHeader->getSequenceNumber() + 1, blockAckAgreementPolicy);
         createAgreement(addbaReq);
+        agreement = getAgreement(dataHeader->getReceiverAddress(), dataHeader->getTid());
+        agreement->setIsAddbaRequestInProgress(true);
+        agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
+        agreement->calculateExpirationTime();
         auto addbaPacket = new Packet("AddbaReq", addbaReq);
         callback->processMgmtFrame(addbaPacket, addbaReq);
     }
     else if (blockAckAgreementPolicy->isAddbaReqNeeded(packet, dataHeader) && agreement != nullptr && !agreement->getIsAddbaResponseReceived()) {
-        const int totalAttempts = agreement->getNumSentBaPolicyFrames();
-        const int attemptsInCurrentBurst = totalAttempts % 3;
         const simtime_t retryDeadline = agreement->getExpirationTime();
         const bool hasRetryDeadline = retryDeadline >= SIMTIME_ZERO;
-        const bool cooldownElapsed = hasRetryDeadline && simTime() >= retryDeadline;
-        const bool allowRetry = totalAttempts < 3 || attemptsInCurrentBurst != 0 || cooldownElapsed;
 
-        if (!allowRetry) {
-            EV_DETAIL << "Suppressing AddbaReq before cooldown expiry for receiver="
+        if (agreement->getIsAddbaRequestInProgress() && (!hasRetryDeadline || simTime() < retryDeadline)) {
+            EV_DETAIL << "Suppressing AddbaReq while previous request is pending for receiver="
                       << dataHeader->getReceiverAddress() << " tid=" << dataHeader->getTid()
-                      << " attempts=" << totalAttempts << " retryDeadline=" << retryDeadline << "\n";
+                      << " attempts=" << agreement->getNumSentBaPolicyFrames()
+                      << " retryDeadline=" << retryDeadline << "\n";
             return;
         }
 
-        if (cooldownElapsed && totalAttempts >= 3 && attemptsInCurrentBurst == 0) {
-            EV_INFO << "Cooldown elapsed; allowing next ADDBA retry burst for receiver="
+        if (hasRetryDeadline && simTime() >= retryDeadline) {
+            EV_INFO << "ADDBA failure timeout elapsed; retrying request for receiver="
                     << dataHeader->getReceiverAddress() << " tid=" << dataHeader->getTid()
-                    << " attempts=" << totalAttempts << "\n";
+                    << " attempts=" << agreement->getNumSentBaPolicyFrames() << "\n";
         }
 
         auto addbaReq = buildAddbaRequest(dataHeader->getReceiverAddress(), dataHeader->getTid(), dataHeader->getSequenceNumber() + 1, blockAckAgreementPolicy);
+        agreement->setIsAddbaRequestInProgress(true);
         agreement->setBlockAckTimeoutValue(blockAckAgreementPolicy->computeAddbaFailureTimeout());
         agreement->calculateExpirationTime();
         auto addbaPacket = new Packet("AddbaReq", addbaReq);
@@ -182,6 +184,7 @@ void OriginatorBlockAckAgreementHandler::processReceivedAddbaResp(const Ptr<cons
 void OriginatorBlockAckAgreementHandler::updateAgreement(OriginatorBlockAckAgreement *agreement, const Ptr<const Ieee80211AddbaResponse>& addbaResp)
 {
     agreement->setIsAddbaResponseReceived(true);
+    agreement->setIsAddbaRequestInProgress(false);
     agreement->setBufferSize(addbaResp->getBufferSize());
     agreement->setBlockAckTimeoutValue(addbaResp->getBlockAckTimeoutValue());
     agreement->calculateExpirationTime();
@@ -192,6 +195,7 @@ void OriginatorBlockAckAgreementHandler::processTransmittedAddbaReq(const Ptr<co
     auto agreement = getAgreement(addbaReq->getReceiverAddress(), addbaReq->getTid());
     if (agreement) {
         agreement->setIsAddbaRequestSent(true);
+        agreement->setIsAddbaRequestInProgress(true);
         agreement->baPolicyFrameSent();
         if (!agreement->getIsAddbaResponseReceived())
             agreement->calculateExpirationTime();

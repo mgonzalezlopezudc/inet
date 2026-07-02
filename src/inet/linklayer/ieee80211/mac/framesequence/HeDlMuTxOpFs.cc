@@ -52,6 +52,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
 namespace inet {
@@ -582,6 +583,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     ASSERT(dlScheduler != nullptr);
     activeAllocations.clear();
     auto hcf = dynamic_cast<Hcf *>(callback);
+    auto hcfMac = hcf != nullptr ? dynamic_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule()) : nullptr;
     auto notifyPlanningFailure = [&] {
         if (auto heHcf = dynamic_cast<HeHcf *>(callback)) {
             auto ac = scheduleContext.candidates.empty() ? AccessCategory::AC_BE :
@@ -899,7 +901,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
             if (staPacket->getDataLength() >= B(4) && dynamicPtrCast<const Ieee80211MacTrailer>(staPacket->peekAtBack(B(4))) != nullptr) {
                 auto trailer = staPacket->removeAtBack<Ieee80211MacTrailer>(B(4));
-                trailer->setFcsMode(FCS_DECLARED_CORRECT);
+                auto fcsMode = hcfMac != nullptr ? hcfMac->getFcsMode() : FCS_DECLARED_CORRECT;
+                trailer->setFcsMode(fcsMode);
+                if (fcsMode == FCS_COMPUTED)
+                    trailer->setFcs(computeEthernetFcs(staPacket, fcsMode));
                 staPacket->insertAtBack(trailer);
             }
 
