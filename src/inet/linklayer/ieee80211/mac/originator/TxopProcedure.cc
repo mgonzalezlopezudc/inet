@@ -23,6 +23,14 @@ simsignal_t TxopProcedure::txopEndedSignal = cComponent::registerSignal("txopEnd
 
 Define_Module(TxopProcedure);
 
+static bool isErpOrLaterMode(const IIeee80211Mode *mode)
+{
+    return dynamic_cast<const Ieee80211OfdmMode *>(mode) ||
+           dynamic_cast<const Ieee80211HtMode *>(mode) ||
+           dynamic_cast<const Ieee80211HeMode *>(mode) ||
+           dynamic_cast<const Ieee80211EhtMode *>(mode);
+}
+
 void TxopProcedure::initialize(int stage)
 {
     ModeSetListener::initialize(stage);
@@ -40,11 +48,11 @@ s TxopProcedure::getTxopLimit(const IIeee80211Mode *mode, AccessCategory ac)
         case AC_BE: return s(0);
         case AC_VI:
             if (dynamic_cast<const Ieee80211DsssMode *>(mode) || dynamic_cast<const Ieee80211HrDsssMode *>(mode)) return ms(6.016);
-            else if (dynamic_cast<const Ieee80211HtMode *>(mode) || dynamic_cast<const Ieee80211OfdmMode *>(mode)) return ms(3.008);
+            else if (isErpOrLaterMode(mode)) return ms(3.008);
             else return s(0);
         case AC_VO:
             if (dynamic_cast<const Ieee80211DsssMode *>(mode) || dynamic_cast<const Ieee80211HrDsssMode *>(mode)) return ms(3.264);
-            else if (dynamic_cast<const Ieee80211HtMode *>(mode) || dynamic_cast<const Ieee80211OfdmMode *>(mode)) return ms(1.504);
+            else if (isErpOrLaterMode(mode)) return ms(1.504);
             else return s(0);
         default: throw cRuntimeError("Unknown access category = %d", ac);
     }
