@@ -18,6 +18,7 @@
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
+#include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
@@ -43,14 +44,16 @@ static bool isHeMuContainerPacket(Packet *packet)
            dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(packet->peekDataAt(payloadOffset)) != nullptr;
 }
 
-static Packet *buildAmpduPacket(const std::vector<Packet *>& frames)
+static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode)
 {
     auto aggregatedPacket = new Packet();
     std::string aggregatedName;
     for (size_t i = 0; i < frames.size(); i++) {
         auto frame = frames[i];
         auto trailer = frame->removeAtBack<Ieee80211MacTrailer>(B(4));
-        trailer->setFcsMode(FCS_DECLARED_CORRECT);
+        trailer->setFcsMode(fcsMode);
+        if (fcsMode == FCS_COMPUTED)
+            trailer->setFcs(computeEthernetFcs(frame, fcsMode));
         frame->insertAtBack(trailer);
         auto mpdu = frame->peekAll();
         auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
@@ -983,7 +986,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                     ampduFrames.push_back(frame);
                 }
                 if (ampduFrames.size() > 1) {
-                    packetToTransmit = buildAmpduPacket(ampduFrames);
+                    packetToTransmit = buildAmpduPacket(ampduFrames, mac->getFcsMode());
                     deletePacketToTransmit = true;
                     pendingAmpduSubframes[packet] = ampduFrames;
                 }
