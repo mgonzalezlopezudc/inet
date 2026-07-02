@@ -67,6 +67,12 @@ test -f "$INET_ROOT/src/libINET.so" ||
     }
 ```
 
+Assume OMNeT++, INET, and related tools such as `opp_run`, `opp_run_dbg`, and
+`opp_repl` are already sourced when they are available on `PATH`. Do not prefix
+every command with `source "$OMNETPP_ROOT/setenv"` or `source setenv`. Source an
+environment script only as an explicit recovery step after validation fails, and
+state why it was necessary.
+
 Record the TShark version:
 
 ```sh
