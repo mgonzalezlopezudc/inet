@@ -12,6 +12,35 @@ Use repository skills for detailed simulation, test, result-analysis, and standa
 * Do not infer packet delivery, loss, retransmission, or protocol behavior without supporting logs, captures, event logs, or recorded results.
 * When a simulation error requires source-level C++ debugging, use a debug build with `opp_run_dbg`, the corresponding debug model libraries, and the `inet-lldb-debugging` skill. Do not mix release and debug binaries.
 
+### Agent learning procedure
+
+When an agent solves a problem in a way that is clearly reusable, it should consider whether the lesson should be persisted.
+
+Reusable lessons include:
+
+* Non-obvious commands, flags, workflows, or environment requirements.
+* Repeated debugging patterns or failure modes.
+* Project-specific conventions that prevented an error.
+* Stable domain knowledge that future agents are likely to need.
+
+Do not persist:
+
+* One-off facts from a single task.
+* Guesses that were not validated.
+* Information that is already documented nearby.
+* Large logs, temporary paths, or overly specific run artifacts.
+
+Before editing any rules or skill file, the agent must ask the user for permission. The proposal should include:
+
+* The reusable lesson.
+* The target file, such as `AGENTS.md`, a relevant `.agents/skills/*/SKILL.md`, or a skill reference file.
+* The exact text or a concise summary of the intended addition.
+* Why the lesson is likely to help future agents.
+
+Only add the knowledge after explicit user approval.
+
+Store project-wide agent behavior in `AGENTS.md`. Store task-specific reusable workflows in the relevant skill's `SKILL.md`. Store longer domain notes, examples, command recipes, or troubleshooting details in a skill `references/` file, linked from `SKILL.md`. Prefer concise, validated, reusable lessons over broad commentary.
+
 ### Available skills
 
 * `inet-simulation-run`: Run INET simulations with Cmdenv or Qtenv and diagnose startup or runtime failures.
