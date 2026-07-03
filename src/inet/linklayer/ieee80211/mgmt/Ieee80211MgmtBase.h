@@ -61,6 +61,9 @@ class INET_API Ieee80211MgmtBase : public OperationalBase, public cListener
     /** Utility method to dispose of an unhandled frame */
     virtual void dropManagementFrame(Packet *frame);
 
+    virtual bool isHeManagementSupported();
+    virtual bool isEhtManagementSupported();
+
     /** Dispatch to frame processing methods according to frame type */
     virtual void processFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header);
 

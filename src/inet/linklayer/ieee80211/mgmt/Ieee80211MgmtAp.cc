@@ -255,7 +255,8 @@ void Ieee80211MgmtAp::sendBeacon()
     body->setSupportedRates(supportedRates);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
-    addApHeManagementElements(body, mib);
+    if (isHeManagementSupported())
+        addApHeManagementElements(body, mib);
     if (auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr && manager->isEnabled()) {
         auto schedules = manager->getBroadcastSchedules();
         if (!schedules.empty()) {
@@ -426,7 +427,7 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
 
     auto associationRequest = packet->peekData<Ieee80211AssociationRequestFrame>();
     mib->setStationTransmitPower(sta->address, associationRequest->getTransmitPowerDbm());
-    if (associationRequest->getHeCapabilitiesPresent())
+    if (isHeManagementSupported() && associationRequest->getHeCapabilitiesPresent())
         mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(associationRequest->getHeCapabilities()), mib->heOperation);
     else
         mib->removePeerHeCapabilities(sta->address);
@@ -455,7 +456,8 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
-    addApHeManagementElements(body, mib);
+    if (isHeManagementSupported())
+        addApHeManagementElements(body, mib);
     body->setChunkLength(B(2 + 2 + 2 + body->getSupportedRates().numRates + 2) + getHeMgmtElementsLength(body));
     sendManagementFrame("AssocResp-OK", body, ST_ASSOCIATIONRESPONSE, sta->address);
 }
@@ -481,7 +483,7 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     }
 
     auto reassociationRequest = packet->peekData<Ieee80211ReassociationRequestFrame>();
-    if (reassociationRequest->getHeCapabilitiesPresent())
+    if (isHeManagementSupported() && reassociationRequest->getHeCapabilitiesPresent())
         mib->setPeerHeCapabilities(sta->address, makeHeCapabilities(reassociationRequest->getHeCapabilities()), mib->heOperation);
     else
         mib->removePeerHeCapabilities(sta->address);
@@ -508,7 +510,8 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
     body->setStatusCode(SC_SUCCESSFUL);
     body->setAid(mib->allocateAssociationId(sta->address));
     body->setSupportedRates(supportedRates);
-    addApHeManagementElements(body, mib);
+    if (isHeManagementSupported())
+        addApHeManagementElements(body, mib);
     body->setChunkLength(B(2 + 2 + 2 + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("ReassocResp-OK", body, ST_REASSOCIATIONRESPONSE, sta->address);
 }
@@ -569,7 +572,8 @@ void Ieee80211MgmtAp::handleProbeRequestFrame(Packet *packet, const Ptr<const Ie
     body->setSupportedRates(supportedRates);
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
-    addApHeManagementElements(body, mib);
+    if (isHeManagementSupported())
+        addApHeManagementElements(body, mib);
     body->setChunkLength(B(8 + 2 + 2 + (2 + ssid.length()) + (2 + supportedRates.numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("ProbeResp", body, ST_PROBERESPONSE, staAddress);
 }
