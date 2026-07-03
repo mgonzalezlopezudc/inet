@@ -78,10 +78,13 @@ void Ieee80211Mac::initialize(int stage)
         dcf = check_and_cast<Dcf *>(getSubmodule("dcf"));
         hcf = check_and_cast_nullable<Hcf *>(getSubmodule("hcf"));
         if (hasPar("twtModule")) {
-            auto twtModule = getModuleByPath(par("twtModule"));
-            twtManager = dynamic_cast<ITwtManager *>(twtModule);
-            if (twtModule != nullptr && twtManager == nullptr)
-                throw cRuntimeError("twtModule does not implement ITwtManager");
+            const char *twtModulePath = par("twtModule");
+            if (*twtModulePath) {
+                auto twtModule = getModuleByPath(twtModulePath);
+                twtManager = dynamic_cast<ITwtManager *>(twtModule);
+                if (twtModule != nullptr && twtManager == nullptr)
+                    throw cRuntimeError("twtModule does not implement ITwtManager");
+            }
         }
         if (mib->qos && !hcf)
             throw cRuntimeError("Missing hcf module, required for QoS");

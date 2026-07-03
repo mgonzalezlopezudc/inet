@@ -116,7 +116,7 @@ void Ieee80211MgmtAp::handleTimer(cMessage *msg)
 
 void Ieee80211MgmtAp::handleCommand(int msgkind, cObject *ctrl)
 {
-    auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+    auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
     auto sendTwtConfirm = [this] (Ieee80211PrimConfirm *confirm, Ieee80211PrimResultCode result) {
         confirm->setResultCode(result);
         auto message = new cMessage(confirm->getClassName());
@@ -256,7 +256,7 @@ void Ieee80211MgmtAp::sendBeacon()
     body->setBeaconInterval(beaconInterval);
     body->setChannelNumber(channelNumber);
     addApHeManagementElements(body, mib);
-    if (auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr && manager->isEnabled()) {
+    if (auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr && manager->isEnabled()) {
         auto schedules = manager->getBroadcastSchedules();
         if (!schedules.empty()) {
             body->setBroadcastTwtPresent(true);
@@ -581,7 +581,7 @@ void Ieee80211MgmtAp::handleProbeResponseFrame(Packet *packet, const Ptr<const I
 
 void Ieee80211MgmtAp::handleActionFrame(Packet *packet, const Ptr<const Ieee80211ActionFrame>& header)
 {
-    auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+    auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
     if (auto setup = dynamicPtrCast<const Ieee80211TwtSetupFrame>(header)) {
         if (!setup->getTwtRequest()) {
             dropManagementFrame(packet);

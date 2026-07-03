@@ -183,7 +183,7 @@ void Ieee80211MgmtSta::handleCommand(int msgkind, cObject *ctrl)
     else if (auto cmd = dynamic_cast<Ieee80211Prim_DisassociateRequest *>(ctrl))
         processDisassociateCommand(cmd);
     else if (auto cmd = dynamic_cast<Ieee80211Prim_TwtSetupRequest *>(ctrl)) {
-        auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+        auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
         auto confirm = new Ieee80211Prim_TwtSetupConfirm();
         confirm->setAgreement(*cmd);
         const auto *peerCapabilities = mib->findNegotiatedHeCapabilities(assocAP.address);
@@ -225,7 +225,7 @@ void Ieee80211MgmtSta::handleCommand(int msgkind, cObject *ctrl)
         }
     }
     else if (auto cmd = dynamic_cast<Ieee80211Prim_TwtTeardownRequest *>(ctrl)) {
-        auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+        auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
         auto confirm = new Ieee80211Prim_TwtTeardownConfirm();
         if (manager == nullptr || !manager->isEnabled())
             sendConfirm(confirm, PRC_REFUSED);
@@ -242,7 +242,7 @@ void Ieee80211MgmtSta::handleCommand(int msgkind, cObject *ctrl)
         }
     }
     else if (auto cmd = dynamic_cast<Ieee80211Prim_TwtInformationRequest *>(ctrl)) {
-        auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+        auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
         auto confirm = new Ieee80211Prim_TwtInformationConfirm();
         auto peer = cmd->getPeerAddress().isUnspecified() ? assocAP.address : cmd->getPeerAddress();
         auto frame = makeShared<Ieee80211TwtInformationFrame>();
@@ -331,7 +331,7 @@ void Ieee80211MgmtSta::processTwtSetupResponse(const Ptr<const Ieee80211TwtSetup
         return;
     auto confirm = new Ieee80211Prim_TwtSetupConfirm();
     confirm->setAgreement(pending->second);
-    auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+    auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
     bool accepted = frame->getSetupCommand() == 3 || frame->getSetupCommand() == 4 || frame->getSetupCommand() == 5;
     if (manager == nullptr || !manager->isEnabled() || !accepted)
         sendConfirm(confirm, PRC_REFUSED);
@@ -876,7 +876,7 @@ void Ieee80211MgmtSta::handleBeaconFrame(Packet *packet, const Ptr<const Ieee802
     const auto& beaconBody = packet->peekData<Ieee80211BeaconFrame>();
     storeAPInfo(packet, header, beaconBody);
     if (mib->bssStationData.isAssociated && header->getTransmitterAddress() == assocAP.address && beaconBody->getBroadcastTwtPresent()) {
-        if (auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr && manager->isEnabled()) {
+        if (auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr && manager->isEnabled()) {
             for (unsigned int i = 0; i < beaconBody->getBroadcastTwtSchedulesArraySize(); ++i) {
                 const auto& element = beaconBody->getBroadcastTwtSchedules(i);
                 TwtBroadcastSchedule schedule;
@@ -930,12 +930,12 @@ void Ieee80211MgmtSta::handleActionFrame(Packet *packet, const Ptr<const Ieee802
         delete packet;
     }
     else if (auto teardown = dynamicPtrCast<const Ieee80211TwtTeardownFrame>(header)) {
-        if (auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr)
+        if (auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this)); manager != nullptr)
             manager->removeAgreement(header->getTransmitterAddress(), teardown->getFlowId(), teardown->getBroadcast(), teardown->getBroadcastId());
         delete packet;
     }
     else if (auto information = dynamicPtrCast<const Ieee80211TwtInformationFrame>(header)) {
-        if (auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+        if (auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
                 manager != nullptr && information->getNextWakeTimePresent())
             manager->updateNextWakeTime(header->getTransmitterAddress(), information->getFlowId(),
                     SimTime((int64_t)information->getNextWakeTime(), SIMTIME_US));

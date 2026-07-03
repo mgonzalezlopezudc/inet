@@ -76,7 +76,7 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
         mac.*.rateSelection.dataFrameBitrate = default(this.bitrate);
         *.macModule = default(absPath(".mac"));
         *.mibModule = default(absPath(".mib"));
-        *.twtModule = default(absPath(".twt"));
+        *.twtModule = default(exists(twt) ? absPath(".twt") : "");
         *.interfaceTableModule = default(absPath(this.interfaceTableModule));
         *.energySourceModule = default(absPath(this.energySourceModule));
     gates:
@@ -88,7 +88,7 @@ module Ieee80211Interface extends NetworkInterface like IWirelessInterface
             parameters:
                 @display("p=100,300;is=s");
         }
-        twt: <default("Ieee80211TwtManager")> like IIeee80211TwtManager {
+        twt: <default("")> like IIeee80211TwtManager if typename != "" {
             parameters:
                 @display("p=100,400;is=s");
         }

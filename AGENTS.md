@@ -10,6 +10,7 @@ Use repository skills for detailed simulation, test, result-analysis, and standa
 * Run one configuration and run number at a time unless a simulation campaign is explicitly requested.
 * Preserve the exact command, working directory, configuration, run number, exit status, and generated artifact paths in reports.
 * Do not infer packet delivery, loss, retransmission, or protocol behavior without supporting logs, captures, event logs, or recorded results.
+* Always use `-j$(nproc)` for `make` and other parallel build commands unless the user explicitly requests a different job count.
 * When a simulation error requires source-level C++ debugging, use a debug build with `opp_run_dbg`, the corresponding debug model libraries, and the `inet-lldb-debugging` skill. Do not mix release and debug binaries.
 
 ### Agent learning procedure
