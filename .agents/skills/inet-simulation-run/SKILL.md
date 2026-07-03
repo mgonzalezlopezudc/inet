@@ -155,7 +155,8 @@ When logs, Qtenv inspection, packet captures, and event logs are insufficient, u
 Source-level debugging must use: 
 - `opp_run_dbg`. 
 - `$INET_ROOT/src/libINET_dbg.so`. 
-- Debug versions of any project-specific C++ libraries. - `--debug-on-errors=true`. 
+- Debug versions of any project-specific C++ libraries.
+- `--debug-on-errors=true`. 
 
 Do not mix `opp_run_dbg` with release model libraries, or `opp_run` with debug model libraries. Use Cmdenv under LLDB by default. Use Qtenv under LLDB only when interactive simulation visualization is also required.
 

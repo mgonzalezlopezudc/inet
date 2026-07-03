@@ -21,6 +21,12 @@ Use repository skills for detailed simulation, test, result-analysis, and standa
 * `omnetpp-result-analysis`: Query and export scalar and vector simulation results with `opp_scavetool`.
 * `inet-lldb-debugging`: Debug INET and OMNeT++ C++ code using LLDB, including runtime errors, crashes, breakpoints, watchpoints, stack inspection, and automated backtrace capture.
 * `inet-unit-tests`: Build and run INET unit tests with repository-specific requirements.
+* `inet-80211-packet-debugging`: Debug IEEE 802.11 PHY/MAC packet exchanges with Cmdenv, PCAPng, TShark, logs, event logs, results, source inspection, and LLDB.
+* `inet-80211-regression-testing`: Design and verify focused IEEE 802.11 regression coverage across deterministic runs, seeds, captures, logs, results, and fingerprints.
+* `inet-fingerprint-regression`: Diagnose fingerprint mismatches and update expected fingerprints only after the changed simulation trajectory is explained.
+* `inet-ned-ini-analysis`: Trace NED inheritance, INI inheritance, wildcard precedence, module paths, `typename` selection, and effective parameter values.
+* `inet-packet-tag-debugging`: Debug INET `Packet`, chunk, protocol tag, request/indication tag, region tag, encapsulation, and metadata propagation issues.
+* `inet-build-debug-modes`: Diagnose release/debug builds, generated code, stale artifacts, model libraries, and runner/library mismatches.
 * `ieee80211-standards`: Search the generated IEEE 802.11 standards corpus and consult source PDFs when necessary.
 
 ### IEEE 802.11 standards
