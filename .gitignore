@@ -10,6 +10,10 @@ standards/**
 !standards/RFCs/catalog.json
 
 # local and generated files not to be committed
+*.pcap
+*.pcapng
+*.trace
+*.elog
 core.*
 doc/src/showcases
 doc/src/tutorials
