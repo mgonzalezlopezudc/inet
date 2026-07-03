@@ -19,7 +19,7 @@ void Ieee80211TwtExampleMgmtAp::initialize(int stage)
     Ieee80211MgmtAp::initialize(stage);
     if (stage != INITSTAGE_LAST || !par("createBroadcastSchedule"))
         return;
-    auto manager = dynamic_cast<ITwtManager *>(getModuleFromPar<cModule>(par("twtModule"), this));
+    auto manager = dynamic_cast<ITwtManager *>(findModuleFromPar<cModule>(par("twtModule"), this));
     if (manager == nullptr || !manager->isEnabled())
         return;
     TwtBroadcastSchedule schedule;
