@@ -122,6 +122,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
           mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT;
     }
     virtual bool isAxMode() const { return modeSet != nullptr && !strcmp(modeSet->getName(), "ax"); }
+    virtual bool isBeMode() const { return modeSet != nullptr && !strcmp(modeSet->getName(), "be"); }
 
     // Queue bank management (for AP mode with HE OFDMA scheduling)
     virtual StationQueueBank *createStationQueueBank(const MacAddress &staAddr);

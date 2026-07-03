@@ -405,8 +405,10 @@ void Ieee80211MgmtSta::startAssociation(ApInfo *ap, simtime_t timeout)
     // create and send association request
     const auto& body = makeShared<Ieee80211AssociationRequestFrame>();
     body->setTransmitPowerDbm(par("associationTransmitPower"));
-    body->setHeCapabilitiesPresent(true);
-    body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
+    if (isHeManagementSupported()) {
+        body->setHeCapabilitiesPresent(true);
+        body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
+    }
 
     // TODO set the following too?
     // string SSID
@@ -516,8 +518,10 @@ void Ieee80211MgmtSta::sendProbeRequest()
     const auto& body = makeShared<Ieee80211ProbeRequestFrame>();
     body->setSSID(scanning.ssid.c_str());
     body->setSupportedRates(supportedRates);
-    body->setHeCapabilitiesPresent(true);
-    body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
+    if (isHeManagementSupported()) {
+        body->setHeCapabilitiesPresent(true);
+        body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
+    }
     body->setChunkLength(B((2 + scanning.ssid.length()) + (2 + body->getSupportedRates().numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("ProbeReq", body, ST_PROBEREQUEST, scanning.bssid);
 }
@@ -769,9 +773,10 @@ void Ieee80211MgmtSta::handleAssociationResponseFrame(Packet *packet, const Ptr<
     MacAddress address = header->getTransmitterAddress();
     int statusCode = responseBody->getStatusCode();
     short aid = responseBody->getAid();
-    bool heCapabilitiesPresent = responseBody->getHeCapabilitiesPresent();
+    bool heManagementSupported = isHeManagementSupported();
+    bool heCapabilitiesPresent = heManagementSupported && responseBody->getHeCapabilitiesPresent();
     Ieee80211HeCapabilitiesElement heCapabilities = responseBody->getHeCapabilities();
-    bool heOperationPresent = responseBody->getHeOperationPresent();
+    bool heOperationPresent = heManagementSupported && responseBody->getHeOperationPresent();
     Ieee80211HeOperationElement heOperation = responseBody->getHeOperation();
     // TODO Ieee80211SupportedRatesElement supportedRates;
     delete packet;
@@ -963,10 +968,11 @@ void Ieee80211MgmtSta::storeAPInfo(Packet *packet, const Ptr<const Ieee80211Mgmt
     ap->ssid = body->getSSID();
     ap->supportedRates = body->getSupportedRates();
     ap->beaconInterval = body->getBeaconInterval();
-    ap->heCapabilitiesPresent = body->getHeCapabilitiesPresent();
+    bool heManagementSupported = isHeManagementSupported();
+    ap->heCapabilitiesPresent = heManagementSupported && body->getHeCapabilitiesPresent();
     if (ap->heCapabilitiesPresent)
         ap->heCapabilities = body->getHeCapabilities();
-    ap->heOperationPresent = body->getHeOperationPresent();
+    ap->heOperationPresent = heManagementSupported && body->getHeOperationPresent();
     if (ap->heOperationPresent)
         ap->heOperation = body->getHeOperation();
     auto signalPowerInd = packet->getTag<SignalPowerInd>();

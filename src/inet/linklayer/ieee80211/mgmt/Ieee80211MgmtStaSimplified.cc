@@ -36,13 +36,27 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
         apMib->bssAccessPointData.stations[mib->address] = Ieee80211Mib::ASSOCIATED;
         mib->bssStationData.associationId = apMib->allocateAssociationId(mib->address);
         mib->bssData.ssid = apMib->bssData.ssid;
-        apMib->setPeerHeCapabilities(mib->address, mib->localHeCapabilities, apMib->heOperation);
-        mib->setPeerHeCapabilities(apMib->address, apMib->localHeCapabilities, apMib->heOperation);
-        mib->heOperation.bssColor = apMib->heOperation.bssColor;
-        apMib->setPeerEhtCapabilities(mib->address, mib->localEhtCapabilities, apMib->ehtOperation);
-        mib->setPeerEhtCapabilities(apMib->address, apMib->localEhtCapabilities, apMib->ehtOperation);
-        mib->ehtOperation = apMib->ehtOperation;
-        EV_INFO << "Peer HE/EHT capabilities set for AP address=" << apMib->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
+        if (isHeManagementSupported()) {
+            apMib->setPeerHeCapabilities(mib->address, mib->localHeCapabilities, apMib->heOperation);
+            mib->setPeerHeCapabilities(apMib->address, apMib->localHeCapabilities, apMib->heOperation);
+            mib->heOperation.bssColor = apMib->heOperation.bssColor;
+            EV_INFO << "Peer HE capabilities set for AP address=" << apMib->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
+        }
+        else {
+            apMib->removePeerHeCapabilities(mib->address);
+            mib->removePeerHeCapabilities(apMib->address);
+            mib->heOperation.bssColor = 0;
+        }
+        if (isEhtManagementSupported()) {
+            apMib->setPeerEhtCapabilities(mib->address, mib->localEhtCapabilities, apMib->ehtOperation);
+            mib->setPeerEhtCapabilities(apMib->address, apMib->localEhtCapabilities, apMib->ehtOperation);
+            mib->ehtOperation = apMib->ehtOperation;
+            EV_INFO << "Peer EHT capabilities set for AP address=" << apMib->address << "\n";
+        }
+        else {
+            apMib->removePeerEhtCapabilities(mib->address);
+            mib->removePeerEhtCapabilities(apMib->address);
+        }
     }
 }
 

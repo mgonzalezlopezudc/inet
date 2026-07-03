@@ -14,6 +14,7 @@
 #include "inet/common/lifecycle/ModuleOperations.h"
 #include "inet/common/lifecycle/NodeStatus.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/common/packet/chunk/SequenceChunk.h"
@@ -121,6 +122,34 @@ void Ieee80211MgmtBase::dropManagementFrame(Packet *frame)
     EV << "ignoring management frame: " << (cMessage *)frame << "\n";
     delete frame;
     numMgmtFramesDropped++;
+}
+
+bool Ieee80211MgmtBase::isHeManagementSupported()
+{
+    if (modeSet != nullptr)
+        return !strcmp(modeSet->getName(), "ax") || !strcmp(modeSet->getName(), "be");
+    try {
+        auto mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
+        return mac->isAxMode() || mac->isBeMode();
+    }
+    catch (const cException& e) {
+        EV_DEBUG << "Could not resolve MAC mode set for HE management support: " << e.what() << "\n";
+        return false;
+    }
+}
+
+bool Ieee80211MgmtBase::isEhtManagementSupported()
+{
+    if (modeSet != nullptr)
+        return !strcmp(modeSet->getName(), "be");
+    try {
+        auto mac = check_and_cast<Ieee80211Mac *>(getModuleFromPar<cModule>(par("macModule"), this));
+        return mac->isBeMode();
+    }
+    catch (const cException& e) {
+        EV_DEBUG << "Could not resolve MAC mode set for EHT management support: " << e.what() << "\n";
+        return false;
+    }
 }
 
 void Ieee80211MgmtBase::processFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header)
