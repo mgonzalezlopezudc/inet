@@ -10,6 +10,7 @@ standards/**
 !standards/RFCs/catalog.json
 
 # local and generated files not to be committed
+.ccache
 *.pcap
 *.pcapng
 *.trace

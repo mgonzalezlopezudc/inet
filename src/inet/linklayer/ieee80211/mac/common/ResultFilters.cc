@@ -16,7 +16,7 @@ namespace ieee80211 {
 
 static Ptr<const Ieee80211MacHeader> peekMacHeader(Packet *packet)
 {
-    return dynamicPtrCast<const Ieee80211MacHeader>(packet->peekAtFront());
+    return packet->peekAtFront<Ieee80211MacHeader>();
 }
 
 Register_ResultFilter("ieee80211Unicast", Ieee80211UnicastFilter);
