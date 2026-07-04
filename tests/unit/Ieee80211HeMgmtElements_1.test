@@ -82,25 +82,25 @@ sixGhzCapabilities.maxMpduLength = 11454;
 request->setHe6GhzBandCapabilitiesPresent(true);
 request->setHe6GhzBandCapabilities(sixGhzCapabilities);
 
-request->setChunkLength(B(56));
+request->setChunkLength(B(54));
 
 auto packet = new Packet("he-mgmt", request);
 auto bytes = packet->peekDataAsBytes();
-ASSERT(bytes->getChunkLength() == B(56));
+ASSERT(bytes->getChunkLength() == B(54));
 
 const auto& raw = bytes->getBytes();
-ASSERT(raw[14] == 255);
-ASSERT(raw[15] == 26);
-ASSERT(raw[16] == 35);
-ASSERT(raw[42] == 255);
-ASSERT(raw[43] == 7);
-ASSERT(raw[44] == 36);
-ASSERT(raw[51] == 255);
-ASSERT(raw[52] == 3);
-ASSERT(raw[53] == 59);
-ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 14, raw.begin() + 17)) == "ff1a23");
-ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 42, raw.begin() + 45)) == "ff0724");
-ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 51, raw.begin() + 54)) == "ff033b");
+ASSERT(raw[12] == 255);
+ASSERT(raw[13] == 26);
+ASSERT(raw[14] == 35);
+ASSERT(raw[40] == 255);
+ASSERT(raw[41] == 7);
+ASSERT(raw[42] == 36);
+ASSERT(raw[49] == 255);
+ASSERT(raw[50] == 3);
+ASSERT(raw[51] == 59);
+ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 12, raw.begin() + 15)) == "ff1a23");
+ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 40, raw.begin() + 43)) == "ff0724");
+ASSERT(bytesToHex(std::vector<uint8_t>(raw.begin() + 49, raw.begin() + 52)) == "ff033b");
 
 auto received = new Packet("he-mgmt-rx", bytes);
 auto decoded = received->popAtFront<Ieee80211AssociationRequestFrame>();
