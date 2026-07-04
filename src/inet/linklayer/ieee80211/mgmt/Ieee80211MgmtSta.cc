@@ -414,7 +414,7 @@ void Ieee80211MgmtSta::startAssociation(ApInfo *ap, simtime_t timeout)
     // string SSID
 //    Ieee80211SupportedRatesElement supportedRates;
 
-    body->setChunkLength(B(2 + 2 + (2 + strlen(body->getSSID())) + (2 + body->getSupportedRates().numRates) + 2) + getHeMgmtElementsLength(body));
+    body->setChunkLength(B(2 + 2 + (2 + strlen(body->getSSID())) + (2 + body->getSupportedRates().numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("Assoc", body, ST_ASSOCIATIONREQUEST, ap->address);
 
     // schedule timeout
