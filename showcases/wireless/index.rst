@@ -32,6 +32,10 @@ IEEE 802.11:
    blockack/doc/index
    aggregation/doc/index
    txop/doc/index
+   heofdma/doc/index
+   bsscoloring/doc/index
+   twt/doc/index
+   hefeatures/doc/index
    errorrate/doc/index
    hiddennode/doc/index
    multiradio/doc/index
