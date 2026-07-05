@@ -287,7 +287,10 @@ def create_role(app, tag_filename, rootdir):
         except LookupError as error:
             inliner.reporter.warning('Could not find match for `%s` in `%s` tag file. Error reported was %s' % (part, tag_filename, error), line=lineno)
             pnode = nodes.inline(title, title)
-            pnode.set_class('reference-'+name)
+            cls = ('reference-' + name).lower()
+            classes = pnode.attributes.setdefault('classes', [])
+            if cls not in classes:
+                classes.append(cls)
             return [pnode], []
         except ParseException as error:
             inliner.reporter.warning('Error while parsing `%s`. Is not a well-formed C++ function call or symbol.'
@@ -308,7 +311,10 @@ def create_role(app, tag_filename, rootdir):
             title = join(title, '()')
 
         pnode = nodes.reference(title, title, internal=False, refuri=full_url)
-        pnode.set_class('reference-'+name)
+        cls = ('reference-' + name).lower()
+        classes = pnode.setdefault('classes', [])
+        if cls not in classes:
+            classes.append(cls)
         return [pnode], []
 
     return find_doxygen_link
