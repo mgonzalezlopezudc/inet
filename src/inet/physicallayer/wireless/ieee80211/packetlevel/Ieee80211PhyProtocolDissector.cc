@@ -27,14 +27,43 @@ Register_Protocol_Dissector(&Protocol::ieee80211HtPhy, Ieee80211PhyProtocolDisse
 Register_Protocol_Dissector(&Protocol::ieee80211VhtPhy, Ieee80211PhyProtocolDissector);
 Register_Protocol_Dissector(&Protocol::ieee80211HePhy, Ieee80211PhyProtocolDissector);
 
+namespace {
+
+const int tolerantParsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
+
+void visitRemainingData(Packet *packet, ProtocolDissector::ICallback& callback, const Protocol *protocol)
+{
+    if (packet->getDataLength() != b(0)) {
+        const auto& data = packet->popAtFront(packet->getDataLength(), tolerantParsingFlags);
+        callback.visitChunk(data, protocol);
+    }
+}
+
+} // namespace
+
 void Ieee80211PhyProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
-    auto protocolTag = packet->getTag<PacketProtocolTag>()->getProtocol();
-    callback.startProtocolDataUnit(protocolTag);
+    auto phyProtocol = protocol;
+    if (phyProtocol == nullptr) {
+        const auto& packetProtocolTag = packet->findTag<PacketProtocolTag>();
+        phyProtocol = packetProtocolTag != nullptr ? packetProtocolTag->getProtocol() : nullptr;
+    }
+    callback.startProtocolDataUnit(phyProtocol);
     auto originalBackOffset = packet->getBackOffset();
     auto payloadEndOffset = packet->getFrontOffset();
-    const auto& header = physicallayer::Ieee80211Radio::popIeee80211PhyHeaderAtFront(packet, b(-1), Chunk::PF_ALLOW_INCORRECT);
-    callback.visitChunk(header, protocolTag);
+    Ptr<const physicallayer::Ieee80211PhyHeader> header;
+    try {
+        header = physicallayer::Ieee80211Radio::popIeee80211PhyHeaderAtFront(packet, b(-1), tolerantParsingFlags);
+    }
+    catch (cRuntimeError&) {
+        callback.markIncorrect();
+        visitRemainingData(packet, callback, phyProtocol);
+        callback.endProtocolDataUnit(phyProtocol);
+        return;
+    }
+    if (header->isIncorrect() || header->isIncomplete() || header->isImproperlyRepresented())
+        callback.markIncorrect();
+    callback.visitChunk(header, phyProtocol);
     payloadEndOffset += header->getChunkLength() + header->getLengthField();
     bool incorrect = (payloadEndOffset > originalBackOffset || b(header->getLengthField()) < header->getChunkLength());
     if (incorrect) {
@@ -42,15 +71,20 @@ void Ieee80211PhyProtocolDissector::dissect(Packet *packet, const Protocol *prot
         payloadEndOffset = originalBackOffset;
     }
     packet->setBackOffset(payloadEndOffset);
-    callback.dissectPacket(packet, &Protocol::ieee80211Mac);
+    try {
+        callback.dissectPacket(packet, &Protocol::ieee80211Mac);
+    }
+    catch (...) {
+        packet->setBackOffset(originalBackOffset);
+        throw;
+    }
     packet->setBackOffset(originalBackOffset);
     auto paddingLength = packet->getDataLength();
     if (paddingLength > b(0)) {
-        const auto& padding = packet->popAtFront(paddingLength);
-        callback.visitChunk(padding, protocolTag);
+        const auto& padding = packet->popAtFront(paddingLength, tolerantParsingFlags);
+        callback.visitChunk(padding, phyProtocol);
     }
-    callback.endProtocolDataUnit(protocolTag);
+    callback.endProtocolDataUnit(phyProtocol);
 }
 
 } // namespace inet
-
