@@ -8,6 +8,7 @@ undissected body bytes, such as HE Trigger frames.
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/common/packet/printer/PacketPrinter.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MacProtocolPrinter.h"
 
 using namespace inet;
 using namespace inet::ieee80211;
@@ -49,8 +50,20 @@ qosNullPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
 text = printer.printPacketToString(&qosNullPacket);
 ASSERT(text.find("Condition") == std::string::npos);
 ASSERT(text.find("QoS Null") != std::string::npos);
+ASSERT(text.find("BSR") != std::string::npos);
 std::cout << text;
 std::cout << "Packet printer accepted empty QoS Null payload.\n";
+
+Ieee80211MacProtocolPrinter macProtocolPrinter;
+ProtocolPrinter::Context macContext;
+auto msduSubframe = makeShared<Ieee80211MsduSubframeHeader>();
+msduSubframe->setSa(MacAddress("0A-AA-00-00-00-04"));
+msduSubframe->setDa(MacAddress("0A-AA-00-00-00-05"));
+msduSubframe->setLength(64);
+macProtocolPrinter.print(msduSubframe, &Protocol::ieee80211Mac, nullptr, macContext);
+ASSERT(macContext.typeColumn.str().find("MSDU subframe") != std::string::npos);
+ASSERT(macContext.infoColumn.str().find("64") != std::string::npos);
+std::cout << "Packet printer accepted MSDU subframe.\n";
 
 Packet delimiterPacket("he-mpdu-delimiter");
 auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
@@ -83,6 +96,50 @@ ASSERT(text.find("Condition") == std::string::npos);
 ASSERT(text.find("ACK") != std::string::npos);
 std::cout << text;
 std::cout << "Packet printer accepted aggregated MPDU subframe.\n";
+
+Packet twtPacket("twt-setup");
+auto twtSetup = makeShared<Ieee80211TwtSetupFrame>();
+twtSetup->setReceiverAddress(MacAddress("0A-AA-00-00-00-01"));
+twtSetup->setTransmitterAddress(MacAddress("0A-AA-00-00-00-02"));
+twtSetup->setAddress3(MacAddress("0A-AA-00-00-00-01"));
+twtSetup->setSequenceNumber(SequenceNumberCyclic(9));
+twtSetup->setFragmentNumber(0);
+twtSetup->setDialogToken(3);
+twtSetup->setTwtRequest(true);
+twtSetup->setTrigger(true);
+twtSetup->setFlowId(2);
+twtPacket.insertAtBack(twtSetup);
+twtPacket.insertAtBack(makeShared<Ieee80211MacTrailer>());
+twtPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
+
+text = printer.printPacketToString(&twtPacket);
+ASSERT(text.find("Condition") == std::string::npos);
+ASSERT(text.find("TWT setup") != std::string::npos);
+std::cout << text;
+std::cout << "Packet printer accepted TWT action frame.\n";
+
+Packet multiStaBlockAckPacket("multi-sta-block-ack");
+auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
+multiStaBlockAck->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+multiStaBlockAck->setTransmitterAddress(MacAddress("0A-AA-00-00-00-02"));
+multiStaBlockAck->setRecordsArraySize(1);
+Ieee80211MultiStaBlockAckRecord blockAckRecord;
+blockAckRecord.aid = 7;
+blockAckRecord.tid = 5;
+blockAckRecord.startingSequenceNumber = 12;
+blockAckRecord.bitmap = 3;
+blockAckRecord.responseReceived = true;
+multiStaBlockAck->setRecords(0, blockAckRecord);
+multiStaBlockAck->setChunkLength(B(18 + 12));
+multiStaBlockAckPacket.insertAtBack(multiStaBlockAck);
+multiStaBlockAckPacket.insertAtBack(makeShared<Ieee80211MacTrailer>());
+multiStaBlockAckPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
+
+text = printer.printPacketToString(&multiStaBlockAckPacket);
+ASSERT(text.find("Condition") == std::string::npos);
+ASSERT(text.find("multi-sta") != std::string::npos);
+std::cout << text;
+std::cout << "Packet printer accepted Multi-STA Block Ack.\n";
 std::cout << "Packet printer accepted 802.11 display frames.\n";
 
 %contains: stdout
