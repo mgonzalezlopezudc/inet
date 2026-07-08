@@ -1,0 +1,97 @@
+%description:
+Test that the packet printer can display IEEE 802.11 PHY header alternatives.
+
+%includes:
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/printer/PacketPrinter.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyProtocolPrinter.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+%activity:
+
+Packet macPacket("inner-ack");
+auto ackHeader = makeShared<Ieee80211MacHeader>();
+ackHeader->setType(ST_ACK);
+ackHeader->setReceiverAddress(MacAddress("0A-AA-00-00-00-01"));
+macPacket.insertAtBack(ackHeader);
+macPacket.insertAtBack(makeShared<Ieee80211MacTrailer>());
+
+Packet ofdmPacket("ofdm-ack");
+auto ofdmHeader = makeShared<Ieee80211OfdmPhyHeader>();
+ofdmHeader->setLengthField(macPacket.getDataLength());
+ofdmHeader->setRate(11);
+ofdmHeader->setService(0);
+ofdmPacket.insertAtBack(ofdmHeader);
+ofdmPacket.insertAtBack(macPacket.peekAll());
+ofdmPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211OfdmPhy);
+
+PacketPrinter printer;
+auto text = printer.printPacketToString(&ofdmPacket);
+ASSERT(text.find("Condition") == std::string::npos);
+ASSERT(text.find("OFDM PHY") != std::string::npos);
+std::cout << text;
+std::cout << "Packet printer accepted OFDM PHY header.\n";
+
+Packet hePacket("he-mu");
+auto heHeader = makeShared<Ieee80211HeMuPhyHeader>();
+heHeader->setLengthField(macPacket.getDataLength());
+heHeader->setPpduFormat(0);
+heHeader->setBssColor(1);
+heHeader->setUsersArraySize(1);
+Ieee80211HeMuUserInfo heUser;
+heUser.ruIndex = 4;
+heUser.ruToneSize = 106;
+heUser.staId = 7;
+heUser.mcs = 3;
+heUser.numberOfSpatialStreams = 2;
+heUser.psduLength = macPacket.getDataLength();
+heHeader->setUsers(0, heUser);
+hePacket.insertAtBack(heHeader);
+hePacket.insertAtBack(macPacket.peekAll());
+hePacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+text = printer.printPacketToString(&hePacket);
+ASSERT(text.find("Condition") == std::string::npos);
+ASSERT(text.find("HE MU PHY") != std::string::npos);
+ASSERT(text.find("STA7") != std::string::npos);
+std::cout << text;
+std::cout << "Packet printer accepted HE MU PHY header.\n";
+
+Ieee80211PhyProtocolPrinter phyProtocolPrinter;
+ProtocolPrinter::Context phyContext;
+auto hePayloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
+hePayloadHeader->setRuIndex(4);
+hePayloadHeader->setStaId(7);
+hePayloadHeader->setMcs(3);
+hePayloadHeader->setNumberOfSpatialStreams(2);
+hePayloadHeader->setMpduLength(B(14));
+phyProtocolPrinter.print(hePayloadHeader, &Protocol::ieee80211HePhy, nullptr, phyContext);
+ASSERT(phyContext.typeColumn.str().find("HE RU payload") != std::string::npos);
+ASSERT(phyContext.infoColumn.str().find("STA7") != std::string::npos);
+
+ProtocolPrinter::Context ehtContext;
+auto ehtHeader = makeShared<Ieee80211EhtPhyHeader>();
+ehtHeader->setLengthField(B(14));
+ehtHeader->setPpduFormat(0);
+ehtHeader->setUsersArraySize(1);
+Ieee80211EhtUserInfo ehtUser;
+ehtUser.mruIndex = 2;
+ehtUser.staId = 8;
+ehtUser.mcs = 4;
+ehtUser.numberOfSpatialStreams = 1;
+ehtUser.psduLength = B(14);
+ehtHeader->setUsers(0, ehtUser);
+phyProtocolPrinter.print(ehtHeader, &Protocol::ieee80211HePhy, nullptr, ehtContext);
+ASSERT(ehtContext.typeColumn.str().find("EHT MU PHY") != std::string::npos);
+ASSERT(ehtContext.infoColumn.str().find("STA8") != std::string::npos);
+
+std::cout << "Packet printer accepted PHY display headers.\n";
+
+%contains: stdout
+Packet printer accepted PHY display headers.
