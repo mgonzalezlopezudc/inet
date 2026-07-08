@@ -18,7 +18,13 @@ Register_Protocol_Printer(&Protocol::ieee80211Mac, Ieee80211MacProtocolPrinter);
 
 void Ieee80211MacProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Protocol *protocol, const cMessagePrinter::Options *options, Context& context) const
 {
-    if (auto macHeader = dynamicPtrCast<const Ieee80211MacHeader>(chunk)) {
+    if (auto mpduSubframeHeader = dynamicPtrCast<const Ieee80211MpduSubframeHeader>(chunk)) {
+        context.infoColumn << "A-MPDU length=" << mpduSubframeHeader->getLength();
+        if (mpduSubframeHeader->getEof())
+            context.infoColumn << " EOF";
+        context.typeColumn << "MPDU delimiter";
+    }
+    else if (auto macHeader = dynamicPtrCast<const Ieee80211MacHeader>(chunk)) {
         context.infoColumn << "WLAN ";
         if (auto oneAddressHeader = dynamicPtrCast<const Ieee80211OneAddressHeader>(chunk))
             context.destinationColumn << oneAddressHeader->getReceiverAddress();

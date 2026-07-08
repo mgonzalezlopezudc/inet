@@ -51,6 +51,38 @@ ASSERT(text.find("Condition") == std::string::npos);
 ASSERT(text.find("QoS Null") != std::string::npos);
 std::cout << text;
 std::cout << "Packet printer accepted empty QoS Null payload.\n";
+
+Packet delimiterPacket("he-mpdu-delimiter");
+auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+delimiter->setLength(0);
+delimiterPacket.insertAtBack(delimiter);
+delimiterPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
+
+text = printer.printPacketToString(&delimiterPacket);
+ASSERT(text.find("Condition") == std::string::npos);
+ASSERT(text.find("MPDU delimiter") != std::string::npos);
+std::cout << text;
+std::cout << "Packet printer accepted MPDU delimiter.\n";
+
+Packet innerPacket("inner-ack");
+auto ackHeader = makeShared<Ieee80211MacHeader>();
+ackHeader->setType(ST_ACK);
+ackHeader->setReceiverAddress(MacAddress("0A-AA-00-00-00-03"));
+innerPacket.insertAtBack(ackHeader);
+innerPacket.insertAtBack(makeShared<Ieee80211MacTrailer>());
+
+Packet aggregatedPacket("he-ampdu");
+auto aggregateDelimiter = makeShared<Ieee80211MpduSubframeHeader>();
+aggregateDelimiter->setLength(innerPacket.getDataLength().get<B>());
+aggregatedPacket.insertAtBack(aggregateDelimiter);
+aggregatedPacket.insertAtBack(innerPacket.peekAll());
+aggregatedPacket.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211Mac);
+
+text = printer.printPacketToString(&aggregatedPacket);
+ASSERT(text.find("Condition") == std::string::npos);
+ASSERT(text.find("ACK") != std::string::npos);
+std::cout << text;
+std::cout << "Packet printer accepted aggregated MPDU subframe.\n";
 std::cout << "Packet printer accepted 802.11 display frames.\n";
 
 %contains: stdout
