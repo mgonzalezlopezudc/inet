@@ -229,6 +229,11 @@ RUN="${3:-0}"
 
 export PATH="$OMNETPP_ROOT/bin:$PATH"
 export LD_LIBRARY_PATH="$OMNETPP_ROOT/lib:$INET_ROOT/src:${LD_LIBRARY_PATH:-}"
+# Preserve the GUI environment from a shell where Qtenv works. Without these,
+# Qt may abort during QApplication startup when launched from LLDB/lldb-mcp.
+export DISPLAY="${DISPLAY:-:0}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}"
+export XAUTHORITY="${XAUTHORITY:-$HOME/.Xauthority}"
 
 exec lldb -- "$OMNETPP_ROOT/bin/opp_run_dbg" \
   -u Qtenv \
@@ -250,6 +255,15 @@ thread backtrace all
 frame variable
 ```
 
+For batch `lldb -b` launches, put the display variables on the LLDB command
+itself so the debuggee inherits them, for example:
+
+```sh
+env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+  lldb -b -o 'breakpoint set --name handleMessage' -o run -- \
+  "$OMNETPP_ROOT/bin/opp_run_dbg" -u Qtenv ...
+```
+
 ## Fallback: drive interactive Qtenv through its own MCP server
 
 Qtenv is interactive: `-c` and `-r` only preselect the run in the GUI, they do
@@ -259,7 +273,8 @@ start Qtenv with its own OMNeT++ MCP server and call `run_simulation` over
 localhost:
 
 ```sh
-opp_run_dbg -u Qtenv \
+env DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
+  opp_run_dbg -u Qtenv \
   -f "$INI_FILE" \
   -n "$INET_ROOT/src;$INET_ROOT/examples" \
   "--image-path=$INET_ROOT/images;$OMNETPP_ROOT/images" \
