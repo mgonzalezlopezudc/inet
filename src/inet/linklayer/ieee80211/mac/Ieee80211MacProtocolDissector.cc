@@ -38,6 +38,77 @@ void visitRemainingData(Packet *packet, ProtocolDissector::ICallback& callback, 
     }
 }
 
+bool isMpduSubframeHeaderAtFront(Packet *packet)
+{
+    try {
+        return dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(packet->peekAtFront(b(-1), tolerantParsingFlags)) != nullptr;
+    }
+    catch (cRuntimeError&) {
+        return false;
+    }
+}
+
+void dissectAggregatedMpdu(Packet *packet, ProtocolDissector::ICallback& callback)
+{
+    int paddingLength = 0;
+    while (packet->getDataLength() > b(0)) {
+        int padding = paddingLength == 4 ? 0 : paddingLength;
+        if (padding != 0) {
+            if (packet->getDataLength() < B(padding))
+                callback.markIncorrect();
+            if (packet->getDataLength() <= B(padding)) {
+                visitRemainingData(packet, callback, &Protocol::ieee80211Mac);
+                break;
+            }
+            const auto& paddingChunk = packet->popAtFront(B(padding), tolerantParsingFlags);
+            callback.visitChunk(paddingChunk, &Protocol::ieee80211Mac);
+        }
+        if (packet->getDataLength() < ieee80211::LENGTH_A_MPDU_SUBFRAME_HEADER) {
+            callback.markIncorrect();
+            visitRemainingData(packet, callback, &Protocol::ieee80211Mac);
+            break;
+        }
+        Ptr<const ieee80211::Ieee80211MpduSubframeHeader> mpduSubframeHeader;
+        try {
+            mpduSubframeHeader = packet->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(b(-1), tolerantParsingFlags);
+        }
+        catch (cRuntimeError&) {
+            callback.markIncorrect();
+            visitRemainingData(packet, callback, &Protocol::ieee80211Mac);
+            break;
+        }
+        if (isMalformed(mpduSubframeHeader))
+            callback.markIncorrect();
+        callback.visitChunk(mpduSubframeHeader, &Protocol::ieee80211Mac);
+        auto mpduDataLength = mpduSubframeHeader->getLength();
+        if (mpduDataLength < 0) {
+            callback.markIncorrect();
+            visitRemainingData(packet, callback, &Protocol::ieee80211Mac);
+            break;
+        }
+        auto mpduLength = B(mpduDataLength);
+        if (mpduLength > packet->getDataLength()) {
+            callback.markIncorrect();
+            visitRemainingData(packet, callback, &Protocol::ieee80211Mac);
+            break;
+        }
+        auto mpduEndOffset = packet->getFrontOffset() + mpduLength;
+        auto originalTrailerPopOffset = packet->getBackOffset();
+        packet->setBackOffset(mpduEndOffset);
+        try {
+            if (mpduLength != B(0))
+                callback.dissectPacket(packet, &Protocol::ieee80211Mac);
+        }
+        catch (...) {
+            packet->setBackOffset(originalTrailerPopOffset);
+            throw;
+        }
+        paddingLength = (4 - (mpduSubframeHeader->getChunkLength() + mpduLength).get<B>() % 4) % 4;
+        packet->setBackOffset(originalTrailerPopOffset);
+        packet->setFrontOffset(mpduEndOffset);
+    }
+}
+
 } // namespace
 
 const Protocol *Ieee80211MacProtocolDissector::computeLlcProtocol(Packet *packet) const
@@ -69,6 +140,11 @@ const Protocol *Ieee80211MacProtocolDissector::computeLlcProtocol(Packet *packet
 void Ieee80211MacProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     callback.startProtocolDataUnit(&Protocol::ieee80211Mac);
+    if (isMpduSubframeHeaderAtFront(packet)) {
+        dissectAggregatedMpdu(packet, callback);
+        callback.endProtocolDataUnit(&Protocol::ieee80211Mac);
+        return;
+    }
     Ptr<const inet::ieee80211::Ieee80211MacHeader> header;
     try {
         header = packet->popAtFront<inet::ieee80211::Ieee80211MacHeader>(b(-1), tolerantParsingFlags);
