@@ -815,7 +815,7 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
     if (receivedPacket == nullptr)
         return;
     auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
-    if (isHeMuContainerPacket(lastTransmittedPacket) && !dynamicPtrCast<const Ieee80211BasicBlockAck>(receivedHeader))
+    if (isHeMuContainerPacket(lastTransmittedPacket) && !dynamicPtrCast<const Ieee80211BlockAck>(receivedHeader))
         return;
     Enter_Method("originatorProcessReceivedFrame");
     EV_INFO << "Processing received frame " << receivedPacket->getName() << " as originator in frame sequence.\n";

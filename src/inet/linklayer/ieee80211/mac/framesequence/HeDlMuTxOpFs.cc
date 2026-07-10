@@ -116,7 +116,7 @@ simtime_t estimateTriggeredBlockAckDuration(int ruToneSize,
     ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
     ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
     ru.bandwidth = Hz(ru.toneSize * 78125.0);
-    return computeHeUserPhyParameters(LENGTH_BASIC_BLOCKACK, ru, 0, 1, false,
+    return computeHeUserPhyParameters(LENGTH_COMPRESSED_BLOCKACK, ru, 0, 1, false,
             guardInterval, coding).duration;
 }
 
@@ -416,10 +416,10 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         std::set<MacAddress> responded;
         EV_INFO << "HE DL MU-BAR FS: processing MU-BAR responses, triggerId = " << owner->ackTriggerId << "\n";
         for (auto packet : collection->getReceivedFrames()) {
-            auto blockAck = dynamicPtrCast<const Ieee80211BasicBlockAck>(
+            auto blockAck = dynamicPtrCast<const Ieee80211CompressedBlockAck>(
                     packet->peekAtFront<Ieee80211MacHeader>());
             if (blockAck == nullptr) {
-                EV_WARN << "HE DL MU-BAR FS: received non-BlockAck frame in MU-BAR response window\n";
+                EV_WARN << "HE DL MU-BAR FS: received non-compressed BlockAck frame in MU-BAR response window\n";
                 continue;
             }
             auto expected = std::find_if(owner->activeAllocations.begin(),
@@ -790,7 +790,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     ASSERT(selectedAllocations.size() >= 2);
 
-    auto dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
+    Ptr<Ieee80211BlockAckReq> dummyReq;
+    if (ackMethod == AckMethod::MU_BAR_TRIGGER)
+        dummyReq = makeShared<Ieee80211CompressedBlockAckReq>();
+    else
+        dummyReq = makeShared<Ieee80211BasicBlockAckReq>();
     auto responseMode = rateSelection->computeResponseBlockAckFrameMode(container, dummyReq);
     for (size_t idx = 0; idx < selectedAllocations.size(); ++idx) {
         simtime_t responseDuration = responseMode->getDuration(LENGTH_BASIC_BLOCKACK);

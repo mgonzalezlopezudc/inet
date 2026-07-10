@@ -1,5 +1,5 @@
 %description:
-Test HeDlMuTxOpFs TXOP trimming, BA-window exhaustion, per-user packing, and fallback below two users.
+Test HeDlMuTxOpFs TXOP trimming, compressed MU-BAR Block Ack timing, BA-window exhaustion, per-user packing, and fallback below two users.
 
 %includes:
 #include <map>
@@ -67,9 +67,19 @@ class MockDlMuRateSelection : public cSimpleModule, public IQosRateSelection
     }
 
   public:
+    bool compressedBlockAckReqSeen = false;
+    int blockAckReqCount = 0;
+
+    void resetObservedRequests() { compressedBlockAckReqSeen = false; blockAckReqCount = 0; }
+
     virtual const IIeee80211Mode *computeResponseCtsFrameMode(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) override { return nullptr; }
     virtual const IIeee80211Mode *computeResponseAckFrameMode(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { return getSlowHeMode(); }
-    virtual const IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override { return getSlowHeMode(); }
+    virtual const IIeee80211Mode *computeResponseBlockAckFrameMode(Packet *packet, const Ptr<const Ieee80211BlockAckReq>& blockAckReq) override
+    {
+        blockAckReqCount++;
+        compressedBlockAckReqSeen |= blockAckReq != nullptr && blockAckReq->getCompressedBitmap();
+        return getSlowHeMode();
+    }
     virtual const IIeee80211Mode *computeMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, TxopProcedure *txopProcedure) override { return getSlowHeMode(); }
 };
 
@@ -279,6 +289,15 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     parameters.warnIneligible = [] (Packet *, const MacAddress&, Tid, int, const char *) {};
     return parameters;
 };
+
+{
+    clearQueue(pendingQueue);
+    auto compressedBlockAck = makeShared<Ieee80211CompressedBlockAck>();
+    requireTrue(LENGTH_COMPRESSED_BLOCKACK == B(32), "compressed Block Ack frame length should be 32 bytes including FCS");
+    requireTrue(compressedBlockAck->getChunkLength() == LENGTH_COMPRESSED_BLOCKACK - B(4),
+            "compressed Block Ack header should exclude only the FCS");
+    EV << "Compressed Block Ack uses the standard 32-byte frame length.\n";
+}
 
 {
     clearQueue(pendingQueue);
@@ -501,12 +520,41 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
     HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)),
-            modeSet, pendingQueue, &ackHandler, callback);
+            modeSet, pendingQueue, &ackHandler, callback, 16, 6500631,
+            SimTime(5.484, SIMTIME_MS), HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "106-tone MU-BAR responses should leave payload time in an AC_VO TXOP");
     requireTrue(fs.getActiveAllocations().size() == 2, "voice TXOP should preserve both 106-tone users");
     EV << "MU-BAR response timing used scheduled RU widths within the voice TXOP.\n";
+    delete step;
+    delete fsContext;
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("mixed-voice-txop-sta1", sta1, tid, 0, 100));
+    pendingQueue->enqueuePacket(makeDataPacket("mixed-voice-txop-sta2", sta2, tid, 0, 100));
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 52)});
+    MockDlMuAckHandler ackHandler;
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid);
+    baHandler.addAgreement(sta2, tid);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    auto rateSelection = check_and_cast<MockDlMuRateSelection *>(callback->getSubmodule("rateSelection"));
+    rateSelection->resetObservedRequests();
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)),
+            modeSet, pendingQueue, &ackHandler, callback, 16, 6500631,
+            SimTime(5.484, SIMTIME_MS), HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER);
+    fs.startSequence(fsContext, 0);
+    auto step = fs.prepareStep(fsContext);
+    requireTrue(step != nullptr, "compressed 52-tone MU-BAR response should leave payload time in an AC_VO TXOP");
+    requireTrue(fs.getActiveAllocations().size() == 2, "compressed response timing should preserve both mixed-RU users");
+    requireTrue(rateSelection->blockAckReqCount > 0, "MU-BAR timing should query the Block Ack response mode");
+    requireTrue(rateSelection->compressedBlockAckReqSeen, "MU-BAR timing should select a compressed BlockAckReq response mode");
+    EV << "Compressed MU-BAR timing preserved mixed 106/52-tone users in the voice TXOP.\n";
     delete step;
     delete fsContext;
 }
@@ -524,7 +572,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
     HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)),
-            modeSet, pendingQueue, &ackHandler, callback);
+            modeSet, pendingQueue, &ackHandler, callback, 16, 6500631,
+            SimTime(5.484, SIMTIME_MS), HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step == nullptr, "26-tone MU-BAR responses should not overrun an AC_VO TXOP");
@@ -535,6 +584,9 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
 
 clearQueue(pendingQueue);
 EV << ".\n";
+
+%contains: stdout
+Compressed Block Ack uses the standard 32-byte frame length.
 
 %contains: stdout
 Planner produced deterministic multi-user packing without queue mutation.
@@ -568,6 +620,9 @@ TXOP/PPDU duration trimming reduced the packed MPDU set while preserving MU oper
 
 %contains: stdout
 MU-BAR response timing used scheduled RU widths within the voice TXOP.
+
+%contains: stdout
+Compressed MU-BAR timing preserved mixed 106/52-tone users in the voice TXOP.
 
 %contains: stdout
 MU-BAR response timing rejected a genuinely too-narrow voice TXOP.

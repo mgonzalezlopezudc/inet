@@ -230,9 +230,8 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
 {
     // 9.3.1.22.4 defines MU-BAR Trigger User Info as BAR Control plus BAR
-    // Information.  26.4.2 requires Ack Type=0 block-ack context for a
-    // Multi-STA BlockAck sent in response to MU-BAR; this helper models the
-    // single-STA Basic BlockAck response carried in the assigned HE TB PPDU.
+    // Information.  26.4.5 requires a Compressed BlockAck response when the
+    // addressed User Info field contains a Compressed BlockAckReq variant.
     auto myAid = mac->getMib()->bssStationData.associationId;
     const Ieee80211HeTriggerUserInfo *selected = nullptr;
     for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i)
@@ -244,19 +243,22 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
             nullptr : recipientBlockAckAgreementHandler->getAgreement(
                     selected->tid, trigger->getTransmitterAddress());
     if (agreement != nullptr) {
-        auto blockAck = makeShared<Ieee80211BasicBlockAck>();
+        if (!selected->muBarCompressedBitmap || selected->muBarMultiTid)
+            throw cRuntimeError("Unsupported MU-BAR BlockAckReq variant");
+        auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
         auto startingSequenceNumber = agreement->getStartingSequenceNumber();
+        std::vector<uint8_t> bytes(8, 0);
+        BitVector bitmap(bytes);
         for (int i = 0; i < 64; ++i) {
-            auto& bitmap = blockAck->getBlockAckBitmapForUpdate(i);
-            for (FragmentNumber fragment = 0; fragment < 16; ++fragment)
-                bitmap.setBit(fragment, agreement->getBlockAckRecord()->getAckState(
-                        startingSequenceNumber + i, fragment));
+            bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, 0);
+            bitmap.setBit(i, ackState);
         }
         blockAck->setReceiverAddress(trigger->getTransmitterAddress());
         blockAck->setTransmitterAddress(mac->getAddress());
-        blockAck->setCompressedBitmap(false);
+        blockAck->setCompressedBitmap(true);
         blockAck->setStartingSequenceNumber(startingSequenceNumber);
         blockAck->setTidInfo(selected->tid);
+        blockAck->setBlockAckBitmap(bitmap);
         blockAck->setDurationField(SIMTIME_ZERO);
         auto response = new Packet("HE-TB-BlockAck", blockAck);
         response->insertAtBack(makeShared<Ieee80211MacTrailer>());
