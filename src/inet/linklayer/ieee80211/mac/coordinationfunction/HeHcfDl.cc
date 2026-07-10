@@ -222,7 +222,10 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             IIeee80211HeDlScheduler::CandidateInfo candidate;
             candidate.staAddress = dest;
             candidate.accessCategory = ac;
-            candidate.holPacketBytes = pkt->getByteLength();
+            // DL MU payloads are carried as A-MPDU subframes. Include the
+            // delimiter in the HoL size so scheduler airtime estimates match
+            // the packing planner's single-MPDU PSDU length.
+            candidate.holPacketBytes = B(4).get<B>() + pkt->getByteLength();
             auto enqueueTimeTag = pkt->findTag<OrigEnqueueTimeTag>();
             candidate.holEnqueueTime = enqueueTimeTag == nullptr ? pkt->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
             candidate.holDelay = simTime() - candidate.holEnqueueTime;

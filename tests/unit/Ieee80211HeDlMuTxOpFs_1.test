@@ -488,6 +488,51 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     delete fsContext;
 }
 
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("voice-txop-sta1", sta1, tid, 0, 100));
+    pendingQueue->enqueuePacket(makeDataPacket("voice-txop-sta2", sta2, tid, 0, 100));
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
+    MockDlMuAckHandler ackHandler;
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid);
+    baHandler.addAgreement(sta2, tid);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)),
+            modeSet, pendingQueue, &ackHandler, callback);
+    fs.startSequence(fsContext, 0);
+    auto step = fs.prepareStep(fsContext);
+    requireTrue(step != nullptr, "106-tone MU-BAR responses should leave payload time in an AC_VO TXOP");
+    requireTrue(fs.getActiveAllocations().size() == 2, "voice TXOP should preserve both 106-tone users");
+    EV << "MU-BAR response timing used scheduled RU widths within the voice TXOP.\n";
+    delete step;
+    delete fsContext;
+}
+
+{
+    clearQueue(pendingQueue);
+    pendingQueue->enqueuePacket(makeDataPacket("narrow-txop-sta1", sta1, tid, 0, 100));
+    pendingQueue->enqueuePacket(makeDataPacket("narrow-txop-sta2", sta2, tid, 0, 100));
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 26), makeAllocation(sta2, 1, 26)});
+    MockDlMuAckHandler ackHandler;
+    MockDlMuInProgressFrames inProgress;
+    MockDlMuOriginatorBlockAckAgreementHandler baHandler;
+    baHandler.addAgreement(sta1, tid);
+    baHandler.addAgreement(sta2, tid);
+    auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
+    auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)),
+            modeSet, pendingQueue, &ackHandler, callback);
+    fs.startSequence(fsContext, 0);
+    auto step = fs.prepareStep(fsContext);
+    requireTrue(step == nullptr, "26-tone MU-BAR responses should not overrun an AC_VO TXOP");
+    requireTrue(pendingQueue->getNumPackets() == 2, "response-phase TXOP rejection must not dequeue packets");
+    EV << "MU-BAR response timing rejected a genuinely too-narrow voice TXOP.\n";
+    delete fsContext;
+}
+
 clearQueue(pendingQueue);
 EV << ".\n";
 
@@ -520,6 +565,12 @@ Fewer than two surviving users aborted HE MU assembly without dequeueing.
 
 %contains: stdout
 TXOP/PPDU duration trimming reduced the packed MPDU set while preserving MU operation.
+
+%contains: stdout
+MU-BAR response timing used scheduled RU widths within the voice TXOP.
+
+%contains: stdout
+MU-BAR response timing rejected a genuinely too-narrow voice TXOP.
 
 %contains: stdout
 .
