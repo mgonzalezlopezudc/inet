@@ -22,6 +22,7 @@ module MldInterface extends NetworkInterface
         string interfaceTableModule;
         int numLinks = default(2);
         string address @mutable = default("auto"); // MLD MAC address
+        bool broadcast = default(true);
 
         **.interfaceTableModule = default(absPath(this.interfaceTableModule));
         *.energySourceModule = default(absPath("^.energySourceModule"));
