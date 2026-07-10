@@ -108,6 +108,7 @@ class INET_API HeHcf : public Hcf
     virtual IIeee80211HeDlScheduler::ScheduleContext collectScheduleContext(AccessCategory ac) const;
 
     virtual queueing::IPacketQueue *findOldestPerStaQueue(AccessCategory ac) const;
+    virtual bool stagePerStaFrameForBlockAckBootstrap(AccessCategory ac);
     virtual bool stagePerStaFrameForSingleUserTransmission(AccessCategory ac);
     virtual bool tryStartUlMuFrameSequence(AccessCategory ac);
     virtual bool tryStartDlMuFrameSequence(AccessCategory ac);

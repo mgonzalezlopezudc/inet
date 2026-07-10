@@ -35,32 +35,37 @@ All configurations are defined in [omnetpp.ini](omnetpp.ini) within the `dl_ofdm
 
 ## 2. Verification and Quantitative Results
 
-All simulations were run to completion with the current `sim-time-limit = 0.6s`. Below is the comparative results table containing the number of successfully received UDP packets at the application layer:
+All simulations were run with Cmdenv in the release build, configuration run
+`0`, seed set `0`, and the configured `sim-time-limit = 0.6s`. The table reports
+the `packetReceived:count` scalar of each UDP sink. Repeated runs with the same
+run number and seed set are deterministic.
 
 ### Summary of Simulation Results
 
 | Scenario / Config | Description | Scheduler / Function | Channel / Bandwidth | Packets Received by Clients (UDP App) |
 |---|---|---|---|---|
-| **`EqualSizedRUs_fBW`** | Bandwidth Optimization | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 43 <br> `host[1]`: 43 <br> `host[2]`: 0 <br> **Total: 86** |
-| **`EqualSizedRUs_fHoL`** | Concurrency Optimization | `HeDlSchedulerEqualSizedRUs` (fHoL) | 5 GHz (20 MHz) | `host[0]`: 22 <br> `host[1]`: 22 <br> `host[2]`: 22 <br> **Total: 66** |
-| **`BacklogBased`** | Queue-Aware Sizing | `HeDlSchedulerBacklogBased` | 5 GHz (20 MHz) | `host[0]`: 101 <br> `host[1]`: 138 <br> `host[2]`: 56 <br> **Total: 295** |
-| **`HoLMinDelay`** | Baseline Latency | `HeDlSchedulerHoLMinDelay` | 5 GHz (20 MHz) | `host[0]`: 101 <br> `host[1]`: 113 <br> `host[2]`: 60 <br> **Total: 274** |
-| **`WideBandwidth80MHz`**| 80 MHz configuration smoke test (8 users) | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (80 MHz) | `host[0]`: 6, `host[1]`: 6, `host[2]`: 0, `host[3]`: 0, <br> `host[4]`: 0, `host[5]`: 0, `host[6]`: 0, `host[7]`: 0 <br> **Total: 12** |
+| **`EqualSizedRUs_fBW`** | Bandwidth Optimization | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 47 <br> `host[1]`: 47 <br> `host[2]`: 47 <br> **Total: 141** |
+| **`EqualSizedRUs_fHoL`** | Concurrency Optimization | `HeDlSchedulerEqualSizedRUs` (fHoL) | 5 GHz (20 MHz) | `host[0]`: 43 <br> `host[1]`: 43 <br> `host[2]`: 43 <br> **Total: 129** |
+| **`BacklogBased`** | Queue-Aware Sizing | `HeDlSchedulerBacklogBased` | 5 GHz (20 MHz) | `host[0]`: 37 <br> `host[1]`: 37 <br> `host[2]`: 58 <br> **Total: 132** |
+| **`HoLMinDelay`** | Baseline Latency | `HeDlSchedulerHoLMinDelay` | 5 GHz (20 MHz) | `host[0]`: 33 <br> `host[1]`: 33 <br> `host[2]`: 65 <br> **Total: 131** |
+| **`WideBandwidth80MHz`**| 80 MHz, 8-user scaling | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (80 MHz) | `host[0..7]`: 86 each <br> **Total: 688** |
 
 ---
 
 ## 3. Analysis and Insights
 
 ### Concurrency vs. Spectral Efficiency (fBW vs. fHoL)
-- By scheduling all 3 stations concurrently using three 52-tone RUs, `EqualSizedRUs_fHoL` demonstrates equal per-station service in the current short run (`22/22/22`). The bandwidth-optimizing `fBW` scheduler delivers more packets overall (`86` vs. `66`) by using larger 106-tone RUs, but it leaves `host[2]` without delivered packets in this result set.
+- `EqualSizedRUs_fHoL` schedules all three stations in every MU opportunity using three 52-tone RUs. The run contains 42 three-user HE MU PPDUs and delivers `43/43/43` packets, including the single-user Block Ack bootstrap packet for each STA.
+- `EqualSizedRUs_fBW` selects two 106-tone RUs per MU PPDU. It rotates service across the three backlogged STAs rather than permanently excluding the third one: 70 two-user HE MU PPDUs deliver `47/47/47` packets.
 
 ### Queue-Aware Multi-User Sizing (BacklogBased vs. HoLMinDelay)
-- Under asymmetric traffic loads, the `BacklogBased` scheduler dynamically scales the size of the RUs according to the backlog levels. Active stations with lower load (`host[1]` and `host[2]`) are still assigned RUs instead of being starved.
-- Compared to `HoLMinDelay`, `BacklogBased` keeps heavy-load `host[0]` unchanged at **101 packets**, increases medium-load `host[1]` from **113 to 138 packets**, and decreases low-load `host[2]` from **60 to 56 packets**. The aggregate result is about an **8% throughput increase** (295 vs. 274 packets), with a different fairness/queueing tradeoff.
+- Both asymmetric scenarios schedule all three active stations in every MU opportunity. `BacklogBased` creates 12 mixed-RU PPDUs; `HoLMinDelay` creates 32 three-user PPDUs.
+- Packet counts alone are not a throughput comparison because the application payloads are 1000, 400, and 100 bytes for hosts 0, 1, and 2. In delivered application bytes, `BacklogBased` carries 57,600 bytes versus 52,700 bytes for `HoLMinDelay`, about 9.3% more in this deterministic short run. `HoLMinDelay` gives the light, small-packet flow more transmission opportunities.
+- The central 26-tone RU used by the light flow is evaluated with an RU-bandwidth-adjusted receive threshold. This keeps the PHY sensitivity test consistent with the medium's per-RU receive-power scaling.
 
 ### Wide Bandwidth 80 MHz Configuration
 - Scaling the channel to 80 MHz configures an 8-host, 8-RU scheduling case using separate 106-tone RUs.
-- The current `0.6s` result file should be treated as a configuration smoke test rather than a capacity benchmark: only `host[0]` and `host[1]` have delivered application packets. Longer seeded runs and broader metrics are needed before making throughput-scaling claims for this scenario.
+- The run creates 85 eight-user HE MU PPDUs and delivers 86 packets to every host (one single-user Block Ack bootstrap packet plus 85 MU packets). This verifies 8-user RU allocation and reception, but a single short deterministic run is still not a capacity benchmark.
 
 ## 4. Qtenv WATCH Inspection
 

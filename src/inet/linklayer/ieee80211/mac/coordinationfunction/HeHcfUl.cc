@@ -268,6 +268,10 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
         request->setRuToneOffset(selected->ruToneOffset);
         request->setStaId(myAid);
         request->setMcs(selected->mcs);
+        request->setGuardInterval(trigger->getGuardInterval());
+        request->setCoding(trigger->getCoding());
+        request->setPacketExtensionDurationUs(trigger->getPacketExtensionDurationUs());
+        request->setPuncturedSubchannelMask(trigger->getPuncturedSubchannelMask());
         request->setCommonDuration(trigger->getCommonDuration());
         tx->transmitFrame(response, blockAck, modeSet->getSifsTime(), this);
         delete response;

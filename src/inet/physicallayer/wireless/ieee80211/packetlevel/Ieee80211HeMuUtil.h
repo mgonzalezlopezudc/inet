@@ -7,6 +7,8 @@
 #ifndef __INET_IEEE80211HEMUUTIL_H
 #define __INET_IEEE80211HEMUUTIL_H
 
+#include <algorithm>
+#include <cmath>
 #include <optional>
 
 #include "inet/linklayer/common/MacAddress.h"
@@ -22,6 +24,20 @@ namespace physicallayer {
  * HE-SIG-B User fields carrying STA-ID are defined in Tables 27-29 and 27-30.
  */
 constexpr uint16_t HE_STA_ID_BROADCAST = 2047;
+
+/**
+ * Scales a full-channel receive-power threshold to the bandwidth occupied by
+ * one HE RU. The scalar radio medium applies the same bandwidth fraction to
+ * DL MU receive power, so applying the unscaled full-channel sensitivity to a
+ * narrow RU would reject signals whose power spectral density is unchanged.
+ */
+inline W scaleHeRuPowerThreshold(W fullChannelThreshold, Hz ruBandwidth, Hz channelBandwidth)
+{
+    if (std::isnan(fullChannelThreshold.get()) || std::isnan(ruBandwidth.get()) ||
+            std::isnan(channelBandwidth.get()) || ruBandwidth <= Hz(0) || channelBandwidth <= Hz(0))
+        return fullChannelThreshold;
+    return fullChannelThreshold * std::min(1.0, ruBandwidth.get() / channelBandwidth.get());
+}
 
 /** Returns a deterministic fallback HE station ID when no association ID is available. */
 inline uint16_t computeHeMuStaId(const MacAddress& address)

@@ -562,7 +562,8 @@ Tid tid = 5;
     EV << "Mixed destination/TID/QoS queues packed only eligible traffic.\n";
 }
 
-// Test 5: bounded AddbaReq retry bursts (3 attempts) and addbaFailureTimeout cooldown resumption.
+// Test 5: suppress duplicate AddbaReq frames while one request is pending, then
+// retry after the addbaFailureTimeout deadline.
 {
     OriginatorBlockAckAgreementHandler retryHandler;
     MockOriginatorBlockAckAgreementPolicy retryPolicy;
@@ -580,13 +581,15 @@ Tid tid = 5;
 
     auto agreement = retryHandler.getAgreement(sta1, tid);
     requireCondition(agreement != nullptr, "expected agreement after first AddbaReq");
-    requireCondition(retryCallback.addbaReqCount == 3, "bounded AddbaReq burst should stop at 3 before cooldown");
+    requireCondition(retryCallback.addbaReqCount == 1,
+            "pending AddbaReq should suppress duplicate requests before the failure timeout");
 
     getSimulation()->setSimTime(SimTime(2, SIMTIME_S));
     retryHandler.processTransmittedDataFrame(retryPacket, retryHeader, &retryPolicy, &retryCallback);
-    requireCondition(retryCallback.addbaReqCount == 4, "post-cooldown AddbaReq retry should resume without teardown");
+    requireCondition(retryCallback.addbaReqCount == 2,
+            "post-timeout AddbaReq retry should resume without teardown");
 
-    EV << "MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while AddbaReq retries are bounded by addbaFailureTimeout and processTransmittedDataFrame; AC_VO classification remains in Hcf management processing.\n";
+    EV << "MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while duplicate AddbaReq frames are suppressed until addbaFailureTimeout and processTransmittedDataFrame permits a retry; AC_VO classification remains in Hcf management processing.\n";
     delete retryPacket;
 }
 
@@ -626,4 +629,4 @@ Colliding STA IDs rejected MU planning without queue or ACK-state mutation.
 Mixed destination/TID/QoS queues packed only eligible traffic.
 
 %contains: stdout
-MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while AddbaReq retries are bounded by addbaFailureTimeout and processTransmittedDataFrame; AC_VO classification remains in Hcf management processing.
+MAC-02 fallback reference: Hcf::startFrameSequence(ac) remains the SU path while duplicate AddbaReq frames are suppressed until addbaFailureTimeout and processTransmittedDataFrame permits a retry; AC_VO classification remains in Hcf management processing.

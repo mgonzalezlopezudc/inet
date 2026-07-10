@@ -108,9 +108,16 @@ B getMuBarTriggerFrameLength(size_t numberOfUsers)
     return getMuBarTriggerHeaderLength(numberOfUsers) + B(4);
 }
 
-simtime_t estimateTriggeredBlockAckDuration(int ruToneSize)
+simtime_t estimateTriggeredBlockAckDuration(int ruToneSize,
+        Ieee80211HeGuardInterval guardInterval, Ieee80211HeCoding coding)
 {
-    return estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK, ruToneSize, 0);
+    Ieee80211HeRu ru;
+    ru.toneSize = std::max(ruToneSize, 26);
+    ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
+    ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
+    ru.bandwidth = Hz(ru.toneSize * 78125.0);
+    return computeHeUserPhyParameters(LENGTH_BASIC_BLOCKACK, ru, 0, 1, false,
+            guardInterval, coding).duration;
 }
 
 } // namespace
@@ -341,6 +348,10 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         header->setTransmitterAddress(mac->getAddress());
         header->setTriggerType(2); // MU-BAR Trigger
         header->setTriggerId(owner->ackTriggerId);
+        header->setGuardInterval(owner->scheduleContext.guardInterval);
+        header->setCoding(owner->scheduleContext.coding);
+        header->setPacketExtensionDurationUs(owner->scheduleContext.packetExtensionDurationUs);
+        header->setPuncturedSubchannelMask(owner->scheduleContext.puncturedSubchannelMask);
         header->setUsersArraySize(owner->activeAllocations.size());
         simtime_t commonDuration = SIMTIME_ZERO;
         for (size_t i = 0; i < owner->activeAllocations.size(); ++i) {
@@ -383,7 +394,8 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             user.muBarStartingSequenceNumber = startingSequenceNumber.get();
             header->setUsers(i, user);
             commonDuration = std::max(commonDuration,
-                    estimateTriggeredBlockAckDuration(allocation.ru.toneSize));
+                    estimateTriggeredBlockAckDuration(allocation.ru.toneSize,
+                            owner->scheduleContext.guardInterval, owner->scheduleContext.coding));
         }
         header->setCommonDuration(commonDuration);
         header->setDurationField(owner->modeSet->getSifsTime() + commonDuration);
@@ -798,7 +810,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         simtime_t responseDuration = SIMTIME_ZERO;
         for (const auto& selectedAllocation : selectedAllocations)
             responseDuration = std::max(responseDuration,
-                    estimateTriggeredBlockAckDuration(selectedAllocation.allocation.ru.toneSize));
+                    estimateTriggeredBlockAckDuration(selectedAllocation.allocation.ru.toneSize,
+                            scheduleContext.guardInterval, scheduleContext.coding));
         totalDuration = modeSet->getSifsTime() + triggerDuration +
                 modeSet->getSifsTime() + responseDuration;
     }
@@ -890,7 +903,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         simtime_t responseDuration = SIMTIME_ZERO;
         for (const auto& finalAllocation : finalAllocations)
             responseDuration = std::max(responseDuration,
-                    estimateTriggeredBlockAckDuration(finalAllocation.allocation.ru.toneSize));
+                    estimateTriggeredBlockAckDuration(finalAllocation.allocation.ru.toneSize,
+                            scheduleContext.guardInterval, scheduleContext.coding));
         totalDuration = modeSet->getSifsTime() + triggerDuration +
                 modeSet->getSifsTime() + responseDuration;
     }

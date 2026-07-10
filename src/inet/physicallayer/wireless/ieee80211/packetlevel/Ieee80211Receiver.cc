@@ -47,6 +47,7 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ISnir.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IInterference.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INoise.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/ReceptionResult.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/NarrowbandNoiseBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
@@ -75,6 +76,17 @@ static Ptr<const Ieee80211HeMuPhyHeader> peekHeMuPhyHeader(const ITransmission *
     return transmission->getPacketProtocol() == &Protocol::ieee80211HePhy && packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>()
             ? packet->peekAtFront<Ieee80211HeMuPhyHeader>()
             : nullptr;
+}
+
+static W getHeRuAdjustedPowerThreshold(const IReception *reception,
+        const Ieee80211Transmission *transmission, W fullChannelThreshold)
+{
+    auto narrowbandReception = dynamic_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel());
+    if (narrowbandReception == nullptr || transmission == nullptr || transmission->getMode() == nullptr)
+        return fullChannelThreshold;
+    auto channelBandwidth = transmission->getMode()->getDataMode()->getBandwidth();
+    return scaleHeRuPowerThreshold(fullChannelThreshold,
+            narrowbandReception->getBandwidth(), channelBandwidth);
 }
 
 static bool containsHeMuUser(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, uint16_t staId)
@@ -417,9 +429,11 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
     auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
     if (shouldIgnoreReceptionDueToHeSpatialReuse(listening, reception, true))
         return false;
-    if (heMuPhyHeader != nullptr)
+    if (heMuPhyHeader != nullptr) {
+        auto ruSensitivity = getHeRuAdjustedPowerThreshold(reception, ieee80211Transmission, sensitivity);
         return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
-               getAnalogModel()->computeIsReceptionPossible(listening, reception, sensitivity);
+               getAnalogModel()->computeIsReceptionPossible(listening, reception, ruSensitivity);
+    }
     // Same non-HE mode-set gate as above; this path evaluates the concrete
     // reception interval against the receiver sensitivity.
     return ieee80211Transmission && modeSet->containsMode(ieee80211Transmission->getMode()) &&
@@ -539,7 +553,9 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
 
     decision.eligible = true;
     decision.transmitPowerLimit = computeSpatialReuseTransmitPowerLimit(decision.obssPdThreshold);
-    decision.ignorePpdu = !getAnalogModel()->computeIsReceptionPossible(listening, reception, decision.obssPdThreshold);
+    auto transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
+    auto ruObssPdThreshold = getHeRuAdjustedPowerThreshold(reception, transmission, decision.obssPdThreshold);
+    decision.ignorePpdu = !getAnalogModel()->computeIsReceptionPossible(listening, reception, ruObssPdThreshold);
     decision.reason = decision.ignorePpdu ?
             (isSrg ? "inter-BSS SRG PPDU below OBSS/PD" : "inter-BSS non-SRG PPDU below OBSS/PD") :
             (isSrg ? "inter-BSS SRG PPDU at or above OBSS/PD" : "inter-BSS non-SRG PPDU at or above OBSS/PD");
