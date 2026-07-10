@@ -98,6 +98,21 @@ const char *getDlMuIneligibilityReason(IOriginatorBlockAckAgreementHandler *hand
     return nullptr;
 }
 
+B getMuBarTriggerHeaderLength(size_t numberOfUsers)
+{
+    return B(24 + 9 * numberOfUsers);
+}
+
+B getMuBarTriggerFrameLength(size_t numberOfUsers)
+{
+    return getMuBarTriggerHeaderLength(numberOfUsers) + B(4);
+}
+
+simtime_t estimateTriggeredBlockAckDuration(int ruToneSize)
+{
+    return estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK, ruToneSize, 0);
+}
+
 } // namespace
 
 class HeDlMuPerStaBlockAckFs : public SequentialFs
@@ -368,12 +383,11 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             user.muBarStartingSequenceNumber = startingSequenceNumber.get();
             header->setUsers(i, user);
             commonDuration = std::max(commonDuration,
-                    estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK,
-                            allocation.ru.toneSize, 0));
+                    estimateTriggeredBlockAckDuration(allocation.ru.toneSize));
         }
         header->setCommonDuration(commonDuration);
         header->setDurationField(owner->modeSet->getSifsTime() + commonDuration);
-        header->setChunkLength(B(24 + 9 * owner->activeAllocations.size()));
+        header->setChunkLength(getMuBarTriggerHeaderLength(owner->activeAllocations.size()));
         auto packet = new Packet("HE-MU-BAR-Trigger", header);
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
         EV_INFO << "HE DL MU-BAR FS: built MU-BAR trigger for " << owner->activeAllocations.size()
@@ -780,8 +794,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         RateSelection::setFrameMode(selectedAllocations[idx].packet, dataOrMgmtHdr, staMode);
     }
     if (ackMethod == AckMethod::MU_BAR_TRIGGER) {
-        auto triggerDuration = responseMode->getDuration(B(26 + 12 * selectedAllocations.size()));
-        auto responseDuration = estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK, 26, 0);
+        auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
+        simtime_t responseDuration = SIMTIME_ZERO;
+        for (const auto& selectedAllocation : selectedAllocations)
+            responseDuration = std::max(responseDuration,
+                    estimateTriggeredBlockAckDuration(selectedAllocation.allocation.ru.toneSize));
         totalDuration = modeSet->getSifsTime() + triggerDuration +
                 modeSet->getSifsTime() + responseDuration;
     }
@@ -810,6 +827,14 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         hasTxopLimit = true;
     }
     if (hasTxopLimit) {
+        if (remainingTxop <= totalDuration) {
+            EV_WARN << "Building MU container packet: reserved MU acknowledgment phase ("
+                    << totalDuration << ") leaves no payload time in the remaining TXOP ("
+                    << remainingTxop << ")" << endl;
+            delete container;
+            notifyPlanningFailure();
+            return nullptr;
+        }
         auto txopPpduLimit = std::max(SIMTIME_ZERO, remainingTxop - totalDuration);
         packingDurationLimit = std::min(packingDurationLimit, txopPpduLimit);
         ppduDurationLimit = std::min(ppduDurationLimit, txopPpduLimit);
@@ -861,8 +886,11 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                     modeSet->getSifsTime() + finalBlockAckDuration;
     }
     else {
-        auto triggerDuration = responseMode->getDuration(B(26 + 12 * finalAllocations.size()));
-        auto responseDuration = estimateHeMuUserDuration(LENGTH_BASIC_BLOCKACK, 26, 0);
+        auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(finalAllocations.size()));
+        simtime_t responseDuration = SIMTIME_ZERO;
+        for (const auto& finalAllocation : finalAllocations)
+            responseDuration = std::max(responseDuration,
+                    estimateTriggeredBlockAckDuration(finalAllocation.allocation.ru.toneSize));
         totalDuration = modeSet->getSifsTime() + triggerDuration +
                 modeSet->getSifsTime() + responseDuration;
     }
