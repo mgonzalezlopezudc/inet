@@ -12,7 +12,6 @@ Use Cmdenv by default. Use Qtenv only when interactive inspection is useful or t
 Adapt these inputs to the scenario:
 
 ```sh
-INET_ROOT=<path-to-inet>
 INI_FILE="${INI_FILE:-omnetpp.ini}"
 PROJECT_NED_ROOT="${PROJECT_NED_ROOT:-.}"
 CONFIG=<configuration-name>
