@@ -26,7 +26,7 @@ simtime_t RecipientQosAckPolicy::computeBasicBlockAckDuration(Packet *packet, co
 {
     b length = LENGTH_BASIC_BLOCKACK;
     if (dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq))
-        length = B(32);
+        length = LENGTH_COMPRESSED_BLOCKACK;
     else if (auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
         length = B(18 + multiTidReq->getRecordsArraySize() * 12);
     }

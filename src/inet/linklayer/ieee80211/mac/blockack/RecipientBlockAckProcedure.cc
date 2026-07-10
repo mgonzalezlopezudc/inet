@@ -112,7 +112,6 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
     else if (auto compressedBlockAckReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
         ASSERT(agreement != nullptr);
         auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
-        blockAck->setChunkLength(B(28));
         auto startingSequenceNumber = compressedBlockAckReq->getStartingSequenceNumber();
         std::vector<uint8_t> bytes(8, 0);
         BitVector bitmap(bytes);
