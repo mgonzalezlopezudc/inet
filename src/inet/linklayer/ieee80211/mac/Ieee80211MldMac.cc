@@ -9,6 +9,9 @@
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/networklayer/common/L3AddressResolver.h"
+#include "inet/networklayer/common/NetworkInterface.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -44,6 +47,12 @@ void Ieee80211MldMac::configureNetworkInterface()
         networkInterface->setMacAddress(mldMacAddress);
         // Note: bit rate, MTU, etc. might need to be aggregated from links or set globally
     }
+
+    cModule *mibModule = getParentModule()->getSubmodule("mib");
+    if (mibModule) {
+        auto mib = check_and_cast<Ieee80211Mib *>(mibModule);
+        mib->address = mldMacAddress;
+    }
 }
 
 bool Ieee80211MldMac::isUpperMessage(cMessage *message) const
@@ -67,6 +76,22 @@ void Ieee80211MldMac::handleUpperMessage(cMessage *message)
             macAddressReq->setSrcAddress(mldMacAddress);
         if (macAddressReq->getDestAddress().isUnspecified())
             macAddressReq->setDestAddress(MacAddress::BROADCAST_ADDRESS);
+
+        if (!macAddressReq->getDestAddress().isMulticast() && !macAddressReq->getDestAddress().isUnspecified()) {
+            MacAddress destMldAddress = macAddressReq->getDestAddress();
+            L3AddressResolver addressResolver;
+            cModule *destHost = addressResolver.findHostWithAddress(destMldAddress);
+            if (destHost) {
+                IInterfaceTable *ift = addressResolver.findInterfaceTableOf(destHost);
+                if (ift) {
+                    std::string linkName = "link" + std::to_string(0); // currently choosing link 0
+                    NetworkInterface *ie = ift->findInterfaceByName(linkName.c_str());
+                    if (ie) {
+                        macAddressReq->setDestAddress(ie->getMacAddress());
+                    }
+                }
+            }
+        }
         send(message, lowerLinkOutBaseGateId); // Send to lowerLinkOut[0]
     } else {
         delete message;
@@ -82,6 +107,19 @@ void Ieee80211MldMac::handleLowerMessage(cMessage *message)
         auto macAddressInd = packet->addTagIfAbsent<MacAddressInd>();
         if (macAddressInd->getDestAddress().isUnspecified())
             macAddressInd->setDestAddress(mldMacAddress);
+
+        if (!macAddressInd->getSrcAddress().isMulticast() && !macAddressInd->getSrcAddress().isUnspecified()) {
+            MacAddress srcLinkAddress = macAddressInd->getSrcAddress();
+            L3AddressResolver addressResolver;
+            NetworkInterface *srcLinkIe = addressResolver.findInterfaceWithMacAddress(srcLinkAddress);
+            if (srcLinkIe) {
+                cModule *mldInterfaceModule = srcLinkIe->getParentModule();
+                if (mldInterfaceModule) {
+                    auto mldInterface = check_and_cast<NetworkInterface *>(mldInterfaceModule);
+                    macAddressInd->setSrcAddress(mldInterface->getMacAddress());
+                }
+            }
+        }
     }
     sendUp(message);
 }
