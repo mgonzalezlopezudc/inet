@@ -5,8 +5,6 @@ description: Diagnose and manage INET fingerprint regression tests. Use when Cod
 
 # INET fingerprint regression work
 
-Use this skill when a change affects INET fingerprints or when the user asks about fingerprint tests, fingerprint mismatches, deterministic regression checks, or updating expected fingerprints.
-
 ## Core rule
 
 Treat a fingerprint change as evidence that the simulation trajectory changed. Do not update fingerprints until the changed trajectory is explained and accepted.
@@ -18,7 +16,7 @@ Treat a fingerprint change as evidence that the simulation trajectory changed. D
 3. Preserve the exact command, exit status, old fingerprint, new fingerprint, and first mismatch location reported by the tool.
 4. Determine whether the code change was expected to alter event ordering, packet contents, timing, random-stream consumption, result recording, or topology/module construction.
 5. Use `inet-cmdenv-log-analysis`, `omnetpp-eventlog-analysis`, `inet-pcap-tshark-analysis`, or `omnetpp-result-analysis` to explain the first behavioral divergence when the mismatch is not obvious.
-6. Update expected fingerprints only when the behavioral change is intentional or demonstrably irrelevant to the tested contract.
+6. Update expected fingerprints only after the behavioral change is intentional or demonstrably irrelevant to the tested contract and the user has explicitly approved updating the fingerprint CSV files.
 7. Rerun the same narrow test after updating expectations.
 8. For 802.11 changes, also consider `inet-80211-regression-testing` and `inet-80211-packet-debugging` before accepting changed fingerprints.
 

@@ -5,41 +5,21 @@ description: Analyze INET and OMNeT++ Cmdenv logs. Use when Codex needs to find 
 
 # Analyzing Cmdenv logs
 
-Use this skill after a simulation has produced Cmdenv output, or when a short rerun with targeted logging is needed.
-
 ## General rules
 
 * Prefer saved logs over scrolling terminal output.
 * Use command-line logging overrides for temporary diagnostics; do not edit `omnetpp.ini` solely to enable logs.
 * Keep logging narrow: target the relevant module subtree and level instead of enabling global `debug` or `trace`.
-* Preserve the exact simulation command, working directory, configuration, run number, log path, exit status, event number, and simulation time.
 * Do not infer delivery, loss, retransmission, or causality from one log line without supporting context.
 
 ## Capture useful Cmdenv context
 
-Use normal Cmdenv mode when logs matter:
+Add these options to the normal Cmdenv command:
 
 ```sh
-mkdir -p logs
-set -o pipefail
-
-LOG="logs/${CONFIG}-${RUN}.cmdenv.log"
-
-opp_run \
-  -u Cmdenv \
-  -f "$INI_FILE" \
-  "--image-path=$INET_ROOT/images" \
-  "--ned-path=$PROJECT_NED_ROOT;$INET_ROOT/src;$INET_ROOT/examples;$INET_ROOT/tutorials;$INET_ROOT/showcases" \
-  -l "$INET_ROOT/src/libINET.so" \
-  -c "$CONFIG" \
-  -r "$RUN" \
-  --cmdenv-express-mode=false \
-  --cmdenv-event-banners=false \
-  '--cmdenv-log-prefix=[%l] event=%e time=%t module=%M: ' \
-  2>&1 | tee "$LOG"
-
-status=$?
-echo "opp_run exit status: $status"
+--cmdenv-express-mode=false
+--cmdenv-event-banners=false
+'--cmdenv-log-prefix=[%l] event=%e time=%t module=%M: '
 ```
 
 Add targeted module logging only after identifying the relevant module path:
@@ -82,15 +62,4 @@ For packet behavior:
 4. Confirm packet-visible facts with PCAPng/TShark when protocol headers matter.
 5. Confirm aggregate behavior with scalars/vectors when counters matter.
 
-## Reporting
-
-Include:
-
-* Exact run command and working directory.
-* INI file, configuration, run number, and seed when known.
-* Log file path.
-* Exit status.
-* Targeted logging overrides.
-* Search commands and patterns used.
-* Relevant event numbers, simulation times, module paths, packet names, and log levels.
-* Whether each conclusion is direct log evidence or an inference.
+Report the log path and targeted overrides, relevant event numbers, simulation times, module paths and packet identities, and which conclusions are direct log evidence or inference.

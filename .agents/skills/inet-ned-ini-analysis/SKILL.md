@@ -5,8 +5,6 @@ description: Analyze INET NED and omnetpp.ini configuration behavior. Use when C
 
 # INET NED and INI analysis
 
-Use this skill when a suspected issue may be caused by effective configuration rather than C++ code: wrong module path, inherited override, wildcard precedence, missing `typename`, unexpected default, incompatible radio/medium type, or recorder/logging override that matches nothing.
-
 ## Core rule
 
 Prove the instantiated module path, type, and effective parameter value before reasoning from it. Do not assume a wildcard override matched the intended module.
@@ -16,7 +14,7 @@ Prove the instantiated module path, type, and effective parameter value before r
 1. Identify the working directory, `omnetpp.ini`, configuration name, run number, and network type.
 2. Read the relevant `[Config ...]` chain and `extends` relationships before inspecting isolated lines.
 3. Search NED files for the module type, submodule name, parameter declaration, default value, and inherited base type.
-4. Check wildcard specificity and order for every relevant INI override.
+4. Evaluate every matching assignment using the checked-out OMNeT++ configuration-precedence rules; show why the selected assignment wins instead of relying on a vague "later" or "more specific" heuristic.
 5. Verify `typename` assignments for compound/simple modules, radios, MACs, queues, management modules, recorders, and radio media.
 6. Confirm module paths using the actual network hierarchy, not guessed paths from examples.
 7. Prefer command-line overrides for temporary diagnostics; do not edit `omnetpp.ini` solely to enable logging, PCAP, event logs, or result inspection.
@@ -36,12 +34,10 @@ Adapt paths to the project. Use `rg --files -g '*.ned'` and `rg --files -g '*.in
 
 * `moduleNamePatterns` for `PcapRecorder` is relative to the node containing the recorder, not a full network path.
 * `**` wildcard overrides can unintentionally match several modules or none.
-* Later or more-specific INI assignments may override earlier assumptions.
+* An apparently relevant assignment may lose because of configuration inheritance, entry order, or pattern matching; identify the actual winning entry.
 * A `typename` may be inherited from a base config or NED default.
 * Radio and radio-medium analog representations must be compatible.
 * Unit suffixes matter for time, frequency, power, bitrate, and length parameters.
 * A parameter name visible in one INET version may not exist in another checkout.
 
-## Reporting
-
-Include the exact config chain, network type, module path, NED type and source file, parameter names and values, matching INI lines, wildcard reasoning, command-line overrides, and any ambiguity that requires a diagnostic run.
+Report the config chain, instantiated type and module path, relevant parameter assignments, the winning precedence reasoning, and any ambiguity requiring a diagnostic run.

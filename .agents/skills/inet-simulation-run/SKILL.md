@@ -7,9 +7,9 @@ description: Run and diagnose INET simulations using Cmdenv or Qtenv. Use for no
 
 Use Cmdenv by default. Use Qtenv only when interactive inspection is useful or the user explicitly asks for it.
 
-## Environment
+## Inputs
 
-The following variables are expected:
+Adapt these inputs to the scenario:
 
 ```sh
 INET_ROOT=<path-to-inet>
@@ -18,24 +18,6 @@ PROJECT_NED_ROOT="${PROJECT_NED_ROOT:-.}"
 CONFIG=<configuration-name>
 RUN=<run-number>
 ```
-
-Validate the important inputs:
-
-```sh
-: "${INET_ROOT:?INET_ROOT must point to the INET project root}"
-
-command -v opp_run >/dev/null ||
-    { echo "opp_run is not available on PATH" >&2; exit 1; }
-
-test -f "$INET_ROOT/src/libINET.so" ||
-    { echo "Missing INET release library" >&2; exit 1; }
-```
-
-Assume OMNeT++, INET, and related tools such as `opp_run`, `opp_run_dbg`, and
-`opp_repl` are already sourced when they are available on `PATH`. Do not prefix
-every command with `source "$OMNETPP_ROOT/setenv"` or `source setenv`. Source an
-environment script only as an explicit recovery step after validation fails, and
-state why it was necessary.
 
 ## Common INET paths
 
@@ -93,15 +75,6 @@ opp_run \
 
 ### Debug build
 
-Verify the debug library first:
-
-```sh
-test -f "$INET_ROOT/src/libINET_dbg.so" ||
-    { echo "Missing INET debug library" >&2; exit 1; }
-```
-
-Then run:
-
 ```sh
 opp_run_dbg \
   -u Qtenv \
@@ -116,61 +89,14 @@ opp_run_dbg \
 
 The debug runner and debug INET library must be used together. Do not mix release and debug binaries.
 
-`--debug-on-errors=true` requests a debugger breakpoint when a runtime error occurs. It is effective when the simulation is already running under a debugger or debugger attachment is configured; it does not launch a debugger by itself.
+`--debug-on-errors=true` requests a debugger trap; it does not launch a debugger. Use `inet-lldb-debugging` for source-level investigation.
 
-For example, launch the debug simulation under LLDB:
+## Diagnostic routing
 
-```sh
-lldb -- \
-  opp_run_dbg \
-  -u Qtenv \
-  -f "$INI_FILE" \
-  "--image-path=$INET_IMAGE_PATH" \
-  "--ned-path=$INET_NED_PATH" \
-  --debug-on-errors=true \
-  -l "$INET_ROOT/src/libINET_dbg.so" \
-  -c "$CONFIG" \
-  -r "$RUN"
-```
+* Use `inet-cmdenv-log-analysis` for module decisions and runtime context.
+* Use `inet-pcap-tshark-analysis` for protocol-visible packets.
+* Use `omnetpp-eventlog-analysis` for scheduling and message causality.
+* Use `omnetpp-result-analysis` for recorded statistics.
+* Use `inet-lldb-debugging` for source-level state.
 
-At the LLDB prompt, start the simulation:
-
-```text
-(lldb) run
-```
-
-When OMNeT++ encounters a runtime error, `--debug-on-errors=true` causes the process to stop in the debugger. Inspect the state before continuing:
-
-```text
-(lldb) process status
-(lldb) thread backtrace all
-(lldb) frame variable
-```
-
-For detailed source-level debugging procedures, use the `inet-lldb-debugging` skill.
-
-## Source-level debugging 
-When logs, Qtenv inspection, packet captures, and event logs are insufficient, use the `inet-lldb-debugging` skill. 
-
-Source-level debugging must use: 
-- `opp_run_dbg`. 
-- `$INET_ROOT/src/libINET_dbg.so`. 
-- Debug versions of any project-specific C++ libraries.
-- `--debug-on-errors=true`. 
-
-Do not mix `opp_run_dbg` with release model libraries, or `opp_run` with debug model libraries. Use Cmdenv under LLDB by default. Use Qtenv under LLDB only when interactive simulation visualization is also required.
-
-## Reporting
-
-Record:
-
-* Whether Cmdenv or Qtenv was used.
-* Whether release or debug mode was used.
-* Exact command.
-* Working directory.
-* `INET_ROOT`.
-* INI file.
-* Configuration and run number.
-* Loaded library.
-* Exit status or displayed error.
-* Relevant module, event number, and simulation time.
+Report the selected environment, build mode, loaded model libraries, and relevant module, event number, simulation time, or error.
