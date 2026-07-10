@@ -305,6 +305,52 @@ queueing::IPacketQueue *HeHcf::findOldestPerStaQueue(AccessCategory ac) const
     return oldestQueue;
 }
 
+bool HeHcf::stagePerStaFrameForBlockAckBootstrap(AccessCategory ac)
+{
+    if (queueBankManager == nullptr || originatorBlockAckAgreementHandler == nullptr ||
+            originatorBlockAckAgreementPolicy == nullptr)
+        return false;
+
+    queueing::IPacketQueue *bootstrapQueue = nullptr;
+    simtime_t oldestEnqueueTime = SIMTIME_MAX;
+    for (const auto& entry : queueBankManager->getQueueBanks()) {
+        auto queue = entry.second->getQueue((StationQueueBank::AccessCategory)ac);
+        if (queue->isEmpty())
+            continue;
+        auto packet = queue->getPacket(0);
+        auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
+        if (header == nullptr || header->getType() != ST_DATA_WITH_QOS ||
+                header->getReceiverAddress().isMulticast() || header->getReceiverAddress().isBroadcast() ||
+                !originatorBlockAckAgreementPolicy->isAddbaReqNeeded(packet, header))
+            continue;
+
+        auto agreement = originatorBlockAckAgreementHandler->getAgreement(
+                header->getReceiverAddress(), header->getTid());
+        if (agreement != nullptr && agreement->getIsAddbaResponseReceived())
+            continue;
+        if (agreement != nullptr && agreement->getIsAddbaRequestInProgress() &&
+                (agreement->getExpirationTime() < SIMTIME_ZERO || simTime() < agreement->getExpirationTime()))
+            continue;
+
+        auto enqueueTimeTag = packet->findTag<OrigEnqueueTimeTag>();
+        auto enqueueTime = enqueueTimeTag == nullptr ? packet->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
+        if (bootstrapQueue == nullptr || enqueueTime < oldestEnqueueTime) {
+            bootstrapQueue = queue;
+            oldestEnqueueTime = enqueueTime;
+        }
+    }
+
+    if (bootstrapQueue == nullptr)
+        return false;
+
+    auto packet = bootstrapQueue->dequeuePacket();
+    auto header = packet->peekAtFront<Ieee80211DataHeader>();
+    edca->getEdcaf(ac)->getPendingQueue()->enqueuePacket(packet);
+    EV_INFO << "Staging single-user Block Ack bootstrap frame for "
+            << header->getReceiverAddress() << " tid=" << (int)header->getTid() << "\n";
+    return true;
+}
+
 bool HeHcf::stagePerStaFrameForSingleUserTransmission(AccessCategory ac)
 {
     auto sourceQueue = findOldestPerStaQueue(ac);
@@ -346,6 +392,10 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
                     << headDataHeader->getReceiverAddress() << " tid=" << headDataHeader->getTid()
                     << " is MU-ineligible, falling back to Hcf::startFrameSequence(ac)." << endl;
         }
+        Hcf::startFrameSequence(ac);
+        return true;
+    }
+    if (pendingQueue->isEmpty() && stagePerStaFrameForBlockAckBootstrap(ac)) {
         Hcf::startFrameSequence(ac);
         return true;
     }

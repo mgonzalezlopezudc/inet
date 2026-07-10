@@ -181,6 +181,18 @@ for (int i = 0; i < numRUs; i++) {
 }
 EV << "PHY-01 CHECK PASS: All RU bandwidths narrower than total channel\n";
 
+// The DL MU medium scales aggregate receive power to the assigned RU
+// bandwidth. Receiver power thresholds must use the same fraction, otherwise
+// a narrow RU can fail sensitivity even when its PSD and SNR are unchanged.
+W fullChannelSensitivity(1e-12);
+auto ruSensitivity = scaleHeRuPowerThreshold(fullChannelSensitivity, rus[0].bandwidth, bandwidth);
+double expectedSensitivityRatio = rus[0].bandwidth.get() / bandwidth.get();
+if (std::abs(ruSensitivity.get() / fullChannelSensitivity.get() - expectedSensitivityRatio) > 1e-12)
+    throw cRuntimeError("PHY-01 FAILED: RU sensitivity was not scaled with RU bandwidth");
+if (scaleHeRuPowerThreshold(fullChannelSensitivity, bandwidth * 2, bandwidth) != fullChannelSensitivity)
+    throw cRuntimeError("PHY-01 FAILED: power threshold was increased for an over-wide signal");
+EV << "PHY-01 CHECK PASS: Receive-power threshold scales with RU bandwidth\n";
+
 // Create main HE-MU PPDU packet for transmission
 auto containerPkt = new Packet("MuContainer");
 auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
