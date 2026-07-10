@@ -1,13 +1,11 @@
 ---
 name: inet-lldb-debugging
-description: Debug INET and OMNeT++ simulations at the C++ source level using LLDB. Use when a simulation raises a runtime error, crashes, aborts, segfaults, hangs in a known code path, or requires breakpoints, watchpoints, stack inspection, or local-variable analysis after Cmdenv logs, Qtenv inspection, packet captures, event logs, or results are insufficient.
+description: Debug INET and OMNeT++ simulations at the C++ source level with LLDB. Use for runtime errors, crashes, aborts, segfaults, unresolved hangs, targeted breakpoints or watchpoints, and local-variable inspection after logs, captures, event logs, or results are insufficient; use Cmdenv by default and Qtenv only when interactive visualization is also needed.
 ---
 
 # Debugging INET simulations with LLDB
 
-Use this skill for source-level C++ debugging of INET or project simulation code. Prefer launching the simulation under LLDB instead of attaching after an error, because breakpoints and stop hooks can be configured before initialization.
-
-## Non-negotiable setup
+## Build invariant
 
 Use matching debug components:
 
@@ -15,49 +13,76 @@ Use matching debug components:
 opp_run_dbg + libINET_dbg.so + debug project libraries
 ```
 
-Do not use:
+Do not mix release and debug runners or model libraries. `--debug-on-errors=true` triggers a debugger trap for an OMNeT++ runtime error; it does not start LLDB.
 
-```text
-opp_run_dbg + libINET.so
-opp_run     + libINET_dbg.so
+## Workflow
+
+1. Reproduce the problem narrowly and preserve the simulation command.
+2. Launch that command under LLDB with `opp_run_dbg`, debug model libraries, and `--debug-on-errors=true`.
+3. Set a targeted breakpoint before running when the suspicious path is known; avoid stepping from `main()`.
+4. At the first relevant stop, record the stop reason and full backtrace before continuing.
+5. Select the first project or INET frame that exposes the invalid state; the trap or exception frame is usually only the consequence.
+6. Inspect locals with `frame variable` before evaluating expressions.
+7. Use conditional breakpoints or watchpoints to locate where the state first diverges.
+8. Correlate the stop with the simulation time, event number, module path, and message or packet identity when available.
+9. Explain the root cause and evidence before proposing a source change.
+
+## Useful commands
+
+```lldb
+process status
+thread backtrace all
+thread list
+frame select <index>
+frame info
+frame variable --show-types
+source list
+
+breakpoint set --file SomeFile.cc --line 123
+breakpoint set --name FullyQualifiedFunctionName
+breakpoint set --name handleMessage --condition 'msg != nullptr'
+breakpoint list
+watchpoint set variable state
+
+continue
+next
+step
+finish
+process interrupt
 ```
 
-`--debug-on-errors=true` makes OMNeT++ trigger a debugger trap on runtime errors. It does not start LLDB. The simulation must already be running under LLDB.
+A watchpoint on a pointer variable detects reassignment of that variable, not destruction of the pointed-to object. For a dangling-pointer investigation, break on the concrete deletion or ownership-transfer path after identifying the object address while it is valid.
 
-Assume OMNeT++, INET, and related tools are already sourced when `opp_run_dbg` is on `PATH`. Source an environment script only as an explicit recovery step after validation fails, and state why.
+Use side-effect-free expressions only when ordinary variable inspection is insufficient:
 
-## Minimal workflow
+```lldb
+expression -- this->getFullPath().c_str()
+expression -- simTime().str().c_str()
+expression -- msg->getName()
+expression -- msg->getClassName()
+```
 
-1. Reproduce the problem once outside LLDB and preserve the exact command.
-2. Confirm working directory, INI file, configuration, run number, NED path, and debug libraries.
-3. Launch `opp_run_dbg` under LLDB with `--debug-on-errors=true` and `-l "$INET_ROOT/src/libINET_dbg.so"`.
-4. Add narrow breakpoints before `run` when the suspected code path is known.
-5. On a trap, breakpoint, abort, or signal, record `process status` and `thread backtrace all` before continuing.
-6. Move past OMNeT++ trap/error-handling frames to the first relevant project or INET source frame.
-7. Use `frame variable` before `expression` when reading state, because expressions may execute code in the stopped process.
-8. Use conditional breakpoints or watchpoints to find where invalid state first appears.
-9. Correlate the debugger stop with Cmdenv event number, simulation time, packet captures, event logs, or result files when relevant.
-10. Report whether the conclusion is direct debugger evidence or inference.
+## OMNeT++ and INET context
 
-## Safe inspection rules
+At a relevant stop, identify:
 
-* Do not immediately continue after a `debug-on-errors` trap; stack unwinding can hide the original context.
-* Do not treat the trap function itself as the root cause.
-* Do not mutate simulation state from LLDB unless the user explicitly requests an experimental state change.
-* Avoid expressions that schedule/cancel messages, mutate packets, change parameters, advance iterators with side effects, or emit signals.
-* Do not claim a faulting source line is the root cause without explaining the invalid state and where it originated.
-* Do not weaken system-wide tracing or security settings to attach LLDB without explicit authorization.
+* Simulation time and event number.
+* Module path and current callback.
+* Message or packet name, class, and ownership.
+* Gate, sender, receiver, timer, queue, or protocol metadata relevant to the failure.
+* The first frame where the invalid value was created or accepted.
 
-## Read references on demand
+For packet metadata, use `inet-packet-tag-debugging`. For IEEE 802.11 paths, use the breakpoint guidance in `inet-80211-packet-debugging`.
 
-Load only the reference needed for the current problem:
+## Qtenv and MCP
 
-* [setup-and-launch.md](references/setup-and-launch.md): `debug-on-errors`, preconditions, tool checks, debug-library checks, Bash-array simulation arguments, launch patterns, and Cmdenv/Qtenv selection under LLDB.
-* [inspection-breakpoints-and-stepping.md](references/inspection-breakpoints-and-stepping.md): runtime-error inspection, variable reading, expression cautions, source/function/conditional breakpoints, watchpoints, and stepping.
-* [failures-automation-troubleshooting-reporting.md](references/failures-automation-troubleshooting-reporting.md): segfaults, aborts, initialization failures, batch first-stop backtraces, stop hooks, attaching, core dumps, unresolved breakpoints, missing locals, investigation sequence, and reporting requirements.
+Use Cmdenv under LLDB by default. When interactive topology, animation, or Qtenv state inspection is necessary, launch the repository's Qtenv `lldb-dap` configuration and drive the same LLDB session through LLDB MCP. Use the Qtenv control surface to advance simulation events and LLDB for C++ state; if an LLDB stop interrupts a pending Qtenv request, inspect the debugger stop before treating the request failure as causal.
 
-Use `rg -n '^##|keyword'` in reference files before reading large ranges.
+## Safety
 
-## Report essentials
+* Do not continue immediately from a `debug-on-errors` trap before preserving the stack and locals.
+* Do not treat the trap function or faulting line alone as the root cause.
+* Do not mutate packets, messages, parameters, timers, iterators, or simulation state from debugger expressions unless the user explicitly requests an experiment.
+* Do not patch source before the evidence identifies a concrete defect.
 
-Include exact LLDB launch command, working directory, `INET_ROOT`, INI file, configuration, run number, `opp_run_dbg` path, INET debug-library path, project debug libraries, LLDB version, stop reason or signal, relevant backtrace, selected source frame, source file and line, breakpoints/watchpoints used, relevant variables, simulation time/event number when available, and path to any saved LLDB log or core dump.
+Report the stop reason, relevant backtrace and source frame, inspected variables, breakpoints or watchpoints, simulation context, and whether the conclusion is direct debugger evidence or inference.

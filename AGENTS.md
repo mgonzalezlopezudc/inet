@@ -6,6 +6,7 @@ Use repository skills for detailed simulation, test, result-analysis, and standa
 
 * Use Cmdenv by default for automated runs, batch execution, log analysis, packet capture, and reproducible debugging.
 * Use Qtenv when Cmdenv is insufficient for interactive debugging or when the user explicitly requests Qtenv.
+* Assume the required OMNeT++ and INET development tools are installed, sourced, and available. Invoke them directly; do not preflight executables, print tool versions routinely, or source environment scripts unless a concrete failure indicates an environment problem. Still validate task artifacts such as selected libraries, captures, result files, and generated corpora when they are evidence for the task.
 * Do not modify `omnetpp.ini` solely to enable temporary logging, tracing, packet capture, or result inspection. Prefer command-line overrides.
 * Run one configuration and run number at a time unless a simulation campaign is explicitly requested.
 * Preserve the exact command, working directory, configuration, run number, exit status, and generated artifact paths in reports.

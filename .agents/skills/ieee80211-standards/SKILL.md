@@ -1,7 +1,7 @@
 ---
 name: ieee80211-standards
 description: Search and inspect IEEE 802.11 standards stored in this repository. Use for questions about clauses, tables, figures, fields, procedures, or normative behavior in 802.11 standards, especially 802.11ax and 802.11be.
----------------------------------------------------------------
+---
 
 # Using the IEEE 802.11 standards corpus
 
@@ -110,15 +110,4 @@ Do not rely on a visually similar table from another revision without confirming
 7. Consult the original PDF only for unresolved or visual details.
 8. Distinguish normative requirements from notes, examples, and informative text.
 
-## Reporting
-
-Include:
-
-* Standard document and revision.
-* Corpus search terms.
-* Chunk identifiers.
-* Clause, table, or figure identifier when available.
-* Whether the corpus or original PDF was used.
-* Relevant cross-references.
-* Any ambiguity between standard revisions.
-* Whether the statement is normative or informative when that distinction matters.
+Report the document revision, search terms and chunk identifiers, clause/table/figure, whether the PDF was needed, relevant cross-references, revision ambiguity, and normative or informative status when material.

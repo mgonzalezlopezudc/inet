@@ -55,12 +55,10 @@ A successful simulation does not guarantee that a configured recorder captured p
 
 Load only the reference needed for the current problem:
 
-* [capture-setup.md](references/capture-setup.md): prerequisites, common simulation command, capture-point selection, PcapRecorder overrides, protocol representation, checksum/FCS settings, capture limits, multiple recorders, and validation.
-* [tshark-inspection.md](references/tshark-inspection.md): basic inspection, display filters, timelines, Cmdenv correlation, time filters, TCP analysis, endpoints, conversations, and protocol hierarchy.
-* [comparison-diagnostics-reporting.md](references/comparison-diagnostics-reporting.md): filtered captures, automated packet assertions, sender/receiver comparison, duplicate observations, empty or undecoded captures, investigation workflows, and reporting requirements.
-
-Use `rg -n '^##|keyword'` in reference files before reading large ranges.
+* [capture-setup.md](references/capture-setup.md): capture-point selection, PcapRecorder overrides, protocol representation, capture bounds, and artifact validation.
+* [tshark-inspection.md](references/tshark-inspection.md): packet timelines, simulation-time correlation, focused TCP analysis, and missing-field diagnosis.
+* [comparison-diagnostics-reporting.md](references/comparison-diagnostics-reporting.md): observation-point comparison, duplicate observations, empty or undecoded captures, and automated assertions.
 
 ## Report essentials
 
-Include exact simulation command, working directory, INI file, configuration, run number, node paths, interface/module patterns, PCAP filenames, Cmdenv log filename if used, exit status, TShark version, exact TShark commands and filters, relevant frame numbers, simulation timestamps, event numbers when known, and remaining ambiguity caused by capture position or decoding limits.
+Include capture points and files, recorder options that affect interpretation, filters, relevant frames and simulation timestamps, correlated event numbers, and remaining ambiguity caused by capture position or decoding limits.

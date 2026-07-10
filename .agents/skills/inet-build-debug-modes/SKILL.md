@@ -5,8 +5,6 @@ description: Diagnose INET build modes, generated code, and model libraries. Use
 
 # INET build and debug modes
 
-Use this skill when simulation, unit-test, or LLDB behavior may be caused by build artifacts rather than model logic.
-
 ## Core rule
 
 Match the runner, libraries, and build mode. Do not debug C++ behavior with stale, optimized, or mismatched binaries.
@@ -14,7 +12,7 @@ Match the runner, libraries, and build mode. Do not debug C++ behavior with stal
 ## Workflow
 
 1. Record repository root, dirty state, build mode, command, and relevant library paths.
-2. Verify that the expected INET library exists before running simulations:
+2. Identify the expected INET library for the selected mode:
    * release: `$INET_ROOT/src/libINET.so`
    * debug: `$INET_ROOT/src/libINET_dbg.so`
 3. Use `opp_run` with release libraries and `opp_run_dbg` with debug libraries.
@@ -23,14 +21,7 @@ Match the runner, libraries, and build mode. Do not debug C++ behavior with stal
 6. If LLDB cannot resolve source lines, locals, or breakpoints, verify debug symbols, optimization level, loaded image path, and source/binary commit match.
 7. Run the smallest build or test command that proves the artifact is fresh; use `inet-unit-tests` for unit-test execution and `inet-simulation-run` for simulation validation.
 
-## Useful checks
-
-```sh
-git status --short
-find src -maxdepth 1 -name 'libINET*.so' -ls
-command -v opp_run opp_run_dbg inet_run_unit_tests
-opp_run_dbg -h | head
-```
+Inspect repository state and the relevant `libINET*.so` artifacts when freshness or mode is disputed.
 
 For loaded-library suspicion under LLDB, inspect:
 
@@ -56,6 +47,4 @@ For loaded-library suspicion under LLDB, inspect:
 * Treat missing LLDB locals as proof of program state before checking debug info and optimization.
 * Rebuild broadly without first identifying the smallest artifact that must be fresh, unless the user asks for a clean rebuild.
 
-## Reporting
-
-Include build command, working directory, mode, library paths, project libraries, generated-code considerations, exact runner command, loaded libraries when inspected, failure output, and whether the final run used release or debug artifacts consistently.
+Report the build mode and command, relevant library paths, generated-code considerations, loaded libraries when inspected, and whether the final run used consistent artifacts.
