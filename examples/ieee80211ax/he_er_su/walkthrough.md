@@ -55,19 +55,16 @@ Ensure your environment is set up, then run the simulations.
 
 ### Running with Qtenv (GUI)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-opp_run -u Qtenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c HeErSu examples/ieee80211ax/he_er_su/omnetpp.ini
+bin/inet -u Qtenv -c HeErSu examples/ieee80211ax/he_er_su/omnetpp.ini
 ```
 
 ### Running with Cmdenv (Command Line)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-
 # Run HeSu Baseline
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c HeSu examples/ieee80211ax/he_er_su/omnetpp.ini
+bin/inet -u Cmdenv -c HeSu examples/ieee80211ax/he_er_su/omnetpp.ini
 
 # Run HeErSu Config
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c HeErSu examples/ieee80211ax/he_er_su/omnetpp.ini
+bin/inet -u Cmdenv -c HeErSu examples/ieee80211ax/he_er_su/omnetpp.ini
 ```
 
 ---

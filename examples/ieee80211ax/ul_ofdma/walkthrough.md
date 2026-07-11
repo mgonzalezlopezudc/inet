@@ -60,27 +60,33 @@ The [omnetpp.ini](omnetpp.ini) file defines several scenarios to show different 
 ### 5. `MultiTidBlockAck`
 - Enables negotiation of Multi-TID Aggregation support (`heMultiTidAggregationRx = true`, `heMultiTidAggregationTx = true`).
 
+### Additional configurations
+
+- `UlMuMimo` uses a full-bandwidth RU for uplink MU-MIMO.
+- `OperatingModeIndication` demonstrates a station OM Control update.
+- `DynamicFragmentation` enables negotiated HE level-1 dynamic fragmentation.
+- `NdpFeedbackReport` exercises NFRP Triggers and station feedback responses.
+- `UoraLightContention`, `UoraHeavyContention`, and
+  `UoraMoreRandomAccessRus` compare UORA contention and RU allocation.
+
 ---
 
 ## Running the Simulation
 
-Ensure your environment is set up, then run the simulations.
+From the INET project root, use the project launcher.
 
 ### Running with Qtenv (GUI)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-opp_run -u Qtenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c General examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Qtenv -c General examples/ieee80211ax/ul_ofdma/omnetpp.ini
 ```
 
 ### Running with Cmdenv (Command Line)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c General examples/ieee80211ax/ul_ofdma/omnetpp.ini
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c ScheduledOnly examples/ieee80211ax/ul_ofdma/omnetpp.ini
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c MixedUora examples/ieee80211ax/ul_ofdma/omnetpp.ini
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c EqualRus examples/ieee80211ax/ul_ofdma/omnetpp.ini
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c MultiTidBlockAck examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Cmdenv -c General examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Cmdenv -c ScheduledOnly examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Cmdenv -c MixedUora examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Cmdenv -c EqualRus examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Cmdenv -c MultiTidBlockAck examples/ieee80211ax/ul_ofdma/omnetpp.ini
 ```
 
 ---

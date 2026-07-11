@@ -1,6 +1,6 @@
 # Walkthrough - 802.11ax MU OFDMA Simulation Examples
 
-This document walks through the design, implementation, and verification of five distinct simulation scenarios illustrating the most prominent features of 802.11ax Multi-User Orthogonal Frequency Division Multiple Access (MU OFDMA) in the INET Framework.
+This document walks through the design, implementation, and verification of the downlink 802.11ax multi-user scenarios in the INET Framework.
 
 These examples are standards-aware packet-level simulations, not bit-level interoperability tests. The HE PHY header and Trigger frame serializers still carry INET model metadata rather than exact HE-SIG/Trigger on-air encodings. The `MultiTidBlockAck` configuration negotiates Multi-TID capability and exercises the BAR/BlockAck plumbing, but the current DL path creates one Block Ack record per request, so it should not be read as proof of aggregated multi-TID operation. FEC legality is checked strictly in the PHY calculator, while mixed LDPC/non-LDPC scheduling is still coarse because a schedule chooses one coding mode across the selected peers.
 
@@ -30,6 +30,16 @@ All configurations are defined in [omnetpp.ini](omnetpp.ini) within the `dl_ofdm
 - **Objective**: Exercise the 80 MHz channel setup with 8 configured users and 8 scheduled RUs.
 - **Mechanism**: Configures an 80 MHz band, center frequency `5.2 GHz`, channel number `2`, and scales the topology to 8 wireless hosts. The scheduler allocates eight 106-tone RUs concurrently.
 - **Key Realization**: To allow correct physical reception of all subchannels by the hosts, the receiver bandwidth is explicitly set to `80MHz` (`**.wlan[*].radio.receiver.bandwidth = 80MHz`), and the transmitter power is configured to `100mW` to compensate for the 10 dB noise integration penalty over the wider bandwidth.
+
+### Additional configurations
+
+- `SuEdcaBaseline` runs the same workload through single-user QoS EDCA.
+- `DlMuMimo` exercises full-bandwidth downlink MU-MIMO with three stations.
+- `MultiTidBlockAck` negotiates and exercises HE Multi-TID Block Ack plumbing.
+- `DlMuMimo80MHz` combines the 80 MHz topology with downlink MU-MIMO.
+
+These mechanisms share the topology for controlled comparison even though
+they are not OFDMA scheduler variants.
 
 ---
 

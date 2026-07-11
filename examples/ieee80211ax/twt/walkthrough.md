@@ -69,22 +69,19 @@ The [omnetpp.ini](omnetpp.ini) file defines four TWT scenarios:
 
 ## Running the Simulation
 
-Ensure your environment is set up, then run the configurations.
+From the INET project root, use the project launcher.
 
 ### Running with Qtenv (GUI)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-opp_run -u Qtenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c IndividualUnannounced examples/ieee80211ax/twt/omnetpp.ini
+bin/inet -u Qtenv -c IndividualUnannounced examples/ieee80211ax/twt/omnetpp.ini
 ```
 
 ### Running with Cmdenv (Command Line)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c Baseline examples/ieee80211ax/twt/omnetpp.ini
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c IndividualUnannounced examples/ieee80211ax/twt/omnetpp.ini
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c IndividualAnnounced examples/ieee80211ax/twt/omnetpp.ini
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c Broadcast examples/ieee80211ax/twt/omnetpp.ini
+bin/inet -u Cmdenv -c Baseline examples/ieee80211ax/twt/omnetpp.ini
+bin/inet -u Cmdenv -c IndividualUnannounced examples/ieee80211ax/twt/omnetpp.ini
+bin/inet -u Cmdenv -c IndividualAnnounced examples/ieee80211ax/twt/omnetpp.ini
+bin/inet -u Cmdenv -c Broadcast examples/ieee80211ax/twt/omnetpp.ini
 ```
 
 ---
