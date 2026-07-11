@@ -90,7 +90,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 edcaf->getTxopProcedure()->getLimit() - edcaf->getTxopProcedure()->getDuration());
     auto sensitivityDbm = math::mW2dBmW(receiver->getSensitivity().get<mW>());
     IIeee80211HeUlScheduler::Schedule ulSchedule;
-    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
+    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
+            pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         // IEEE 802.11-2024 9.3.1.22 Table 9-47 defines BSRP as Trigger type 4.
         // 26.5.2 permits the AP to solicit HE TB responses via addressed User
         // Info fields and RA-RUs.  The standard leaves scheduling policy open;
@@ -110,14 +111,22 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 EV_DEBUG << "HE UL BSRP: skipping sleeping TWT STA " << station.first << "\n";
                 continue;
             }
+            auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+            if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
+                    (negotiated == nullptr || !negotiated->valid || !negotiated->intersection.ndpFeedbackReport))
+                continue;
             IIeee80211HeUlScheduler::RuAllocation allocation;
             allocation.staAddress = station.first;
             allocation.associationId = mac->getMib()->getAssociationId(station.first);
             allocation.ru = layout[index++];
+            if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+                allocation.mcs = 0;
+                allocation.numberOfSpatialStreams = 1;
+            }
             allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
             ulSchedule.allocations.push_back(allocation);
         }
-        while (index < maxRus) {
+        while (index < maxRus && pendingUlTrigger != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
             IIeee80211HeUlScheduler::RuAllocation allocation;
             allocation.randomAccess = true;
             allocation.associationId = 0;
@@ -202,6 +211,10 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     }
     ulSchedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
     auto triggerType = pendingUlTrigger;
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        ulSchedule.coding = physicallayer::HE_CODING_BCC;
+        ulSchedule.packetExtensionDurationUs = 0;
+    }
     pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     if (ulSchedule.allocations.empty()) {
         EV_WARN << "HE UL skipping Trigger because no usable RU allocations remain"
@@ -451,6 +464,11 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         sendTriggeredBlockAckResponse(packet, trigger);
         return;
     }
+    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
+            !mac->getMib()->localHeCapabilities.ndpFeedbackReport) {
+        delete packet;
+        return;
+    }
     if (!ulCoordinator->isEnabled() || mac->isApInAxMode() ||
             mac->getMib()->bssStationData.associationId <= 0) {
         delete packet;
@@ -491,7 +509,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
             }
         }
     }
-    else if (selected != nullptr && trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
+    else if (selected != nullptr && (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
+            trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)) {
         // 9.3.1.22.6: BSRP Trigger has no trigger-dependent User Info; the
         // HE TB response is used to report buffer status.  We choose the
         // highest-priority queued TID to report when a directed BSRP RU exists.
@@ -594,6 +613,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     exchange.expectedResponseTime = simTime() + modeSet->getSifsTime();
     auto responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
             selectedTid, queueBytes, availableSlots, selected, trigger, exchange);
+    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+        responsePacket->setName("HE-TB-NDP-Feedback-Report");
     if (!exchange.packets.empty())
         triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
 

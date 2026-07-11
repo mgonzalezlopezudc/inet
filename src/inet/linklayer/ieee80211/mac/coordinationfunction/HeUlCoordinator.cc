@@ -301,7 +301,8 @@ uint32_t HeUlCoordinator::allocateTriggerId()
 void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
 {
     ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ||
-            triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+            triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
+            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER);
     lastTriggerTime = simTime();
     hasSentTrigger = true;
     if (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER)

@@ -217,13 +217,17 @@ void HeMinstrelRateControl::reportHeRxSnir(const MacAddress& peer, double snirDb
 const IIeee80211Mode *HeMinstrelRateControl::getRate()
 {
     Enter_Method("getRate");
-    if (currentMode == nullptr && modeSet != nullptr) {
+    // RateControlBase installs a mandatory fallback mode during initialization.
+    // Do not let that fallback suppress an explicitly requested HE ER SU mode
+    // for ER Beacons and group-addressed ER-BSS traffic.
+    if (enableExtendedRangeSu && modeSet != nullptr) {
         Constraints constraints;
-        constraints.extendedRangeSu = enableExtendedRangeSu;
+        constraints.extendedRangeSu = true;
         constraints.dcm = preferDcm;
         auto selection = selectHeMode(MacAddress::BROADCAST_ADDRESS, Hz(NaN), 0,
-                enableExtendedRangeSu ? HE_EXTENDED_RANGE_SU : HE_SINGLE_USER, maxNss, constraints);
-        currentMode = selection.mode != nullptr ? selection.mode : modeSet->getSlowestMode();
+                HE_EXTENDED_RANGE_SU, maxNss, constraints);
+        if (selection.mode != nullptr)
+            currentMode = selection.mode;
     }
     return currentMode;
 }

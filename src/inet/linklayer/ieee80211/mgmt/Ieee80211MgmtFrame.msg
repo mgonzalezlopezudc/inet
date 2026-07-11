@@ -189,6 +189,7 @@ struct Ieee80211HeOperationElement
     short bssColor;
     int operatingChannelWidthMHz;
     short basicHeMcsNss;
+    bool erSuDisable;
     bool defaultPeDurationPresent;
     short defaultPeDurationUs;
 }
