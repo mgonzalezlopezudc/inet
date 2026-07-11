@@ -18,6 +18,7 @@
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211HeOmi.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -69,6 +70,7 @@ class INET_API HeHcf : public Hcf
     // response can be a single-TID A-MPDU and must be retried per MPDU.
     std::map<uint32_t, TriggeredUlExchange> triggeredUlExchanges;
     bool forceNextSingleUser[4] = {};
+    std::map<MacAddress, Ieee80211HeOperatingMode> peerOperatingModes;
 
     HeMuMimoCsiManager csiManager;
     bool enableDlMuMimo = false;

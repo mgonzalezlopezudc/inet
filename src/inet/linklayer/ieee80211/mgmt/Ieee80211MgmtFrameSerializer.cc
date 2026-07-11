@@ -184,13 +184,21 @@ static void writeHeCapabilitiesElement(MemoryOutputStream& stream, const Ieee802
     uint64_t macCapabilities = 0;
     setBits(macCapabilities, 1, 1, capabilities.twtRequester ? 1 : 0);
     setBits(macCapabilities, 2, 1, capabilities.twtResponder ? 1 : 0);
+    setBits(macCapabilities, 3, 2, std::clamp((int)capabilities.dynamicFragmentationLevel, 0, 3));
     setBits(macCapabilities, 12, 3, capabilities.multiTidAggregationRx ? 1 : 0);
     setBits(macCapabilities, 17, 1, capabilities.heTbBlockAckTx ? 1 : 0);
     setBits(macCapabilities, 18, 1, capabilities.broadcastTwt ? 1 : 0);
     setBits(macCapabilities, 19, 1, capabilities.ulOfdma ? 1 : 0);
+    setBits(macCapabilities, 25, 1, capabilities.omControl ? 1 : 0);
     setBits(macCapabilities, 26, 1, capabilities.ulOfdma ? 1 : 0);
     setBits(macCapabilities, 27, 2, std::clamp((int)capabilities.maxAmpduLengthExponent - 3, 0, 3));
     setBits(macCapabilities, 35, 1, capabilities.multiTidAggregationTx ? 1 : 0);
+    // two-NAV is mandatory behavior rather than an HE capability bit. Keep it
+    // in the packet-level extension's high model bits so association still
+    // negotiates it without overloading a normative subfield.
+    setBits(macCapabilities, 42, 1, capabilities.twoNav ? 1 : 0);
+    setBits(macCapabilities, 43, 1, capabilities.erBss ? 1 : 0);
+    setBits(macCapabilities, 44, 1, capabilities.ndpFeedbackReport ? 1 : 0);
     for (int i = 0; i < 6; ++i)
         stream.writeByte((macCapabilities >> (8 * i)) & 0xff);
 
@@ -205,6 +213,8 @@ static void writeHeCapabilitiesElement(MemoryOutputStream& stream, const Ieee802
     setBits(phyCapabilities, 1, 7, supportedChannelWidthSet);
     setBits(phyCapabilities, 13, 1, capabilities.ldpc ? 1 : 0);
     setBits(phyCapabilities, 14, 1, capabilities.preamblePuncturing ? 1 : 0);
+    setBits(phyCapabilities, 22, 1, capabilities.fullBandwidthUlMuMimo ? 1 : 0);
+    setBits(phyCapabilities, 23, 1, capabilities.partialBandwidthUlMuMimo ? 1 : 0);
     int dcmConstellation = capabilities.dcm ? encodeDcmConstellation(capabilities.maxDcmConstellation) : 0;
     int dcmNss = capabilities.dcm && capabilities.maxDcmNss > 1 ? 1 : 0;
     setBits(phyCapabilities, 24, 2, dcmConstellation);
@@ -395,6 +405,11 @@ static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLeng
     capabilities.twtRequester = getBits(macCapabilities, 1, 1) != 0;
     capabilities.twtResponder = getBits(macCapabilities, 2, 1) != 0;
     capabilities.broadcastTwt = getBits(macCapabilities, 18, 1) != 0;
+    capabilities.dynamicFragmentationLevel = getBits(macCapabilities, 3, 2);
+    capabilities.omControl = getBits(macCapabilities, 25, 1) != 0;
+    capabilities.twoNav = getBits(macCapabilities, 42, 1) != 0;
+    capabilities.erBss = getBits(macCapabilities, 43, 1) != 0;
+    capabilities.ndpFeedbackReport = getBits(macCapabilities, 44, 1) != 0;
     capabilities.supportedChannelWidth80MHz = (supportedChannelWidthSet & (1 << 1)) != 0;
     capabilities.supportedChannelWidth160MHz = (supportedChannelWidthSet & (1 << 2)) != 0;
     capabilities.supportedChannelWidth80Plus80MHz = (supportedChannelWidthSet & (1 << 3)) != 0;
@@ -402,6 +417,8 @@ static void readHeCapabilitiesElement(MemoryInputStream& stream, int payloadLeng
     capabilities.ulOfdma = getBits(macCapabilities, 26, 1) != 0 || getBits(macCapabilities, 19, 1) != 0;
     capabilities.ldpc = getBit(phyCapabilities, 13);
     capabilities.preamblePuncturing = getBit(phyCapabilities, 14);
+    capabilities.fullBandwidthUlMuMimo = getBit(phyCapabilities, 22);
+    capabilities.partialBandwidthUlMuMimo = getBit(phyCapabilities, 23);
     int dcmConstellation = getBits(phyCapabilities, 27, 2);
     capabilities.dcm = dcmConstellation != 0;
     capabilities.maxDcmConstellation = decodeDcmConstellation(dcmConstellation);

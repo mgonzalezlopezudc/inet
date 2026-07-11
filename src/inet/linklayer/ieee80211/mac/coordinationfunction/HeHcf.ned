@@ -37,6 +37,11 @@ module HeHcf extends Hcf
         double maxHeMuPpduDuration @unit(s) = default(5.484ms); // Downlink MU PPDU duration ceiling
         string dlMuAckMethod = default("muBarTrigger"); // "muBarTrigger" uses a MU-BAR Trigger; "sequentialBar" sends one BAR per STA
         bool enableUlMuOfdma = default(false); // Enables AP-triggered HE uplink OFDMA exchanges
+        bool enableUlMuMimo = default(false); // Enables full-bandwidth HE trigger-based UL MU-MIMO
+        bool sendOperatingModeIndication = default(false);
+        int operatingModeRxNss = default(1);
+        int operatingModeChannelWidth = default(0);
+        bool operatingModeUlMuDisable = default(false);
         double ulTriggerCheckInterval @unit(s) = default(1ms); // Interval at which the AP considers starting an uplink Trigger exchange
         double ulTargetRssiMargin @unit(dB) = default(10dB); // Target received-power margin requested from scheduled uplink STAs
         double maxHeTbPpduDuration @unit(s) = default(1ms); // Maximum duration requested for an HE trigger-based uplink PPDU

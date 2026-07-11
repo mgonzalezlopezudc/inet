@@ -9,6 +9,7 @@
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211HeOmi.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
 namespace inet {
@@ -696,7 +697,14 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 stream.writeMacAddress(dataHeader->getAddress4());
             if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {
                 stream.writeUint16Le(packQosControl(dataHeader->getTid(), dataHeader->getAckPolicy(), dataHeader->getAMsduPresent()));
-                if (dataHeader->getBufferStatusPresent()) {
+                if (dataHeader->getOperatingModePresent()) {
+                    ieee80211::Ieee80211HeOperatingMode mode;
+                    mode.channelWidth = dataHeader->getOperatingModeChannelWidth();
+                    mode.rxNss = dataHeader->getOperatingModeRxNss();
+                    mode.ulMuDisable = dataHeader->getOperatingModeUlMuDisable();
+                    stream.writeUint32Le(ieee80211::packHeOperatingModeHtControl(mode));
+                }
+                else if (dataHeader->getBufferStatusPresent()) {
                     ieee80211::Ieee80211HeBufferStatus status;
                     status.tid = dataHeader->getBufferStatusTid();
                     status.accessCategory = dataHeader->getBufferStatusAc();
@@ -1302,7 +1310,14 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 if (order) {
                     auto htControl = stream.readUint32Le();
                     ieee80211::Ieee80211HeBufferStatus status;
-                    if (ieee80211::unpackHeBufferStatusHtControl(htControl, status)) {
+                    ieee80211::Ieee80211HeOperatingMode mode;
+                    if (ieee80211::unpackHeOperatingModeHtControl(htControl, mode)) {
+                        dataHeader->setOperatingModePresent(true);
+                        dataHeader->setOperatingModeChannelWidth(mode.channelWidth);
+                        dataHeader->setOperatingModeRxNss(mode.rxNss);
+                        dataHeader->setOperatingModeUlMuDisable(mode.ulMuDisable);
+                    }
+                    else if (ieee80211::unpackHeBufferStatusHtControl(htControl, status)) {
                         dataHeader->setBufferStatusPresent(true);
                         dataHeader->setBufferStatusTid(status.tid);
                         dataHeader->setBufferStatusAc(status.accessCategory);

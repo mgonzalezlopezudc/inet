@@ -76,6 +76,7 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.staId = request->getStaId();
         user.mcs = request->getMcs();
         user.numberOfSpatialStreams = request->getNumberOfSpatialStreams();
+        user.streamStartIndex = request->getStreamStartIndex();
         user.dcm = request->getDcm();
         user.psduLength = B(packet->getDataLength());
         Ieee80211HeRu ru;
@@ -425,6 +426,11 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             }
         }
         heMuPhyHeader->setMuMimo(isMuMimo);
+        if (request != nullptr && request->getMuMimo()) {
+            isMuMimo = true;
+            heMuPhyHeader->setMuMimo(true);
+            maxTotalNsts = request->getTotalNsts();
+        }
         if (isMuMimo) {
             heMuPhyHeader->setTotalNsts(maxTotalNsts);
         }

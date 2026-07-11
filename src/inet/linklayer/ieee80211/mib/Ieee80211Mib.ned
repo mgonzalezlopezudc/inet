@@ -28,12 +28,19 @@ simple Ieee80211Mib extends SimpleModule
         bool heTwtRequester = default(false); // Advertises HE TWT requester support
         bool heTwtResponder = default(false); // Advertises HE TWT responder support
         bool heBroadcastTwt = default(false); // Advertises HE broadcast TWT support
+        int heDynamicFragmentationLevel = default(0); // 0=disabled, 1..3 are IEEE 802.11 dynamic-fragmentation levels
+        bool heOmControl = default(false); // Advertises reception of the HE OM Control subfield
+        bool heTwoNav = default(false); // Maintains separate intra-BSS and basic NAV state
+        bool heErBss = default(false); // Advertises extended-range BSS operation
+        bool heNdpFeedbackReport = default(false); // Advertises the HE NDP feedback report procedure
         bool heMultiTidAggregationRx = default(false); // Advertises support for receiving Multi-TID Block Acks
         bool heMultiTidAggregationTx = default(false); // Advertises support for transmitting Multi-TID Block Acks
         int heBssColor = default(0); // HE BSS color (1-63), 0 indicates disabled / unspecified
         int heDefaultPeDurationUs = default(0); // Default HE packet extension: 0, 4, 8, 12, or 16 microseconds
         bool heDlMuMimoBeamformer = default(false);
         bool heDlMuMimoBeamformee = default(false);
+        bool heFullBandwidthUlMuMimo = default(false);
+        bool hePartialBandwidthUlMuMimo = default(false);
         int heSoundingDimensions = default(0);
         int heBeamformeeSts20Mhz = default(0);
         int heBeamformeeStsAbove20Mhz = default(0);

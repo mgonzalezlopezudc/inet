@@ -138,6 +138,11 @@ struct Ieee80211HeCapabilitiesElement
     bool twtRequester;
     bool twtResponder;
     bool broadcastTwt;
+    short dynamicFragmentationLevel;
+    bool omControl;
+    bool twoNav;
+    bool erBss;
+    bool ndpFeedbackReport;
     bool supportedChannelWidth40MHz;
     bool supportedChannelWidth80MHz;
     bool supportedChannelWidth160MHz;
@@ -167,6 +172,8 @@ struct Ieee80211HeCapabilitiesElement
     bool ru1992Tone;
     bool dlMuMimoBeamformer;
     bool dlMuMimoBeamformee;
+    bool fullBandwidthUlMuMimo;
+    bool partialBandwidthUlMuMimo;
     short soundingDimensions;
     short beamformeeSts20Mhz;
     short beamformeeStsAbove20Mhz;

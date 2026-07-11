@@ -33,6 +33,7 @@ class INET_API Rx : public SimpleModule, public IRx
 
     MacAddress address;
     cMessage *endNavTimer = nullptr;
+    cMessage *endIntraBssNavTimer = nullptr;
     physicallayer::IRadio::ReceptionState receptionState = physicallayer::IRadio::RECEPTION_STATE_UNDEFINED;
     physicallayer::IRadio::TransmissionState transmissionState = physicallayer::IRadio::TRANSMISSION_STATE_UNDEFINED;
     physicallayer::IRadioSignal::SignalPart receivedPart = physicallayer::IRadioSignal::SIGNAL_PART_NONE;
@@ -43,6 +44,8 @@ class INET_API Rx : public SimpleModule, public IRx
     virtual void initialize(int stage) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void setOrExtendNav(simtime_t navInterval);
+    virtual void setOrExtendNav(simtime_t navInterval, bool intraBss);
+    virtual bool isIntraBssFrame(const Ptr<const Ieee80211MacHeader>& header) const;
     virtual bool isFcsOk(Packet *packet) const;
     std::string getRxStatusTxt() const;
 
