@@ -68,7 +68,6 @@ bool Ieee80211MldMac::isLowerMessage(cMessage *message) const
 
 void Ieee80211MldMac::handleUpperMessage(cMessage *message)
 {
-    // Basic stub: For now, forward everything to link 0
     if (numLinks > 0) {
         auto packet = check_and_cast<Packet *>(message);
         auto macAddressReq = packet->addTagIfAbsent<MacAddressReq>();
@@ -77,6 +76,7 @@ void Ieee80211MldMac::handleUpperMessage(cMessage *message)
         if (macAddressReq->getDestAddress().isUnspecified())
             macAddressReq->setDestAddress(MacAddress::BROADCAST_ADDRESS);
 
+        int chosenLink = 0;
         if (!macAddressReq->getDestAddress().isMulticast() && !macAddressReq->getDestAddress().isUnspecified()) {
             MacAddress destMldAddress = macAddressReq->getDestAddress();
             L3AddressResolver addressResolver;
@@ -84,7 +84,9 @@ void Ieee80211MldMac::handleUpperMessage(cMessage *message)
             if (destHost) {
                 IInterfaceTable *ift = addressResolver.findInterfaceTableOf(destHost);
                 if (ift) {
-                    std::string linkName = "link" + std::to_string(0); // currently choosing link 0
+                    chosenLink = nextLinkIndex;
+                    nextLinkIndex = (nextLinkIndex + 1) % numLinks;
+                    std::string linkName = "link" + std::to_string(chosenLink);
                     NetworkInterface *ie = ift->findInterfaceByName(linkName.c_str());
                     if (ie) {
                         macAddressReq->setDestAddress(ie->getMacAddress());
@@ -92,7 +94,7 @@ void Ieee80211MldMac::handleUpperMessage(cMessage *message)
                 }
             }
         }
-        send(message, lowerLinkOutBaseGateId); // Send to lowerLinkOut[0]
+        send(message, lowerLinkOutBaseGateId + chosenLink);
     } else {
         delete message;
     }

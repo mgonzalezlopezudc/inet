@@ -22,6 +22,7 @@ class INET_API Ieee80211MldMac : public MacProtocolBase
     MacAddress mldMacAddress;
     ieee80211::QoSSequenceNumberAssignment *sequenceNumberAssignment = nullptr;
     queueing::IPacketQueue *pendingQueue[4] = {nullptr};
+    int nextLinkIndex = 0;
 
   protected:
     virtual void initialize(int stage) override;

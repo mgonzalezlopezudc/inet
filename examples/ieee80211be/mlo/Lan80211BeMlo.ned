@@ -55,6 +55,7 @@ network Lan80211BeMlo
             @display("p=350,250;r=,,#707070");
             numLinks = 2;
             mldWlan.link[*].mgmt.typename = "Ieee80211MgmtApSimplified";
+            mldWlan.link[*].agent.typename = "";
         }
         server: StandardHost {
             @display("p=550,250");
