@@ -655,7 +655,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     auto containerHdr = makeShared<Ieee80211DataHeader>();
     containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     containerHdr->setType(ST_DATA_WITH_QOS);
-    containerHdr->setChunkLength(b(288)); // minimal 802.11 QoS data header size
+    containerHdr->setChunkLength(b(208)); // minimal 802.11 QoS data header size
     if (auto heHcf = dynamic_cast<HeHcf *>(callback)) {
         auto originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(heHcf->getOriginatorMacDataService());
         ASSERT(originatorQosDataService != nullptr);

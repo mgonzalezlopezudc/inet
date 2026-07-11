@@ -190,10 +190,15 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                     feedback->setNc(maxNss);
                     feedback->setNr(mac->getMib()->localHeCapabilities.soundingDimensions);
                     feedback->setValid(true);
-                    feedback->setChunkLength(B(42));
+                    // Body chunk length: Cat(1) + HEAction(1) + DialogToken(1) + MIMO Control(3)
+                    // — matches §9.6.28.2 minimum body per Table 9-99.
+                    feedback->setChunkLength(B(6));
 
-                    auto responseHeader = makeShared<Ieee80211MgmtHeader>();
+                    // Use Ieee80211ActionFrame (category 30 = HE) so the protocol
+                    // dissector routes the body to Ieee80211HeSoundingMgmtFrameSerializer.
+                    auto responseHeader = makeShared<Ieee80211ActionFrame>();
                     responseHeader->setType(ST_ACTION);
+                    responseHeader->setCategory(30);   // HE category
                     responseHeader->setReceiverAddress(trigger->getTransmitterAddress());
                     responseHeader->setTransmitterAddress(mac->getAddress());
                     responseHeader->setAddress3(trigger->getTransmitterAddress()); // BSSID

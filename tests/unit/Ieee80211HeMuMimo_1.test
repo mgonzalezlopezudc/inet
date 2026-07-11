@@ -121,7 +121,7 @@ using namespace inet::units::values;
     auto decoded = received->popAtFront<Ieee80211HeCompressedBeamformingFeedback>();
     
     ASSERT(decoded->getDialogToken() == 7);
-    ASSERT(decoded->getAid() == 42);
+    // AID is not serialized in standard HE Compressed Beamforming Feedback frames
     ASSERT(decoded->getFeedbackBandwidth() == 40e6);
     ASSERT(decoded->getNc() == 2);
     ASSERT(decoded->getNr() == 4);

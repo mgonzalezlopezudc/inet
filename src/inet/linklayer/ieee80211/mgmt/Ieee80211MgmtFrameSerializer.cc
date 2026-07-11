@@ -1122,62 +1122,125 @@ const Ptr<Chunk> Ieee80211MgmtFrameSerializer::deserialize(MemoryInputStream& st
     return frame;
 }
 
+// IEEE 802.11-2024 §9.6.28 — HE Action frame body serializer.
+//
+// Both frame types share the same MAC-layer Action body layout:
+//   Octet 0 : Category = 30 (HE)
+//   Octet 1 : HE Action code
+//               0 = HE Compressed Beamforming / CQI (§9.6.28.2)
+//               1 = HE NDP Announcement          (§9.6.28.4)
+//   Octet 2+: Frame-type-specific fields (see below)
+//
+// The Category and HE Action octets are written here (not in the MAC
+// header serializer) because the INET HE-sounding frames use a base
+// Ieee80211MgmtHeader chunk for the 24-byte 802.11 header and a separate
+// Ieee80211HeNdpAnnouncement / Ieee80211HeCompressedBeamformingFeedback
+// chunk for the action body.
+
+static constexpr uint8_t HE_CATEGORY_CODE = 30;
+static constexpr uint8_t HE_ACTION_COMPRESSED_BF = 0;
+static constexpr uint8_t HE_ACTION_NDP_ANNOUNCEMENT = 1;
+
 void Ieee80211HeSoundingMgmtFrameSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     if (auto ndpaFrame = dynamicPtrCast<const Ieee80211HeNdpAnnouncement>(chunk)) {
-        stream.writeByte(0); // tag
+        b startPos = stream.getLength();
+        // §9.6.28.4 HE NDP Announcement frame body
+        stream.writeByte(HE_CATEGORY_CODE);
+        stream.writeByte(HE_ACTION_NDP_ANNOUNCEMENT);
         stream.writeByte(ndpaFrame->getDialogToken());
-        unsigned int size = ndpaFrame->getStationsArraySize();
-        stream.writeByte(size);
-        for (unsigned int i = 0; i < size; ++i) {
+        // Per-STA Info (2 bytes each) — Table 9-100
+        for (unsigned int i = 0; i < ndpaFrame->getStationsArraySize(); ++i) {
             const auto& sta = ndpaFrame->getStations(i);
-            stream.writeUint16Be(sta.aid);
-            stream.writeByte(sta.feedbackType);
-            stream.writeByte(sta.nc);
+            uint16_t perStaInfo = (sta.aid & 0x7FFu) | ((uint16_t)(sta.feedbackType & 0xFu) << 11);
+            stream.writeUint16Le(perStaInfo);
         }
+        b written = stream.getLength() - startPos;
+        b total = ndpaFrame->getChunkLength();
+        if (total > written)
+            stream.writeByteRepeatedly(0, (total - written).get<B>());
     }
     else if (auto feedbackFrame = dynamicPtrCast<const Ieee80211HeCompressedBeamformingFeedback>(chunk)) {
-        stream.writeByte(1); // tag
+        b startPos = stream.getLength();
+        // §9.6.28.2 HE Compressed Beamforming / CQI frame body
+        stream.writeByte(HE_CATEGORY_CODE);
+        stream.writeByte(HE_ACTION_COMPRESSED_BF);
         stream.writeByte(feedbackFrame->getDialogToken());
-        stream.writeUint16Be(feedbackFrame->getAid());
-        stream.writeUint64Be(std::lround(feedbackFrame->getFeedbackBandwidth()));
-        stream.writeByte(feedbackFrame->getNc());
-        stream.writeByte(feedbackFrame->getNr());
-        stream.writeBit(feedbackFrame->getValid());
+        // MIMO Control (3 bytes) — Table 9-99
+        uint8_t bwCode = 0;
+        double bw = feedbackFrame->getFeedbackBandwidth();
+        if (bw >= 160e6) bwCode = 3;
+        else if (bw >= 80e6) bwCode = 2;
+        else if (bw >= 40e6) bwCode = 1;
+        uint8_t ncIdx = (feedbackFrame->getNc() > 0) ? (feedbackFrame->getNc() - 1) & 0x7u : 0;
+        uint8_t nrIdx = (feedbackFrame->getNr() > 0) ? (feedbackFrame->getNr() - 1) & 0x7u : 0;
+        uint32_t mimoCtrl = (ncIdx)
+                          | ((uint32_t)nrIdx << 3)
+                          | ((uint32_t)(bwCode & 0x3u) << 6)
+                          | (1u << 11)   // Feedback Type = MU
+                          | (1u << 14)   // First Feedback Segment
+                          | ((uint32_t)(feedbackFrame->getDialogToken() & 0x3Fu) << 16);
+        stream.writeByte(mimoCtrl & 0xFFu);
+        stream.writeByte((mimoCtrl >> 8) & 0xFFu);
+        stream.writeByte((mimoCtrl >> 16) & 0xFFu);
+        b written = stream.getLength() - startPos;
+        b total = feedbackFrame->getChunkLength();
+        if (total > written)
+            stream.writeByteRepeatedly(0, (total - written).get<B>());
     }
     else
-        throw cRuntimeError("Cannot serialize frame");
+        throw cRuntimeError("Ieee80211HeSoundingMgmtFrameSerializer: cannot serialize unknown HE sounding frame type");
 }
 
 const Ptr<Chunk> Ieee80211HeSoundingMgmtFrameSerializer::deserialize(MemoryInputStream& stream) const
 {
-    uint8_t tag = stream.readByte();
-    if (tag == 0) {
+    uint8_t category = stream.readByte();
+    uint8_t action   = stream.readByte();
+    if (category != HE_CATEGORY_CODE)
+        throw cRuntimeError("Ieee80211HeSoundingMgmtFrameSerializer: expected Category=%u, got %u",
+                            HE_CATEGORY_CODE, category);
+
+    if (action == HE_ACTION_NDP_ANNOUNCEMENT) {
+        // §9.6.28.4 HE NDP Announcement
         auto frame = makeShared<Ieee80211HeNdpAnnouncement>();
         frame->setDialogToken(stream.readByte());
-        unsigned int size = stream.readByte();
-        frame->setStationsArraySize(size);
-        for (unsigned int i = 0; i < size; ++i) {
+        // Remaining bytes are Per-STA Info fields (2 bytes each)
+        std::vector<Ieee80211HeNdpStaInfo> stations;
+        while (stream.getRemainingLength() >= B(2)) {
+            uint16_t perStaInfo = stream.readUint16Le();
+            if ((perStaInfo & 0x7FFu) == 0) // Padding
+                continue;
             Ieee80211HeNdpStaInfo sta;
-            sta.aid = stream.readUint16Be();
-            sta.feedbackType = stream.readByte();
-            sta.nc = stream.readByte();
-            frame->setStations(i, sta);
+            sta.aid          = perStaInfo & 0x7FFu;
+            sta.feedbackType = (perStaInfo >> 11) & 0xFu;
+            sta.nc           = 0; // Nc not encoded in the per-STA Info wire field
+            stations.push_back(sta);
         }
+        frame->setStationsArraySize(stations.size());
+        for (size_t i = 0; i < stations.size(); ++i)
+            frame->setStations(i, stations[i]);
+        if (stream.getRemainingLength() > b(0))
+            stream.seek(stream.getLength());
         return frame;
     }
-    else if (tag == 1) {
+    else if (action == HE_ACTION_COMPRESSED_BF) {
+        // §9.6.28.2 HE Compressed Beamforming / CQI
         auto frame = makeShared<Ieee80211HeCompressedBeamformingFeedback>();
         frame->setDialogToken(stream.readByte());
-        frame->setAid(stream.readUint16Be());
-        frame->setFeedbackBandwidth(stream.readUint64Be());
-        frame->setNc(stream.readByte());
-        frame->setNr(stream.readByte());
-        frame->setValid(stream.readBit());
+        uint32_t mimoCtrl = stream.readByte();
+        mimoCtrl |= (uint32_t)stream.readByte() << 8;
+        mimoCtrl |= (uint32_t)stream.readByte() << 16;
+        frame->setNc((mimoCtrl & 0x7u) + 1);
+        frame->setNr(((mimoCtrl >> 3) & 0x7u) + 1);
+        uint8_t bwCode = (mimoCtrl >> 6) & 0x3u;
+        frame->setFeedbackBandwidth((bwCode == 3) ? 160e6 : (bwCode == 2) ? 80e6 : (bwCode == 1) ? 40e6 : 20e6);
+        frame->setValid(true);
+        if (stream.getRemainingLength() > b(0))
+            stream.seek(stream.getLength());
         return frame;
     }
     else
-        throw cRuntimeError("Cannot deserialize frame");
+        throw cRuntimeError("Ieee80211HeSoundingMgmtFrameSerializer: unsupported HE Action code %u", action);
 }
 
 } // namespace ieee80211

@@ -289,11 +289,15 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeMacAddress(mgmtHeader->getReceiverAddress());
             stream.writeMacAddress(mgmtHeader->getTransmitterAddress());
             stream.writeMacAddress(mgmtHeader->getAddress3());
-            writeSequenceControl(stream, mgmtHeader->getFragmentNumber(), mgmtHeader->getSequenceNumber().get());
+            writeSequenceControl(stream, mgmtHeader->getFragmentNumber(), mgmtHeader->getSequenceNumber().isValid() ? mgmtHeader->getSequenceNumber().get() : 0);
             if (mgmtHeader->getOrder())
                 stream.writeUint32Be(0);
             if (type == ST_ACTION) {
                 auto actionFrame = dynamicPtrCast<const Ieee80211ActionFrame>(chunk);
+                if (actionFrame == nullptr) {
+                    ASSERT(stream.getLength() - startPos == mgmtHeader->getChunkLength());
+                    break;
+                }
                 switch (actionFrame->getCategory()) {
                     case 3: {
                         stream.writeByte(actionFrame->getCategory());
@@ -364,6 +368,13 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                         }
                         else
                             throw cRuntimeError("Unsupported S1G action frame");
+                        break;
+                    }
+                    case 30: {
+                        // HE category (IEEE 802.11-2024 Table 9-51).
+                        // The action body is serialized by a separate body chunk.
+                        // The MAC header chunk covers only the 24-byte 802.11 header.
+                        ASSERT(stream.getLength() - startPos == actionFrame->getChunkLength());
                         break;
                     }
                     default:
@@ -680,7 +691,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             stream.writeMacAddress(dataHeader->getReceiverAddress());
             stream.writeMacAddress(dataHeader->getTransmitterAddress());
             stream.writeMacAddress(dataHeader->getAddress3());
-            writeSequenceControl(stream, dataHeader->getFragmentNumber(), dataHeader->getSequenceNumber().get());
+            writeSequenceControl(stream, dataHeader->getFragmentNumber(), dataHeader->getSequenceNumber().isValid() ? dataHeader->getSequenceNumber().get() : 0);
             if (dataHeader->getFromDS() && dataHeader->getToDS())
                 stream.writeMacAddress(dataHeader->getAddress4());
             if (type == ST_DATA_WITH_QOS || type == ST_QOS_NULL) {

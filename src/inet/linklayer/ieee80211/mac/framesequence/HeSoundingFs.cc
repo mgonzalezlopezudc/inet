@@ -144,10 +144,16 @@ Packet *HeSoundingFs::buildNdpaFrame(FrameSequenceContext *context)
         info.nc = targets[i].maxNss;
         ndpaBody->setStations(i, info);
     }
-    ndpaBody->setChunkLength(B(1 + 1 + 1 + targets.size() * 4));
+    // Body chunk length: Cat(1) + HEAction(1) + DialogToken(1) + 2 bytes per STA
+    // — matches §9.6.28.4 Table 9-100 Per-STA Info (AID11 | FeedbackTypeAndNg | Disambiguation).
+    ndpaBody->setChunkLength(B(3 + targets.size() * 2));
 
-    auto header = makeShared<Ieee80211MgmtHeader>();
+    // Use Ieee80211ActionFrame (category 30 = HE) so the protocol dissector at
+    // Ieee80211MacProtocolDissector.cc:246 recognises it as an Action frame and
+    // routes the body chunk directly to Ieee80211HeSoundingMgmtFrameSerializer.
+    auto header = makeShared<Ieee80211ActionFrame>();
     header->setType(ST_ACTION);
+    header->setCategory(30);   // HE category (IEEE 802.11-2024 Table 9-51)
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);
     header->setAddress3(apAddress); // BSSID
@@ -200,7 +206,7 @@ Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
 
     auto commonRequest = ndpPacket->addTagIfAbsent<physicallayer::Ieee80211HeMuCommonReq>();
     commonRequest->setGuardInterval(physicallayer::HE_GI_3_2_US);
-    commonRequest->setCoding(physicallayer::HE_CODING_BCC);
+    commonRequest->setCoding(ruToneSize >= 484 ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC);
     commonRequest->setPacketExtensionDurationUs(0);
     commonRequest->setPuncturedSubchannelMask(0);
 
@@ -243,9 +249,9 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
         user.targetRssiDbm = -60;
         header->setUsers(i, user);
 
-        // The feedback body is 42 bytes; account for the management header and FCS too.
+        // The feedback MPDU is 34 bytes: 24 (MAC hdr) + 6 (§9.6.28.2 body) + 4 (FCS).
         commonDuration = std::max(commonDuration,
-                physicallayer::estimateHeMuUserDuration(B(70), ruLayout[i].toneSize, 0));
+                physicallayer::estimateHeMuUserDuration(B(34), ruLayout[i].toneSize, 0));
     }
     ASSERT(commonDuration > SIMTIME_ZERO);
     header->setCommonDuration(commonDuration);
