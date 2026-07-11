@@ -26,6 +26,7 @@ network Lan80211AxHeFeatures
 {
     parameters:
         int numHosts = default(4);
+        bool hasInterferer = default(false);
         @display("bgb=700,500");
     submodules:
         visualizer: <default(firstAvailableOrEmpty("IntegratedCanvasVisualizer"))> like IIntegratedVisualizer if typename != "" {
@@ -35,11 +36,16 @@ network Lan80211AxHeFeatures
         configurator: Ipv4NetworkConfigurator {
             parameters:
                 @display("p=100,100;is=s");
-                config = xml("<config><interface hosts='*' address='145.236.x.x' netmask='255.255.0.0'/></config>");
+                config = default(xml("<config><interface hosts='*' address='145.236.x.x' netmask='255.255.0.0'/></config>"));
         }
         radioMedium: Ieee80211ScalarRadioMedium {
             parameters:
                 @display("p=100,200;is=s");
+        }
+        interferer: WirelessHost if hasInterferer {
+            @display("p=350,150;r=,,#707070");
+            wlan[*].mgmt.typename = default("Ieee80211MgmtStaSimplified");
+            wlan[*].agent.typename = "";
         }
         host[numHosts]: WirelessHost {
             @display("r=,,#707070");
