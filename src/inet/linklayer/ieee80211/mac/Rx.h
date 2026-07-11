@@ -44,13 +44,13 @@ class INET_API Rx : public SimpleModule, public IRx
     virtual void handleMessage(cMessage *msg) override;
     virtual void setOrExtendNav(simtime_t navInterval);
     virtual bool isFcsOk(Packet *packet) const;
-    virtual void recomputeMediumFree();
     std::string getRxStatusTxt() const;
 
   public:
     Rx();
     ~Rx();
 
+    virtual void recomputeMediumFree();
     virtual bool isReceptionInProgress() const override;
     virtual bool isMediumFree() const override { return mediumFree; }
     virtual void receptionStateChanged(physicallayer::IRadio::ReceptionState newReceptionState) override;

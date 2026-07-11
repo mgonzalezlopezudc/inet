@@ -5,6 +5,7 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/common/InterfaceTag_m.h"
@@ -124,6 +125,47 @@ void Ieee80211MldMac::handleLowerMessage(cMessage *message)
         }
     }
     sendUp(message);
+}
+
+void Ieee80211MldMac::registerLinkMac(Ieee80211Mac *linkMac)
+{
+    if (std::find(linkMacs.begin(), linkMacs.end(), linkMac) == linkMacs.end()) {
+        linkMacs.push_back(linkMac);
+    }
+}
+
+void Ieee80211MldMac::linkTransmissionStateChanged(Ieee80211Mac *linkMac, physicallayer::IRadio::TransmissionState state)
+{
+    // Notify other link MACs to recompute their medium free status
+    for (auto other : linkMacs) {
+        if (other != linkMac) {
+            other->otherLinkTransmissionStateChanged();
+        }
+    }
+}
+
+bool Ieee80211MldMac::isOtherLinkTransmitting(Ieee80211Mac *thisLinkMac) const
+{
+    for (auto linkMac : linkMacs) {
+        if (linkMac != thisLinkMac) {
+            if (linkMac->getTransmissionState() == physicallayer::IRadio::TRANSMISSION_STATE_TRANSMITTING) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool Ieee80211MldMac::isOtherLinkTransmittingDuring(Ieee80211Mac *thisLinkMac, simtime_t start, simtime_t end) const
+{
+    for (auto linkMac : linkMacs) {
+        if (linkMac != thisLinkMac) {
+            if (linkMac->isTransmittingDuring(start, end)) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 } // namespace ieee80211

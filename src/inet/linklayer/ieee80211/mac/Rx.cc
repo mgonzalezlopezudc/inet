@@ -10,8 +10,10 @@
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/checksum/Checksum.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
 #include "inet/linklayer/ieee80211/mac/contract/IContention.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -95,7 +97,24 @@ bool Rx::lowerFrameReceived(Packet *packet)
     Enter_Method("lowerFrameReceived(\"%s\")", packet->getName());
     take(packet);
 
-    bool isFrameOk = isFcsOk(packet);
+    bool selfInterference = false;
+    auto macModule = check_and_cast<Ieee80211Mac *>(getParentModule());
+    if (macModule->getMldMac() != nullptr) {
+        auto mib = macModule->getMib();
+        if (mib->localEhtCapabilities.mlo && mib->localEhtCapabilities.nstr) {
+            simtime_t rxStart = simTime();
+            simtime_t rxEnd = simTime();
+            if (auto signalTimeInd = packet->findTag<SignalTimeInd>()) {
+                rxStart = signalTimeInd->getStartTime();
+                rxEnd = signalTimeInd->getEndTime();
+            }
+            if (macModule->getMldMac()->isOtherLinkTransmittingDuring(macModule, rxStart, rxEnd)) {
+                selfInterference = true;
+            }
+        }
+    }
+
+    bool isFrameOk = isFcsOk(packet) && !selfInterference;
     if (isFrameOk) {
         EV_INFO << "Received frame from PHY: " << packet << endl;
         const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
@@ -104,7 +123,11 @@ bool Rx::lowerFrameReceived(Packet *packet)
         return true;
     }
     else {
-        EV_INFO << "Received an erroneous frame from PHY, dropping it." << std::endl;
+        if (selfInterference) {
+            EV_INFO << "Received frame corrupted due to MLO NSTR self-interference: " << packet << std::endl;
+        } else {
+            EV_INFO << "Received an erroneous frame from PHY, dropping it." << std::endl;
+        }
         PacketDropDetails details;
         details.setReason(INCORRECTLY_RECEIVED);
         emit(packetDroppedSignal, packet, &details);
@@ -164,8 +187,16 @@ bool Rx::isFcsOk(Packet *packet) const
 void Rx::recomputeMediumFree()
 {
     bool oldMediumFree = mediumFree;
+    bool otherLinkTx = false;
+    auto macModule = check_and_cast<Ieee80211Mac *>(getParentModule());
+    if (macModule->getMldMac() != nullptr) {
+        auto mib = macModule->getMib();
+        if (mib->localEhtCapabilities.mlo && mib->localEhtCapabilities.nstr) {
+            otherLinkTx = macModule->getMldMac()->isOtherLinkTransmitting(macModule);
+        }
+    }
     // note: the duration of mode switching (rx-to-tx or tx-to-rx) should also count as busy
-    mediumFree = receptionState == IRadio::RECEPTION_STATE_IDLE && transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && !endNavTimer->isScheduled();
+    mediumFree = receptionState == IRadio::RECEPTION_STATE_IDLE && transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && !endNavTimer->isScheduled() && !otherLinkTx;
     if (mediumFree != oldMediumFree) {
         for (auto contention : contentions)
             contention->mediumStateChanged(mediumFree);

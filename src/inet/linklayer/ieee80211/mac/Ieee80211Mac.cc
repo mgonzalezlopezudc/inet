@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211MldMac.h"
 
 #include "inet/common/INETUtils.h"
 #include "inet/common/ModuleAccess.h"
@@ -88,6 +89,14 @@ void Ieee80211Mac::initialize(int stage)
         }
         if (mib->qos && !hcf)
             throw cRuntimeError("Missing hcf module, required for QoS");
+
+        if (hasPar("mldMacModule")) {
+            const char *mldMacPath = par("mldMacModule");
+            if (mldMacPath && *mldMacPath) {
+                mldMac = check_and_cast<Ieee80211MldMac *>(getModuleByPath(mldMacPath));
+                mldMac->registerLinkMac(this);
+            }
+        }
     }
 }
 
@@ -363,6 +372,14 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
     else if (signalID == IRadio::transmissionStateChangedSignal) {
         auto oldTransmissionState = transmissionState;
         transmissionState = static_cast<IRadio::TransmissionState>(value);
+        if (transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING) {
+            lastTxStart = simTime();
+            lastTxEnd = -1;
+        }
+        else if (oldTransmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING) {
+            lastTxEnd = simTime();
+        }
+
         bool transmissionFinished = (oldTransmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING && transmissionState == IRadio::TRANSMISSION_STATE_IDLE);
         if (transmissionFinished) {
             tx->radioTransmissionFinished();
@@ -370,6 +387,10 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
             configureRadioMode(twtManager != nullptr && !twtManager->isStationAwake() ? IRadio::RADIO_MODE_SLEEP : IRadio::RADIO_MODE_RECEIVER); // FIXME this is in a very wrong place!!! should be done explicitly from coordination function!
         }
         rx->transmissionStateChanged(transmissionState);
+
+        if (mldMac != nullptr) {
+            mldMac->linkTransmissionStateChanged(this, transmissionState);
+        }
     }
     else if (signalID == IRadio::receivedSignalPartChangedSignal) {
         rx->receivedSignalPartChanged(static_cast<IRadioSignal::SignalPart>(value));
@@ -519,6 +540,30 @@ void Ieee80211Mac::destroyStationQueueBank(const MacAddress &staAddr)
 StationQueueBank *Ieee80211Mac::getStationQueueBank(const MacAddress &staAddr) const
 {
     return hcf == nullptr ? nullptr : hcf->getStationQueueBank(staAddr);
+}
+
+bool Ieee80211Mac::isTransmittingDuring(simtime_t rxStart, simtime_t rxEnd) const
+{
+    if (transmissionState == physicallayer::IRadio::TRANSMISSION_STATE_TRANSMITTING) {
+        simtime_t txStart = lastTxStart;
+        simtime_t txEnd = simTime();
+        if (txStart < rxEnd && txEnd > rxStart)
+            return true;
+    }
+    if (lastTxStart != -1 && lastTxEnd != -1) {
+        simtime_t txStart = lastTxStart;
+        simtime_t txEnd = lastTxEnd;
+        if (txStart < rxEnd && txEnd > rxStart)
+            return true;
+    }
+    return false;
+}
+
+void Ieee80211Mac::otherLinkTransmissionStateChanged()
+{
+    if (auto concreteRx = dynamic_cast<Rx *>(rx.get())) {
+        concreteRx->recomputeMediumFree();
+    }
 }
 
 } // namespace ieee80211

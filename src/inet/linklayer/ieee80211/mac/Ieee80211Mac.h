@@ -33,6 +33,7 @@ class IIeee80211Llc;
 class Ieee80211MacHeader;
 class StationQueueBank;
 class ITwtManager;
+class Ieee80211MldMac;
 
 /**
  * Implements the IEEE 802.11 MAC. The features, standards compliance and
@@ -53,6 +54,9 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     opp_component_ptr<physicallayer::IRadio> radio;
     const physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     physicallayer::IRadio::TransmissionState transmissionState = physicallayer::IRadio::TransmissionState::TRANSMISSION_STATE_UNDEFINED;
+    Ieee80211MldMac *mldMac = nullptr;
+    simtime_t lastTxStart = -1;
+    simtime_t lastTxEnd = -1;
 
     opp_component_ptr<Dcf> dcf;
     opp_component_ptr<Pcf> pcf;
@@ -105,6 +109,12 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     virtual FcsMode getFcsMode() const { return fcsMode; }
     virtual const MacAddress& getAddress() const { return mib->address; }
     virtual Ieee80211Mib *getMib() const { return mib; }
+    virtual Ieee80211MldMac *getMldMac() const { return mldMac; }
+    virtual physicallayer::IRadio::TransmissionState getTransmissionState() const { return transmissionState; }
+    virtual simtime_t getLastTxStart() const { return lastTxStart; }
+    virtual simtime_t getLastTxEnd() const { return lastTxEnd; }
+    virtual bool isTransmittingDuring(simtime_t rxStart, simtime_t rxEnd) const;
+    virtual void otherLinkTransmissionStateChanged();
     virtual void sendUp(cMessage *message) override;
     virtual void sendUpFrame(Packet *frame);
     virtual void sendDownFrame(Packet *frame);
