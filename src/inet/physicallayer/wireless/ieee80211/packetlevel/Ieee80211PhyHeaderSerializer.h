@@ -134,6 +134,40 @@ class INET_API Ieee80211HeMuPhyHeaderSerializer : public FieldsChunkSerializer
     Ieee80211HeMuPhyHeaderSerializer() : FieldsChunkSerializer() {}
 };
 
+/**
+ * Serializes the 12-byte INET-internal per-RU payload delimiter prepended to
+ * each MPDU inside an HE MU DL or TB PPDU container. The encoded fields are
+ * ruIndex (4 B LE int), ruToneSize (2 B LE), ruToneOffset (2 B LE),
+ * staId (2 B LE), one packed mcs/nss byte, and one flags byte (dcm|muMimo).
+ * Internal PPDU-building state (mpduLength, spatialConfiguration, totalNsts,
+ * streamStartIndex, leakageSum) is intentionally NOT serialized.
+ */
+class INET_API Ieee80211HeMuRuPayloadHeaderSerializer : public FieldsChunkSerializer
+{
+  protected:
+    virtual void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const override;
+    virtual const Ptr<Chunk> deserialize(MemoryInputStream& stream) const override;
+
+  public:
+    Ieee80211HeMuRuPayloadHeaderSerializer() : FieldsChunkSerializer() {}
+};
+
+/**
+ * Serializes the 12-byte INET-internal per-RU payload delimiter prepended to
+ * each MPDU inside an EHT MU PPDU container. Identical layout to
+ * Ieee80211HeMuRuPayloadHeaderSerializer but operates on mruIndex/mruToneSize/
+ * mruToneOffset fields.
+ */
+class INET_API Ieee80211EhtRuPayloadHeaderSerializer : public FieldsChunkSerializer
+{
+  protected:
+    virtual void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const override;
+    virtual const Ptr<Chunk> deserialize(MemoryInputStream& stream) const override;
+
+  public:
+    Ieee80211EhtRuPayloadHeaderSerializer() : FieldsChunkSerializer() {}
+};
+
 } // namespace physicallayer
 
 } // namespace inet

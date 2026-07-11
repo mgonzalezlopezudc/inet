@@ -70,6 +70,8 @@ Register_Serializer(Ieee80211ErpOfdmPhyHeader, Ieee80211ErpOfdmPhyHeaderSerializ
 Register_Serializer(Ieee80211HtPhyHeader, Ieee80211HtPhyHeaderSerializer);
 Register_Serializer(Ieee80211VhtPhyHeader, Ieee80211VhtPhyHeaderSerializer);
 Register_Serializer(Ieee80211HeMuPhyHeader, Ieee80211HeMuPhyHeaderSerializer);
+Register_Serializer(Ieee80211HeMuRuPayloadHeader, Ieee80211HeMuRuPayloadHeaderSerializer);
+Register_Serializer(Ieee80211EhtRuPayloadHeader, Ieee80211EhtRuPayloadHeaderSerializer);
 
 /**
  * FHSS
@@ -636,6 +638,88 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     }
 
     return heMuPhyHeader;
+}
+
+/**
+ * HE MU RU Payload Header
+ *
+ * Wire layout (12 bytes, matching chunkLength = B(12) in the .msg):
+ *
+ *   Offset  Size  Field
+ *   ------  ----  -----
+ *   0       4     ruIndex        (int32, little-endian)
+ *   4       2     ruToneSize     (uint16, little-endian)
+ *   6       2     ruToneOffset   (uint16, little-endian)
+ *   8       2     staId          (uint16, little-endian)
+ *   10      1     mcs[3:0] | (nss-1)[6:4]  (packed byte)
+ *   11      1     bit0=dcm, bit1=muMimo    (flags byte)
+ *
+ * Fields mpduLength, spatialConfiguration, totalNsts, streamStartIndex and
+ * leakageSum are internal PPDU-building state and are intentionally NOT
+ * serialized; they live outside the canonical 12-byte representation.
+ */
+void Ieee80211HeMuRuPayloadHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
+{
+    auto h = dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(chunk);
+    stream.writeUint32Le((uint32_t)h->getRuIndex());
+    stream.writeUint16Le(h->getRuToneSize());
+    stream.writeUint16Le(h->getRuToneOffset());
+    stream.writeUint16Le(h->getStaId());
+    uint8_t mcsnss = (h->getMcs() & 0x0F) | (((h->getNumberOfSpatialStreams() - 1) & 0x07) << 4);
+    stream.writeByte(mcsnss);
+    uint8_t flags = (h->getDcm() ? 0x01 : 0x00) | (h->getMuMimo() ? 0x02 : 0x00);
+    stream.writeByte(flags);
+}
+
+const Ptr<Chunk> Ieee80211HeMuRuPayloadHeaderSerializer::deserialize(MemoryInputStream& stream) const
+{
+    auto h = makeShared<Ieee80211HeMuRuPayloadHeader>();
+    h->setRuIndex((int32_t)stream.readUint32Le());
+    h->setRuToneSize(stream.readUint16Le());
+    h->setRuToneOffset(stream.readUint16Le());
+    h->setStaId(stream.readUint16Le());
+    uint8_t mcsnss = stream.readByte();
+    h->setMcs(mcsnss & 0x0F);
+    h->setNumberOfSpatialStreams(((mcsnss >> 4) & 0x07) + 1);
+    uint8_t flags = stream.readByte();
+    h->setDcm(flags & 0x01);
+    h->setMuMimo(flags & 0x02);
+    return h;
+}
+
+/**
+ * EHT MU RU Payload Header
+ *
+ * Identical 12-byte layout to Ieee80211HeMuRuPayloadHeaderSerializer,
+ * mapping mruIndex -> ruIndex, mruToneSize -> ruToneSize,
+ * mruToneOffset -> ruToneOffset field accessors.
+ */
+void Ieee80211EhtRuPayloadHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
+{
+    auto h = dynamicPtrCast<const Ieee80211EhtRuPayloadHeader>(chunk);
+    stream.writeUint32Le((uint32_t)h->getMruIndex());
+    stream.writeUint16Le(h->getMruToneSize());
+    stream.writeUint16Le(h->getMruToneOffset());
+    stream.writeUint16Le(h->getStaId());
+    uint8_t mcsnss = (h->getMcs() & 0x0F) | (((h->getNumberOfSpatialStreams() - 1) & 0x07) << 4);
+    stream.writeByte(mcsnss);
+    uint8_t flags = (h->getMuMimo() ? 0x02 : 0x00);
+    stream.writeByte(flags);
+}
+
+const Ptr<Chunk> Ieee80211EhtRuPayloadHeaderSerializer::deserialize(MemoryInputStream& stream) const
+{
+    auto h = makeShared<Ieee80211EhtRuPayloadHeader>();
+    h->setMruIndex((int32_t)stream.readUint32Le());
+    h->setMruToneSize(stream.readUint16Le());
+    h->setMruToneOffset(stream.readUint16Le());
+    h->setStaId(stream.readUint16Le());
+    uint8_t mcsnss = stream.readByte();
+    h->setMcs(mcsnss & 0x0F);
+    h->setNumberOfSpatialStreams(((mcsnss >> 4) & 0x07) + 1);
+    uint8_t flags = stream.readByte();
+    h->setMuMimo(flags & 0x02);
+    return h;
 }
 
 } // namespace physicallayer
