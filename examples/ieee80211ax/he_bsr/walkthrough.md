@@ -45,8 +45,8 @@ The [omnetpp.ini](omnetpp.ini) file defines three test scenarios:
 - **Result**: AP triggers frequent UL transmissions with minimal BSRP polling overhead, but continuous Trigger-based PPDU scheduling introduces frame aggregation limits and SIFS overhead under high backlog.
 
 ### 2. `StaleBsr`
-- The queue report freshness threshold is set to a very low value: `**.ap.wlan[*].mac.hcf.ulCoordinator.reportMaxAge = 1ms`.
-- Since queue statuses expire in 1ms, the AP's scheduler frequently finds the records stale and is forced to send additional BSRP Trigger frames to re-verify backlogs before scheduling.
+- The queue report freshness threshold is set to `**.ap.wlan[*].mac.hcf.ulCoordinator.reportMaxAge = 10ms`.
+- Since queue statuses expire after 10 ms, the AP's scheduler frequently finds records stale and sends additional BSRP Trigger frames before backlog-based scheduling. The value is deliberately long enough for one Trigger exchange to finish deterministically; it is an INET experiment parameter, not an IEEE timer value.
 - **Result**: Higher explicit BSRP polling overhead (373 BSRP Triggers vs. 3 in baseline) due to continuous expiration.
 
 ### 3. `ImplicitBsr`
@@ -118,7 +118,7 @@ scalar  HeBsrNetwork.server.app[0]                     packetReceived:count     
 1. **Explicit BSRP Polling Overhead**:
    - In `ImplicitBsr`, the AP sends **0 BSRP Triggers**. Because the STAs transmit BSRs implicitly inside uplink SU data frames during their EDCA transmit opportunities, the AP's coordinator receives regular backlog updates without having to explicitly query the STAs.
    - In `FullBsrAccounting`, the AP sends **3 BSRP Triggers**.
-   - In `StaleBsr`, the count dramatically rises to **373 BSRP Triggers**. Because the queue status records expire in just 1 ms, the AP's scheduler is constantly forced to send BSRP trigger polls to check the STAs' queue status.
+   - In `StaleBsr`, the documented run rises to **373 BSRP Triggers**. Because queue status records expire after 10 ms, the scheduler repeatedly has to refresh them.
 
 2. **Trigger-Based Scheduling vs. EDCA Throughput**:
    - `ImplicitBsr` delivers **1419 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding. Because the AP receives these implicit reports during normal EDCA transmissions, it requires **0 explicit BSRP trigger frames** and **3 Basic Triggers** to maintain fresh queue records.

@@ -38,7 +38,7 @@ The network [HeRateAdaptationNetwork.ned](HeRateAdaptationNetwork.ned) consists 
 
 ## Configurations in `omnetpp.ini`
 
-The [omnetpp.ini](omnetpp.ini) file defines two scenarios:
+The [omnetpp.ini](omnetpp.ini) file defines three scenarios:
 
 ### 1. `FixedMcs` (Baseline)
 - The AP's HCF Downlink Scheduler does not use a dynamic rate control module.
@@ -51,6 +51,13 @@ The [omnetpp.ini](omnetpp.ini) file defines two scenarios:
   - `**.ap.wlan[*].mac.hcf.rateControl.maxMcs = 11`
   - `**.ap.wlan[*].mac.hcf.dlScheduler.heRateControlModule = "^.rateControl"`
 - **Result**: The Downlink Scheduler queries the `HeMinstrelRateControl` module to select the optimal MCS/NSS dynamically for each peer, updating its selection based on ACK success rates.
+
+### 3. `HeMinstrelMobile`
+
+- Extends `HeMinstrel` and changes only `host[3]` to `LinearMobility` at 8 m/s.
+- This is the didactically useful adaptation case: the link budget changes
+  during the run, so inspect the selected-rate vector over simulation time
+  rather than comparing only its mean or the final packet count.
 
 ---
 
@@ -70,6 +77,9 @@ bin/inet -u Cmdenv -c FixedMcs examples/ieee80211ax/he_rate_adaptation/omnetpp.i
 
 # Run HeMinstrel Config
 bin/inet -u Cmdenv -c HeMinstrel examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
+
+# Run Minstrel with a moving edge station
+bin/inet -u Cmdenv -c HeMinstrelMobile examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
 ```
 
 ---
@@ -102,7 +112,7 @@ scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  195
 scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  200
 ```
 
-AP Datarate vector summary (both configs):
+AP datarate vector summary for the two static configs:
 `HeRateAdaptationNetwork.ap.wlan[0].mac.hcf datarateSelected:vector count=1144 mean=27.34 Mbps min=7.31 Mbps max=121.87 Mbps`
 
 Individual Host uplink datarates (both configs):

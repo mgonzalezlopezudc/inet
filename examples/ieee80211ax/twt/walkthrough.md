@@ -10,8 +10,11 @@ In legacy 802.11 power-saving modes (like PS-Poll or APSD), stations wake up per
 1. **Scheduled Wakeup**: Instead of waking up for every Beacon, the AP and each STA negotiate specific, customized time windows called **TWT sessions** (defined by `wakeInterval` and `wakeDuration`). The STA remains in a deep sleep state outside of these sessions.
 2. **Individual TWT**:
    - Negotiated dynamically via TWT Setup frames.
-   - **Unannounced TWT**: The STA wakes up at the TWT start time and can immediately transmit uplink frames or receive downlink frames without waiting for a poll frame.
-   - **Announced TWT**: The STA wakes up but must remain quiet (listening) until the AP polls it (e.g., with a trigger frame or downlink data frame) to confirm it is ready.
+   - **Unannounced TWT**: The STA is not required to announce that it is awake
+     before exchanging frames during the service period.
+   - **Announced TWT**: The STA indicates that it is awake before the peer sends
+     it frames. “Announced” describes presence signaling, not a general rule
+     that the STA must remain silent until an AP poll.
 3. **Broadcast TWT**:
    - The AP defines and broadcasts a shared TWT schedule (in Beacons or Association responses).
    - Multiple stations join this shared broadcast schedule, allowing the AP to coordinate groups of STAs together (highly useful for Downlink/Uplink MU-OFDMA).
@@ -27,7 +30,7 @@ The network [TwtRegression.ned](TwtRegression.ned) consists of:
 - **Traffic**: The `server` generates downlink UDP traffic destined for `sta[0]` and `sta[1]` (200B packets sent every 2s, starting at `0.5s`).
 
 ```
-       [sta[0]] (Color 1)
+       [sta[0]]
           |
           | (140m wireless)
           v
@@ -35,7 +38,7 @@ The network [TwtRegression.ned](TwtRegression.ned) consists of:
           ^
           | (140m wireless)
           |
-       [sta[1]] (Color 2)
+       [sta[1]]
 ```
 
 ---
@@ -134,4 +137,8 @@ scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               14.3174 s
    - In the `Broadcast` config, the stations sleep for **~85.68 seconds** (spending about 14.32s awake).
    - *Why do they sleep so much?* The UDP downlink application generates a packet every 2 seconds (`sendInterval = 2000ms`), which is much slower than the TWT wake interval (100ms). This allows the stations to remain in a low-power sleep state for the vast majority of the time, waking up only during their negotiated TWT service periods (SPs) to receive packets.
    - *Why is Broadcast sleep time slightly shorter than Individual?* In Broadcast TWT, stations wake up at the start of the broadcast SP. If they miss Beacons due to sleeping, the broadcast schedule can expire and they must wake up, listen for a Beacon to resynchronize, and then return to sleep. This synchronization overhead results in slightly higher awake times (~14.3s vs ~10.7s in Individual configs).
-   - This simulation clearly demonstrates the massive energy-saving benefits of TWT, especially in low-duty-cycle traffic scenarios (like IoT sensors or background updates) where stations can sleep for most of the time.
+   - Awake/sleep time demonstrates scheduled radio availability. The configured
+     radio energy consumer and battery make the corresponding energy cost
+     measurable; compare consumed energy together with delivery and latency.
+     Sleep fraction alone is not an energy result, and this single workload is
+     not a general estimate of real-device battery lifetime.

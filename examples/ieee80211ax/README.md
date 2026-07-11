@@ -3,6 +3,11 @@
 These examples demonstrate High Efficiency (HE) PHY and MAC mechanisms. Each
 directory is independently runnable; use this table to choose a scenario.
 
+The examples are organized as controlled experiments: change one mechanism,
+keep the topology and offered load fixed, and compare both protocol events and
+end-to-end results. They model the behavior relevant to INET experiments; they
+are not waveform implementations or interoperability certification tests.
+
 | Area | Example | Main mechanisms |
 |------|---------|-----------------|
 | Downlink multi-user access | [dl_ofdma](dl_ofdma/walkthrough.md) | RU scheduling, SU baseline, wide channels, DL MU-MIMO, Multi-TID Block Ack |
@@ -30,6 +35,27 @@ bin/inet -u Cmdenv -c <ConfigName> examples/ieee80211ax/<example>/omnetpp.ini
 ```
 
 Use `-u Qtenv` for interactive animation or module inspection.
+
+For a fair comparison, use the same configuration run and seed, and inspect
+more than packet counts. Depending on the feature, useful evidence includes RU
+allocations, PPDU format, Trigger/Block Ack counts, selected MCS, latency,
+fairness, radio awake time, and consumed energy. Numeric results printed in a
+walkthrough describe the documented deterministic run; regenerate them after
+changing the model, seed, traffic, or simulation duration.
+
+## Reading the terminology
+
+- **HE SU**, **HE MU**, **HE TB**, and **HE ER SU** name PPDU formats. OFDMA
+  divides frequency into resource units (RUs); MU-MIMO separates users by
+  spatial streams. A scenario may combine the two.
+- Downlink MU scheduling is performed by the AP. Uplink HE TB transmission is
+  initiated by an AP Trigger frame; scheduled RUs name a station, whereas
+  UORA RUs permit contention.
+- BSS color identifies the BSS of an HE PPDU. Spatial reuse is the separate
+  decision to apply an OBSS/PD rule to an eligible inter-BSS PPDU.
+- A configured bitrate is a model input, not by itself proof that a particular
+  MCS, coding mode, or PPDU format was transmitted. Confirm the transmitter or
+  HCF statistics/watches named by the walkthrough.
 
 ## Shared topology
 
