@@ -157,11 +157,9 @@ Bit 0 is the primary 20 MHz subchannel; `0100` disables subchannel index 1 only.
 
 ## 3. How to Run
 
-From the repository root, source OMNeT++ and INET, then run the desired configuration:
+From the INET project root, run the desired configuration:
 
 ```sh
-source /home/user/omnetpp-6.4.0aipre2/setenv -f
-source setenv -q
 bin/inet -u Qtenv -c HeLdpc examples/ieee80211ax/he_features/omnetpp.ini
 ```
 

@@ -66,7 +66,7 @@ You can run the simulation using Qtenv or Cmdenv.
 ### Running with Qtenv (GUI)
 Run the following command to launch the simulation in the GUI:
 ```sh
-opp_run -u Qtenv -l src/libINET.so -c BssColoringEnabled examples/ieee80211ax/bss_coloring/omnetpp.ini
+bin/inet -u Qtenv -c BssColoringEnabled examples/ieee80211ax/bss_coloring/omnetpp.ini
 ```
 You can visually observe the concurrent transmissions in Qtenv when BSS Coloring is enabled.
 
@@ -76,10 +76,10 @@ For the underlying spatial-reuse decisions, inspect any STA radio receiver. The 
 Run the configurations to generate results:
 ```sh
 # Run disabled configuration
-opp_run -u Cmdenv -l src/libINET.so -c BssColoringDisabled examples/ieee80211ax/bss_coloring/omnetpp.ini
+bin/inet -u Cmdenv -c BssColoringDisabled examples/ieee80211ax/bss_coloring/omnetpp.ini
 
 # Run enabled configuration
-opp_run -u Cmdenv -l src/libINET.so -c BssColoringEnabled examples/ieee80211ax/bss_coloring/omnetpp.ini
+bin/inet -u Cmdenv -c BssColoringEnabled examples/ieee80211ax/bss_coloring/omnetpp.ini
 ```
 
 ---

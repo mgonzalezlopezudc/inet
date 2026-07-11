@@ -56,23 +56,20 @@ The [omnetpp.ini](omnetpp.ini) file defines two scenarios:
 
 ## Running the Simulation
 
-Ensure your environment is set up, then run the simulations.
+From the INET project root, use the project launcher.
 
 ### Running with Qtenv (GUI)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-opp_run -u Qtenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c HeMinstrel examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
+bin/inet -u Qtenv -c HeMinstrel examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
 ```
 
 ### Running with Cmdenv (Command Line)
 ```sh
-source $HOME/omnetpp-6.4.0aipre2/setenv && source $HOME/omnetpp_ws/inet/setenv
-
 # Run FixedMcs Baseline
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c FixedMcs examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
+bin/inet -u Cmdenv -c FixedMcs examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
 
 # Run HeMinstrel Config
-opp_run -u Cmdenv --ned-path=$HOME/omnetpp_ws/inet/src:$HOME/omnetpp_ws/inet/examples -l $HOME/omnetpp_ws/inet/src/libINET.so -c HeMinstrel examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
+bin/inet -u Cmdenv -c HeMinstrel examples/ieee80211ax/he_rate_adaptation/omnetpp.ini
 ```
 
 ---

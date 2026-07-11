@@ -59,28 +59,25 @@ The [omnetpp.ini](omnetpp.ini) file defines three test scenarios:
 
 ## Running the Simulation
 
-Ensure your environment is set up and compiled, then run the simulations.
+From the INET project root, use the project launcher.
 
 ### Running with Qtenv (GUI)
 ```sh
-source /home/user/omnetpp-6.4.0aipre2/setenv && source /home/user/omnetpp_ws/inet/setenv
-opp_run -u Qtenv --ned-path=/home/user/omnetpp_ws/inet/src:/home/user/omnetpp_ws/inet/examples -l /home/user/omnetpp_ws/inet/src/libINET.so -c ImplicitBsr examples/ieee80211ax/he_bsr/omnetpp.ini
+bin/inet -u Qtenv -c ImplicitBsr examples/ieee80211ax/he_bsr/omnetpp.ini
 ```
 
 While the simulation runs, inspect the AP `wlan[0].mac.hcf.ulCoordinator` module. The watches `bufferStatusSummary`, `freshReports`, `backloggedReports`, `bufferStatusByAid`, `ofdmaContentionWindow`, and `ofdmaBackoff` show how BSR information drives Trigger decisions. The AP `ulTriggerPolicy` watches `lastContext.*` and `lastSelectedTriggerName`, and the `ulScheduler` watches `lastScheduleSummary` and `lastRuAllocations`.
 
 ### Running with Cmdenv (Command Line)
 ```sh
-source /home/user/omnetpp-6.4.0aipre2/setenv && source /home/user/omnetpp_ws/inet/setenv
-
 # Run Full BSR Accounting
-opp_run -u Cmdenv --ned-path=/home/user/omnetpp_ws/inet/src:/home/user/omnetpp_ws/inet/examples -l /home/user/omnetpp_ws/inet/src/libINET.so -c FullBsrAccounting examples/ieee80211ax/he_bsr/omnetpp.ini
+bin/inet -u Cmdenv -c FullBsrAccounting examples/ieee80211ax/he_bsr/omnetpp.ini
 
 # Run Stale BSR Scenario
-opp_run -u Cmdenv --ned-path=/home/user/omnetpp_ws/inet/src:/home/user/omnetpp_ws/inet/examples -l /home/user/omnetpp_ws/inet/src/libINET.so -c StaleBsr examples/ieee80211ax/he_bsr/omnetpp.ini
+bin/inet -u Cmdenv -c StaleBsr examples/ieee80211ax/he_bsr/omnetpp.ini
 
 # Run Implicit BSR Scenario
-opp_run -u Cmdenv --ned-path=/home/user/omnetpp_ws/inet/src:/home/user/omnetpp_ws/inet/examples -l /home/user/omnetpp_ws/inet/src/libINET.so -c ImplicitBsr examples/ieee80211ax/he_bsr/omnetpp.ini
+bin/inet -u Cmdenv -c ImplicitBsr examples/ieee80211ax/he_bsr/omnetpp.ini
 ```
 
 ---
@@ -91,7 +88,6 @@ After running the simulations, use `opp_scavetool` to analyze how many BSRP and 
 
 ```sh
 # Query the number of BSRP and Basic Trigger frames sent by the AP
-source /home/user/omnetpp-6.4.0aipre2/setenv
 opp_scavetool query -l -f "*Trigger*" examples/ieee80211ax/he_bsr/results/*.sca
 
 # Query the total packets received at the UDP sink on the server
