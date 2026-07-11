@@ -9,9 +9,12 @@
 
 #include "inet/linklayer/base/MacProtocolBase.h"
 #include "inet/linklayer/ieee80211/mac/sequencenumberassignment/QoSSequenceNumberAssignment.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 
 namespace inet {
 namespace ieee80211 {
+
+class Ieee80211Mac;
 
 class INET_API Ieee80211MldMac : public MacProtocolBase
 {
@@ -23,6 +26,7 @@ class INET_API Ieee80211MldMac : public MacProtocolBase
     ieee80211::QoSSequenceNumberAssignment *sequenceNumberAssignment = nullptr;
     queueing::IPacketQueue *pendingQueue[4] = {nullptr};
     int nextLinkIndex = 0;
+    std::vector<Ieee80211Mac *> linkMacs;
 
   protected:
     virtual void initialize(int stage) override;
@@ -38,6 +42,10 @@ class INET_API Ieee80211MldMac : public MacProtocolBase
     virtual ~Ieee80211MldMac();
     ieee80211::QoSSequenceNumberAssignment* getSequenceNumberAssignment() const { return sequenceNumberAssignment; }
     queueing::IPacketQueue* getPendingQueue(int ac) const { return pendingQueue[ac]; }
+    void registerLinkMac(Ieee80211Mac *linkMac);
+    void linkTransmissionStateChanged(Ieee80211Mac *linkMac, physicallayer::IRadio::TransmissionState state);
+    bool isOtherLinkTransmitting(Ieee80211Mac *thisLinkMac) const;
+    bool isOtherLinkTransmittingDuring(Ieee80211Mac *thisLinkMac, simtime_t start, simtime_t end) const;
 };
 
 } // namespace ieee80211
