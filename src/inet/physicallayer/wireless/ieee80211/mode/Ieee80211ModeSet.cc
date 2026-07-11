@@ -949,11 +949,18 @@ bool isSameHeModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
         return false;
     auto dataA = heA->getDataMode();
     auto dataB = heB->getDataMode();
+    auto preambleA = heA->getPreambleMode()->getPreambleFormat();
+    auto preambleB = heB->getPreambleMode()->getPreambleFormat();
+    bool compatibleSuPreamble = preambleA == preambleB ||
+            (preambleA == Ieee80211HePreambleMode::HE_PREAMBLE_SU &&
+             preambleB == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU) ||
+            (preambleA == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU &&
+             preambleB == Ieee80211HePreambleMode::HE_PREAMBLE_SU);
     return dataA->getMcsIndex() == dataB->getMcsIndex() &&
            dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
            dataA->getBandwidth() == dataB->getBandwidth() &&
            dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
-           heA->getPreambleMode()->getPreambleFormat() == heB->getPreambleMode()->getPreambleFormat() &&
+           compatibleSuPreamble &&
            heA->getCenterFrequencyMode() == heB->getCenterFrequencyMode();
 }
 

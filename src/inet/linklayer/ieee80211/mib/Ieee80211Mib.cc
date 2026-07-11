@@ -53,6 +53,9 @@ void Ieee80211Mib::initialize(int stage)
         localHeCapabilities.omControl = par("heOmControl").boolValue();
         localHeCapabilities.twoNav = par("heTwoNav").boolValue();
         localHeCapabilities.erBss = par("heErBss").boolValue();
+        // IEEE 802.11-2024, 26.17.6: an AP operating an ER BSS shall not
+        // advertise ER SU reception as disabled in its HE Operation element.
+        heOperation.erSuDisable = !localHeCapabilities.erBss;
         localHeCapabilities.ndpFeedbackReport = par("heNdpFeedbackReport").boolValue();
         localHeCapabilities.multiTidAggregationRx = par("heMultiTidAggregationRx").boolValue();
         localHeCapabilities.multiTidAggregationTx = par("heMultiTidAggregationTx").boolValue();
@@ -231,6 +234,7 @@ std::string Ieee80211Mib::getHeOperationSummary() const
     std::stringstream stream;
     stream << "bssColor=" << (int)heOperation.bssColor
            << ", width=" << heOperation.operatingChannelWidth
+           << ", erSu=" << (heOperation.erSuDisable ? "disabled" : "enabled")
            << ", defaultPE=" << heOperation.defaultPeDurationUs << "us"
            << ", basicMcsNss=" << heOperation.basicHeMcsNss;
     return stream.str();

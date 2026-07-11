@@ -148,6 +148,7 @@ const char *HeHcf::getPendingUlTriggerName() const
         case IIeee80211HeUlTriggerPolicy::NO_TRIGGER: return "NO_TRIGGER";
         case IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER: return "BASIC_TRIGGER";
         case IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER: return "BSRP_TRIGGER";
+        case IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER: return "NFRP_TRIGGER";
         default: return "UNKNOWN";
     }
 }
@@ -206,15 +207,17 @@ void HeHcf::handleMessage(cMessage *msg)
             frameSequenceHandler->isSequenceRunning() || edca->getChannelOwner() != nullptr ||
             tx->isBusy() || ulTriggerAccessRequested)
         return;
-    auto triggerType = ulCoordinator->selectTrigger(mac->getMib());
+    auto triggerType = par("enableNdpFeedbackReport").boolValue() ?
+            IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER : ulCoordinator->selectTrigger(mac->getMib());
     if (triggerType == IIeee80211HeUlTriggerPolicy::NO_TRIGGER)
         return;
     EV_INFO << "Requesting channel access for HE UL "
-             << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
+             << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" :
+                     triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? "NFRP" : "Basic")
              << " Trigger\n";
     pendingUlTrigger = triggerType;
     ulTriggerAccessRequested = true;
-    auto ac = triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
+    auto ac = triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER || triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
             AC_BE : ulCoordinator->getPreferredAccessCategory();
     edca->requestChannelAccess(ac, this);
 }

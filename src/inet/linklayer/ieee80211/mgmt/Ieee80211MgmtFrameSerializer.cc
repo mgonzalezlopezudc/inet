@@ -247,6 +247,10 @@ static void writeHeOperationElement(MemoryOutputStream& stream, const Ieee80211H
     uint32_t operationParameters = 0;
     if (operation.defaultPeDurationPresent)
         operationParameters |= std::clamp((int)operation.defaultPeDurationUs / 4, 0, 4);
+    // IEEE 802.11-2024, Figure 9-905: ER SU Disable is B16 of the
+    // 24-bit HE Operation Parameters field.
+    if (operation.erSuDisable)
+        operationParameters |= 1 << 16;
     stream.writeByte(operationParameters & 0xff);
     stream.writeByte((operationParameters >> 8) & 0xff);
     stream.writeByte((operationParameters >> 16) & 0xff);
@@ -459,6 +463,7 @@ static void readHeOperationElement(MemoryInputStream& stream, int payloadLength,
     int defaultPeDuration = operationParameters & 0x7;
     operation.defaultPeDurationPresent = defaultPeDuration != 0;
     operation.defaultPeDurationUs = defaultPeDuration * 4;
+    operation.erSuDisable = (operationParameters & (1 << 16)) != 0;
     operation.bssColor = stream.readByte() & 0x3f;
     operation.basicHeMcsNss = stream.readUint16Le();
     operation.operatingChannelWidthMHz = 20;

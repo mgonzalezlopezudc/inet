@@ -89,6 +89,7 @@ struct Ieee80211HeOperation
     uint8_t bssColor = 0;
     Hz operatingChannelWidth = Hz(20e6);
     int basicHeMcsNss = 0;
+    bool erSuDisable = true;
     bool defaultPeDurationPresent = false;
     int defaultPeDurationUs = 0;
 };
@@ -215,6 +216,7 @@ inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeOperation& op
 {
     os << "bssColor=" << (int)operation.bssColor
        << " width=" << operation.operatingChannelWidth
+       << " erSu=" << (operation.erSuDisable ? "disabled" : "enabled")
        << " defaultPE=" << operation.defaultPeDurationUs << "us"
        << " basicMcsNss=" << operation.basicHeMcsNss;
     return os;

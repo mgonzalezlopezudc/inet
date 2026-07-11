@@ -32,12 +32,12 @@ network HeErSuNetwork
         }
         edge: WirelessHost {
             @display("p=90,180;r=,,#707070");
-            wlan[*].mgmt.typename = "Ieee80211MgmtStaSimplified";
-            wlan[*].agent.typename = "";
+            wlan[*].mgmt.typename = default("Ieee80211MgmtStaSimplified");
+            wlan[*].agent.typename = default("");
         }
         ap: AccessPoint {
             @display("p=390,180;r=,,#707070");
-            wlan[*].mgmt.typename = "Ieee80211MgmtApSimplified";
+            wlan[*].mgmt.typename = default("Ieee80211MgmtApSimplified");
         }
         server: StandardHost {
             @display("p=650,180");
@@ -45,4 +45,3 @@ network HeErSuNetwork
     connections:
         server.ethg++ <--> Eth100M <--> ap.ethg++;
 }
-

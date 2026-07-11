@@ -164,9 +164,11 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
                                               processResponses(context);
                                               return true;
                                           }),
-                               new StepFs("MULTI-STA-BA",
+                               new OptionalFs(new StepFs("MULTI-STA-BA",
                                           [this](StepFs *, FrameSequenceContext *context) {
                                               return new TransmitStep(buildMultiStaBlockAckPacket(), this->modeSet->getSifsTime(), true);
+                                          }), [this](OptionalFs *, FrameSequenceContext *) {
+                                              return this->triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER;
                                           })}))
 {
     ASSERT(coordinator != nullptr);
@@ -175,7 +177,8 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
     ASSERT(!schedule.allocations.empty());
     ASSERT(schedule.commonDuration > SIMTIME_ZERO);
     ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ||
-            triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+            triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
+            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER);
     triggerId = coordinator->allocateTriggerId();
 }
 
@@ -218,10 +221,11 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     // the SIFS-delayed HE TB response and the AP's following SIFS response.
     auto responseDuration = modeSet->getSifsTime() + schedule.commonDuration;
     header->setDurationField(responseDuration + modeSet->getSifsTime());
-    int userInfoSize = (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) ? 5 : 6;
+    int userInfoSize = (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
+            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) ? 5 : 6;
     header->setChunkLength(B(24 + userInfoSize * schedule.allocations.size()));
-    auto packet = new Packet(triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
-            "HE-BSRP-Trigger" : "HE-Basic-Trigger", header);
+    auto packet = new Packet(triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "HE-BSRP-Trigger" :
+            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? "HE-NFRP-Trigger" : "HE-Basic-Trigger", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
     return packet;
 }

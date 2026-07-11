@@ -20,6 +20,7 @@ class INET_API IIeee80211HeUlTriggerPolicy
         NO_TRIGGER = -1,
         BASIC_TRIGGER = 0,
         BSRP_TRIGGER = 4,
+        NFRP_TRIGGER = 7,
     };
 
     /** Aggregate association, report, backlog, retry, and timing state for a decision. */

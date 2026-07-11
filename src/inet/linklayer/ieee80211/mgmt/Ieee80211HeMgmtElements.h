@@ -149,6 +149,7 @@ inline Ieee80211HeOperationElement makeHeOperationElement(const Ieee80211HeOpera
     element.bssColor = operation.bssColor;
     element.operatingChannelWidthMHz = (int)(operation.operatingChannelWidth.get() / 1e6);
     element.basicHeMcsNss = operation.basicHeMcsNss;
+    element.erSuDisable = operation.erSuDisable;
     element.defaultPeDurationPresent = operation.defaultPeDurationPresent;
     element.defaultPeDurationUs = operation.defaultPeDurationUs;
     return element;
@@ -161,6 +162,7 @@ inline Ieee80211HeOperation makeHeOperation(const Ieee80211HeOperationElement& e
     operation.bssColor = element.bssColor;
     operation.operatingChannelWidth = Hz(element.operatingChannelWidthMHz * 1e6);
     operation.basicHeMcsNss = element.basicHeMcsNss;
+    operation.erSuDisable = element.erSuDisable;
     operation.defaultPeDurationPresent = element.defaultPeDurationPresent;
     operation.defaultPeDurationUs = element.defaultPeDurationUs;
     return operation;

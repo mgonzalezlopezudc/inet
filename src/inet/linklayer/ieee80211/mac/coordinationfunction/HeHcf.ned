@@ -42,6 +42,7 @@ module HeHcf extends Hcf
         int operatingModeRxNss = default(1);
         int operatingModeChannelWidth = default(0);
         bool operatingModeUlMuDisable = default(false);
+        bool enableNdpFeedbackReport = default(false); // Periodically sends NFRP Trigger frames when peers negotiated support
         double ulTriggerCheckInterval @unit(s) = default(1ms); // Interval at which the AP considers starting an uplink Trigger exchange
         double ulTargetRssiMargin @unit(dB) = default(10dB); // Target received-power margin requested from scheduled uplink STAs
         double maxHeTbPpduDuration @unit(s) = default(1ms); // Maximum duration requested for an HE trigger-based uplink PPDU
