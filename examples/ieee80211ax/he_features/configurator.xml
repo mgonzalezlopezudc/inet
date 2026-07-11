@@ -1,0 +1,6 @@
+<config>
+    <interface hosts="ap host[*]" address="145.236.1.x" netmask="255.255.255.0"/>
+    <interface hosts="interferer" address="145.236.2.x" netmask="255.255.255.0"/>
+    <interface hosts="server" address="145.236.3.x" netmask="255.255.255.0"/>
+    <interface hosts="*" address="145.236.x.x" netmask="255.255.255.0"/>
+</config>
