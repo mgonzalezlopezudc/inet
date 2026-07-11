@@ -32,7 +32,7 @@ The network [HeErSuNetwork.ned](HeErSuNetwork.ned) consists of:
 
 ## Configurations in `omnetpp.ini`
 
-The [omnetpp.ini](omnetpp.ini) file defines two scenarios:
+The [omnetpp.ini](omnetpp.ini) file defines three scenarios:
 
 ### 1. `HeSu` (Baseline)
 - The AP transmits standard HE SU PPDUs.
@@ -46,6 +46,15 @@ The [omnetpp.ini](omnetpp.ini) file defines two scenarios:
   - `**.ap.wlan[*].mac.hcf.rateControl.preferDcm = true`
   - `**.ap.wlan[*].mac.hcf.rateControl.maxMcs = 2`
 - **Result**: The AP rate controller restricts MCS selection to robust levels (0, 1, 2), activates DCM to combat frequency selective fading, and formats the PPDUs as HE ER SU with the repeated HE-SIG-A preamble field (44 µs total duration).
+
+### 3. `ErBss` (ER BSS management behavior)
+
+- Extends `HeErSu`, enables full beaconing/association instead of installing
+  association state at initialization, and sets the HE ER BSS capability.
+- Management-frame bitrate overrides are removed so HE rate control can choose
+  ER SU for the relevant management and group-addressed transmissions.
+- Block Ack is disabled to keep the trace focused on ER-BSS management and
+  single-MPDU behavior; this is a scope choice, not an ER-BSS requirement.
 
 ---
 
@@ -65,6 +74,9 @@ bin/inet -u Cmdenv -c HeSu examples/ieee80211ax/he_er_su/omnetpp.ini
 
 # Run HeErSu Config
 bin/inet -u Cmdenv -c HeErSu examples/ieee80211ax/he_er_su/omnetpp.ini
+
+# Run ER-BSS beaconing and association
+bin/inet -u Cmdenv -c ErBss examples/ieee80211ax/he_er_su/omnetpp.ini
 ```
 
 ---
@@ -102,4 +114,6 @@ scalar  HeErSuNetwork.edge.wlan[0].mac    packetDropIncorrectlyReceived:count  4
 2. **Under-the-Hood Preamble Difference**:
    - In `HeSu`, transmissions use standard HE SU PPDUs with a **36 µs** preamble.
    - In `HeErSu`, transmissions employ HE ER SU PPDUs. The preamble includes the repeated HE-SIG-A field, increasing the preamble duration to **44 µs**. This extra 8 µs of repeated header symbol provides the essential energy duplication required to decode preambles under real-world multipath fading and noise, which would otherwise drop the link entirely.
-   - By combining `HeMinstrelRateControl` with `preferDcm = true` and `enableExtendedRangeSu = true`, the AP is fully prepared to handle severe fading, ensuring high reliability at the edge of the coverage zone.
+   - The configuration demonstrates selection and timing of the robust format.
+     It does not prove a range gain in this deterministic free-space channel;
+     such a claim requires a fading/noise experiment and a delivery/PER sweep.

@@ -4,13 +4,26 @@ This example illustrates the BSS Coloring mechanism introduced in the IEEE 802.1
 
 ## Background: BSS Coloring & Spatial Reuse
 
-In legacy 802.11 standards, all stations on the same channel share the channel capacity via CSMA/CA. When a station hears any preamble/frame above its Clear Channel Assessment Carrier Sense (CCA-CS) threshold (typically -82 dBm for 20 MHz), it considers the medium busy and defers transmission. In high-density deployments, this causes severe throughput degradation due to overlapping BSSs (OBSS) deferring to one another.
+Stations on the same channel normally defer when physical or virtual carrier
+sense reports the medium busy. In a dense deployment, overlapping BSSs can
+therefore suppress one another even when a concurrent transmission would have
+been decodable. Exact CCA thresholds depend on signal type, bandwidth, and PHY
+rules; they should not be reduced to one universal sensitivity value.
 
 802.11ax introduces **BSS Coloring** to address this:
 1. Every BSS is assigned a numerical identifier called a "color" (between 1 and 63), carried in the HE PHY preamble header.
 2. A receiver distinguishes between **Intra-BSS** frames (same color as its own BSS) and **Inter-BSS / OBSS** frames (different color).
-3. If an incoming frame is Inter-BSS, the receiver can apply a higher Carrier Sense threshold known as the **OBSS Packet Detect (OBSS/PD)** threshold (e.g., -62 dBm).
-4. If the received power of the Inter-BSS frame is below the OBSS/PD threshold, the receiver ignores the frame, leaving the channel state as **IDLE** for transmission. This allows the local station to transmit concurrently.
+3. For an eligible inter-BSS PPDU, the receiver can apply the configured
+   **OBSS Packet Detect (OBSS/PD)** rule instead of ordinary preamble detection.
+4. If the PPDU is below the applicable threshold and the other spatial-reuse
+   conditions hold, it need not keep the local medium busy. This creates an
+   opportunity for concurrent transmission; it does not guarantee that the
+   concurrent frames will decode successfully.
+
+BSS coloring supplies classification information. OBSS/PD-based spatial reuse
+is the policy that uses that information. The IEEE PHY also couples more
+aggressive OBSS/PD operation to transmit-power constraints; this focused INET
+scenario fixes power and explores the receive-side decision.
 
 ---
 
@@ -45,7 +58,8 @@ The network [BssColoringNetwork.ned](BssColoringNetwork.ned) consists of two ove
 
 ## Configurations in `omnetpp.ini`
 
-There are two main configurations defined in [omnetpp.ini](omnetpp.ini):
+There are two primary configurations and four diagnostic variants in
+[omnetpp.ini](omnetpp.ini):
 
 ### 1. `BssColoringDisabled`
 - Spatial reuse is turned off: `**.receiver.enableSpatialReuse = false`.
@@ -56,6 +70,18 @@ There are two main configurations defined in [omnetpp.ini](omnetpp.ini):
 - Spatial reuse is turned on: `**.receiver.enableSpatialReuse = true` with `**.receiver.obssPdThreshold = -62dBm`.
 - When `ap1` transmits, `ap2` and `sta2` receive the frame with BSS Color 1. Since their own BSS Color is 2 (Inter-BSS) and the received power (-80 dBm) is below the OBSS/PD threshold (-62 dBm), the receiver ignores it.
 - **Result**: `ap2` can transmit to `sta2` concurrently with `ap1`'s transmission to `sta1`. The aggregate network throughput is significantly higher.
+
+### Diagnostic variants
+
+- `ObssPdConservative` and `ObssPdAggressive` sweep the threshold while keeping
+  topology and colors fixed. Compare aggregate goodput, per-BSS fairness, and
+  reception errors: a more permissive reuse decision can also raise
+  interference at the intended receiver.
+- `BssColoringCollision` deliberately assigns the same color to both BSSs, so
+  color alone can no longer classify the neighbor as an OBSS for this rule.
+- `TwoNav` enables the HE intra-BSS/basic NAV distinction. Dual NAV protects
+  virtual carrier-sense reservations; it is related to spatial reuse but is
+  not the same mechanism as OBSS/PD.
 
 ---
 
@@ -80,6 +106,12 @@ bin/inet -u Cmdenv -c BssColoringDisabled examples/ieee80211ax/bss_coloring/omne
 
 # Run enabled configuration
 bin/inet -u Cmdenv -c BssColoringEnabled examples/ieee80211ax/bss_coloring/omnetpp.ini
+
+# Useful controls
+bin/inet -u Cmdenv -c ObssPdConservative examples/ieee80211ax/bss_coloring/omnetpp.ini
+bin/inet -u Cmdenv -c ObssPdAggressive examples/ieee80211ax/bss_coloring/omnetpp.ini
+bin/inet -u Cmdenv -c BssColoringCollision examples/ieee80211ax/bss_coloring/omnetpp.ini
+bin/inet -u Cmdenv -c TwoNav examples/ieee80211ax/bss_coloring/omnetpp.ini
 ```
 
 ---
