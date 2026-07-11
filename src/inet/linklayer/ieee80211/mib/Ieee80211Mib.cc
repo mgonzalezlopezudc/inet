@@ -47,10 +47,21 @@ void Ieee80211Mib::initialize(int stage)
         localHeCapabilities.twtRequester = par("heTwtRequester").boolValue();
         localHeCapabilities.twtResponder = par("heTwtResponder").boolValue();
         localHeCapabilities.broadcastTwt = par("heBroadcastTwt").boolValue();
+        localHeCapabilities.dynamicFragmentationLevel = par("heDynamicFragmentationLevel").intValue();
+        if (localHeCapabilities.dynamicFragmentationLevel < 0 || localHeCapabilities.dynamicFragmentationLevel > 3)
+            throw cRuntimeError("heDynamicFragmentationLevel must be between 0 and 3");
+        localHeCapabilities.omControl = par("heOmControl").boolValue();
+        localHeCapabilities.twoNav = par("heTwoNav").boolValue();
+        localHeCapabilities.erBss = par("heErBss").boolValue();
+        localHeCapabilities.ndpFeedbackReport = par("heNdpFeedbackReport").boolValue();
         localHeCapabilities.multiTidAggregationRx = par("heMultiTidAggregationRx").boolValue();
         localHeCapabilities.multiTidAggregationTx = par("heMultiTidAggregationTx").boolValue();
         localHeCapabilities.dlMuMimoBeamformer = par("heDlMuMimoBeamformer").boolValue();
         localHeCapabilities.dlMuMimoBeamformee = par("heDlMuMimoBeamformee").boolValue();
+        localHeCapabilities.fullBandwidthUlMuMimo = par("heFullBandwidthUlMuMimo").boolValue();
+        localHeCapabilities.partialBandwidthUlMuMimo = par("hePartialBandwidthUlMuMimo").boolValue();
+        if (localHeCapabilities.partialBandwidthUlMuMimo && !localHeCapabilities.fullBandwidthUlMuMimo)
+            throw cRuntimeError("partial-bandwidth HE UL MU-MIMO requires full-bandwidth HE UL MU-MIMO support");
         localHeCapabilities.soundingDimensions = par("heSoundingDimensions").intValue();
         localHeCapabilities.beamformeeSts20Mhz = par("heBeamformeeSts20Mhz").intValue();
         localHeCapabilities.beamformeeStsAbove20Mhz = par("heBeamformeeStsAbove20Mhz").intValue();
@@ -114,10 +125,17 @@ void Ieee80211Mib::initialize(int stage)
         WATCH(localHeCapabilities.twtRequester);
         WATCH(localHeCapabilities.twtResponder);
         WATCH(localHeCapabilities.broadcastTwt);
+        WATCH(localHeCapabilities.dynamicFragmentationLevel);
+        WATCH(localHeCapabilities.omControl);
+        WATCH(localHeCapabilities.twoNav);
+        WATCH(localHeCapabilities.erBss);
+        WATCH(localHeCapabilities.ndpFeedbackReport);
         WATCH(localHeCapabilities.multiTidAggregationRx);
         WATCH(localHeCapabilities.multiTidAggregationTx);
         WATCH(localHeCapabilities.dlMuMimoBeamformer);
         WATCH(localHeCapabilities.dlMuMimoBeamformee);
+        WATCH(localHeCapabilities.fullBandwidthUlMuMimo);
+        WATCH(localHeCapabilities.partialBandwidthUlMuMimo);
         WATCH(localHeCapabilities.soundingDimensions);
         WATCH(localHeCapabilities.beamformeeSts20Mhz);
         WATCH(localHeCapabilities.beamformeeStsAbove20Mhz);
@@ -177,8 +195,14 @@ std::string Ieee80211Mib::getHeCapabilitiesSummary() const
            << ", DL-OFDMA=" << (localHeCapabilities.dlOfdma ? "yes" : "no")
            << ", UL-OFDMA=" << (localHeCapabilities.ulOfdma ? "yes" : "no")
            << ", TWT=" << (localHeCapabilities.twtRequester || localHeCapabilities.twtResponder || localHeCapabilities.broadcastTwt ? "yes" : "no")
+           << ", dynFrag=" << localHeCapabilities.dynamicFragmentationLevel
+           << ", OMI=" << (localHeCapabilities.omControl ? "yes" : "no")
+           << ", twoNAV=" << (localHeCapabilities.twoNav ? "yes" : "no")
+           << ", ER-BSS=" << (localHeCapabilities.erBss ? "yes" : "no")
+           << ", NDP-FB=" << (localHeCapabilities.ndpFeedbackReport ? "yes" : "no")
            << ", MU-MIMO BFer=" << (localHeCapabilities.dlMuMimoBeamformer ? "yes" : "no")
            << ", BFmee=" << (localHeCapabilities.dlMuMimoBeamformee ? "yes" : "no")
+           << ", UL-MU-MIMO=" << (localHeCapabilities.fullBandwidthUlMuMimo ? "full" : "no")
            << ", maxTxNss=" << getMaxNss(localHeCapabilities.txMcsNss)
            << ", maxRxNss=" << getMaxNss(localHeCapabilities.rxMcsNss)
            << ", peers=" << getNegotiatedHePeerCount();

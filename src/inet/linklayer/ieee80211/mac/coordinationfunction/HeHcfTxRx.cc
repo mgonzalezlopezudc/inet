@@ -77,6 +77,18 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             }
         }
     }
+    if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        if (dataHeader->getOperatingModePresent() && mac->getMib()->localHeCapabilities.omControl) {
+            Ieee80211HeOperatingMode mode;
+            mode.channelWidth = dataHeader->getOperatingModeChannelWidth();
+            mode.rxNss = dataHeader->getOperatingModeRxNss();
+            mode.ulMuDisable = dataHeader->getOperatingModeUlMuDisable();
+            peerOperatingModes[dataHeader->getTransmitterAddress()] = mode;
+            EV_INFO << "Accepted HE OMI from " << dataHeader->getTransmitterAddress()
+                    << ": width=" << (int)mode.channelWidth << " rxNss=" << (int)mode.rxNss
+                    << " ulMuDisable=" << mode.ulMuDisable << endl;
+        }
+    }
     Hcf::recipientProcessReceivedFrame(packet, header);
 }
 
@@ -281,10 +293,18 @@ void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
                 if (!writableHeader->getBufferStatusPresent())
                     writableHeader->setChunkLength(writableHeader->getChunkLength() + B(4));
                 writableHeader->setOrder(true);
-                writableHeader->setBufferStatusPresent(true);
-                writableHeader->setBufferStatusTid(tid);
-                writableHeader->setBufferStatusAc(ac);
-                writableHeader->setBufferStatusQueueSize(queueBytes);
+                if (par("sendOperatingModeIndication").boolValue() && mac->getMib()->localHeCapabilities.omControl) {
+                    writableHeader->setOperatingModePresent(true);
+                    writableHeader->setOperatingModeChannelWidth(par("operatingModeChannelWidth"));
+                    writableHeader->setOperatingModeRxNss(par("operatingModeRxNss"));
+                    writableHeader->setOperatingModeUlMuDisable(par("operatingModeUlMuDisable"));
+                }
+                else {
+                    writableHeader->setBufferStatusPresent(true);
+                    writableHeader->setBufferStatusTid(tid);
+                    writableHeader->setBufferStatusAc(ac);
+                    writableHeader->setBufferStatusQueueSize(queueBytes);
+                }
                 packet->insertAtFront(writableHeader);
             }
         }

@@ -227,6 +227,10 @@ class Ieee80211DataHeader extends Ieee80211DataOrMgmtHeader
     uint8_t bufferStatusTid = 0;
     uint8_t bufferStatusAc = 0;
     uint32_t bufferStatusQueueSize = 0;
+    bool operatingModePresent = false;
+    uint8_t operatingModeChannelWidth = 0;
+    uint8_t operatingModeRxNss = 1;
+    bool operatingModeUlMuDisable = false;
 }
 
 struct Ieee80211MuBarTriggerUserInfoRecord
@@ -246,6 +250,9 @@ struct Ieee80211HeTriggerUserInfo
     uint16_t ruToneSize;
     uint16_t ruToneOffset;
     uint8_t mcs = 0;
+    uint8_t numberOfSpatialStreams = 1;
+    uint8_t streamStartIndex = 0;
+    bool muMimo = false;
     uint8_t tid = 0;
     int8_t targetRssiDbm = -60;
     bool randomAccess = false;

@@ -206,6 +206,9 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.ruToneSize = allocation.ru.toneSize;
         user.ruToneOffset = allocation.ru.toneOffset;
         user.mcs = allocation.mcs;
+        user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
+        user.streamStartIndex = allocation.streamStartIndex;
+        user.muMimo = allocation.muMimo;
         user.tid = allocation.tid;
         user.targetRssiDbm = allocation.targetRssiDbm;
         user.randomAccess = allocation.randomAccess;

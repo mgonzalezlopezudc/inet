@@ -72,6 +72,9 @@ class INET_API IIeee80211HeUlScheduler
         physicallayer::Ieee80211HeRu ru;
         bool randomAccess = false;
         int mcs = 0;
+        int numberOfSpatialStreams = 1;
+        int streamStartIndex = 0;
+        bool muMimo = false;
         int targetRssiDbm = -75;
         simtime_t estimatedDuration = SIMTIME_ZERO;
     };
@@ -112,6 +115,8 @@ inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeUlScheduler:
        << " ac=" << (int)allocation.accessCategory
        << " ru={" << allocation.ru << "}"
        << " mcs=" << allocation.mcs
+       << " nss=" << allocation.numberOfSpatialStreams
+       << " stream=" << allocation.streamStartIndex
        << " targetRssi=" << allocation.targetRssiDbm
        << " duration=" << allocation.estimatedDuration;
     return os;

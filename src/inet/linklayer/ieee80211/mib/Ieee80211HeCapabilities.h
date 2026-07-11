@@ -50,6 +50,11 @@ struct Ieee80211HeCapabilities
     bool twtRequester = false;
     bool twtResponder = false;
     bool broadcastTwt = false;
+    int dynamicFragmentationLevel = 0;
+    bool omControl = false;
+    bool twoNav = false;
+    bool erBss = false;
+    bool ndpFeedbackReport = false;
     std::set<Hz> supportedChannelWidths = {Hz(20e6), Hz(40e6), Hz(80e6), Hz(160e6)};
     Ieee80211HeMcsNssMap rxMcsNss;
     Ieee80211HeMcsNssMap txMcsNss;
@@ -70,6 +75,8 @@ struct Ieee80211HeCapabilities
     std::set<int> supportedRuToneSizes = {26, 52, 106, 242, 484, 996, 1992};
     bool dlMuMimoBeamformer = false;
     bool dlMuMimoBeamformee = false;
+    bool fullBandwidthUlMuMimo = false;
+    bool partialBandwidthUlMuMimo = false;
     int soundingDimensions = 0;
     int beamformeeSts20Mhz = 0;
     int beamformeeStsAbove20Mhz = 0;
@@ -137,6 +144,12 @@ inline Ieee80211NegotiatedHeCapabilities negotiateHeCapabilities(
             local.multiTidAggregationTx && peer.multiTidAggregationRx;
     negotiated.intersection.muBarTriggerRx = local.muBarTriggerRx && peer.muBarTriggerRx;
     negotiated.intersection.heTbBlockAckTx = local.heTbBlockAckTx && peer.heTbBlockAckTx;
+    negotiated.intersection.dynamicFragmentationLevel =
+            std::min(local.dynamicFragmentationLevel, peer.dynamicFragmentationLevel);
+    negotiated.intersection.omControl = local.omControl && peer.omControl;
+    negotiated.intersection.twoNav = local.twoNav && peer.twoNav;
+    negotiated.intersection.erBss = local.erBss && peer.erBss;
+    negotiated.intersection.ndpFeedbackReport = local.ndpFeedbackReport && peer.ndpFeedbackReport;
     negotiated.intersection.maxAmpduLengthExponent =
             std::min(local.maxAmpduLengthExponent, peer.maxAmpduLengthExponent);
     negotiated.intersection.maxMpduLength = std::min(local.maxMpduLength, peer.maxMpduLength);
@@ -148,6 +161,10 @@ inline Ieee80211NegotiatedHeCapabilities negotiateHeCapabilities(
             negotiated.intersection.supportedRuToneSizes.insert(toneSize);
     negotiated.intersection.dlMuMimoBeamformer = local.dlMuMimoBeamformer;
     negotiated.intersection.dlMuMimoBeamformee = peer.dlMuMimoBeamformee;
+    negotiated.intersection.fullBandwidthUlMuMimo =
+            local.fullBandwidthUlMuMimo && peer.fullBandwidthUlMuMimo;
+    negotiated.intersection.partialBandwidthUlMuMimo =
+            local.partialBandwidthUlMuMimo && peer.partialBandwidthUlMuMimo;
     negotiated.intersection.soundingDimensions = local.soundingDimensions;
     negotiated.intersection.beamformeeSts20Mhz = peer.beamformeeSts20Mhz;
     negotiated.intersection.beamformeeStsAbove20Mhz = peer.beamformeeStsAbove20Mhz;
@@ -179,8 +196,15 @@ inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeCapabilities&
        << " bcastTwt=" << (capabilities.broadcastTwt ? "yes" : "no")
        << " multiTidRx=" << (capabilities.multiTidAggregationRx ? "yes" : "no")
        << " multiTidTx=" << (capabilities.multiTidAggregationTx ? "yes" : "no")
+       << " dynFrag=" << capabilities.dynamicFragmentationLevel
+       << " OMI=" << (capabilities.omControl ? "yes" : "no")
+       << " twoNAV=" << (capabilities.twoNav ? "yes" : "no")
+       << " ER-BSS=" << (capabilities.erBss ? "yes" : "no")
+       << " NDP-FB=" << (capabilities.ndpFeedbackReport ? "yes" : "no")
        << " bf=" << (capabilities.dlMuMimoBeamformer ? "yes" : "no")
        << " bfee=" << (capabilities.dlMuMimoBeamformee ? "yes" : "no")
+       << " ulMuMimo=" << (capabilities.fullBandwidthUlMuMimo ? "full" :
+               capabilities.partialBandwidthUlMuMimo ? "partial" : "no")
        << " maxTxNss=" << getMaxNss(capabilities.txMcsNss)
        << " maxRxNss=" << getMaxNss(capabilities.rxMcsNss)
        << " ruSizes=" << capabilities.supportedRuToneSizes.size();

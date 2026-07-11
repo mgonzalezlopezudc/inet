@@ -158,6 +158,27 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 }), ulSchedule.allocations.end());
     }
     ulSchedule.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
+    if (par("enableUlMuMimo").boolValue() && pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER) {
+        std::vector<IIeee80211HeUlScheduler::RuAllocation *> eligible;
+        for (auto& allocation : ulSchedule.allocations) {
+            if (allocation.randomAccess)
+                continue;
+            auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
+            if (negotiated != nullptr && negotiated->valid && negotiated->intersection.fullBandwidthUlMuMimo)
+                eligible.push_back(&allocation);
+        }
+        if (eligible.size() >= 2) {
+            auto fullRu = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, 1).front();
+            int stream = 0;
+            for (auto allocation : eligible) {
+                allocation->ru = fullRu;
+                allocation->streamStartIndex = stream++;
+                allocation->muMimo = true;
+            }
+            ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
+                    [] (const auto& allocation) { return allocation.randomAccess || !allocation.muMimo; }), ulSchedule.allocations.end());
+        }
+    }
     if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0))) {
         switch (heMode->getDataMode()->getGuardIntervalType()) {
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
@@ -596,6 +617,13 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     request->setRuToneOffset(selected->ruToneOffset);
     request->setStaId(myAid);
     request->setMcs(selected->mcs);
+    request->setNumberOfSpatialStreams(selected->numberOfSpatialStreams);
+    request->setStreamStartIndex(selected->streamStartIndex);
+    // Each non-AP transmitter emits only its own spatial stream(s); the AP
+    // receives the group jointly. Keeping TXVECTOR NSTS local avoids requiring
+    // every one-stream STA to own the group's aggregate antenna count.
+    request->setTotalNsts(selected->numberOfSpatialStreams);
+    request->setMuMimo(selected->muMimo);
     request->setGuardInterval(trigger->getGuardInterval());
     request->setCoding(trigger->getCoding());
     request->setPacketExtensionDurationUs(trigger->getPacketExtensionDurationUs());

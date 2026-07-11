@@ -31,12 +31,14 @@ Rx::Rx()
 Rx::~Rx()
 {
     cancelAndDelete(endNavTimer);
+    cancelAndDelete(endIntraBssNavTimer);
 }
 
 void Rx::initialize(int stage)
 {
     if (stage == INITSTAGE_LOCAL) {
         endNavTimer = new cMessage("NAV");
+        endIntraBssNavTimer = new cMessage("Intra-BSS NAV");
         WATCH(address);
         WATCH(receptionState);
         WATCH(transmissionState);
@@ -77,13 +79,15 @@ std::string Rx::getRxStatusTxt() const
     }
     if (endNavTimer->isScheduled())
         s += std::string(addSpace ? " " : "") + "NAV";
+    if (endIntraBssNavTimer->isScheduled())
+        s += std::string(addSpace ? " " : "") + "Intra-BSS-NAV";
     s += ")";
     return s;
 }
 
 void Rx::handleMessage(cMessage *msg)
 {
-    if (msg == endNavTimer) {
+    if (msg == endNavTimer || msg == endIntraBssNavTimer) {
         EV_INFO << "The radio channel has become free according to the NAV" << std::endl;
         emit(navChangedSignal, SimTime::ZERO);
         recomputeMediumFree();
@@ -119,7 +123,7 @@ bool Rx::lowerFrameReceived(Packet *packet)
         EV_INFO << "Received frame from PHY: " << packet << endl;
         const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
         if (header->getReceiverAddress() != address)
-            setOrExtendNav(header->getDurationField());
+            setOrExtendNav(header->getDurationField(), isIntraBssFrame(header));
         return true;
     }
     else {
@@ -196,7 +200,7 @@ void Rx::recomputeMediumFree()
         }
     }
     // note: the duration of mode switching (rx-to-tx or tx-to-rx) should also count as busy
-    mediumFree = receptionState == IRadio::RECEPTION_STATE_IDLE && transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && !endNavTimer->isScheduled() && !otherLinkTx;
+    mediumFree = receptionState == IRadio::RECEPTION_STATE_IDLE && transmissionState == IRadio::TRANSMISSION_STATE_UNDEFINED && !endNavTimer->isScheduled() && !endIntraBssNavTimer->isScheduled() && !otherLinkTx;
     if (mediumFree != oldMediumFree) {
         for (auto contention : contentions)
             contention->mediumStateChanged(mediumFree);
@@ -226,22 +230,45 @@ void Rx::transmissionStateChanged(IRadio::TransmissionState state)
 
 void Rx::setOrExtendNav(simtime_t navInterval)
 {
+    setOrExtendNav(navInterval, false);
+}
+
+bool Rx::isIntraBssFrame(const Ptr<const Ieee80211MacHeader>& header) const
+{
+    auto mac = check_and_cast<Ieee80211Mac *>(getParentModule());
+    auto mib = mac->getMib();
+    if (!mib->localHeCapabilities.twoNav)
+        return false;
+    auto twoAddress = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header);
+    if (twoAddress == nullptr)
+        return false;
+    auto transmitter = twoAddress->getTransmitterAddress();
+    if (transmitter == mib->bssData.bssid)
+        return true;
+    if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT)
+        return mib->bssAccessPointData.stations.count(transmitter) != 0;
+    return false;
+}
+
+void Rx::setOrExtendNav(simtime_t navInterval, bool intraBss)
+{
     if (navInterval == -1)
         return;
     ASSERT(navInterval >= 0);
     if (navInterval > 0) {
         simtime_t endNav = simTime() + navInterval;
-        if (endNavTimer->isScheduled()) {
-            simtime_t oldEndNav = endNavTimer->getArrivalTime();
+        auto timer = intraBss ? endIntraBssNavTimer : endNavTimer;
+        if (timer->isScheduled()) {
+            simtime_t oldEndNav = timer->getArrivalTime();
             if (endNav < oldEndNav)
                 return; // never decrease NAV
-            emit(navChangedSignal, endNavTimer->getArrivalTime() - simTime());
-            cancelEvent(endNavTimer);
+            emit(navChangedSignal, timer->getArrivalTime() - simTime());
+            cancelEvent(timer);
         }
         else
             emit(navChangedSignal, SimTime::ZERO);
-        EV_INFO << "Setting NAV to " << navInterval << std::endl;
-        scheduleAt(endNav, endNavTimer);
+        EV_INFO << "Setting " << (intraBss ? "intra-BSS NAV" : "basic NAV") << " to " << navInterval << std::endl;
+        scheduleAt(endNav, timer);
         emit(navChangedSignal, endNav - simTime());
         recomputeMediumFree();
     }

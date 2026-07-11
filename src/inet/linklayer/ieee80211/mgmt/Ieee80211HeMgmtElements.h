@@ -37,6 +37,11 @@ inline Ieee80211HeCapabilitiesElement makeHeCapabilitiesElement(const Ieee80211H
     element.twtRequester = capabilities.twtRequester;
     element.twtResponder = capabilities.twtResponder;
     element.broadcastTwt = capabilities.broadcastTwt;
+    element.dynamicFragmentationLevel = capabilities.dynamicFragmentationLevel;
+    element.omControl = capabilities.omControl;
+    element.twoNav = capabilities.twoNav;
+    element.erBss = capabilities.erBss;
+    element.ndpFeedbackReport = capabilities.ndpFeedbackReport;
     element.supportedChannelWidth40MHz = containsChannelWidth(capabilities, 40);
     element.supportedChannelWidth80MHz = containsChannelWidth(capabilities, 80);
     element.supportedChannelWidth160MHz = containsChannelWidth(capabilities, 160);
@@ -66,6 +71,8 @@ inline Ieee80211HeCapabilitiesElement makeHeCapabilitiesElement(const Ieee80211H
     element.ru1992Tone = capabilities.supportedRuToneSizes.count(1992) != 0;
     element.dlMuMimoBeamformer = capabilities.dlMuMimoBeamformer;
     element.dlMuMimoBeamformee = capabilities.dlMuMimoBeamformee;
+    element.fullBandwidthUlMuMimo = capabilities.fullBandwidthUlMuMimo;
+    element.partialBandwidthUlMuMimo = capabilities.partialBandwidthUlMuMimo;
     element.soundingDimensions = capabilities.soundingDimensions;
     element.beamformeeSts20Mhz = capabilities.beamformeeSts20Mhz;
     element.beamformeeStsAbove20Mhz = capabilities.beamformeeStsAbove20Mhz;
@@ -80,6 +87,11 @@ inline Ieee80211HeCapabilities makeHeCapabilities(const Ieee80211HeCapabilitiesE
     capabilities.twtRequester = element.twtRequester;
     capabilities.twtResponder = element.twtResponder;
     capabilities.broadcastTwt = element.broadcastTwt;
+    capabilities.dynamicFragmentationLevel = element.dynamicFragmentationLevel;
+    capabilities.omControl = element.omControl;
+    capabilities.twoNav = element.twoNav;
+    capabilities.erBss = element.erBss;
+    capabilities.ndpFeedbackReport = element.ndpFeedbackReport;
     capabilities.supportedChannelWidths.clear();
     capabilities.supportedChannelWidths.insert(Hz(20e6));
     if (element.supportedChannelWidth40MHz)
@@ -121,6 +133,8 @@ inline Ieee80211HeCapabilities makeHeCapabilities(const Ieee80211HeCapabilitiesE
         capabilities.supportedRuToneSizes.insert(1992);
     capabilities.dlMuMimoBeamformer = element.dlMuMimoBeamformer;
     capabilities.dlMuMimoBeamformee = element.dlMuMimoBeamformee;
+    capabilities.fullBandwidthUlMuMimo = element.fullBandwidthUlMuMimo;
+    capabilities.partialBandwidthUlMuMimo = element.partialBandwidthUlMuMimo;
     capabilities.soundingDimensions = element.soundingDimensions;
     capabilities.beamformeeSts20Mhz = element.beamformeeSts20Mhz;
     capabilities.beamformeeStsAbove20Mhz = element.beamformeeStsAbove20Mhz;

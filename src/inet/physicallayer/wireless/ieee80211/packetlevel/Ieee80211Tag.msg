@@ -66,6 +66,9 @@ class Ieee80211HeMuReq extends TagBase
     uint16_t staId;
     uint8_t mcs = 0;
     uint8_t numberOfSpatialStreams = 1;
+    uint8_t streamStartIndex = 0;
+    uint8_t totalNsts = 1;
+    bool muMimo = false;
     bool dcm = false;
     uint8_t guardInterval = 2;
     uint8_t coding = 0;
