@@ -59,6 +59,7 @@ run number and seed set are deterministic.
 | **`BacklogBased`** | Queue-Aware Sizing | `HeDlSchedulerBacklogBased` | 5 GHz (20 MHz) | `host[0]`: 37 <br> `host[1]`: 37 <br> `host[2]`: 58 <br> **Total: 132** |
 | **`HoLMinDelay`** | Baseline Latency | `HeDlSchedulerHoLMinDelay` | 5 GHz (20 MHz) | `host[0]`: 33 <br> `host[1]`: 33 <br> `host[2]`: 65 <br> **Total: 131** |
 | **`WideBandwidth80MHz`**| 80 MHz, 8-user scaling | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (80 MHz) | `host[0..7]`: 86 each <br> **Total: 688** |
+| **`MultiTidBlockAck`** | Downlink Multi-TID Block Ack | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 115 (80 VO, 35 NC) <br> `host[1]`: 115 (80 VO, 35 NC) <br> `host[2]`: 0 <br> **Total: 230** |
 
 ---
 
@@ -76,6 +77,11 @@ run number and seed set are deterministic.
 ### Wide Bandwidth 80 MHz Configuration
 - Scaling the channel to 80 MHz configures an 8-host, 8-RU scheduling case using separate 106-tone RUs.
 - The run creates 85 eight-user HE MU PPDUs and delivers 86 packets to every host (one single-user Block Ack bootstrap packet plus 85 MU packets). This verifies 8-user RU allocation and reception, but a single short deterministic run is still not a capacity benchmark.
+
+### Downlink Multi-TID Block Ack (`MultiTidBlockAck`)
+- In this configuration, Multi-TID Aggregation is negotiated between the AP and the client stations. 
+- The Server sends two concurrent streams per host (TID 6 / Voice and TID 7 / Network Control). The AP accumulates this multi-TID downlink data, packs them into HE MU PPDUs using `sequentialBar` acknowledgement method, and issues Multi-TID BAR frames to confirm multi-TID delivery. 
+- A total of 115 packets are successfully received by both `host[0]` and `host[1]`.
 
 ## 4. Qtenv WATCH Inspection
 

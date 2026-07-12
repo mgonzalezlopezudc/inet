@@ -57,8 +57,11 @@ The [omnetpp.ini](omnetpp.ini) file defines several scenarios to show different 
 ### 4. `EqualRus`
 - Changes the scheduler type to `HeUlSchedulerEqualSizedRUs` which partitions the channel into equal-sized subchannels.
 
-### 5. `MultiTidBlockAck`
-- Enables negotiation of Multi-TID Aggregation support (`heMultiTidAggregationRx = true`, `heMultiTidAggregationTx = true`).
+### 5. `UlSuMultiTidBlockAck`
+- Illustrates Uplink Single-User (UL SU) Multi-TID Traffic under EDCA. A single station (`host[0]`) transmits a Multi-TID A-MPDU containing TID 6 (Voice) and TID 7 (Network Control) payloads concurrently without AP triggering, and the AP responds with a Multi-TID BlockAck frame.
+
+### 6. `UlMuMultiTidBlockAck`
+- Illustrates Uplink Multi-User (UL MU) OFDMA Multi-TID Traffic. Multiple stations transmit simultaneously in response to an AP's Trigger frame. The AP schedules `host[0]` (TID 6) and `host[1]` (TID 7) in the same Trigger frame. Both stations respond concurrently in their allocated RUs, and the AP acknowledges both with a single Multi-STA BlockAck frame.
 
 ### Additional configurations
 
@@ -86,7 +89,8 @@ bin/inet -u Cmdenv -c General examples/ieee80211ax/ul_ofdma/omnetpp.ini
 bin/inet -u Cmdenv -c ScheduledOnly examples/ieee80211ax/ul_ofdma/omnetpp.ini
 bin/inet -u Cmdenv -c MixedUora examples/ieee80211ax/ul_ofdma/omnetpp.ini
 bin/inet -u Cmdenv -c EqualRus examples/ieee80211ax/ul_ofdma/omnetpp.ini
-bin/inet -u Cmdenv -c MultiTidBlockAck examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Cmdenv -c UlSuMultiTidBlockAck examples/ieee80211ax/ul_ofdma/omnetpp.ini
+bin/inet -u Cmdenv -c UlMuMultiTidBlockAck examples/ieee80211ax/ul_ofdma/omnetpp.ini
 ```
 
 ---
@@ -126,10 +130,17 @@ scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count      
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   64
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  0
 
-MultiTidBlockAck-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        2085
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   64
+UlSuMultiTidBlockAck-#0.sca:
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        360
+scalar  Lan80211AxUlOfdma.server.app[1]               packetReceived:count        175
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   0
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  0
+
+UlMuMultiTidBlockAck-#0.sca:
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        360
+scalar  Lan80211AxUlOfdma.server.app[1]               packetReceived:count        360
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  360
 
 UoraLightContention-#0.sca:
 scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        198
@@ -150,19 +161,30 @@ scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count      
    - The server successfully receives **979 packets**.
    - *Why?* The trigger-frame exchange introduces handshake overhead, and splitting the 20 MHz channel into small RUs reduces the peak bitrate per user. However, this ensures collision-free, synchronized uplink access, which is highly beneficial in environments with hundreds of active stations.
 
-2. **The EDCA Fallback (`ScheduledOnly`, `EqualRus`, `MultiTidBlockAck`)**:
+2. **The EDCA Fallback (`ScheduledOnly`, `EqualRus`)**:
    - In these configurations, the AP sends **0 Basic Triggers** (no actual Uplink OFDMA scheduling occurs), although it sends **64 BSRP Triggers** to poll for queue status.
    - Consequently, the stations fallback to standard **CSMA/CA (EDCA)** for their data transmissions.
    - The server receives **2085 packets** (a much higher throughput).
    - *Why?* With only 3 stations at close range (5m) and zero channel interference, CSMA/CA operates at near-perfect efficiency without collisions. Bypassing the Trigger frame coordination overhead allows the stations to transmit at full single-user speeds (14.6 Mbps), maximizing throughput.
 
-3. **High Contention Overhead (`MixedUora`)**:
+3. **Uplink Single-User (UL SU) Multi-TID Traffic (`UlSuMultiTidBlockAck`)**:
+   - Trigger-based MU-OFDMA is disabled (`enableUlMuOfdma = false`). The single station (`host[0]`) transmits its multi-TID A-MPDUs (TID 6 and TID 7) using standard EDCA access.
+   - The AP receives the packets and acknowledges delivery of both TIDs using a `MultiTidBlockAck` response frame. 
+   - All 360 packets for TID 6 and 175 packets for TID 7 are received successfully.
+
+4. **Uplink Multi-User (UL MU) Multi-TID Traffic (`UlMuMultiTidBlockAck`)**:
+   - Trigger-based MU-OFDMA is enabled, and the AP's scheduler coordinates the uplink.
+   - The AP polls the stations using BSRP triggers, and schedules `host[0]` (TID 6) and `host[1]` (TID 7) in the same Basic Trigger frame.
+   - Both stations transmit their payloads simultaneously inside the HE TB PPDU. The AP receives both payloads concurrently and responds with a single `MultiStaBlockAck` frame containing acknowledgement records for both TIDs/AIDs simultaneously.
+   - The AP sends **360 Basic Triggers** and **2 BSRP Triggers**. All 360 packets from `host[0]` and `host[1]` are successfully received.
+
+5. **High Contention Overhead (`MixedUora`)**:
    - In `MixedUora`, the AP allocates most RUs for Random Access (UORA).
    - The AP sends **111 Basic Triggers** and **103 BSRP Triggers**.
    - The server receives only **208 packets** (severe throughput drop).
    - *Why?* The stations are in a highly saturated traffic state. Contending via UORA causes high collision rates on the random-access RUs. The AP is forced to spend significant airtime sending BSRP polls and triggers to resolve contentions, resulting in severe overhead and packet loss.
 
-4. **UORA Contention, Traffic Load, and RU Count (`UoraLightContention`, `UoraHeavyContention`, `UoraMoreRandomAccessRus`)**:
+6. **UORA Contention, Traffic Load, and RU Count (`UoraLightContention`, `UoraHeavyContention`, `UoraMoreRandomAccessRus`)**:
    - **`UoraLightContention` (198 packets)**: With 8 contending stations and 1 random-access RU, the light traffic load (`sendInterval = 12ms`) results in moderate contention. Stations can successfully transmit, but are limited by UORA access parameters.
    - **`UoraHeavyContention` (203 packets)**: Increasing the offered load (`sendInterval = 1ms`) leads to severe collision and backoff overhead on the single random-access RU. However, because UORA backoff locks stations out and limits their transmission attempts under contention, the actual throughput remains bounded at a similar saturation level (~200 packets).
    - **`UoraMoreRandomAccessRus` (204 packets)**: Allocating more random-access RUs (3 instead of 1) reduces the collision probability per RU. However, due to the trigger check interval and overhead of scheduling multiple UORA RUs, the overall packet delivery count is similar under saturation, but has lower average latency and more equitable channel access among the 8 hosts.
