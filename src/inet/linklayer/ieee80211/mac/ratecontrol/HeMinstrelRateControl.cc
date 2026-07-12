@@ -200,6 +200,11 @@ void HeMinstrelRateControl::reportHeTxResult(const MacAddress& peer, int mcs,
     stats.attempts++;
     if (success)
         stats.successes++;
+    // Export the mode that was actually transmitted as well as selections
+    // made directly through selectHeMode(). Some HE frame paths use the
+    // installed fallback/current mode and therefore bypass scheduler lookup.
+    emit(selectedMcsSignal, (long)mcs);
+    emit(selectedNssSignal, (long)numberOfSpatialStreams);
     double sample = success ? 1.0 / std::max(1, retryCount + 1) : 0.0;
     stats.ewmaSuccessProbability = ewmaWeight * stats.ewmaSuccessProbability +
             (1 - ewmaWeight) * sample;

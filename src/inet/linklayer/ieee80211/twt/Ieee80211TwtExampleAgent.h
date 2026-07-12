@@ -23,10 +23,14 @@ class INET_API Ieee80211TwtExampleAgent : public Ieee80211AgentSta
     simtime_t wakeDuration;
     simtime_t firstWakeOffset;
     int broadcastId = 0;
+    bool twtAgreementActive = false;
 
   protected:
     virtual void initialize(int stage) override;
     virtual void processAssociateConfirm(Ieee80211Prim_AssociateConfirm *resp) override;
+    virtual void processTwtSetupConfirm(Ieee80211Prim_TwtSetupConfirm *resp) override;
+    virtual void processTwtTeardownConfirm(Ieee80211Prim_TwtTeardownConfirm *resp) override;
+    virtual void receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details) override;
 };
 
 } // namespace ieee80211

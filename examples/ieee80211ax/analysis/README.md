@@ -47,5 +47,5 @@ python examples/ieee80211ax/analysis/first_tranche.py width \
 
 The group names are `rate`, `bsr`, `bss`, `width`, `twt`, `dl`, `uora`,
 `puncturing`, `fragmentation`, and `mimo`. Each has a same-directory Markdown
-guide explaining the expected observation and identifying measured versus
-configuration-derived panels.
+guide explaining the expected observation and identifying the result signals
+that supply each panel.

@@ -36,7 +36,13 @@ void FrameSequenceHandler::handleStartRxTimeout()
             break;
         }
         case IFrameSequenceStep::Type::TRANSMIT:
-            throw cRuntimeError("Received timeout while in transmit step");
+            // The receive timeout belongs to the preceding collection step.
+            // If that step completed from a response at the same simulation
+            // time, its timer may already be the event being dispatched and
+            // cannot be cancelled retroactively. The active transmit step has
+            // no receive timeout to fail, so ignore this stale event.
+            EV_DEBUG << "Ignoring stale receive timeout during transmit step\n";
+            break;
         default:
             throw cRuntimeError("Unknown step type");
     }
@@ -73,7 +79,14 @@ void FrameSequenceHandler::processResponse(Packet *frame)
             break;
         }
         case IFrameSequenceStep::Type::TRANSMIT:
-            throw cRuntimeError("Received frame while current step is transmit");
+            // A half-duplex 802.11 MAC cannot process a response that overlaps
+            // its own transmission. Propagation delay may still deliver such
+            // a frame from the packet-level radio; treat it as an undecodable
+            // overlapping reception instead of aborting the active sequence.
+            EV_WARN << "Discarding received frame while current step is transmit: "
+                    << frame->getName() << "\n";
+            delete frame;
+            break;
         default:
             throw cRuntimeError("Unknown step type");
     }

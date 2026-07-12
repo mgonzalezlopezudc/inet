@@ -107,6 +107,26 @@ def all_values(frame: pd.DataFrame) -> np.ndarray:
     return np.concatenate([np.asarray(value, dtype=float) for value in frame.vecvalue]) if not frame.empty else np.array([])
 
 
+def longest_vector(frame: pd.DataFrame) -> pd.Series:
+    if frame.empty:
+        raise RuntimeError("Cannot select a vector from an empty result frame")
+    return frame.loc[frame.vecvalue.map(len).idxmax()]
+
+
+def aligned_longest(*frames: pd.DataFrame) -> list[pd.Series]:
+    """Select synchronized telemetry vectors from the module with most samples."""
+    common_modules = set(frames[0].module)
+    for frame in frames[1:]:
+        common_modules &= set(frame.module)
+    if not common_modules:
+        raise RuntimeError("Measured telemetry vectors do not share a recording module")
+    module = max(common_modules, key=lambda item: len(frames[0][frames[0].module == item].iloc[0].vecvalue))
+    rows = [frame[frame.module == module].iloc[0] for frame in frames]
+    if len({len(row.vecvalue) for row in rows}) != 1:
+        raise RuntimeError(f"Measured telemetry vectors are not aligned for {module}")
+    return rows
+
+
 def duration(dataset: Dataset) -> float:
     for name in ("endToEndDelay:vector", "packetReceived:vector", "radioMode:vector", "transmissionState:vector"):
         frame = dataset.vectors(name)
@@ -286,33 +306,52 @@ def plot_uora(datasets: list[Dataset], out: Path) -> None:
 
 
 def plot_puncturing(datasets: list[Dataset], out: Path) -> None:
-    fig,axes=plt.subplots(1,2,figsize=(14,4.8)); labels=[]; goods=[]
+    fig,axes=plt.subplots(1,3,figsize=(18,4.8)); labels=[]; goods=[]
     for data in datasets: labels.append(data.label); goods.append(sum(sink_goodputs(data).values())/1e6)
     axes[0].bar(labels,goods); axes[0].set_ylabel("Goodput [Mbit/s]"); axes[0].tick_params(axis="x",rotation=25); axes[0].grid(axis="y",alpha=.3)
-    rows=[]
-    for data in datasets:
-        punctured="punct" in data.label.lower() and "without" not in data.label.lower() and "clean" not in data.label.lower(); rows.append([1,0 if punctured else 1,1,1])
-    axes[1].imshow(rows,aspect="auto",cmap="RdYlGn",vmin=0,vmax=1); axes[1].set_xticks(range(4),["20 MHz #1","#2","#3","#4"]); axes[1].set_yticks(range(len(labels)),labels); axes[1].set_title("Configuration-derived usable subchannels")
+    measured = datasets[-1]
+    offsets=measured.vectors("heRuToneOffset:vector"); sizes=measured.vectors("heRuToneSize:vector"); staids=measured.vectors("heStaId:vector"); masks=measured.vectors("hePuncturedSubchannelMask:vector")
+    if offsets.empty or sizes.empty or staids.empty or masks.empty:
+        raise RuntimeError("Puncturing suite requires measured HE RU placement and puncturing-mask vectors")
+    offset_row, size_row, sta_row=aligned_longest(offsets,sizes,staids)
+    scatter=axes[1].scatter(offset_row.vectime, offset_row.vecvalue, s=np.maximum(12,np.asarray(size_row.vecvalue)/2), c=sta_row.vecvalue, cmap="tab20", alpha=.7)
+    axes[1].set(xlabel="Simulation time [s]",ylabel="RU tone offset",title=f"{measured.label}: measured RU placement")
+    axes[1].grid(alpha=.3); fig.colorbar(scatter,ax=axes[1],label="STA ID")
+    mask_row=longest_vector(masks)
+    axes[2].step(mask_row.vectime,np.asarray(mask_row.vecvalue,dtype=np.int64),where="post")
+    axes[2].set(xlabel="Simulation time [s]",ylabel="Punctured-subchannel bit mask",title="Resolved mask per transmitted HE PPDU")
+    axes[2].grid(alpha=.3)
     fig.suptitle("Preamble puncturing: delivered goodput and frequency allocation")
     save(fig,out/"puncturing-frequency-allocation.png")
 
 
 def plot_fragmentation(datasets: list[Dataset], out: Path) -> None:
-    fig,axes=plt.subplots(1,2,figsize=(13,4.8)); ack=[]; labels=[]
+    fig,axes=plt.subplots(1,2,figsize=(13,4.8)); labels=[]; per_dataset=[]
     for data in datasets:
-        frame=data.vectors("packetSentToPeer:vector(packetBytes)"); sizes=all_values(frame)/8; ecdf(axes[0],sizes,data.label); labels.append(data.label); ack.append(scalar_sum(data,"blockAckAgreementAdded:count")+scalar_sum(data,"frameSequenceFinished:count"))
-    axes[0].set(xlabel="MAC packet size [bytes]",ylabel="ECDF",title="Fragment-size proxy from transmitted MAC packets"); axes[0].legend(fontsize="small"); axes[0].grid(alpha=.3)
-    axes[1].bar(labels,ack); axes[1].set_ylabel("Block-ack agreements + frame sequences"); axes[1].set_title("Acknowledgment-exchange overhead proxy"); axes[1].tick_params(axis="x",rotation=25); axes[1].grid(axis="y",alpha=.3)
+        frame=data.vectors("packetSentToPeer:vector(packetBytes)"); sizes=all_values(frame)/8; ecdf(axes[0],sizes,data.label); labels.append(data.label)
+        types=data.vectors("acknowledgmentFrameType:vector"); airtimes=data.vectors("acknowledgmentAirtime:vector")
+        if types.empty or airtimes.empty: raise RuntimeError("Fragmentation suite requires measured acknowledgment type/airtime vectors")
+        type_row,airtime_row=aligned_longest(types,airtimes)
+        type_values=np.asarray(type_row.vecvalue,dtype=int); airtime_values=np.asarray(airtime_row.vecvalue,dtype=float)
+        per_dataset.append({int(frame_type):float(airtime_values[type_values==frame_type].sum())*1e3 for frame_type in np.unique(type_values)})
+    axes[0].set(xlabel="Transmitted MAC frame size [bytes]",ylabel="ECDF",title="Measured transmitted-frame size distribution"); axes[0].legend(fontsize="small"); axes[0].grid(alpha=.3)
+    frame_names={0x1d:"ACK",0x18:"Block Ack Request",0x19:"Block Ack"}; frame_types=sorted(set().union(*(values.keys() for values in per_dataset)))
+    x=np.arange(len(labels)); width=.8/max(1,len(frame_types))
+    for index,frame_type in enumerate(frame_types): axes[1].bar(x+index*width,[values.get(frame_type,0) for values in per_dataset],width,label=frame_names.get(frame_type,f"type {frame_type}"))
+    axes[1].set_xticks(x+width*(len(frame_types)-1)/2,labels); axes[1].set_ylabel("Measured acknowledgment airtime [ms]"); axes[1].set_title("Frame-type-specific acknowledgment airtime"); axes[1].tick_params(axis="x",rotation=25); axes[1].grid(axis="y",alpha=.3); axes[1].legend(fontsize="small")
     save(fig,out/"fragmentation-and-ack-overhead.png")
 
 
 def plot_mimo(datasets: list[Dataset], out: Path) -> None:
-    labels=[]; stations=sorted({station for data in datasets for station in sink_goodputs(data)})
-    matrix=np.zeros((len(datasets),len(stations)))
-    for row,data in enumerate(datasets):
-        labels.append(data.label); rates=sink_goodputs(data)
-        for col,station in enumerate(stations): matrix[row,col]=1 if rates.get(station,0)>0 else 0
-    fig,axes=plt.subplots(1,2,figsize=(13,4.8)); im=axes[0].imshow(matrix,aspect="auto",cmap="Blues",vmin=0,vmax=1); axes[0].set_xticks(range(len(stations)),stations,rotation=30); axes[0].set_yticks(range(len(labels)),labels); axes[0].set_title("Configured one-stream-per-served-user allocation")
+    labels=[data.label for data in datasets]
+    measured=datasets[-1]; staids=measured.vectors("heStaId:vector"); streams=measured.vectors("heSpatialStreams:vector"); starts=measured.vectors("heStreamStartIndex:vector")
+    if staids.empty or streams.empty or starts.empty: raise RuntimeError("MU-MIMO suite requires measured STA/NSS/stream-start vectors")
+    sta_row,stream_row,start_row=aligned_longest(staids,streams,starts)
+    times=np.asarray(sta_row.vectime); station_ids=np.asarray(sta_row.vecvalue,dtype=int); nss=np.asarray(stream_row.vecvalue,dtype=float); start_indices=np.asarray(start_row.vecvalue,dtype=int)
+    ppdu_times=np.unique(times); stations=np.unique(station_ids); matrix=np.full((len(stations),len(ppdu_times)),np.nan); starts_matrix=np.full_like(matrix,np.nan)
+    time_index={value:index for index,value in enumerate(ppdu_times)}; station_index={value:index for index,value in enumerate(stations)}
+    for time,station,count,start in zip(times,station_ids,nss,start_indices): matrix[station_index[station],time_index[time]]=count; starts_matrix[station_index[station],time_index[time]]=start
+    fig,axes=plt.subplots(1,2,figsize=(14,4.8)); im=axes[0].imshow(matrix,aspect="auto",interpolation="nearest",origin="lower",extent=(ppdu_times[0],ppdu_times[-1],-.5,len(stations)-.5),vmin=0.5,cmap="viridis"); axes[0].set_yticks(range(len(stations)),stations); axes[0].set(xlabel="PPDU transmission time [s]",ylabel="STA ID",title=f"{measured.label}: measured NSS per PPDU"); fig.colorbar(im,ax=axes[0],label="Allocated spatial streams (NSS)")
     goods=[sum(sink_goodputs(data).values())/1e6 for data in datasets]; axes[1].bar(labels,goods); axes[1].set_ylabel("Aggregate goodput [Mbit/s]"); axes[1].tick_params(axis="x",rotation=25); axes[1].grid(axis="y",alpha=.3); axes[1].set_title("Measured MU-MIMO delivery")
     fig.suptitle("MU-MIMO spatial compatibility and delivered capacity")
     save(fig,out/"mu-mimo-spatial-stream-matrix.png")

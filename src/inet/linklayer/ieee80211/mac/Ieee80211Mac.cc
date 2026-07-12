@@ -443,6 +443,13 @@ void Ieee80211Mac::setTwtRadioAwake(bool awake)
         configureRadioMode(awake ? IRadio::RADIO_MODE_RECEIVER : IRadio::RADIO_MODE_SLEEP);
 }
 
+void Ieee80211Mac::twtServicePeriodChanged()
+{
+    Enter_Method("twtServicePeriodChanged");
+    if (hcf != nullptr)
+        hcf->twtServicePeriodChanged();
+}
+
 bool Ieee80211Mac::isTwtPeerEligible(const MacAddress& peer) const
 {
     return twtManager == nullptr || twtManager->isPeerEligible(peer);

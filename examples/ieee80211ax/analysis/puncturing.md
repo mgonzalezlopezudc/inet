@@ -1,10 +1,8 @@
 # Preamble-puncturing plots
 
-The left panel compares measured delivered goodput. The right panel explains
-the configured 80 MHz allocation as four 20 MHz subchannels, with the second
-subchannel unavailable in punctured conditions. Under narrowband interference,
-puncturing should preserve traffic on the other three subchannels.
-
-INET currently records no per-PPDU RU/puncturing-mask result signal. Therefore
-the frequency panel is explicitly configuration-derived, while the goodput
-panel is measured. It must not be described as an observed RU timeline.
+The left panel compares measured delivered goodput. The middle panel uses the
+radio's measured RU tone offset, tone size, timestamp, and STA ID telemetry.
+The punctured subchannel should have no overlapping allocations while traffic
+continues on the remaining spectrum. The right panel plots
+`hePuncturedSubchannelMask`, the resolved mask recorded for every transmitted
+HE PPDU; mask changes should align with changes in usable RU placement.

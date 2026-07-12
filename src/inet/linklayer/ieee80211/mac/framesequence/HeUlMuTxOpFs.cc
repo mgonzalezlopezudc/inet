@@ -220,7 +220,13 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     // 9.3.1.22 says the Trigger Duration field follows 9.2.5.  Here it covers
     // the SIFS-delayed HE TB response and the AP's following SIFS response.
     auto responseDuration = modeSet->getSifsTime() + schedule.commonDuration;
-    header->setDurationField(responseDuration + modeSet->getSifsTime());
+    // Keep non-participating STAs' NAV set through the AP response. Without
+    // the Multi-STA BlockAck airtime, their NAV expired exactly when the AP
+    // began transmitting the BlockAck and an EDCA frame could arrive while
+    // the frame-sequence state was still in its transmit step.
+    auto maxBlockAckLength = B(18 + 12 * schedule.allocations.size() + 4);
+    auto blockAckDuration = modeSet->getSlowestMandatoryMode()->getDuration(maxBlockAckLength);
+    header->setDurationField(responseDuration + modeSet->getSifsTime() + blockAckDuration);
     int userInfoSize = (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
             triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) ? 5 : 6;
     header->setChunkLength(B(24 + userInfoSize * schedule.allocations.size()));

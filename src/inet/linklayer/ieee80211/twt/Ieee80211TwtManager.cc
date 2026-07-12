@@ -509,6 +509,10 @@ void Ieee80211TwtManager::updateServicePeriodState()
         stationAwake = awake;
         mac->setTwtRadioAwake(awake);
     }
+    // Re-evaluate queued traffic at every service-period boundary. This is
+    // required on the AP too: peer eligibility can change while the AP radio
+    // itself remains continuously awake.
+    mac->twtServicePeriodChanged();
 }
 
 void Ieee80211TwtManager::rescheduleServicePeriodTimer()

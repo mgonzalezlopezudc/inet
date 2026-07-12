@@ -47,5 +47,23 @@ module Ieee80211Radio extends FlatRadioBase
         *.channelNumber = this.channelNumber;
         @class(Ieee80211Radio);
         @signal[radioChannelChanged](type=long);
+        @signal[heRuIndex](type=long);
+        @signal[heRuToneSize](type=long);
+        @signal[heRuToneOffset](type=long);
+        @signal[heStaId](type=long);
+        @signal[heSpatialStreams](type=long);
+        @signal[heStreamStartIndex](type=long);
+        @signal[hePuncturedSubchannelMask](type=long);
+        @signal[acknowledgmentFrameType](type=long);
+        @signal[acknowledgmentAirtime](type=simtime_t);
         @statistic[radioChannel](title="Radio channel"; source=radioChannelChanged; record=histogram,vector; interpolationmode=sample-hold);
+        @statistic[heRuIndex](title="HE RU index"; record=vector; interpolationmode=none);
+        @statistic[heRuToneSize](title="HE RU tone size"; record=vector; interpolationmode=none);
+        @statistic[heRuToneOffset](title="HE RU tone offset"; record=vector; interpolationmode=none);
+        @statistic[heStaId](title="HE user STA ID"; record=vector; interpolationmode=none);
+        @statistic[heSpatialStreams](title="HE user spatial streams"; record=vector; interpolationmode=none);
+        @statistic[heStreamStartIndex](title="HE user stream start index"; record=vector; interpolationmode=none);
+        @statistic[hePuncturedSubchannelMask](title="HE punctured subchannel mask"; record=vector; interpolationmode=sample-hold);
+        @statistic[acknowledgmentFrameType](title="802.11 acknowledgment frame type"; record=vector; interpolationmode=none);
+        @statistic[acknowledgmentAirtime](title="802.11 acknowledgment frame airtime"; unit=s; record=vector; interpolationmode=none);
 }

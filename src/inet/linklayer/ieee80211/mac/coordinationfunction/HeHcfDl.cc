@@ -295,6 +295,9 @@ queueing::IPacketQueue *HeHcf::findOldestPerStaQueue(AccessCategory ac) const
         if (queue->isEmpty())
             continue;
         auto packet = queue->getPacket(0);
+        auto header = packet->peekAtFront<Ieee80211MacHeader>();
+        if (isTwtSleeping(mac, header->getReceiverAddress()))
+            continue;
         auto enqueueTimeTag = packet->findTag<OrigEnqueueTimeTag>();
         auto enqueueTime = enqueueTimeTag == nullptr ? packet->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
         if (oldestQueue == nullptr || enqueueTime < oldestEnqueueTime) {
@@ -321,6 +324,7 @@ bool HeHcf::stagePerStaFrameForBlockAckBootstrap(AccessCategory ac)
         auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
         if (header == nullptr || header->getType() != ST_DATA_WITH_QOS ||
                 header->getReceiverAddress().isMulticast() || header->getReceiverAddress().isBroadcast() ||
+                isTwtSleeping(mac, header->getReceiverAddress()) ||
                 !originatorBlockAckAgreementPolicy->isAddbaReqNeeded(packet, header))
             continue;
 

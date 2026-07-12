@@ -26,6 +26,15 @@ class INET_API Ieee80211Radio : public FlatRadioBase
      * The signal value is the new radio channel.
      */
     static simsignal_t radioChannelChangedSignal;
+    static simsignal_t heRuIndexSignal;
+    static simsignal_t heRuToneSizeSignal;
+    static simsignal_t heRuToneOffsetSignal;
+    static simsignal_t heStaIdSignal;
+    static simsignal_t heSpatialStreamsSignal;
+    static simsignal_t heStreamStartIndexSignal;
+    static simsignal_t hePuncturedSubchannelMaskSignal;
+    static simsignal_t acknowledgmentFrameTypeSignal;
+    static simsignal_t acknowledgmentAirtimeSignal;
     static const Ptr<const Ieee80211PhyHeader> popIeee80211PhyHeaderAtFront(Packet *packet, b length = b(-1), int flags = 0);
     static const Ptr<const Ieee80211PhyHeader> peekIeee80211PhyHeaderAtFront(const Packet *packet, b length = b(-1), int flags = 0);
 
