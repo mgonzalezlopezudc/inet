@@ -1,7 +1,6 @@
 // Copyright (C) 2026 INET Framework contributors
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
-//
 
 package inet.examples.ieee80211ax.bss_coloring;
 
@@ -14,7 +13,7 @@ import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMed
 import inet.visualizer.contract.IIntegratedVisualizer;
 
 //
-// Network topology for demonstrating 802.11ax BSS Coloring and Spatial Reuse.
+// \brief Network topology for demonstrating 802.11ax BSS Coloring and Spatial Reuse.
 //
 // It consists of two overlapping BSSs:
 // - BSS 1: AP1 (150, 250) and associated STA1_1, STA1_2 (100, 240/260)
@@ -23,6 +22,9 @@ import inet.visualizer.contract.IIntegratedVisualizer;
 // Having 2 STAs per BSS ensures that the AP downlink scheduler triggers
 // HE MU-OFDMA transmissions (which carry BSS Color) instead of falling
 // back to single-user (SU) transmissions.
+//
+// Both APs are connected to separate wired traffic servers (server1 and server2)
+// via 100M Ethernet lines to isolate BSS traffic generation paths.
 //
 network BssColoringNetwork
 {
