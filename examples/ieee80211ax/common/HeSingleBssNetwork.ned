@@ -12,8 +12,24 @@ import inet.node.wireless.AccessPoint;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 import inet.visualizer.contract.IIntegratedVisualizer;
 
-// Common wired-server, AP, and station topology used by the single-BSS HE examples.
-// Scenario-specific networks extend this type so their INI module paths stay stable.
+//
+// \brief Common wired-server, AP, and wireless station topology.
+//
+// This base network serves as the architectural foundation for the majority of the
+// 802.11ax (HE) example configurations (such as Downlink OFDMA, Uplink OFDMA, OMI,
+// Dynamic Fragmentation, and MU-MIMO). 
+//
+// Scenario-specific networks extend this compound module and override parameter/host values.
+// This ensures that model paths (e.g. `**.host[0].wlan[0]`) remain identical and stable
+// across different configurations, enabling modular INI file inheritances.
+//
+// Key submodules included are:
+// - \p configurator (Ipv4NetworkConfigurator): Automatically assigns IP addresses and setups static routing.
+// - \p radioMedium (Ieee80211ScalarRadioMedium): Models the shared wireless medium, handling pathloss and interference.
+// - \p host[] (WirelessHost): A collection of wireless client stations using simplified 802.11 management (Ieee80211MgmtStaSimplified) by default.
+// - \p ap (AccessPoint): The local BSS Access Point using simplified AP management (Ieee80211MgmtApSimplified).
+// - \p server (StandardHost): A wired backend host connected directly to the AP via a 100 Mbps Ethernet link (Eth100M).
+//
 network HeSingleBssNetwork
 {
     parameters:

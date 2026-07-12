@@ -10,6 +10,14 @@ import inet.node.inet.WirelessHost;
 import inet.node.wireless.AccessPoint;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
 
+//
+// \brief Target Wake Time (TWT) regression and showcase network.
+//
+// This network consists of an Access Point (ap), a wired backend server, and a variable
+// number of TWT-capable wireless stations. It is designed to verify the TWT power-saving
+// protocol mechanisms (individual TWT agreements and broadcast TWT modes) under deterministic
+// scheduling constraints.
+//
 network TwtRegression
 {
     parameters:

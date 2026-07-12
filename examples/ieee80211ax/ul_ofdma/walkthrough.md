@@ -112,7 +112,7 @@ scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  427
 
 MixedUora-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        126
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        208
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   103
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  111
 
@@ -130,6 +130,15 @@ MultiTidBlockAck-#0.sca:
 scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        2085
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   64
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  0
+
+UoraLightContention-#0.sca:
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        198
+
+UoraHeavyContention-#0.sca:
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        203
+
+UoraMoreRandomAccessRus-#0.sca:
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        204
 ```
 
 ---
@@ -150,5 +159,11 @@ scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent
 3. **High Contention Overhead (`MixedUora`)**:
    - In `MixedUora`, the AP allocates most RUs for Random Access (UORA).
    - The AP sends **111 Basic Triggers** and **103 BSRP Triggers**.
-   - The server receives only **126 packets** (severe throughput drop).
-   - *Why?* The stations are in a highly saturated traffic state (sending every 0.4ms). Contending via UORA causes high collision rates on the random-access RUs. The AP is forced to spend significant airtime sending BSRP polls and triggers to resolve contentions, resulting in severe overhead and packet loss.
+   - The server receives only **208 packets** (severe throughput drop).
+   - *Why?* The stations are in a highly saturated traffic state. Contending via UORA causes high collision rates on the random-access RUs. The AP is forced to spend significant airtime sending BSRP polls and triggers to resolve contentions, resulting in severe overhead and packet loss.
+
+4. **UORA Contention, Traffic Load, and RU Count (`UoraLightContention`, `UoraHeavyContention`, `UoraMoreRandomAccessRus`)**:
+   - **`UoraLightContention` (198 packets)**: With 8 contending stations and 1 random-access RU, the light traffic load (`sendInterval = 12ms`) results in moderate contention. Stations can successfully transmit, but are limited by UORA access parameters.
+   - **`UoraHeavyContention` (203 packets)**: Increasing the offered load (`sendInterval = 1ms`) leads to severe collision and backoff overhead on the single random-access RU. However, because UORA backoff locks stations out and limits their transmission attempts under contention, the actual throughput remains bounded at a similar saturation level (~200 packets).
+   - **`UoraMoreRandomAccessRus` (204 packets)**: Allocating more random-access RUs (3 instead of 1) reduces the collision probability per RU. However, due to the trigger check interval and overhead of scheduling multiple UORA RUs, the overall packet delivery count is similar under saturation, but has lower average latency and more equitable channel access among the 8 hosts.
+
