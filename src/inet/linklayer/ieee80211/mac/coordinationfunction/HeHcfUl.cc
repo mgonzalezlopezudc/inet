@@ -11,6 +11,7 @@
 
 #include "inet/common/INETMath.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/linklayer/ieee80211/mac/blockack/BlockAckAgreementUtils.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
@@ -426,6 +427,14 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         auto firstHeader = exchange.packets.front()->removeAtFront<Ieee80211DataHeader>();
         firstHeader->setBufferStatusQueueSize(reportedQueueBytes);
         exchange.packets.front()->insertAtFront(firstHeader);
+        for (auto mpdu : exchange.packets) {
+            auto trailer = mpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
+            auto fcsMode = mac->getFcsMode();
+            trailer->setFcsMode(fcsMode);
+            if (fcsMode == FCS_COMPUTED)
+                trailer->setFcs(computeEthernetFcs(mpdu, fcsMode));
+            mpdu->insertAtBack(trailer);
+        }
         if (exchange.packets.size() > 1) {
             delete responsePacket;
             responsePacket = new Packet("HE-TB-A-MPDU");
@@ -593,7 +602,12 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
             mac->getMib()->bssData.bssid, selectedTid).size();
     int availableSlots = ulBaAgreement == nullptr ? 0 :
             std::max(0, ulBaAgreement->getBufferSize() - occupiedSlots);
-    if (sourcePacket != nullptr && (ulBaAgreement == nullptr || availableSlots == 0))
+    // UORA must be able to send its first QoS MPDU before a Block Ack
+    // agreement exists. The Trigger exchange's Multi-STA BA directly carries
+    // the response bitmap, so reserve one slot for this non-aggregated MPDU.
+    if (randomAccess && sourcePacket != nullptr && ulBaAgreement == nullptr)
+        availableSlots = 1;
+    if (sourcePacket != nullptr && availableSlots == 0)
         sourcePacket = nullptr;
     int64_t queueBytes = 0;
     for (int i = 0; i < sourceQueue->getNumPackets(); i++) {
@@ -613,9 +627,12 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     exchange.expectedResponseTime = simTime() + modeSet->getSifsTime();
     auto responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
             selectedTid, queueBytes, availableSlots, selected, trigger, exchange);
+    auto responseHeader = exchange.packets.empty() ?
+            responsePacket->peekAtFront<Ieee80211MacHeader>() :
+            exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
         responsePacket->setName("HE-TB-NDP-Feedback-Report");
-    if (!exchange.packets.empty())
+    if (!exchange.packets.empty() || exchange.randomAccess)
         triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
 
     auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
@@ -656,7 +673,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
              << ", " << (randomAccess ? "random-access" : "scheduled")
              << " RU=" << selected->ruIndex
              << ", packets=" << exchange.packets.size() << "\n";
-    tx->transmitFrame(responsePacket, responsePacket->peekAtFront<Ieee80211MacHeader>(),
+    tx->transmitFrame(responsePacket, responseHeader,
             modeSet->getSifsTime(), this);
     delete responsePacket;
     delete packet;
@@ -685,7 +702,12 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
                 record = &multiStaBlockAck->getRecords(i);
                 break;
             }
-        bool exchangeSuccess = false;
+        // A UORA response to a BSRP Trigger is a QoS Null carrying buffer
+        // status, so there is no queued data MPDU or bitmap bit to retire. A
+        // positive per-AID response record is nevertheless a successful UORA
+        // attempt and must reset OCW and be counted.
+        bool exchangeSuccess = exchange.randomAccess && exchange.packets.empty() &&
+                record != nullptr && record->responseReceived;
         for (size_t i = 0; i < exchange.packets.size(); ++i) {
             bool acknowledged = false;
             if (record != nullptr && record->responseReceived) {

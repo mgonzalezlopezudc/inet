@@ -120,6 +120,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     virtual void sendDownFrame(Packet *frame);
     virtual void sendDownPendingRadioConfigMsg();
     virtual void setTwtRadioAwake(bool awake);
+    virtual void twtServicePeriodChanged();
     virtual bool isTwtPeerEligible(const MacAddress& peer) const;
     virtual void sendTwtPsPoll(const MacAddress& peer);
     virtual ITwtManager *getTwtManager() const { return twtManager; }

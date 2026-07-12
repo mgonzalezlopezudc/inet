@@ -938,6 +938,17 @@ bool Hcf::hasFrameToTransmit()
         throw cRuntimeError("Hcca is unimplemented");
 }
 
+void Hcf::twtServicePeriodChanged()
+{
+    Enter_Method("twtServicePeriodChanged");
+    for (int ac = AC_BK; ac <= AC_VO; ac++) {
+        auto accessCategory = static_cast<AccessCategory>(ac);
+        auto edcaf = edca->getEdcaf(accessCategory);
+        if (edcaf != nullptr && hasFrameToTransmit(accessCategory))
+            edca->requestChannelAccess(accessCategory, this);
+    }
+}
+
 void Hcf::sendUp(const std::vector<Packet *>& completeFrames)
 {
     for (auto frame : completeFrames)

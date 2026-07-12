@@ -61,6 +61,15 @@ namespace physicallayer {
 Define_Module(Ieee80211Radio);
 
 simsignal_t Ieee80211Radio::radioChannelChangedSignal = cComponent::registerSignal("radioChannelChanged");
+simsignal_t Ieee80211Radio::heRuIndexSignal = cComponent::registerSignal("heRuIndex");
+simsignal_t Ieee80211Radio::heRuToneSizeSignal = cComponent::registerSignal("heRuToneSize");
+simsignal_t Ieee80211Radio::heRuToneOffsetSignal = cComponent::registerSignal("heRuToneOffset");
+simsignal_t Ieee80211Radio::heStaIdSignal = cComponent::registerSignal("heStaId");
+simsignal_t Ieee80211Radio::heSpatialStreamsSignal = cComponent::registerSignal("heSpatialStreams");
+simsignal_t Ieee80211Radio::heStreamStartIndexSignal = cComponent::registerSignal("heStreamStartIndex");
+simsignal_t Ieee80211Radio::hePuncturedSubchannelMaskSignal = cComponent::registerSignal("hePuncturedSubchannelMask");
+simsignal_t Ieee80211Radio::acknowledgmentFrameTypeSignal = cComponent::registerSignal("acknowledgmentFrameType");
+simsignal_t Ieee80211Radio::acknowledgmentAirtimeSignal = cComponent::registerSignal("acknowledgmentAirtime");
 
 static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
 {
@@ -338,9 +347,35 @@ bool Ieee80211Radio::verifyFcs(const Ptr<const Ieee80211PhyHeader>& phyHeader) c
 
 void Ieee80211Radio::encapsulate(Packet *packet) const
 {
+    auto self = const_cast<Ieee80211Radio *>(this);
     auto ieee80211Transmitter = check_and_cast<const Ieee80211Transmitter *>(transmitter);
     auto mode = ieee80211Transmitter->computeTransmissionMode(packet);
     auto heMuUsers = collectHeMuUsers(packet);
+    if (!heMuUsers.empty()) {
+        auto request = packet->findTag<Ieee80211HeMuReq>();
+        auto commonRequest = packet->findTag<Ieee80211HeMuCommonReq>();
+        self->emit(hePuncturedSubchannelMaskSignal, (long)(request != nullptr ? request->getPuncturedSubchannelMask() :
+                commonRequest != nullptr ? commonRequest->getPuncturedSubchannelMask() : 0));
+        for (const auto& user : heMuUsers) {
+            self->emit(heRuIndexSignal, (long)user.ruIndex);
+            self->emit(heRuToneSizeSignal, (long)user.ruToneSize);
+            self->emit(heRuToneOffsetSignal, (long)user.ruToneOffset);
+            self->emit(heStaIdSignal, (long)user.staId);
+            self->emit(heSpatialStreamsSignal, (long)user.numberOfSpatialStreams);
+            self->emit(heStreamStartIndexSignal, (long)user.streamStartIndex);
+        }
+    }
+    auto frontChunk = packet->peekAtFront<Chunk>();
+    if (auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(frontChunk)) {
+        bool acknowledgment = dynamicPtrCast<const ieee80211::Ieee80211AckFrame>(macHeader) != nullptr ||
+                dynamicPtrCast<const ieee80211::Ieee80211BlockAckReq>(macHeader) != nullptr ||
+                dynamicPtrCast<const ieee80211::Ieee80211BlockAck>(macHeader) != nullptr;
+        if (acknowledgment) {
+            self->emit(acknowledgmentFrameTypeSignal, (long)macHeader->getType());
+            self->emit(acknowledgmentAirtimeSignal,
+                    SimTime(mode->getDuration(packet->getDataLength()).dbl()));
+        }
+    }
     auto phyHeader = !heMuUsers.empty() ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
     if (auto heMuPhyHeader = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader)) {
         auto networkInterface = getContainingNicModule(this);

@@ -44,5 +44,28 @@ void Ieee80211TwtExampleAgent::processAssociateConfirm(Ieee80211Prim_AssociateCo
     requestTwtSetup(request);
 }
 
+void Ieee80211TwtExampleAgent::processTwtSetupConfirm(Ieee80211Prim_TwtSetupConfirm *resp)
+{
+    Ieee80211AgentSta::processTwtSetupConfirm(resp);
+    twtAgreementActive = resp->getResultCode() == PRC_SUCCESS;
+}
+
+void Ieee80211TwtExampleAgent::processTwtTeardownConfirm(Ieee80211Prim_TwtTeardownConfirm *resp)
+{
+    Ieee80211AgentSta::processTwtTeardownConfirm(resp);
+    if (resp->getResultCode() == PRC_SUCCESS)
+        twtAgreementActive = false;
+}
+
+void Ieee80211TwtExampleAgent::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj, cObject *details)
+{
+    if (signalID == l2BeaconLostSignal && twtAgreementActive) {
+        Enter_Method("%s", cComponent::getSignalName(signalID));
+        EV_INFO << "Ignoring beacon-loss indication while a TWT agreement intentionally permits beacon sleep\n";
+        return;
+    }
+    Ieee80211AgentSta::receiveSignal(source, signalID, obj, details);
+}
+
 } // namespace ieee80211
 } // namespace inet
