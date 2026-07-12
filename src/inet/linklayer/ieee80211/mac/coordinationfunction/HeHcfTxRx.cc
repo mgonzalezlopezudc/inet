@@ -290,7 +290,7 @@ void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
                         queueBytes += queuedPacket->getByteLength();
                 }
                 auto writableHeader = packet->removeAtFront<Ieee80211DataHeader>();
-                if (!writableHeader->getBufferStatusPresent())
+                if (!writableHeader->getBufferStatusPresent() && !writableHeader->getOperatingModePresent())
                     writableHeader->setChunkLength(writableHeader->getChunkLength() + B(4));
                 writableHeader->setOrder(true);
                 if (par("sendOperatingModeIndication").boolValue() && mac->getMib()->localHeCapabilities.omControl) {
