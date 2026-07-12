@@ -6,6 +6,7 @@
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerEqualSizedRUs.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -18,7 +19,24 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
     int availableRus = physicallayer::getHeMaxRuCount(context.channelBandwidth);
     ASSERT(availableRus >= 0);
     int raCount = computeRandomAccessRuCount(context, availableRus);
-    int scheduledCount = std::min({(int)context.candidates.size(), maxMuStations,
+
+    // Filter candidates based on ulMuDisable flag in operating modes
+    std::vector<CandidateInfo> candidates;
+    auto hcf = dynamic_cast<const HeHcf *>(getParentModule());
+    for (const auto& candidate : context.candidates) {
+        bool ulMuDisable = false;
+        if (hcf != nullptr) {
+            Ieee80211HeOperatingMode peerMode;
+            if (hcf->getPeerOperatingMode(candidate.staAddress, peerMode)) {
+                ulMuDisable = peerMode.ulMuDisable;
+            }
+        }
+        if (!ulMuDisable) {
+            candidates.push_back(candidate);
+        }
+    }
+
+    int scheduledCount = std::min({(int)candidates.size(), maxMuStations,
             std::max(0, availableRus - raCount)});
     if (scheduledCount == 0)
         raCount = std::min(raCount, availableRus);
@@ -27,7 +45,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
     ASSERT((int)layout.size() == availableRus);
     int targetRssiDbm = computeTargetRssiDbm(context);
     for (int i = 0; i < scheduledCount; i++) {
-        const auto& candidate = context.candidates[i];
+        const auto& candidate = candidates[i];
         RuAllocation allocation;
         allocation.staAddress = candidate.staAddress;
         allocation.associationId = candidate.associationId;

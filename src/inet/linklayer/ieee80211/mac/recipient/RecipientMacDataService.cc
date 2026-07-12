@@ -26,7 +26,8 @@ Packet *RecipientMacDataService::defragment(Packet *dataOrMgmtFrame)
 {
     Packet *packet = basicReassembly->addFragment(dataOrMgmtFrame);
     if (packet && packet->peekAtFront<Ieee80211DataOrMgmtHeader>()) {
-        emit(packetDefragmentedSignal, packet);
+        if (packet != dataOrMgmtFrame)
+            emit(packetDefragmentedSignal, packet);
         return packet;
     }
     else

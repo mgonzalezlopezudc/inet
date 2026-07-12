@@ -349,5 +349,15 @@ uint16_t HeHcf::getAssociationId(const MacAddress& address) const
     return aid > 0 ? aid : 0;
 }
 
+bool HeHcf::getPeerOperatingMode(const MacAddress& address, Ieee80211HeOperatingMode& mode) const
+{
+    auto it = peerOperatingModes.find(address);
+    if (it != peerOperatingModes.end()) {
+        mode = it->second;
+        return true;
+    }
+    return false;
+}
+
 } // namespace ieee80211
 } // namespace inet

@@ -159,6 +159,12 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     std::vector<int> limitNss(tempGroup.size());
                     for (size_t i = 0; i < tempGroup.size(); ++i) {
                         int maxRxNss = getMaxNss(tempGroup[i].negotiatedHeCapabilities->intersection.txMcsNss);
+                        if (hcf != nullptr) {
+                            Ieee80211HeOperatingMode peerMode;
+                            if (hcf->getPeerOperatingMode(tempGroup[i].staAddress, peerMode)) {
+                                maxRxNss = std::min(maxRxNss, (int)peerMode.rxNss);
+                            }
+                        }
                         limitNss[i] = std::min(maxRxNss, 4);
                     }
 

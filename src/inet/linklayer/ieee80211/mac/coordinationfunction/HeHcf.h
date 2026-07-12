@@ -138,6 +138,7 @@ class INET_API HeHcf : public Hcf
     virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
     uint16_t getAssociationId(const MacAddress& address) const;
+    virtual bool getPeerOperatingMode(const MacAddress& address, Ieee80211HeOperatingMode& mode) const;
     void handleDlMuPlanningFailure(AccessCategory ac);
     void processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid);
 };
