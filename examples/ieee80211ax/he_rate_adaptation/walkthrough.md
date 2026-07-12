@@ -100,26 +100,47 @@ opp_scavetool query -l -f 'name =~ "datarateSelected:vector"' examples/ieee80211
 
 ```
 FixedMcs-#0.sca:
-scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  230
-scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  227
-scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  195
-scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  200
+scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  359
+scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  359
+scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  359
+scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  358
 
 HeMinstrel-#0.sca:
-scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  230
-scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  227
-scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  195
-scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  200
+scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  359
+scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  359
+scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  359
+scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  358
 ```
 
 AP datarate vector summary for the two static configs:
-`HeRateAdaptationNetwork.ap.wlan[0].mac.hcf datarateSelected:vector count=1144 mean=27.34 Mbps min=7.31 Mbps max=121.87 Mbps`
+`HeRateAdaptationNetwork.ap.wlan[0].mac.hcf datarateSelected:vector count=1559 mean=16.06 Mbps min=7.31 Mbps max=121.87 Mbps`
 
-Individual Host uplink datarates (both configs):
-- `host[0]` (closest): `mean=111.46 Mbps` (using high MCS)
-- `host[1]`: `mean=114.23 Mbps`
-- `host[2]`: `mean=120.40 Mbps`
+Individual Host HCF wlan[0] datarates (both configs):
+- `host[0]` (closest): `mean=118.18 Mbps` (using high MCS)
+- `host[1]`: `mean=118.18 Mbps`
+- `host[2]`: `mean=118.69 Mbps`
 - `host[3]` (furthest): `mean=7.31 Mbps` (uses fixed MCS 0 due to low SNR)
+
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c HeMinstrel examples/ieee80211ax/he_rate_adaptation/omnetpp.ini --result-dir=examples/ieee80211ax/he_rate_adaptation/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/he_rate_adaptation/results/HeMinstrel-#0HeRateAdaptationNetwork.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **Downlink UDP Packets**: The AP transmits UDP data packets (e.g. frames 1, 7, 13) to client hosts at distance-adapted MCS rates.
+2. **Block Ack Negotiation**: Block ACK negotiation Action frames (e.g. frames 3, 5, 9, 11, 15) are exchanged between the AP and the client hosts to establish session block acknowledgments.
+3. **Minstrel Dynamic Adaptation (HeMinstrelMobile)**: Under mobility (in `HeMinstrelMobile`), you can observe the AP dynamically reducing the transmission MCS and datarates for `host[3]` as it moves further away and its SNR decreases, maintaining high packet delivery success rates.
 
 ---
 

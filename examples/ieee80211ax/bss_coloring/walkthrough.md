@@ -62,18 +62,47 @@ bin/inet -u Cmdenv -c TwoNav examples/ieee80211ax/bss_coloring/omnetpp.ini
 
 ## Verifying Results
 
-Query the packet delivery counts:
+Query the packet delivery counts at the client stations:
 ```sh
 opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.sta*app*"' examples/ieee80211ax/bss_coloring/results/*.sca
 ```
 
-### Quantitative Analysis and Two NAV Verification:
-Under the default simulation run, all configurations deliver 180 packets to each client application due to the low offered load and the HCF scheduler's multi-user aggregation capacity. However, the virtual carrier-sense behavior differs significantly.
+### Quantitative Summary:
+For all configurations, the offering load is fully delivered:
 
-To verify the Dual NAV (`TwoNav`) configuration, query the NAV and Intra-BSS NAV transition counts or vectors in the result files:
-- **`nav` (Basic NAV)**: Records transitions of the basic NAV timer.
-- **`intraBssNavChanged`**: Records transitions of the intra-BSS NAV timer.
+| Configuration / Config | `sta1[0]` Packets | `sta1[1]` Packets | `sta2[0]` Packets | `sta2[1]` Packets |
+|---|---|---|---|---|
+| **All Configurations** | 180 | 180 | 180 | 180 |
 
-Query the vector metrics in Qtenv or scavetool to see how the client stations update their separate NAV timers:
-1. In `BssColoringEnabled` (without TwoNav), every inter-BSS virtual carrier reservation updates the single main `nav` vector, forcing the station to defer.
-2. In `TwoNav`, inter-BSS frame reservations update only the Basic NAV (monitored via `nav:vector`), while local intra-BSS reservations update the Intra-BSS NAV (monitored via `intraBssNavChanged:vector`). This separation allows the MAC layer to ignore Basic NAV updates during eligible spatial-reuse transmission opportunities.
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c BssColoringEnabled examples/ieee80211ax/bss_coloring/omnetpp.ini --result-dir=examples/ieee80211ax/bss_coloring/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges at the first Access Point (`ap1`):
+
+```sh
+tshark -n -r examples/ieee80211ax/bss_coloring/results/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **Downlink UDP Packets**: `ap1` sends UDP data frames to its stations (e.g. frame 1, 15).
+2. **Action Frame Handshake**: Stations establish block acknowledgment session configurations with their AP (e.g. frames 3, 5, 7, 11).
+3. **Spatial Concurrency**: Under `BssColoringEnabled`, when `ap2` transmits downlink data concurrently (e.g. frame 9), the nodes in BSS 1 class it as an inter-BSS transmission (due to different BSS colors: Color 1 vs. Color 2). Since its received power is -80 dBm (below the -62 dBm OBSS/PD threshold), the local nodes ignore the transmission and transmit concurrently without deferring.
+
+---
+
+## Two NAV (Dual NAV) Verification
+
+To verify the Dual NAV (`TwoNav`) configuration, query the NAV transition vectors in the result files:
+- **`nav` (Basic NAV)**: Records transitions of the basic NAV timer (source `navChanged`).
+- **`intraBssNavChanged`**: Records transitions of the intra-BSS NAV timer (source `intraBssNavChanged`).
+
+Query the vector metrics in scavetool to see how the client stations update their separate NAV timers:
+1. In `BssColoringEnabled` (without TwoNav), every inter-BSS virtual carrier reservation updates the single main `nav:vector`, forcing the station to defer.
+2. In `TwoNav`, inter-BSS frame reservations update only the Basic NAV (monitored via `nav:vector`), while local intra-BSS reservations update the Intra-BSS NAV (monitored via `intraBssNavChanged:vector`). This separation allows the MAC layer to ignore Basic NAV updates during eligible spatial-reuse transmission opportunities. (Note: Since there are no client-to-client transmissions in this downlink-heavy scenario, the `intraBssNavChanged` signal remains un-triggered/idle).

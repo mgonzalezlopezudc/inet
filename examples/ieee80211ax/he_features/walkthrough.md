@@ -219,7 +219,52 @@ In Qtenv, inspect the AP `mib` module for `heCapabilitiesSummary`, `heOperationS
 
 ---
 
-## 6. Notes and Limitations
+## 6. Quantitative Results and Verification
+
+All configurations were run with Cmdenv, and the table reports the `packetReceived:count` scalar for the UDP sink application on each host:
+
+| Configuration / Config | Description | Packets Received by Clients (UDP App) |
+|---|---|---|
+| **`BccBaseline`** | HE MU-OFDMA with BCC coding | `host[0..3]`: 16 each <br> **Total: 64** |
+| **`HeLdpc`** | HE LDPC timing and PER gain | `host[0..3]`: 16 each <br> **Total: 64** |
+| **`PacketExtension`** | 8 µs HE packet-extension duration | `host[0..3]`: 16 each <br> **Total: 64** |
+| **`PreamblePuncturing`** | Punctured second 20 MHz subchannel | `host[0..3]`: 16 each <br> **Total: 64** |
+| **`MixedLdpcSupport`** | AP LDPC enabled, host[3] disabled | `host[0]`: 56 <br> `host[1]`: 1 <br> `host[2]`: 1 <br> `host[3]`: 55 <br> **Total: 113** |
+| **`CombinedHeFeatures`** | LDPC, PE, and puncturing enabled | `host[0..3]`: 16 each <br> **Total: 64** |
+| **`PreamblePuncturingUnderInterference`** | Jammer on 2nd subchannel (punctured) | `host[0..3]`: 10 each <br> **Total: 40** |
+| **`CleanChannelBaseline`** | Clean channel baseline (no interferer) | `host[0..3]`: 16 each <br> **Total: 64** |
+| **`LegacyInterferenceWithoutPuncturing`** | Jammer on 2nd subchannel (no puncturing) | `host[0..3]`: 10 each <br> **Total: 40** |
+
+To query the received packet counts using `opp_scavetool`:
+
+```sh
+opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*app*"' examples/ieee80211ax/he_features/results/*.sca
+```
+
+---
+
+## 7. PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c PreamblePuncturing examples/ieee80211ax/he_features/omnetpp.ini --result-dir=examples/ieee80211ax/he_features/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges at the Access Point's wireless interface:
+
+```sh
+tshark -n -r examples/ieee80211ax/he_features/results/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **Downlink UDP Traffic**: The AP transmits UDP data packets (e.g. frame 1) to the client hosts.
+2. **ADDBA Handshake**: The AP and hosts exchange block acknowledgment action frames (e.g. frames 3, 5, 7) to negotiate Multi-STA block acknowledgments.
+3. **Preamble Puncturing Verification**: In Qtenv or trace summaries, the HE MU PPDU layout resolves tones avoiding the punctured subchannel index 1 (corresponding to the `0100` mask), scheduling user data only on the remaining active subchannels.
+
+---
+
+## 8. Notes and Limitations
 
 * HE LDPC in INET is a packet-level model: it does not include a bit-level LDPC codec. Instead it models the timing and PER impact (codeword accounting, tail-bit omission, and a 1.5 dB SNR boost).
 * Preamble puncturing capability is advertised by default in the current `Ieee80211HeCapabilities` struct, so all peers in this example support it. The scenario therefore emphasizes **configuration validation** and **puncture-aware allocation** rather than a peer-capability fallback.

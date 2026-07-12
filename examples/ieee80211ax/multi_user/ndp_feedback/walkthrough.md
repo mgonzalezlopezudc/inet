@@ -63,14 +63,39 @@ opp_scavetool query -l -f 'name =~ "packetSentToPeer:count" and module =~ "*.mac
 
 ### Quantitative Summary:
 - **`host[0..2].app[0] packetSent:count`**: 361 packets each (Application layer).
-- **`server.app[0] packetReceived:count`**: 0.
+- **`server.app[0] packetReceived:count`**: 1034.
 - **`ap.wlan[0].mac.hcf packetSentToPeer:count`**: 1113.
 - **`host[0..2].wlan[0].mac.hcf packetSentToPeer:count`**: 690, 720, and 728.
 
-### Interpretation of Results:
-1. **Uplink Data Starvation**:
-   - The server receives **0 UDP packets** because `enableUlMuOfdma` is active on the stations, which forces them to wait for data-trigger schedules (Basic/BSRP Triggers).
-   - Since the `ScheduledOnly` base configuration disables random-access and scheduled data RUs (`minRandomAccessRus = 0`, `maxMuStations = 0`), the AP sends **0 data trigger frames**. The hosts' application data packets remain queued in their MAC buffers.
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c NdpFeedbackReport examples/ieee80211ax/multi_user/ndp_feedback/omnetpp.ini --result-dir=examples/ieee80211ax/multi_user/ndp_feedback/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/multi_user/ndp_feedback/results/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap -c 25
+```
+
+The decoded output timeline shows:
+1. **NFRP Trigger frames**: The AP regularly broadcasts EHT NDP Feedback Report Poll (NFRP) Trigger frames (e.g. frames 1, 5, 9, 13) to poll stations.
+2. **Concurrent QoS Null responses**: Target stations (`host[0..2]`) respond concurrently with QoS Null frames (e.g. frames 2, 3, 4) carrying resource status info in their HE TB NDP feedback headers.
+3. **Uplink UDP Packets**: Uplink user data packets (UDP frames) are also transmitted successfully, resulting in **1034 received packets** at the server UDP application.
+
+---
+
+## Interpretation of Results:
+
+1. **Uplink Data and Control Feedback**:
+   - The server successfully receives **1034 UDP packets** from the hosts, confirming active scheduled uplink transmission.
+   - The stations wait for the HCF scheduler's triggers to transmit data. Under the `ScheduledOnly` base configuration settings, the AP schedules data uplink transmissions alongside regular control signaling.
+
 2. **High MAC-Layer Transmissions**:
-   - The hosts still record very high MAC-layer transmission counts (~700 frames each). These represent the **HE TB NDP feedback report frames** sent in response to the AP's frequent NFRP triggers.
-   - The AP sends **79 broadcast trigger frames** (which are the NFRP triggers) and receives simultaneous feedback reports from the stations.
+   - The hosts record very high MAC-layer transmission counts (~700 frames each). These represent the **HE TB NDP feedback report frames** (decoded as QoS Null frames in TShark) sent concurrently in response to the AP's frequent NFRP triggers.
+   - The AP broadcasts NFRP Trigger frames every 20ms to poll stations and coordinate uplink channel status.

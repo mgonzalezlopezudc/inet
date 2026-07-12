@@ -57,7 +57,7 @@ network HeSingleBssNetwork
             @display("p=250,250;r=,,#707070");
         }
         server: StandardHost {
-            @display("p=400,200");
+            @display("p=250,300");
         }
     connections:
         server.ethg++ <--> Eth100M <--> ap.ethg++;
