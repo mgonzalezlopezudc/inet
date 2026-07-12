@@ -106,5 +106,9 @@ bin/inet -u Qtenv -c OperatingModeIndication examples/ieee80211ax/mac_features/o
 2. Inspect the `peerOperatingModes` watch/inspector.
 3. Observe how the AP updates the entry for `host[0]`'s MAC address once the first data frame is received.
 
-### Model Limitation:
-In the current INET HCF scheduler implementation, the AP coordination function parses and maintains the `peerOperatingModes` state, but the scheduler does not yet actively filter scheduled peers based on the `ulMuDisable` or `rxNss` flags. This example demonstrates the structural OMI protocol formatting and AP state tracking.
+### Active OMI Scheduling Filtering:
+In the INET HCF scheduler implementation, the AP coordination function parses, maintains, and respects the `peerOperatingModes` state. In the `OperatingModeIndication` run:
+- The AP `HeHcf` coordination module stores this state in its `peerOperatingModes` map.
+- The uplink scheduler `HeUlSchedulerBacklogBased` checks this map and actively excludes `host[0]` from the UL MU triggers because of its `ulMuDisable` OMI setting.
+- This is verified by the fact that the AP only schedules `host[1]` and `host[2]` in its User Info fields (visible in verbose logs and PCAP decodes), while `host[0]` falls back to EDCA transmission.
+- Similarly, the downlink scheduler respects the `rxNss` constraint when allocating streams.

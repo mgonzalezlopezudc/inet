@@ -182,11 +182,10 @@ The decoded output timeline shows:
    - The server successfully receives **979 packets**.
    - *Why?* The trigger-frame exchange introduces handshake overhead, and splitting the 20 MHz channel into small RUs reduces the peak bitrate per user. However, this ensures collision-free, synchronized uplink access, which is highly beneficial in environments with hundreds of active stations.
 
-2. **The EDCA Fallback (`ScheduledOnly`, `EqualRus`)**:
-   - In these configurations, the AP sends **0 Basic Triggers** (no actual Uplink OFDMA scheduling occurs), although it sends **64 BSRP Triggers** to poll for queue status.
-   - Consequently, the stations fallback to standard **CSMA/CA (EDCA)** for their data transmissions.
-   - The server receives **2085 packets** (a much higher throughput).
-   - *Why?* With only 3 stations at close range (5m) and zero channel interference, CSMA/CA operates at near-perfect efficiency without collisions. Bypassing the Trigger frame coordination overhead allows the stations to transmit at full single-user speeds (14.6 Mbps), maximizing throughput.
+2. **The Scheduled-Only and Equal-RU Modes (`ScheduledOnly`, `EqualRus`)**:
+   - Under these configurations, the AP actively coordinates uplink transmissions using **348 Basic Triggers** and **2 BSRP Triggers** (identical trigger counts to the `General` baseline).
+   - *Why?* Both configurations still have Uplink OFDMA enabled (`enableUlMuOfdma = true`). The scheduler actively schedules data transmissions, but `ScheduledOnly` completely disables UORA random-access contention RUs (`minRandomAccessRus = 0`, `maxRandomAccessRus = 0`). This isolates the scheduled multi-user allocation from collision/contention overhead.
+   - For a true EDCA fallback comparison where UL OFDMA is completely disabled, see `UlSuMultiTidBlockAck` (or the new `EdcaBaseline` config).
 
 3. **Uplink Single-User (UL SU) Multi-TID Traffic (`UlSuMultiTidBlockAck`)**:
    - Trigger-based MU-OFDMA is disabled (`enableUlMuOfdma = false`). The single station (`host[0]`) transmits its multi-TID A-MPDUs (TID 6 and TID 7) using standard EDCA access.
