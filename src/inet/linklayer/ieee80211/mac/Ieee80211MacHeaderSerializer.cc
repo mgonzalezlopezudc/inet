@@ -341,24 +341,38 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                         stream.writeByte(actionFrame->getS1gAction());
                         if (auto twtSetup = dynamicPtrCast<const Ieee80211TwtSetupFrame>(chunk)) {
                             stream.writeByte(twtSetup->getDialogToken());
-                            uint8_t control = (twtSetup->getTwtRequest() ? 1 : 0) |
+                            // Wrapping in standard TWT Element (Element ID = 216, Length = 15)
+                            stream.writeByte(216);
+                            stream.writeByte(15);
+                            uint8_t elementControl = 0x20; // Individual TWT, Wake Duration Unit = 1 (TU), NDP Paging = 0
+                            stream.writeByte(elementControl);
+                            uint16_t requestType = (twtSetup->getTwtRequest() ? 1 : 0) |
                                     ((twtSetup->getSetupCommand() & 0x7) << 1) |
                                     (twtSetup->getTrigger() ? 0x10 : 0) |
                                     (twtSetup->getImplicit() ? 0x20 : 0) |
-                                    (twtSetup->getAnnounced() ? 0x40 : 0) |
-                                    (twtSetup->getBroadcast() ? 0x80 : 0);
-                            stream.writeByte(control);
-                            stream.writeByte((twtSetup->getFlowId() & 0x7) | ((twtSetup->getBroadcastId() & 0x1f) << 3));
+                                    ((twtSetup->getAnnounced() ? 0 : 1) << 6) |
+                                    ((twtSetup->getFlowId() & 0x7) << 7) |
+                                    ((twtSetup->getWakeIntervalExponent() & 0x1f) << 10);
+                            stream.writeUint16Le(requestType);
                             stream.writeUint64Le(twtSetup->getTargetWakeTime());
-                            stream.writeByte(twtSetup->getWakeIntervalExponent());
-                            stream.writeUint16Le(twtSetup->getWakeIntervalMantissa());
                             stream.writeByte(twtSetup->getNominalWakeDuration());
+                            stream.writeUint16Le(twtSetup->getWakeIntervalMantissa());
                             stream.writeByte(twtSetup->getPersistence());
                             ASSERT(stream.getLength() - startPos == twtSetup->getChunkLength());
                         }
                         else if (auto teardown = dynamicPtrCast<const Ieee80211TwtTeardownFrame>(chunk)) {
-                            stream.writeByte((teardown->getFlowId() & 0x7) | ((teardown->getBroadcastId() & 0x1f) << 3) |
-                                    (teardown->getBroadcast() ? 0x80 : 0));
+                            uint8_t flowByte = 0;
+                            if (teardown->getBroadcast()) {
+                                // Negotiation Type = 2, Broadcast ID, Teardown All
+                                flowByte = (teardown->getBroadcastId() & 0x1f) |
+                                           (2 << 5) |
+                                           (teardown->getTeardownAll() ? 0x80 : 0);
+                            } else {
+                                // Negotiation Type = 0, Flow ID, Teardown All
+                                flowByte = (teardown->getFlowId() & 0x7) |
+                                           (teardown->getTeardownAll() ? 0x80 : 0);
+                            }
+                            stream.writeByte(flowByte);
                             ASSERT(stream.getLength() - startPos == teardown->getChunkLength());
                         }
                         else if (auto information = dynamicPtrCast<const Ieee80211TwtInformationFrame>(chunk)) {
@@ -441,7 +455,8 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                     (1ULL << 17) |                                    // B17: CS Required
                     ((static_cast<uint64_t>(ulBw) & 0x3) << 18) |     // B18-B19: UL BW
                     ((static_cast<uint64_t>(giAndHeLtf) & 0x3) << 20) | // B20-B21: GI And HE-LTF Type
-                    ((static_cast<uint64_t>(trigger->getCoding() & 1)) << 27); // B27: LDPC Extra Symbol Segment
+                    ((static_cast<uint64_t>(trigger->getCoding() & 1)) << 27) | // B27: LDPC Extra Symbol Segment
+                    (3ULL << 54);                                     // B54-B55: Reserved set to 1 for HE Trigger variant
             writeLeBits(stream, commonInfo, 64);
 
             // --- User Info List ---
@@ -866,21 +881,36 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                         copyActionFrameFields(frame, actionFrame);
                         frame->setS1gAction(s1gAction);
                         frame->setDialogToken(stream.readByte());
-                        uint8_t control = stream.readByte();
-                        uint8_t flow = stream.readByte();
-                        frame->setTwtRequest(control & 1);
-                        frame->setSetupCommand((control >> 1) & 0x7);
-                        frame->setTrigger(control & 0x10);
-                        frame->setImplicit(control & 0x20);
-                        frame->setAnnounced(control & 0x40);
-                        frame->setBroadcast(control & 0x80);
-                        frame->setFlowId(flow & 0x7);
-                        frame->setBroadcastId((flow >> 3) & 0x1f);
-                        frame->setTargetWakeTime(stream.readUint64Le());
-                        frame->setWakeIntervalExponent(stream.readByte());
-                        frame->setWakeIntervalMantissa(stream.readUint16Le());
-                        frame->setNominalWakeDuration(stream.readByte());
-                        frame->setPersistence(stream.readByte());
+                        auto startPos = stream.getPosition();
+                        uint8_t nextByte1 = stream.readByte();
+                        uint8_t nextByte2 = stream.readByte();
+                        uint16_t requestType = 0;
+                        if (nextByte1 == 216 && nextByte2 == 15) {
+                            stream.readByte();
+                            requestType = stream.readUint16Le();
+                            frame->setTargetWakeTime(stream.readUint64Le());
+                            frame->setNominalWakeDuration(stream.readByte());
+                            frame->setWakeIntervalMantissa(stream.readUint16Le());
+                            frame->setPersistence(stream.readByte());
+                        } else {
+                            // Legacy format: no TWT element wrapper
+                            stream.seek(startPos);
+                            uint8_t control = stream.readByte();
+                            uint8_t flow = stream.readByte();
+                            requestType = control | (flow << 8);
+                            frame->setTargetWakeTime(stream.readUint64Le());
+                            frame->setWakeIntervalExponent(stream.readByte());
+                            frame->setWakeIntervalMantissa(stream.readUint16Le());
+                            frame->setNominalWakeDuration(stream.readByte());
+                            frame->setPersistence(stream.readByte());
+                        }
+                        frame->setTwtRequest(requestType & 1);
+                        frame->setSetupCommand((requestType >> 1) & 0x7);
+                        frame->setTrigger(requestType & 0x10);
+                        frame->setImplicit(requestType & 0x20);
+                        frame->setAnnounced(((requestType >> 6) & 1) == 0);
+                        frame->setFlowId((requestType >> 7) & 0x7);
+                        frame->setWakeIntervalExponent((requestType >> 10) & 0x1f);
                         return frame;
                     }
                     else if (s1gAction == 7) {
@@ -889,9 +919,22 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                         copyActionFrameFields(frame, actionFrame);
                         frame->setS1gAction(s1gAction);
                         uint8_t flow = stream.readByte();
-                        frame->setFlowId(flow & 0x7);
-                        frame->setBroadcastId((flow >> 3) & 0x1f);
-                        frame->setBroadcast(flow & 0x80);
+                        uint8_t negType = (flow >> 5) & 3;
+                        if (negType == 2) {
+                            frame->setBroadcast(true);
+                            frame->setBroadcastId(flow & 0x1f);
+                            frame->setTeardownAll((flow & 0x80) != 0);
+                        } else if (negType == 0) {
+                            frame->setBroadcast(false);
+                            frame->setFlowId(flow & 0x7);
+                            frame->setTeardownAll((flow & 0x80) != 0);
+                        } else {
+                            // Legacy fallback
+                            frame->setBroadcast((flow & 0x80) != 0);
+                            frame->setBroadcastId((flow >> 3) & 0x1f);
+                            frame->setFlowId(flow & 0x7);
+                            frame->setTeardownAll(false);
+                        }
                         return frame;
                     }
                     else if (s1gAction == 11) {

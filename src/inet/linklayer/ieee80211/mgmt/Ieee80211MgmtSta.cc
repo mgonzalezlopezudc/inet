@@ -405,14 +405,12 @@ void Ieee80211MgmtSta::startAssociation(ApInfo *ap, simtime_t timeout)
     // create and send association request
     const auto& body = makeShared<Ieee80211AssociationRequestFrame>();
     body->setTransmitPowerDbm(par("associationTransmitPower"));
+    body->setSSID(ap->ssid.c_str());
+    body->setSupportedRates(supportedRates);
     if (isHeManagementSupported()) {
         body->setHeCapabilitiesPresent(true);
         body->setHeCapabilities(makeHeCapabilitiesElement(mib->localHeCapabilities));
     }
-
-    // TODO set the following too?
-    // string SSID
-//    Ieee80211SupportedRatesElement supportedRates;
 
     body->setChunkLength(B(2 + 2 + (2 + strlen(body->getSSID())) + (2 + body->getSupportedRates().numRates)) + getHeMgmtElementsLength(body));
     sendManagementFrame("Assoc", body, ST_ASSOCIATIONREQUEST, ap->address);
