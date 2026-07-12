@@ -35,7 +35,8 @@ Packet *RecipientQosMacDataService::defragment(std::vector<Packet *> completeFra
     for (auto fragment : completeFragments) {
         auto packet = basicReassembly->addFragment(fragment);
         if (packet != nullptr) {
-            emit(packetDefragmentedSignal, packet);
+            if (packet != fragment)
+                emit(packetDefragmentedSignal, packet);
             return packet;
         }
     }
@@ -46,7 +47,8 @@ Packet *RecipientQosMacDataService::defragment(Packet *mgmtFragment)
 {
     auto packet = basicReassembly->addFragment(mgmtFragment);
     if (packet && packet->hasAtFront<Ieee80211DataOrMgmtHeader>()) {
-        emit(packetDefragmentedSignal, packet);
+        if (packet != mgmtFragment)
+            emit(packetDefragmentedSignal, packet);
         return packet;
     }
     else

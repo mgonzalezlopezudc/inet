@@ -969,7 +969,27 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
         bool deletePacketToTransmit = false;
         if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK && !rtsPolicy->isRtsNeeded(packet, header)) {
-                auto frames = channelOwner->getInProgressFrames()->getEligibleFramesLike(packet, 64, 1048575);
+                int maxAmpduLengthExponent = 7;
+                auto mib = mac->getMib();
+                if (mib != nullptr) {
+                    auto negotiated = mib->findNegotiatedHeCapabilities(dataFrame->getReceiverAddress());
+                    if (negotiated != nullptr && negotiated->valid) {
+                        maxAmpduLengthExponent = negotiated->intersection.maxAmpduLengthExponent;
+                    }
+                    else {
+                        auto negotiatedVht = mib->findNegotiatedVhtCapabilities(dataFrame->getReceiverAddress());
+                        if (negotiatedVht != nullptr && negotiatedVht->valid) {
+                            maxAmpduLengthExponent = negotiatedVht->intersection.maxAmpduLengthExponent;
+                        }
+                    }
+                }
+                auto originatorModule = dynamic_cast<cModule *>(originatorDataService);
+                auto mpduAggregationPolicy = originatorModule ? originatorModule->getSubmodule("mpduAggregationPolicy") : nullptr;
+                if (mpduAggregationPolicy != nullptr && mpduAggregationPolicy->hasPar("maxAmpduLengthExponent")) {
+                    maxAmpduLengthExponent = std::min(maxAmpduLengthExponent, (int)mpduAggregationPolicy->par("maxAmpduLengthExponent").intValue());
+                }
+                long long maxAggregateLength = (1LL << (13 + maxAmpduLengthExponent)) - 1;
+                auto frames = channelOwner->getInProgressFrames()->getEligibleFramesLike(packet, 64, maxAggregateLength);
                 std::vector<Packet *> ampduFrames;
                 for (auto frame : frames) {
                     auto frameHeader = frame->peekAtFront<Ieee80211DataHeader>();

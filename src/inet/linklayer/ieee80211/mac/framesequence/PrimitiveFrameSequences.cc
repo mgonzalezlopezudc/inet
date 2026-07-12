@@ -6,6 +6,7 @@
 
 
 #include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -429,10 +430,55 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
             auto receiverAddr = std::get<0>(blockAckReqParams);
             auto startingSequenceNumber = std::get<1>(blockAckReqParams);
             auto tid = std::get<2>(blockAckReqParams);
-            auto blockAckReq = canUseCompressedBlockAckReq(context, receiverAddr, tid) ?
-                    context->getQoSContext()->blockAckProcedure->buildCompressedBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber) :
-                    context->getQoSContext()->blockAckProcedure->buildBasicBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber);
-            auto blockAckPacket = new Packet(dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq) ? "CompressedBlockAckReq" : "BasicBlockAckReq", blockAckReq);
+
+            auto inProgress = context->getInProgressFrames();
+            auto hcfModule = inProgress != nullptr ? inProgress->getParentModule() : nullptr;
+            auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
+            auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
+
+            auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddr) : nullptr;
+            Packet *blockAckPacket = nullptr;
+
+            if (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx) {
+                // Collect starting sequence numbers by TID from in-progress frames for receiverAddr
+                std::map<Tid, SequenceNumberCyclic> recordsByTid;
+                for (int i = 0; i < inProgress->getLength(); i++) {
+                    auto f = inProgress->getFrames(i);
+                    auto macHdr = f->peekAtFront<Ieee80211MacHeader>();
+                    if (macHdr != nullptr && macHdr->getReceiverAddress() == receiverAddr) {
+                        if (auto dataHdr = dynamicPtrCast<const Ieee80211DataHeader>(macHdr)) {
+                            auto t = dataHdr->getTid();
+                            auto seqNum = dataHdr->getSequenceNumber();
+                            auto it = recordsByTid.find(t);
+                            if (it == recordsByTid.end() || seqNum.get() < it->second.get()) {
+                                recordsByTid[t] = seqNum;
+                            }
+                        }
+                    }
+                }
+                if (recordsByTid.empty()) {
+                    recordsByTid[tid] = startingSequenceNumber;
+                }
+                auto multiTidReq = makeShared<Ieee80211MultiTidBlockAckReq>();
+                multiTidReq->setReceiverAddress(receiverAddr);
+                multiTidReq->setTransmitterAddress(macModule->getAddress());
+                multiTidReq->setRecordsArraySize(recordsByTid.size());
+                unsigned int idx = 0;
+                for (const auto& entry : recordsByTid) {
+                    Ieee80211MultiTidBlockAckReqRecord rec;
+                    rec.tid = entry.first;
+                    rec.startingSequenceNumber = entry.second.get();
+                    multiTidReq->setRecords(idx++, rec);
+                }
+                multiTidReq->setChunkLength(B(18 + 4 * recordsByTid.size()));
+                blockAckPacket = new Packet("MultiTidBlockAckReq", multiTidReq);
+            }
+            else {
+                auto blockAckReq = canUseCompressedBlockAckReq(context, receiverAddr, tid) ?
+                        context->getQoSContext()->blockAckProcedure->buildCompressedBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber) :
+                        context->getQoSContext()->blockAckProcedure->buildBasicBlockAckReqFrame(receiverAddr, tid, startingSequenceNumber);
+                blockAckPacket = new Packet(dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq) ? "CompressedBlockAckReq" : "BasicBlockAckReq", blockAckReq);
+            }
             blockAckPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
             return new TransmitStep(blockAckPacket, context->getIfs(), true);
         }

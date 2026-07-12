@@ -8,6 +8,7 @@
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -88,6 +89,18 @@ void OriginatorBlockAckAgreementHandler::processReceivedBlockAck(const Ptr<const
             agreement->calculateExpirationTime();
             scheduleInactivityTimer(callback);
         }
+    }
+    else if (auto multiTidBlockAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(blockAck)) {
+        unsigned int numRecords = multiTidBlockAck->getRecordsArraySize();
+        for (unsigned int i = 0; i < numRecords; ++i) {
+            const auto& rec = multiTidBlockAck->getRecords(i);
+            auto agreement = getAgreement(multiTidBlockAck->getTransmitterAddress(), rec.tid);
+            if (agreement) {
+                agreement->setStartingSequenceNumber(SequenceNumberCyclic(rec.startingSequenceNumber));
+                agreement->calculateExpirationTime();
+            }
+        }
+        scheduleInactivityTimer(callback);
     }
     else
         throw cRuntimeError("Unsupported BlockAck");

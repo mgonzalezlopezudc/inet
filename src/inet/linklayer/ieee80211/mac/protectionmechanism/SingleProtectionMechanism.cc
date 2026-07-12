@@ -8,6 +8,7 @@
 #include "inet/linklayer/ieee80211/mac/protectionmechanism/SingleProtectionMechanism.h"
 
 #include "inet/common/ModuleAccess.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/rateselection/RateSelection.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 
@@ -78,6 +79,12 @@ simtime_t SingleProtectionMechanism::computeBlockAckReqDurationField(Packet *pac
         simtime_t blockAckFrameDuration = rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getDuration(B(32));
         simtime_t blockAckReqDurationPerId = blockAckFrameDuration + modeSet->getSifsTime();
         return blockAckReqDurationPerId;
+    }
+    else if (auto multiTidReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+        // The Multi-TID Block Ack response has 18 bytes fixed + 12 bytes per TID record.
+        B multiTidAckLength = B(18 + 12 * multiTidReq->getRecordsArraySize());
+        simtime_t blockAckFrameDuration = rateSelection->computeResponseBlockAckFrameMode(packet, blockAckReq)->getDuration(multiTidAckLength);
+        return blockAckFrameDuration + modeSet->getSifsTime();
     }
     else
         throw cRuntimeError("Multi-Tid Block Ack Requests are not supported");

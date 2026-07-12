@@ -6,6 +6,7 @@
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerBacklogBased.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -15,7 +16,21 @@ Define_Module(HeUlSchedulerBacklogBased);
 IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const ScheduleContext& context)
 {
     Schedule result;
-    auto candidates = context.candidates;
+    std::vector<CandidateInfo> candidates;
+    auto hcf = dynamic_cast<const HeHcf *>(getParentModule());
+    for (const auto& candidate : context.candidates) {
+        bool ulMuDisable = false;
+        if (hcf != nullptr) {
+            Ieee80211HeOperatingMode peerMode;
+            if (hcf->getPeerOperatingMode(candidate.staAddress, peerMode)) {
+                ulMuDisable = peerMode.ulMuDisable;
+            }
+        }
+        if (!ulMuDisable) {
+            candidates.push_back(candidate);
+        }
+    }
+
     std::stable_sort(candidates.begin(), candidates.end(), [] (const auto& left, const auto& right) {
         if (left.anchor != right.anchor)
             return left.anchor;
