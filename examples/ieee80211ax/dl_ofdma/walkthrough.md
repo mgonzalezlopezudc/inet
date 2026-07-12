@@ -54,16 +54,45 @@ run number and seed set are deterministic.
 
 | Scenario / Config | Description | Scheduler / Function | Channel / Bandwidth | Packets Received by Clients (UDP App) |
 |---|---|---|---|---|
-| **`EqualSizedRUs_fBW`** | Bandwidth Optimization | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 47 <br> `host[1]`: 47 <br> `host[2]`: 47 <br> **Total: 141** |
-| **`EqualSizedRUs_fHoL`** | Concurrency Optimization | `HeDlSchedulerEqualSizedRUs` (fHoL) | 5 GHz (20 MHz) | `host[0]`: 43 <br> `host[1]`: 43 <br> `host[2]`: 43 <br> **Total: 129** |
-| **`BacklogBased`** | Queue-Aware Sizing | `HeDlSchedulerBacklogBased` | 5 GHz (20 MHz) | `host[0]`: 37 <br> `host[1]`: 37 <br> `host[2]`: 58 <br> **Total: 132** |
-| **`HoLMinDelay`** | Baseline Latency | `HeDlSchedulerHoLMinDelay` | 5 GHz (20 MHz) | `host[0]`: 33 <br> `host[1]`: 33 <br> `host[2]`: 65 <br> **Total: 131** |
-| **`WideBandwidth80MHz`**| 80 MHz, 8-user scaling | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (80 MHz) | `host[0..7]`: 86 each <br> **Total: 688** |
+| **`EqualSizedRUs_fBW`** | Bandwidth Optimization | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 129 <br> `host[1]`: 18 <br> `host[2]`: 127 <br> **Total: 274** |
+| **`EqualSizedRUs_fHoL`** | Concurrency Optimization | `HeDlSchedulerEqualSizedRUs` (fHoL) | 5 GHz (20 MHz) | `host[0]`: 129 <br> `host[1]`: 18 <br> `host[2]`: 127 <br> **Total: 274** |
+| **`BacklogBased`** | Queue-Aware Sizing | `HeDlSchedulerBacklogBased` | 5 GHz (20 MHz) | `host[0]`: 110 <br> `host[1]`: 28 <br> `host[2]`: 11 <br> **Total: 149** |
+| **`HoLMinDelay`** | Baseline Latency | `HeDlSchedulerHoLMinDelay` | 5 GHz (20 MHz) | `host[0]`: 2 <br> `host[1]`: 65 <br> `host[2]`: 98 <br> **Total: 165** |
+| **`WideBandwidth80MHz`**| 80 MHz, 8-user scaling | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (80 MHz) | `host[0..6]`: 155 each <br> `host[7]`: 154 <br> **Total: 1239** |
 | **`MultiTidBlockAck`** | Downlink Multi-TID Block Ack | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 115 (80 VO, 35 NC) <br> `host[1]`: 115 (80 VO, 35 NC) <br> `host[2]`: 0 <br> **Total: 230** |
+
+### Results Verification with `opp_scavetool`
+
+To verify scalar and vector results after the simulations run:
+
+```sh
+opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*app*"' examples/ieee80211ax/dl_ofdma/results/*.sca
+```
 
 ---
 
-## 3. Analysis and Insights
+## 3. PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c MultiTidBlockAck examples/ieee80211ax/dl_ofdma/omnetpp.ini --result-dir=examples/ieee80211ax/dl_ofdma/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/dl_ofdma/results/MultiTidBlockAck-#0Lan80211AxDlOfdma.ap.wlan[0].pcap -c 25
+```
+
+The decoded output timeline shows:
+1. **ADDBA negotiation**: The AP and hosts exchange Action frames (e.g. frames 3, 7, 9, 11) to establish the Block Ack agreement.
+2. **Downlink UDP traffic**: Multi-user transmissions of UDP data packets are sent by the AP to the client hosts.
+3. **Trigger/Block Ack exchanges**: The AP sends Block Ack Requests (BAR) (e.g. frame 22), and the hosts reply with Block Acks (BA) (e.g. frame 23) confirming packet delivery.
+
+---
+
+## 4. Analysis and Insights
 
 ### Concurrency vs. Spectral Efficiency (fBW vs. fHoL)
 - `EqualSizedRUs_fHoL` schedules all three stations in every MU opportunity using three 52-tone RUs. The run contains 42 three-user HE MU PPDUs and delivers `43/43/43` packets, including the single-user Block Ack bootstrap packet for each STA.

@@ -46,12 +46,12 @@ Execute the simulation using Cmdenv for either downlink or uplink direction:
 bin/inet -u Cmdenv -c MultiTidBlockAck examples/ieee80211ax/mac_features/multi_tid_block_ack/downlink.ini
 
 # Run Uplink Multi-TID Block Ack
-bin/inet -u Cmdenv -c MultiTidBlockAck examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini
+bin/inet -u Cmdenv -c UlMuMultiTidBlockAck examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini
 ```
 
 ---
 
-## Verifying Results and Model Limitations
+## Verifying Results
 
 After the simulation completes, check the results using `opp_scavetool`:
 ```sh
@@ -68,5 +68,29 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.serve
 - **`server.app[0] packetReceived:count` (TID 0)**: 1030.
 - **`server.app[1] packetReceived:count` (TID 6)**: 512.
 
-### Critical Model Realization:
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c UlMuMultiTidBlockAck examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini --result-dir=examples/ieee80211ax/mac_features/multi_tid_block_ack/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/mac_features/multi_tid_block_ack/results/UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **BSRP and Basic Triggers**: The AP broadcasts Buffer Status Report Poll (BSRP) triggers (e.g. frames 1, 6) and Basic triggers (e.g. frame 15) to coordinate multi-user uplink access.
+2. **Concurrent Uplink Traffic**: Target stations transmit UDP data frames (TID 0/6) concurrently via HE TB PPDUs (e.g. frame 11, 13, 20).
+3. **Multi-STA Block Acks**: The AP acknowledges the received frames via Block Ack frames (e.g. frames 5, 10, 19).
+
+---
+
+## Model Details and Limitations
+
 The INET 802.11ax MAC model successfully negotiates Multi-TID capability flags and routes the internal BAR/Block Ack state machinery correctly. However, the current DL/UL path creates a separate Block Ack record per request rather than packing multiple TIDs into a single physical Multi-TID Block Ack frame. Thus, this scenario is a verification of the capability negotiation and internal queue prioritization structures, not a proof of aggregated physical multi-TID transmission.

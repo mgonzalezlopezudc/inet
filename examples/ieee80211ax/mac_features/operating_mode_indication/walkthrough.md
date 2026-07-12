@@ -69,6 +69,29 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.serve
 - **`host[0..2].app[0] packetSent:count`**: 361 packets each (Total sent by hosts = 1083).
 - **`server.app[0] packetReceived:count`**: 1073.
 
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c OperatingModeIndication examples/ieee80211ax/mac_features/operating_mode_indication/omnetpp.ini --result-dir=examples/ieee80211ax/mac_features/operating_mode_indication/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/mac_features/operating_mode_indication/results/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **Uplink UDP Traffic**: Stations transmit UDP packets (e.g. frames 1, 2, 4) to the AP.
+2. **OMI Insertion**: `host[0]` (MAC `0a:aa:00:00:00:01`) transmits data frames with the HE variant HT Control field containing the OM Control subfield (e.g. frames 6, 9, 19).
+3. **AP State Update**: The AP receives these frames, extracts the OMI flags (Rx NSS 2, UL MU Disable), and updates its internal peer tracking records.
+
+---
+
 ### Under-the-Hood OMI Exchange:
 When the AP receives a frame from `host[0]` carrying the OMI field, it extracts the parameters and updates its internal peer state:
 - The AP `HeHcf` coordination module stores this state in its `peerOperatingModes` map.

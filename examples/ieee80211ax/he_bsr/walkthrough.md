@@ -99,28 +99,50 @@ opp_scavetool query -l -f "*packetReceived:count*" examples/ieee80211ax/he_bsr/r
 ```
 FullBsrAccounting-#0.sca:
 scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   3
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  520
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        743
+scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  541
+scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1034
 
 StaleBsr-#0.sca:
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   373
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  103
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1029
+scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   28
+scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  500
+scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1012
 
 ImplicitBsr-#0.sca:
 scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   0
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  3
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1419
+scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  4
+scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        2077
 ```
 
-### Interpretation of Results
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c StaleBsr examples/ieee80211ax/he_bsr/omnetpp.ini --result-dir=examples/ieee80211ax/he_bsr/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/he_bsr/results/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap -c 25
+```
+
+The decoded output timeline shows:
+1. **BSRP Triggers**: The AP broadcasts Buffer Status Report Poll (BSRP) triggers (e.g. frame 1) to poll station queue statuses. Stations respond with QoS Null frames carrying queue status (e.g. frames 2, 3, 4).
+2. **Periodic Polling**: Since the queue status expires rapidly in the `StaleBsr` configuration (10 ms age limit), the AP is forced to re-poll buffer status regularly (e.g. frames 6, 11, 16, 21), generating explicit BSRP overhead.
+
+---
+
+## Interpretation of Results
 
 1. **Explicit BSRP Polling Overhead**:
    - In `ImplicitBsr`, the AP sends **0 BSRP Triggers**. Because the STAs transmit BSRs implicitly inside uplink SU data frames during their EDCA transmit opportunities, the AP's coordinator receives regular backlog updates without having to explicitly query the STAs.
    - In `FullBsrAccounting`, the AP sends **3 BSRP Triggers**.
-   - In `StaleBsr`, the documented run rises to **373 BSRP Triggers**. Because queue status records expire after 10 ms, the scheduler repeatedly has to refresh them.
+   - In `StaleBsr`, the BSRP trigger count rises to **28 BSRP Triggers**. Because queue status records expire after 10 ms, the scheduler periodically has to refresh them.
 
 2. **Trigger-Based Scheduling vs. EDCA Throughput**:
-   - `ImplicitBsr` delivers **1419 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding. Because the AP receives these implicit reports during normal EDCA transmissions, it requires **0 explicit BSRP trigger frames** and **3 Basic Triggers** to maintain fresh queue records.
-   - `FullBsrAccounting` delivers **743 packets** and sends **520 Basic Triggers**. The constant polling and triggering overhead at 1ms check intervals limits the aggregate channel capacity, resulting in lower throughput than SU EDCA.
-   - `StaleBsr` delivers **1029 packets**. Because it spends a significant amount of time in BSRP/EDCA cycles due to the fast expiration of BSR reports, it sends fewer Basic Triggers (103) and relies more on EDCA, producing intermediate throughput.
+   - `ImplicitBsr` delivers **2077 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding. Because the AP receives these implicit reports during normal EDCA transmissions, it requires **0 explicit BSRP trigger frames** and **4 Basic Triggers** to maintain fresh queue records.
+   - `FullBsrAccounting` delivers **1034 packets** and sends **541 Basic Triggers**. The constant polling and triggering overhead at 1ms check intervals limits the aggregate channel capacity, resulting in lower throughput than SU EDCA.
+   - `StaleBsr` delivers **1012 packets**. Because it spends extra overhead in BSRP polling cycles, it sends slightly fewer Basic Triggers (500) and suffers a slight throughput reduction compared to the full baseline.

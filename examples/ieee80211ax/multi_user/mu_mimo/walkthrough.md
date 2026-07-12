@@ -93,6 +93,29 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.serve
 - **`UlMuMimo` (20 MHz, 3 STAs Uplink)**:
   - `server.app[0]`: 1021 packets received.
 
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c DlMuMimo examples/ieee80211ax/multi_user/mu_mimo/downlink.ini --result-dir=examples/ieee80211ax/multi_user/mu_mimo/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **Downlink Data and ACKs**: The AP transmits UDP data frames to the stations (e.g. frame 1, 5, 9), which acknowledge them.
+2. **Action Frame Handshake**: Stations establish block acknowledgment session configurations with the AP (e.g. frames 3, 7, 11, 13).
+3. **Sounding Verification**: Under DL MU-MIMO, trace logs show NDPA, NDP, and BFRP trigger frames coordinating channel measurement and CSI feedback between AP and clients.
+
+---
+
 ### Qtenv Watch Points:
 Launch any MU-MIMO configuration in Qtenv (`-u Qtenv`):
 1. **CSI Feedback**: Select the AP's `ap.wlan[0].mac.hcf.csiManager` module and inspect the `csiTable` watch. It shows the active CSI records containing spatial SNR and feedback timestamps collected from each sounding sequence.

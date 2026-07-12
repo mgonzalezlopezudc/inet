@@ -51,23 +51,40 @@ bin/inet -u Cmdenv -c DynamicFragmentation examples/ieee80211ax/mac_features/dyn
 
 ---
 
-## Verifying Results and Model Limitations
+## Verifying Results
 
 After the simulation completes, query the results using `opp_scavetool` or standard grepping of the `.sca` file:
 ```sh
-# Query packetSent at client applications
-opp_scavetool query -l -f 'name =~ "packetSent:count" and module =~ "*.host*app*"' examples/ieee80211ax/mac_features/dynamic_fragmentation/results/*.sca
+# Query packetSent and packetFragmented at the client hosts
+opp_scavetool query -l -f 'name =~ "packetSent:count" or name =~ "packetFragmented:count"' examples/ieee80211ax/mac_features/dynamic_fragmentation/results/*.sca
 
 # Query packetDefragmented at the AP
-opp_scavetool query -l -f 'name =~ "packetDefragmented:count" and module =~ "*.ap*recipientMacDataService*"' examples/ieee80211ax/mac_features/dynamic_fragmentation/results/*.sca
+opp_scavetool query -l -f 'name =~ "packetDefragmented:count"' examples/ieee80211ax/mac_features/dynamic_fragmentation/results/*.sca
 ```
 
 ### Quantitative Summary:
 - **`host[0..2].app[0] packetSent:count`**: 361 packets each (Total sent by hosts = 1083).
-- **`ap.wlan[0].mac.hcf.recipientMacDataService packetDefragmented:count`**: 1079.
-- **`server.app[0] packetReceived:count`**: 1079.
+- **`host[0..2].wlan[0].mac.hcf.originatorMacDataService packetFragmented:count`**: 359, 359, 360 (Total fragmented = 1078).
+- **`ap.wlan[0].mac.hcf.recipientMacDataService packetDefragmented:count`**: 1068.
+- **`server.app[0] packetReceived:count`**: 1068.
 
-### Critical Model Realization:
-In the current implementation of `HeDynamicFragmentationPolicy`, the policy checks for negotiated HE capabilities by peeking at the MAC header of the frame. However, at the point `computeFragmentSizes` is called during frame generation, the MAC header has not yet been prepended to the packet. As a result, the header lookup returns `nullptr`, and dynamic fragmentation is suppressed. Therefore, `packetFragmented:count` remains `0` on the stations.
+---
 
-However, the AP's `recipientMacDataService` still routes all incoming unfragmented packets through the defragmentation path, resulting in a `packetDefragmented:count` matching the total received packet count. This is a model limitation to be aware of when studying dynamic fragmentation in INET.
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c DynamicFragmentation examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini --result-dir=examples/ieee80211ax/mac_features/dynamic_fragmentation/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **Dynamic Frame Fragments**: Standard data frames are dynamically split into smaller fragments of approximately 504 bytes (corresponding to the `fragmentationThreshold = 500B` configuration) to fit channel opportunities (e.g. frames 1, 2, 4, 6).
+2. **Fragment ACKs**: The AP acknowledges each received fragment (e.g. frames 3, 5, 7) individually.
+3. **Reassembly**: Once the last fragment is received, the MAC layer defragments and reassembles the original QoS MSDU before passing it up to UDP, decoded by TShark as the fully reassembled UDP packet (e.g. frame 8).

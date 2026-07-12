@@ -111,24 +111,24 @@ opp_scavetool query -l -f 'name =~ "heUlBsrpTriggerSent:count" or name =~ "heUlB
 
 ```
 General-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        979
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   3
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  427
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1060
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  348
 
 MixedUora-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        208
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   103
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  111
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1037
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   101
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  396
 
 ScheduledOnly-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        2085
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   64
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  0
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1060
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  348
 
 EqualRus-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        2085
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   64
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  0
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1060
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  348
 
 UlSuMultiTidBlockAck-#0.sca:
 scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        360
@@ -143,14 +143,35 @@ scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  360
 
 UoraLightContention-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        198
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1185
 
 UoraHeavyContention-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        203
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1144
 
 UoraMoreRandomAccessRus-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        204
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1159
 ```
+
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c UlMuMultiTidBlockAck examples/ieee80211ax/ul_ofdma/omnetpp.ini --result-dir=examples/ieee80211ax/ul_ofdma/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/ul_ofdma/results/UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **BSRP Triggers**: The AP broadcasts Buffer Status Report Poll (BSRP) triggers (e.g. frame 1) to poll station queue statuses. Stations respond with QoS Null frames carrying queue size info.
+2. **Uplink UDP traffic**: The AP issues Basic Trigger frames (e.g. frame 15) scheduling uplink resources. The scheduled stations respond concurrently with their HE TB PPDU uplink transmissions.
+3. **Multi-STA Block Ack**: The AP acknowledges the concurrent uplink transmissions using a Block Ack (e.g. frame 19) confirming packet delivery.
 
 ---
 

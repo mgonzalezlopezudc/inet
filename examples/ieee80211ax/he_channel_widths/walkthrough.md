@@ -54,29 +54,51 @@ bin/inet -u Cmdenv -c Width160MHz examples/ieee80211ax/he_channel_widths/omnetpp
 Compare the total received packets and the mean end-to-end delays at the client applications:
 ```sh
 # Query total received packets at the clients
-opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.sta*app*"' examples/ieee80211ax/he_channel_widths/results/*.sca
+opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*app*"' examples/ieee80211ax/he_channel_widths/results/*.sca
 
-# Query mean end-to-end delay at the clients
-opp_scavetool query -l -f 'name =~ "endToEndDelay:histogram" and field =~ "mean"' examples/ieee80211ax/he_channel_widths/results/*.sca
+# Query end-to-end delay histograms at the clients
+opp_scavetool query -l -f 'name =~ "endToEndDelay:histogram"' examples/ieee80211ax/he_channel_widths/results/*.sca
 ```
 
 ### Quantitative Summary:
 For all configurations, the server generates 400 packets per flow (total 1600 packets). Every client receives **exactly 400 packets** (or 399 in some runs), showing 100% delivery. Since the offered load is well below the capacity of all widths, we compare the **mean end-to-end delay** to observe the performance gains:
 
-| Configuration | `sta[0]` Delay | `sta[1]` Delay | `sta[2]` Delay | `sta[3]` Delay |
+| Configuration | `host[0]` Delay | `host[1]` Delay | `host[2]` Delay | `host[3]` Delay |
 |---|---|---|---|---|
 | **`Width20MHz`** | 0.273 ms | 0.541 ms | 0.809 ms | 1.077 ms |
 | **`Width40MHz`** | 0.178 ms | 0.350 ms | 0.522 ms | 1.435 ms |
 | **`Width80MHz`** | 0.113 ms | 0.222 ms | 0.330 ms | 0.438 ms |
 | **`Width160MHz`**| 0.097 ms | 0.190 ms | 0.281 ms | 1.129 ms |
 
-### Analysis and Insights:
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c Width20MHz examples/ieee80211ax/he_channel_widths/omnetpp.ini --result-dir=examples/ieee80211ax/he_channel_widths/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/he_channel_widths/results/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap -c 20
+```
+
+The decoded output timeline shows:
+1. **ADDBA Negotiation**: Before data transfer, the AP and client hosts negotiate block acknowledgment using 802.11 Action frames (e.g. frames 3, 5).
+2. **Downlink UDP Packets**: The AP transmits UDP data frames to each client host (e.g. frames 1, 7, 11, 15) which are acknowledged by the client hosts via Block Ack frames.
+
+---
+
+## Analysis and Insights:
 
 1. **Bandwidth vs. Wire-Time Delay**:
-   - As the channel width increases, the mean delay for the first station (`sta[0]`) drops significantly: **0.273 ms** (20 MHz) $\rightarrow$ **0.178 ms** (40 MHz) $\rightarrow$ **0.113 ms** (80 MHz) $\rightarrow$ **0.097 ms** (160 MHz).
+   - As the channel width increases, the mean delay for the first station (`host[0]`) drops significantly: **0.273 ms** (20 MHz) $\rightarrow$ **0.178 ms** (40 MHz) $\rightarrow$ **0.113 ms** (80 MHz) $\rightarrow$ **0.097 ms** (160 MHz).
    - This occurs because a wider channel supports a higher physical bit rate, reducing the physical transmission duration (airtime) of the frame.
 
 2. **Sequential Delay and Ethernet Serialization**:
-   - Within each run, the delays increase sequentially: `sta[0] < sta[1] < sta[2] < sta[3]`.
+   - Within each run, the delays increase sequentially: `host[0] < host[1] < host[2] < host[3]`.
    - This is a didactically interesting artifact of **Ethernet serialization** on the server-to-AP link. The server generates packets for the four stations at the exact same simulation time. However, because the Ethernet link is serial, the packets must be transmitted one after another.
    - Packet 0 is placed on the wire first, while Packet 3 must wait for Packets 0, 1, and 2 to finish transmitting over the Ethernet cable. This creates a staggered queueing arrival time at the AP MAC layer, translating directly to sequential end-to-end delays at the client applications.

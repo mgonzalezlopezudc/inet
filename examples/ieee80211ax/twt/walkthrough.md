@@ -108,23 +108,46 @@ scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               0
 IndividualUnannounced-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtAgreementCount          2
 scalar  TwtRegression.sta[0].wlan[0].twt  twtAgreementCount          1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.2467 s
-scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.7533 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.3766 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.6234 s
 
 IndividualAnnounced-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtAgreementCount          2
 scalar  TwtRegression.sta[0].wlan[0].twt  twtAgreementCount          1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.2467 s
-scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.7533 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.3788 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.6212 s
 
 Broadcast-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtBroadcastScheduleCount  1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtBroadcastScheduleCount  1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               85.6826 s
-scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               14.3174 s
+scalar  TwtRegression.sta[1].wlan[0].twt  twtBroadcastScheduleCount  1
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               69.157 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               30.843 s
 ```
 
-### Interpretation of Results
+---
+
+## PCAP Tshark Packet Exchange Analysis
+
+To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+
+```sh
+bin/inet -u Cmdenv -c IndividualUnannounced examples/ieee80211ax/twt/omnetpp.ini --result-dir=examples/ieee80211ax/twt/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+```
+
+Use TShark to print the timeline of packet exchanges:
+
+```sh
+tshark -n -r examples/ieee80211ax/twt/results/IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap -c 26
+```
+
+The decoded output timeline shows:
+1. **Network Entry**: The client stations send Probe Requests, Authenticate, and Associate with the AP (e.g. frames 2, 3, 11, 19).
+2. **TWT Negotiation**: After association, client stations send 802.11 Action frames carrying TWT Setup Requests (e.g. frame 23), and the AP responds with Action frames containing TWT Setup Responses (Accept) (e.g. frame 25) confirming the wake schedule.
+3. **Power Saving sleep state**: Once negotiated, the client stations remain in deep sleep outside their wake service periods.
+
+---
+
+## Interpretation of Results
 
 1. **Agreement Counts**:
    - In `Baseline`, no TWT agreements are formed.
@@ -133,12 +156,8 @@ scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               14.3174 s
 
 2. **Sleep Duration**:
    - In `Baseline`, the stations sleep for **0 seconds** because TWT is disabled.
-   - In both `Individual` configs, the stations sleep for **~89.25 seconds** out of the 100-second simulation (spending only about 10.75s awake).
-   - In the `Broadcast` config, the stations sleep for **~85.68 seconds** (spending about 14.32s awake).
+   - In both `Individual` configs, the stations sleep for **~89.38 seconds** out of the 100-second simulation (spending only about 10.62s awake).
+   - In the `Broadcast` config, the stations sleep for **~69.16 seconds** (spending about 30.84s awake).
    - *Why do they sleep so much?* The UDP downlink application generates a packet every 2 seconds (`sendInterval = 2000ms`), which is much slower than the TWT wake interval (100ms). This allows the stations to remain in a low-power sleep state for the vast majority of the time, waking up only during their negotiated TWT service periods (SPs) to receive packets.
-   - *Why is Broadcast sleep time slightly shorter than Individual?* In Broadcast TWT, stations wake up at the start of the broadcast SP. If they miss Beacons due to sleeping, the broadcast schedule can expire and they must wake up, listen for a Beacon to resynchronize, and then return to sleep. This synchronization overhead results in slightly higher awake times (~14.3s vs ~10.7s in Individual configs).
-   - Awake/sleep time demonstrates scheduled radio availability. The configured
-     radio energy consumer and battery make the corresponding energy cost
-     measurable; compare consumed energy together with delivery and latency.
-     Sleep fraction alone is not an energy result, and this single workload is
-     not a general estimate of real-device battery lifetime.
+   - *Why is Broadcast sleep time shorter than Individual?* In Broadcast TWT, stations wake up at the start of the broadcast SP. If they miss Beacons due to sleeping, the broadcast schedule can expire and they must wake up, listen for a Beacon to resynchronize, and then return to sleep. This synchronization overhead results in slightly higher awake times (~30.84s vs ~10.62s in Individual configs).
+   - Awake/sleep time demonstrates scheduled radio availability. The configured radio energy consumer and battery make the corresponding energy cost measurable; compare consumed energy together with delivery and latency. Sleep fraction alone is not an energy result, and this workload is not a general estimate of real-device battery lifetime.
