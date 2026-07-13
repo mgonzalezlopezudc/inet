@@ -1,0 +1,312 @@
+{
+  "aggregation": {
+    "delay": "pooled packet p95 within run",
+    "observation": "one per run",
+    "uncertainty": "95% Student-t CI"
+  },
+  "conditions": [
+    {
+      "configuration": "SuEdcaBaseline",
+      "group": "dl",
+      "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
+      "label": "EDCA",
+      "measurement": {
+        "end_s": 0.88,
+        "start_s": 0.55
+      },
+      "metadata": {
+        "workload": "symmetric"
+      },
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#0.sca",
+          "sha256": "9bc48447fff042eeafba1eaf50b9851e13e9483b365bb82112a099f59c329637"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#0.vec",
+          "sha256": "598cca1883b7663e6877db7022fd2ada96e4228337ba127946bb34a14006478b"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#1.sca",
+          "sha256": "d36361f293eff817cd9a33e3a5b9a2c84277029ce225195867ba8789a9242638"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#1.vec",
+          "sha256": "512ca368deacc7718fc9a35af24d07f8a6691e2d77a7333d4ace5a4b829649e3"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#2.sca",
+          "sha256": "c4b48f126142b6f615d37ef7059511342aeaf2685fd272385d34aadf9244d7c9"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#2.vec",
+          "sha256": "06db6558a6be4baa7ac87f79d7de1bb7c7cdd095c302e4e2b9a6be9c3a7b563f"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#3.sca",
+          "sha256": "bd37ba886df963c9f6cd59d7e5319e9c3a485e3ca8245814b0ef7a62abc7d7fa"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#3.vec",
+          "sha256": "e96de4c8f8eb780f55b29cd93ded6d781ff90a4e94fbabc28c0dddd1913fca49"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#4.sca",
+          "sha256": "a4c07ab59774ce1b5545ab83797a956b019ede2559c46f2e1ce090043c39a007"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/SuEdcaBaseline-#4.vec",
+          "sha256": "842811edd17901bcacbf8cfeeac02a9e56d20c6f94e2b032ec89ee9738ca7a9b"
+        }
+      ]
+    },
+    {
+      "configuration": "EqualSizedRUs_fBW",
+      "group": "dl",
+      "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
+      "label": "fBW",
+      "measurement": {
+        "end_s": 0.88,
+        "start_s": 0.55
+      },
+      "metadata": {
+        "workload": "symmetric"
+      },
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#0.sca",
+          "sha256": "b58ce1744f06eeb345110e017a6f4e0c683bd49298e2d9543ceadc1412cb2dfc"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#0.vec",
+          "sha256": "147dc2519f6fd5e4b843891cd022d66af2442d0bb039d21d58bc56c29e3dccec"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#1.sca",
+          "sha256": "516324d0335feb279bc1f2d2daa3fefd1a431a5b1936ae06a2ac7031414a5589"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#1.vec",
+          "sha256": "9f0ba25cc77de7536ba7df33f82cb5bb12035ad9f46b7274c590fd40b0fefb94"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#2.sca",
+          "sha256": "e17759072dc431832e575f67e547f8d27e2c1d20a5fbdcbd50e9db41528f1888"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#2.vec",
+          "sha256": "c63b4009b8ed1c2f13e0f9c2d582e652556fe16d3c1100395c9abef4cefb78a9"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#3.sca",
+          "sha256": "76a161844ee1b23d3baf8358234506f6b496997fcaba1d03fa366ecbe7186511"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#3.vec",
+          "sha256": "45fcf90b5ea39f2824fee0725573385ff568dab38e4318b71a46cba099030595"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#4.sca",
+          "sha256": "4a48262e7a65a69b73daf77fb85f410d16089368d40cb11a50d84e5510d9836f"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#4.vec",
+          "sha256": "3ed8be764211f1c74e90d1bbadb614c7ce5d9e11c6827264112531c9592b571d"
+        }
+      ]
+    },
+    {
+      "configuration": "EqualSizedRUs_fHoL",
+      "group": "dl",
+      "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
+      "label": "fHoL",
+      "measurement": {
+        "end_s": 0.88,
+        "start_s": 0.55
+      },
+      "metadata": {
+        "workload": "symmetric"
+      },
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#0.sca",
+          "sha256": "1e5f5f71430661089186184c498dcb6664425f5008c4c75abadd3297b4f9084b"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#0.vec",
+          "sha256": "4d8fadefe8035d91d7c4d1f8a2da08c4e3f5b6775b1eb5413becda9886db0067"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#1.sca",
+          "sha256": "ef8ec183e256daca8b5f23b728ecb5c36430d9915d38c26c27d55ac2c88bc606"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#1.vec",
+          "sha256": "9aaf0bc7ea4d827e3bcee602dd395edb2547009fffe8c6b23373544f0fe4a266"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#2.sca",
+          "sha256": "39a85513793ee1a19d5824a880f62eb467671f0793bca045e126e40b71c79636"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#2.vec",
+          "sha256": "474517e2e15d0f783bff3a44ef3e98f7a3c635354fe85b37c0ddd366c4fdca7d"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#3.sca",
+          "sha256": "6f02e0d64b35ee7f6805ff0a1b0481656ba60ca3fd2219fab0c65e89b6520268"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#3.vec",
+          "sha256": "2d6a037d80b036bf1721edeadee3a1489bd6938fc169571e9fe420c0d06edb3c"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#4.sca",
+          "sha256": "91913c24f808b60c62d186efe9ca890a9e23d3b305f21a82f5f790c6872e28b0"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fHoL-#4.vec",
+          "sha256": "574d6ebd14e01396be3e5ff868cac8ae439ffa8564f9c6ae5e4a76764f57a6fd"
+        }
+      ]
+    },
+    {
+      "configuration": "BacklogBased",
+      "group": "dl",
+      "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
+      "label": "Backlog",
+      "measurement": {
+        "end_s": 0.88,
+        "start_s": 0.55
+      },
+      "metadata": {
+        "offered_bps_by_index": [
+          80000000,
+          8000000,
+          800000
+        ],
+        "workload": "asymmetric"
+      },
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#0.sca",
+          "sha256": "4cf8f5517541ce26bbdc70ced60b8609a9276667b7617ccce3c48492a71fb1e8"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#0.vec",
+          "sha256": "a42b2282885600f48ddaa6270fd70c8132d2442f77e7d874e687eba080cb7ee3"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#1.sca",
+          "sha256": "f0dfeaa61c00b3634cfd4ad0037827d25a4d32f3c671f6521673188c6d39260a"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#1.vec",
+          "sha256": "b83ccfa80754d3351d719bfe4c0590eeaee67e0b1b12c520cd35348c7b1784ee"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#2.sca",
+          "sha256": "cb96822ed180b5be0c41515f085933998f6c7f6a0fbaa9c77170e58f216fb1a2"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#2.vec",
+          "sha256": "ee6a65c6658b61b381421531ac6e4338ffa8f8ee71eab877692c10266ee2b0fe"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#3.sca",
+          "sha256": "667b5be9b119c76f6d68d3d9435c2311847bc3102edc3837948da7dbee35879b"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#3.vec",
+          "sha256": "8a6148b19e97cfbe1f79ebac32c92a77bfb98494eb9708e82bbe590f7d4112ea"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#4.sca",
+          "sha256": "254c9ef31d14ef93d41e035296c5edfcd1c115fc2c30af0ea10b80a05ab8a163"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/BacklogBased-#4.vec",
+          "sha256": "bab60dfb8aa0ee690cd7ee44ee07bfef85bd7fda9b9a6bea77ebdd963c3c2cd4"
+        }
+      ]
+    },
+    {
+      "configuration": "HoLMinDelay",
+      "group": "dl",
+      "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
+      "label": "HoL min delay",
+      "measurement": {
+        "end_s": 0.88,
+        "start_s": 0.55
+      },
+      "metadata": {
+        "offered_bps_by_index": [
+          80000000,
+          8000000,
+          800000
+        ],
+        "workload": "asymmetric"
+      },
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#0.sca",
+          "sha256": "6cf8fbfbf7b8c3f4f7b2e67e1b21c8e814158da5fe751105359270cb09daa156"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#0.vec",
+          "sha256": "89b79c693e7a36767d35287badf153664583a57cd0e2f00b559acb2061c0484a"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#1.sca",
+          "sha256": "5754241cab54202ce280623ba48d89575945d538bae9ad9c09707311ea102a04"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#1.vec",
+          "sha256": "42e5492f424a2cc31b7c8bd9d088c64417f5de3a5c51f5146b5502cc46e5d059"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#2.sca",
+          "sha256": "55cb27c6d7b4810552669b7dadd7feadbabfdf410dfc46f44f5649b5d6a9faf3"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#2.vec",
+          "sha256": "b2f96a25988ab4baa2e8cb15fa3ec41996cbb141bb0b86c99609ce705e72b63a"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#3.sca",
+          "sha256": "7674f1d867147c411fc8d6f69184ce68f389e400b2f61420da8a55a579fd9b7f"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#3.vec",
+          "sha256": "8e4a6d0987eeb4f1417705dcd1f467d4d7a6ae960e31aaa20f3d810e2b709148"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#4.sca",
+          "sha256": "b592593e377ff754337e2bb1bb7b78d6eb7685b3cc65f3edb92ddd11b7924fae"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/HoLMinDelay-#4.vec",
+          "sha256": "cdc9ff1dcf626687170536c1becf7e4d3a913ce695c1cd8c8c0f086859e299f8"
+        }
+      ]
+    }
+  ],
+  "extra": {},
+  "figure": "examples/ieee80211ax/analysis/figures/dl/dl-scheduler-dashboard.png",
+  "git_revision": "45bfc81f91965732c0229b6b5eaf9b6170611577",
+  "result_filters": [
+    {
+      "module": "**.app[*]",
+      "name": "packetReceived:vector(packetBytes)",
+      "type": "vector",
+      "unit": "B"
+    },
+    {
+      "module": "**.app[*]",
+      "name": "endToEndDelay:vector",
+      "type": "vector",
+      "unit": "s"
+    }
+  ],
+  "schema_version": 1
+}

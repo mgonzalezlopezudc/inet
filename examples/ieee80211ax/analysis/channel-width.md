@@ -1,10 +1,9 @@
-# Channel-width plots
+# HE channel width
 
-The dashboard shows aggregate application goodput, goodput normalized by
-configured channel width, and the packet-delay ECDF. Wider channels should
-increase raw capacity, but goodput per Hz reveals whether that bandwidth is
-used efficiently. At the cell edge, wider bandwidth may reduce delivery due to
-the noise-integration and sensitivity penalty.
+![Channel-width dashboard](figures/width/channel-width-dashboard.png)
 
-Widths are read from the dataset labels (`20`, `40`, `80`, or `160` MHz), while
-goodput and delay come from native OMNeT++ results.
+IEEE Std 802.11-2024 represents full 20, 40, 80, and 160 MHz HE channel widths in the PHY TXVECTOR/RXVECTOR parameters (Table 27-1, `80211ax-2024:chunk:10001`) and advertises supported widths through HE PHY capabilities (Table 9-376, `80211ax-2024:chunk:03627`–`03633`). More bandwidth supplies more tones, but MAC/PHY overhead, RU partitioning, sensitivity, and traffic determine realized goodput.
+
+The four configurations keep topology, MCS family, scheduler, packet size, offered load, seed mapping, and measurement interval fixed. A 1000-byte, 0.25 ms per-flow workload keeps all widths backlogged while reducing the tiny-packet overhead that previously hid width scaling. Each configuration uses the matching receiver bandwidth and nominal HE rate.
+
+The expected result is monotonically increasing aggregate goodput, with sublinear scaling and declining or nonconstant spectral efficiency because fixed overhead does not scale with width. The ECDF is explicitly run 0; bars and confidence intervals use run-level observations. This is an idealized close-range capacity experiment, not evidence that 160 MHz is superior at a cell edge or in congested spectrum.

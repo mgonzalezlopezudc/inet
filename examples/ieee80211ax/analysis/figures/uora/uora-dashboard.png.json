@@ -1,0 +1,181 @@
+{
+  "aggregation": {
+    "observation": "one value per run",
+    "uncertainty": "95% Student-t CI"
+  },
+  "conditions": [
+    {
+      "configuration": "UoraLightContention",
+      "group": "uora",
+      "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "label": "Light, 1 RA-RU",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#0.sca",
+          "sha256": "58c1494eb31b2b12f6f27aa262b59b3cbca506c9895f1ce51a69a1fc00f1445e"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#0.vec",
+          "sha256": "b894664c20f434572bf902f830b7b2c745529ad1f69d62c5e161a2b42aa472ca"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#1.sca",
+          "sha256": "67f00fa3a35c62cc5694ecbb8f44c7c06463b0c00887cef724b023b9be18968b"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#1.vec",
+          "sha256": "06838778e457bc178b0675a1c1ec266e6dc600a800563707534c63ccef464927"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#2.sca",
+          "sha256": "14644dc7a1107b91591de19e923fc90bbd04818768b33f5db46e561ac2813e63"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#2.vec",
+          "sha256": "3bd5e244f4472f0515808e05a0a7c115f4508d08b189dbbf6bee6ea0b160a1ff"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#3.sca",
+          "sha256": "d9ba53b9e80ca4c2ce402b2188d98b8ac6473300dfcf6b864179a822a5bf3bc2"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#3.vec",
+          "sha256": "e46d4b3d5ee7c2efe9ebc506a103b9599f60a89ed7ac3949ba097395beeb5037"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#4.sca",
+          "sha256": "04700de0174cafdcc402172600ccedf79af2943fa9666e02053e28ab2286d7c7"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#4.vec",
+          "sha256": "cb795c976ac48d45653a7e28cbbb76dedee728a138990ba665ef077f946506e7"
+        }
+      ]
+    },
+    {
+      "configuration": "UoraHeavyContention",
+      "group": "uora",
+      "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "label": "Heavy, 1 RA-RU",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#0.sca",
+          "sha256": "380c976abe63d44388c4ced1537ab44c1465f1611dc026668f5b8248a8144964"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#0.vec",
+          "sha256": "6e763a63fb6e5ff050005a3b96afa4b09fb37e0eb896c45e30ca5c228707777d"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#1.sca",
+          "sha256": "26f1982158ae04294e96e783353edf3f0d30be03ff4fef74afd1e617a60c90e1"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#1.vec",
+          "sha256": "68a2c39349c86ad242984d771c6e374fb5ac7a0670fcc311447e1553c063ea8c"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#2.sca",
+          "sha256": "d8edaab331ce324be4c3a13b3935093effa769749131e7c2201a98beada4fb57"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#2.vec",
+          "sha256": "9366349653192ae71c5c05ee55f5e6fc314421204ea155d5691c3e70d258e056"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#3.sca",
+          "sha256": "7eb8f3caa87dd5a3dfa1e46c8530c9c513632200a96cdda50e21ad0fd7b05772"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#3.vec",
+          "sha256": "330f8aad1bd61cbce3f37100a79a33186b255ed2995b566e6e669e3260e422c7"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#4.sca",
+          "sha256": "7431c9a2a1f8e0e25d1509561a2e37b4cd8351f0f83076b28cc06967fb5f12f3"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#4.vec",
+          "sha256": "d0177e96b114e3b7451f703ac724ee8deb61fd304b3708b4972975169f5d9ed1"
+        }
+      ]
+    },
+    {
+      "configuration": "UoraMoreRandomAccessRus",
+      "group": "uora",
+      "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "label": "Heavy, 3 RA-RUs",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#0.sca",
+          "sha256": "e74f2d21e0bbb5d256bfea53556e65ee8ae8bfc337ff04ccc6194a09dd73db8c"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#0.vec",
+          "sha256": "12b7ad82a72cc24ad45c704410cf599e6917b40cc50ab24a4ebf210a7a0a8fd2"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#1.sca",
+          "sha256": "2fd998e9443354bfeb0822cdbd1a0baf3e4b93aed458365e540723a5d6c52303"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#1.vec",
+          "sha256": "a93de692f6f807aa52884a8a8c944577c396423b37dd23c1ce84201e48ad8c68"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#2.sca",
+          "sha256": "f777ba9f27303dfb71892267ecf5410f0f008a5f5b98f77d78bee50a94255f23"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#2.vec",
+          "sha256": "8c98032700e96b5fe7badf4e67c6b5551d90b607a7e3c8df0aa358c0c1f647f1"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#3.sca",
+          "sha256": "445a1836eef88004214212841448bfc48ab746b46acb6d1b7c63f2db02d92f6d"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#3.vec",
+          "sha256": "af6d360ab05cc24244a216da2633a5c7075f868d09c06d2d61a0a67f120279ea"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#4.sca",
+          "sha256": "3f53ef61de1098b3fc87bf93d31c9d66c6d0c0de84c9da5a8a3535e8a61d904b"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#4.vec",
+          "sha256": "762f0df7e3e21d99ae49ddb57a9d3bc22862a87adecacd925f4424183ad5d1a4"
+        }
+      ]
+    }
+  ],
+  "extra": {},
+  "figure": "examples/ieee80211ax/analysis/figures/uora/uora-dashboard.png",
+  "git_revision": "45bfc81f91965732c0229b6b5eaf9b6170611577",
+  "result_filters": [
+    {
+      "name": "heUlRandomAccessAttempt:count",
+      "type": "scalar"
+    },
+    {
+      "name": "heUlRandomAccessSuccess:count",
+      "type": "scalar"
+    }
+  ],
+  "schema_version": 1
+}

@@ -156,7 +156,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             [this] (const auto& allocation) {
                 return !allocation.randomAccess && isTwtSleeping(mac, allocation.staAddress);
             }), ulSchedule.allocations.end());
-    auto puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(), channelBandwidth);
+    auto puncturedSubchannels = resolveHePreamblePuncturing(this, channelBandwidth);
     if (!puncturedSubchannels.empty()) {
         for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
             if (puncturedSubchannels[i])

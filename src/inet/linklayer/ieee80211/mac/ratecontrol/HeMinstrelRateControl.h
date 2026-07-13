@@ -93,6 +93,8 @@ class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211
     simsignal_t selectedNssSignal;
     simsignal_t probeSignal;
     simsignal_t successProbabilitySignal;
+    simsignal_t txSuccessSignal;
+    simsignal_t retryCountSignal;
 
   protected:
     virtual void initialize(int stage) override;

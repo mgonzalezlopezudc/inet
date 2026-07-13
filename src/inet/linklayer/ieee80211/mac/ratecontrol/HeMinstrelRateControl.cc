@@ -45,6 +45,8 @@ void HeMinstrelRateControl::initialize(int stage)
         selectedNssSignal = registerSignal("heRateSelectedNss");
         probeSignal = registerSignal("heRateProbe");
         successProbabilitySignal = registerSignal("heRateSuccessProbability");
+        txSuccessSignal = registerSignal("heRateTxSuccess");
+        retryCountSignal = registerSignal("heRateRetryCount");
         WATCH(peers);
     }
 }
@@ -209,6 +211,8 @@ void HeMinstrelRateControl::reportHeTxResult(const MacAddress& peer, int mcs,
     stats.ewmaSuccessProbability = ewmaWeight * stats.ewmaSuccessProbability +
             (1 - ewmaWeight) * sample;
     emit(successProbabilitySignal, stats.ewmaSuccessProbability);
+    emit(txSuccessSignal, success ? 1L : 0L);
+    emit(retryCountSignal, (long)retryCount);
 }
 
 void HeMinstrelRateControl::reportHeRxSnir(const MacAddress& peer, double snirDb)
@@ -240,9 +244,17 @@ const IIeee80211Mode *HeMinstrelRateControl::getRate()
 void HeMinstrelRateControl::frameTransmitted(Packet *frame, int retryCount, bool isSuccessful, bool isGivenUp)
 {
     if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(currentMode)) {
+        auto peer = getReceiverAddress(frame);
         auto mcs = heMode->getDataMode()->getModulationAndCodingScheme();
-        reportHeTxResult(getReceiverAddress(frame), mcs->getMcsIndex(), mcs->getNumNss(),
+        reportHeTxResult(peer, mcs->getMcsIndex(), mcs->getNumNss(),
                 0, retryCount, isSuccessful && !isGivenUp, frame == nullptr ? 0 : frame->getByteLength());
+        // The ordinary SU frame path obtains the next mode through getRate(),
+        // rather than through an HE MU scheduler. Install the per-peer choice
+        // here so that feedback affects the next SU transmission as well.
+        Constraints constraints;
+        auto selection = selectHeMode(peer, Hz(NaN), 0, 0, maxNss, constraints);
+        if (selection.mode != nullptr)
+            currentMode = selection.mode;
     }
 }
 

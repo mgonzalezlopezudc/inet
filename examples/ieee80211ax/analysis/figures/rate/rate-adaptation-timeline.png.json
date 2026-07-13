@@ -1,0 +1,86 @@
+{
+  "aggregation": {
+    "timeline": "representative run 0; no cross-peer inference"
+  },
+  "conditions": [
+    {
+      "configuration": "HeMinstrelMobile",
+      "group": "rate",
+      "ini": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+      "label": "Mobile HE Minstrel",
+      "measurement": {
+        "end_s": 1.7,
+        "start_s": 0.5
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#0.sca",
+          "sha256": "d85ec622fad6cae4c17cde9b00458691c75c49aaf8093cccd4e68094d661871b"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#0.vec",
+          "sha256": "874cc136dd8a192819b40ba6980548f566b2781636b06fe38cc5ebc270e5d4e6"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#1.sca",
+          "sha256": "41e2d4a04fcb948592b26aede9f3769977423951c4b3a9a736986c4e87c443c0"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#1.vec",
+          "sha256": "5d985460ca2cb22ac15deac3324615bae98d933891d120fdee3ace98aaf1c43b"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#2.sca",
+          "sha256": "67cdbf0e35308a8279a4ffd1c9b9c9ea133587409a11090f36e47faae1e91e20"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#2.vec",
+          "sha256": "957cc7dc00984fa156a52378b2d7033cc4f7ae617bc095086e33253929c2aeac"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#3.sca",
+          "sha256": "2f3d6719bc6e0e4341752fe18ee4292feb7e122758633514643205c8c4a4a6ec"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#3.vec",
+          "sha256": "f0166718f2e1b00503f69b8d11f7b589098fcb0601aefaed3bcbbfb81f569037"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#4.sca",
+          "sha256": "e9180f2ee9d46038dfb0d9a044ba1fbb0689ca6507c4506b9e882bec93b4d607"
+        },
+        {
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/HeMinstrelMobile-#4.vec",
+          "sha256": "5f149735d86c7d0eb81a847aa1a578ab32c13e8716f29ab5ecdd8f3c54cce182"
+        }
+      ]
+    }
+  ],
+  "extra": {},
+  "figure": "examples/ieee80211ax/analysis/figures/rate/rate-adaptation-timeline.png",
+  "git_revision": "45bfc81f91965732c0229b6b5eaf9b6170611577",
+  "result_filters": [
+    {
+      "module": "**.rateControl",
+      "name": "heRateSelectedMcs:vector",
+      "type": "vector"
+    },
+    {
+      "module": "**.rateControl",
+      "name": "heRateSelectedNss:vector",
+      "type": "vector"
+    },
+    {
+      "module": "**.rateControl",
+      "name": "heRateSuccessProbability:vector",
+      "type": "vector"
+    },
+    {
+      "module": "**.rateControl",
+      "name": "heRateTxSuccess:vector",
+      "type": "vector"
+    }
+  ],
+  "schema_version": 1
+}

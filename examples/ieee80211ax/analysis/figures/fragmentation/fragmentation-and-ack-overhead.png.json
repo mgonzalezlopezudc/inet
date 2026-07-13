@@ -1,0 +1,190 @@
+{
+  "aggregation": {
+    "airtime": "per-run sums with 95% t CI",
+    "frame_sizes": "ECDF from run 0"
+  },
+  "conditions": [
+    {
+      "configuration": "DynamicFragmentation",
+      "group": "fragmentation",
+      "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
+      "label": "Dynamic",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#0.sca",
+          "sha256": "3c0f3055f4f173fdf9d0417483d0453e3e645b219606b413fd67cf46c8e35880"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#0.vec",
+          "sha256": "df6744da58ff071f8ffb39efe5f7c94b8bb1dd2b0f70b552dc367024fe3edc4c"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#1.sca",
+          "sha256": "fe20212100b992082486d207632ee89650e4b70050ae764a2ba936087cd341bd"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#1.vec",
+          "sha256": "9e617d577c12666b4ffc9ccc0489d4239e27fa37b9bb1d004b6f4f1222d30aec"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#2.sca",
+          "sha256": "b67cea2a61230252f3959e2a7510e4ed406bda08490a226493e27691bac29e1e"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#2.vec",
+          "sha256": "32f595d90f3247cb8200469baf9b6604ec3373b53d547d9fa16693e56f33d75f"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#3.sca",
+          "sha256": "60ebf28df14123cf2b4d4868f7bda5921ddc6c986f726c10b1bb29996dda1622"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#3.vec",
+          "sha256": "f4bc8a73d473a65c59c6a212634066c6394963fa01da54bf39e2175307600e3a"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#4.sca",
+          "sha256": "432680a109bf2a5b15f862260dbe00e755fe03bf3179d600334d7065f0611502"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/DynamicFragmentation-#4.vec",
+          "sha256": "ac702df623ecf7b365e0c027865f2d2d2bd352227ac1f2aa8b11aa0ebe9d4bad"
+        }
+      ]
+    },
+    {
+      "configuration": "StaticFragmentation",
+      "group": "fragmentation",
+      "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
+      "label": "Static",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#0.sca",
+          "sha256": "8f0ef3b8e819b1d462d40558380d9885f46c48fc7237b2bd50db82a52778d7ef"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#0.vec",
+          "sha256": "6770f4a66696aa3bf87920b982a89d1d22ae4aad7e4538cc6a2706c905574954"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#1.sca",
+          "sha256": "42fe673aac1468bd0a09777a8621587f5803ba457c5ec39986047a6630579327"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#1.vec",
+          "sha256": "d49679b114766e53b88b7b7a530be42a7212ebf90a0e7a36ae7f27c9d4f0a86e"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#2.sca",
+          "sha256": "2a2d09020cedbfec1fc5d17fc4fa35bf69e83731fe1f2f9be38d52a408f8066f"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#2.vec",
+          "sha256": "c59433b84678db7caff80b2b2119c1b3592ee11f748bb30bad6d700d5823152b"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#3.sca",
+          "sha256": "61db01da7ffc355b690d6cf3ba17f782eb555a47a651688715d8b070eca5e06f"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#3.vec",
+          "sha256": "fb51ff8840d59cb8718db49dcb32183e70868b1989e5efe6732a760c5686833a"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#4.sca",
+          "sha256": "be9004c7a96b6d62f082add88fa8d9050f76b113d2bfda9ca8bf260d6353396e"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/StaticFragmentation-#4.vec",
+          "sha256": "036a87faec304486808581fcad0068901730f9d50145ed34feedd3596bed8f8c"
+        }
+      ]
+    },
+    {
+      "configuration": "NoFragmentation",
+      "group": "fragmentation",
+      "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
+      "label": "Unfragmented",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#0.sca",
+          "sha256": "077d2054d72cc8ee1a588fb2c2c4061733a9bb92a3aac7f4106b170d9f9c5a12"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#0.vec",
+          "sha256": "97a38b2c4e01769440b46690cfcd4292fad4f978ff5aaf618b59d98f69243e51"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#1.sca",
+          "sha256": "71735419921feb13df9f3dfc5a3641197a6a3e4d9120ac2f82f4dcade804a682"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#1.vec",
+          "sha256": "8a7c2e485920eae0fb8b0973219fa04c371a48c6dc59ead4ad451c00225264fb"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#2.sca",
+          "sha256": "d076139c8119840162e5f234236998ed8345f3f0ecf92fec8333ed72aedb3e64"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#2.vec",
+          "sha256": "8e02d17945c5d6169fbafd3c64ccb9ddce28fe2c1352ad9749b4aa908fbaecdd"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#3.sca",
+          "sha256": "def46973a1216e9c56f9545756a2c78dabe6d339960163d820cc7a692f9501a1"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#3.vec",
+          "sha256": "b7d24801e70e0fa16e1b2503a543eed29d372b68cd9f1a8d632f632e52c6e4d6"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#4.sca",
+          "sha256": "14ea52383b7a642a6a9d118ecbcdbbbcadf54a171c8e463e167a8f1967a60bfa"
+        },
+        {
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/NoFragmentation-#4.vec",
+          "sha256": "16f3cb5a89da2211b570bffbea94172bf2615cdfcb0b913bddae52c0335524f2"
+        }
+      ]
+    }
+  ],
+  "extra": {},
+  "figure": "examples/ieee80211ax/analysis/figures/fragmentation/fragmentation-and-ack-overhead.png",
+  "git_revision": "45bfc81f91965732c0229b6b5eaf9b6170611577",
+  "result_filters": [
+    {
+      "module": "**.host[*].wlan[0].mac.hcf",
+      "name": "packetSentToPeer:vector(packetBytes)",
+      "type": "vector",
+      "value_semantics": "bytes from packetBytes recorder"
+    },
+    {
+      "module": "**.radio",
+      "name": "acknowledgmentFrameType:vector",
+      "type": "vector"
+    },
+    {
+      "module": "**.radio",
+      "name": "acknowledgmentAirtime:vector",
+      "type": "vector",
+      "unit": "s"
+    }
+  ],
+  "schema_version": 1
+}
