@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "default_repetitions": 5,
+  "groups": {
+    "fragmentation": {
+      "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.2, "end": 2.0},
+      "output": "examples/ieee80211ax/analysis/figures/fragmentation/fragmentation-and-ack-overhead.png",
+      "conditions": [
+        {"label": "Dynamic", "config": "DynamicFragmentation"},
+        {"label": "Static", "config": "StaticFragmentation"},
+        {"label": "Unfragmented", "config": "NoFragmentation"}
+      ]
+    },
+    "uora": {
+      "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/ul_ofdma/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.2, "end": 2.0},
+      "output": "examples/ieee80211ax/analysis/figures/uora/uora-dashboard.png",
+      "conditions": [
+        {"label": "Light, 1 RA-RU", "config": "UoraLightContention"},
+        {"label": "Heavy, 1 RA-RU", "config": "UoraHeavyContention"},
+        {"label": "Heavy, 3 RA-RUs", "config": "UoraMoreRandomAccessRus"}
+      ]
+    },
+    "twt": {
+      "ini": "examples/ieee80211ax/twt/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/twt/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 10.0, "end": 100.0},
+      "output": "examples/ieee80211ax/analysis/figures/twt/twt-state-and-energy.png",
+      "conditions": [
+        {"label": "Baseline", "config": "BaselineEnergy", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "TWT", "config": "TwtEnergySaving", "metadata": {"minimum_delivery_ratio": 0.95, "sink_module_regex": "\\.server\\.app\\["}}
+      ]
+    },
+    "rate": {
+      "ini": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/he_rate_adaptation/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.5, "end": 1.7},
+      "output": "examples/ieee80211ax/analysis/figures/rate/rate-adaptation-timeline.png",
+      "conditions": [
+        {"label": "Mobile HE Minstrel", "config": "HeMinstrelMobile"}
+      ]
+    },
+    "puncturing": {
+      "ini": "examples/ieee80211ax/he_features/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/he_features/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.25, "end": 0.95},
+      "output": "examples/ieee80211ax/analysis/figures/puncturing/puncturing-frequency-allocation.png",
+      "conditions": [
+        {"label": "Clean", "config": "CleanChannelBaseline"},
+        {"label": "Interference, unpunctured", "config": "LegacyInterferenceWithoutPuncturing"},
+        {"label": "Interference, punctured", "config": "PreamblePuncturingUnderInterference"},
+        {"label": "Runtime puncturing", "config": "DynamicPuncturing"}
+      ]
+    },
+    "mimo": {
+      "ini": "examples/ieee80211ax/multi_user/mu_mimo/downlink.ini",
+      "result_dir": "examples/ieee80211ax/multi_user/mu_mimo/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.55, "end": 0.88},
+      "output": "examples/ieee80211ax/analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png",
+      "conditions": [
+        {"label": "20 MHz OFDMA", "config": "EqualSizedRUs_fBW", "result_dir": "examples/ieee80211ax/dl_ofdma/results"},
+        {"label": "20 MHz MU-MIMO", "config": "DlMuMimo"}
+      ]
+    },
+    "bss": {
+      "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/bss_coloring/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.2, "end": 0.95},
+      "output": "examples/ieee80211ax/analysis/figures/bss/bss-coloring-comparison.png",
+      "conditions": [
+        {"label": "Disabled", "config": "BssColoringDisabled"},
+        {"label": "Conservative", "config": "ObssPdConservative"},
+        {"label": "Enabled", "config": "BssColoringEnabled"},
+        {"label": "Aggressive", "config": "ObssPdAggressive"},
+        {"label": "Color collision", "config": "BssColoringCollision"}
+      ]
+    },
+    "width": {
+      "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/he_channel_widths/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.2, "end": 0.43},
+      "output": "examples/ieee80211ax/analysis/figures/width/channel-width-dashboard.png",
+      "conditions": [
+        {"label": "20 MHz", "config": "Width20MHz", "metadata": {"bandwidth_mhz": 20}},
+        {"label": "40 MHz", "config": "Width40MHz", "metadata": {"bandwidth_mhz": 40}},
+        {"label": "80 MHz", "config": "Width80MHz", "metadata": {"bandwidth_mhz": 80}},
+        {"label": "160 MHz", "config": "Width160MHz", "metadata": {"bandwidth_mhz": 160}}
+      ]
+    },
+    "dl": {
+      "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/dl_ofdma/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.55, "end": 0.88},
+      "output": "examples/ieee80211ax/analysis/figures/dl/dl-scheduler-dashboard.png",
+      "conditions": [
+        {"label": "EDCA", "config": "SuEdcaBaseline", "metadata": {"workload": "symmetric"}},
+        {"label": "fBW", "config": "EqualSizedRUs_fBW", "metadata": {"workload": "symmetric"}},
+        {"label": "fHoL", "config": "EqualSizedRUs_fHoL", "metadata": {"workload": "symmetric"}},
+        {"label": "Backlog", "config": "BacklogBased", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [80000000, 8000000, 800000]}},
+        {"label": "HoL min delay", "config": "HoLMinDelay", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [80000000, 8000000, 800000]}}
+      ]
+    },
+    "bsr": {
+      "ini": "examples/ieee80211ax/he_bsr/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/he_bsr/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.2, "end": 1.9},
+      "output": "examples/ieee80211ax/analysis/figures/bsr/bsr-reported-vs-scheduled.png",
+      "conditions": [
+        {"label": "Fresh BSR", "config": "BurstyTraffic"},
+        {"label": "Stale BSR", "config": "StaleBsr"}
+      ]
+    }
+  }
+}

@@ -49,6 +49,9 @@ module HeHcf extends Hcf
         // Bit 0 denotes the primary 20 MHz subchannel. Empty keeps the
         // legacy unpunctured channel; puncturing is supported for 80/160 MHz.
         string hePreamblePuncturing = default("");
+        string dynamicHePreamblePuncturing = default(""); // Runtime mask used only inside the configured interval
+        double dynamicHePreamblePuncturingStart @unit(s) = default(-1s);
+        double dynamicHePreamblePuncturingEnd @unit(s) = default(-1s); // Negative keeps the runtime mask active indefinitely
         bool enableDlMuMimo = default(false); // Enables HE downlink MU-MIMO sounding and transmission
         double csiValidityDuration @unit(s) = default(0.1s); // Validity duration of sounding CSI measurements
         double defaultCsiLeakage = default(0.1); // Default inter-user interference leakage factor

@@ -1,0 +1,127 @@
+{
+  "aggregation": {
+    "timeline": "representative run 0; event-driven step observations"
+  },
+  "conditions": [
+    {
+      "configuration": "BurstyTraffic",
+      "group": "bsr",
+      "ini": "examples/ieee80211ax/he_bsr/omnetpp.ini",
+      "label": "Fresh BSR",
+      "measurement": {
+        "end_s": 1.9,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#0.sca",
+          "sha256": "6f1b806770761b04556cc8f7c09e808e01343bc670f56a2c3c351ba01a36eafe"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#0.vec",
+          "sha256": "3ae6b847f8fd56c26c9b460bbf7c8ec955a94561a9de1c6486939bb9270a86ca"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#1.sca",
+          "sha256": "1ed8bf0a1373d5b9d62d8f3175eca31fb72e3593300084ce323f2cf09af379d1"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#1.vec",
+          "sha256": "d7eb240c10fe0c93e05a69b728bc938f9d7d22cf8115f6cfe5dc15af51ab1ace"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#2.sca",
+          "sha256": "26bb30fee4b73b496e66f03f63bccbed60182a525ec6705dc8f18d92c5af1308"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#2.vec",
+          "sha256": "6d9ef80a1b0ea4d3f8c3d8a54d4d50ff99ebe17ef13cf8382315f649834952c5"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#3.sca",
+          "sha256": "54fd2a64657fec2a2bdf76904ddf8990ddad75b9d72cd0e2d3e4c85570dfd599"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#3.vec",
+          "sha256": "7776be6a98037eaf38f2fb55b291aa3aabd6860ecc9bc332ff3cc7fb1554b149"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#4.sca",
+          "sha256": "68ae5ab0e8c77f38ea0fcf2333c2b31c62ffab295027df9456569a3b15180f04"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#4.vec",
+          "sha256": "dfb8ec0542c6ae53f797d1acf1e1229dd8a72dbca5ab8f0ae995b9c658fe44cf"
+        }
+      ]
+    },
+    {
+      "configuration": "StaleBsr",
+      "group": "bsr",
+      "ini": "examples/ieee80211ax/he_bsr/omnetpp.ini",
+      "label": "Stale BSR",
+      "measurement": {
+        "end_s": 1.9,
+        "start_s": 0.2
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#0.sca",
+          "sha256": "2db240765883cc3179be6858749388e075e83b83ee700822b7c3d864216dbde8"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#0.vec",
+          "sha256": "33c4eed55b035e86b690f5ac583403db88896e4626df8a873471b7b0e2bafe67"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#1.sca",
+          "sha256": "e207bfb9f94fd6137e537a7849fe5ff48863e3af0e6bf5ee711ae9ca5754be42"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#1.vec",
+          "sha256": "7db01af44cc17bc5441a89c5df678281de5086713988530623397132059c6425"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#2.sca",
+          "sha256": "aaf4ae8243abbca7e61f3ecbd85d5d0a663f57a86b854ba9b62c754aa2dc9285"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#2.vec",
+          "sha256": "1b04b2fe7de1e32bd60b03bad4fac19206aa5d5f785372b2fd7aeb8044c7df82"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#3.sca",
+          "sha256": "cb07d6522f0fdf1a82b11b9bd8483a5feba97743a1e8eceacbf6833befe2d0cc"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#3.vec",
+          "sha256": "36a36d470a2e592ff064741cfeaea95a835ada98f2443b8855a23bbd97e6c4f7"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#4.sca",
+          "sha256": "68bc689bde9dd576538211ce82967f52d2139bcdd63c5b902d865898229352fc"
+        },
+        {
+          "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#4.vec",
+          "sha256": "7705d8ce4422e30f15695ba065f8b2a71aa51c2ea06d6ff6443c49af8c3654ce"
+        }
+      ]
+    }
+  ],
+  "extra": {},
+  "figure": "examples/ieee80211ax/analysis/figures/bsr/bsr-reported-vs-scheduled.png",
+  "git_revision": "45bfc81f91965732c0229b6b5eaf9b6170611577",
+  "result_filters": [
+    {
+      "name": "heUlBufferStatusReportedBytes:vector",
+      "type": "vector"
+    },
+    {
+      "name": "heUlBufferStatusScheduledBytes:vector",
+      "type": "vector"
+    }
+  ],
+  "schema_version": 1
+}

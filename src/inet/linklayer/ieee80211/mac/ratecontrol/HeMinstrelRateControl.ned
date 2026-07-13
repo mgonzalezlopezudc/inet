@@ -37,9 +37,13 @@ simple HeMinstrelRateControl extends SimpleModule like IRateControl, IIeee80211H
         @signal[heRateSelectedNss](type=long);
         @signal[heRateProbe](type=long);
         @signal[heRateSuccessProbability](type=double);
+        @signal[heRateTxSuccess](type=long);
+        @signal[heRateRetryCount](type=long);
         @statistic[datarateChanged](title="datarate"; record=vector; interpolationmode=sample-hold);
         @statistic[heRateSelectedMcs](title="selected HE MCS"; record=vector; interpolationmode=sample-hold);
         @statistic[heRateSelectedNss](title="selected HE NSS"; record=vector; interpolationmode=sample-hold);
         @statistic[heRateProbe](title="HE probe selections"; record=count);
         @statistic[heRateSuccessProbability](title="HE EWMA success probability"; record=vector; interpolationmode=sample-hold);
+        @statistic[heRateTxSuccess](title="HE transmission outcome"; record=vector; interpolationmode=none);
+        @statistic[heRateRetryCount](title="HE transmission retry count"; record=vector; interpolationmode=none);
 }

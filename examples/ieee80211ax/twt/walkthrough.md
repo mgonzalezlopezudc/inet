@@ -25,9 +25,9 @@ In legacy 802.11 power-saving modes (like PS-Poll or APSD), stations wake up per
 
 The network [TwtRegression.ned](TwtRegression.ned) consists of:
 - **`ap`**: An Access Point located at `(300, 180)`.
-- **`sta[0..1]`**: Two wireless stations located at `(170, 130)` and `(170, 230)` (approx. 140 meters from the AP).
+- **`sta[0..1]`**: Two wireless stations located at `(250, 150)` and `(250, 210)` on strong links to the AP.
 - **`server`**: A wired server connected to the AP.
-- **Traffic**: The `server` generates downlink UDP traffic destined for `sta[0]` and `sta[1]` (200B packets sent every 2s, starting at `0.5s`).
+- **Traffic**: Each station generates 200-byte uplink UDP packets for the wired server every 2 s from 10–90 s. The remaining 10 s drains queued traffic.
 
 ```
        [sta[0]]
@@ -156,8 +156,7 @@ The decoded output timeline shows:
 
 2. **Sleep Duration**:
    - In `Baseline`, the stations sleep for **0 seconds** because TWT is disabled.
-   - In both `Individual` configs, the stations sleep for **~89.38 seconds** out of the 100-second simulation (spending only about 10.62s awake).
-   - In the `Broadcast` config, the stations sleep for **~69.16 seconds** (spending about 30.84s awake).
-   - *Why do they sleep so much?* The UDP downlink application generates a packet every 2 seconds (`sendInterval = 2000ms`), which is much slower than the TWT wake interval (100ms). This allows the stations to remain in a low-power sleep state for the vast majority of the time, waking up only during their negotiated TWT service periods (SPs) to receive packets.
-   - *Why is Broadcast sleep time shorter than Individual?* In Broadcast TWT, stations wake up at the start of the broadcast SP. If they miss Beacons due to sleeping, the broadcast schedule can expire and they must wake up, listen for a Beacon to resynchronize, and then return to sleep. This synchronization overhead results in slightly higher awake times (~30.84s vs ~10.62s in Individual configs).
+   - The current individual schedule requests a 90 ms service period every 100 ms. Exact awake and sleep durations are result metrics, not fixed expectations; random seeds and management synchronization can change them.
+   - *Why use a high duty cycle?* The regression requires every treatment seed to preserve at least 95% of paired-baseline delivery. This schedule retains measurable sleep intervals while prioritizing reliable delivery of the periodic uplink workload.
+   - Broadcast and individual schedules can have different awake time because beacon synchronization and schedule maintenance add overhead.
    - Awake/sleep time demonstrates scheduled radio availability. The configured radio energy consumer and battery make the corresponding energy cost measurable; compare consumed energy together with delivery and latency. Sleep fraction alone is not an energy result, and this workload is not a general estimate of real-device battery lifetime.

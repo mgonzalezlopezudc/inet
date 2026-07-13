@@ -1,10 +1,9 @@
-# Target Wake Time plots
+# Target wake time (TWT)
 
-The radio-state raster should expose long, repeated low-power intervals for TWT
-stations and a continuously available AP. The companion bars divide recorded
-energy consumption by delivered application bits. A useful TWT configuration
-reduces joules per delivered bit without unacceptable loss or delay.
+![TWT radio state and energy](figures/twt/twt-state-and-energy.png)
 
-Zero energy bars mean the selected run did not instantiate an energy consumer;
-they must not be interpreted as zero physical consumption. Use
-`BaselineEnergy` and `TwtEnergySaving` for the energy comparison.
+IEEE Std 802.11-2024 defines a TWT service period as a period during which a TWT STA is expected to be awake and describes TWT as a way for an AP to manage activity and reduce contention (`80211ax-2024:chunk:00351`, Clause 26.8.1 in `09855`). Sleep time is therefore expected, but delivery loss is not a valid proxy for energy efficiency.
+
+The baseline and treatment have identical periodic uplink traffic, strong-link station geometry, run numbers, and seeds. Uplink traffic directly exercises each requester STA releasing queued traffic in its service periods; the strong link deliberately isolates scheduling and energy behavior from marginal-coverage loss. Traffic starts at 10 s, after TWT setup, and stops at 90 s so the final 10 s drains queued packets. Station radio power is integrated as a piecewise-constant vector over 10–100 s, then divided by application-delivered bits. The raster uses the actual radio-mode enumeration: off, sleep, receiver, transmitter, transceiver, and switching.
+
+The analysis is a hard gate: every TWT run must deliver at least 95% of its same-number baseline run. Only after that condition passes are energy-per-bit values plotted. This makes the conclusion narrow and defensible: the configured unannounced TWT schedule reduces radio energy while preserving the periodic workload, rather than merely suppressing traffic.

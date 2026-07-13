@@ -1,0 +1,435 @@
+{
+  "bsr": {
+    "Fresh BSR": {
+      "reported_backlog_mean_bytes": {
+        "ci95": 3730.3495381396992,
+        "count": 5,
+        "mean": 54128.10893362976
+      },
+      "scheduled_backlog_mean_bytes": {
+        "ci95": 2236.6985569943786,
+        "count": 5,
+        "mean": 55125.34104326195
+      }
+    },
+    "Stale BSR": {
+      "reported_backlog_mean_bytes": {
+        "ci95": 3179.745096063212,
+        "count": 5,
+        "mean": 73246.78472182213
+      },
+      "scheduled_backlog_mean_bytes": {
+        "ci95": 2945.0079116413067,
+        "count": 5,
+        "mean": 73815.56025395289
+      }
+    }
+  },
+  "bss": {
+    "Aggressive": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 0.15166609346777385,
+        "count": 5,
+        "mean": 0.7879999999999999
+      },
+      "goodput_mbps": {
+        "ci95": 0.00592308289108896,
+        "count": 5,
+        "mean": 6.397866666666667
+      },
+      "jain_fairness": {
+        "ci95": 1.3880200355284898e-05,
+        "count": 5,
+        "mean": 0.9999894390864773
+      }
+    },
+    "Color collision": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 0.0
+      },
+      "goodput_mbps": {
+        "ci95": 0.007254265393688469,
+        "count": 5,
+        "mean": 6.393599999999999
+      },
+      "jain_fairness": {
+        "ci95": 5.686285944530729e-06,
+        "count": 5,
+        "mean": 0.999994983333519
+      }
+    },
+    "Conservative": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 0.0
+      },
+      "goodput_mbps": {
+        "ci95": 0.05665762393999328,
+        "count": 5,
+        "mean": 6.414933333333333
+      },
+      "jain_fairness": {
+        "ci95": 1.5069699893833582e-05,
+        "count": 5,
+        "mean": 0.9999907239098093
+      }
+    },
+    "Disabled": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 0.0
+      },
+      "goodput_mbps": {
+        "ci95": 0.05665762393999328,
+        "count": 5,
+        "mean": 6.414933333333333
+      },
+      "jain_fairness": {
+        "ci95": 1.5069699893833582e-05,
+        "count": 5,
+        "mean": 0.9999907239098093
+      }
+    },
+    "Enabled": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 0.15166609346777385,
+        "count": 5,
+        "mean": 0.7879999999999999
+      },
+      "goodput_mbps": {
+        "ci95": 0.00592308289108896,
+        "count": 5,
+        "mean": 6.397866666666667
+      },
+      "jain_fairness": {
+        "ci95": 1.3880200355284898e-05,
+        "count": 5,
+        "mean": 0.9999894390864773
+      }
+    }
+  },
+  "dl": {
+    "Backlog": {
+      "delay_p95_ms": {
+        "ci95": 0.7212473781878904,
+        "count": 5,
+        "mean": 150.16598266538
+      },
+      "goodput_mbps": {
+        "ci95": 0.053194426159215887,
+        "count": 5,
+        "mean": 8.35539393939394
+      },
+      "jain_fairness": {
+        "ci95": 0.0017362830387691439,
+        "count": 5,
+        "mean": 0.6901538684328599
+      }
+    },
+    "EDCA": {
+      "delay_p95_ms": {
+        "ci95": 0.736658865359759,
+        "count": 5,
+        "mean": 20.441224898050002
+      },
+      "goodput_mbps": {
+        "ci95": 0.08520747729500329,
+        "count": 5,
+        "mean": 7.729454545454546
+      },
+      "jain_fairness": {
+        "ci95": 0.000586712137229644,
+        "count": 5,
+        "mean": 0.999398828867786
+      }
+    },
+    "HoL min delay": {
+      "delay_p95_ms": {
+        "ci95": 1.2213321284773249,
+        "count": 5,
+        "mean": 181.11824507199998
+      },
+      "goodput_mbps": {
+        "ci95": 0.03131077133569526,
+        "count": 5,
+        "mean": 7.029818181818183
+      },
+      "jain_fairness": {
+        "ci95": 0.0026549346858188577,
+        "count": 5,
+        "mean": 0.6560405029495056
+      }
+    },
+    "fBW": {
+      "delay_p95_ms": {
+        "ci95": 7.618029495162477,
+        "count": 5,
+        "mean": 101.41064443520999
+      },
+      "goodput_mbps": {
+        "ci95": 0.175561038488537,
+        "count": 5,
+        "mean": 2.984727272727273
+      },
+      "jain_fairness": {
+        "ci95": 0.0011464395141656735,
+        "count": 5,
+        "mean": 0.9989936440319067
+      }
+    },
+    "fHoL": {
+      "delay_p95_ms": {
+        "ci95": 15.38573965982723,
+        "count": 5,
+        "mean": 105.9946078614
+      },
+      "goodput_mbps": {
+        "ci95": 0.25809344708886184,
+        "count": 5,
+        "mean": 2.9367272727272726
+      },
+      "jain_fairness": {
+        "ci95": 0.0011459904825535047,
+        "count": 5,
+        "mean": 0.9989933759646558
+      }
+    }
+  },
+  "fragmentation": {
+    "Dynamic": {
+      "ack_airtime_total_ms": {
+        "ci95": 1.2650961008590427,
+        "count": 5,
+        "mean": 52.99679999999999
+      },
+      "mac_frame_size_mean_bytes": {
+        "ci95": 1.1365447680118754,
+        "count": 5,
+        "mean": 297.3373517847997
+      }
+    },
+    "Static": {
+      "ack_airtime_total_ms": {
+        "ci95": 1.2650961008590427,
+        "count": 5,
+        "mean": 52.99679999999999
+      },
+      "mac_frame_size_mean_bytes": {
+        "ci95": 1.1365447680118754,
+        "count": 5,
+        "mean": 297.3373517847997
+      }
+    },
+    "Unfragmented": {
+      "ack_airtime_total_ms": {
+        "ci95": 0.037759653430696684,
+        "count": 5,
+        "mean": 73.42640000000003
+      },
+      "mac_frame_size_mean_bytes": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 1470.0
+      }
+    }
+  },
+  "mimo": {
+    "20 MHz MU-MIMO": {
+      "goodput_mbps": {
+        "ci95": 0.12845029589503465,
+        "count": 5,
+        "mean": 3.166060606060607
+      }
+    },
+    "20 MHz OFDMA": {
+      "goodput_mbps": {
+        "ci95": 0.175561038488537,
+        "count": 5,
+        "mean": 2.984727272727273
+      }
+    }
+  },
+  "puncturing": {
+    "Clean": {
+      "goodput_mbps": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 16.000000000000004
+      }
+    },
+    "Interference, punctured": {
+      "goodput_mbps": {
+        "ci95": 0.03417511878731774,
+        "count": 5,
+        "mean": 16.016
+      }
+    },
+    "Interference, unpunctured": {
+      "goodput_mbps": {
+        "ci95": 0.03417511878731774,
+        "count": 5,
+        "mean": 16.016
+      }
+    },
+    "Runtime puncturing": {
+      "goodput_mbps": {
+        "ci95": 0.030764153169576786,
+        "count": 5,
+        "mean": 15.986285714285717
+      },
+      "observed_masks": [
+        0,
+        2
+      ]
+    }
+  },
+  "rate": {
+    "Mobile HE Minstrel": {
+      "goodput_mbps": {
+        "ci95": 0.11315640376988181,
+        "count": 5,
+        "mean": 5.6652000000000005
+      },
+      "selected_mcs_max": 11,
+      "selected_mcs_min": 0,
+      "tx_success_fraction": {
+        "ci95": 0.002535884775632019,
+        "count": 5,
+        "mean": 0.9845245731284761
+      }
+    }
+  },
+  "twt": {
+    "Baseline": {
+      "delivered_bytes": {
+        "ci95": 111.05780420791174,
+        "count": 5,
+        "mean": 15960.0
+      },
+      "energy_per_bit_j": {
+        "ci95": 1.9986252827623375e-08,
+        "count": 5,
+        "mean": 2.854311138771627e-06
+      },
+      "goodput_mbps": {
+        "ci95": 9.871804818481054e-06,
+        "count": 5,
+        "mean": 0.0014186666666666666
+      }
+    },
+    "TWT": {
+      "delivered_bytes": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 16000.0
+      },
+      "energy_per_bit_j": {
+        "ci95": 4.300000211215e-11,
+        "count": 5,
+        "mean": 1.5552121124310594e-06
+      },
+      "goodput_mbps": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 0.001422222222222222
+      }
+    },
+    "delivery_ratio_twt_over_baseline": {
+      "ci95": 0.007028974949867869,
+      "count": 5,
+      "mean": 1.0025316455696203
+    }
+  },
+  "uora": {
+    "Heavy, 1 RA-RU": {
+      "attempts": {
+        "ci95": 43.87837485781434,
+        "count": 5,
+        "mean": 77.6
+      },
+      "success_probability": {
+        "ci95": 0.14041753814379018,
+        "count": 5,
+        "mean": 0.4847628663323472
+      }
+    },
+    "Heavy, 3 RA-RUs": {
+      "attempts": {
+        "ci95": 77.9217121767211,
+        "count": 5,
+        "mean": 212.4
+      },
+      "success_probability": {
+        "ci95": 0.13240171211102636,
+        "count": 5,
+        "mean": 0.4901908498889795
+      }
+    },
+    "Light, 1 RA-RU": {
+      "attempts": {
+        "ci95": 4.061589034289206,
+        "count": 5,
+        "mean": 5.2
+      },
+      "success_probability": {
+        "ci95": 0.29266301102836095,
+        "count": 5,
+        "mean": 0.8333333333333333
+      }
+    }
+  },
+  "width": {
+    "160 MHz": {
+      "delay_p95_ms": {
+        "ci95": 0.2562596379121204,
+        "count": 5,
+        "mean": 109.07556731924001
+      },
+      "goodput_mbps": {
+        "ci95": 0.9467012182830435,
+        "count": 5,
+        "mean": 44.52173913043479
+      }
+    },
+    "20 MHz": {
+      "delay_p95_ms": {
+        "ci95": 10.512362775217147,
+        "count": 5,
+        "mean": 177.7702104044
+      },
+      "goodput_mbps": {
+        "ci95": 1.4927795325397735,
+        "count": 5,
+        "mean": 19.123478260869568
+      }
+    },
+    "40 MHz": {
+      "delay_p95_ms": {
+        "ci95": 26.64930287031888,
+        "count": 5,
+        "mean": 180.0343766492
+      },
+      "goodput_mbps": {
+        "ci95": 1.3279967328784965,
+        "count": 5,
+        "mean": 20.869565217391305
+      }
+    },
+    "80 MHz": {
+      "delay_p95_ms": {
+        "ci95": 0.6338849530098718,
+        "count": 5,
+        "mean": 127.5067901326
+      },
+      "goodput_mbps": {
+        "ci95": 3.240188610168233,
+        "count": 5,
+        "mean": 37.95478260869565
+      }
+    }
+  }
+}

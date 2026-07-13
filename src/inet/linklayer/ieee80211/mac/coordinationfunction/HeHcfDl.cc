@@ -108,8 +108,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
     context.noiseFigureDb = par("receiverNoiseFigure");
     context.maxAmpduMpduCount = par("maxAmpduMpduCount");
     context.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
-    context.puncturedSubchannels = parseHePreamblePuncturing(par("hePreamblePuncturing").stringValue(),
-            context.channelBandwidth);
+    context.puncturedSubchannels = resolveHePreamblePuncturing(this, context.channelBandwidth);
     for (size_t i = 0; i < context.puncturedSubchannels.size(); ++i)
         if (context.puncturedSubchannels[i])
             context.puncturedSubchannelMask |= 1U << i;

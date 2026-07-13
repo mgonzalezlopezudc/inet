@@ -1,0 +1,141 @@
+{
+  "aggregation": {
+    "goodput": "per run with 95% Student-t CI",
+    "telemetry": "all PPDUs validated; representative run 0 plotted"
+  },
+  "conditions": [
+    {
+      "configuration": "EqualSizedRUs_fBW",
+      "group": "mimo",
+      "ini": "examples/ieee80211ax/multi_user/mu_mimo/downlink.ini",
+      "label": "20 MHz OFDMA",
+      "measurement": {
+        "end_s": 0.88,
+        "start_s": 0.55
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#0.sca",
+          "sha256": "b58ce1744f06eeb345110e017a6f4e0c683bd49298e2d9543ceadc1412cb2dfc"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#0.vec",
+          "sha256": "147dc2519f6fd5e4b843891cd022d66af2442d0bb039d21d58bc56c29e3dccec"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#1.sca",
+          "sha256": "516324d0335feb279bc1f2d2daa3fefd1a431a5b1936ae06a2ac7031414a5589"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#1.vec",
+          "sha256": "9f0ba25cc77de7536ba7df33f82cb5bb12035ad9f46b7274c590fd40b0fefb94"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#2.sca",
+          "sha256": "e17759072dc431832e575f67e547f8d27e2c1d20a5fbdcbd50e9db41528f1888"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#2.vec",
+          "sha256": "c63b4009b8ed1c2f13e0f9c2d582e652556fe16d3c1100395c9abef4cefb78a9"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#3.sca",
+          "sha256": "76a161844ee1b23d3baf8358234506f6b496997fcaba1d03fa366ecbe7186511"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#3.vec",
+          "sha256": "45fcf90b5ea39f2824fee0725573385ff568dab38e4318b71a46cba099030595"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#4.sca",
+          "sha256": "4a48262e7a65a69b73daf77fb85f410d16089368d40cb11a50d84e5510d9836f"
+        },
+        {
+          "path": "examples/ieee80211ax/dl_ofdma/results/EqualSizedRUs_fBW-#4.vec",
+          "sha256": "3ed8be764211f1c74e90d1bbadb614c7ce5d9e11c6827264112531c9592b571d"
+        }
+      ]
+    },
+    {
+      "configuration": "DlMuMimo",
+      "group": "mimo",
+      "ini": "examples/ieee80211ax/multi_user/mu_mimo/downlink.ini",
+      "label": "20 MHz MU-MIMO",
+      "measurement": {
+        "end_s": 0.88,
+        "start_s": 0.55
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#0.sca",
+          "sha256": "6963e74e118fc7734ad2321d091e917ad15eaabab6577f9eac23ba954783ffd2"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#0.vec",
+          "sha256": "cf610b12fc7675337c581a1270f6b7117a014298a07241c7d35619aa59e43107"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#1.sca",
+          "sha256": "440c96f5532196ddb9ac74b5e48acec076014c5a191a30d453b44ce2b116d5f3"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#1.vec",
+          "sha256": "65e6809d6533f94958cce1c4782025ce47745d6f361be2d8ec622055701b9f24"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#2.sca",
+          "sha256": "bff705e8027f67a4a02c09862f1db67f17236027cc601b2f1ba1114d516def03"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#2.vec",
+          "sha256": "b565f780e4207ccea53e92da2c5a1cfe68f5ceb81af7ec9d0affa6aa9e855e7b"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#3.sca",
+          "sha256": "011f3177be224257b60a2771ee149ab8aecb52199a54c714dbf4fac6d9649c22"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#3.vec",
+          "sha256": "8c9d4d4e26e6febac0957092c468ab20e57543017e76a58d1e52383b82627f1d"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#4.sca",
+          "sha256": "b63479722c4fa76d6bcf20d082a02aa9bf53c0100467fff0528334d474c22851"
+        },
+        {
+          "path": "examples/ieee80211ax/multi_user/mu_mimo/results/DlMuMimo-#4.vec",
+          "sha256": "217350f3283c5e8af352729f0857c3bb83343d25356aba8eeecdeac61ce165c2"
+        }
+      ]
+    }
+  ],
+  "extra": {},
+  "figure": "examples/ieee80211ax/analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png",
+  "git_revision": "45bfc81f91965732c0229b6b5eaf9b6170611577",
+  "result_filters": [
+    {
+      "module": "**.ap.wlan[0].radio",
+      "name": "heStaId:vector",
+      "type": "vector"
+    },
+    {
+      "module": "**.ap.wlan[0].radio",
+      "name": "heSpatialStreams:vector",
+      "type": "vector"
+    },
+    {
+      "module": "**.ap.wlan[0].radio",
+      "name": "heStreamStartIndex:vector",
+      "type": "vector"
+    },
+    {
+      "module": "**.app[*]",
+      "name": "packetReceived:vector(packetBytes)",
+      "type": "vector",
+      "unit": "B"
+    }
+  ],
+  "schema_version": 1
+}

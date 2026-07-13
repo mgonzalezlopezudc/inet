@@ -111,6 +111,18 @@ inline std::vector<bool> parseHePreamblePuncturing(const char *value, inet::unit
     return result;
 }
 
+inline std::vector<bool> resolveHePreamblePuncturing(const omnetpp::cComponent *component,
+        inet::units::values::Hz bandwidth)
+{
+    auto dynamicMask = component->par("dynamicHePreamblePuncturing").stringValue();
+    auto start = omnetpp::SimTime(component->par("dynamicHePreamblePuncturingStart"));
+    auto end = omnetpp::SimTime(component->par("dynamicHePreamblePuncturingEnd"));
+    bool insideDynamicInterval = dynamicMask[0] != '\0' && start >= omnetpp::SimTime::ZERO &&
+            omnetpp::simTime() >= start && (end < omnetpp::SimTime::ZERO || omnetpp::simTime() < end);
+    return parseHePreamblePuncturing(insideDynamicInterval ? dynamicMask :
+            component->par("hePreamblePuncturing").stringValue(), bandwidth);
+}
+
 inline bool overlapsHePuncturedSubchannel(const inet::physicallayer::Ieee80211HeRu& ru,
         const std::vector<bool>& puncturedSubchannels, inet::units::values::Hz bandwidth)
 {
