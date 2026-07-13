@@ -262,6 +262,35 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
     // ordinary EDCA transmissions.
     sendUp(recipientDataService->dataFrameReceived(packet, header, nullptr));
 }
+Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
+        const Ieee80211HeTriggerUserInfo& user, RecipientBlockAckAgreement *agreement,
+        const MacAddress& receiverAddress, const MacAddress& transmitterAddress)
+{
+    ASSERT(agreement != nullptr);
+    ASSERT(user.muBarCompressedBitmap && !user.muBarMultiTid);
+    // The MU-BAR User Info field embeds a Compressed BlockAckReq whose
+    // Starting Sequence Number selects the 64-MPDU response bitmap window
+    // (9.3.1.22.4 and 9.3.1.9).  Using the agreement's initial window here
+    // makes every later response repeat the first bitmap and eventually
+    // exhausts the originator's BA window.
+    auto startingSequenceNumber = SequenceNumberCyclic(user.muBarStartingSequenceNumber);
+    std::vector<uint8_t> bytes(8, 0);
+    BitVector bitmap(bytes);
+    for (int i = 0; i < 64; ++i) {
+        bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, 0);
+        bitmap.setBit(i, ackState);
+    }
+    auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+    blockAck->setReceiverAddress(receiverAddress);
+    blockAck->setTransmitterAddress(transmitterAddress);
+    blockAck->setCompressedBitmap(true);
+    blockAck->setStartingSequenceNumber(startingSequenceNumber);
+    blockAck->setTidInfo(user.tid);
+    blockAck->setBlockAckBitmap(bitmap);
+    blockAck->setDurationField(SIMTIME_ZERO);
+    return blockAck;
+}
+
 void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
 {
     // 9.3.1.22.4 defines MU-BAR Trigger User Info as BAR Control plus BAR
@@ -280,21 +309,8 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
     if (agreement != nullptr) {
         if (!selected->muBarCompressedBitmap || selected->muBarMultiTid)
             throw cRuntimeError("Unsupported MU-BAR BlockAckReq variant");
-        auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
-        auto startingSequenceNumber = agreement->getStartingSequenceNumber();
-        std::vector<uint8_t> bytes(8, 0);
-        BitVector bitmap(bytes);
-        for (int i = 0; i < 64; ++i) {
-            bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + i, 0);
-            bitmap.setBit(i, ackState);
-        }
-        blockAck->setReceiverAddress(trigger->getTransmitterAddress());
-        blockAck->setTransmitterAddress(mac->getAddress());
-        blockAck->setCompressedBitmap(true);
-        blockAck->setStartingSequenceNumber(startingSequenceNumber);
-        blockAck->setTidInfo(selected->tid);
-        blockAck->setBlockAckBitmap(bitmap);
-        blockAck->setDurationField(SIMTIME_ZERO);
+        auto blockAck = buildHeMuBarCompressedBlockAck(*selected, agreement,
+                trigger->getTransmitterAddress(), mac->getAddress());
         auto response = new Packet("HE-TB-BlockAck", blockAck);
         response->insertAtBack(makeShared<Ieee80211MacTrailer>());
         auto request = response->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();

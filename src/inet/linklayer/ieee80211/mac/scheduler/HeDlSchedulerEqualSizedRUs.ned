@@ -9,9 +9,9 @@ package inet.linklayer.ieee80211.mac.scheduler;
 // Downlink OFDMA scheduler with equal-sized RU allocations.
 //
 // The scheduler ranks eligible stations by schedulingFunction, picks a
-// standard equal-RU layout that fits the selected users, and aligns payload
-// durations by adapting RU sizes where possible. Use "fBW" to prioritize
-// backlog or "fHoL" to prioritize head-of-line delay.
+// standard equal-RU layout that fits the selected users, and estimates the
+// common payload horizon from the eligible per-station backlog. Use "fBW" to
+// prioritize backlog or "fHoL" to prioritize head-of-line delay.
 //
 simple HeDlSchedulerEqualSizedRUs like IIeee80211HeDlScheduler
 {

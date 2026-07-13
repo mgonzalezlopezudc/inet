@@ -26,6 +26,16 @@ network TestNetwork
                 schedulingFunction = "fHoL";
                 maxMuStations = 4;
         }
+        schedulerFbwCap: HeDlSchedulerEqualSizedRUs {
+            parameters:
+                schedulingFunction = "fBW";
+                maxMuStations = 2;
+        }
+        schedulerFholCap: HeDlSchedulerEqualSizedRUs {
+            parameters:
+                schedulingFunction = "fHoL";
+                maxMuStations = 2;
+        }
 }
 
 %inifile: omnetpp.ini
@@ -50,6 +60,7 @@ static IIeee80211HeDlScheduler::ScheduleContext makeContext(int count, Hz bandwi
         candidate.staAddress = MacAddress(address);
         candidate.anchor = i == 0;
         candidate.holDelay = SimTime(count - i, SIMTIME_MS);
+        candidate.holPacketBytes = 200;
         candidate.backlogBytes = 1000 - i;
         context.candidates.push_back(candidate);
     }
@@ -79,6 +90,10 @@ auto schedulerFhol = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
         getParentModule()->getSubmodule("schedulerFhol"));
 auto schedulerCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
         getParentModule()->getSubmodule("schedulerCap"));
+auto schedulerFbwCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("schedulerFbwCap"));
+auto schedulerFholCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("schedulerFholCap"));
 
 {
     const int fbwCounts[] = {1, 2, 2, 4, 4, 4, 4, 4, 9, 9};
@@ -129,6 +144,30 @@ auto schedulerCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
 }
 
 {
+    auto context = makeContext(3, Hz(20e6));
+    context.candidates[0].holDelay = SimTime(1, SIMTIME_MS);
+    context.candidates[0].backlogBytes = 100;
+    context.candidates[1].holDelay = SimTime(2, SIMTIME_MS);
+    context.candidates[1].backlogBytes = 5000;
+    context.candidates[2].holDelay = SimTime(10, SIMTIME_MS);
+    context.candidates[2].backlogBytes = 500;
+
+    auto fbw = schedulerFbwCap->schedule(context);
+    auto fhol = schedulerFholCap->schedule(context);
+    ASSERT(fbw.size() == 2);
+    ASSERT(fhol.size() == 2);
+    ASSERT(fbw[0].staAddress == context.anchorSta);
+    ASSERT(fhol[0].staAddress == context.anchorSta);
+    ASSERT(fbw[1].staAddress == context.candidates[1].staAddress);
+    ASSERT(fhol[1].staAddress == context.candidates[2].staAddress);
+
+    auto expectedDuration = estimateHeMuUserDuration(B(context.candidates[1].backlogBytes),
+            fbw[1].ru.toneSize, fbw[1].mcs, 1, false, context.guardInterval);
+    ASSERT(fbw[1].estimatedDuration == expectedDuration);
+    EV << "fBW prioritized backlog, fHoL prioritized delay, and packing duration used eligible backlog.\n";
+}
+
+{
     Ieee80211HeCapabilities local;
     Ieee80211HeCapabilities peer;
     peer.supportedChannelWidths = {Hz(20e6)};
@@ -160,5 +199,6 @@ EV << ".\n";
 20 MHz fBW and fHoL tables matched the standard RU counts.
 40, 80, and 160 MHz ceiling/floor layout selection passed.
 Candidate cap preserved the mandatory anchor deterministically.
+fBW prioritized backlog, fHoL prioritized delay, and packing duration used eligible backlog.
 Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.
 .

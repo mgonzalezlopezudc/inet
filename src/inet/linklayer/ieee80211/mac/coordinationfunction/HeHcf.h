@@ -23,6 +23,11 @@
 namespace inet {
 namespace ieee80211 {
 
+/** Builds the compressed Block Ack bitmap requested by an MU-BAR User Info field. */
+INET_API Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
+        const Ieee80211HeTriggerUserInfo& user, RecipientBlockAckAgreement *agreement,
+        const MacAddress& receiverAddress, const MacAddress& transmitterAddress);
+
 /**
  * Extends Hcf to support IEEE 802.11ax Downlink OFDMA multi-user scheduling.
  *
