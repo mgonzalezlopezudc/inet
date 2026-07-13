@@ -1,121 +1,258 @@
-# Walkthrough - 802.11ax MU OFDMA Simulation Examples
+# Walkthrough: 802.11ax Downlink OFDMA
 
-This document walks through the design, implementation, and verification of the downlink 802.11ax multi-user scenarios in the INET Framework.
+This example compares IEEE 802.11ax downlink OFDMA with a matched single-user
+OFDM baseline and exposes the trade-off between the `fBW` and `fHoL` equal-RU
+scheduling policies. It is a standards-aware packet-level model, not a
+bit-level interoperability or conformance test.
 
-These examples are standards-aware packet-level simulations, not bit-level interoperability tests. The HE PHY header and Trigger frame serializers still carry INET model metadata rather than exact HE-SIG/Trigger on-air encodings. The `MultiTidBlockAck` configuration negotiates Multi-TID capability and exercises the BAR/BlockAck plumbing, but the current DL path creates one Block Ack record per request, so it should not be read as proof of aggregated multi-TID operation. FEC legality is checked strictly in the PHY calculator, while mixed LDPC/non-LDPC scheduling is still coarse because a schedule chooses one coding mode across the selected peers.
+## Verification result
 
----
+The corrected model now demonstrates the intended advantages under a saturated
+three-station downlink workload:
 
-## 1. Implemented Simulation Configurations
+- at 20 MHz, `fBW` DL OFDMA delivers `23.467 Mbps`, versus `7.496 Mbps` for
+  matched SU OFDM: a `3.13x` throughput gain;
+- at 20 MHz, `fHoL` delivers `20.224 Mbps` and exactly equal packet counts to
+  all three stations, illustrating its concurrency/fairness objective;
+- at 80 MHz, both OFDMA policies deliver essentially the full `40 Mbps`
+  offered load with sub-millisecond mean delay; and
+- the AP capture contains two simultaneous Block Ack responses per `fBW`
+  MU-BAR and three per `fHoL` MU-BAR, while the SU capture contains no MU-BAR.
 
-All configurations are defined in [omnetpp.ini](omnetpp.ini) within the `dl_ofdma` example folder.
+These are deterministic run-0 observations. They establish the behavior of
+this example; use multiple independent seeds before making broader performance
+claims.
 
-### Scenario A: Bandwidth Optimization (`EqualSizedRUs_fBW`)
-- **Objective**: Maximize bandwidth occupancy (spectral efficiency) by choosing larger Resource Units (RUs).
-- **Mechanism**: Uses the `HeDlSchedulerEqualSizedRUs` scheduler with `schedulingFunction = "fBW"`. Under a 20 MHz channel, it allocates two 106-tone RUs (which covers 87.6% of the tones), serving 2 out of the 3 active users concurrently. The third user is buffered for subsequent frames.
+## Standards baseline
 
-### Scenario B: Latency/STA Concurrency Optimization (`EqualSizedRUs_fHoL`)
-- **Objective**: Minimize Head-of-Line (HoL) packet delay and maximize user concurrency.
-- **Mechanism**: Uses the `HeDlSchedulerEqualSizedRUs` scheduler with `schedulingFunction = "fHoL"`. Under a 20 MHz channel, it allocates three 52-tone RUs, serving all 3 active users concurrently. This improves short-run per-station fairness compared with the bandwidth-oriented scheduler, at the cost of smaller RUs.
+The normative reference used here is IEEE Std 802.11-2024:
 
-### Scenario C: Queue-Aware Dynamic RU Allocation (`BacklogBased`)
-- **Objective**: Dynamically allocate mixed RU sizes (e.g., larger RU for heavy backlog, smaller RU for low backlog) in a multi-user frame.
-- **Mechanism**: Uses `HeDlSchedulerBacklogBased` with asymmetric traffic profiles (heavy load on `host[0]`, medium on `host[1]`, light on `host[2]`).
+- Clause 26.5.1.1 defines HE DL MU operation as allowing an AP to transmit
+  simultaneously to non-AP STAs using DL OFDMA, DL MU-MIMO, or both. It also
+  requires the PSDUs on the allocated RUs to be padded to end together.
+- Clause 26.5.1.2 requires the HE MU TXVECTOR to identify the STA associated
+  with each RU. The capture therefore checks distinct AIDs and RU allocations.
+- Clause 26.6.2.2 defines padding of the per-user A-MPDUs in an HE MU PPDU.
+- Clause 9.3.1.22.4 defines an MU-BAR Trigger User Info field as BAR Control
+  plus BAR Information, including the requested Block Ack bitmap window.
+- Clause 26.5.2.3.3 requires a response to a Trigger frame to use HE-TB format
+  and the RU, MCS, GI, and related parameters indicated by the Trigger.
 
-### Scenario D: Latency-Centric Scheduling Baseline (`HoLMinDelay`)
-- **Objective**: Provide a comparison baseline for `BacklogBased` by scheduling RUs based strictly on the sizes and delays of Head-of-Line packets.
-- **Mechanism**: Uses `HeDlSchedulerHoLMinDelay` under the same asymmetric traffic profile as Scenario C.
+The standard defines the frame formats and protocol behavior. It does not
+define INET's `fBW` or `fHoL` heuristic, nor require OFDMA to outperform SU for
+every workload.
 
-### Scenario E: Wide-Bandwidth 80 MHz Configuration (`WideBandwidth80MHz`)
-- **Objective**: Exercise the 80 MHz channel setup with 8 configured users and 8 scheduled RUs.
-- **Mechanism**: Configures an 80 MHz band, center frequency `5.2 GHz`, channel number `2`, and scales the topology to 8 wireless hosts. The scheduler allocates eight 106-tone RUs concurrently.
-- **Key Realization**: To allow correct physical reception of all subchannels by the hosts, the receiver bandwidth is explicitly set to `80MHz` (`**.wlan[*].radio.receiver.bandwidth = 80MHz`), and the transmitter power is configured to `100mW` to compensate for the 10 dB noise integration penalty over the wider bandwidth.
+## Controlled comparison matrix
 
-### Additional configurations
+All six core configurations use the same topology, three stations, `100 mW`
+transmit power, best-effort EDCA traffic, packet size, start time, simulation
+duration, warm-up period, and seed. Each source offers a 100-byte packet every
+`0.06 ms`, for `40 Mbps` aggregate application load. Traffic starts at `0.5 s`;
+statistics cover the `0.7-1.0 s` measurement interval.
 
-- `SuEdcaBaseline` runs the same workload through single-user QoS EDCA.
-- `DlMuMimo` exercises full-bandwidth downlink MU-MIMO with three stations.
-- `MultiTidBlockAck` negotiates and exercises HE Multi-TID Block Ack plumbing.
-- `DlMuMimo80MHz` combines the 80 MHz topology with downlink MU-MIMO.
+| Configuration | Width | MAC/scheduler |
+|---|---:|---|
+| `EqualSizedRUs_fBW` | 20 MHz | DL OFDMA, maximize occupied bandwidth |
+| `EqualSizedRUs_fHoL` | 20 MHz | DL OFDMA, prioritize HoL service |
+| `SuEdcaBaseline` | 20 MHz | ordinary HCF/SU OFDM |
+| `EqualSizedRUs80MHz_fBW` | 80 MHz | matched `fBW` comparison |
+| `EqualSizedRUs80MHz_fHoL` | 80 MHz | matched `fHoL` comparison |
+| `SuEdcaBaseline80MHz` | 80 MHz | matched SU OFDM comparison |
 
-These mechanisms share the topology for controlled comparison even though
-they are not OFDMA scheduler variants.
+`WideBandwidth80MHz` remains a separate eight-station scaling scenario. It is
+not used for the controlled width comparison because it intentionally changes
+the station count and workload.
 
----
+The short `10 ms` ADDBA retry interval is important: all independently
+contending stations complete Block Ack setup before the measurement interval.
+Port 80 maps the comparison traffic to `AC_BE`, avoiding a finite voice TXOP as
+an accidental confounder.
 
-## 2. Verification and Quantitative Results
+## Why the policies differ
 
-All simulations were run with Cmdenv in the release build, configuration run
-`0`, seed set `0`, and the configured `sim-time-limit = 0.6s`. The table reports
-the `packetReceived:count` scalar of each UDP sink. Repeated runs with the same
-run number and seed set are deterministic.
+With three backlogged stations on 20 MHz, the standard equal-RU layouts that
+matter here contain two 106-tone RUs or four 52-tone RUs:
 
-### Summary of Simulation Results
+- `fBW` keeps the oldest station as the mandatory anchor, ranks the remaining
+  candidates by eligible backlog, and selects the widest layout that fits. It
+  therefore transmits to two stations on two 106-tone RUs and rotates service.
+- `fHoL` ranks by head-of-line age and selects the smallest layout that can
+  accommodate all candidates. It transmits to all three stations in three of
+  the four 52-tone RU positions.
 
-| Scenario / Config | Description | Scheduler / Function | Channel / Bandwidth | Packets Received by Clients (UDP App) |
-|---|---|---|---|---|
-| **`EqualSizedRUs_fBW`** | Bandwidth Optimization | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 129 <br> `host[1]`: 18 <br> `host[2]`: 127 <br> **Total: 274** |
-| **`EqualSizedRUs_fHoL`** | Concurrency Optimization | `HeDlSchedulerEqualSizedRUs` (fHoL) | 5 GHz (20 MHz) | `host[0]`: 129 <br> `host[1]`: 18 <br> `host[2]`: 127 <br> **Total: 274** |
-| **`BacklogBased`** | Queue-Aware Sizing | `HeDlSchedulerBacklogBased` | 5 GHz (20 MHz) | `host[0]`: 110 <br> `host[1]`: 28 <br> `host[2]`: 11 <br> **Total: 149** |
-| **`HoLMinDelay`** | Baseline Latency | `HeDlSchedulerHoLMinDelay` | 5 GHz (20 MHz) | `host[0]`: 2 <br> `host[1]`: 65 <br> `host[2]`: 98 <br> **Total: 165** |
-| **`WideBandwidth80MHz`**| 80 MHz, 8-user scaling | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (80 MHz) | `host[0..6]`: 155 each <br> `host[7]`: 154 <br> **Total: 1239** |
-| **`MultiTidBlockAck`** | Downlink Multi-TID Block Ack | `HeDlSchedulerEqualSizedRUs` (fBW) | 5 GHz (20 MHz) | `host[0]`: 115 (80 VO, 35 NC) <br> `host[1]`: 115 (80 VO, 35 NC) <br> `host[2]`: 0 <br> **Total: 230** |
+At 20 MHz, `fBW` occupies 212 tones and achieves higher aggregate throughput;
+`fHoL` occupies 156 tones but serves every station in each MU exchange. At
+80 MHz both have enough capacity for the offered load, so `fHoL`'s three-user
+service gives slightly lower delay.
 
-### Results Verification with `opp_scavetool`
+## Reproducing `.sca` and `.vec` results
 
-To verify scalar and vector results after the simulations run:
+Run one configuration and run number at a time from this directory. The
+verified command was:
 
 ```sh
-opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*app*"' examples/ieee80211ax/dl_ofdma/results/*.sca
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c EqualSizedRUs_fBW -r 0 --result-dir=results/comparison
 ```
 
----
+Repeat it for the other five configurations in the table. Every verified run
+exited successfully at the `1 s` simulation time limit and produced a `.sca`,
+`.vec`, and `.vci` file under `results/comparison`.
 
-## 3. PCAP Tshark Packet Exchange Analysis
-
-To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+Check run metadata rather than relying only on filenames:
 
 ```sh
-bin/inet -u Cmdenv -c MultiTidBlockAck examples/ieee80211ax/dl_ofdma/omnetpp.ini --result-dir=examples/ieee80211ax/dl_ofdma/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+opp_scavetool query -a \
+  'results/comparison/EqualSizedRUs_fBW-#0.sca'
 ```
 
-Use TShark to print the timeline of packet exchanges:
+Query application totals and delay distributions with:
 
 ```sh
-tshark -n -r examples/ieee80211ax/dl_ofdma/results/MultiTidBlockAck-#0Lan80211AxDlOfdma.ap.wlan[0].pcap -c 25
+opp_scavetool query -s -l \
+  -f 'module =~ **.host[*].app[0] AND (name =~ packetReceived* OR name =~ endToEndDelay*)' \
+  results/comparison/*.sca
+
+opp_scavetool query -v -l \
+  -f 'module =~ **.host[*].app[0] AND (name =~ packetReceived* OR name =~ endToEndDelay*)' \
+  results/comparison/*.vec
 ```
 
-The decoded output timeline shows:
-1. **ADDBA negotiation**: The AP and hosts exchange Action frames (e.g. frames 3, 7, 9, 11) to establish the Block Ack agreement.
-2. **Downlink UDP traffic**: Multi-user transmissions of UDP data packets are sent by the AP to the client hosts.
-3. **Trigger/Block Ack exchanges**: The AP sends Block Ack Requests (BAR) (e.g. frame 22), and the hosts reply with Block Acks (BA) (e.g. frame 23) confirming packet delivery.
+## Scalar results
 
----
+Throughput uses application payload bytes received in the `0.3 s` measurement
+interval. Mean delay is weighted over all received application packets.
 
-## 4. Analysis and Insights
+| Configuration | Packets per host | App throughput | Mean E2E delay | Max E2E delay |
+|---|---:|---:|---:|---:|
+| `EqualSizedRUs_fBW` | 2992 / 2928 / 2880 | 23.467 Mbps | 10.472 ms | 12.259 ms |
+| `EqualSizedRUs_fHoL` | 2528 / 2528 / 2528 | 20.224 Mbps | 12.858 ms | 14.302 ms |
+| `SuEdcaBaseline` | 943 / 945 / 923 | 7.496 Mbps | 17.010 ms | 23.607 ms |
+| `EqualSizedRUs80MHz_fBW` | 4995 / 4996 / 4996 | 39.965 Mbps | 0.797 ms | 1.523 ms |
+| `EqualSizedRUs80MHz_fHoL` | 4994 / 4994 / 4995 | 39.955 Mbps | 0.744 ms | 1.200 ms |
+| `SuEdcaBaseline80MHz` | 2934 / 2924 / 2831 | 23.171 Mbps | 5.047 ms | 7.211 ms |
 
-### Concurrency vs. Spectral Efficiency (fBW vs. fHoL)
-- `EqualSizedRUs_fHoL` schedules all three stations in every MU opportunity using three 52-tone RUs. The run contains 42 three-user HE MU PPDUs and delivers `43/43/43` packets, including the single-user Block Ack bootstrap packet for each STA.
-- `EqualSizedRUs_fBW` selects two 106-tone RUs per MU PPDU. It rotates service across the three backlogged STAs rather than permanently excluding the third one: 70 two-user HE MU PPDUs deliver `47/47/47` packets.
+The controlled comparisons show:
 
-### Queue-Aware Multi-User Sizing (BacklogBased vs. HoLMinDelay)
-- Both asymmetric scenarios schedule all three active stations in every MU opportunity. `BacklogBased` creates 12 mixed-RU PPDUs; `HoLMinDelay` creates 32 three-user PPDUs.
-- Packet counts alone are not a throughput comparison because the application payloads are 1000, 400, and 100 bytes for hosts 0, 1, and 2. In delivered application bytes, `BacklogBased` carries 57,600 bytes versus 52,700 bytes for `HoLMinDelay`, about 9.3% more in this deterministic short run. `HoLMinDelay` gives the light, small-packet flow more transmission opportunities.
-- The central 26-tone RU used by the light flow is evaluated with an RU-bandwidth-adjusted receive threshold. This keeps the PHY sensitivity test consistent with the medium's per-RU receive-power scaling.
+- 20 MHz `fBW` is `3.13x` SU throughput and lowers mean delay by about 38%;
+- 20 MHz `fHoL` is `2.70x` SU throughput with perfectly even delivery;
+- 20 MHz `fBW` is about 16% faster than `fHoL`, as expected from the wider RU
+  layout;
+- widening `fBW` from 20 to 80 MHz increases delivered throughput by about
+  70% and removes the backlog; and
+- at 80 MHz, `fHoL` and `fBW` both meet the offered load, with `fHoL` reducing
+  mean delay by about 6.6%.
 
-### Wide Bandwidth 80 MHz Configuration
-- Scaling the channel to 80 MHz configures an 8-host, 8-RU scheduling case using separate 106-tone RUs.
-- The run creates 85 eight-user HE MU PPDUs and delivers 86 packets to every host (one single-user Block Ack bootstrap packet plus 85 MU packets). This verifies 8-user RU allocation and reception, but a single short deterministic run is still not a capacity benchmark.
+## Vector result
 
-### Downlink Multi-TID Block Ack (`MultiTidBlockAck`)
-- In this configuration, Multi-TID Aggregation is negotiated between the AP and the client stations. 
-- The Server sends two concurrent streams per host (TID 6 / Voice and TID 7 / Network Control). The AP accumulates this multi-TID downlink data, packs them into HE MU PPDUs using `sequentialBar` acknowledgement method, and issues Multi-TID BAR frames to confirm multi-TID delivery. 
-- A total of 115 packets are successfully received by both `host[0]` and `host[1]`.
+The packet-arrival vectors were binned into consecutive 50 ms intervals. The
+result confirms sustained delivery rather than a scalar caused by one burst:
 
-## 4. Qtenv WATCH Inspection
+| Configuration | 0.70-.75 | .75-.80 | .80-.85 | .85-.90 | .90-.95 | .95-1.00 |
+|---|---:|---:|---:|---:|---:|---:|
+| 20 MHz `fBW` | 23.552 | 23.552 | 23.552 | 23.552 | 23.552 | 23.040 |
+| 20 MHz `fHoL` | 19.968 | 20.736 | 19.968 | 19.968 | 20.736 | 19.968 |
+| 20 MHz SU | 7.744 | 7.232 | 7.776 | 7.280 | 7.264 | 7.680 |
+| 80 MHz `fBW` | 39.728 | 39.968 | 40.048 | 40.096 | 39.760 | 40.192 |
+| 80 MHz `fHoL` | 39.920 | 40.208 | 39.856 | 39.872 | 39.888 | 39.984 |
+| 80 MHz SU | 23.216 | 22.736 | 23.280 | 23.232 | 22.720 | 23.840 |
 
-Run any configuration with `-u Qtenv`, select the AP's `wlan[0].mac.hcf` module, and inspect `heHcfSummary`, `pendingUlTriggerName`, `stationQueueBanks`, `triggeredUlExchangeCount`, and `csiManager.csiTable`.
+Values are aggregate application Mbps. The delay vectors independently match
+the scalar histogram counts, means, minima, and maxima shown above.
 
-For the AP scheduler submodule, inspect `lastScheduleSummary`, `lastCandidates`, and `lastRuAllocations`. These watches show whether the scheduler selected ordinary OFDMA or, in `DlMuMimo`, a full-channel MU-MIMO group with per-user NSS/MCS/SNR.
+## PCAP and TShark verification
 
-For PHY details, inspect the AP radio transmitter's `lastHeTransmissionSummary` and `lastHeUserPhyParameters`. These expose the HE PPDU format, user count, RU layout, coding, packet extension, puncturing mask, LDPC accounting, and resolved PPDU duration.
+The following command records the AP MAC capture without permanently enabling
+capture in `omnetpp.ini`:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c EqualSizedRUs_fBW -r 0 --result-dir=results/pcap_comparison/fBW \
+  '--*.ap.wlan[*].recordPcap=true' \
+  '--*.ap.wlan[*].pcapRecorder[*].moduleNamePatterns="mac"' \
+  '--*.ap.wlan[*].pcapRecorder[*].verbose=false' \
+  '--**.checksumMode="computed"' '--**.fcsMode="computed"' \
+  '--**.scalar-recording=false' '--**.vector-recording=false'
+```
+
+Repeat with `EqualSizedRUs_fHoL` and `SuEdcaBaseline`, changing the result
+directory. The checksum/FCS overrides make packets serializable for capture;
+the performance table comes from the non-capture campaign.
+
+Validate a capture and inspect MU-BAR user allocations with:
+
+```sh
+capinfos \
+  'results/pcap_comparison/fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap'
+
+tshark -n \
+  -r 'results/pcap_comparison/fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
+  -Y 'wlan.trigger.he.trigger_type == 2' \
+  -T fields -E header=y -E occurrence=a \
+  -e frame.time_relative \
+  -e wlan.trigger.he.user_info.aid12 \
+  -e wlan.trigger.he.ru_allocation
+```
+
+The AP captures are PCAPng files with native IEEE 802.11 encapsulation:
+
+| Capture | Packets | MU-BAR triggers | Block Ack frames | Observed response grouping |
+|---|---:|---:|---:|---|
+| 20 MHz `fBW` | 1842 | 456 | 912 | 2 simultaneous BAs per trigger |
+| 20 MHz `fHoL` | 1323 | 261 | 783 | 3 simultaneous BAs per trigger |
+| 20 MHz SU | 450 | 0 | 144 | ordinary SU BAR/BA only |
+
+Representative `fBW` Trigger rows contain rotating AID pairs and TShark RU
+values `53,54`, which INET's serializer maps to the two 106-tone positions.
+Representative `fHoL` rows contain AIDs `1,2,3` and values `37,38,39`, the first
+three positions in the four-52-tone layout. This is direct protocol-visible
+evidence that the policies select different RU layouts.
+
+The two `fBW` HE-TB Block Acks have identical timestamps after each Trigger;
+the three `fHoL` responses do likewise. The Block Ack starting sequence numbers
+also advance from 1 to values above 800, proving that the bitmap window advances
+beyond its initial 64 MPDUs instead of stalling.
+
+## Defects found and fixed
+
+The poor earlier result was not just a parameter problem. Two code defects and
+several scenario confounders hid the OFDMA benefit:
+
+1. `HeDlSchedulerEqualSizedRUs` estimated each allocation's packing horizon
+   from only the HoL MPDU. The packing planner therefore stopped at roughly one
+   MPDU per user even when an eligible backlog and A-MPDU capacity existed. It
+   now estimates from the complete eligible per-user backlog.
+2. A triggered Block Ack response used the recipient agreement's original
+   starting sequence number instead of the starting sequence requested in the
+   MU-BAR User Info. After the first 64-MPDU bitmap window, outstanding MPDUs
+   were not released and DL MU service stalled. The response now uses the
+   trigger-requested window.
+3. The old workload used synchronized voice traffic, low power, a retry timeout
+   longer than the useful setup interval, and an 80 MHz case that also changed
+   host count and load. The controlled matrix removes those confounders.
+
+Focused regression coverage verifies backlog-vs-HoL ranking, backlog-sized
+packing duration, MU-BAR bitmap-window selection, BA-window exhaustion, and
+HE MU TXOP trimming:
+
+```sh
+CCACHE_DISABLE=1 inet_run_unit_tests -m release \
+  -f '(HeDlScheduler|Ieee80211HeDlMuTxOpFs|Ieee80211HeMuBlockAckGating).*\.test'
+```
+
+All four selected tests pass.
+
+## Limitations
+
+- INET carries some HE PHY information as packet metadata, so the capture does
+  not expose every HE-SIG field exactly as a real monitor capture would.
+- Application delivery is established from sink `.sca`/`.vec` results. Do not
+  compare configurations by TShark-decoded UDP count because aggregated MPDUs
+  may be presented as opaque 802.11 payloads to the dissector.
+- The results show the intended scheduler trade-off for this workload, not a
+  universal claim that one policy or OFDMA always wins.
+
+Within those limits, the example now clearly demonstrates simultaneous
+multi-station delivery, the throughput advantage of DL OFDMA over matched SU
+OFDM, the `fBW` versus `fHoL` trade-off, and the capacity effect of 20 versus
+80 MHz.

@@ -7,6 +7,7 @@ allocation index; all Block Ack responses require an explicit BAR or MU-BAR.
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -280,6 +281,22 @@ ASSERT(agreementHandler->agreement->getBlockAckRecord()->getAckState(SequenceNum
 ASSERT(!agreementHandler->agreement->getBlockAckRecord()->getAckState(SequenceNumberCyclic(3), 0));
 EV << "Partial A-MPDU acknowledged only the successful MPDU.\n";
 
+auto laterHeader = makeShared<Ieee80211DataHeader>();
+laterHeader->setType(ST_DATA_WITH_QOS);
+laterHeader->setTransmitterAddress(ap);
+laterHeader->setReceiverAddress(sta);
+laterHeader->setTid(tid);
+laterHeader->setSequenceNumber(SequenceNumberCyclic(70));
+agreementHandler->qosFrameReceived(laterHeader, nullptr);
+Ieee80211HeTriggerUserInfo muBarUser;
+muBarUser.tid = tid;
+muBarUser.muBarCompressedBitmap = true;
+muBarUser.muBarStartingSequenceNumber = 70;
+auto triggeredBlockAck = buildHeMuBarCompressedBlockAck(muBarUser, agreementHandler->agreement, ap, sta);
+ASSERT(triggeredBlockAck->getStartingSequenceNumber() == SequenceNumberCyclic(70));
+ASSERT(triggeredBlockAck->getBlockAckBitmap().getBit(0));
+EV << "MU-BAR response bitmap starts at the trigger-requested sequence number.\n";
+
 auto barPacket = makeBarPacket(sta, ap, tid);
 hcf->receiveControl(barPacket);
 ASSERT(tx.transmitCount == 1);
@@ -298,6 +315,9 @@ QoS BlockAck record updates: 2
 
 %contains: stdout
 Partial A-MPDU acknowledged only the successful MPDU.
+
+%contains: stdout
+MU-BAR response bitmap starts at the trigger-requested sequence number.
 
 %contains: stdout
 TX 1: BasicBlockAck ifs=0.000016

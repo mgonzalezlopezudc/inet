@@ -258,7 +258,19 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
 
     // Fallback: standard equal-sized RU scheduling
     auto selectedCandidates = context.candidates;
-    std::sort(selectedCandidates.begin(), selectedCandidates.end(), defaultCandidateLess);
+    if (schedulingFunction == "fBW") {
+        std::sort(selectedCandidates.begin(), selectedCandidates.end(), [] (const CandidateInfo& a, const CandidateInfo& b) {
+            if (a.anchor != b.anchor)
+                return a.anchor;
+            if (a.backlogBytes != b.backlogBytes)
+                return a.backlogBytes > b.backlogBytes;
+            if (a.holDelay != b.holDelay)
+                return a.holDelay > b.holDelay;
+            return a.staAddress < b.staAddress;
+        });
+    }
+    else
+        std::sort(selectedCandidates.begin(), selectedCandidates.end(), defaultCandidateLess);
     auto validCounts = getHeEqualRuCounts(context.channelBandwidth);
     int candidateLimit = maxMuStations < 0 ? getHeMaxRuCount(context.channelBandwidth) : maxMuStations;
     int candidates = std::min((int)selectedCandidates.size(), candidateLimit);
@@ -316,8 +328,13 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         if (maxMcs >= 0) {
             alloc.mcs = std::min(alloc.mcs, maxMcs);
         }
+        // The packing planner uses this value as the common per-user packing
+        // horizon. Estimate it from all currently eligible MPDUs instead of
+        // the HoL MPDU alone, otherwise a symmetric equal-RU schedule can
+        // never grow beyond one MPDU per user despite maxAmpduMpduCount.
         alloc.estimatedDuration = estimateDuration(
-                std::max<int64_t>(selectedCandidates[i].holPacketBytes, 1),
+                std::max<int64_t>({selectedCandidates[i].backlogBytes,
+                        selectedCandidates[i].holPacketBytes, 1}),
                 alloc.ru.toneSize, alloc.mcs, context.guardInterval);
         result.push_back(alloc);
     }
