@@ -113,7 +113,7 @@
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png",
-  "git_revision": "764b6791d5ae2ee52955d3ea64c76e26e85c8bcd",
+  "git_revision": "b901f85f9bd35b5c5aa3c26fddf63428a3bc4d5f",
   "result_filters": [
     {
       "module": "**.ap.wlan[0].radio",
