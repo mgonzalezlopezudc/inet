@@ -26,7 +26,7 @@ Therefore, wider channels do not automatically translate to increased range or b
 The simulation runs in the `HeChannelWidthsNetwork` topology consisting of:
 - **`ap`**: Access Point at `(300, 200)`.
 - **`sta[0..3]`**: Four stationary client hosts arranged around the AP at close range (approx. 50-80 meters).
-- **`server`**: A wired server connected to the AP via a 100M Ethernet link.
+- **`server`**: A wired server connected to the AP via a 100G Ethernet link.
 - **Traffic**: Downlink UDP traffic is sent from the server to each of the four client hosts (200B payloads sent every 2ms).
 
 The variables under test are the channel width and its matching physical bitrate:
@@ -98,7 +98,6 @@ The decoded output timeline shows:
    - As the channel width increases, the mean delay for the first station (`host[0]`) drops significantly: **0.273 ms** (20 MHz) $\rightarrow$ **0.178 ms** (40 MHz) $\rightarrow$ **0.113 ms** (80 MHz) $\rightarrow$ **0.097 ms** (160 MHz).
    - This occurs because a wider channel supports a higher physical bit rate, reducing the physical transmission duration (airtime) of the frame.
 
-2. **Sequential Delay and Ethernet Serialization**:
-   - Within each run, the delays increase sequentially: `host[0] < host[1] < host[2] < host[3]`.
-   - This is a didactically interesting artifact of **Ethernet serialization** on the server-to-AP link. The server generates packets for the four stations at the exact same simulation time. However, because the Ethernet link is serial, the packets must be transmitted one after another.
-   - Packet 0 is placed on the wire first, while Packet 3 must wait for Packets 0, 1, and 2 to finish transmitting over the Ethernet cable. This creates a staggered queueing arrival time at the AP MAC layer, translating directly to sequential end-to-end delays at the client applications.
+2. **Negligible Sequential Delay with 100G Ethernet**:
+   - In earlier configurations using a 100M Ethernet link, the packets for the four stations were serialized one after another on the wire, introducing a staggered arrival/queueing delay at the AP MAC layer (`host[0] < host[1] < host[2] < host[3]`).
+   - With the 100G Ethernet link, the transmission delay per packet is extremely small (around 16 ns for a 200B packet). This makes the Ethernet serialization delay negligible, so the packets arrive at the AP almost simultaneously, effectively eliminating this staggered queueing delay.

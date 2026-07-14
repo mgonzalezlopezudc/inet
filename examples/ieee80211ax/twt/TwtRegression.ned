@@ -4,7 +4,7 @@
 package inet.examples.ieee80211ax.twt;
 
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
-import inet.node.ethernet.Eth100M;
+import inet.node.ethernet.Eth100G;
 import inet.node.inet.StandardHost;
 import inet.node.inet.WirelessHost;
 import inet.node.wireless.AccessPoint;
@@ -47,5 +47,5 @@ network TwtRegression
             @display("p=500,180");
         }
     connections:
-        server.ethg++ <--> Eth100M <--> ap.ethg++;
+        server.ethg++ <--> Eth100G <--> ap.ethg++;
 }

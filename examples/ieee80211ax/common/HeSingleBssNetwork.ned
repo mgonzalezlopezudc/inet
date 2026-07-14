@@ -5,7 +5,7 @@
 package inet.examples.ieee80211ax.common;
 
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
-import inet.node.ethernet.Eth100M;
+import inet.node.ethernet.Eth100G;
 import inet.node.inet.StandardHost;
 import inet.node.inet.WirelessHost;
 import inet.node.wireless.AccessPoint;
@@ -28,7 +28,7 @@ import inet.visualizer.contract.IIntegratedVisualizer;
 // - \p radioMedium (Ieee80211ScalarRadioMedium): Models the shared wireless medium, handling pathloss and interference.
 // - \p host[] (WirelessHost): A collection of wireless client stations using simplified 802.11 management (Ieee80211MgmtStaSimplified) by default.
 // - \p ap (AccessPoint): The local BSS Access Point using simplified AP management (Ieee80211MgmtApSimplified).
-// - \p server (StandardHost): A wired backend host connected directly to the AP via a 100 Mbps Ethernet link (Eth100M).
+// - \p server (StandardHost): A wired backend host connected directly to the AP via a 100 Gbps Ethernet link (Eth100G).
 //
 network HeSingleBssNetwork
 {
@@ -60,5 +60,5 @@ network HeSingleBssNetwork
             @display("p=250,300");
         }
     connections:
-        server.ethg++ <--> Eth100M <--> ap.ethg++;
+        server.ethg++ <--> Eth100G <--> ap.ethg++;
 }

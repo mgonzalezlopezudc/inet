@@ -5,7 +5,7 @@
 package inet.examples.ieee80211ax.bss_coloring;
 
 import inet.networklayer.configurator.ipv4.Ipv4NetworkConfigurator;
-import inet.node.ethernet.Eth100M;
+import inet.node.ethernet.Eth100G;
 import inet.node.inet.StandardHost;
 import inet.node.inet.WirelessHost;
 import inet.node.wireless.AccessPoint;
@@ -24,7 +24,7 @@ import inet.visualizer.contract.IIntegratedVisualizer;
 // back to single-user (SU) transmissions.
 //
 // Both APs are connected to separate wired traffic servers (server1 and server2)
-// via 100M Ethernet lines to isolate BSS traffic generation paths.
+// via 100G Ethernet lines to isolate BSS traffic generation paths.
 //
 network BssColoringNetwork
 {
@@ -75,6 +75,6 @@ network BssColoringNetwork
                 @display("p=350,150");
         }
     connections:
-        server1.ethg++ <--> Eth100M <--> ap1.ethg++;
-        server2.ethg++ <--> Eth100M <--> ap2.ethg++;
+        server1.ethg++ <--> Eth100G <--> ap1.ethg++;
+        server2.ethg++ <--> Eth100G <--> ap2.ethg++;
 }

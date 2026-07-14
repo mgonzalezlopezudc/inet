@@ -1,9 +1,9 @@
 # working directory, command line arguments, simulation time limit, fingerprint, expected result, tags
-/examples/ieee80211ax/bss_coloring/,       -f omnetpp.ini -c BssColoringEnabled -r 0,       1s,      9929-7654/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/dl_ofdma/,          -f omnetpp.ini -c EqualSizedRUs_fBW -r 0,        0.6s,    e118-cc49/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_bsr/,            -f omnetpp.ini -c FullBsrAccounting -r 0,        2s,      9295-4f60/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_er_su/,          -f omnetpp.ini -c HeErSu -r 0,                   2s,      9cbc-0d6e/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_features/,       -f omnetpp.ini -c CombinedHeFeatures -r 0,       0.52s,   a37f-9e6e/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_rate_adaptation/,-f omnetpp.ini -c HeMinstrel -r 0,               2s,      ac45-e283/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/twt/,               -f omnetpp.ini -c IndividualAnnounced -r 0,      100s,    96b3-6ffb/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/ul_ofdma/,          -f omnetpp.ini -c MixedUora -r 0,                2s,      dd42-4808/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/bss_coloring/,       -f omnetpp.ini -c BssColoringEnabled -r 0,       1s,      337f-622d/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/dl_ofdma/,          -f omnetpp.ini -c EqualSizedRUs_fBW -r 0,        0.6s,    b1f5-c2ff/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/he_bsr/,            -f omnetpp.ini -c FullBsrAccounting -r 0,        2s,      0b61-ddc3/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/he_er_su/,          -f omnetpp.ini -c HeErSu -r 0,                   2s,      d790-2d10/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/he_features/,       -f omnetpp.ini -c CombinedHeFeatures -r 0,       0.52s,   56c4-9dd3/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/he_rate_adaptation/,-f omnetpp.ini -c HeMinstrel -r 0,               2s,      a481-63c8/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/twt/,               -f omnetpp.ini -c IndividualAnnounced -r 0,      100s,    99f2-7833/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/ul_ofdma/,          -f omnetpp.ini -c MixedUora -r 0,                2s,      8705-fe54/tplx, PASS, wireless ieee80211 he

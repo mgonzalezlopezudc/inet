@@ -21,7 +21,7 @@ In legacy 802.11 standards, all uplink traffic is sent using single-user CSMA/CA
 The network [Lan80211AxUlOfdma.ned](Lan80211AxUlOfdma.ned) consists of:
 - **`ap`**: An Access Point located at `(25, 25)` on a 50m x 50m area.
 - **`host[0..2]`**: Three wireless stations situated around the AP at close range (5 meters).
-- **`server`**: A wired server connected to the AP via 100M Ethernet.
+- **`server`**: A wired server connected to the AP via 100G Ethernet.
 - **Traffic**: Each host generates heavy uplink UDP traffic destined for the `server` (400B packets sent every 0.4ms, starting at `0.2s`).
 
 ```
@@ -31,7 +31,7 @@ The network [Lan80211AxUlOfdma.ned](Lan80211AxUlOfdma.ned) consists of:
              v         v         v
                     [ ap ]
                       |
-                      | (100M Ethernet)
+                      | (100G Ethernet)
                       v
                   [server]
 ```

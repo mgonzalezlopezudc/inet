@@ -18,7 +18,7 @@ To allocate RUs efficiently, the AP's Uplink Scheduler needs to know the backlog
 The network [HeBsrNetwork.ned](HeBsrNetwork.ned) consists of:
 - **`ap`**: An Access Point located at `(300, 210)`.
 - **`host[0..2]`**: Three wireless stations located around the AP at distances of 60m.
-- **`server`**: A wired server connected to the AP via a 100 Mbps Ethernet link (`ap.ethg++ <--> Eth100M <--> server.ethg++`).
+- **`server`**: A wired server connected to the AP via a 100 Gbps Ethernet link (`ap.ethg++ <--> Eth100G <--> server.ethg++`).
 - **Traffic**: Each host runs a `UdpBasicApp` that generates uplink traffic destined for the `server` with 700B messages every 0.35ms.
 
 ```
@@ -28,7 +28,7 @@ The network [HeBsrNetwork.ned](HeBsrNetwork.ned) consists of:
              v        v        v
                    [ ap ]
                      |
-                     | (100M Ethernet)
+                     | (100G Ethernet)
                      v
                  [server]
 ```
