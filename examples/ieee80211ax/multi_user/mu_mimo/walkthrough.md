@@ -129,10 +129,10 @@ Two deterministic seeds produced:
 
 | Direction | Seed | MU delivered | EDCA delivered | Delivery gain | MU mean delay | EDCA mean delay |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| DL | 0 | 4080 | 2811 | 45.1% | 24.83-24.86 ms | 16.98-17.05 ms |
-| DL | 1 | 4080 | 2814 | 45.0% | 24.78-24.80 ms | 16.92-16.99 ms |
-| UL | 0 | 2556 | 1773 | 44.2% | 198.35 ms | 273.42 ms |
-| UL | 1 | 2592 | 1807 | 43.4% | 196.14 ms | 266.51 ms |
+| DL | 0 | 4080 | 2820 | 44.7% | 24.80 ms | 16.76-16.99 ms |
+| DL | 1 | 4080 | 2820 | 44.7% | 24.74 ms | 16.79-17.00 ms |
+| UL | 0 | 2556 | 1773 | 44.2% | 198.22 ms | 273.33 ms |
+| UL | 1 | 2592 | 1807 | 43.4% | 196.01 ms | 266.43 ms |
 
 DL MU-MIMO delivers more traffic during the fixed 0.7-1.0 s measurement
 interval, so its queueing-delay population is not the same as the EDCA
@@ -236,7 +236,7 @@ tshark -n -r "$DL_PCAP" \
     -e _ws.col.Info
 ```
 
-Seed 0 contains five BFRP Triggers. The first appears at 0.501744647 s for
+Seed 0 contains five BFRP Triggers. The first appears at 0.501732340 s for
 AIDs 1 and 2; later polls include all three beamformees. The exchange is
 preceded by the NDP Announcement and sounding NDP and followed by compressed
 beamforming feedback, matching Figure 26-8. Native MAC captures do not contain
@@ -258,7 +258,7 @@ tshark -n -r "$UL_PCAP" \
     -e _ws.col.Info
 ```
 
-The capture contains 490 decoded Basic Triggers. Frame 18 at 0.203093286 s
+The capture contains 490 decoded Basic Triggers. Frame 18 at 0.202041286 s
 identifies AIDs 1, 2, and 3, assigns RU allocation 61 (the full 242-tone RU) to
 all three, and decodes starting streams 0, 1, and 2. The encoded NSS values are
 0, 0, and 0, meaning one spatial stream per user; the TID Aggregation Limit is
@@ -275,7 +275,7 @@ tshark -n -r "$UL_PCAP" \
 ```
 
 Frames 19, 20, and 21 are 1000-byte QoS Data frames from the three stations at
-0.204609401-0.204609506 s; frame 22 is the AP's Block Ack response. The capture
+0.203557401-0.203557506 s; frame 22 is the AP's Block Ack response. The capture
 therefore corroborates the Trigger structure and actual simultaneous payload
 delivery rather than only QoS Null responses.
 
@@ -287,7 +287,7 @@ bin/inet -u Cmdenv -c DlMuMimo80MHz -r 0 \
 ```
 
 The validated run reaches the 1 s simulation limit without error. Its eight
-receivers deliver 1494-1510 packets each. This check specifically guards the
+receivers deliver 1490-1506 packets each. This check specifically guards the
 wide-RU BFRP coding path that previously requested BCC on 484-tone RUs.
 
 ## Root-cause summary

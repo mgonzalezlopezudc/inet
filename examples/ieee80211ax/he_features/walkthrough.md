@@ -225,15 +225,16 @@ All configurations were run with Cmdenv, and the table reports the `packetReceiv
 
 | Configuration / Config | Description | Packets Received by Clients (UDP App) |
 |---|---|---|
-| **`BccBaseline`** | HE MU-OFDMA with BCC coding | `host[0..3]`: 16 each <br> **Total: 64** |
-| **`HeLdpc`** | HE LDPC timing and PER gain | `host[0..3]`: 16 each <br> **Total: 64** |
-| **`PacketExtension`** | 8 µs HE packet-extension duration | `host[0..3]`: 16 each <br> **Total: 64** |
-| **`PreamblePuncturing`** | Punctured second 20 MHz subchannel | `host[0..3]`: 16 each <br> **Total: 64** |
-| **`MixedLdpcSupport`** | AP LDPC enabled, host[3] disabled | `host[0]`: 56 <br> `host[1]`: 1 <br> `host[2]`: 1 <br> `host[3]`: 55 <br> **Total: 113** |
-| **`CombinedHeFeatures`** | LDPC, PE, and puncturing enabled | `host[0..3]`: 16 each <br> **Total: 64** |
-| **`PreamblePuncturingUnderInterference`** | Jammer on 2nd subchannel (punctured) | `host[0..3]`: 10 each <br> **Total: 40** |
-| **`CleanChannelBaseline`** | Clean channel baseline (no interferer) | `host[0..3]`: 16 each <br> **Total: 64** |
-| **`LegacyInterferenceWithoutPuncturing`** | Jammer on 2nd subchannel (no puncturing) | `host[0..3]`: 10 each <br> **Total: 40** |
+| **`BccBaseline`** | HE MU-OFDMA with BCC coding | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`HeLdpc`** | HE LDPC timing and PER gain | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`PacketExtension`** | 8 µs HE packet-extension duration | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`PreamblePuncturing`** | Punctured second 20 MHz subchannel | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`MixedLdpcSupport`** | AP LDPC enabled, host[3] disabled | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`CombinedHeFeatures`** | LDPC, PE, and puncturing enabled | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`PreamblePuncturingUnderInterference`** | Jammer on 2nd subchannel (punctured) | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`CleanChannelBaseline`** | Clean channel baseline (no interferer) | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`LegacyInterferenceWithoutPuncturing`** | Jammer on 2nd subchannel (no puncturing) | `host[0..3]`: 400 each <br> **Total: 1600** |
+| **`DynamicPuncturing`** | Dynamic preamble puncturing | `host[0..3]`: 400 each <br> **Total: 1600** |
 
 To query the received packet counts using `opp_scavetool`:
 

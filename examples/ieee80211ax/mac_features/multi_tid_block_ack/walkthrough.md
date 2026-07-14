@@ -63,10 +63,11 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.serve
 ```
 
 ### Quantitative Summary:
-- **`host[0..2].app[0] packetSent:count` (TID 0)**: 361 packets each (Total sent = 1083).
-- **`host[0..2].app[1] packetSent:count` (TID 6)**: 176 packets each (Total sent = 528).
-- **`server.app[0] packetReceived:count` (TID 0)**: 1030.
-- **`server.app[1] packetReceived:count` (TID 6)**: 512.
+- **`host[0].app[0] packetSent:count` (TID 6)**: 361 packets.
+- **`host[1].app[0] packetSent:count` (TID 7)**: 361 packets.
+- **`host[2]`**: Traffic is disabled (`numApps = 0`).
+- **`server.app[0] packetReceived:count` (TID 6)**: 360.
+- **`server.app[1] packetReceived:count` (TID 7)**: 360.
 
 ---
 

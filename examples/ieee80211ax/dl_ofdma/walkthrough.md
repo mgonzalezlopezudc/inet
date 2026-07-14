@@ -10,7 +10,7 @@ bit-level interoperability or conformance test.
 The corrected model now demonstrates the intended advantages under a saturated
 three-station downlink workload:
 
-- at 20 MHz, `fBW` DL OFDMA delivers `23.467 Mbps`, versus `7.496 Mbps` for
+- at 20 MHz, `fBW` DL OFDMA delivers `23.552 Mbps`, versus `7.520 Mbps` for
   matched SU OFDM: a `3.13x` throughput gain;
 - at 20 MHz, `fHoL` delivers `20.224 Mbps` and exactly equal packet counts to
   all three stations, illustrating its concurrency/fairness objective;
@@ -125,17 +125,17 @@ interval. Mean delay is weighted over all received application packets.
 
 | Configuration | Packets per host | App throughput | Mean E2E delay | Max E2E delay |
 |---|---:|---:|---:|---:|
-| `EqualSizedRUs_fBW` | 2992 / 2928 / 2880 | 23.467 Mbps | 10.472 ms | 12.259 ms |
-| `EqualSizedRUs_fHoL` | 2528 / 2528 / 2528 | 20.224 Mbps | 12.858 ms | 14.302 ms |
-| `SuEdcaBaseline` | 943 / 945 / 923 | 7.496 Mbps | 17.010 ms | 23.607 ms |
-| `EqualSizedRUs80MHz_fBW` | 4995 / 4996 / 4996 | 39.965 Mbps | 0.797 ms | 1.523 ms |
-| `EqualSizedRUs80MHz_fHoL` | 4994 / 4994 / 4995 | 39.955 Mbps | 0.744 ms | 1.200 ms |
-| `SuEdcaBaseline80MHz` | 2934 / 2924 / 2831 | 23.171 Mbps | 5.047 ms | 7.211 ms |
+| `EqualSizedRUs_fBW` | 3088 / 2880 / 2864 | 23.552 Mbps | 10.391 ms | 12.182 ms |
+| `EqualSizedRUs_fHoL` | 2528 / 2528 / 2528 | 20.224 Mbps | 12.860 ms | 14.292 ms |
+| `SuEdcaBaseline` | 964 / 942 / 914 | 7.520 Mbps | 16.914 ms | 23.655 ms |
+| `EqualSizedRUs80MHz_fBW` | 5006 / 5001 / 4990 | 39.992 Mbps | 0.767 ms | 1.486 ms |
+| `EqualSizedRUs80MHz_fHoL` | 4997 / 4997 / 4997 | 39.976 Mbps | 0.710 ms | 1.147 ms |
+| `SuEdcaBaseline80MHz` | 2960 / 2893 / 2835 | 23.168 Mbps | 5.014 ms | 7.173 ms |
 
 The controlled comparisons show:
 
-- 20 MHz `fBW` is `3.13x` SU throughput and lowers mean delay by about 38%;
-- 20 MHz `fHoL` is `2.70x` SU throughput with perfectly even delivery;
+- 20 MHz `fBW` is `3.13x` SU throughput and lowers mean delay by about 39%;
+- 20 MHz `fHoL` is `2.69x` SU throughput with perfectly even delivery;
 - 20 MHz `fBW` is about 16% faster than `fHoL`, as expected from the wider RU
   layout;
 - widening `fBW` from 20 to 80 MHz increases delivered throughput by about

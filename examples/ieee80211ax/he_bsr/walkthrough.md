@@ -47,7 +47,7 @@ The [omnetpp.ini](omnetpp.ini) file defines three test scenarios:
 ### 2. `StaleBsr`
 - The queue report freshness threshold is set to `**.ap.wlan[*].mac.hcf.ulCoordinator.reportMaxAge = 10ms`.
 - Since queue statuses expire after 10 ms, the AP's scheduler frequently finds records stale and sends additional BSRP Trigger frames before backlog-based scheduling. The value is deliberately long enough for one Trigger exchange to finish deterministically; it is an INET experiment parameter, not an IEEE timer value.
-- **Result**: Higher explicit BSRP polling overhead (373 BSRP Triggers vs. 3 in baseline) due to continuous expiration.
+- **Result**: Higher explicit BSRP polling overhead (30 BSRP Triggers vs. 3 in baseline) due to continuous expiration.
 
 ### 3. `ImplicitBsr`
 - The AP's UL trigger check interval is set to a larger value: `**.ap.wlan[*].mac.hcf.ulTriggerCheckInterval = 0.5s`.
@@ -99,18 +99,18 @@ opp_scavetool query -l -f "*packetReceived:count*" examples/ieee80211ax/he_bsr/r
 ```
 FullBsrAccounting-#0.sca:
 scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   3
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  541
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1034
+scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  495
+scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1687
 
 StaleBsr-#0.sca:
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   28
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  500
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1012
+scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   30
+scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  475
+scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1640
 
 ImplicitBsr-#0.sca:
 scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   0
 scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  4
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        2077
+scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        2022
 ```
 
 ---
@@ -140,9 +140,9 @@ The decoded output timeline shows:
 1. **Explicit BSRP Polling Overhead**:
    - In `ImplicitBsr`, the AP sends **0 BSRP Triggers**. Because the STAs transmit BSRs implicitly inside uplink SU data frames during their EDCA transmit opportunities, the AP's coordinator receives regular backlog updates without having to explicitly query the STAs.
    - In `FullBsrAccounting`, the AP sends **3 BSRP Triggers**.
-   - In `StaleBsr`, the BSRP trigger count rises to **28 BSRP Triggers**. Because queue status records expire after 10 ms, the scheduler periodically has to refresh them.
+   - In `StaleBsr`, the BSRP trigger count rises to **30 BSRP Triggers**. Because queue status records expire after 10 ms, the scheduler periodically has to refresh them.
 
 2. **Trigger-Based Scheduling vs. EDCA Throughput**:
-   - `ImplicitBsr` delivers **2077 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding. Because the AP receives these implicit reports during normal EDCA transmissions, it requires **0 explicit BSRP trigger frames** and **4 Basic Triggers** to maintain fresh queue records.
-   - `FullBsrAccounting` delivers **1034 packets** and sends **541 Basic Triggers**. The constant polling and triggering overhead at 1ms check intervals limits the aggregate channel capacity, resulting in lower throughput than SU EDCA.
-   - `StaleBsr` delivers **1012 packets**. Because it spends extra overhead in BSRP polling cycles, it sends slightly fewer Basic Triggers (500) and suffers a slight throughput reduction compared to the full baseline.
+   - `ImplicitBsr` delivers **2022 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding. Because the AP receives these implicit reports during normal EDCA transmissions, it requires **0 explicit BSRP trigger frames** and **4 Basic Triggers** to maintain fresh queue records.
+   - `FullBsrAccounting` delivers **1687 packets** and sends **495 Basic Triggers**. The constant polling and triggering overhead at 1ms check intervals limits the aggregate channel capacity, resulting in lower throughput than SU EDCA.
+   - `StaleBsr` delivers **1640 packets**. Because it spends extra overhead in BSRP polling cycles, it sends slightly fewer Basic Triggers (475) and suffers a slight throughput reduction compared to the full baseline.
