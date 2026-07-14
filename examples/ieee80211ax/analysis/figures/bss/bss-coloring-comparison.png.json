@@ -17,11 +17,11 @@
       "result_files": [
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringDisabled-#0.sca",
-          "sha256": "c77264438611ac2b49d2f571b4398ce4e9a309f0910bd74ff7052463d0100a8f"
+          "sha256": "e6536481520809f027bb8959e909a91a18de40d8ca1854f2ab51b6551e207765"
         },
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringDisabled-#0.vec",
-          "sha256": "815c5c6d51f5912a044a83ef262cbaa6f594a1de3ead749a995446e8e4e9d28a"
+          "sha256": "708022071bab8805fcc5818e1c4e785640963790d3ceb36aa860cf43935f9b50"
         },
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringDisabled-#1.sca",
@@ -123,11 +123,11 @@
       "result_files": [
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringEnabled-#0.sca",
-          "sha256": "067aa514746b68ab515477be728429b2225abb6233044b686dd65482025248d0"
+          "sha256": "76475cc79de71bcd69dd96e45c5a6d2a3d8ea91a7933c32d9e9dc55a379e9830"
         },
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringEnabled-#0.vec",
-          "sha256": "f36681cc568a326a17d549e7a3134972dd0f8eddaece4dfd58ce7c1269000871"
+          "sha256": "21866ec589e1d22a3ec3d2263d206801e3151439382f5d7813f2cbd110b6b117"
         },
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringEnabled-#1.sca",
@@ -229,11 +229,11 @@
       "result_files": [
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringCollision-#0.sca",
-          "sha256": "7bb1c1cee052df971c8f9dd550553f9c65946a209619d95d330639b67b024839"
+          "sha256": "76e6eaec8c971ef7a4d2748de5cc901a9f3da6d8e0ba740c6c833fa2dd7cbead"
         },
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringCollision-#0.vec",
-          "sha256": "fdf64edc97f1fd16dc47826918d5004827a63eadc71fe8b7dc845ceea5229af5"
+          "sha256": "235b403bdf4235d6b96dbf67282b563d24f3d2b87fd828831116ebd43b9d2288"
         },
         {
           "path": "examples/ieee80211ax/bss_coloring/results/BssColoringCollision-#1.sca",
@@ -272,7 +272,7 @@
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/bss/bss-coloring-comparison.png",
-  "git_revision": "764b6791d5ae2ee52955d3ea64c76e26e85c8bcd",
+  "git_revision": "b901f85f9bd35b5c5aa3c26fddf63428a3bc4d5f",
   "result_filters": [
     {
       "module": "**.app[*]",

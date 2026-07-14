@@ -69,11 +69,11 @@
       "result_files": [
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#0.sca",
-          "sha256": "50c89931da0b07466f08696672c0567549b0f40e9d0a6362a113ff55fe7a768c"
+          "sha256": "09124c40c5a7b11954e19bd65d0e1642abdb5881dbda83a273c7c4e8082716cf"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#0.vec",
-          "sha256": "53b8b3a3dc8a786676db105c66833eacc40606e3315717fdb2c1dcb510255a55"
+          "sha256": "8f700b400a562a756635babb7e8ba2abae42439250a2eb74172703c0ef62ac03"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#1.sca",
@@ -112,7 +112,7 @@
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/bsr/bsr-reported-vs-scheduled.png",
-  "git_revision": "764b6791d5ae2ee52955d3ea64c76e26e85c8bcd",
+  "git_revision": "b901f85f9bd35b5c5aa3c26fddf63428a3bc4d5f",
   "result_filters": [
     {
       "name": "heUlBufferStatusReportedBytes:vector",
