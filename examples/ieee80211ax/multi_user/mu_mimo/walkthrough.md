@@ -129,10 +129,10 @@ Two deterministic seeds produced:
 
 | Direction | Seed | MU delivered | EDCA delivered | Delivery gain | MU mean delay | EDCA mean delay |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| DL | 0 | 4080 | 2820 | 44.7% | 24.80 ms | 16.76-16.99 ms |
-| DL | 1 | 4080 | 2820 | 44.7% | 24.74 ms | 16.79-17.00 ms |
-| UL | 0 | 2556 | 1773 | 44.2% | 198.22 ms | 273.33 ms |
-| UL | 1 | 2592 | 1807 | 43.4% | 196.01 ms | 266.43 ms |
+| DL | 0 | 4080 | 2797 | 45.9% | 24.81 ms | 16.90 ms |
+| DL | 1 | 4080 | 2793 | 46.1% | 24.74 ms | 16.86 ms |
+| UL | 0 | 2378 | 1677 | 41.8% | 217.29 ms | 263.90 ms |
+| UL | 1 | 2385 | 1715 | 39.1% | 210.05 ms | 303.42 ms |
 
 DL MU-MIMO delivers more traffic during the fixed 0.7-1.0 s measurement
 interval, so its queueing-delay population is not the same as the EDCA
