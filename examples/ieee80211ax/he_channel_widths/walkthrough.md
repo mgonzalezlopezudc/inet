@@ -61,14 +61,14 @@ opp_scavetool query -l -f 'name =~ "endToEndDelay:histogram"' examples/ieee80211
 ```
 
 ### Quantitative Summary:
-For all configurations, the server generates 400 packets per flow (total 1600 packets). Every client receives **exactly 400 packets** (or 399 in some runs), showing 100% delivery. Since the offered load is well below the capacity of all widths, we compare the **mean end-to-end delay** to observe the performance gains:
+For each configuration, the server generates 1000 packets per flow (total 4000 packets) starting at 0.2 s. Under high saturation, the scheduler distributes RUs differently across configurations, causing variations in delivered packets and mean delays:
 
-| Configuration | `host[0]` Delay | `host[1]` Delay | `host[2]` Delay | `host[3]` Delay |
+| Configuration | `host[0]` (Pkts / Delay) | `host[1]` (Pkts / Delay) | `host[2]` (Pkts / Delay) | `host[3]` (Pkts / Delay) |
 |---|---|---|---|---|
-| **`Width20MHz`** | 0.273 ms | 0.541 ms | 0.809 ms | 1.077 ms |
-| **`Width40MHz`** | 0.178 ms | 0.350 ms | 0.522 ms | 1.435 ms |
-| **`Width80MHz`** | 0.113 ms | 0.222 ms | 0.330 ms | 0.438 ms |
-| **`Width160MHz`**| 0.097 ms | 0.190 ms | 0.281 ms | 1.129 ms |
+| **`Width20MHz`** | 294 / 65.87 ms | 293 / 65.69 ms | 293 / 65.94 ms | 1 / 3.51 ms |
+| **`Width40MHz`** | 190 / 89.04 ms | 181 / 109.60 ms| 186 / 91.05 ms | 181 / 93.62 ms |
+| **`Width80MHz`** | 829 / 20.46 ms | 823 / 20.81 ms | 823 / 21.20 ms | 1 / 1.95 ms |
+| **`Width160MHz`**| 873 / 17.08 ms | 873 / 17.08 ms | 873 / 17.08 ms | 1 / 1.52 ms |
 
 ---
 
@@ -95,7 +95,7 @@ The decoded output timeline shows:
 ## Analysis and Insights:
 
 1. **Bandwidth vs. Wire-Time Delay**:
-   - As the channel width increases, the mean delay for the first station (`host[0]`) drops significantly: **0.273 ms** (20 MHz) $\rightarrow$ **0.178 ms** (40 MHz) $\rightarrow$ **0.113 ms** (80 MHz) $\rightarrow$ **0.097 ms** (160 MHz).
+   - As the channel width increases from 20 MHz to 160 MHz, the mean delay for the active stations under high traffic drops (e.g. for `host[0]`: 65.87 ms at 20 MHz to 20.46 ms at 80 MHz and 17.08 ms at 160 MHz). Note that at 40 MHz, the delay rises because the scheduler serves all four stations concurrently (rather than starving the fourth station as in 20 MHz).
    - This occurs because a wider channel supports a higher physical bit rate, reducing the physical transmission duration (airtime) of the frame.
 
 2. **Negligible Sequential Delay with 100G Ethernet**:

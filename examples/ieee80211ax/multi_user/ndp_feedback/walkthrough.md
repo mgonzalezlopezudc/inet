@@ -63,9 +63,9 @@ opp_scavetool query -l -f 'name =~ "packetSentToPeer:count" and module =~ "*.mac
 
 ### Quantitative Summary:
 - **`host[0..2].app[0] packetSent:count`**: 361 packets each (Application layer).
-- **`server.app[0] packetReceived:count`**: 1034.
-- **`ap.wlan[0].mac.hcf packetSentToPeer:count`**: 1113.
-- **`host[0..2].wlan[0].mac.hcf packetSentToPeer:count`**: 690, 720, and 728.
+- **`server.app[0] packetReceived:count`**: 1030.
+- **`ap.wlan[0].mac.hcf packetSentToPeer:count`**: 1110.
+- **`host[0..2].wlan[0].mac.hcf packetSentToPeer:count`**: 672, 715, and 711.
 
 ---
 
@@ -86,14 +86,14 @@ tshark -n -r examples/ieee80211ax/multi_user/ndp_feedback/results/NdpFeedbackRep
 The decoded output timeline shows:
 1. **NFRP Trigger frames**: The AP regularly broadcasts EHT NDP Feedback Report Poll (NFRP) Trigger frames (e.g. frames 1, 5, 9, 13) to poll stations.
 2. **Concurrent QoS Null responses**: Target stations (`host[0..2]`) respond concurrently with QoS Null frames (e.g. frames 2, 3, 4) carrying resource status info in their HE TB NDP feedback headers.
-3. **Uplink UDP Packets**: Uplink user data packets (UDP frames) are also transmitted successfully, resulting in **1034 received packets** at the server UDP application.
+3. **Uplink UDP Packets**: Uplink user data packets (UDP frames) are also transmitted successfully, resulting in **1030 received packets** at the server UDP application.
 
 ---
 
 ## Interpretation of Results:
 
 1. **Uplink Data and Control Feedback**:
-   - The server successfully receives **1034 UDP packets** from the hosts, confirming active scheduled uplink transmission.
+   - The server successfully receives **1030 UDP packets** from the hosts, confirming active scheduled uplink transmission.
    - The stations wait for the HCF scheduler's triggers to transmit data. Under the `ScheduledOnly` base configuration settings, the AP schedules data uplink transmissions alongside regular control signaling.
 
 2. **High MAC-Layer Transmissions**:

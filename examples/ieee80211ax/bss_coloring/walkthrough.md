@@ -68,11 +68,13 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.sta*a
 ```
 
 ### Quantitative Summary:
-For all configurations, the offering load is fully delivered:
 
 | Configuration / Config | `sta1[0]` Packets | `sta1[1]` Packets | `sta2[0]` Packets | `sta2[1]` Packets |
 |---|---|---|---|---|
-| **All Configurations** | 180 | 180 | 180 | 180 |
+| **BssColoringDisabled** | 180 | 180 | 180 | 180 |
+| **BssColoringEnabled** | 180 | 181 | 180 | 180 |
+| **BssColoringCollision**| 180 | 180 | 180 | 180 |
+| **TwoNav**              | 20  | 21  | 180 | 180 |
 
 ---
 

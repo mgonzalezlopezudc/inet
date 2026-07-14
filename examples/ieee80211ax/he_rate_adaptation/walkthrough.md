@@ -100,26 +100,25 @@ opp_scavetool query -l -f 'name =~ "datarateSelected:vector"' examples/ieee80211
 
 ```
 FixedMcs-#0.sca:
-scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  359
-scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  359
-scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  359
+scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  358
+scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  358
+scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  358
 scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  358
 
 HeMinstrel-#0.sca:
-scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  359
-scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  359
-scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  359
-scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  358
+scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  1095
+scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  1094
+scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  161
+scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  160
 ```
 
-AP datarate vector summary for the two static configs:
-`HeRateAdaptationNetwork.ap.wlan[0].mac.hcf datarateSelected:vector count=1559 mean=16.06 Mbps min=7.31 Mbps max=121.87 Mbps`
+AP datarate vector summary:
+- `FixedMcs`: count=1566, mean=17.04 Mbps, min=7.31 Mbps, max=121.87 Mbps
+- `HeMinstrel`: count=2589, mean=53.85 Mbps, min=7.31 Mbps, max=121.87 Mbps
 
-Individual Host HCF wlan[0] datarates (both configs):
-- `host[0]` (closest): `mean=118.18 Mbps` (using high MCS)
-- `host[1]`: `mean=118.18 Mbps`
-- `host[2]`: `mean=118.69 Mbps`
-- `host[3]` (furthest): `mean=7.31 Mbps` (uses fixed MCS 0 due to low SNR)
+Individual Host HCF wlan[0] datarates:
+- `FixedMcs` hosts mean datarate: `host[0]`: 118.30 Mbps, `host[1]`: 118.60 Mbps, `host[2]`: 118.94 Mbps, `host[3]`: 7.31 Mbps
+- `HeMinstrel` hosts mean datarate: `host[0]`: 111.46 Mbps, `host[1]`: 108.19 Mbps, `host[2]`: 118.40 Mbps, `host[3]`: 17.39 Mbps
 
 ---
 
@@ -146,12 +145,9 @@ The decoded output timeline shows:
 
 ## Interpretation of Results
 
-1. **Identical Results in Static Channel**:
-   - The packet delivery numbers and selected bitrates are identical between the static `FixedMcs` and dynamic `HeMinstrel` runs.
-   - *Why?* The simulation uses a deterministic, collision-free, static channel model (Free Space Path Loss). The path loss and SNR for each host remain completely constant over time.
-   - Under these conditions:
-     - `FixedMcs` maps the stable SNR to the same optimal MCS for each peer.
-     - `HeMinstrel` probes the rates and dynamically converges to the same optimal MCS because the success rate of the supported MCS levels is 100%.
+1. **Different Results under High Traffic Saturation**:
+   - With the 100G Ethernet upgrade and dynamic queue clearing at the AP, the packet delivery numbers and selected bitrates differ between the static `FixedMcs` and dynamic `HeMinstrel` runs.
+   - *Why?* While the channel remains static, the high offered traffic load saturates the queues. `HeMinstrel`'s lookaround probing and success estimation interact dynamically with the DL HCF scheduler, adapting the rates to clear queues of closer stations faster, which changes scheduling priority and results in higher aggregate throughput (2510 total packets vs 1432 for FixedMcs) at the expense of fairness for more distant stations.
 
 2. **Datarate vs. Distance**:
    - The AP dynamically transmits to closer stations (like `host[0]`) at much higher bitrates (up to 121.87 Mbps, using high MCS) because of the strong signal.

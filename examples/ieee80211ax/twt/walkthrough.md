@@ -108,8 +108,8 @@ scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               0
 IndividualUnannounced-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtAgreementCount          2
 scalar  TwtRegression.sta[0].wlan[0].twt  twtAgreementCount          1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.3766 s
-scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.6234 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               89.3788 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.6212 s
 
 IndividualAnnounced-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtAgreementCount          2
@@ -120,8 +120,8 @@ scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               10.6212 s
 Broadcast-#0.sca:
 scalar  TwtRegression.ap.wlan[0].twt      twtBroadcastScheduleCount  1
 scalar  TwtRegression.sta[1].wlan[0].twt  twtBroadcastScheduleCount  1
-scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               69.157 s
-scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               30.843 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtSleepTime               78.8487 s
+scalar  TwtRegression.sta[0].wlan[0].twt  twtAwakeTime               21.1513 s
 ```
 
 ---
