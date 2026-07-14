@@ -181,7 +181,7 @@ AccessCategory HeUlCoordinator::getPreferredAccessCategory() const
 }
 
 IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee80211Mib *mib,
-        Hz centerFrequency, Hz bandwidth, simtime_t txopLimit,
+        Hz centerFrequency, Hz bandwidth, simtime_t txopLimit, simtime_t requestedDuration,
         double sensitivityDbm, double targetRssiMarginDb,
         int estimatedRaContenders, double collisionRate, double idleRate)
 {
@@ -189,6 +189,7 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
     ASSERT(scheduler != nullptr);
     ASSERT(centerFrequency > Hz(0));
     ASSERT(bandwidth > Hz(0));
+    ASSERT(requestedDuration > SIMTIME_ZERO);
     ASSERT(estimatedRaContenders >= 0);
     ASSERT(collisionRate >= 0 && collisionRate <= 1);
     ASSERT(idleRate >= 0 && idleRate <= 1);
@@ -196,6 +197,7 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
     context.channelCenterFrequency = centerFrequency;
     context.channelBandwidth = bandwidth;
     context.txopLimit = txopLimit;
+    context.requestedDuration = requestedDuration;
     context.apSensitivityDbm = sensitivityDbm;
     context.targetRssiMarginDb = targetRssiMarginDb;
     context.estimatedRandomAccessContenders = estimatedRaContenders;

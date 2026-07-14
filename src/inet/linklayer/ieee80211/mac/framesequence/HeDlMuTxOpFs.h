@@ -45,6 +45,10 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
         Tid tid = 0;
         int ruIndex;
         physicallayer::Ieee80211HeRu ru;
+        int numberOfSpatialStreams = 1;
+        int streamStartIndex = 0;
+        int totalNsts = 1;
+        bool muMimo = false;
         Packet *packet = nullptr;
         std::vector<Packet *> packets;
     };

@@ -8,6 +8,7 @@ Test HE Sounding Coordinator STA-side state machine.
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.coordinationfunction.HeSoundingCoordinator;
@@ -113,11 +114,12 @@ HeMuMimoCsiManager csiManager;
 {
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setTriggerType(1); // Beamforming Report Poll
+    trigger->setCoding(physicallayer::HE_CODING_LDPC);
     trigger->setUsersArraySize(1);
     Ieee80211HeTriggerUserInfo user;
     user.aid = 5;
     user.ruIndex = 1;
-    user.ruToneSize = 242;
+    user.ruToneSize = 484;
     trigger->setUsers(0, user);
     trigger->setTransmitterAddress(MacAddress("66:77:88:99:AA:BB"));
 
@@ -127,6 +129,9 @@ HeMuMimoCsiManager csiManager;
 
     if (mockTx.lastSent != nullptr) {
         EV << "Transmitted action frame: " << mockTx.lastSent->getName() << "\n";
+        auto request = mockTx.lastSent->getTag<physicallayer::Ieee80211HeMuReq>();
+        ASSERT(request->getRuToneSize() == 484);
+        ASSERT(request->getCoding() == physicallayer::HE_CODING_LDPC);
         delete mockTx.lastSent;
     }
 }

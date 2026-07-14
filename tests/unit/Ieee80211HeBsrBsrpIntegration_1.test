@@ -113,7 +113,7 @@ ASSERT(coordinator->getPreferredAccessCategory() == AC_VI);
 EV << "Fresh backlogged and retry reports selected a Basic Trigger.\n";
 
 auto freshSchedule = coordinator->createSchedule(mib, Hz(5.18e9), Hz(20e6),
-        SimTime(2, SIMTIME_MS), -85, 10, 0, 0, 0);
+        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
 ASSERT(freshSchedule.allocations.size() == 2);
 ASSERT(scheduler->lastContext.candidates.size() == 2);
 ASSERT(scheduler->lastContext.candidates[0].hasFreshReport);
@@ -121,13 +121,15 @@ ASSERT(scheduler->lastContext.candidates[0].associationId == aid1);
 ASSERT(scheduler->lastContext.candidates[0].getSelectedBacklogBytes() == 1200);
 ASSERT(scheduler->lastContext.candidates[1].associationId == aid2);
 ASSERT(scheduler->lastContext.candidates[1].retryPending);
+ASSERT(scheduler->lastContext.requestedDuration == SimTime(1500, SIMTIME_US));
+ASSERT(freshSchedule.commonDuration == SimTime(1500, SIMTIME_US));
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 1200);
 EV << "Fresh reports reached the UL scheduler and produced allocations.\n";
 
 wait(0.011);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
 auto staleSchedule = coordinator->createSchedule(mib, Hz(5.18e9), Hz(20e6),
-        SimTime(2, SIMTIME_MS), -85, 10, 0, 0, 0);
+        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
 ASSERT(staleSchedule.allocations.empty());
 ASSERT(scheduler->lastContext.candidates.empty());
 EV << "Stale reports were excluded and selected BSRP polling.\n";
@@ -135,7 +137,7 @@ EV << "Stale reports were excluded and selected BSRP polling.\n";
 coordinator->updateBufferStatus(aid3, AC_VO, 6, 800, false);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
 auto implicitSchedule = coordinator->createSchedule(mib, Hz(5.18e9), Hz(20e6),
-        SimTime(2, SIMTIME_MS), -85, 10, 0, 0, 0);
+        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
 ASSERT(implicitSchedule.allocations.size() == 1);
 ASSERT(scheduler->lastContext.candidates.size() == 1);
 ASSERT(scheduler->lastContext.candidates[0].associationId == aid3);

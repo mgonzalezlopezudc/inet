@@ -131,7 +131,13 @@ void printTriggerInfo(std::ostream& stream, const Ieee80211TriggerFrame& trigger
             stream << "RA";
         else
             stream << "AID" << user.aid;
-        stream << " RU" << user.ruIndex << " TID" << static_cast<int>(user.tid) << " MCS" << static_cast<int>(user.mcs);
+        stream << " RU" << user.ruIndex;
+        if (trigger.getTriggerType() == 0)
+            stream << " limit" << static_cast<int>(user.tidAggregationLimit)
+                   << " preferredACI" << static_cast<int>(user.preferredAc);
+        else if (trigger.getTriggerType() == 2)
+            stream << " TID" << static_cast<int>(user.tid);
+        stream << " MCS" << static_cast<int>(user.mcs);
     }
     if (usersCount > maxPrintedUsers)
         stream << "; +" << (usersCount - maxPrintedUsers) << " more";

@@ -6,6 +6,7 @@
 
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
 
+#include <algorithm>
 #include <cmath>
 
 #include "inet/common/packet/Packet.h"
@@ -233,6 +234,11 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
 
     auto ruLayout = physicallayer::getHeEqualRuLayout(Hz(0), bandwidth, layoutCount);
 
+    bool requiresLdpc = std::any_of(ruLayout.begin(), ruLayout.end(), [] (const auto& ru) {
+        return ru.toneSize >= 484;
+    });
+    header->setCoding(requiresLdpc ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC);
+
     // A BFRP Trigger is addressed only to users for which the selected
     // equal-sized RU layout has an explicit RU. Keep this assertion next to
     // the indexing below to turn configuration mistakes into local failures.
@@ -262,7 +268,8 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
     EV_INFO << "Built HE BFRP Trigger " << triggerId
             << " for " << targets.size() << " sounding targets"
-            << " using " << layoutCount << " RUs\n";
+            << " using " << layoutCount << " RUs and "
+            << (requiresLdpc ? "LDPC" : "BCC") << " coding\n";
     return packet;
 }
 
