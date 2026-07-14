@@ -125,23 +125,23 @@ interval. Mean delay is weighted over all received application packets.
 
 | Configuration | Packets per host | App throughput | Mean E2E delay | Max E2E delay |
 |---|---:|---:|---:|---:|
-| `EqualSizedRUs_fBW` | 3088 / 2880 / 2864 | 23.552 Mbps | 10.391 ms | 12.182 ms |
-| `EqualSizedRUs_fHoL` | 2528 / 2528 / 2528 | 20.224 Mbps | 12.860 ms | 14.292 ms |
-| `SuEdcaBaseline` | 964 / 942 / 914 | 7.520 Mbps | 16.914 ms | 23.655 ms |
-| `EqualSizedRUs80MHz_fBW` | 5006 / 5001 / 4990 | 39.992 Mbps | 0.767 ms | 1.486 ms |
-| `EqualSizedRUs80MHz_fHoL` | 4997 / 4997 / 4997 | 39.976 Mbps | 0.710 ms | 1.147 ms |
-| `SuEdcaBaseline80MHz` | 2960 / 2893 / 2835 | 23.168 Mbps | 5.014 ms | 7.173 ms |
+| `EqualSizedRUs_fBW` | 3072 / 2880 / 2880 | 23.552 Mbps | 10.411 ms | 12.245 ms |
+| `EqualSizedRUs_fHoL` | 2512 / 2512 / 2512 | 20.096 Mbps | 12.857 ms | 14.287 ms |
+| `SuEdcaBaseline` | 947 / 960 / 890 | 7.459 Mbps | 16.898 ms | 23.330 ms |
+| `EqualSizedRUs80MHz_fBW` | 4993 / 4997 / 5011 | 40.003 Mbps | 0.763 ms | 1.485 ms |
+| `EqualSizedRUs80MHz_fHoL` | 4996 / 4996 / 4996 | 39.968 Mbps | 0.707 ms | 1.146 ms |
+| `SuEdcaBaseline80MHz` | 2847 / 2809 / 2725 | 22.349 Mbps | 5.058 ms | 7.027 ms |
 
 The controlled comparisons show:
 
-- 20 MHz `fBW` is `3.13x` SU throughput and lowers mean delay by about 39%;
+- 20 MHz `fBW` is `3.16x` SU throughput and lowers mean delay by about 38%;
 - 20 MHz `fHoL` is `2.69x` SU throughput with perfectly even delivery;
-- 20 MHz `fBW` is about 16% faster than `fHoL`, as expected from the wider RU
+- 20 MHz `fBW` is about 17% faster than `fHoL`, as expected from the wider RU
   layout;
 - widening `fBW` from 20 to 80 MHz increases delivered throughput by about
   70% and removes the backlog; and
 - at 80 MHz, `fHoL` and `fBW` both meet the offered load, with `fHoL` reducing
-  mean delay by about 6.6%.
+  mean delay by about 7.3%.
 
 ## Vector result
 
@@ -150,12 +150,12 @@ result confirms sustained delivery rather than a scalar caused by one burst:
 
 | Configuration | 0.70-.75 | .75-.80 | .80-.85 | .85-.90 | .90-.95 | .95-1.00 |
 |---|---:|---:|---:|---:|---:|---:|
-| 20 MHz `fBW` | 23.552 | 23.552 | 23.552 | 23.552 | 23.552 | 23.040 |
-| 20 MHz `fHoL` | 19.968 | 20.736 | 19.968 | 19.968 | 20.736 | 19.968 |
-| 20 MHz SU | 7.744 | 7.232 | 7.776 | 7.280 | 7.264 | 7.680 |
-| 80 MHz `fBW` | 39.728 | 39.968 | 40.048 | 40.096 | 39.760 | 40.192 |
-| 80 MHz `fHoL` | 39.920 | 40.208 | 39.856 | 39.872 | 39.888 | 39.984 |
-| 80 MHz SU | 23.216 | 22.736 | 23.280 | 23.232 | 22.720 | 23.840 |
+| 20 MHz `fBW` | 23.552 | 23.552 | 23.552 | 23.040 | 23.552 | 24.064 |
+| 20 MHz `fHoL` | 19.968 | 19.968 | 19.968 | 19.968 | 20.736 | 19.968 |
+| 20 MHz SU | 7.632 | 7.104 | 7.616 | 7.648 | 7.120 | 7.632 |
+| 80 MHz `fBW` | 40.112 | 40.144 | 39.760 | 40.320 | 39.648 | 40.032 |
+| 80 MHz `fHoL` | 40.128 | 39.888 | 39.888 | 39.984 | 39.984 | 39.936 |
+| 80 MHz SU | 22.336 | 22.352 | 22.336 | 22.352 | 22.384 | 22.336 |
 
 Values are aggregate application Mbps. The delay vectors independently match
 the scalar histogram counts, means, minima, and maxima shown above.

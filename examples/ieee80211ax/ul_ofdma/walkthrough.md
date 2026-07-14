@@ -111,24 +111,24 @@ opp_scavetool query -l -f 'name =~ "heUlBsrpTriggerSent:count" or name =~ "heUlB
 
 ```
 General-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1049
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1004
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  368
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  354
 
 MixedUora-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1041
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   100
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  455
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1000
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   102
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  411
 
 ScheduledOnly-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1049
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1004
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  368
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  354
 
 EqualRus-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1049
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        1004
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
-scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  368
+scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  354
 
 UlSuMultiTidBlockAck-#0.sca:
 scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        360
@@ -143,13 +143,13 @@ scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:
 scalar  Lan80211AxUlOfdma.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  360
 
 UoraLightContention-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        450
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        290
 
 UoraHeavyContention-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        4627
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        4500
 
 UoraMoreRandomAccessRus-#0.sca:
-scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        5381
+scalar  Lan80211AxUlOfdma.server.app[0]               packetReceived:count        4833
 ```
 
 ---
