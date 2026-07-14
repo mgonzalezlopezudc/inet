@@ -551,18 +551,29 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 int fval = user.targetRssiDbm + 110;
                 if (fval < 0) fval = 0;
                 if (fval > 127) fval = 127;
+                if (user.numberOfSpatialStreams < 1 || user.numberOfSpatialStreams > 8)
+                    throw cRuntimeError("Invalid Trigger User Info spatial-stream count %u",
+                            user.numberOfSpatialStreams);
+                if (user.streamStartIndex > 7 ||
+                        user.streamStartIndex + user.numberOfSpatialStreams > 8)
+                    throw cRuntimeError("Invalid Trigger User Info spatial-stream allocation start=%u count=%u",
+                            user.streamStartIndex, user.numberOfSpatialStreams);
                 uint64_t userInfo =
                         (user.aid & 0xFFFULL) |                         // B0-B11: AID12
                         ((static_cast<uint64_t>(ruAllocation) & 0xFF) << 12) | // B12-B19: RU Allocation
                         ((static_cast<uint64_t>(trigger->getCoding() & 1)) << 20) | // B20: UL FEC Coding Type
                         ((static_cast<uint64_t>(user.mcs) & 0xF) << 21) | // B21-B24: UL HE-MCS
+                        ((static_cast<uint64_t>(user.streamStartIndex) & 0x7) << 26) | // B26-B28: Starting Spatial Stream
+                        ((static_cast<uint64_t>(user.numberOfSpatialStreams - 1) & 0x7) << 29) | // B29-B31: Number Of Spatial Streams minus 1
                         ((static_cast<uint64_t>(fval) & 0x7F) << 32);    // B32-B38: UL Target Receive Power
                 writeLeBits(stream, userInfo, 40);
 
                 if (trigger->getTriggerType() == 0) { // Basic Trigger: 1 octet (8 bits)
-                    // TID Aggregation Limit (B2-B4) packs user.tid
-                    uint8_t tidAggregationLimit = user.tid & 0x7;
-                    uint8_t basicUserInfo = (tidAggregationLimit << 2);
+                    if (user.mpduMuSpacingFactor > 3 || user.tidAggregationLimit > 7 || user.preferredAc > 3)
+                        throw cRuntimeError("Invalid Basic Trigger dependent User Info fields");
+                    uint8_t basicUserInfo = user.mpduMuSpacingFactor |
+                            (user.tidAggregationLimit << 2) |
+                            (user.preferredAc << 6);
                     stream.writeByte(basicUserInfo);
                 }
                 else if (trigger->getTriggerType() == 1) { // BFRP Trigger: 1 octet
@@ -1081,6 +1092,8 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 }
 
                 user.mcs = (userInfo >> 21) & 0xF;
+                user.streamStartIndex = (userInfo >> 26) & 0x7;
+                user.numberOfSpatialStreams = ((userInfo >> 29) & 0x7) + 1;
                 auto targetRssiVal = (userInfo >> 32) & 0x7F;
                 user.targetRssiDbm = static_cast<int8_t>(targetRssiVal - 110);
                 user.randomAccess = (user.aid == 0 || user.aid == 2045);
@@ -1090,7 +1103,10 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                         throw cRuntimeError("Truncated Basic Trigger dependent User Info field");
                     auto basicUserInfo = stream.readByte();
                     consumedBytes += 1;
-                    user.tid = (basicUserInfo >> 2) & 0x7;
+                    user.mpduMuSpacingFactor = basicUserInfo & 0x3;
+                    user.tidAggregationLimit = (basicUserInfo >> 2) & 0x7;
+                    user.preferredAc = (basicUserInfo >> 6) & 0x3;
+                    user.tid = 0;
                 }
                 else if (triggerType == 1) { // BFRP Trigger
                     if (remainingBytes - consumedBytes < 1)
@@ -1148,6 +1164,15 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 }
 
                 users.push_back(user);
+            }
+            for (auto& user : users) {
+                if (user.randomAccess)
+                    continue;
+                int usersOnRu = std::count_if(users.begin(), users.end(), [&user] (const auto& other) {
+                    return !other.randomAccess && other.ruToneSize == user.ruToneSize &&
+                            other.ruToneOffset == user.ruToneOffset;
+                });
+                user.muMimo = usersOnRu > 1;
             }
             trigger->setUsersArraySize(users.size());
             for (unsigned int i = 0; i < users.size(); i++)

@@ -30,7 +30,12 @@ using namespace inet::ieee80211;
     user.ruToneSize = 106;
     user.ruToneOffset = 0;
     user.mcs = 3;
+    user.numberOfSpatialStreams = 3;
+    user.streamStartIndex = 2;
     user.tid = 5;
+    user.mpduMuSpacingFactor = 2;
+    user.tidAggregationLimit = 1;
+    user.preferredAc = 3;
     user.targetRssiDbm = -70; // Target Rssi = -70 dBm -> PTARGET = -70 + 110 = 40
     trigger->setUsers(0, user);
 
@@ -46,7 +51,7 @@ using namespace inet::ieee80211;
         hexStr += buf;
     }
     EV << "Basic Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24002003FFFFFFFFFFFF100000000000003222080000000007A076002814");
+    ASSERT(hexStr == "24002003FFFFFFFFFFFF100000000000003222080000C00007A0764828C6");
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet", bytes);
@@ -63,7 +68,12 @@ using namespace inet::ieee80211;
     ASSERT(recvTrigger->getUsers(0).ruToneSize == 106);
     ASSERT(recvTrigger->getUsers(0).ruToneOffset == 0);
     ASSERT(recvTrigger->getUsers(0).mcs == 3);
-    ASSERT(recvTrigger->getUsers(0).tid == 5);
+    ASSERT(recvTrigger->getUsers(0).numberOfSpatialStreams == 3);
+    ASSERT(recvTrigger->getUsers(0).streamStartIndex == 2);
+    ASSERT(recvTrigger->getUsers(0).tid == 0);
+    ASSERT(recvTrigger->getUsers(0).mpduMuSpacingFactor == 2);
+    ASSERT(recvTrigger->getUsers(0).tidAggregationLimit == 1);
+    ASSERT(recvTrigger->getUsers(0).preferredAc == 3);
     ASSERT(recvTrigger->getUsers(0).targetRssiDbm == -70);
 
     delete pk;
@@ -114,7 +124,7 @@ using namespace inet::ieee80211;
         hexStr += buf;
     }
     EV << "BSRP Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "2400900102000000000102000000000204191200000000006400E00032C800C0002D");
+    ASSERT(hexStr == "24009001020000000001020000000002041912000000C0006400E00032C800C0002D");
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet-bsrp", bytes);
@@ -195,7 +205,7 @@ using namespace inet::ieee80211;
         hexStr += buf;
     }
     EV << "MU-BAR Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24005802FFFFFFFFFFFF02000000000382252200000000000B00000037043030120C0020003406100010604500709078");
+    ASSERT(hexStr == "24005802FFFFFFFFFFFF020000000003822522000000C0000B00000037043030120C0020003406100010604500709078");
 
     auto pk2 = new Packet("recv-packet-mu-bar", bytes);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
@@ -228,10 +238,10 @@ using namespace inet::ieee80211;
 EV << ".\n";
 
 %contains: stdout
-Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000003222080000000007A076002814
+Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000003222080000C00007A0764828C6
 Basic Trigger Frame round-trip verified successfully.
-BSRP Trigger Serialized hex: 2400900102000000000102000000000204191200000000006400E00032C800C0002D
+BSRP Trigger Serialized hex: 24009001020000000001020000000002041912000000C0006400E00032C800C0002D
 BSRP Trigger Frame round-trip verified successfully.
-MU-BAR Trigger Serialized hex: 24005802FFFFFFFFFFFF02000000000382252200000000000B00000037043030120C0020003406100010604500709078
+MU-BAR Trigger Serialized hex: 24005802FFFFFFFFFFFF020000000003822522000000C0000B00000037043030120C0020003406100010604500709078
 MU-BAR Trigger Frame round-trip verified successfully.
 .

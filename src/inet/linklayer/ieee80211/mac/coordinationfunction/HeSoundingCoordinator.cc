@@ -215,6 +215,12 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                     request->setRuToneOffset(selected->ruToneOffset);
                     request->setStaId(myAid);
                     request->setMcs(selected->mcs);
+                    request->setNumberOfSpatialStreams(selected->numberOfSpatialStreams);
+                    request->setStreamStartIndex(selected->streamStartIndex);
+                    request->setGuardInterval(trigger->getGuardInterval());
+                    request->setCoding(trigger->getCoding());
+                    request->setPacketExtensionDurationUs(trigger->getPacketExtensionDurationUs());
+                    request->setPuncturedSubchannelMask(trigger->getPuncturedSubchannelMask());
                     request->setCommonDuration(trigger->getCommonDuration());
 
                     tx->transmitFrame(response, responseHeader, modeSet->getSifsTime(), callback);

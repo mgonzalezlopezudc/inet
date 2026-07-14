@@ -43,6 +43,17 @@ namespace ieee80211 {
 
 namespace {
 
+static uint8_t accessCategoryToAci(AccessCategory ac)
+{
+    switch (ac) {
+        case AC_BE: return 0;
+        case AC_BK: return 1;
+        case AC_VI: return 2;
+        case AC_VO: return 3;
+        default: throw cRuntimeError("Invalid access category for Basic Trigger");
+    }
+}
+
 class HeUlReceiveCollectionStep : public ReceiveCollectionStep
 {
   protected:
@@ -213,6 +224,8 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.streamStartIndex = allocation.streamStartIndex;
         user.muMimo = allocation.muMimo;
         user.tid = allocation.tid;
+        user.tidAggregationLimit = 1; // single-TID HE TB A-MPDU model
+        user.preferredAc = accessCategoryToAci(allocation.accessCategory);
         user.targetRssiDbm = allocation.targetRssiDbm;
         user.randomAccess = allocation.randomAccess;
         header->setUsers(i, user);

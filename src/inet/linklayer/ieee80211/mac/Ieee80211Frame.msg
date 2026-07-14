@@ -253,6 +253,11 @@ struct Ieee80211HeTriggerUserInfo
     uint8_t numberOfSpatialStreams = 1;
     uint8_t streamStartIndex = 0;
     bool muMimo = false;
+    // Trigger Dependent User Info fields for a Basic Trigger (Figure 9-96).
+    uint8_t mpduMuSpacingFactor = 0;
+    uint8_t tidAggregationLimit = 1;
+    uint8_t preferredAc = 0; // ACI encoding from Table 9-193
+    // Runtime scheduler metadata; this is not a Basic Trigger wire field.
     uint8_t tid = 0;
     int8_t targetRssiDbm = -60;
     bool randomAccess = false;

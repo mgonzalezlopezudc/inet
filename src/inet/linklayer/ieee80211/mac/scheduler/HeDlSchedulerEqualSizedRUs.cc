@@ -236,7 +236,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                             alloc.mcs = std::min(alloc.mcs, maxMcs);
                         }
                         alloc.estimatedDuration = estimateHeMuUserDuration(
-                                B(std::max<int64_t>(groupCandidates[i].holPacketBytes, 1)),
+                                B(std::max<int64_t>({groupCandidates[i].backlogBytes,
+                                        groupCandidates[i].holPacketBytes, 1})),
                                 fullChannelRu.toneSize, alloc.mcs, finalNss[i], false, context.guardInterval);
                         result.push_back(alloc);
                     }

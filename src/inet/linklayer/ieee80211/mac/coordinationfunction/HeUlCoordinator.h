@@ -81,7 +81,7 @@ class INET_API HeUlCoordinator : public SimpleModule
     IIeee80211HeUlTriggerPolicy::TriggerType selectTrigger(const Ieee80211Mib *mib) const;
     AccessCategory getPreferredAccessCategory() const;
     IIeee80211HeUlScheduler::Schedule createSchedule(const Ieee80211Mib *mib,
-            Hz centerFrequency, Hz bandwidth, simtime_t txopLimit,
+            Hz centerFrequency, Hz bandwidth, simtime_t txopLimit, simtime_t requestedDuration,
             double sensitivityDbm, double targetRssiMarginDb,
             int estimatedRaContenders, double collisionRate, double idleRate);
     uint32_t allocateTriggerId();

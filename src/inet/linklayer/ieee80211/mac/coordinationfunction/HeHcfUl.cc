@@ -47,6 +47,17 @@
 namespace inet {
 namespace ieee80211 {
 
+static AccessCategory aciToAccessCategory(uint8_t aci)
+{
+    switch (aci) {
+        case 0: return AC_BE;
+        case 1: return AC_BK;
+        case 2: return AC_VI;
+        case 3: return AC_VO;
+        default: throw cRuntimeError("Invalid Preferred AC in Basic Trigger");
+    }
+}
+
 bool HeHcf::allAssociatedStationsSupportPreamblePuncturing() const
 {
     return std::all_of(mac->getMib()->bssAccessPointData.stations.begin(),
@@ -150,7 +161,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 staleOrUnknown++;
         }
         ulSchedule = ulCoordinator->createSchedule(mac->getMib(), centerFrequency, channelBandwidth,
-                txopLimit, sensitivityDbm, par("ulTargetRssiMargin"), staleOrUnknown, 0, 0);
+                txopLimit, par("maxHeTbPpduDuration"), sensitivityDbm,
+                par("ulTargetRssiMargin"), staleOrUnknown, 0, 0);
     }
     ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
             [this] (const auto& allocation) {
@@ -306,6 +318,13 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
     auto agreement = selected == nullptr || recipientBlockAckAgreementHandler == nullptr ?
             nullptr : recipientBlockAckAgreementHandler->getAgreement(
                     selected->tid, trigger->getTransmitterAddress());
+    if (selected == nullptr)
+        EV_WARN << "Ignoring MU-BAR Trigger because it has no User Info for local AID " << myAid << endl;
+    else if (recipientBlockAckAgreementHandler == nullptr)
+        EV_WARN << "Ignoring MU-BAR Trigger for AID " << myAid << " because no recipient Block Ack handler is installed" << endl;
+    else if (agreement == nullptr)
+        EV_WARN << "Ignoring MU-BAR Trigger for AID " << myAid << " because no recipient Block Ack agreement exists for TID "
+                << (int)selected->tid << " and originator " << trigger->getTransmitterAddress() << endl;
     if (agreement != nullptr) {
         if (!selected->muBarCompressedBitmap || selected->muBarMultiTid)
             throw cRuntimeError("Unsupported MU-BAR BlockAckReq variant");
@@ -321,6 +340,13 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
         request->setRuToneOffset(selected->ruToneOffset);
         request->setStaId(myAid);
         request->setMcs(selected->mcs);
+        request->setNumberOfSpatialStreams(selected->numberOfSpatialStreams);
+        request->setStreamStartIndex(selected->streamStartIndex);
+        // Each responding STA transmits only its local stream(s). The AP's
+        // parallel-reception path reconstructs the aggregate stream layout
+        // from all simultaneous HE-TB requests.
+        request->setTotalNsts(selected->numberOfSpatialStreams);
+        request->setMuMimo(selected->muMimo);
         request->setGuardInterval(trigger->getGuardInterval());
         request->setCoding(trigger->getCoding());
         request->setPacketExtensionDurationUs(trigger->getPacketExtensionDurationUs());
@@ -354,6 +380,24 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         TriggeredUlExchange& exchange)
 {
     Packet *responsePacket = nullptr;
+    if (sourcePacket != nullptr) {
+        // 26.5.2.4 requires a QoS Null response when the allocation cannot
+        // contain pending data. Check the first MPDU too; the aggregation loop
+        // below performs the same check for every additional MPDU.
+        auto sourceHeader = sourcePacket->peekAtFront<Ieee80211DataHeader>();
+        B psduLength = B(4 + sourcePacket->getByteLength()) +
+                (sourceHeader->getBufferStatusPresent() ? B(0) : B(4));
+        auto ru = exchange.ru;
+        ru.dataSubcarriers = physicallayer::getHeRuDataSubcarrierCount(ru.toneSize);
+        ru.pilotSubcarriers = physicallayer::getHeRuPilotSubcarrierCount(ru.toneSize);
+        ru.bandwidth = Hz(ru.toneSize * 78125.0);
+        auto duration = physicallayer::computeHeUserPhyParameters(psduLength, ru, selected->mcs,
+                selected->numberOfSpatialStreams, false,
+                static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger->getGuardInterval()),
+                static_cast<physicallayer::Ieee80211HeCoding>(trigger->getCoding())).duration;
+        if (duration > trigger->getCommonDuration())
+            sourcePacket = nullptr;
+    }
     if (sourcePacket != nullptr) {
         // 26.5.2.4: a Basic Trigger response can carry QoS Data in an A-MPDU.
         // The Ack Policy is Block Ack/Implicit BAR style so the AP can return a
@@ -424,7 +468,10 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             ru.dataSubcarriers = physicallayer::getHeRuDataSubcarrierCount(ru.toneSize);
             ru.pilotSubcarriers = physicallayer::getHeRuPilotSubcarrierCount(ru.toneSize);
             ru.bandwidth = Hz(ru.toneSize * 78125.0);
-            if (physicallayer::computeHeUserPhyParameters(psduLength, ru, selected->mcs).duration > trigger->getCommonDuration())
+            if (physicallayer::computeHeUserPhyParameters(psduLength, ru, selected->mcs,
+                    selected->numberOfSpatialStreams, false,
+                    static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger->getGuardInterval()),
+                    static_cast<physicallayer::Ieee80211HeCoding>(trigger->getCoding())).duration > trigger->getCommonDuration())
                 break;
             auto writableCandidateHeader = candidate->removeAtFront<Ieee80211DataHeader>();
             if (!writableCandidateHeader->getRetry()) {
@@ -520,19 +567,32 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         // 26.5.2.4: an associated non-AP STA responding to a Basic Trigger
         // addressed to its AID constructs an HE TB A-MPDU using the Trigger's
         // TID aggregation limit and the addressed User Info field.  INET keeps
-        // this path single-TID and chooses from the AC mapped from that TID.
-        selectedAc = mapTidToAccessCategory(selected->tid);
-        sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
-        for (int i = 0; i < sourceQueue->getNumPackets(); i++) {
-            auto candidate = sourceQueue->getPacket(i);
-            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                    candidate->peekAtFront<Ieee80211MacHeader>());
-            if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS &&
-                    dataHeader->getTid() == selected->tid) {
-                sourcePacket = candidate;
-                break;
+        // this path single-TID. Preferred AC is a lower-bound recommendation,
+        // not a selected TID (9.3.1.22.2), so choose pending data from that AC
+        // or a higher-priority AC and derive the actual TID from the MPDU.
+        auto preferredAc = aciToAccessCategory(selected->preferredAc);
+        for (int ac = AC_VO; ac >= preferredAc && sourcePacket == nullptr; ac--) {
+            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
+            for (int i = 0; i < queue->getNumPackets(); i++) {
+                auto candidate = queue->getPacket(i);
+                auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                        candidate->peekAtFront<Ieee80211MacHeader>());
+                if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS) {
+                    sourceQueue = queue;
+                    selectedAc = static_cast<AccessCategory>(ac);
+                    sourcePacket = candidate;
+                    break;
+                }
             }
         }
+        if (sourceQueue == nullptr) {
+            selectedAc = preferredAc;
+            sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
+        }
+        EV_DEBUG << "HE TB Basic Trigger queue selection: preferredAc=" << preferredAc
+                 << ", AC=" << selectedAc
+                 << ", queued=" << sourceQueue->getNumPackets()
+                 << ", data=" << (sourcePacket != nullptr) << "\n";
     }
     else if (selected != nullptr && (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
             trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)) {
@@ -604,7 +664,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     ASSERT(selected->ruToneSize > 0);
     ASSERT(trigger->getCommonDuration() > SIMTIME_ZERO);
 
-    uint8_t selectedTid = bsrpTid >= 0 ? bsrpTid : selected->tid;
+    uint8_t selectedTid = bsrpTid >= 0 ? bsrpTid : 0;
     if (sourcePacket != nullptr) {
         auto sourceHeader = dynamicPtrCast<const Ieee80211DataHeader>(
                 sourcePacket->peekAtFront<Ieee80211MacHeader>());
@@ -618,10 +678,16 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
             mac->getMib()->bssData.bssid, selectedTid).size();
     int availableSlots = ulBaAgreement == nullptr ? 0 :
             std::max(0, ulBaAgreement->getBufferSize() - occupiedSlots);
-    // UORA must be able to send its first QoS MPDU before a Block Ack
-    // agreement exists. The Trigger exchange's Multi-STA BA directly carries
-    // the response bitmap, so reserve one slot for this non-aggregated MPDU.
-    if (randomAccess && sourcePacket != nullptr && ulBaAgreement == nullptr)
+    EV_DEBUG << "HE TB Block Ack window: agreement=" << (ulBaAgreement != nullptr)
+             << ", size=" << (ulBaAgreement != nullptr ? ulBaAgreement->getBufferSize() : 0)
+             << ", occupied=" << occupiedSlots
+             << ", available=" << availableSlots << "\n";
+    // IEEE 802.11-2024 10.3.2.13.3 and 26.4.4.5 allow a tagged QoS Data MPDU
+    // in an HE TB response to be acknowledged immediately by a Multi-STA BA;
+    // an existing block ack agreement is required only for the untagged
+    // multi-MPDU aggregation case. Reserve one slot so both scheduled and UORA
+    // users can send their first non-aggregated MPDU before an agreement exists.
+    if (sourcePacket != nullptr && ulBaAgreement == nullptr)
         availableSlots = 1;
     if (sourcePacket != nullptr && availableSlots == 0)
         sourcePacket = nullptr;
@@ -646,6 +712,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     auto responseHeader = exchange.packets.empty() ?
             responsePacket->peekAtFront<Ieee80211MacHeader>() :
             exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
+    auto responsePacketCount = exchange.packets.size();
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
         responsePacket->setName("HE-TB-NDP-Feedback-Report");
     if (!exchange.packets.empty() || exchange.randomAccess)
@@ -688,7 +755,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
              << ", AID=" << myAid
              << ", " << (randomAccess ? "random-access" : "scheduled")
              << " RU=" << selected->ruIndex
-             << ", packets=" << exchange.packets.size() << "\n";
+             << ", packets=" << responsePacketCount << "\n";
     tx->transmitFrame(responsePacket, responseHeader,
             modeSet->getSifsTime(), this);
     delete responsePacket;

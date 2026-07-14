@@ -362,6 +362,9 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             user.ruToneSize = allocation.ru.toneSize;
             user.ruToneOffset = allocation.ru.toneOffset;
             user.mcs = 0;
+            user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
+            user.streamStartIndex = allocation.streamStartIndex;
+            user.muMimo = allocation.muMimo;
             user.tid = allocation.tid;
             SequenceNumberCyclic startingSequenceNumber;
             auto tid = allocation.tid;
@@ -990,6 +993,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         activeAlloc.tid = dataHeader->getTid();
         activeAlloc.ruIndex = alloc.ru.index;
         activeAlloc.ru = alloc.ru;
+        activeAlloc.numberOfSpatialStreams = alloc.numberOfSpatialStreams;
+        activeAlloc.streamStartIndex = selectedAllocation.streamStartIndex;
+        activeAlloc.totalNsts = selectedAllocation.totalNsts;
+        activeAlloc.muMimo = selectedAllocation.muMimo;
         activeAlloc.packet = staPackets.front();
         activeAlloc.packets = staPackets;
         activeAllocations.push_back(activeAlloc);
