@@ -105,7 +105,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         // offset, then return the user RU for reception/interference filtering.
         const auto& user = heMuPhyHeader->getUsers(0);
         constexpr double HE_TONE_SPACING = 78125;
-        auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
+        auto channelBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
         int channelTones = getHeChannelToneCount(channelBandwidth);
         ru.index = user.ruIndex;
         ru.toneSize = user.ruToneSize;
@@ -125,7 +125,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
             // DL HE MU receiver filtering follows the STA-ID and RU location
             // carried in the HE-SIG-B User field (Clause 27.3.11.8.4).
             constexpr double HE_TONE_SPACING = 78125;
-            auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
+            auto channelBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
             if (user.ruToneSize == 0) {
                 auto legacyRus = calculateHeRus(scalarTransmissionAnalogModel->getCenterFrequency(),
                         channelBandwidth, heMuPhyHeader->getUsersArraySize());
@@ -159,7 +159,7 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
         return nullptr;
 
     auto arrival = getArrival(receiver, transmission);
-    auto totalBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
+    auto totalBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
     auto aggregatePower = scalarMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
     auto packet = transmission->getPacket();
     auto heMuHeader = packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>() ?

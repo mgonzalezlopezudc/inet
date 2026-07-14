@@ -27,7 +27,7 @@ The simulation runs in the `HeChannelWidthsNetwork` topology consisting of:
 - **`ap`**: Access Point at `(300, 200)`.
 - **`sta[0..3]`**: Four stationary client hosts arranged around the AP at close range (approx. 50-80 meters).
 - **`server`**: A wired server connected to the AP via a 100G Ethernet link.
-- **Traffic**: Downlink UDP traffic is sent from the server to each of the four client hosts (200B payloads sent every 2ms).
+- **Traffic**: Downlink UDP traffic is sent from the server to each of the four client hosts (1000B payloads sent every 0.25ms in the saturated phase, with a single-packet trigger at t = 0.2s for ADDBA warmup).
 
 The variables under test are the channel width and its matching physical bitrate:
 - **`Width20MHz`**: 20 MHz channel, 14.625 Mbps bitrate.
@@ -61,14 +61,14 @@ opp_scavetool query -l -f 'name =~ "endToEndDelay:histogram"' examples/ieee80211
 ```
 
 ### Quantitative Summary:
-For each configuration, the server generates 1000 packets per flow (total 4000 packets) starting at 0.2 s. Under high saturation, the scheduler distributes RUs differently across configurations, causing variations in delivered packets and mean delays:
+For each configuration, the server generates a single trigger packet per host during an idle warmup phase (`t = 0.2s` to `0.25s`) to establish Block Ack agreements, and then generates saturated traffic from `t = 0.3s` to `0.5s` (800 packets per flow, total 3200 packets). Under high saturation, the scheduler distributes RUs equitably across all configurations:
 
 | Configuration | `host[0]` (Pkts / Delay) | `host[1]` (Pkts / Delay) | `host[2]` (Pkts / Delay) | `host[3]` (Pkts / Delay) |
 |---|---|---|---|---|
-| **`Width20MHz`** | 294 / 65.87 ms | 293 / 65.69 ms | 293 / 65.94 ms | 1 / 3.51 ms |
-| **`Width40MHz`** | 190 / 89.04 ms | 181 / 109.60 ms| 186 / 91.05 ms | 181 / 93.62 ms |
-| **`Width80MHz`** | 829 / 20.46 ms | 823 / 20.81 ms | 823 / 21.20 ms | 1 / 1.95 ms |
-| **`Width160MHz`**| 873 / 17.08 ms | 873 / 17.08 ms | 873 / 17.08 ms | 1 / 1.52 ms |
+| **`Width20MHz`** | 114 / 60.51 ms | 113 / 61.30 ms | 113 / 61.31 ms | 113 / 61.32 ms |
+| **`Width40MHz`** | 167 / 52.28 ms | 166 / 52.81 ms | 166 / 52.81 ms | 166 / 52.82 ms |
+| **`Width80MHz`** | 312 / 32.41 ms | 312 / 32.41 ms | 312 / 32.41 ms | 311 / 32.68 ms |
+| **`Width160MHz`**| 528 / 9.92 ms  | 528 / 9.93 ms  | 528 / 9.93 ms  | 528 / 9.93 ms  |
 
 ---
 
@@ -95,7 +95,7 @@ The decoded output timeline shows:
 ## Analysis and Insights:
 
 1. **Bandwidth vs. Wire-Time Delay**:
-   - As the channel width increases from 20 MHz to 160 MHz, the mean delay for the active stations under high traffic drops (e.g. for `host[0]`: 65.87 ms at 20 MHz to 20.46 ms at 80 MHz and 17.08 ms at 160 MHz). Note that at 40 MHz, the delay rises because the scheduler serves all four stations concurrently (rather than starving the fourth station as in 20 MHz).
+   - As the channel width increases from 20 MHz to 160 MHz, the mean delay for all active stations under high traffic drops consistently (e.g., for `host[0]`: 60.51 ms at 20 MHz to 52.28 ms at 40 MHz, 32.41 ms at 80 MHz, and 9.92 ms at 160 MHz). With the warmup trigger setup, all four stations are successfully scheduled concurrently without any station being starved.
    - This occurs because a wider channel supports a higher physical bit rate, reducing the physical transmission duration (airtime) of the frame.
 
 2. **Negligible Sequential Delay with 100G Ethernet**:
