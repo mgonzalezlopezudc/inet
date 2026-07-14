@@ -34,7 +34,7 @@ The network [TwtRegression.ned](TwtRegression.ned) consists of:
           |
           | (140m wireless)
           v
-       [ ap ] <==== (100M Ethernet) ====> [server]
+       [ ap ] <==== (100G Ethernet) ====> [server]
           ^
           | (140m wireless)
           |
