@@ -16,8 +16,8 @@ import inet.visualizer.contract.IIntegratedVisualizer;
 // \brief Network topology for demonstrating 802.11ax BSS Coloring and Spatial Reuse.
 //
 // It consists of two overlapping BSSs:
-// - BSS 1: AP1 (150, 250) and associated STA1_1, STA1_2 (100, 240/260)
-// - BSS 2: AP2 (400, 250) and associated STA2_1, STA2_2 (450, 240/260)
+// - BSS 1: AP1 (200, 250) and associated STA1_1, STA1_2 (170, 240/260)
+// - BSS 2: AP2 (400, 250) and associated STA2_1, STA2_2 (430, 240/260)
 //
 // Having 2 STAs per BSS ensures that the AP downlink scheduler triggers
 // HE MU-OFDMA transmissions (which carry BSS Color) instead of falling

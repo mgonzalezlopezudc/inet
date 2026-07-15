@@ -8,10 +8,17 @@ Four conditions compare a clean 80 MHz channel, secondary-channel interference w
 
 Figure generation requires both masks 0 and 2 and aligned AP-radio RU offset, RU size, STA ID, and mask telemetry. Thus the frequency panel represents scheduled HE PPDUs, not a configuration string. The expected tradeoff is resilience under secondary-channel interference versus the loss of one 20 MHz subchannel; exact goodput depends on whether the offered load reaches either capacity ceiling.
 
-In the refreshed `0.3–0.95 s` window, all four conditions measure `16.0 Mbps`
-in this workload. That equality means the offered load and model abstraction
-are masking a goodput difference; it must not be reported as a capacity gain.
-The AP vector is the decisive feature evidence: the mask is `0` before about
-`0.35 s`, `2` during the active puncturing interval, and returns to `0` after
-about `0.7 s`. A fresh AP PCAP also decodes the surrounding QoS Data, ACK, and
-Action exchanges, but does not expose every HE PHY metadata field.
+The refreshed `0.3–0.95 s` results use the 2 ms offered load for the clean
+control (`16.000 Mbps`) and the 0.5 ms saturated load for the interference
+pair. Their five-run means are `63.941 ± 0.051 Mbps` without puncturing,
+`63.882 ± 0.033 Mbps` with static puncturing, and `63.931 ± 0.033 Mbps` with
+runtime puncturing (95% Student-t confidence intervals). The near-equality
+means this scalar-medium workload does not turn puncturing into a measured
+goodput gain; the feature evidence is the allocation and mask telemetry.
+
+The runtime AP vector observes mask values `{0, 2}`: mask `0` before about
+`0.35 s`, mask `2` while the jammer is active, and mask `0` after about
+`0.7 s`. A fresh AP PCAPng contains 5,028 strictly ordered IEEE 802.11 frames;
+TShark identifies 834 non-IP MAC-data frames plus the surrounding UDP, Action,
+and ACK exchanges. The native capture does not expose all HE PHY fields, so RU
+placement and mask timing are taken from `.vec` telemetry.

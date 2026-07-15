@@ -25,7 +25,13 @@ The network is configured in `omnetpp.ini` under `[General]`:
   * This scheduler is used for all scenarios because it calls `allocateHeRus()` with the punctured-subchannel mask, producing a puncture-aware RU layout.
 * `**.displayHeMuSignalDetails = true` and `**.displayHeMuSignalPhyFields = true`
 
-The server sends 1000-byte downlink UDP packets to all four hosts every 0.2 ms. A single warm-up trigger runs from `0.2s` to `0.25s`; normal traffic starts at `0.3s`. The resulting backlog quickly exceeds the scheduler's 1500 B threshold, so the scheduler requests large RUs (up to 484-tone, which spans a 40 MHz half of the 80 MHz channel). This makes preamble puncturing visibly force the scheduler to downgrade RU sizes so that no RU overlaps the disabled 20 MHz subchannel.
+The server sends 1000-byte downlink UDP packets to all four hosts every 2 ms in
+the ordinary feature configurations. A single warm-up trigger runs from
+`0.2s` to `0.25s`; normal traffic starts at `0.3s`. The interference
+configurations override the data interval to `0.5ms` to saturate the channel.
+The resulting backlog exceeds the scheduler's 1500 B threshold, so it requests
+large RUs (up to 484-tone). Under puncturing, the allocator downgrades or
+relocates allocations so that no RU overlaps the disabled 20 MHz subchannel.
 
 ---
 
@@ -56,7 +62,9 @@ The server sends 1000-byte downlink UDP packets to all four hosts every 0.2 ms. 
 **What to observe:**
 
 * Slightly shorter PPDU durations because the BCC tail bits are no longer transmitted and LDPC codeword accounting is used.
-* Higher received packet counts at the hosts because of the LDPC SNR boost.
+* The LDPC PHY path is selected, but this offered load is fully delivered in
+  both BCC and LDPC runs; application packet counts alone do not expose the
+  modeled PER improvement here.
 * The HE MU signal details show `coding = LDPC`.
 
 ### Scenario C: `PacketExtension`
@@ -221,25 +229,33 @@ In Qtenv, inspect the AP `mib` module for `heCapabilitiesSummary`, `heOperationS
 
 ## 6. Quantitative Results and Verification
 
-All configurations were run with Cmdenv, and the table reports the `packetReceived:count` scalar for the UDP sink application on each host:
+All configurations were run with Cmdenv using five seeds. The table reports
+aggregate goodput from `packetReceived:vector(packetBytes)` in the common
+`0.3–0.95s` measurement window. The ordinary feature cases offer 2 ms traffic;
+the three interference cases use the 0.5 ms override.
 
-| Configuration / Config | Description | Packets Received by Clients (UDP App) |
+| Configuration / Config | Description | Measured aggregate goodput |
 |---|---|---|
-| **`BccBaseline`** | HE MU-OFDMA with BCC coding | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`HeLdpc`** | HE LDPC timing and PER gain | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`PacketExtension`** | 8 µs HE packet-extension duration | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`PreamblePuncturing`** | Punctured second 20 MHz subchannel | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`MixedLdpcSupport`** | AP LDPC enabled, host[3] disabled | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`CombinedHeFeatures`** | LDPC, PE, and puncturing enabled | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`PreamblePuncturingUnderInterference`** | Jammer on 2nd subchannel (punctured) | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`CleanChannelBaseline`** | Clean channel baseline (no interferer) | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`LegacyInterferenceWithoutPuncturing`** | Jammer on 2nd subchannel (no puncturing) | `host[0..3]`: 351 each <br> **Total: 1404** |
-| **`DynamicPuncturing`** | Dynamic preamble puncturing | `host[0..3]`: 351 each <br> **Total: 1404** |
+| **`BccBaseline`** | HE MU-OFDMA with BCC coding | **16.000 Mbps**; 325 packets/STA/run |
+| **`HeLdpc`** | HE LDPC timing and PER gain | **16.000 Mbps**; 325 packets/STA/run |
+| **`PacketExtension`** | 8 µs HE packet-extension duration | **16.000 Mbps**; 325 packets/STA/run |
+| **`PreamblePuncturing`** | Punctured second 20 MHz subchannel | **16.000 Mbps**; 325 packets/STA/run |
+| **`MixedLdpcSupport`** | AP LDPC enabled, host[3] disabled | **16.000 Mbps**; 325 packets/STA/run |
+| **`CombinedHeFeatures`** | LDPC, PE, and puncturing enabled | **16.000 Mbps**; 325 packets/STA/run |
+| **`CleanChannelBaseline`** | Clean channel baseline (no interferer) | **16.000 Mbps**; 325 packets/STA/run |
+| **`LegacyInterferenceWithoutPuncturing`** | Jammer on 2nd subchannel (no puncturing) | **63.941 ± 0.051 Mbps** |
+| **`PreamblePuncturingUnderInterference`** | Jammer on 2nd subchannel (punctured) | **63.882 ± 0.033 Mbps** |
+| **`DynamicPuncturing`** | Dynamic preamble puncturing | **63.931 ± 0.033 Mbps** |
+
+The intervals are 95% Student-t confidence intervals over five run-level
+observations. The equal ordinary-case goodput is the offered-load ceiling, and
+the near-equal interference-case goodput does not constitute a puncturing
+throughput gain; the decisive puncturing evidence is the mask/RU telemetry.
 
 To query the received packet counts using `opp_scavetool`:
 
 ```sh
-opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*app*"' examples/ieee80211ax/he_features/results/*.sca
+opp_scavetool query -l -f 'name =~ "packetReceived:vector(packetBytes)" and module =~ "*.host*app*"' examples/ieee80211ax/he_features/results/*.vec
 ```
 
 ---
@@ -249,19 +265,24 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*
 To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
 
 ```sh
-bin/inet -u Cmdenv -c PreamblePuncturing examples/ieee80211ax/he_features/omnetpp.ini --result-dir=examples/ieee80211ax/he_features/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
+mkdir -p examples/ieee80211ax/he_features/results/pcap
+bin/inet -u Cmdenv -f examples/ieee80211ax/he_features/omnetpp.ini -c DynamicPuncturing -r 0 --result-dir=examples/ieee80211ax/he_features/results/pcap --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\" --**.pcapRecorder[*].moduleNamePatterns=\"wlan[0]\" --**.pcapRecorder[*].dumpProtocols=\"ieee80211mac\" --**.pcapRecorder[*].fileFormat=\"pcapng\" --**.pcapRecorder[*].timePrecision=9 --**.pcapRecorder[*].alwaysFlush=true
 ```
 
 Use TShark to print the timeline of packet exchanges at the Access Point's wireless interface:
 
 ```sh
-tshark -n -r examples/ieee80211ax/he_features/results/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap -c 20
+tshark -n -r 'examples/ieee80211ax/he_features/results/pcap/DynamicPuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' -c 20
 ```
 
 The decoded output timeline shows:
 1. **Downlink UDP Traffic**: The AP transmits UDP data packets (e.g. frame 1) to the client hosts.
 2. **ADDBA Handshake**: The AP and hosts exchange block acknowledgment action frames (e.g. frames 3, 5, 7) to negotiate Multi-STA block acknowledgments.
-3. **Preamble Puncturing Verification**: In Qtenv or trace summaries, the HE MU PPDU layout resolves tones avoiding the punctured subchannel index 1 (corresponding to the `0100` mask), scheduling user data only on the remaining active subchannels.
+3. **Preamble Puncturing Verification**: The AP `.vec` telemetry observes
+   mask values `0` and `2`, with the runtime transition at approximately
+   `0.35s` and `0.7s`. The aligned RU offset/size/STA vectors show the
+   scheduler's puncture-aware allocation; the native PCAP confirms the
+   surrounding IEEE 802.11 exchange but does not carry all HE PHY fields.
 
 ---
 

@@ -28,87 +28,87 @@
   "bss": {
     "Aggressive": {
       "concurrent_ap_airtime_percent": {
-        "ci95": 0.0,
+        "ci95": 0.2584332046501372,
         "count": 5,
-        "mean": 49.8
+        "mean": 0.5319999999999999
       },
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.16544152521280792,
         "count": 5,
-        "mean": 6.400000000000001
+        "mean": 6.648615384615385
       },
       "jain_fairness": {
-        "ci95": 0.0,
+        "ci95": 0.08115472310826816,
         "count": 5,
-        "mean": 1.0
+        "mean": 0.900268388707411
       }
     },
     "Color collision": {
       "concurrent_ap_airtime_percent": {
-        "ci95": 0.0,
+        "ci95": 0.2584332046501372,
         "count": 5,
-        "mean": 49.8
+        "mean": 0.5319999999999999
       },
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.16544152521280792,
         "count": 5,
-        "mean": 6.400000000000001
+        "mean": 6.648615384615385
       },
       "jain_fairness": {
-        "ci95": 0.0,
+        "ci95": 0.08115472310826816,
         "count": 5,
-        "mean": 1.0
+        "mean": 0.900268388707411
       }
     },
     "Conservative": {
       "concurrent_ap_airtime_percent": {
-        "ci95": 0.0,
+        "ci95": 0.2584332046501372,
         "count": 5,
-        "mean": 49.8
+        "mean": 0.5319999999999999
       },
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.16544152521280792,
         "count": 5,
-        "mean": 6.400000000000001
+        "mean": 6.648615384615385
       },
       "jain_fairness": {
-        "ci95": 0.0,
+        "ci95": 0.08115472310826816,
         "count": 5,
-        "mean": 1.0
+        "mean": 0.900268388707411
       }
     },
     "Disabled": {
       "concurrent_ap_airtime_percent": {
-        "ci95": 0.0,
+        "ci95": 0.2584332046501372,
         "count": 5,
-        "mean": 49.8
+        "mean": 0.5319999999999999
       },
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.16544152521280792,
         "count": 5,
-        "mean": 6.400000000000001
+        "mean": 6.648615384615385
       },
       "jain_fairness": {
-        "ci95": 0.0,
+        "ci95": 0.08115472310826817,
         "count": 5,
-        "mean": 1.0
+        "mean": 0.900268388707411
       }
     },
     "Enabled": {
       "concurrent_ap_airtime_percent": {
-        "ci95": 0.0,
+        "ci95": 0.2584332046501372,
         "count": 5,
-        "mean": 49.8
+        "mean": 0.5319999999999999
       },
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.16544152521280792,
         "count": 5,
-        "mean": 6.400000000000001
+        "mean": 6.648615384615385
       },
       "jain_fairness": {
-        "ci95": 0.0,
+        "ci95": 0.08115472310826816,
         "count": 5,
-        "mean": 1.0
+        "mean": 0.900268388707411
       }
     }
   },
@@ -263,23 +263,23 @@
     },
     "Interference, punctured": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.033481224893943805,
         "count": 5,
-        "mean": 16.000000000000004
+        "mean": 63.88184615384616
       }
     },
     "Interference, unpunctured": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.051143415812115595,
         "count": 5,
-        "mean": 16.000000000000004
+        "mean": 63.94092307692309
       }
     },
     "Runtime puncturing": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.033481224893943805,
         "count": 5,
-        "mean": 16.000000000000004
+        "mean": 63.93107692307693
       },
       "observed_masks": [
         0,
