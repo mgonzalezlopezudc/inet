@@ -1,23 +1,25 @@
 # Walkthrough: 802.11ax Downlink OFDMA
 
-This example shows why downlink OFDMA is useful when several stations are
-backlogged at the same time. Earlier 802.11 generations give one station the
-whole channel in each transmission opportunity; 802.11ax can divide that
-opportunity into resource units (RUs) and serve several stations in one HE MU
-PPDU. The comparison also shows that RU scheduling is a policy choice: using
-wider RUs can maximize aggregate goodput, while serving more users per PPDU
-can improve service regularity.
+This example shows how downlink OFDMA behaves when several stations have data
+ready at the same time. Earlier 802.11 generations give one station the whole
+channel in each transmission opportunity; 802.11ax can divide that opportunity
+into resource units (RUs) and serve several stations in one HE MU PPDU. The
+comparison also shows that RU scheduling is a policy choice and that OFDMA is
+not automatically faster than SU OFDM at every channel width and offered load.
 
 ## What the experiment demonstrates
 
-Under the saturated three-station workload:
+Under the low-load, rate-matched three-station workload:
 
-- at 20 MHz, `fBW` DL OFDMA averages `23.516 Mbps`, versus `7.432 Mbps` for
-  matched SU OFDM: a `3.16x` throughput gain;
-- at 20 MHz, `fHoL` averages `20.096 Mbps` and has a p95 delay of `14.02 ms`,
-  while `fBW` has a p95 delay of `11.86 ms`; and
-- fresh AP captures contain 2593, 1855, and 637 decoded frames for `fBW`,
-  `fHoL`, and SU respectively. TShark shows the common warm-up data at
+- at 20 MHz, `fBW` and `fHoL` DL OFDMA deliver `2.399 Mbps` and
+  `2.395 Mbps`, essentially the complete `2.4 Mbps` offered load, while SU
+  OFDM delivers `1.615 Mbps`;
+- their p95 delays are `1.68 ms`, `2.31 ms`, and `52.26 ms` respectively, so
+  both OFDMA policies avoid the queue buildup seen in SU;
+- at 80 MHz, both OFDMA policies deliver `2.400 Mbps` with `0.58 ms` p95
+  delay, while SU delivers `2.374 Mbps` with `12.80 ms` p95 delay; and
+- fresh AP captures contain 3192, 2533, and 1605 decoded frames for 20 MHz
+  `fBW`, `fHoL`, and SU respectively. TShark shows the common warm-up data at
   `0.200180 s`, normal data at `0.300180 s`, and the expected Action/ACK
   exchanges. HE RU metadata is retained in the `.vec` results because the
   native MAC capture does not expose every HE MU field.
@@ -50,8 +52,15 @@ every workload.
 The controlled configurations use the same topology, three stations, `100 mW`
 transmit power, best-effort EDCA traffic, packet size, simulation duration,
 `0.2–0.25 s` warm-up, and `0.3 s` normal-operation start. Each source offers a
-100-byte packet every `0.06 ms`, for `40 Mbps` aggregate application load. The
+100-byte packet every `1 ms`, for `2.4 Mbps` aggregate application load. The
 analysis campaign measures `0.3–0.88 s`.
+
+The SU rate is fixed by `**.wlan[*].bitrate`. The DL MU scheduler normally
+selects a per-RU MCS independently from estimated SNR, so the AP's
+`heMcsSnrThresholds` is capped at MCS 1. This makes the comparison rate-matched:
+MCS 1 corresponds to `14.625 Mbps` at 20 MHz and `61.25 Mbps` at 80 MHz with
+the configured guard interval. These are PHY data-field rates, not application
+goodput limits.
 
 | Configuration | Width | MAC/scheduler |
 |---|---:|---|
@@ -73,8 +82,8 @@ an accidental confounder.
 
 ## Why the policies differ
 
-With three backlogged stations on 20 MHz, the standard equal-RU layouts that
-matter here contain two 106-tone RUs or four 52-tone RUs:
+When all three queues are eligible on 20 MHz, the standard equal-RU layouts
+that matter here contain two 106-tone RUs or four 52-tone RUs:
 
 - `fBW` keeps the oldest station as the mandatory anchor, ranks the remaining
   candidates by eligible backlog, and selects the widest layout that fits. It
@@ -83,30 +92,34 @@ matter here contain two 106-tone RUs or four 52-tone RUs:
   accommodate all candidates. It transmits to all three stations in three of
   the four 52-tone RU positions.
 
-At 20 MHz, `fBW` occupies 212 tones and achieves higher aggregate throughput;
-`fHoL` occupies 156 tones but serves every station in each MU exchange. At
-80 MHz both have enough capacity for the offered load, so `fHoL`'s three-user
-service gives slightly lower delay.
+At 20 MHz, `fBW` occupies 212 tones and rotates service between two stations;
+`fHoL` occupies 156 tones but serves every eligible station in each MU
+exchange. Both carry essentially the full offered load. `fBW` has lower p95
+delay here because its 106-tone RUs transmit each user's payload faster than
+the 52-tone RUs used by `fHoL`. At 80 MHz both policies have ample capacity and
+produce the same measured p95 delay.
 
 ## Reproducing `.sca` and `.vec` results
 
-Run one configuration and run number at a time from this directory. The
-verified command was:
+Run one configuration, run number, and seed set at a time from this directory.
+The configurations define only run number 0, so the five-seed campaign varies
+`--seed-set` rather than using run numbers 0 through 4. A verified command is:
 
 ```sh
 ../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
-  -c EqualSizedRUs_fBW -r 0 --result-dir=results/comparison
+  -c EqualSizedRUs_fBW -r 0 --seed-set=0 \
+  --result-dir=results/comparison/EqualSizedRUs_fBW/seed0
 ```
 
-Repeat it for the other five configurations in the table. Every verified run
-exited successfully at the `1 s` simulation time limit and produced a `.sca`,
-`.vec`, and `.vci` file under `results/comparison`.
+Repeat it with seed sets 0 through 4 for the other five configurations in the
+table. Every verified run exited successfully at the `1 s` simulation time
+limit and produced a `.sca`, `.vec`, and `.vci` file in its result directory.
 
 Check run metadata rather than relying only on filenames:
 
 ```sh
 opp_scavetool query -a \
-  'results/comparison/EqualSizedRUs_fBW-#0.sca'
+  'results/comparison/EqualSizedRUs_fBW/seed0/EqualSizedRUs_fBW-#0.sca'
 ```
 
 Query application totals and delay distributions with:
@@ -114,36 +127,51 @@ Query application totals and delay distributions with:
 ```sh
 opp_scavetool query -s -l \
   -f 'module =~ **.host[*].app[0] AND (name =~ packetReceived* OR name =~ endToEndDelay*)' \
-  results/comparison/*.sca
+  results/comparison/*/seed*/*.sca
 
 opp_scavetool query -v -l \
   -f 'module =~ **.host[*].app[0] AND (name =~ packetReceived* OR name =~ endToEndDelay*)' \
-  results/comparison/*.vec
+  results/comparison/*/seed*/*.vec
 ```
 
-## Scalar results
+## Performance results
 
 Throughput uses application payload bytes received in the `0.3–0.88 s`
-measurement interval. The table reports p95 delay from the corresponding
-application delay vectors.
+measurement interval and reports the mean of seed sets 0 through 4. The p95
+values use the nearest-rank percentile of the corresponding application delay
+samples pooled across those five seeds and restricted to the same interval.
 
 | Configuration | Aggregate app throughput | p95 E2E delay |
 |---|---:|---:|
-| `EqualSizedRUs_fBW` | 23.516 Mbps | 11.86 ms |
-| `EqualSizedRUs_fHoL` | 20.096 Mbps | 14.02 ms |
-| `SuEdcaBaseline` | 7.432 Mbps | 20.76 ms |
-| `BacklogBased` | 35.758 Mbps | 35.80 ms |
-| `HoLMinDelay` | 13.813 Mbps | 86.91 ms |
+| `EqualSizedRUs_fBW` | 2.399 Mbps | 1.68 ms |
+| `EqualSizedRUs_fHoL` | 2.395 Mbps | 2.31 ms |
+| `SuEdcaBaseline` | 1.615 Mbps | 52.26 ms |
+| `EqualSizedRUs80MHz_fBW` | 2.400 Mbps | 0.58 ms |
+| `EqualSizedRUs80MHz_fHoL` | 2.400 Mbps | 0.58 ms |
+| `SuEdcaBaseline80MHz` | 2.374 Mbps | 12.80 ms |
+| `BacklogBased` | 6.751 Mbps | 208.78 ms |
+| `HoLMinDelay` | 5.472 Mbps | 221.27 ms |
 
 The controlled comparisons show:
 
-- 20 MHz `fBW` is `3.16x` SU throughput and lowers p95 delay by about 43%;
-- 20 MHz `fHoL` is `2.70x` SU throughput;
-- 20 MHz `fBW` is about 17% faster than `fHoL`, as expected from the wider RU
-  layout;
+- at 20 MHz, both OFDMA policies carry essentially the full offered load,
+  whereas SU carries about 67% of it;
+- 20 MHz `fBW` has about 27% lower p95 delay than `fHoL`, while their aggregate
+  goodputs are nearly identical;
+- both 20 MHz OFDMA policies reduce p95 delay by more than 95% relative to SU;
+- at 80 MHz, all three configurations carry nearly the full offered load, but
+  OFDMA has `0.58 ms` p95 delay versus `12.80 ms` for SU;
 - the asymmetric pair demonstrates the workload trade-off: BacklogBased
   delivers more aggregate goodput, while neither result should be read as a
   universal fairness or delay ordering.
+
+The 20 MHz queue results explain the delay difference. Across all five seeds,
+both OFDMA policies have zero AP destination-queue overflows; in run 0 their
+per-destination queues contain at most two packets. The SU AP queue reaches its
+100-packet limit in every seed, ends with 98 packets, and drops an average of
+589.6 packets per run. The delay comparison therefore captures the intended
+benefit of serving several sparse downlink flows together, not merely a small
+difference between percentile estimators.
 
 ## Vector result
 
@@ -153,12 +181,16 @@ they are not scalars caused by the warm-up burst:
 
 | Configuration | Vector evidence |
 |---|---|
-| 20 MHz `fBW` | Five nonempty arrival vectors; 23.516 Mbps mean |
-| 20 MHz `fHoL` | Five nonempty arrival vectors; 20.096 Mbps mean |
-| 20 MHz SU | Five nonempty arrival vectors; 7.432 Mbps mean |
+| 20 MHz `fBW` | All 15 station/seed arrival vectors nonempty; 2.399 Mbps mean |
+| 20 MHz `fHoL` | All 15 station/seed arrival vectors nonempty; 2.395 Mbps mean |
+| 20 MHz SU | All 15 station/seed arrival vectors nonempty; 1.615 Mbps mean |
+| 80 MHz `fBW` | All 15 station/seed arrival vectors nonempty; 2.400 Mbps mean |
+| 80 MHz `fHoL` | All 15 station/seed arrival vectors nonempty; 2.400 Mbps mean |
+| 80 MHz SU | All 15 station/seed arrival vectors nonempty; 2.374 Mbps mean |
 
-Values are aggregate application Mbps. The delay vectors independently match
-the scalar histogram counts, means, minima, and maxima shown above.
+Values are aggregate application Mbps. The vector timestamps are used to apply
+the same `0.3–0.88 s` interval to throughput and delay instead of relying on
+whole-run scalar totals.
 
 ## PCAP and TShark verification
 
@@ -167,7 +199,8 @@ capture in `omnetpp.ini`:
 
 ```sh
 ../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
-  -c EqualSizedRUs_fBW -r 0 --result-dir=results/pcap_comparison/fBW \
+  -c EqualSizedRUs_fBW -r 0 --seed-set=0 \
+  --result-dir=results/pcap_comparison/fBW \
   '--*.ap.wlan[*].recordPcap=true' \
   '--*.ap.wlan[*].pcapRecorder[*].moduleNamePatterns="mac"' \
   '--*.ap.wlan[*].pcapRecorder[*].verbose=false' \
@@ -197,9 +230,9 @@ The AP captures are PCAPng files with native IEEE 802.11 encapsulation:
 
 | Capture | PCAPng frames | TShark-visible evidence |
 |---|---:|---|
-| 20 MHz `fBW` | 2593 | QoS Data, ACK, and Action exchanges |
-| 20 MHz `fHoL` | 1855 | QoS Data, ACK, and Action exchanges |
-| 20 MHz SU | 637 | SU data/control exchange |
+| 20 MHz `fBW` | 3192 | QoS Data, ACK, and Action exchanges |
+| 20 MHz `fHoL` | 2533 | QoS Data, ACK, and Action exchanges |
+| 20 MHz SU | 1605 | SU data/control exchange |
 
 The fresh captures start at simulation time `0.200180 s`; the first normal-data
 observation is at `0.300180 s`. The native capture decoder does not expose the
@@ -213,18 +246,20 @@ based on the result vectors rather than inferred from packet counts.
 - Application delivery is established from sink `.sca`/`.vec` results. Do not
   compare configurations by TShark-decoded UDP count because aggregated MPDUs
   may be presented as opaque 802.11 payloads to the dissector.
-- OFDMA wins here because all three queues remain backlogged, so every HE MU
-  opportunity can amortize contention and preamble overhead across users. At
-  low load, an SU transmission may be just as efficient because there may not
-  be several packets ready to share an opportunity.
-- `fBW` wins the aggregate-throughput comparison because two 106-tone RUs use
-  212 tones, whereas the three-user `fHoL` layout uses three 52-tone RUs, or
-  156 tones. This is a consequence of this three-user load and the legal RU
-  layouts, not a universal ranking of schedulers.
+- At 20 MHz, OFDMA wins because the AP can place several sparse destination
+  queues in one HE MU PPDU. The SU baseline sends to one receiver per PPDU and,
+  with only one 100-byte packet arriving per flow per millisecond, cannot
+  amortize its per-transmission overhead through large aggregates as effectively.
+- `fBW` and `fHoL` deliver nearly identical aggregate goodput because both have
+  enough capacity for the offered load. `fBW` has lower p95 delay in this run:
+  two 106-tone RUs send each selected payload faster than the 52-tone RUs in
+  the three-user `fHoL` layout, despite `fBW` rotating one user between PPDUs.
+- The fixed MCS cap is essential to this interpretation. The throughput and
+  delay gains do not come from allowing OFDMA to select a higher MCS than SU.
 - The results show the intended scheduler trade-off for this workload, not a
   universal claim that OFDMA always wins.
 
-Within those limits, the example clearly demonstrates simultaneous
-multi-station delivery, the throughput advantage of DL OFDMA over matched SU
-OFDM, the `fBW` versus `fHoL` trade-off, and the capacity effect of 20 versus
-80 MHz.
+Within those limits, the example demonstrates simultaneous multi-station
+delivery, lower queueing delay for matched-rate DL OFDMA with several sparse
+downlink flows, the `fBW` versus `fHoL` trade-off, and bandwidth-dependent
+behavior at 20 versus 80 MHz.
