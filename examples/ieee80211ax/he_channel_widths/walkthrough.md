@@ -61,14 +61,14 @@ opp_scavetool query -l -f 'name =~ "endToEndDelay:histogram"' examples/ieee80211
 ```
 
 ### Quantitative Summary:
-For each configuration, the server generates a single trigger packet per host during an idle warmup phase (`t = 0.2s` to `0.25s`) to establish Block Ack agreements, and then generates saturated traffic from `t = 0.3s` to `0.5s` (800 packets per flow, total 3200 packets). Under high saturation, the scheduler distributes RUs equitably across all configurations:
+For each configuration, the server generates a single trigger packet per host during an idle warmup phase (`t = 0.2s` to `0.25s`) to establish Block Ack agreements, and then generates saturated traffic from `t = 0.3s` to `0.45s`. The five-seed analysis measures `0.3–0.43s`.
 
-| Configuration | `host[0]` (Pkts / Delay) | `host[1]` (Pkts / Delay) | `host[2]` (Pkts / Delay) | `host[3]` (Pkts / Delay) |
-|---|---|---|---|---|
-| **`Width20MHz`** | 114 / 60.51 ms | 113 / 61.30 ms | 113 / 61.31 ms | 113 / 61.32 ms |
-| **`Width40MHz`** | 167 / 52.28 ms | 166 / 52.81 ms | 166 / 52.81 ms | 166 / 52.82 ms |
-| **`Width80MHz`** | 312 / 32.41 ms | 312 / 32.41 ms | 312 / 32.41 ms | 311 / 32.68 ms |
-| **`Width160MHz`**| 528 / 9.92 ms  | 528 / 9.93 ms  | 528 / 9.93 ms  | 528 / 9.93 ms  |
+| Configuration | Aggregate goodput | p95 delay |
+|---|---:|---:|
+| **`Width20MHz`** | 23.94 Mbps | 100.88 ms |
+| **`Width40MHz`** | 35.31 Mbps | 89.39 ms |
+| **`Width80MHz`** | 66.15 Mbps | 48.64 ms |
+| **`Width160MHz`** | 111.90 Mbps | 15.81 ms |
 
 ---
 
@@ -95,7 +95,7 @@ The decoded output timeline shows:
 ## Analysis and Insights:
 
 1. **Bandwidth vs. Wire-Time Delay**:
-   - As the channel width increases from 20 MHz to 160 MHz, the mean delay for all active stations under high traffic drops consistently (e.g., for `host[0]`: 60.51 ms at 20 MHz to 52.28 ms at 40 MHz, 32.41 ms at 80 MHz, and 9.92 ms at 160 MHz). With the warmup trigger setup, all four stations are successfully scheduled concurrently without any station being starved.
+   - As the channel width increases from 20 MHz to 160 MHz, aggregate goodput rises from `23.94` to `111.90 Mbps` and p95 delay falls from `100.88` to `15.81 ms`. With the warm-up trigger setup, all four stations have nonempty arrival vectors in every run.
    - This occurs because a wider channel supports a higher physical bit rate, reducing the physical transmission duration (airtime) of the frame.
 
 2. **Negligible Sequential Delay with 100G Ethernet**:

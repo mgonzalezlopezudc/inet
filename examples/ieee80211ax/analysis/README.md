@@ -4,6 +4,13 @@ These figures are evidence checks for the INET HE implementation, not generic cl
 
 The experiment manifest is [`experiments.json`](experiments.json). It fixes the configuration names, result directories, repetition count, measurement windows, workload metadata, and output paths. The loader rejects missing `.sca`/`.vec` pairs, extra or mixed configurations, missing runs, non-monotonic vectors, misaligned telemetry, and unit mismatches where OMNeT++ records a unit. `packetBytes` recorder values are bytes even though OMNeT++ currently leaves their unit attribute empty; the exact recorder name is used as that contract.
 
+The controlled short experiments use the same phase convention: one low-rate
+warm-up trigger in `0.2–0.25 s`, normal traffic from `0.3 s`, and analysis
+windows beginning at `0.3 s` unless a feature needs a settling interval (rate
+adaptation) or a different time scale (TWT). The downlink example also uses
+`warmup-period = 0.25 s` so simulator result statistics do not discard part of
+the common warm-up definition.
+
 ## Conclusions
 
 | Analysis | Evidence required before accepting the plot | Interpretation |
@@ -14,7 +21,7 @@ The experiment manifest is [`experiments.json`](experiments.json). It fixes the 
 | [Rate adaptation](rate-adaptation.md) | Selected MCS/NSS, EWMA probability, and actual TX outcome | A changing MCS is adaptation evidence only when paired with transmission outcomes. |
 | [Preamble puncturing](puncturing.md) | Runtime mask 0 → 2 → 0 and aligned RU placement | Puncturing avoids a busy secondary 20 MHz channel but sacrifices usable spectrum. |
 | [MU-MIMO](mu-mimo.md) | Multiple users in a PPDU and disjoint spatial-stream ranges | Concurrent streams, not throughput alone, establish that MU-MIMO occurred. |
-| [BSS coloring](bss-coloring.md) | Correct transmit-state code and concurrent AP airtime | OBSS/PD changes spatial reuse; throughput may remain offered-load limited. |
+| [BSS coloring](bss-coloring.md) | Correct transmit-state code and concurrent AP airtime | This bounded workload currently shows no condition separation; the result is a limitation, not proof that OBSS/PD is ineffective. |
 | [Channel width](channel-width.md) | Saturated workload and per-run goodput/delay | Wider channels increase capacity here, but scaling is not expected to be perfectly linear. |
 | [DL schedulers](dl-schedulers.md) | Separate symmetric/asymmetric workloads | Scheduler conclusions depend on load shape; asymmetric fairness is normalized by offered load. |
 | [BSR](bsr.md) | AP-reported and AP-scheduled backlog timelines | BSR is scheduling state, not application goodput; freshness controls whether the AP view is usable. |

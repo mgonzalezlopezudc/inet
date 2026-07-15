@@ -27,7 +27,7 @@ The network [HeRateAdaptationNetwork.ned](HeRateAdaptationNetwork.ned) consists 
   - `host[2]` at 177m (`(150, 260)`).
   - `host[3]` at 230m (`(90, 210)`) -> furthest, low SNR.
 - **`server`**: A wired server connected to the AP.
-- **Traffic**: Downlink UDP traffic is sent from the `server` to each of the four hosts via the AP (900B packets sent every 0.35ms).
+- **Traffic**: Downlink UDP traffic is sent from the `server` to each of the four hosts via the AP (900B packets sent every 0.35ms). The common warm-up is `0.2–0.25s`, normal traffic starts at `0.3s`, and rate analysis starts at `0.5s` to allow controller settling.
 
 ```
   [host[3]]       [host[2]]       [host[1]]       [host[0]]      [ap] <== (wired) ==> [server]
@@ -96,29 +96,15 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*
 opp_scavetool query -l -f 'name =~ "datarateSelected:vector"' examples/ieee80211ax/he_rate_adaptation/results/*.vec
 ```
 
-### Expected Output Summary
+### Refreshed vector summary
 
-```
-FixedMcs-#0.sca:
-scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  358
-scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  358
-scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  358
-scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  358
+The five-run `HeMinstrelMobile` campaign records the following AP-controller
+evidence:
+- `HeMinstrelMobile`: the refreshed five-run vector campaign selects MCS 0 through 11, with `9.372 ± 3.830 Mbps` goodput and `0.980 ± 0.010` transmission-success fraction.
 
-HeMinstrel-#0.sca:
-scalar  HeRateAdaptationNetwork.host[0].app[0]  packetReceived:count  1095
-scalar  HeRateAdaptationNetwork.host[1].app[0]  packetReceived:count  1094
-scalar  HeRateAdaptationNetwork.host[2].app[0]  packetReceived:count  161
-scalar  HeRateAdaptationNetwork.host[3].app[0]  packetReceived:count  160
-```
-
-AP datarate vector summary:
-- `FixedMcs`: count=1566, mean=17.04 Mbps, min=7.31 Mbps, max=121.87 Mbps
-- `HeMinstrel`: count=2589, mean=53.85 Mbps, min=7.31 Mbps, max=121.87 Mbps
-
-Individual Host HCF wlan[0] datarates:
-- `FixedMcs` hosts mean datarate: `host[0]`: 118.30 Mbps, `host[1]`: 118.60 Mbps, `host[2]`: 118.94 Mbps, `host[3]`: 7.31 Mbps
-- `HeMinstrel` hosts mean datarate: `host[0]`: 111.46 Mbps, `host[1]`: 108.19 Mbps, `host[2]`: 118.40 Mbps, `host[3]`: 17.39 Mbps
+The selected-MCS and transmission-outcome vectors, rather than a fixed-rate
+comparison that was not part of the refreshed manifest, are the current
+evidence for adaptation.
 
 ---
 
@@ -145,13 +131,15 @@ The decoded output timeline shows:
 
 ## Interpretation of Results
 
-1. **Different Results under High Traffic Saturation**:
-   - With the 100G Ethernet upgrade and dynamic queue clearing at the AP, the packet delivery numbers and selected bitrates differ between the static `FixedMcs` and dynamic `HeMinstrel` runs.
-   - *Why?* While the channel remains static, the high offered traffic load saturates the queues. `HeMinstrel`'s lookaround probing and success estimation interact dynamically with the DL HCF scheduler, adapting the rates to clear queues of closer stations faster, which changes scheduling priority and results in higher aggregate throughput (2510 total packets vs 1432 for FixedMcs) at the expense of fairness for more distant stations.
+1. **Observed adaptation**:
+   - The selected-MCS vector spans MCS 0 through 11 while the transmission-outcome vector remains highly successful (`0.980 ± 0.010`). This pairing is the evidence for adaptation; selected rates alone would not establish useful delivery.
 
 2. **Datarate vs. Distance**:
-   - The AP dynamically transmits to closer stations (like `host[0]`) at much higher bitrates (up to 121.87 Mbps, using high MCS) because of the strong signal.
-   - For the cell-edge `host[3]` at 230m, the AP is forced to transmit at the robust base rate of 7.31 Mbps (MCS 0) to ensure the signal is decodable.
+   - The refreshed manifest records selected-MCS and success vectors, but does not
+     record a per-station distance/rate table. No per-host bitrate claim is made
+     from this campaign.
 
-3. **Advantages of Minstrel in Dynamic Channels**:
-   - While both algorithms perform identically in this static sandbox, in real-world scenarios with client mobility, blockages, or multi-user interference, a static SNR mapping is highly inaccurate or unavailable. In those conditions, Minstrel's adaptive feedback loop is essential to track link quality changes dynamically using transmission success history.
+3. **Scope**:
+   - The current manifest does not rerun the fixed-rate baseline, so no current
+     Minstrel-versus-fixed throughput claim is made here. A fixed-rate
+     comparison should use the same normalized phase and seeds.

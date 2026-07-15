@@ -11,49 +11,49 @@
       "label": "Light, 1 RA-RU",
       "measurement": {
         "end_s": 2.0,
-        "start_s": 0.2
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#0.sca",
-          "sha256": "43b2d5f3fb9ac68ad438f920369e0bd5acf293d7d45a725f7edefa9eea46082d"
+          "sha256": "6f8bccad325c60b76d4f0f8966240db8a198d55b263547174f3fceb7caba53e7"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#0.vec",
-          "sha256": "622ce24399ea1a6aea3447dc94ea6005d909300eb7b698ff00873a74f672e113"
+          "sha256": "edd0141447933cb350599a9a8833399782bd36e1a8aa5bc85cc0cbbfa5decc28"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#1.sca",
-          "sha256": "feb3ee67fb06d8aa315d2cfe38dd2795dd880979ff630f3183f53b455f6e0c5e"
+          "sha256": "dc7d3af2408bfd25b82dc5554938e9cb5afd941f3f01e8d8883319627040aab1"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#1.vec",
-          "sha256": "39fe882a6962d1ac65da9c93dec8bd67143e7383024d9f048a7146a508ff1061"
+          "sha256": "4cbab6e83bb624edd22f286cdb2705a52ebe3b9a99c980e21f9832062daa2fad"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#2.sca",
-          "sha256": "d0b90dd1b8c1b1d550fa6e1e5006766d604cfc54d63e63ead4879e21a91bdd3a"
+          "sha256": "f5f79d26f2c47eecb96e48cee1811309b0c789764ed759fa432a5ad76f82aaa4"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#2.vec",
-          "sha256": "0cd87216531b619c145560bf9bd51a09e99b0f197d147673f6254cfa76f4856c"
+          "sha256": "8f918d3bbbe61ab0a77500b8c0f3fc09f5f93529811ee328344f846c521da561"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#3.sca",
-          "sha256": "1405065f98814572929307f9cfc1e3f5c8c8e40490fff34315da289cda8ecd9d"
+          "sha256": "668fc40df1eb25a08c2697e460f8e796fcb6d40b5688273128eff2c05247ace7"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#3.vec",
-          "sha256": "027871e333961b8684f3ed3b8e569f49279c77921e1b8a4a3ccee3a56ba05347"
+          "sha256": "3890a306ac1ae86e36325b6c0249bace67a572b7a16ea26266450357e14a9b64"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#4.sca",
-          "sha256": "0baa5d469b22336dc2b6bf9361e96b707fd4f4898f60adcb7f023eae97ad4b5f"
+          "sha256": "75bd0a7136031cbdab54f38f138a3e142e194f346d3705aa1afdcd7a104cd8a6"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#4.vec",
-          "sha256": "6c772e866ebef3cf98f1045769fc237b1079a5bd007757863373e9f44276c30f"
+          "sha256": "9fb4e7a682608618832ae31060305f6b8d74792c19b089a3ad528fcdc379f3b9"
         }
       ]
     },
@@ -64,49 +64,49 @@
       "label": "Heavy, 1 RA-RU",
       "measurement": {
         "end_s": 2.0,
-        "start_s": 0.2
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#0.sca",
-          "sha256": "541f150ee899879c4a67e9ab631976fd88e82d36b208298ea5c791e004543d14"
+          "sha256": "8c11c2b5f9aa6159c62cbe67b8c480c26caf198780fbf1674e29104a9418bf2e"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#0.vec",
-          "sha256": "f9566b054595b191a853852fd4d4e0282e604c7f4ce78d5151079fa8c8a15898"
+          "sha256": "bd4f003b86e26600bb0b0e75511303a5609643f0d788dc11a47b043d28e157ff"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#1.sca",
-          "sha256": "346a7d4336d25d81cf3856401457d6bdec4406feaf8fe15ed9f6fd84bf9158d8"
+          "sha256": "6a88c9a85830e8d166bebef72acb9242e8b55c678e1ec7f17dd416b3ec8dc823"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#1.vec",
-          "sha256": "f9d5a2346be8e9f052f789088a8f5187fc2548fe9173200c32e4a609afea6734"
+          "sha256": "f1d54141c5c33ee7d8899800a9c0911450d211a1c1cecd28494bf98304e9c4a1"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#2.sca",
-          "sha256": "4f2e34d79bc24eff8aed7071b3f96a03f0b9b3cdd256df8901d20aaa118b7b5e"
+          "sha256": "0654bbc9c0da0390808b86b816a4ea6e68cc6e347994a5b5476a1e3939eda9ff"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#2.vec",
-          "sha256": "13fbfea686fd6355a6949b2c4da84626a6d2a110004e82eb8e56b11d450d3378"
+          "sha256": "8535220726e3218c98be326d4e7b6d41d0f26096f80fc65a40bd954f42e08b63"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#3.sca",
-          "sha256": "89eb23ef372a4a29ddee6b35f5a1a845344217447167128e1a74027f191a4328"
+          "sha256": "11bbd00cac1326059b307c683addde6a8960f9877ad8a5a75650dd73ee389063"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#3.vec",
-          "sha256": "68a17e57e5d961a70ff75af643449d35e1d5590ff185cac0543b2836fea5daf2"
+          "sha256": "780aa05918445a38ba9805c6e9720df97d7c17edd0f74ffee0abf997a1b3d826"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#4.sca",
-          "sha256": "14f1e26d27190288cb1baf80710b3def12cd879a18bd92504ff892b3f8124fac"
+          "sha256": "73cc4ef70a809611ee332fa69ec19cb5cf491eb2f2357729f64b06ecb37a03c4"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#4.vec",
-          "sha256": "7768637430b89df468f021806ee394a6c23ec792e5ecd8993a642c2ff050abf9"
+          "sha256": "c6985a18b449dc0afc95ce7c651b1db41077f1ffb0ea88ce709406ffdfd5ff48"
         }
       ]
     },
@@ -117,56 +117,56 @@
       "label": "Heavy, 3 RA-RUs",
       "measurement": {
         "end_s": 2.0,
-        "start_s": 0.2
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#0.sca",
-          "sha256": "102deec09daae57f4c08b9823a2f04358f7f775986fea2c900dc9aeecd085889"
+          "sha256": "55a1a0709f2e415ee79921b3b9ce19932e502456ec7b5876cc4761bc1c224fae"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#0.vec",
-          "sha256": "4c67c18155ab14faea915547a98f189e994f52decf3cacd1d2e27464eb3cb27b"
+          "sha256": "13f043b94f6c94274cb334ffe470f8581c2cee16e61958cc6743d9e5d4043c4c"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#1.sca",
-          "sha256": "409c0fb8a7267097aca3be8e4ebc3269bc31239f7bb6a8b43b1ac3006f184ced"
+          "sha256": "96d04e30fa39e8b4a55e440274f9c22437103ef4e032704f698006f51dacae24"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#1.vec",
-          "sha256": "2d4c5816484a9e4f74ec3a81ba77b72d10533a30cf45c1692eaac0c68c27cf63"
+          "sha256": "c373f39a4a1fd93fd1dcef88dc235a5595922ad58d96ee0af874c10964518deb"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#2.sca",
-          "sha256": "91bd6fc51c7fa531d64d30e26b311a48941fbc48ce2b6d157178c4f89886044a"
+          "sha256": "266b54d1cc9bc283314734832457677fea5c4609fb5795955c94c508a57018b0"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#2.vec",
-          "sha256": "eb6b3f09f89ead5b7f4df9f07f26f4a433c54072e93d48dfa7b38c8b46167c6b"
+          "sha256": "f0bdd4551403a1f94f2e5a34d1cb7f156f7e64e500491cfa5894fed57cf78f35"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#3.sca",
-          "sha256": "44398c5288f77b8022e44fb9a864ee2748f761ccd255d159727ddd359404b99a"
+          "sha256": "9e388985f216c22f08b99a536515846025392912e30da49f9c0916799c86cd35"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#3.vec",
-          "sha256": "c4596f4c98e57fbaa6d9afebc2d179134247a8fc00125a103988842e25704dd1"
+          "sha256": "f5e185bb06e161d729e2709a8781012463cd1e2c6caa4078e1911ae47136e3e8"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#4.sca",
-          "sha256": "38b67e156614aafba97204a5505ee8ceea06e290513d7c33bf5447fc3b9191d8"
+          "sha256": "e7b28ac34eac35b4151e81a02b8c94db8cd0a57cd32ecea866bba7ebb72f0cf9"
         },
         {
           "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#4.vec",
-          "sha256": "866fa18b6e3f3bc967b5a50284b2479d3f66e56482a4332bc602dad3a7249138"
+          "sha256": "c9723015346681018777f60e29b7371684ac7a8511f8165b09f1f23130f163f7"
         }
       ]
     }
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/uora/uora-dashboard.png",
-  "git_revision": "f6c86d533f51bd5b6ea69cb2f030c7c6f5e85c09",
+  "git_revision": "e8644a9931488920ae367e2e48ec086ede5de4a0",
   "result_filters": [
     {
       "name": "heUlRandomAccessAttempt:count",

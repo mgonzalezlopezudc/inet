@@ -134,11 +134,11 @@ Two deterministic seeds produced:
 | UL | 0 | 2378 | 1677 | 41.8% | 217.29 ms | 263.90 ms |
 | UL | 1 | 2385 | 1715 | 39.1% | 210.05 ms | 303.42 ms |
 
-DL MU-MIMO delivers more traffic during the fixed 0.7-1.0 s measurement
-interval, so its queueing-delay population is not the same as the EDCA
-baseline's; the aggregate delivery gain is the meaningful comparison there.
-For the saturated UL workload, MU-MIMO improves both aggregate delivery and
-mean delay.
+The refreshed manifest compares 20 MHz DL MU-MIMO over `0.3–0.88 s` against
+the OFDMA control. The result vectors report `10.938 Mbps` for MU-MIMO and
+`23.568 Mbps` for OFDMA; the lower aggregate value makes the structural
+multi-user and disjoint-stream checks in the next section essential. This is
+not a universal performance ranking.
 
 ### Internal HE PHY and scheduler vectors from `.vec`/`.sca`
 

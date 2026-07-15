@@ -6,7 +6,7 @@
       "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.2, "end": 2.0},
+      "measurement": {"start": 0.3, "end": 2.0},
       "output": "examples/ieee80211ax/analysis/figures/fragmentation/fragmentation-and-ack-overhead.png",
       "conditions": [
         {"label": "Dynamic", "config": "DynamicFragmentation"},
@@ -18,7 +18,7 @@
       "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/ul_ofdma/results",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.2, "end": 2.0},
+      "measurement": {"start": 0.3, "end": 2.0},
       "output": "examples/ieee80211ax/analysis/figures/uora/uora-dashboard.png",
       "conditions": [
         {"label": "Light, 1 RA-RU", "config": "UoraLightContention"},
@@ -51,7 +51,7 @@
       "ini": "examples/ieee80211ax/he_features/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_features/results",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.25, "end": 0.95},
+      "measurement": {"start": 0.3, "end": 0.95},
       "output": "examples/ieee80211ax/analysis/figures/puncturing/puncturing-frequency-allocation.png",
       "conditions": [
         {"label": "Clean", "config": "CleanChannelBaseline"},
@@ -75,7 +75,7 @@
       "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/bss_coloring/results",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.2, "end": 0.95},
+      "measurement": {"start": 0.3, "end": 0.95},
       "output": "examples/ieee80211ax/analysis/figures/bss/bss-coloring-comparison.png",
       "conditions": [
         {"label": "Disabled", "config": "BssColoringDisabled"},
@@ -89,7 +89,7 @@
       "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_channel_widths/results",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.2, "end": 0.43},
+      "measurement": {"start": 0.3, "end": 0.43},
       "output": "examples/ieee80211ax/analysis/figures/width/channel-width-dashboard.png",
       "conditions": [
         {"label": "20 MHz", "config": "Width20MHz", "metadata": {"bandwidth_mhz": 20}},
@@ -102,7 +102,7 @@
       "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/dl_ofdma/results",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.55, "end": 0.88},
+      "measurement": {"start": 0.3, "end": 0.88},
       "output": "examples/ieee80211ax/analysis/figures/dl/dl-scheduler-dashboard.png",
       "conditions": [
         {"label": "EDCA", "config": "SuEdcaBaseline", "metadata": {"workload": "symmetric"}},
@@ -116,7 +116,7 @@
       "ini": "examples/ieee80211ax/he_bsr/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_bsr/results",
       "expected_repetitions": 5,
-      "measurement": {"start": 0.2, "end": 1.9},
+      "measurement": {"start": 0.3, "end": 1.9},
       "output": "examples/ieee80211ax/analysis/figures/bsr/bsr-reported-vs-scheduled.png",
       "conditions": [
         {"label": "Fresh BSR", "config": "BurstyTraffic"},

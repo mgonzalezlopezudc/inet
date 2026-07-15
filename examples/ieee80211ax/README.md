@@ -43,6 +43,11 @@ fairness, radio awake time, and consumed energy. Numeric results printed in a
 walkthrough describe the documented deterministic run; regenerate them after
 changing the model, seed, traffic, or simulation duration.
 
+The controlled short scenarios use a common timing convention: a low-rate
+warm-up trigger from `0.2 s` to `0.25 s`, followed by normal traffic from
+`0.3 s`. The analysis manifest records measurement windows from `0.3 s` unless
+a scenario explicitly needs settling time or a different time scale.
+
 ## Reading the terminology
 
 - **HE SU**, **HE MU**, **HE TB**, and **HE ER SU** name PPDU formats. OFDMA

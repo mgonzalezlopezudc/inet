@@ -25,7 +25,7 @@ The network is configured in `omnetpp.ini` under `[General]`:
   * This scheduler is used for all scenarios because it calls `allocateHeRus()` with the punctured-subchannel mask, producing a puncture-aware RU layout.
 * `**.displayHeMuSignalDetails = true` and `**.displayHeMuSignalPhyFields = true`
 
-The server sends 1000-byte downlink UDP packets to all four hosts every 0.2 ms. The resulting backlog quickly exceeds the scheduler's 1500 B threshold, so the scheduler requests large RUs (up to 484-tone, which spans a 40 MHz half of the 80 MHz channel). This makes preamble puncturing visibly force the scheduler to downgrade RU sizes so that no RU overlaps the disabled 20 MHz subchannel.
+The server sends 1000-byte downlink UDP packets to all four hosts every 0.2 ms. A single warm-up trigger runs from `0.2s` to `0.25s`; normal traffic starts at `0.3s`. The resulting backlog quickly exceeds the scheduler's 1500 B threshold, so the scheduler requests large RUs (up to 484-tone, which spans a 40 MHz half of the 80 MHz channel). This makes preamble puncturing visibly force the scheduler to downgrade RU sizes so that no RU overlaps the disabled 20 MHz subchannel.
 
 ---
 

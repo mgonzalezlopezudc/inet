@@ -19,7 +19,7 @@ The network [HeBsrNetwork.ned](HeBsrNetwork.ned) consists of:
 - **`ap`**: An Access Point located at `(300, 210)`.
 - **`host[0..2]`**: Three wireless stations located around the AP at distances of 60m.
 - **`server`**: A wired server connected to the AP via a 100 Gbps Ethernet link (`ap.ethg++ <--> Eth100G <--> server.ethg++`).
-- **Traffic**: Each host runs a `UdpBasicApp` that generates uplink traffic destined for the `server` with 700B messages every 0.35ms.
+- **Traffic**: Each host runs a `UdpBasicApp` that generates uplink traffic destined for the `server` with 700B messages every 0.35ms. The controlled phase uses a `0.2–0.25s` warm-up and normal traffic from `0.3s`; the bursty comparison starts its first burst at `0.3s`.
 
 ```
        [host[0]]  [host[1]]  [host[2]]
@@ -94,24 +94,14 @@ opp_scavetool query -l -f "*Trigger*" examples/ieee80211ax/he_bsr/results/*.sca
 opp_scavetool query -l -f "*packetReceived:count*" examples/ieee80211ax/he_bsr/results/*.sca
 ```
 
-### Expected Output Summary
+### Refreshed vector summary
 
-```
-FullBsrAccounting-#0.sca:
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   2
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  515
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1701
-
-StaleBsr-#0.sca:
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   35
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  464
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        1620
-
-ImplicitBsr-#0.sca:
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBsrpTriggerSent:count   0
-scalar  HeBsrNetwork.ap.wlan[0].mac.hcf.ulCoordinator  heUlBasicTriggerSent:count  3
-scalar  HeBsrNetwork.server.app[0]                     packetReceived:count        2001
-```
+The refreshed five-seed campaign records AP backlog vectors for `BurstyTraffic`
+and `StaleBsr` and measures `0.3–1.9s`. Mean reported/scheduled backlog is
+`36,079/41,506 B` for the fresh bursty condition and `73,410/73,565 B` for
+the stale condition. These are scheduling-state observations; the campaign
+does not record scalar trigger counters, so old single-run trigger totals are
+not retained as current results.
 
 ---
 
@@ -138,11 +128,13 @@ The decoded output timeline shows:
 ## Interpretation of Results
 
 1. **Explicit BSRP Polling Overhead**:
-   - In `ImplicitBsr`, the AP sends **0 BSRP Triggers**. Because the STAs transmit BSRs implicitly inside uplink SU data frames during their EDCA transmit opportunities, the AP's coordinator receives regular backlog updates without having to explicitly query the STAs.
-   - In `FullBsrAccounting`, the AP sends **2 BSRP Triggers**.
-   - In `StaleBsr`, the BSRP trigger count rises to **35 BSRP Triggers**. Because queue status records expire after 10 ms, the scheduler periodically has to refresh them.
+   - The scalar-recording command above remains useful for a focused trigger
+     campaign, but those counters are not part of the refreshed five-seed
+     manifest output.
 
 2. **Trigger-Based Scheduling vs. EDCA Throughput**:
-   - `ImplicitBsr` delivers **2001 packets** to the server, which is the highest throughput among the three configurations. By scheduling trigger checks at 0.5s intervals, STAs make heavy use of standard SU EDCA channel access, avoiding the overhead of trigger frame sequences, Multi-STA BlockAck responses, and padding. Because the AP receives these implicit reports during normal EDCA transmissions, it requires **0 explicit BSRP trigger frames** and **3 Basic Triggers** to maintain fresh queue records.
-   - `FullBsrAccounting` delivers **1701 packets** and sends **515 Basic Triggers**. The constant polling and triggering overhead at 1ms check intervals limits the aggregate channel capacity, resulting in lower throughput than SU EDCA.
-   - `StaleBsr` delivers **1620 packets**. Because it spends extra overhead in BSRP polling cycles, it sends slightly fewer Basic Triggers (464) and suffers a slight throughput reduction compared to the full baseline.
+   - The refreshed `.vec` evidence supports the narrower conclusion that the
+     10 ms report-age policy leaves the AP with a much larger mean backlog than
+     the fresh bursty condition. Trigger-count and application-delivery claims
+     require a separate scalar-recording run of `FullBsrAccounting`,
+     `StaleBsr`, and `ImplicitBsr`.

@@ -11,49 +11,49 @@
       "label": "Clean",
       "measurement": {
         "end_s": 0.95,
-        "start_s": 0.25
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#0.sca",
-          "sha256": "f2deb6969031c08d2f9441d6cbd5fb42ab71f13313b68a5b83d1a0dcaf99e045"
+          "sha256": "1951746df59e5878a9da794b317669f030c1b027c37b8973910a0f877aecff76"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#0.vec",
-          "sha256": "67ec082c0948553447bf64aa6c89ae67a9feca89dd52ae2772cc236bd9411f55"
+          "sha256": "11da58f80c890089a85ab7671b488eced86955f097a934c13dc8932429e5d41d"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#1.sca",
-          "sha256": "dc0bd0f0cd3cbbd808934dfb2cda0c20e83bf3917d3a5c2ddecbb32fc08f6b02"
+          "sha256": "06f28ce2519f968a8363b7433ffd95f674c2104c946f03ca42016c4233cf4309"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#1.vec",
-          "sha256": "eab4ecf5572a7ee09e7846f68edcd98b7f975697e8c85bff6fe0c2b16974c2bb"
+          "sha256": "4c07386b79c9535062586d2381d968773eb21053c54b6407014a2e469799ccbd"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#2.sca",
-          "sha256": "68a1c016d93dfa5664c01fa8fbfcd43b5346a534be5c55d11b55a28ccd5b7f80"
+          "sha256": "3c09606b33e158ae0c8f2f4ca4498a23bced2e7940b312123596b5b6375acb67"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#2.vec",
-          "sha256": "104220c8b950c6f4c52e7570a2b3046e997defd988a37c083514e55c57d3e53e"
+          "sha256": "21f202fbc8463ae42ae06139cdc9511e7fa9b9aa2906f7585bebef2661d8ede5"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#3.sca",
-          "sha256": "a4dfa8b266b94f0cfe0f66bdf29171a68be8c5d966eb9757df2471eb99910f3d"
+          "sha256": "d7b5298bd62bd994e39c7460612b018cda19133ecb3ec617029e1d60f2c77547"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#3.vec",
-          "sha256": "91473c9278da06d6549ce3acc699facd20085c747dcc26b5cf1a345f06f31757"
+          "sha256": "56de60750d869efaf6da8d8e12e131d1e75a7e78f3e05bb8c0304758a816579c"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#4.sca",
-          "sha256": "0636bcb24277f9f958e4fda5637d5fe41f17a2d9956ac100a4714de63b54c81c"
+          "sha256": "3293729e5e4be23b449f5521a705a4558b17f5eeb756b90affe9d03425830f52"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#4.vec",
-          "sha256": "918da1dd2a6fcce3d12686ad8f45a835f38c6bfc342ef16876bb82bb40207a5f"
+          "sha256": "b18aab44ebdaf2481c699b990bd35a99efb74406ca4dabd2a190eab053c9ce1c"
         }
       ]
     },
@@ -64,49 +64,49 @@
       "label": "Interference, unpunctured",
       "measurement": {
         "end_s": 0.95,
-        "start_s": 0.25
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#0.sca",
-          "sha256": "4a650b444a7049529bbcb4a9559bc87b90ec86799b23c26d3e8caf9d8642ff7d"
+          "sha256": "2e363387a7fd4fa27d9526766fba41918d669e4c8df17a92379eff313160ddaa"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#0.vec",
-          "sha256": "f448efacf5ad3d992608891404b16e0b8c75a970590f05537bf6cdb76b86c6b4"
+          "sha256": "f207e96c1ee31c79265b176b915bcc2b322e1d81604547ac2de66b4c13ba2868"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#1.sca",
-          "sha256": "87d19466a06bd63646674b4780b15c810c1dc81e997ce438251f05e7b6a9b22d"
+          "sha256": "68343431c585654b476e244dab3a5e9df392fa89b4cfb8121eb518cf5ebfd61e"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#1.vec",
-          "sha256": "f051fd85f041408aeea169ddfe5c7a3d4a2a046e56e7292f17e9783453c7a0df"
+          "sha256": "ab27bfdbe0c5ef95e15d9de4dcb7db6537deac2bde2f167a96f321c3195f02eb"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#2.sca",
-          "sha256": "5053b3905fedc2a4c5192460779e30f36e1752d817cb6267c87e881da405e54a"
+          "sha256": "b11bc26b944f0ab18baf025aa9cfc3bad0ac8364052b83967e84a0ee290c98e7"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#2.vec",
-          "sha256": "b2b9ff75eb918a23ae0258c82e45e5c01d44c9f5947c044dfcca77e771722270"
+          "sha256": "918f28f51e013c445069ec3ac4ac6c34d4bd56261b68270d194c6cf0a067e450"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#3.sca",
-          "sha256": "2f2ea97d399a49166a1e3ddb66098e72cd95e294cdc1c5b4114ab2dcaede05aa"
+          "sha256": "c9f5e61bc09dc2328f771b91b351d1e6aabeeeea503d908649036281d90460fc"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#3.vec",
-          "sha256": "046d3ca168a1747bde6e31bab093937c9cec7e4f00402f4f6488b2006b8b2957"
+          "sha256": "6399038535bab0927bb275ba9a57f1a739102129b4d428ac8bdf68d7751b1a82"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#4.sca",
-          "sha256": "9ec650457fe9883e287230ed30899f9724c9854159af182ea1224122d7ec8dc7"
+          "sha256": "f84080f36ca03e8432cb9a5cef5763b8781f1fb21d5ba0519054c9c8e414d8a2"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#4.vec",
-          "sha256": "c6339fc9cc2a0333d0e4b17a48f041869abb8f314f33c6e9910549f45fae6c28"
+          "sha256": "f587d505fe3421a3975a2f5db859ec58a9b334c118e0080ea2cd71d0909acd99"
         }
       ]
     },
@@ -117,49 +117,49 @@
       "label": "Interference, punctured",
       "measurement": {
         "end_s": 0.95,
-        "start_s": 0.25
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#0.sca",
-          "sha256": "38aa2641bc01a973bea3ff4c8f229ae16f0033c769b82b63b3e7b1bd659ffeb8"
+          "sha256": "09caf78c805dbf75f135c45cf9791bea05368461a023320b3af2a3c98f0b2d8d"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#0.vec",
-          "sha256": "0ba39feb573b699548f4115b2127fa2b7b83543fb6f316117ed6c4d7a16095fa"
+          "sha256": "753e1afd938213836a4ebf617821d57ea50b133ee46a789d18ce3faaba3f2668"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#1.sca",
-          "sha256": "ff0cbb0952f4aa834570b71019ac96366c222c9f69bd1e4cf5c3ad8a764820c0"
+          "sha256": "5459e16cf79470a1f4b08938628c4ace8935a56703c24df04cf0293f732416a8"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#1.vec",
-          "sha256": "c97125f0d94f7f29bb80e1d380f415fbcd93cc5a9c24b7db3262d38ab9cdd409"
+          "sha256": "838a2c07f17c0c7cf49f9420bfea647f2911426a2a32f30746bb0e7f15f9c3fc"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#2.sca",
-          "sha256": "a93c319e92a9e2e5d14dbf9cc2123c53687813ef69e97d90367b5674763e8c54"
+          "sha256": "1de9d90e4651fac4a455a2b7d19f0460b382be01ce458004e2202222eb40a980"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#2.vec",
-          "sha256": "b34120b8c51a838f23dbb0fd9a80f4a57cc710d501a3591856294b6bede662af"
+          "sha256": "e7e09e9c33edb62c3cc83bf600f5be808a92bd42a0abe73c78618b44b46fe044"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#3.sca",
-          "sha256": "f40cfa8c413a908f56b7b39da056b8629bf274f4e8c82dba7e691cd7cb176958"
+          "sha256": "74d5b3b74506fd6732e409a6d8b34d727982ac4984ea015aec96265c602bd93e"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#3.vec",
-          "sha256": "3991d7fd4e219ac4e463cd5e492c51ddbc33a34ce3f7bb55b92db9d7d7720fe9"
+          "sha256": "1e95515bdabf3cdfc2b3844b3751d2327b5b6476dc145a68cde46be32071ccdd"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#4.sca",
-          "sha256": "d8c80c6c0132e6ee0644dd86e3a22d314d03c68a23688db78ded394ce8acc91b"
+          "sha256": "cb573c73d49fd774404aa1c206cbde3ae5f082d7f3151683a979da9b04e0402b"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#4.vec",
-          "sha256": "84e33f476d121e3791c3c0e336d18cd544c1e3b3d28ecdfa087b337f29a92b1a"
+          "sha256": "127027ff3fa8a41f4fcb327254aa8ed0f58cb12e145637e7a63e70f945d78023"
         }
       ]
     },
@@ -170,56 +170,56 @@
       "label": "Runtime puncturing",
       "measurement": {
         "end_s": 0.95,
-        "start_s": 0.25
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#0.sca",
-          "sha256": "7e0ee853b4cb2b1f9a71229a728ce8b2790a702d3abd8349fcd0b05d92005f39"
+          "sha256": "37fa6cb59e8638fff777cda23e848fab95bbbf47a4e725217ae619e6defd5c76"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#0.vec",
-          "sha256": "97f4eb4c007e5ebfa8e12b09710b915d257ce51a8a3987d602478d815e5399a1"
+          "sha256": "f8857978eb46d8c700403610fdf5c40b06dca3e39481f4c88ffb9c15bbdfcdcb"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#1.sca",
-          "sha256": "b17734c01362e820315679a04cd4db1dcbb41df3fb6390ec509c1359a8a409b5"
+          "sha256": "2498cfb1193e8f00c9dcce3288a175a5e08df49e29e3167b927b9ec210f6371a"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#1.vec",
-          "sha256": "6ce4315b72c6b7ec12b1946ec6b99ac9f1d40842ed336dacd756fdcf8f076f74"
+          "sha256": "482ba889cf76c448cdb130e3d491bddd96e0a38eb873983aa1410e2761a10a36"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#2.sca",
-          "sha256": "7f71de95f3e8e2a0de58dcc0f77f235214d87e62c440ab02fc9db0ca22a67058"
+          "sha256": "59d8e97084ef17bd3be6c7fce59462e80e7c3601cf662f351259674d8e8b0490"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#2.vec",
-          "sha256": "ba714b2fa379cf511b1d52fa692b996af8be2919383ae38c0cf289a5b77a0902"
+          "sha256": "4caca74a34dd8890d7ee463e035649f0170fe72201b194131b686714555f3205"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#3.sca",
-          "sha256": "40e577d4150985d4bd9bbb3872feb313d8b1d62d013e5079824b4a54c605551e"
+          "sha256": "0e3502df0f0344db2d90a460811f63a3f16fe0dca78a9ccc91827c93e2afbf3e"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#3.vec",
-          "sha256": "094f5faaf235ace92fdfebd813c2a972fa730bb29c491b4a29eb8614a99951b7"
+          "sha256": "25798b8d66fe29ef88106ef746a0fb5db93e92aa13ebfdc9ea95235dc1c37a07"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#4.sca",
-          "sha256": "47a41ce8f0897b0107f6453f6c8f856e5d94d78b44a5fce2ca3719beeff5b4be"
+          "sha256": "a924a987a0085e5f3978492a1eb96cdd8261426a386309be0dd6909771153166"
         },
         {
           "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#4.vec",
-          "sha256": "a18687d013ddcaf0705eb15a288d2a9f2e4c224d6e915fc7b50177882f6de1c7"
+          "sha256": "81ee51fda201a0450d68a3484002139e170140cd7b58dbc582cd96d718cd728e"
         }
       ]
     }
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/puncturing/puncturing-frequency-allocation.png",
-  "git_revision": "f6c86d533f51bd5b6ea69cb2f030c7c6f5e85c09",
+  "git_revision": "e8644a9931488920ae367e2e48ec086ede5de4a0",
   "result_filters": [
     {
       "module": "**.app[*]",
