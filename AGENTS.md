@@ -2,6 +2,9 @@
 
 Use repository skills for detailed simulation, test, result-analysis, and standards workflows.
 
+### References to files in user-facing explanations
+* Always use relative (to the project workspace) and not absolute references to files in your user-facing explanations. For example, use `src/some-file` instead of `/home/user/omnetpp_ws/inet/src/some-file`.
+
 ### General rules
 
 * Use Cmdenv by default for automated runs, batch execution, log analysis, packet capture, and reproducible debugging.
