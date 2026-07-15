@@ -97,12 +97,13 @@ opp_scavetool query -l -f 'name =~ "packetDropIncorrectlyReceived:count" and mod
 
 ```
 HeSu-#0.sca:
-scalar  HeErSuNetwork.host[0].app[0]       packetReceived:count                 1800
+scalar  HeErSuNetwork.host[0].app[0]       packetReceived:count                 1700
 scalar  HeErSuNetwork.host[0].wlan[0].mac  packetDropIncorrectlyReceived:count  14
 
 HeErSu-#0.sca:
-scalar  HeErSuNetwork.host[0].app[0]       packetReceived:count                 1800
+scalar  HeErSuNetwork.host[0].app[0]       packetReceived:count                 1700
 scalar  HeErSuNetwork.host[0].wlan[0].mac  packetDropIncorrectlyReceived:count  0
+scalar  HeErSuNetwork.ap.wlan[0].mac       packetDropIncorrectlyReceived:count  9
 
 ErBss-#0.sca:
 scalar  HeErSuNetwork.host[0].app[0]       packetReceived:count                 120
@@ -128,17 +129,17 @@ tshark -n -r examples/ieee80211ax/he_er_su/results/HeErSu-#0HeErSuNetwork.ap.wla
 The decoded output timeline shows:
 1. **Long-Distance Downlink Data**: The AP transmits UDP data packets (e.g. frame 1, 6) to the cell-edge `host[0]` at 320m.
 2. **Block Ack Negotiation**: Block ACK negotiation Action frames (e.g. frames 3, 5, 7) are exchanged between the AP and the client host to establish session block acknowledgments.
-3. **Preamble and Coding Resilience**: Under the robust ER SU format, packet corruption is avoided, resulting in **0 MAC-layer packet drops** for `HeErSu`, compared to **14 packet drops** in `HeSu` due to preamble/header failures under weak SNR.
+3. **Preamble and Coding Resilience**: In this run, `HeErSu` delivered all 1700 offered packets to the host with 0 host-side incorrect-reception drops; 9 incorrect-reception drops were recorded at the AP. `HeSu` also delivered 1700 packets but recorded 14 host-side incorrect-reception drops.
 
 ---
 
 ## Interpretation of Results
 
 1. **Successful Delivery**:
-   - Both scenarios successfully deliver **1800 packets** to the `host[0]` client (out of 1801 packets sent by the server).
+   - Both scenarios deliver **1700 packets** to the `host[0]` client during the normalized `.3–2s` traffic interval.
    - *Why?* Under the clean, deterministic Free Space Path Loss model without dynamic shadowing or multipath fading, the signal at 320 meters (-86.55 dBm) remains slightly above the receiver sensitivity threshold of -88 dBm. This allows MCS 0 to decode successfully in both cases.
    - However, standard `HeSu` experiences **14 MAC packet drops** due to marginal reception corruption on the baseline preamble (36 µs).
-   - `HeErSu` achieves **0 MAC packet drops** because its repeated HE-SIG-A preamble symbols (44 µs) provide extra energy-combining gains, preventing reception corruption.
+   - `HeErSu` records **0 host-side MAC packet drops** in this run, although 9 incorrect-reception drops are recorded at the AP. This supports the observed delivery outcome but is not a full coverage or fading sweep.
 
 2. **Under-the-Hood Preamble Difference**:
    - In `HeSu`, transmissions use standard HE SU PPDUs with a **36 µs** preamble.

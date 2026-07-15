@@ -10,49 +10,49 @@
       "label": "Fresh BSR",
       "measurement": {
         "end_s": 1.9,
-        "start_s": 0.2
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#0.sca",
-          "sha256": "2c22a5a4a8f52dface733aeebf05963b5c4aa9aa3b6c71ff472df0c518f02887"
+          "sha256": "9b2f64923dc737866b4da5ffad124222efe635a64221c23aa2d54602c111ccdb"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#0.vec",
-          "sha256": "f1eb365adfb3c874fbc77e3c56cf18959b5ff47e03bfe3f26a134a0b1981e88c"
+          "sha256": "27424fe61564e81cd41d9a9da415d75a5a833ef6e0a6e0cf486b49365e721bc1"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#1.sca",
-          "sha256": "26dd23c01a47f5475120c2b1a4e63f90e93747adddcf8082930f3b15181d8eff"
+          "sha256": "d93de84ee87fbdec2a8efa59e75c5940bb94b4a9b2bd982677d8ac86524af87a"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#1.vec",
-          "sha256": "a4019d561400d2758294d55c174c44b53f455fa2e475e32b910528e3f2a9b613"
+          "sha256": "741070ca6eb80a79d6ed1ed01f8b4ed8dc33395d846d1a6f4dd6d548b0d55761"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#2.sca",
-          "sha256": "ab1d78aa684cf218b39dbd6a78b096696391f4b2bfcedbacad4a4e71c8c69ab6"
+          "sha256": "5abcf67d93c41a88f81a833c27bec2270108313724d1877759a7d71b36c721ac"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#2.vec",
-          "sha256": "fddc989033b98b3c7bce9ef39c695ae2c0fb3265d3845295df4af7813701f432"
+          "sha256": "4d752f8b85a30c5faf6ffec23f8b81717ed91e986f706f0921e4a522a3283ae9"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#3.sca",
-          "sha256": "1f59fdad63fc7398052cc50366119459feec0be011404436200bf89ed61978ab"
+          "sha256": "a7cdbd1e811f3c789964b2fa4484b0551d4ad91a6c5fd60b66e3f103762ab9ee"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#3.vec",
-          "sha256": "ff9d6ae02f745ecc9642b4cab71525f72c02a9dd8fbc865cdc1c0b5b0c211ca9"
+          "sha256": "37055b85b5175a73ee3d4d0c5aebb66f2436af29aff40a5adcdc4c87114418c8"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#4.sca",
-          "sha256": "d7d9cc984285f7c8415929e1050959e66d383e3b5fec9682259099905e42afec"
+          "sha256": "6fce5284b0a701dc67ff93ef4ca4b881c980b57df61c3ffb4d4fe44d84c96122"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/BurstyTraffic-#4.vec",
-          "sha256": "4d1dcb947f718201d204d9868df5e373ef4eb67cf2a8d4e5e17dc22e26df781f"
+          "sha256": "883edfa09bc9985d9b198a22623e1abb500d10f1633c915e014c591962a833bc"
         }
       ]
     },
@@ -63,56 +63,56 @@
       "label": "Stale BSR",
       "measurement": {
         "end_s": 1.9,
-        "start_s": 0.2
+        "start_s": 0.3
       },
       "metadata": {},
       "result_files": [
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#0.sca",
-          "sha256": "6a491c88583c49004cc09e4a54f5da9fc1b2ec81c4173adb1c1fb2b472a58ac9"
+          "sha256": "7b1130472e10710df9dca5c693e0159c5cada0eaeaa7b27e58d4f36ea48b500f"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#0.vec",
-          "sha256": "9c1d13f3a3c02d9d8df68838e1e5bc614f104bfed416597871b4c48624caa3f7"
+          "sha256": "77db50a55d613dc1a9a84f9ba5260916919df155d1fc86278289660f65258a03"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#1.sca",
-          "sha256": "bd5e34bcc55122c0a593919c53be4661975d8c40dd6f04d001bb36b427c91044"
+          "sha256": "38bd0827ec45b57ac2d50020b1c6f8880dfbe825725448543ca4fc5c64640cec"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#1.vec",
-          "sha256": "ab8ac37c533f7760361a01449186fcd4a90446cf486ff96442262ee872202e8d"
+          "sha256": "3b8f41b3ffd30933cd94adda3ba7bdd4b770c7411ab1964d0807c9a8713ca413"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#2.sca",
-          "sha256": "f826ea16a322341063c6eb72afd621ab6b641a08d2c90565f8131738fdad10e4"
+          "sha256": "7b75ca46bb010ce5bdae9140b30306d0c8d9ac68d735182999bdc4959dd2c673"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#2.vec",
-          "sha256": "480347c48defd367d3177dd7750204fc612191a50736d53d20a693625276d8ce"
+          "sha256": "c960e8f3a830a8e92319f2f4caa371fe3dc4d13bf430d6a021a4b1b0ee37820a"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#3.sca",
-          "sha256": "31d42387b2323cd742160cfac7889d18da766e219b35f42d93671d250073f9b1"
+          "sha256": "94fae7b72970847051a6ad0c13fec1f84622787d75578dd4833bc591bda281d7"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#3.vec",
-          "sha256": "c83fccd1c6404a4e911d176087e3a5708ed9f664dc2eeb57575cc8f62da278a1"
+          "sha256": "6f01967a99169b77d3f2a27b7bd3ce38d85378fc036b6731c40fd7566e01c5fe"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#4.sca",
-          "sha256": "d64dd8e6fcd4511191f070d44956823d92f9f7d402b1ab693d0d44284233b37b"
+          "sha256": "97dca2666f45e26c9d99d53f0fd8821eed21b50c3c4130f455b3b5c910dafd4e"
         },
         {
           "path": "examples/ieee80211ax/he_bsr/results/StaleBsr-#4.vec",
-          "sha256": "ce039fd7f85b0ce88dc1f8ab5c1dab136279986b3c145ad790a066aa22e49ca1"
+          "sha256": "667ecd77666df8d608f02ecca47c233f649e07ade7a0d216209d150279fa21b7"
         }
       ]
     }
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/bsr/bsr-reported-vs-scheduled.png",
-  "git_revision": "f6c86d533f51bd5b6ea69cb2f030c7c6f5e85c09",
+  "git_revision": "e8644a9931488920ae367e2e48ec086ede5de4a0",
   "result_filters": [
     {
       "name": "heUlBufferStatusReportedBytes:vector",

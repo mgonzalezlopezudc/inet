@@ -22,7 +22,7 @@ In legacy 802.11 standards, stations operating on the same channel share the cha
 The network [BssColoringNetwork.ned](BssColoringNetwork.ned) consists of two overlapping BSSs:
 - **BSS 1**: `ap1` at `(150, 250)` and associated `sta1[0..1]` at `(100, 240/260)`. Color is set to 1.
 - **BSS 2**: `ap2` at `(400, 250)` and associated `sta2[0..1]` at `(450, 240/260)`. Color is set to 2.
-- Wired servers generate downlink UDP traffic to the client hosts (1000B payloads sent every 5ms).
+- Wired servers generate downlink UDP traffic to the client hosts (1000B payloads sent every 5ms). All conditions use a `0.2–0.25s` warm-up trigger and start normal traffic at `0.3s`.
 
 At a distance of 200m between the two APs, the signal from the overlapping BSS arrives at approximately **-80 dBm**.
 - This is **above** the receiver sensitivity threshold of -85 dBm.
@@ -69,12 +69,13 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.sta*a
 
 ### Quantitative Summary:
 
-| Configuration / Config | `sta1[0]` Packets | `sta1[1]` Packets | `sta2[0]` Packets | `sta2[1]` Packets |
-|---|---|---|---|---|
-| **BssColoringDisabled** | 161 | 161 | 161 | 161 |
-| **BssColoringEnabled** | 180 | 180 | 180 | 180 |
-| **BssColoringCollision**| 161 | 161 | 161 | 161 |
-| **TwoNav**              | 1   | 1   | 161 | 161 |
+| Configuration | Aggregate goodput | Jain fairness | Concurrent AP airtime |
+|---|---:|---:|---:|
+| **BssColoringDisabled** | 6.4 Mbps | 1.0 | 49.8% |
+| **BssColoringEnabled** | 6.4 Mbps | 1.0 | 49.8% |
+| **ObssPdConservative** | 6.4 Mbps | 1.0 | 49.8% |
+| **ObssPdAggressive** | 6.4 Mbps | 1.0 | 49.8% |
+| **BssColoringCollision** | 6.4 Mbps | 1.0 | 49.8% |
 
 ---
 
@@ -92,10 +93,15 @@ Use TShark to print the timeline of packet exchanges at the first Access Point (
 tshark -n -r examples/ieee80211ax/bss_coloring/results/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap -c 20
 ```
 
-The decoded output timeline shows:
+The refreshed run-0 captures are nonempty PCAPng files with 362 frames at
+each AP. TShark shows the same warm-up/data/action/ACK exchange pattern at
+both observation points. The decoded output timeline shows:
 1. **Downlink UDP Packets**: `ap1` sends UDP data frames to its stations (e.g. frame 1, 15).
 2. **Action Frame Handshake**: Stations establish block acknowledgment session configurations with their AP (e.g. frames 3, 5, 7, 11).
-3. **Spatial Concurrency**: Under `BssColoringEnabled`, when `ap2` transmits downlink data concurrently (e.g. frame 9), the nodes in BSS 1 class it as an inter-BSS transmission (due to different BSS colors: Color 1 vs. Color 2). Since its received power is -80 dBm (below the -62 dBm OBSS/PD threshold), the local nodes ignore the transmission and transmit concurrently without deferring.
+3. **Capture limitation**: The native MAC captures do not expose the full
+   OBSS/PD decision or distinguish every medium observation. Together with the
+   identical `.sca/.vec` metrics for all five manifest conditions, this run
+   does not support claiming a spatial-reuse throughput benefit.
 
 ---
 

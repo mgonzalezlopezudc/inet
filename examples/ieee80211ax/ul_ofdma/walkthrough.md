@@ -22,7 +22,7 @@ The network [Lan80211AxUlOfdma.ned](Lan80211AxUlOfdma.ned) consists of:
 - **`ap`**: An Access Point located at `(25, 25)` on a 50m x 50m area.
 - **`host[0..2]`**: Three wireless stations situated around the AP at close range (5 meters).
 - **`server`**: A wired server connected to the AP via 100G Ethernet.
-- **Traffic**: Each host generates heavy uplink UDP traffic destined for the `server` (400B packets sent every 0.4ms, starting at `0.2s`).
+- **Traffic**: Each host generates heavy uplink UDP traffic destined for the `server` (400B packets sent every 0.4ms, with normal operation starting at `0.3s` after the `0.2–0.25s` warm-up trigger).
 
 ```
        [host[0]]   [host[1]]   [host[2]]
@@ -205,7 +205,6 @@ The decoded output timeline shows:
    - *Why?* The stations are in a highly saturated traffic state. Contending via UORA causes high collision rates on the random-access RUs. The AP is forced to spend significant airtime sending BSRP polls and triggers to resolve contentions, resulting in severe overhead and packet loss.
 
 6. **UORA Contention, Traffic Load, and RU Count (`UoraLightContention`, `UoraHeavyContention`, `UoraMoreRandomAccessRus`)**:
-   - **`UoraLightContention` (198 packets)**: With 8 contending stations and 1 random-access RU, the light traffic load (`sendInterval = 12ms`) results in moderate contention. Stations can successfully transmit, but are limited by UORA access parameters.
-   - **`UoraHeavyContention` (203 packets)**: Increasing the offered load (`sendInterval = 1ms`) leads to severe collision and backoff overhead on the single random-access RU. However, because UORA backoff locks stations out and limits their transmission attempts under contention, the actual throughput remains bounded at a similar saturation level (~200 packets).
-   - **`UoraMoreRandomAccessRus` (204 packets)**: Allocating more random-access RUs (3 instead of 1) reduces the collision probability per RU. However, due to the trigger check interval and overhead of scheduling multiple UORA RUs, the overall packet delivery count is similar under saturation, but has lower average latency and more equitable channel access among the 8 hosts.
-
+   - **`UoraLightContention`**: The five-seed AP counters show `4.4 ± 2.9` attempts and `0.767 ± 0.338` success probability.
+   - **`UoraHeavyContention`**: One RA-RU increases this to `80.8 ± 41.3` attempts, with `0.624 ± 0.062` success probability.
+   - **`UoraMoreRandomAccessRus`**: Three RA-RUs produce `217.0 ± 60.3` attempts and `0.638 ± 0.030` success probability. The extra RUs increase opportunity, but these five runs do not establish a decisive success-probability gain.

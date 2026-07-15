@@ -10,18 +10,19 @@ bit-level interoperability or conformance test.
 The corrected model now demonstrates the intended advantages under a saturated
 three-station downlink workload:
 
-- at 20 MHz, `fBW` DL OFDMA delivers `23.552 Mbps`, versus `7.520 Mbps` for
-  matched SU OFDM: a `3.13x` throughput gain;
-- at 20 MHz, `fHoL` delivers `20.224 Mbps` and exactly equal packet counts to
-  all three stations, illustrating its concurrency/fairness objective;
-- at 80 MHz, both OFDMA policies deliver essentially the full `40 Mbps`
-  offered load with sub-millisecond mean delay; and
-- the AP capture contains two simultaneous Block Ack responses per `fBW`
-  MU-BAR and three per `fHoL` MU-BAR, while the SU capture contains no MU-BAR.
+- at 20 MHz, `fBW` DL OFDMA averages `23.516 Mbps`, versus `7.432 Mbps` for
+  matched SU OFDM: a `3.16x` throughput gain;
+- at 20 MHz, `fHoL` averages `20.096 Mbps` and has a p95 delay of `14.02 ms`,
+  while `fBW` has a p95 delay of `11.86 ms`; and
+- fresh AP captures contain 2593, 1855, and 637 decoded frames for `fBW`,
+  `fHoL`, and SU respectively. TShark shows the common warm-up data at
+  `0.200180 s`, normal data at `0.300180 s`, and the expected Action/ACK
+  exchanges. HE RU metadata is retained in the `.vec` results because the
+  native MAC capture does not expose every HE MU field.
 
-These are deterministic run-0 observations. They establish the behavior of
-this example; use multiple independent seeds before making broader performance
-claims.
+The aggregate values are five-seed means; the capture observations are run 0.
+They establish the behavior of this example without turning one seed into a
+general performance claim.
 
 ## Standards baseline
 
@@ -44,11 +45,11 @@ every workload.
 
 ## Controlled comparison matrix
 
-All six core configurations use the same topology, three stations, `100 mW`
-transmit power, best-effort EDCA traffic, packet size, start time, simulation
-duration, warm-up period, and seed. Each source offers a 100-byte packet every
-`0.06 ms`, for `40 Mbps` aggregate application load. Traffic starts at `0.5 s`;
-statistics cover the `0.7-1.0 s` measurement interval.
+The controlled configurations use the same topology, three stations, `100 mW`
+transmit power, best-effort EDCA traffic, packet size, simulation duration,
+`0.2–0.25 s` warm-up, and `0.3 s` normal-operation start. Each source offers a
+100-byte packet every `0.06 ms`, for `40 Mbps` aggregate application load. The
+analysis campaign measures `0.3–0.88 s`.
 
 | Configuration | Width | MAC/scheduler |
 |---|---:|---|
@@ -120,42 +121,39 @@ opp_scavetool query -v -l \
 
 ## Scalar results
 
-Throughput uses application payload bytes received in the `0.3 s` measurement
-interval. Mean delay is weighted over all received application packets.
+Throughput uses application payload bytes received in the `0.3–0.88 s`
+measurement interval. The table reports p95 delay from the corresponding
+application delay vectors.
 
-| Configuration | Packets per host | App throughput | Mean E2E delay | Max E2E delay |
-|---|---:|---:|---:|---:|
-| `EqualSizedRUs_fBW` | 3072 / 2880 / 2880 | 23.552 Mbps | 10.411 ms | 12.245 ms |
-| `EqualSizedRUs_fHoL` | 2512 / 2512 / 2512 | 20.096 Mbps | 12.857 ms | 14.287 ms |
-| `SuEdcaBaseline` | 947 / 960 / 890 | 7.459 Mbps | 16.898 ms | 23.330 ms |
-| `EqualSizedRUs80MHz_fBW` | 4993 / 4997 / 5011 | 40.003 Mbps | 0.763 ms | 1.485 ms |
-| `EqualSizedRUs80MHz_fHoL` | 4996 / 4996 / 4996 | 39.968 Mbps | 0.707 ms | 1.146 ms |
-| `SuEdcaBaseline80MHz` | 2847 / 2809 / 2725 | 22.349 Mbps | 5.058 ms | 7.027 ms |
+| Configuration | Aggregate app throughput | p95 E2E delay |
+|---|---:|---:|
+| `EqualSizedRUs_fBW` | 23.516 Mbps | 11.86 ms |
+| `EqualSizedRUs_fHoL` | 20.096 Mbps | 14.02 ms |
+| `SuEdcaBaseline` | 7.432 Mbps | 20.76 ms |
+| `BacklogBased` | 35.758 Mbps | 35.80 ms |
+| `HoLMinDelay` | 13.813 Mbps | 86.91 ms |
 
 The controlled comparisons show:
 
-- 20 MHz `fBW` is `3.16x` SU throughput and lowers mean delay by about 38%;
-- 20 MHz `fHoL` is `2.69x` SU throughput with perfectly even delivery;
+- 20 MHz `fBW` is `3.16x` SU throughput and lowers p95 delay by about 43%;
+- 20 MHz `fHoL` is `2.70x` SU throughput;
 - 20 MHz `fBW` is about 17% faster than `fHoL`, as expected from the wider RU
   layout;
-- widening `fBW` from 20 to 80 MHz increases delivered throughput by about
-  70% and removes the backlog; and
-- at 80 MHz, `fHoL` and `fBW` both meet the offered load, with `fHoL` reducing
-  mean delay by about 7.3%.
+- the asymmetric pair demonstrates the workload trade-off: BacklogBased
+  delivers more aggregate goodput, while neither result should be read as a
+  universal fairness or delay ordering.
 
 ## Vector result
 
-The packet-arrival vectors were binned into consecutive 50 ms intervals. The
-result confirms sustained delivery rather than a scalar caused by one burst:
+The packet-arrival vectors are monotonic and populated throughout the
+`0.3–0.88 s` interval. The run-level aggregates confirm sustained delivery;
+they are not scalars caused by the warm-up burst:
 
-| Configuration | 0.70-.75 | .75-.80 | .80-.85 | .85-.90 | .90-.95 | .95-1.00 |
-|---|---:|---:|---:|---:|---:|---:|
-| 20 MHz `fBW` | 23.552 | 23.552 | 23.552 | 23.040 | 23.552 | 24.064 |
-| 20 MHz `fHoL` | 19.968 | 19.968 | 19.968 | 19.968 | 20.736 | 19.968 |
-| 20 MHz SU | 7.632 | 7.104 | 7.616 | 7.648 | 7.120 | 7.632 |
-| 80 MHz `fBW` | 40.112 | 40.144 | 39.760 | 40.320 | 39.648 | 40.032 |
-| 80 MHz `fHoL` | 40.128 | 39.888 | 39.888 | 39.984 | 39.984 | 39.936 |
-| 80 MHz SU | 22.336 | 22.352 | 22.336 | 22.352 | 22.384 | 22.336 |
+| Configuration | Vector evidence |
+|---|---|
+| 20 MHz `fBW` | Five nonempty arrival vectors; 23.516 Mbps mean |
+| 20 MHz `fHoL` | Five nonempty arrival vectors; 20.096 Mbps mean |
+| 20 MHz SU | Five nonempty arrival vectors; 7.432 Mbps mean |
 
 Values are aggregate application Mbps. The delay vectors independently match
 the scalar histogram counts, means, minima, and maxima shown above.
@@ -187,31 +185,24 @@ capinfos \
 
 tshark -n \
   -r 'results/pcap_comparison/fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
-  -Y 'wlan.trigger.he.trigger_type == 2' \
+  -Y 'wlan.fc.type_subtype == 0x0028 || wlan.fc.type_subtype == 0x001d || wlan.fc.type_subtype == 0x000d' \
   -T fields -E header=y -E occurrence=a \
-  -e frame.time_relative \
-  -e wlan.trigger.he.user_info.aid12 \
-  -e wlan.trigger.he.ru_allocation
+  -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
+  -e wlan.ta -e wlan.ra -e data.len
 ```
 
 The AP captures are PCAPng files with native IEEE 802.11 encapsulation:
 
-| Capture | Packets | MU-BAR triggers | Block Ack frames | Observed response grouping |
-|---|---:|---:|---:|---|
-| 20 MHz `fBW` | 1842 | 456 | 912 | 2 simultaneous BAs per trigger |
-| 20 MHz `fHoL` | 1323 | 261 | 783 | 3 simultaneous BAs per trigger |
-| 20 MHz SU | 450 | 0 | 144 | ordinary SU BAR/BA only |
+| Capture | PCAPng frames | TShark-visible evidence |
+|---|---:|---|
+| 20 MHz `fBW` | 2593 | QoS Data, ACK, and Action exchanges |
+| 20 MHz `fHoL` | 1855 | QoS Data, ACK, and Action exchanges |
+| 20 MHz SU | 637 | SU data/control exchange |
 
-Representative `fBW` Trigger rows contain rotating AID pairs and TShark RU
-values `53,54`, which INET's serializer maps to the two 106-tone positions.
-Representative `fHoL` rows contain AIDs `1,2,3` and values `37,38,39`, the first
-three positions in the four-52-tone layout. This is direct protocol-visible
-evidence that the policies select different RU layouts.
-
-The two `fBW` HE-TB Block Acks have identical timestamps after each Trigger;
-the three `fHoL` responses do likewise. The Block Ack starting sequence numbers
-also advance from 1 to values above 800, proving that the bitmap window advances
-beyond its initial 64 MPDUs instead of stalling.
+The fresh captures start at simulation time `0.200180 s`; the first normal-data
+observation is at `0.300180 s`. The native capture decoder does not expose the
+HE RU user information used by the `.vec` analysis, so RU layout claims are
+based on the result vectors rather than inferred from packet counts.
 
 ## Defects found and fixed
 
