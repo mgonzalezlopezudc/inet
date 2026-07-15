@@ -32,11 +32,11 @@ The network [TwtRegression.ned](TwtRegression.ned) consists of:
 ```
        [sta[0]]
           |
-          | (140m wireless)
+          | (58m wireless)
           v
        [ ap ] <==== (100G Ethernet) ====> [server]
           ^
-          | (140m wireless)
+          | (58m wireless)
           |
        [sta[1]]
 ```
@@ -56,12 +56,13 @@ The [omnetpp.ini](omnetpp.ini) file defines four TWT scenarios:
 - Stations negotiate an **Individual, Unannounced** TWT schedule:
   - `*.sta[*].wlan[*].agent.requestBroadcast = false`
   - `*.sta[*].wlan[*].agent.announced = false`
-  - Wake interval is set to 100ms (`wakeInterval = 100ms`) and wake duration is 20ms (`wakeDuration = 20ms`).
+  - Wake interval is set to `100 ms` and wake duration to `90 ms`.
 - **Result**: Stations enter a low-power sleep state outside their wake windows.
 
 ### 3. `IndividualAnnounced`
 - Extends the `IndividualUnannounced` configuration but sets `announced = true`.
-- **Result**: The stations must wait for the AP to poll them after waking up before exchanging data.
+- Announced mode changes presence signaling; it is not a general requirement
+  to wait for an AP poll before every exchange.
 
 ### 4. `Broadcast`
 - Stations join a **Broadcast** TWT schedule created by the AP:
@@ -156,7 +157,17 @@ The decoded output timeline shows:
 
 2. **Sleep Duration**:
    - In `Baseline`, the stations sleep for **0 seconds** because TWT is disabled.
-   - The current individual schedule requests a 90 ms service period every 100 ms. Exact awake and sleep durations are result metrics, not fixed expectations; random seeds and management synchronization can change them.
+   - The configured individual schedule requests a 90 ms service period every 100 ms. Exact awake and sleep durations are result metrics, not fixed expectations; random seeds and management synchronization can change them.
    - *Why use a high duty cycle?* The regression requires every treatment seed to preserve at least 95% of paired-baseline delivery. This schedule retains measurable sleep intervals while prioritizing reliable delivery of the periodic uplink workload.
    - Broadcast and individual schedules can have different awake time because beacon synchronization and schedule maintenance add overhead.
    - Awake/sleep time demonstrates scheduled radio availability. The configured radio energy consumer and battery make the corresponding energy cost measurable; compare consumed energy together with delivery and latency. Sleep fraction alone is not an energy result, and this workload is not a general estimate of real-device battery lifetime.
+
+3. **Energy advantage with delivery preserved**:
+   - Across five paired seeds, TWT delivers `16,000 B` versus
+     `15,960 ± 111 B` for the baseline, satisfying the 95% delivery gate.
+     Energy per delivered bit falls from `2.85e-6 J/bit` to
+     `1.56e-6 J/bit`, about a 45% reduction.
+   - The `90 ms` service period is deliberately conservative. It leaves only a
+     modest nominal sleep opportunity, but keeps the periodic uplink workload
+     reliable. A shorter service period could save more energy while increasing
+     queueing delay or loss; that is the trade-off TWT exposes.

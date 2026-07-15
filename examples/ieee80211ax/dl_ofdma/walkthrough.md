@@ -1,14 +1,16 @@
 # Walkthrough: 802.11ax Downlink OFDMA
 
-This example compares IEEE 802.11ax downlink OFDMA with a matched single-user
-OFDM baseline and exposes the trade-off between the `fBW` and `fHoL` equal-RU
-scheduling policies. It is a standards-aware packet-level model, not a
-bit-level interoperability or conformance test.
+This example shows why downlink OFDMA is useful when several stations are
+backlogged at the same time. Earlier 802.11 generations give one station the
+whole channel in each transmission opportunity; 802.11ax can divide that
+opportunity into resource units (RUs) and serve several stations in one HE MU
+PPDU. The comparison also shows that RU scheduling is a policy choice: using
+wider RUs can maximize aggregate goodput, while serving more users per PPDU
+can improve service regularity.
 
-## Verification result
+## What the experiment demonstrates
 
-The corrected model now demonstrates the intended advantages under a saturated
-three-station downlink workload:
+Under the saturated three-station workload:
 
 - at 20 MHz, `fBW` DL OFDMA averages `23.516 Mbps`, versus `7.432 Mbps` for
   matched SU OFDM: a `3.16x` throughput gain;
@@ -204,46 +206,25 @@ observation is at `0.300180 s`. The native capture decoder does not expose the
 HE RU user information used by the `.vec` analysis, so RU layout claims are
 based on the result vectors rather than inferred from packet counts.
 
-## Defects found and fixed
-
-The poor earlier result was not just a parameter problem. Two code defects and
-several scenario confounders hid the OFDMA benefit:
-
-1. `HeDlSchedulerEqualSizedRUs` estimated each allocation's packing horizon
-   from only the HoL MPDU. The packing planner therefore stopped at roughly one
-   MPDU per user even when an eligible backlog and A-MPDU capacity existed. It
-   now estimates from the complete eligible per-user backlog.
-2. A triggered Block Ack response used the recipient agreement's original
-   starting sequence number instead of the starting sequence requested in the
-   MU-BAR User Info. After the first 64-MPDU bitmap window, outstanding MPDUs
-   were not released and DL MU service stalled. The response now uses the
-   trigger-requested window.
-3. The old workload used synchronized voice traffic, low power, a retry timeout
-   longer than the useful setup interval, and an 80 MHz case that also changed
-   host count and load. The controlled matrix removes those confounders.
-
-Focused regression coverage verifies backlog-vs-HoL ranking, backlog-sized
-packing duration, MU-BAR bitmap-window selection, BA-window exhaustion, and
-HE MU TXOP trimming:
-
-```sh
-CCACHE_DISABLE=1 inet_run_unit_tests -m release \
-  -f '(HeDlScheduler|Ieee80211HeDlMuTxOpFs|Ieee80211HeMuBlockAckGating).*\.test'
-```
-
-All four selected tests pass.
-
-## Limitations
+## How to read the result
 
 - INET carries some HE PHY information as packet metadata, so the capture does
   not expose every HE-SIG field exactly as a real monitor capture would.
 - Application delivery is established from sink `.sca`/`.vec` results. Do not
   compare configurations by TShark-decoded UDP count because aggregated MPDUs
   may be presented as opaque 802.11 payloads to the dissector.
+- OFDMA wins here because all three queues remain backlogged, so every HE MU
+  opportunity can amortize contention and preamble overhead across users. At
+  low load, an SU transmission may be just as efficient because there may not
+  be several packets ready to share an opportunity.
+- `fBW` wins the aggregate-throughput comparison because two 106-tone RUs use
+  212 tones, whereas the three-user `fHoL` layout uses three 52-tone RUs, or
+  156 tones. This is a consequence of this three-user load and the legal RU
+  layouts, not a universal ranking of schedulers.
 - The results show the intended scheduler trade-off for this workload, not a
-  universal claim that one policy or OFDMA always wins.
+  universal claim that OFDMA always wins.
 
-Within those limits, the example now clearly demonstrates simultaneous
+Within those limits, the example clearly demonstrates simultaneous
 multi-station delivery, the throughput advantage of DL OFDMA over matched SU
 OFDM, the `fBW` versus `fHoL` trade-off, and the capacity effect of 20 versus
 80 MHz.

@@ -1,6 +1,10 @@
 # 802.11ax Uplink OFDMA (UL OFDMA) Simulation
 
-This example illustrates the Uplink Multi-User Orthogonal Frequency Division Multiple Access (UL MU-OFDMA) and Uplink OFDMA Random Access (UORA) mechanisms introduced in the IEEE 802.11ax (Wi-Fi 6) standard. It demonstrates how the Access Point (AP) coordinates concurrent uplink transmissions from multiple stations (STAs) using Trigger frames, and compares scheduled access against random-access contention.
+This example shows the central uplink change in 802.11ax: instead of every
+station independently contending for a full-width single-user transmission,
+the AP can use a Trigger frame to let several stations transmit at the same
+time on separate RUs. It compares deterministic scheduled RUs with UORA RUs,
+where stations contend inside a Trigger opportunity.
 
 ## Background: UL MU-OFDMA & UORA
 
@@ -176,6 +180,13 @@ The decoded output timeline shows:
 ---
 
 ## Interpretation of Results
+
+The `5 ms` three-station load is sufficient to keep scheduled UL exchanges
+active without making every teaching configuration collapse under queueing.
+The dedicated UORA conditions use eight stations and `1 ms` or `12 ms`
+intervals because UORA's advantage and cost depend on contention intensity.
+One RA-RU creates a clear collision bottleneck; three RA-RUs change only the
+number of simultaneous random-access opportunities, isolating that parameter.
 
 1. **Active Uplink MU-OFDMA Scheduling (`General`)**:
    - Under the `General` config, the AP actively coordinates uplink transmissions using **427 Basic Triggers** and **3 BSRP Triggers**.

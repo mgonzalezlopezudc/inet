@@ -1,6 +1,9 @@
 # Walkthrough - HE Multi-TID Block Ack
 
-This walkthrough guides you through the HE Multi-TID Block Ack simulation example in the INET Framework.
+This walkthrough explains how 802.11ax reduces acknowledgment overhead when a
+station has traffic in several QoS queues. Earlier per-TID Block Ack exchanges
+repeat BAR, BA, and SIFS overhead; Multi-TID feedback can describe several TID
+windows in one acknowledgment context.
 
 ## Background: Multi-TID Block Ack
 
@@ -35,6 +38,10 @@ description = "HE Multi-TID Block Ack: AP and stations negotiate Multi-TID Aggre
 ### Key Parameters:
 1. **`heMultiTidAggregationRx = true`**: Declares that the node's receiver supports receiving aggregated Multi-TID A-MPDUs.
 2. **`heMultiTidAggregationTx = true`**: Declares that the node's transmitter supports building and transmitting Multi-TID A-MPDUs.
+
+The two applications use different TIDs and unequal packet sizes/rates so both
+acknowledgment windows remain active and easy to distinguish. A single-TID
+stream could negotiate the capability but would never exercise its purpose.
 
 ---
 
@@ -92,6 +99,11 @@ The decoded output timeline shows:
 
 ---
 
-## Model Details and Limitations
+## Interpreting the result
 
-The INET 802.11ax MAC model successfully negotiates Multi-TID capability flags and routes the internal BAR/Block Ack state machinery correctly. However, the current DL/UL path creates a separate Block Ack record per request rather than packing multiple TIDs into a single physical Multi-TID Block Ack frame. Thus, this scenario is a verification of the capability negotiation and internal queue prioritization structures, not a proof of aggregated physical multi-TID transmission.
+The application counts establish delivery of both TIDs, while the Trigger and
+Block Ack sequence establishes coordinated feedback. The current scenario
+exercises capability negotiation and the per-TID acknowledgment state, but it
+does not measure an airtime saving from packing several TID records into one
+physical Multi-TID Block Ack. Such a performance claim requires a matched
+single-TID control and direct BAR/BA airtime accounting.

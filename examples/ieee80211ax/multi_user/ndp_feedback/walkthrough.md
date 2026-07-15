@@ -1,6 +1,9 @@
 # Walkthrough - HE NDP Feedback Report
 
-This walkthrough guides you through the HE NDP Feedback Report simulation example in the INET Framework.
+This walkthrough shows how an 802.11ax AP can collect short feedback from many
+stations in one Trigger-based uplink opportunity. Earlier single-user polling
+would spend a separate contention/control exchange per station; NDP Feedback
+Report responses share the channel as HE TB transmissions.
 
 ## Background: HE NDP Feedback Report
 
@@ -34,7 +37,10 @@ extends = ScheduledOnly
 ### Key Parameters:
 1. **`heNdpFeedbackReport = true`**: AP and stations advertise support for the NDP feedback report mechanism.
 2. **`enableNdpFeedbackReport = true`**: Activates the AP's generation of NFRP trigger frames.
-3. **`ulTriggerCheckInterval = 20ms`**: Commands the AP to check and send trigger frames every 20ms.
+3. **`ulTriggerCheckInterval = 20ms`**: Polls often enough to produce a clear
+   sequence of NFRP exchanges without letting control traffic dominate every
+   transmission opportunity. It is a demonstration cadence, not a standard
+   timer value.
 
 ---
 
@@ -99,3 +105,8 @@ The decoded output timeline shows:
 2. **High MAC-Layer Transmissions**:
    - The hosts record very high MAC-layer transmission counts (~700 frames each). These represent the **HE TB NDP feedback report frames** (decoded as QoS Null frames in TShark) sent concurrently in response to the AP's frequent NFRP triggers.
    - The AP broadcasts NFRP Trigger frames every 20ms to poll stations and coordinate uplink channel status.
+
+The advantage to inspect is control efficiency, not the UDP packet total: one
+NFRP Trigger elicits concurrent feedback from all three stations after SIFS.
+Application delivery confirms that the feedback procedure coexists with data;
+it does not by itself quantify the airtime saved versus sequential polling.
