@@ -19,7 +19,7 @@ application-level aggregate delivery advantage over matched EDCA controls:
 - The serialized Basic Trigger contains the spatial-stream allocation, TID
   Aggregation Limit, and Preferred AC fields that TShark decodes.
 
-The results below were generated with release INET libraries on 2026-07-14.
+The results below were generated with release INET libraries on 2026-07-15.
 
 ## IEEE 802.11 expectations
 
@@ -83,10 +83,12 @@ mkdir -p results/validation/dl-mu results/validation/dl-su
 mkdir -p results/validation/ul-mu results/validation/ul-su
 
 bin/inet -u Cmdenv -c DlMuMimo -r 0 \
+    --warmup-period=0.7s \
     --result-dir=results/validation/dl-mu \
     examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
 
 bin/inet -u Cmdenv -c SuEdcaBaseline -r 0 \
+    --warmup-period=0.7s \
     --result-dir=results/validation/dl-su \
     examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
 
@@ -129,16 +131,17 @@ Two deterministic seeds produced:
 
 | Direction | Seed | MU delivered | EDCA delivered | Delivery gain | MU mean delay | EDCA mean delay |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| DL | 0 | 4080 | 2797 | 45.9% | 24.81 ms | 16.90 ms |
-| DL | 1 | 4080 | 2793 | 46.1% | 24.74 ms | 16.86 ms |
-| UL | 0 | 2378 | 1677 | 41.8% | 217.29 ms | 263.90 ms |
-| UL | 1 | 2385 | 1715 | 39.1% | 210.05 ms | 303.42 ms |
+| DL | 0 | 14640 | 2796 | 423.6% | 6.31 ms | 16.91 ms |
+| DL | 1 | 14640 | 2823 | 418.6% | 6.28 ms | 16.87 ms |
+| UL | 0 | 2378 | 1677 | 41.8% | 200.35 ms | 270.69 ms |
+| UL | 1 | 2385 | 1715 | 39.1% | 199.72 ms | 268.24 ms |
 
-The refreshed manifest compares 20 MHz DL MU-MIMO over `0.3–0.88 s` against
-the OFDMA control. The result vectors report `10.938 Mbps` for MU-MIMO and
-`23.568 Mbps` for OFDMA; the lower aggregate value makes the structural
-multi-user and disjoint-stream checks in the next section essential. This is
-not a universal performance ranking.
+The refreshed five-seed manifest compares 20 MHz DL MU-MIMO over
+`0.55–0.88 s` against the OFDMA control. The result vectors report
+`38.982 Mbps` for MU-MIMO and `23.568 Mbps` for OFDMA. MU-MIMO uses the
+model's calibrated default inter-user CSI leakage of 0.01. The structural
+multi-user and disjoint-stream checks in the next section remain essential;
+this is not a universal performance ranking.
 
 ### Internal HE PHY and scheduler vectors from `.vec`/`.sca`
 
@@ -158,14 +161,14 @@ opp_scavetool query -l \
     results/validation/ul-mu/UlMuMimo-#0.vec
 ```
 
-For DL seed 0, each AP-radio user vector has 264 records. RU tone size is 242
+For DL seed 0, each AP-radio user vector has 921 records. RU tone size is 242
 for every record; STA IDs range from 1 to 3; NSS is always one; and starting
-stream indices range from 0 to 2. The aligned records form 88 three-user
+stream indices range from 0 to 2. The aligned records form 307 three-user
 full-bandwidth MU-MIMO PPDUs.
 
-For UL seed 0, the AP records 490 Basic Triggers, 1456 scheduled-user
-allocations, and a maximum of three users per Trigger. Seed 1 records 472,
-1406, and three respectively. Station-radio vectors show 242-tone, one-stream
+For UL seed 0, the AP records 458 Basic Triggers, 1358 scheduled-user
+allocations, and a maximum of three users per Trigger. Seed 1 records 438,
+1297, and three respectively. Station-radio vectors show 242-tone, one-stream
 HE TB transmissions at starting stream indices 0, 1, and 2. Initial BSRP and
 occasional single-user allocations account for the small-RU records.
 
@@ -220,7 +223,7 @@ capinfos "$DL_PCAP"
 capinfos "$UL_PCAP"
 ```
 
-The validated AP captures contain 815 DL packets and 4804 UL packets, use
+The validated AP captures contain 3611 DL packets and 4508 UL packets, use
 IEEE 802.11 encapsulation, have nanosecond precision, and are strictly ordered.
 
 ### Downlink sounding
@@ -236,8 +239,8 @@ tshark -n -r "$DL_PCAP" \
     -e _ws.col.Info
 ```
 
-Seed 0 contains five BFRP Triggers. The first appears at 0.501732340 s for
-AIDs 1 and 2; later polls include all three beamformees. The exchange is
+Seed 0 contains seven BFRP Triggers. The first appears at 0.300624062 s for
+AIDs 2, 3, and 1; later polls also include all three beamformees. The exchange is
 preceded by the NDP Announcement and sounding NDP and followed by compressed
 beamforming feedback, matching Figure 26-8. Native MAC captures do not contain
 radiotap/HE-SIG-B metadata, so use the AP HE vectors for the DL stream indices.
@@ -258,8 +261,8 @@ tshark -n -r "$UL_PCAP" \
     -e _ws.col.Info
 ```
 
-The capture contains 490 decoded Basic Triggers. Frame 18 at 0.202041286 s
-identifies AIDs 1, 2, and 3, assigns RU allocation 61 (the full 242-tone RU) to
+The capture contains 458 decoded Basic Triggers. Frame 170 at 0.361001785 s
+identifies AIDs 3, 2, and 1, assigns RU allocation 61 (the full 242-tone RU) to
 all three, and decodes starting streams 0, 1, and 2. The encoded NSS values are
 0, 0, and 0, meaning one spatial stream per user; the TID Aggregation Limit is
 one for every user.
@@ -268,14 +271,14 @@ Inspect the following frames:
 
 ```sh
 tshark -n -r "$UL_PCAP" \
-    -Y 'frame.number >= 18 && frame.number <= 22' \
+    -Y 'frame.number >= 170 && frame.number <= 174' \
     -T fields -E separator=, \
     -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
     -e wlan.sa -e wlan.da -e _ws.col.Info
 ```
 
-Frames 19, 20, and 21 are 1000-byte QoS Data frames from the three stations at
-0.203557401-0.203557506 s; frame 22 is the AP's Block Ack response. The capture
+Frames 171, 172, and 173 are 1000-byte QoS Data frames from the three stations at
+0.362517900-0.362518005 s; frame 174 is the AP's Block Ack response. The capture
 therefore corroborates the Trigger structure and actual simultaneous payload
 delivery rather than only QoS Null responses.
 
@@ -283,11 +286,13 @@ delivery rather than only QoS Null responses.
 
 ```sh
 bin/inet -u Cmdenv -c DlMuMimo80MHz -r 0 \
+    --warmup-period=0.7s \
     examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
 ```
 
 The validated run reaches the 1 s simulation limit without error. Its eight
-receivers deliver 1490-1506 packets each. This check specifically guards the
+receivers deliver 1500 packets each with mean delay of approximately 0.48 ms.
+This check specifically guards the
 wide-RU BFRP coding path that previously requested BCC on 484-tone RUs.
 
 ## Root-cause summary
@@ -308,3 +313,5 @@ The original poor results had both implementation and scenario causes:
 After fixing the implementation defects and using a matched saturated UL load,
 the `.sca`, `.vec`, PCAP, and TShark evidence consistently shows the intended
 standards-shaped MU-MIMO exchanges and a repeatable aggregate delivery gain.
+With default inter-user CSI leakage calibrated to 0.01, the five-seed DL
+comparison also shows higher MU-MIMO goodput than its matched OFDMA control.

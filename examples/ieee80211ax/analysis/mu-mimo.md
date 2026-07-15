@@ -9,7 +9,8 @@ The comparison holds bandwidth at 20 MHz and uses the same traffic for OFDMA and
 MU-MIMO may improve aggregate delivery by reusing frequency resources in the spatial domain, but sounding, acknowledgments, channel quality, and offered load can offset that gain. The structural stream checks are stronger evidence of feature operation than expecting a fixed throughput multiplier.
 
 For the refreshed five-seed comparison, the OFDMA control averages `23.568
-Mbps` while the 20 MHz MU-MIMO condition averages `10.938 Mbps`. The lower
-MU-MIMO goodput does not invalidate the feature result: the vector checks still
-require multiple users and non-overlapping stream intervals in an HE MU PPDU,
-which is the direct evidence that spatial multiplexing occurred.
+Mbps` while the 20 MHz MU-MIMO condition averages `38.982 Mbps`. The MU-MIMO
+condition uses the model's calibrated default inter-user CSI leakage of 0.01;
+the vector checks still require multiple users and non-overlapping stream
+intervals in an HE MU PPDU, so the performance result is accepted only together
+with direct evidence that spatial multiplexing occurred.
