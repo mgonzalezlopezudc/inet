@@ -53,19 +53,22 @@ earlier 100-packet baseline.
 
 ## Comparison matrix
 
-The topology, station positions, transmit power, best-effort classification,
-packet size, warm-up, normal-traffic start, duration, and MCS cap are common to
-the controlled configurations. The offered load intentionally differs between
-the 20 and 80 MHz experiments:
+The topology, station positions, transmit power, packet size, warm-up,
+normal-traffic start, duration, and MCS cap are common to the controlled
+configurations. The two `_ACVO` variants change only the traffic
+classification from best effort to voice. The offered load intentionally
+differs between the 20 and 80 MHz experiments:
 
-| Configuration | Width | Offered load | MAC/scheduler |
-|---|---:|---:|---|
-| `EqualSizedRUs_fBW` | 20 MHz | 2.4 Mbps | DL OFDMA, maximize occupied bandwidth |
-| `EqualSizedRUs_fHoL` | 20 MHz | 2.4 Mbps | DL OFDMA, serve candidates by HoL policy |
-| `SuEdcaBaseline` | 20 MHz | 2.4 Mbps | SU OFDM, shared 300-packet `AC_BE` queue |
-| `EqualSizedRUs80MHz_fBW` | 80 MHz | 24 Mbps | high-load DL OFDMA, `fBW` |
-| `EqualSizedRUs80MHz_fHoL` | 80 MHz | 24 Mbps | high-load DL OFDMA, `fHoL` |
-| `SuEdcaBaseline80MHz` | 80 MHz | 24 Mbps | high-load SU OFDM, shared 300-packet queue |
+| Configuration | Width | Offered load | Access category | MAC/scheduler |
+|---|---:|---:|---|---|
+| `EqualSizedRUs_fBW` | 20 MHz | 2.4 Mbps | `AC_BE` | DL OFDMA, maximize occupied bandwidth |
+| `EqualSizedRUs_fBW_ACVO` | 20 MHz | 2.4 Mbps | `AC_VO` | DL OFDMA, maximize occupied bandwidth |
+| `EqualSizedRUs_fHoL` | 20 MHz | 2.4 Mbps | `AC_BE` | DL OFDMA, serve candidates by HoL policy |
+| `EqualSizedRUs_fHoL_ACVO` | 20 MHz | 2.4 Mbps | `AC_VO` | DL OFDMA, serve candidates by HoL policy |
+| `SuEdcaBaseline` | 20 MHz | 2.4 Mbps | `AC_BE` | SU OFDM, shared 300-packet queue |
+| `EqualSizedRUs80MHz_fBW` | 80 MHz | 24 Mbps | `AC_BE` | high-load DL OFDMA, `fBW` |
+| `EqualSizedRUs80MHz_fHoL` | 80 MHz | 24 Mbps | `AC_BE` | high-load DL OFDMA, `fHoL` |
+| `SuEdcaBaseline80MHz` | 80 MHz | 24 Mbps | `AC_BE` | high-load SU OFDM, shared 300-packet queue |
 
 At 20 MHz, each source sends a 100-byte packet every `1 ms`. The 80 MHz base
 configuration overrides that interval to `0.1 ms`, increasing aggregate load
@@ -95,7 +98,9 @@ goodput even though more users appear in each MU transmission.
 | Configuration | Aggregate app throughput | p95 E2E delay |
 |---|---:|---:|
 | `EqualSizedRUs_fBW` | 2.399 Mbps | 1.68 ms |
+| `EqualSizedRUs_fBW_ACVO` | 2.400 Mbps | 0.78 ms |
 | `EqualSizedRUs_fHoL` | 2.395 Mbps | 2.31 ms |
+| `EqualSizedRUs_fHoL_ACVO` | 2.396 Mbps | 2.25 ms |
 | `SuEdcaBaseline` | 1.588 Mbps | 155.96 ms |
 | `EqualSizedRUs80MHz_fBW` | 22.465 Mbps | 11.47 ms |
 | `EqualSizedRUs80MHz_fHoL` | 19.607 Mbps | 14.03 ms |
@@ -108,6 +113,14 @@ fix the service-rate deficit: the queue reaches 300 packets in every seed,
 ends with 298.2 packets on average, and drops 413.6 packets per run on average.
 Both OFDMA configurations have zero queue-overflow drops and a maximum of two
 packets in any per-STA queue.
+
+Classifying the same sparse traffic as `AC_VO` preserves DL MU OFDMA and full
+offered-load delivery. Its shorter AIFS and smaller contention window reduce
+the `fBW` p95 delay from `1.68 ms` to `0.78 ms`. The `fHoL` change is much
+smaller, from `2.31 ms` to `2.25 ms`, because scheduler layout and candidate
+timing still dominate part of its delay. These differences are specific to
+this workload and seed set; changing access category does not guarantee the
+same relative improvement under congestion.
 
 At 80 MHz, `fBW` and SU have nearly equal aggregate throughput. `fBW` has about
 15% lower p95 delay (`11.47 ms` versus `13.42 ms`), but this result does not
@@ -216,8 +229,34 @@ names instead of summing them before computing percentiles. Apply the same
 
 The short `10 ms` ADDBA retry interval lets all independently contending
 stations complete Block Ack setup before the measurement interval. Port 80
-maps the comparison traffic to `AC_BE`, avoiding the finite voice TXOP as an
-accidental confounder.
+maps the original comparison traffic to `AC_BE`. The `_ACVO` configurations
+map both warm-up and measured traffic to port 5000, which the QoS classifier
+maps to TID 6/`AC_VO`; keeping both phases on the same TID also lets the
+measured traffic use the Block Ack agreements established during warm-up.
+
+`AC_VO` has a `1.504 ms` TXOP limit in this configuration, but that does not
+prevent the small-packet MU exchanges. Focused seed-0 traces over
+`0.300–0.310 s` assembled ten HE MU PPDUs for each scheduler. `fBW` used two
+RU allocations in all ten. `fHoL` used two allocations in six and three
+allocations in four. A two-user PPDU occupied `400 us` and its reported
+sequential acknowledgment phase occupied `272 us`, for about `672 us`. The
+longest observed three-user case occupied `772 us` plus a `384 us`
+acknowledgment phase, or about `1.156 ms`. Thus each complete observed MU
+exchange fits within the voice TXOP; no single-frame exception is needed.
+
+The focused MAC trace can be reproduced with:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c EqualSizedRUs_fHoL_ACVO -r 0 --seed-set=0 \
+  --sim-time-limit=0.31s --cmdenv-express-mode=false \
+  '--**.ap.wlan[0].mac.hcf.**.cmdenv-log-level=debug' \
+  '--**.scalar-recording=false' '--**.vector-recording=false'
+```
+
+Look for `Txop started: limit = 0.001504`, `HE DL MU scheduling`, and
+`Assembled HE MU PPDU` in the output. Repeat with
+`EqualSizedRUs_fBW_ACVO` for the other scheduler.
 
 For a structural packet-exchange check, enable AP MAC capture from the command
 line rather than permanently changing `omnetpp.ini`:
