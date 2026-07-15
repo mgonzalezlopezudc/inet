@@ -1,6 +1,10 @@
 # Walkthrough - HE BSS Coloring & Spatial Reuse Simulation
 
-This walkthrough guides you through the HE BSS Coloring and Spatial Reuse simulation example in the INET Framework.
+This walkthrough explains how 802.11ax turns BSS identity into a spatial-reuse
+decision. Earlier stations defer to any sufficiently strong same-channel
+transmission. An HE station can identify an inter-BSS PPDU and apply a more
+permissive OBSS/PD threshold, gaining airtime when the other BSS is far enough
+away that simultaneous transmissions remain decodable.
 
 ## Background: BSS Coloring & Spatial Reuse
 
@@ -25,8 +29,11 @@ The network [BssColoringNetwork.ned](BssColoringNetwork.ned) consists of two ove
 - Wired servers generate downlink UDP traffic to the client hosts (1000B payloads sent every 2ms). All conditions use a `0.2–0.25s` warm-up trigger and start normal traffic at `0.3s`.
 - The medium limit cache is set to `100ms` so the saturated aggregate transmissions are not rejected by the generic `10ms` limit.
 
-At a distance of 200m between the two APs, the signal from the overlapping BSS
-is intended to fall between the normal energy-detection and OBSS/PD thresholds.
+The `200 m` AP separation and `30 m` AP-to-client distances create the intended
+spatial-reuse geometry: the other AP should be detectable by ordinary CCA but
+much weaker than the wanted AP at each receiver. MCS 0 and `20 mW` power leave
+link margin for concurrent transmission; the `2 ms` streams keep both BSSs
+backlogged so an airtime opportunity can become measurable goodput.
 
 ---
 
@@ -78,8 +85,11 @@ opp_scavetool query -l -f 'name =~ "packetReceived:vector(packetBytes)" and modu
 | **BssColoringCollision** | 6.649 ± 0.165 Mbps | 0.900 ± 0.081 | 0.532 ± 0.258% |
 
 Values are means ± 95% Student-t confidence intervals over five seeded runs,
-measured from `0.3–0.95s`. The identical results show that this bounded
-scalar-medium workload does not expose a measurable spatial-reuse benefit.
+measured from `0.3–0.95s`. The identical results mean this scalar-medium
+experiment demonstrates color assignment, threshold configuration, and dual
+NAV state, but does not establish a throughput advantage. The intended
+802.11ax advantage is conditional: ignoring a weak OBSS is useful only when it
+changes the CCA decision and the added interference still permits decoding.
 
 ---
 
@@ -98,15 +108,21 @@ Use TShark to print the timeline of packet exchanges at the first Access Point (
 tshark -n -r 'examples/ieee80211ax/bss_coloring/results/pcap/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' -c 20
 ```
 
-The refreshed run-0 captures are nonempty PCAPng files with 83 frames at each
+The run-0 captures are nonempty PCAPng files with 83 frames at each
 AP. TShark shows the same warm-up/data/action/ACK exchange pattern at both
 observation points. The decoded output timeline shows:
 1. **Downlink UDP Packets**: `ap1` sends UDP data frames to its stations (e.g. frame 1, 15).
 2. **Action Frame Handshake**: Stations establish block acknowledgment session configurations with their AP (e.g. frames 3, 5, 7, 11).
-3. **Capture limitation**: The native MAC captures do not expose the full
+3. **Evidence boundary**: The native MAC captures do not expose the full
    OBSS/PD decision or distinguish every medium observation. Together with the
    identical `.sca/.vec` metrics for all five manifest conditions, this run
    does not support claiming a spatial-reuse throughput benefit.
+
+The threshold sweep is still instructive. `-78 dBm` is conservative and should
+admit fewer inter-BSS opportunities; `-52 dBm` is aggressive and risks harmful
+interference; `-62 dBm` is the middle treatment. A good spatial-reuse study
+must inspect concurrency, goodput, PER, and fairness together—raising the
+threshold is not beneficial if it merely converts deferral into collisions.
 
 ---
 

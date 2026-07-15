@@ -1,12 +1,14 @@
 # Walkthrough - HE MU-MIMO (Downlink and Uplink)
 
-This walkthrough validates the HE Multi-User MIMO (MU-MIMO) examples against
-IEEE Std 802.11-2024 using OMNeT++ scalar/vector results and native IEEE 802.11
-PCAPng captures.
+This walkthrough shows how 802.11ax MU-MIMO increases capacity by assigning
+different spatial streams to several stations on the same frequency resource.
+OFDMA separates users in frequency; MU-MIMO reuses that frequency in space.
+The example therefore checks both the stream allocation and the resulting
+application-level gain over matched single-user or OFDMA controls.
 
-## Validation status
+## What the experiment demonstrates
 
-The examples now demonstrate both the required MU-MIMO structure and an
+The examples demonstrate both the required MU-MIMO structure and an
 application-level aggregate delivery advantage over matched EDCA controls:
 
 - `DlMuMimo` sounds the stations, then sends three users on the same 242-tone
@@ -14,8 +16,8 @@ application-level aggregate delivery advantage over matched EDCA controls:
 - `UlMuMimo` sends Basic Triggers assigning the same 242-tone RU and disjoint
   stream ranges to as many as three stations. The stations answer with
   simultaneous HE TB QoS Data PPDUs and the AP acknowledges the exchange.
-- `DlMuMimo80MHz` completes; wide BFRP allocations select LDPC instead of the
-  invalid BCC coding previously used for RUs of 484 tones or more.
+- `DlMuMimo80MHz` extends the same mechanism to eight stations and an
+  eight-antenna AP.
 - The serialized Basic Trigger contains the spatial-stream allocation, TID
   Aggregation Limit, and Preferred AC fields that TShark decodes.
 
@@ -65,11 +67,12 @@ The observable invariants are therefore:
   budget, and full-bandwidth UL MU-MIMO.
 - `EdcaBaseline`: the same saturated UL workload using EDCA only.
 
-The focused `uplink.ini` sets the application interval to 0.5 ms in both UL
-configurations. The original 5 ms load was below the capacity of both schemes,
-so it could demonstrate the protocol exchange but not a throughput advantage.
-The 1.5 ms HE TB duration fits the voice TXOP while remaining below the
-standard's 5.484 ms PPDU limit.
+The focused `uplink.ini` sets the application interval to `0.5 ms` in both UL
+configurations. This deliberately keeps all three station queues backlogged:
+without simultaneous demand, spatial multiplexing has nothing to combine and
+its sounding and Trigger overhead can dominate. The `1.5 ms` HE TB duration is
+long enough to amortize Trigger and Block Ack overhead, fits the voice TXOP,
+and remains below the standard's `5.484 ms` PPDU limit.
 
 `SuEdcaBaseline80MHz` is not a matched control for `DlMuMimo80MHz`: it has
 three stations instead of eight and must not be used for a performance ratio.
@@ -136,7 +139,7 @@ Two deterministic seeds produced:
 | UL | 0 | 2378 | 1677 | 41.8% | 200.35 ms | 270.69 ms |
 | UL | 1 | 2385 | 1715 | 39.1% | 199.72 ms | 268.24 ms |
 
-The refreshed five-seed manifest compares 20 MHz DL MU-MIMO over
+The five-seed campaign compares 20 MHz DL MU-MIMO over
 `0.55–0.88 s` against the OFDMA control. The result vectors report
 `38.982 Mbps` for MU-MIMO and `23.568 Mbps` for OFDMA. MU-MIMO uses the
 model's calibrated default inter-user CSI leakage of 0.01. The structural
@@ -290,28 +293,15 @@ bin/inet -u Cmdenv -c DlMuMimo80MHz -r 0 \
     examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
 ```
 
-The validated run reaches the 1 s simulation limit without error. Its eight
-receivers deliver 1500 packets each with mean delay of approximately 0.48 ms.
-This check specifically guards the
-wide-RU BFRP coding path that previously requested BCC on 484-tone RUs.
+The run reaches the 1 s simulation limit. Its eight receivers deliver 1500
+packets each with mean delay of approximately `0.48 ms`.
 
-## Root-cause summary
+## How to read the result
 
-The original poor results had both implementation and scenario causes:
-
-- Implementation defects omitted Trigger stream and Basic dependent fields,
-  lost HE coding/stream metadata on sounding and triggered acknowledgments,
-  treated same-Trigger UL MU-MIMO streams as scalar co-channel interference,
-  prevented scheduled HE TB data before a Block Ack agreement, ignored the
-  configured HE TB duration, and failed to check whether the first MPDU fit.
-- The DL packing estimate considered only the head-of-line packet, preventing
-  the planner from amortizing control overhead with a useful A-MPDU.
-- The original UL offered load was too low and ordinary EDCA could carry most
-  packets before a Trigger arrived. That was a parameter-selection issue, not
-  evidence that MU-MIMO was slower.
-
-After fixing the implementation defects and using a matched saturated UL load,
-the `.sca`, `.vec`, PCAP, and TShark evidence consistently shows the intended
-standards-shaped MU-MIMO exchanges and a repeatable aggregate delivery gain.
-With default inter-user CSI leakage calibrated to 0.01, the five-seed DL
-comparison also shows higher MU-MIMO goodput than its matched OFDMA control.
+MU-MIMO's advantage comes from simultaneous spatial streams, not from a faster
+MCS or wider channel. That is why the 20 MHz comparison keeps bandwidth and
+traffic fixed and why the vector checks are essential. The `38.982 Mbps`
+MU-MIMO result versus `23.568 Mbps` for OFDMA is credible only together with
+the observed three users, common 242-tone RU, and non-overlapping stream
+indices. Sounding cost, channel correlation, station capability, and a light
+load can all reduce or eliminate this advantage in another workload.

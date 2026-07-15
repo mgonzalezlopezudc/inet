@@ -54,7 +54,8 @@ The [omnetpp.ini](omnetpp.ini) file defines three scenarios:
 
 ### 3. `HeMinstrelMobile`
 
-- Extends `HeMinstrel` and changes only `host[3]` to `LinearMobility` at 8 m/s.
+- Extends `HeMinstrel` and changes only `host[3]` to `LinearMobility` at
+  `40 m/s`.
 - This is the didactically useful adaptation case: the link budget changes
   during the run, so inspect the selected-rate vector over simulation time
   rather than comparing only its mean or the final packet count.
@@ -96,15 +97,13 @@ opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host*
 opp_scavetool query -l -f 'name =~ "datarateSelected:vector"' examples/ieee80211ax/he_rate_adaptation/results/*.vec
 ```
 
-### Refreshed vector summary
+### Vector summary
 
-The five-run `HeMinstrelMobile` campaign records the following AP-controller
-evidence:
-- `HeMinstrelMobile`: the refreshed five-run vector campaign selects MCS 0 through 11, with `9.372 ± 3.830 Mbps` goodput and `0.980 ± 0.010` transmission-success fraction.
-
-The selected-MCS and transmission-outcome vectors, rather than a fixed-rate
-comparison that was not part of the refreshed manifest, are the current
-evidence for adaptation.
+The five-run `HeMinstrelMobile` campaign selects MCS 0 through 11, with
+`9.372 ± 3.830 Mbps` goodput and a `0.980 ± 0.010` transmission-success
+fraction. The selected-MCS and transmission-outcome vectors together are the
+evidence for useful adaptation; a changing MCS by itself could merely show
+probing or instability.
 
 ---
 
@@ -134,12 +133,14 @@ The decoded output timeline shows:
 1. **Observed adaptation**:
    - The selected-MCS vector spans MCS 0 through 11 while the transmission-outcome vector remains highly successful (`0.980 ± 0.010`). This pairing is the evidence for adaptation; selected rates alone would not establish useful delivery.
 
-2. **Datarate vs. Distance**:
-   - The refreshed manifest records selected-MCS and success vectors, but does not
-     record a per-station distance/rate table. No per-host bitrate claim is made
-     from this campaign.
-
-3. **Scope**:
-   - The current manifest does not rerun the fixed-rate baseline, so no current
-     Minstrel-versus-fixed throughput claim is made here. A fixed-rate
-     comparison should use the same normalized phase and seeds.
+2. **Why the moving edge station is the teaching case**:
+   - A stationary strong link would let both static and adaptive selection stay
+     near one rate. Moving `host[3]` at `40 m/s` makes the link budget change
+     enough during a two-second run to traverse MCS 0 through 11.
+   - Traffic begins at `0.3 s`, but analysis starts at `0.5 s` so controller
+     initialization and probing are not mistaken for steady adaptation.
+   - The `0.980 ± 0.010` success fraction shows the controller changes rates
+     without simply trading goodput for widespread loss. Rate adaptation is an
+     implementation policy available to earlier Wi-Fi too; the HE-specific
+     benefit demonstrated here is selecting within the larger 802.11ax MCS,
+     NSS, RU, and PPDU-format envelope.

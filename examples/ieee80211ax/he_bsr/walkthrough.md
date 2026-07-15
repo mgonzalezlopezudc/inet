@@ -39,21 +39,26 @@ The network [HeBsrNetwork.ned](HeBsrNetwork.ned) consists of:
 
 The [omnetpp.ini](omnetpp.ini) file defines three test scenarios:
 
-### 1. `FullBsrAccounting` (Default/Baseline)
+### 1. `FullBsrAccounting` (fresh-report reference)
 - The BSR freshness timer (`reportMaxAge`) uses the default (retained longer).
 - The AP relies on fresh queue reports delivered implicitly or from previous polls to schedule UL MU-OFDMA data transmissions using `HeUlSchedulerBacklogBased`.
-- **Result**: AP triggers frequent UL transmissions with minimal BSRP polling overhead, but continuous Trigger-based PPDU scheduling introduces frame aggregation limits and SIFS overhead under high backlog.
+- Fresh reports let the AP allocate RUs from recent queue information without
+  first spending another exchange on BSRP polling.
 
 ### 2. `StaleBsr`
 - The queue report freshness threshold is set to `**.ap.wlan[*].mac.hcf.ulCoordinator.reportMaxAge = 10ms`.
 - Since queue statuses expire after 10 ms, the AP's scheduler frequently finds records stale and sends additional BSRP Trigger frames before backlog-based scheduling. The value is deliberately long enough for one Trigger exchange to finish deterministically; it is an INET experiment parameter, not an IEEE timer value.
-- **Result**: Higher explicit BSRP polling overhead (30 BSRP Triggers vs. 3 in baseline) due to continuous expiration.
+- The intentionally short age limit makes the cost of stale state visible:
+  reports expire on the timescale of the offered traffic, so the AP must
+  refresh its view before it can make a useful backlog-based allocation.
 
 ### 3. `ImplicitBsr`
 - The AP's UL trigger check interval is set to a larger value: `**.ap.wlan[*].mac.hcf.ulTriggerCheckInterval = 0.5s`.
 - This allows STAs to first transmit data frames using single-user (SU) EDCA channel access. The buffer status (BSR) is implicitly set in the HE-variant HT Control field of these SU data frames.
 - When the AP receives these SU QoS Data frames, it extracts the BSR implicitly, updating its backlog database. It then triggers UL MU-OFDMA transmissions only when necessary, without sending explicit BSRP poll frames.
-- **Result**: Zero explicit BSRP triggers, minimal Basic trigger overhead, and significantly higher aggregate throughput since STAs utilize efficient SU EDCA transmissions.
+- This configuration demonstrates how an uplink data frame can refresh the
+  AP's scheduling state without a dedicated poll. It is not a pure throughput
+  comparison with scheduled OFDMA because it intentionally allows SU EDCA.
 
 ---
 
@@ -94,14 +99,14 @@ opp_scavetool query -l -f "*Trigger*" examples/ieee80211ax/he_bsr/results/*.sca
 opp_scavetool query -l -f "*packetReceived:count*" examples/ieee80211ax/he_bsr/results/*.sca
 ```
 
-### Refreshed vector summary
+### Vector summary
 
-The refreshed five-seed campaign records AP backlog vectors for `BurstyTraffic`
+The five-seed campaign records AP backlog vectors for `BurstyTraffic`
 and `StaleBsr` and measures `0.3–1.9s`. Mean reported/scheduled backlog is
 `36,079/41,506 B` for the fresh bursty condition and `73,410/73,565 B` for
 the stale condition. These are scheduling-state observations; the campaign
-does not record scalar trigger counters, so old single-run trigger totals are
-not retained as current results.
+uses those vectors, rather than packet counts, to show what information the
+scheduler actually had.
 
 ---
 
@@ -127,14 +132,16 @@ The decoded output timeline shows:
 
 ## Interpretation of Results
 
-1. **Explicit BSRP Polling Overhead**:
-   - The scalar-recording command above remains useful for a focused trigger
-     campaign, but those counters are not part of the refreshed five-seed
-     manifest output.
-
-2. **Trigger-Based Scheduling vs. EDCA Throughput**:
-   - The refreshed `.vec` evidence supports the narrower conclusion that the
-     10 ms report-age policy leaves the AP with a much larger mean backlog than
-     the fresh bursty condition. Trigger-count and application-delivery claims
-     require a separate scalar-recording run of `FullBsrAccounting`,
-     `StaleBsr`, and `ImplicitBsr`.
+1. **Fresh information is the advantage**: BSR does not carry payload; it lets
+   the AP replace blind polling or contention with informed RU allocation.
+   Scheduled bytes following nonzero reports is therefore stronger evidence
+   than application packet count alone.
+2. **Why `10 ms` matters**: it is long enough for a report exchange to finish,
+   but short relative to this saturated workload. The stale case consequently
+   accumulates about twice the mean reported backlog of the bursty fresh case.
+   That is a scheduling-state penalty, not a claim that every shorter report
+   lifetime halves throughput.
+3. **Why bursty traffic matters**: filling, draining, and refilling the queues
+   makes report freshness observable. A permanently empty or permanently
+   saturated queue would reveal much less about whether the AP's view tracks
+   changes in demand.

@@ -12,10 +12,10 @@ The full-bandwidth tone allocations for the supported channel widths are:
 - **80 MHz**: 996-tone RU
 - **160 MHz**: 2x996-tone RU (contiguous 160 MHz representation, not non-contiguous 80+80 MHz)
 
-### The Noise Integration Penalty:
+### The noise-integration trade-off
 While a wider channel increases the transmission rate, it also integrates more physical noise across the receiver band. Doubling the receiver bandwidth increases the thermal noise floor by 3 dB:
 - 40 MHz has 3 dB more noise than 20 MHz.
-- 80 MHz has 6 dB more noise than 20 MHz (and a corresponding 10 dB noise integration penalty is typically offset by increasing transmitter power).
+- 80 MHz has 6 dB more noise than 20 MHz.
 - 160 MHz has 9 dB more noise than 20 MHz.
 Therefore, wider channels do not automatically translate to increased range or better performance in low-SNR environments unless transmit power or receiver sensitivity is adjusted.
 
@@ -98,6 +98,13 @@ The decoded output timeline shows:
    - As the channel width increases from 20 MHz to 160 MHz, aggregate goodput rises from `23.94` to `111.90 Mbps` and p95 delay falls from `100.88` to `15.81 ms`. With the warm-up trigger setup, all four stations have nonempty arrival vectors in every run.
    - This occurs because a wider channel supports a higher physical bit rate, reducing the physical transmission duration (airtime) of the frame.
 
-2. **Negligible Sequential Delay with 100G Ethernet**:
-   - In earlier configurations using a 100M Ethernet link, the packets for the four stations were serialized one after another on the wire, introducing a staggered arrival/queueing delay at the AP MAC layer (`host[0] < host[1] < host[2] < host[3]`).
-   - With the 100G Ethernet link, the transmission delay per packet is extremely small (around 16 ns for a 200B packet). This makes the Ethernet serialization delay negligible, so the packets arrive at the AP almost simultaneously, effectively eliminating this staggered queueing delay.
+2. **Why these parameters make bandwidth visible**:
+   - The `0.25 ms` per-flow interval keeps every width backlogged. If the load
+     were below 20 MHz capacity, all four configurations would merely deliver
+     the offered load and bandwidth would appear irrelevant.
+   - The 1000-byte payload is large enough that PHY capacity matters more than
+     per-packet MAC overhead. The 100 Gbit/s wired link makes its serialization
+     delay negligible, so the measured trend comes from the wireless channel.
+   - The stations are deliberately close to the AP. This is a capacity test,
+     not a coverage test: at the cell edge, the 3 dB noise increase per width
+     doubling can outweigh the extra tones.

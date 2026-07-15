@@ -1,6 +1,7 @@
 # 802.11ax HE Advanced Features Showcase
 
-This example illustrates the most recently added 802.11ax HE MAC/PHY features in the INET Framework:
+This example isolates several 802.11ax HE PHY/MAC choices and the trade-offs
+they introduce relative to a BCC, unpunctured HE MU baseline:
 
 * HE LDPC timing/accounting and LDPC PER gain
 * Packet-extension (PE) timing metadata
@@ -32,6 +33,13 @@ configurations override the data interval to `0.5ms` to saturate the channel.
 The resulting backlog exceeds the scheduler's 1500 B threshold, so it requests
 large RUs (up to 484-tone). Under puncturing, the allocator downgrades or
 relocates allocations so that no RU overlaps the disabled 20 MHz subchannel.
+
+These values are deliberate. An 80 MHz channel is the smallest width in this
+example that can lose one 20 MHz subchannel while retaining a useful wideband
+transmission. Four continuously backlogged stations give the scheduler several
+RU-placement choices. The 1000-byte packets make PHY coding and RU capacity
+more visible than a tiny-packet workload, while the `0.5 ms` interference cases
+remove the offered-load ceiling when puncturing is evaluated.
 
 ---
 
@@ -248,9 +256,14 @@ the three interference cases use the 0.5 ms override.
 | **`DynamicPuncturing`** | Dynamic preamble puncturing | **63.931 ± 0.033 Mbps** |
 
 The intervals are 95% Student-t confidence intervals over five run-level
-observations. The equal ordinary-case goodput is the offered-load ceiling, and
-the near-equal interference-case goodput does not constitute a puncturing
-throughput gain; the decisive puncturing evidence is the mask/RU telemetry.
+observations. The equal ordinary-case goodput is the offered-load ceiling:
+LDPC, PE, and puncturing change the PHY representation without changing an
+application rate that is already fully served. The near-equal interference
+results also do not establish a puncturing gain in this scalar-medium scenario;
+the decisive evidence here is the mask transition and puncture-aware RU
+placement. Conceptually, puncturing's advantage is resilience, not extra
+clean-channel capacity: it sacrifices one 20 MHz subchannel so traffic can
+continue on the remaining spectrum when that subchannel is unusable.
 
 To query the received packet counts using `opp_scavetool`:
 
@@ -286,8 +299,15 @@ The decoded output timeline shows:
 
 ---
 
-## 8. Notes and Limitations
+## 8. How to interpret the feature trade-offs
 
 * HE LDPC in INET is a packet-level model: it does not include a bit-level LDPC codec. Instead it models the timing and PER impact (codeword accounting, tail-bit omission, and a 1.5 dB SNR boost).
 * Preamble puncturing capability is advertised by default in the current `Ieee80211HeCapabilities` struct, so all peers in this example support it. The scenario therefore emphasizes **configuration validation** and **puncture-aware allocation** rather than a peer-capability fallback.
 * The example focuses on downlink MU-OFDMA. The same metadata paths (PE duration, puncturing mask, coding) are also used for uplink MU-OFDMA via the Trigger frame.
+* LDPC buys robustness and can improve useful throughput near a decoding
+  boundary; on a clean link it may only change coding/timing telemetry.
+* Packet extension gives receivers more processing time at a direct airtime
+  cost. The configured `8 us` makes that cost easy to identify in PPDU duration.
+* Mixed capability is intentionally included because an AP can use a feature
+  only when the scheduled peers support the relevant mode. Negotiation is part
+  of the advantage: it permits modern and less-capable stations to coexist.

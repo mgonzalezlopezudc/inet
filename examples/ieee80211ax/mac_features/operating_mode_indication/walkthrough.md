@@ -1,6 +1,9 @@
 # Walkthrough - HE Operating Mode Indication (OMI)
 
-This walkthrough guides you through the HE Operating Mode Indication (OMI) simulation example in the INET Framework.
+This walkthrough shows how an 802.11ax station can change its active receive
+capability without reassociating. OMI turns a costly management transition into
+a small control field carried by ordinary traffic, allowing the AP scheduler to
+adapt immediately to a station's power, thermal, or bandwidth constraint.
 
 ## Background: Operating Mode Indication (OMI)
 
@@ -42,6 +45,13 @@ extends = ScheduledOnly
 2. **`sendOperatingModeIndication = true`**: Commands `host[0]` to append the OMI HT Control subfield to its transmitted frames.
 3. **`operatingModeRxNss = 2`**: `host[0]` advertises an operating Rx NSS limit of 2.
 4. **`operatingModeUlMuDisable = true`**: `host[0]` requests that the AP disable scheduling it in uplink multi-user transmissions.
+
+`host[0]` advertises two receive streams so the value is restrictive but still
+allows spatial multiplexing in downlink tests. Setting `ulMuDisable` makes the
+scheduler consequence unambiguous: hosts 1 and 2 remain eligible for Triggered
+UL MU service, while host 0 must use a single-user opportunity. The `0.5 s`
+Trigger check interval leaves time for the OMI-carrying frame to update AP state
+before the next scheduling decision.
 
 ---
 
@@ -112,3 +122,9 @@ In the INET HCF scheduler implementation, the AP coordination function parses, m
 - The uplink scheduler `HeUlSchedulerBacklogBased` checks this map and actively excludes `host[0]` from the UL MU triggers because of its `ulMuDisable` OMI setting.
 - This is verified by the fact that the AP only schedules `host[1]` and `host[2]` in its User Info fields (visible in verbose logs and PCAP decodes), while `host[0]` falls back to EDCA transmission.
 - Similarly, the downlink scheduler respects the `rxNss` constraint when allocating streams.
+
+The packet count confirms that traffic continues through the mode change, but
+the didactic evidence is the causal chain: OM Control field, updated peer state,
+then changed scheduler eligibility. A throughput comparison would mix the
+energy/capability trade-off with the chosen traffic and is not the purpose of
+this scenario.

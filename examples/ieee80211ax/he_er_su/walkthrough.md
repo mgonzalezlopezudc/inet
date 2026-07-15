@@ -15,16 +15,18 @@ In dense or outdoor deployments, stations (STAs) at the cell edge suffer from lo
 
 The network [HeErSuNetwork.ned](HeErSuNetwork.ned) consists of:
 - **`ap`**: An Access Point located at `(390, 180)`.
-- **`edge`**: A stationary wireless host located at `(70, 180)` (representing a cell-edge client).
+- **`host[0]`**: A stationary wireless host located at `(70, 180)`
+  (representing a cell-edge client).
 - **Distance**: The AP and client are separated by **320 meters**. At this distance, the Free Space Path Loss (FSPL) at 5 GHz is approximately 96.5 dB, resulting in very weak signal reception (around -86.5 dBm at 10mW transmission power).
 - **`server`**: A wired server connected to the AP.
-- **Traffic**: Downlink UDP traffic is sent from the `server` to the `edge` host via the AP (300B packets sent every 1ms).
+- **Traffic**: Downlink UDP traffic is sent from the `server` to `host[0]` via
+  the AP (300 B packets sent every 1 ms).
 
 ```
         [server]
            | (wired)
            v
-        [ ap ] <--------------- 320m ---------------> [edge]
+        [ ap ] <--------------- 320m -------------> [host[0]]
       (AP at 390m)                                (STA at 70m)
 ```
 
@@ -145,3 +147,14 @@ The decoded output timeline shows:
    - In `HeSu`, transmissions use standard HE SU PPDUs with a **36 µs** preamble.
    - In `HeErSu`, transmissions employ HE ER SU PPDUs. The preamble includes the repeated HE-SIG-A field, increasing the preamble duration to **44 µs**. This extra 8 µs of repeated header symbol provides the essential energy duplication required to decode preambles under marginal SNR or real-world fading conditions, preventing drops.
    - The configuration demonstrates selection and timing of the robust format. It does not prove a full coverage sweep range gain in this deterministic free-space channel; such a claim requires a fading/noise experiment and a delivery/PER sweep.
+
+3. **Why the parameters sit near the coverage boundary**:
+   - `320 m`, `10 mW`, and MCS 0 put ordinary HE SU only slightly above the
+     configured receiver sensitivity. A short distance would hide the value of
+     repeated HE-SIG-A and DCM; a much longer distance would make both modes
+     fail regardless of format.
+   - The 300-byte, `1 ms` stream creates enough frames to expose a reception
+     reliability difference without turning this into a capacity benchmark.
+     DCM intentionally trades half the data rate for frequency diversity, so
+     its expected advantage is lower packet-error rate or extended coverage,
+     not higher peak throughput.
