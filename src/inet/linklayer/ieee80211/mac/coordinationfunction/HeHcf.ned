@@ -54,7 +54,7 @@ module HeHcf extends Hcf
         double dynamicHePreamblePuncturingEnd @unit(s) = default(-1s); // Negative keeps the runtime mask active indefinitely
         bool enableDlMuMimo = default(false); // Enables HE downlink MU-MIMO sounding and transmission
         double csiValidityDuration @unit(s) = default(0.1s); // Validity duration of sounding CSI measurements
-        double defaultCsiLeakage = default(0.1); // Default inter-user interference leakage factor
+        double defaultCsiLeakage = default(0.01); // Default inter-user interference leakage factor
         string csiLeakageOverrides = default(""); // Specific peer-to-peer leakage overrides e.g. "1-2:0.01"
 
     submodules:
