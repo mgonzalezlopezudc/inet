@@ -2,8 +2,8 @@
 
 Use repository skills for detailed simulation, test, result-analysis, and standards workflows.
 
-### References to files in user-facing explanations
-* Always use relative (to the project workspace) and not absolute references to files in your user-facing explanations. For example, use `src/some-file` instead of `/home/user/omnetpp_ws/inet/src/some-file`.
+### Links to files in user-facing explanations
+* Always use relative (to the project workspace) and not absolute links to files in your user-facing explanations. For example, use `[some-file](src/some-file)` instead of `[some-file]/(home/user/omnetpp_ws/inet/src/some-file)`.
 
 ### General rules
 
