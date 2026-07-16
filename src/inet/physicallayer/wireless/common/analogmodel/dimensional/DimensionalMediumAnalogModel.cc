@@ -29,8 +29,12 @@ void DimensionalMediumAnalogModel::initialize(int stage)
     if (stage == INITSTAGE_LOCAL) {
         attenuateWithCenterFrequency = par("attenuateWithCenterFrequency"); // TODO rename center
         enableChannelMatrixMrc = par("enableChannelMatrixMrc");
+        enableChannelMatrixLmmse = par("channelMatrixInterferenceMode").stdstringValue() == "lmmse";
         channelMatrixTransmitAntenna = par("channelMatrixTransmitAntenna");
+        channelMatrixTimeResolution = par("channelMatrixTimeResolution");
         channelMatrixFrequencyResolution = Hz(par("channelMatrixFrequencyResolution"));
+        if (!std::isfinite(channelMatrixTimeResolution.dbl()) || channelMatrixTimeResolution <= 0)
+            throw cRuntimeError("Channel matrix time resolution must be finite and positive");
         if (!std::isfinite(channelMatrixFrequencyResolution.get<Hz>()) || channelMatrixFrequencyResolution <= Hz(0))
             throw cRuntimeError("Channel matrix frequency resolution must be finite and positive");
     }
@@ -143,6 +147,7 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
     }
     const std::vector<const IReception *> *interferingReceptions = interference->getInterferingReceptions();
     std::vector<std::shared_ptr<const ChannelMatrixSignal>> channelMatrixInterferers;
+    bool containsNonChannelMatrixInterference = false;
     bool hasOverlappingReception = false;
     auto listeningLowerFrequency = centerFrequency - bandwidth / 2;
     auto listeningUpperFrequency = centerFrequency + bandwidth / 2;
@@ -155,9 +160,13 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
         auto overlaps = std::min(listeningUpperFrequency, receptionUpperFrequency) >
                 std::max(listeningLowerFrequency, receptionLowerFrequency);
         hasOverlappingReception |= overlaps;
-        if (overlaps && dimensionalSignal->getChannelMatrixSignal() != nullptr)
-            channelMatrixInterferers.push_back(dimensionalSignal->getChannelMatrixSignal()->withInputPower(
-                    dimensionalSignal->getChannelMatrixSignal()->getInputPower()->multiply(bandpassFilter)));
+        if (overlaps) {
+            if (dimensionalSignal->getChannelMatrixSignal() != nullptr)
+                channelMatrixInterferers.push_back(dimensionalSignal->getChannelMatrixSignal()->withInputPower(
+                        dimensionalSignal->getChannelMatrixSignal()->getInputPower()->multiply(bandpassFilter)));
+            else
+                containsNonChannelMatrixInterference = true;
+        }
         EV_TRACE << "Interference power begin " << endl;
         EV_TRACE << *receptionPower << endl;
         EV_TRACE << "Interference power end" << endl;
@@ -168,7 +177,7 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
     EV_TRACE << "Noise power end" << endl;
     return new DimensionalNoise(listening->getStartTime(), listening->getEndTime(), centerFrequency, bandwidth,
             noisePower->multiply(bandpassFilter), hasOverlappingReception, backgroundNoisePower,
-            std::move(channelMatrixInterferers));
+            std::move(channelMatrixInterferers), containsNonChannelMatrixInterference);
 }
 
 const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *reception, const INoise *noise) const
@@ -178,13 +187,27 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *recep
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& noisePower = makeShared<AddedFunction<WpHz, Domain<simsec, Hz>>>(dimensionalReception->getPower(), dimensionalNoise->getPower());
     return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getCenterFrequency(),
             dimensionalReception->getBandwidth(), noisePower, dimensionalNoise->hasInterferingReceptions(),
-            dimensionalNoise->getBackgroundNoisePower(), dimensionalNoise->getChannelMatrixInterferers());
+            dimensionalNoise->getBackgroundNoisePower(), dimensionalNoise->getChannelMatrixInterferers(),
+            dimensionalNoise->hasNonChannelMatrixInterference());
 }
 
 const ISnir *DimensionalMediumAnalogModel::computeSNIR(const IReception *reception, const INoise *noise) const
 {
     auto dimensionalReception = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
     auto dimensionalNoise = check_and_cast<const DimensionalNoise *>(noise);
+    auto channelMatrixSignal = dimensionalReception->getChannelMatrixSignal();
+    if (enableChannelMatrixLmmse && channelMatrixSignal != nullptr && dimensionalNoise->hasInterferingReceptions()) {
+        if (dimensionalNoise->hasNonChannelMatrixInterference())
+            throw cRuntimeError("L-MMSE channel matrix reception cannot combine interference without channel matrix metadata");
+        if (dimensionalNoise->getChannelMatrixInterferers().empty())
+            throw cRuntimeError("L-MMSE noise reports overlapping receptions but contains no channel matrix interferers");
+        auto lmmseSnir = ChannelMatrixCombiner::createStaticSingleStreamLmmseSnir(
+                channelMatrixSignal, dimensionalNoise->getChannelMatrixInterferers(),
+                dimensionalNoise->getBackgroundNoisePower(), reception->getStartTime(), reception->getEndTime(),
+                dimensionalReception->getCenterFrequency(), dimensionalReception->getBandwidth(),
+                channelMatrixTimeResolution, channelMatrixFrequencyResolution);
+        return new DimensionalSnir(reception, noise, lmmseSnir);
+    }
     if (dimensionalReception->isChannelMatrixCombined() && dimensionalNoise->hasInterferingReceptions())
         throw cRuntimeError("Selected-antenna MRC with overlapping receptions requires receive-antenna interference covariance, which is not available in the dimensional analog pipeline");
     return new DimensionalSnir(reception, noise);

@@ -18,12 +18,14 @@ namespace physicallayer {
 DimensionalNoise::DimensionalNoise(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth,
         const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power, bool hasInterferingReceptions,
         const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& backgroundNoisePower,
-        std::vector<std::shared_ptr<const ChannelMatrixSignal>> channelMatrixInterferers) :
+        std::vector<std::shared_ptr<const ChannelMatrixSignal>> channelMatrixInterferers,
+        bool containsNonChannelMatrixInterference) :
     NarrowbandNoiseBase(startTime, endTime, centerFrequency, bandwidth),
     power(power),
     containsInterferingReceptions(hasInterferingReceptions),
     backgroundNoisePower(backgroundNoisePower),
-    channelMatrixInterferers(std::move(channelMatrixInterferers))
+    channelMatrixInterferers(std::move(channelMatrixInterferers)),
+    containsNonChannelMatrixInterference(containsNonChannelMatrixInterference)
 {
 }
 

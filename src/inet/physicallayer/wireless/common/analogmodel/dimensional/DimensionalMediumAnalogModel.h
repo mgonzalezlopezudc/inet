@@ -24,7 +24,9 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
   protected:
     bool attenuateWithCenterFrequency = false;
     bool enableChannelMatrixMrc = false;
+    bool enableChannelMatrixLmmse = false;
     int channelMatrixTransmitAntenna = 0;
+    simtime_t channelMatrixTimeResolution = -1;
     Hz channelMatrixFrequencyResolution = Hz(NaN);
 
   protected:

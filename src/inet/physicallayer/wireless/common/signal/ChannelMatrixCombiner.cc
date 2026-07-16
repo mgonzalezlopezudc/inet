@@ -12,6 +12,7 @@
 #include <map>
 
 #include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSignal.h"
 
 namespace inet {
 namespace physicallayer {
@@ -197,6 +198,103 @@ Ptr<const IFunction<double, Domain<simsec, Hz>>> ChannelMatrixCombiner::createSt
             timeWindowFunction, frequencyDeltaFunction);
     auto identityFunction = makeShared<ConstantFunction<double, Domain<simsec, Hz>>>(1);
     return makeShared<AddedFunction<double, Domain<simsec, Hz>>>(identityFunction, timeFrequencyDeltaFunction);
+}
+
+Ptr<const IFunction<double, Domain<simsec, Hz>>> ChannelMatrixCombiner::createStaticSingleStreamLmmseSnir(
+        const std::shared_ptr<const ChannelMatrixSignal>& desiredSignal,
+        const std::vector<std::shared_ptr<const ChannelMatrixSignal>>& interferingSignals,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& backgroundNoisePower,
+        simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth,
+        simtime_t timeResolution, Hz frequencyResolution)
+{
+    if (desiredSignal == nullptr)
+        throw cRuntimeError("L-MMSE desired channel matrix signal must not be null");
+    if (backgroundNoisePower == nullptr)
+        throw cRuntimeError("L-MMSE background noise power must not be null");
+    if (!desiredSignal->getChannelMatrixResponse()->isTimeInvariant())
+        throw cRuntimeError("Static L-MMSE requires a time-invariant desired channel matrix response");
+    auto numReceiveAntennas = desiredSignal->getNumReceiveAntennas();
+    for (const auto& interferingSignal : interferingSignals) {
+        if (interferingSignal == nullptr)
+            throw cRuntimeError("L-MMSE interfering channel matrix signal must not be null");
+        if (!interferingSignal->getChannelMatrixResponse()->isTimeInvariant())
+            throw cRuntimeError("Static L-MMSE requires time-invariant interfering channel matrix responses");
+        if (interferingSignal->getNumReceiveAntennas() != numReceiveAntennas)
+            throw cRuntimeError("L-MMSE interfering channel receive dimension differs from desired channel");
+    }
+    auto timeStep = simsec(timeResolution);
+    if (endTime <= startTime)
+        throw cRuntimeError("L-MMSE reception duration must be positive");
+    if (!std::isfinite(timeStep.get<s>().dbl()) || timeStep <= simsec(0) ||
+            !std::isfinite(centerFrequency.get<Hz>()) || centerFrequency <= Hz(0) ||
+            !std::isfinite(bandwidth.get<Hz>()) || bandwidth <= Hz(0) ||
+            !std::isfinite(frequencyResolution.get<Hz>()) || frequencyResolution <= Hz(0))
+        throw cRuntimeError("L-MMSE time and frequency grid parameters must be finite and positive");
+    auto lowerFrequency = centerFrequency - bandwidth / 2;
+    auto upperFrequency = centerFrequency + bandwidth / 2;
+    if (lowerFrequency < Hz(0))
+        throw cRuntimeError("L-MMSE signal band must not contain negative frequencies");
+
+    auto lowerTimeIndexValue = std::floor((simsec(startTime) / timeStep).get<unit>());
+    auto upperTimeIndexValue = std::ceil((simsec(endTime) / timeStep).get<unit>());
+    auto lowerFrequencyIndexValue = std::floor((lowerFrequency / frequencyResolution).get<unit>());
+    auto upperFrequencyIndexValue = std::ceil((upperFrequency / frequencyResolution).get<unit>());
+    if (upperTimeIndexValue <= lowerTimeIndexValue)
+        upperTimeIndexValue = lowerTimeIndexValue + 1;
+    if (upperFrequencyIndexValue <= lowerFrequencyIndexValue)
+        upperFrequencyIndexValue = lowerFrequencyIndexValue + 1;
+    auto numTimeCells = upperTimeIndexValue - lowerTimeIndexValue;
+    auto numFrequencyCells = upperFrequencyIndexValue - lowerFrequencyIndexValue;
+    if (!std::isfinite(numTimeCells) || !std::isfinite(numFrequencyCells) ||
+            numTimeCells > std::numeric_limits<int>::max() - 1 ||
+            numFrequencyCells > std::numeric_limits<int>::max() - 1 ||
+            numTimeCells * numFrequencyCells > 2000000)
+        throw cRuntimeError("L-MMSE time-frequency grid has too many cells: %g",
+                numTimeCells * numFrequencyCells);
+
+    int sizeTime = (int)numTimeCells + 1;
+    int sizeFrequency = (int)numFrequencyCells + 1;
+    auto lowerGridTime = simsec(timeStep.get<s>() * lowerTimeIndexValue);
+    auto upperGridTime = simsec(timeStep.get<s>() * upperTimeIndexValue);
+    auto lowerGridFrequency = lowerFrequencyIndexValue * frequencyResolution;
+    auto upperGridFrequency = upperFrequencyIndexValue * frequencyResolution;
+    std::vector<double> sinrs(sizeTime * sizeFrequency);
+    std::vector<std::vector<std::complex<double>>> interferingChannels(interferingSignals.size());
+    std::vector<double> interferingPowers(interferingSignals.size());
+    for (int frequencyIndex = 0; frequencyIndex < sizeFrequency - 1; frequencyIndex++) {
+        auto cellLowerFrequency = lowerGridFrequency + frequencyResolution * frequencyIndex;
+        auto cellUpperFrequency = cellLowerFrequency + frequencyResolution;
+        auto sampleFrequency = (std::max(cellLowerFrequency, lowerFrequency) +
+                std::min(cellUpperFrequency, upperFrequency)) / 2;
+        auto desiredChannel = desiredSignal->computeEffectiveChannel(simsec(startTime), sampleFrequency);
+        for (size_t i = 0; i < interferingSignals.size(); i++)
+            interferingChannels[i] = interferingSignals[i]->computeEffectiveChannel(simsec(startTime), sampleFrequency);
+        for (int timeIndex = 0; timeIndex < sizeTime - 1; timeIndex++) {
+            auto cellLowerTime = lowerGridTime + timeStep * timeIndex;
+            auto cellUpperTime = cellLowerTime + timeStep;
+            auto sampleTime = (std::max(cellLowerTime, simsec(startTime)) +
+                    std::min(cellUpperTime, simsec(endTime))) / 2;
+            Point<simsec, Hz> samplePoint(sampleTime, sampleFrequency);
+            auto desiredPower = desiredSignal->getInputPower()->getValue(samplePoint).get<WpHz>();
+            auto noisePower = backgroundNoisePower->getValue(samplePoint).get<WpHz>();
+            for (size_t i = 0; i < interferingSignals.size(); i++)
+                interferingPowers[i] = interferingSignals[i]->getInputPower()->getValue(samplePoint).get<WpHz>();
+            sinrs[frequencyIndex * sizeTime + timeIndex] = computeSingleStreamLmmseSinr(
+                    desiredChannel, desiredPower, interferingChannels, interferingPowers, noisePower);
+        }
+    }
+    for (int frequencyIndex = 0; frequencyIndex < sizeFrequency - 1; frequencyIndex++)
+        sinrs[frequencyIndex * sizeTime + sizeTime - 1] =
+                sinrs[frequencyIndex * sizeTime + sizeTime - 2];
+    for (int timeIndex = 0; timeIndex < sizeTime; timeIndex++)
+        sinrs[(sizeFrequency - 1) * sizeTime + timeIndex] =
+                sinrs[(sizeFrequency - 2) * sizeTime + timeIndex];
+    auto gridFunction = makeShared<PeriodicallyInterpolated2DFunction<double, simsec, Hz>>(
+            lowerGridTime, upperGridTime, sizeTime, lowerGridFrequency, upperGridFrequency, sizeFrequency,
+            LeftInterpolator<simsec, double>::singleton, LeftInterpolator<Hz, double>::singleton, sinrs);
+    auto receptionWindow = makeShared<Boxcar2DFunction<double, simsec, Hz>>(
+            simsec(startTime), simsec(endTime), lowerFrequency, upperFrequency, 1);
+    return gridFunction->multiply(receptionWindow);
 }
 
 } // namespace physicallayer
