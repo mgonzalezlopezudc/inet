@@ -22,6 +22,9 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
 {
   protected:
     bool attenuateWithCenterFrequency = false;
+    bool enableChannelMatrixMrc = false;
+    int channelMatrixTransmitAntenna = 0;
+    Hz channelMatrixFrequencyResolution = Hz(NaN);
 
   protected:
     virtual void initialize(int stage) override;
@@ -31,7 +34,9 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
-    virtual const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> computeReceptionPower(const IRadio *radio, const ITransmission *transmission, const IArrival *arrival) const;
+    virtual const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> computeReceptionPower(const IRadio *radio,
+            const ITransmission *transmission, const IArrival *arrival, bool *channelMatrixCombined = nullptr,
+            Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> *interferencePower = nullptr) const;
     virtual const INoise *computeNoise(const IListening *listening, const IInterference *interference) const override;
     virtual const INoise *computeNoise(const IReception *reception, const INoise *noise) const override;
     virtual const ISnir *computeSNIR(const IReception *reception, const INoise *noise) const override;

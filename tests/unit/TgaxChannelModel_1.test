@@ -53,6 +53,10 @@ class TestableTgaxChannelModel : public TgaxChannelModel
         return createPowerGain(channel, startTime, endTime, centerFrequency, bandwidth);
     }
 
+    void checkSpatialTransmissionBand(Hz centerFrequency, Hz bandwidth) const {
+        validateSpatialTransmissionBand(centerFrequency, bandwidth);
+    }
+
     int getNumCreatedChannels() const { return numCreatedChannels; }
 };
 
@@ -78,6 +82,12 @@ class ProductionTgaxChannelModel : public TgaxChannelModel
 
     const TgaxSisoChannel *getChannel(int transmitterRadioId, int receiverRadioId) const {
         return getOrCreateChannel(transmitterRadioId, receiverRadioId);
+    }
+
+    std::shared_ptr<const TgaxMimoChannel> getMatrixChannel(int transmitterRadioId,
+            int receiverRadioId, int numTransmitAntennas, int numReceiveAntennas) const {
+        return getOrCreateMatrixChannel(transmitterRadioId, receiverRadioId,
+                numTransmitAntennas, numReceiveAntennas);
     }
 };
 
@@ -115,6 +125,15 @@ for (auto frequency : {GHz(5) - MHz(9.25), GHz(5) + MHz(0.25), GHz(5) + MHz(8.25
 ASSERT(modelA.getChannel(1, 2) == modelAChannel);
 ASSERT(modelA.getChannel(2, 1) == modelAChannel);
 ASSERT(modelA.getNumCreatedChannels() == 1);
+modelA.checkSpatialTransmissionBand(GHz(5), MHz(20));
+bool rejectedWideSpatialTransmission = false;
+try {
+    modelA.checkSpatialTransmissionBand(GHz(5), MHz(40));
+}
+catch (const cRuntimeError&) {
+    rejectedWideSpatialTransmission = true;
+}
+ASSERT(rejectedWideSpatialTransmission);
 
 TestableTgaxChannelModel directionalModel;
 directionalModel.configure("A", MHz(20), false, GHz(5), MHz(1));
@@ -131,6 +150,26 @@ auto secondOrderLink34 = secondQueryOrder.getChannel(3, 4);
 auto secondOrderLink12 = secondQueryOrder.getChannel(1, 2);
 checkSameChannel(firstOrderLink12, secondOrderLink12);
 checkSameChannel(firstOrderLink34, secondOrderLink34);
+
+auto forwardMatrixChannel = firstQueryOrder.getMatrixChannel(101, 202, 1, 2);
+auto reverseMatrixChannel = firstQueryOrder.getMatrixChannel(202, 101, 2, 1);
+ASSERT(forwardMatrixChannel->getNumReceiveAntennas() == 2);
+ASSERT(forwardMatrixChannel->getNumTransmitAntennas() == 1);
+ASSERT(reverseMatrixChannel->getNumReceiveAntennas() == 1);
+ASSERT(reverseMatrixChannel->getNumTransmitAntennas() == 2);
+auto forwardMatrix = forwardMatrixChannel->getChannelMatrix(simsec(0), GHz(5));
+auto reverseMatrix = reverseMatrixChannel->getChannelMatrix(simsec(1), GHz(5));
+for (int receiveAntenna = 0; receiveAntenna < 2; receiveAntenna++)
+    ASSERT(forwardMatrix.getCoefficient(receiveAntenna, 0) ==
+            reverseMatrix.getCoefficient(0, receiveAntenna));
+bool rejectedChangedMatrixDimensions = false;
+try {
+    firstQueryOrder.getMatrixChannel(101, 202, 2, 2);
+}
+catch (const cRuntimeError&) {
+    rejectedChangedMatrixDimensions = true;
+}
+ASSERT(rejectedChangedMatrixDimensions);
 
 const double coefficient = 1 / std::sqrt(2.0);
 TgaxSisoChannel twoTapChannel({

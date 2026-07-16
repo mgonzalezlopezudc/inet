@@ -10,9 +10,10 @@ import inet.common.Module;
 import inet.physicallayer.wireless.common.contract.packetlevel.IWidebandChannelModel;
 
 //
-// A cached reciprocal SISO NLOS realization of a TGax indoor channel profile.
-// The frequency response is sampled on an absolute grid and is constant over
-// the duration of each immutable channel snapshot.
+// A cached reciprocal NLOS realization of a TGax indoor channel profile. The
+// default is a SISO response; Models B and D optionally provide static matrix
+// responses for one or two antennas per endpoint. The frequency response is
+// sampled on an absolute grid and is constant over each immutable snapshot.
 //
 module TgaxChannelModel extends Module like IWidebandChannelModel
 {
@@ -30,6 +31,7 @@ module TgaxChannelModel extends Module like IWidebandChannelModel
         double environmentalSpeed @unit(mps) = default(0.0247222mps); // 0.089 km/h
         int numDopplerOscillators = default(32); // finite spectral approximation per tap
         double timeResolution @unit(s) = default(1ms); // piecewise-constant snapshot grid
+        bool spatialChannel = default(false); // Opt-in static B/D NLOS matrix response, with receive rows and transmit columns
         @class(TgaxChannelModel);
         @display("i=block/tunnel");
 }

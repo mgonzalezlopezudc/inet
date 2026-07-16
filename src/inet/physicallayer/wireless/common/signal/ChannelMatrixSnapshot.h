@@ -20,6 +20,7 @@ class INET_API ConstantChannelMatrixResponse : public IChannelMatrixResponse
   public:
     explicit ConstantChannelMatrixResponse(ChannelMatrix channelMatrix);
 
+    virtual bool isTimeInvariant() const override { return true; }
     virtual int getNumReceiveAntennas() const override;
     virtual int getNumTransmitAntennas() const override;
     virtual ChannelMatrix getChannelMatrix(simsec time, Hz frequency) const override;

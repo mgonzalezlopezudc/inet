@@ -11,9 +11,11 @@
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixSnapshot.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
 #include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixCombiner.h"
 
 namespace inet {
 
@@ -24,8 +26,14 @@ Define_Module(DimensionalMediumAnalogModel);
 void DimensionalMediumAnalogModel::initialize(int stage)
 {
     AnalogModelBase::initialize(stage);
-    if (stage == INITSTAGE_LOCAL)
+    if (stage == INITSTAGE_LOCAL) {
         attenuateWithCenterFrequency = par("attenuateWithCenterFrequency"); // TODO rename center
+        enableChannelMatrixMrc = par("enableChannelMatrixMrc");
+        channelMatrixTransmitAntenna = par("channelMatrixTransmitAntenna");
+        channelMatrixFrequencyResolution = Hz(par("channelMatrixFrequencyResolution"));
+        if (!std::isfinite(channelMatrixFrequencyResolution.get<Hz>()) || channelMatrixFrequencyResolution <= Hz(0))
+            throw cRuntimeError("Channel matrix frequency resolution must be finite and positive");
+    }
 }
 
 std::ostream& DimensionalMediumAnalogModel::printToStream(std::ostream& stream, int level, int evFlags) const
@@ -36,8 +44,12 @@ std::ostream& DimensionalMediumAnalogModel::printToStream(std::ostream& stream, 
     return stream;
 }
 
-const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::computeReceptionPower(const IRadio *receiverRadio, const ITransmission *transmission, const IArrival *arrival) const
+const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::computeReceptionPower(
+        const IRadio *receiverRadio, const ITransmission *transmission, const IArrival *arrival,
+        bool *channelMatrixCombined, Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> *interferencePower) const
 {
+    if (channelMatrixCombined != nullptr)
+        *channelMatrixCombined = false;
     const IRadioMedium *radioMedium = receiverRadio->getMedium();
     auto analogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
     const Coord& transmissionStartPosition = transmission->getStartPosition();
@@ -63,10 +75,41 @@ const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogMode
         const auto& approximatedAttenuationFunction = makeShared<ApproximatedFunction<double, Domain<simsec, Hz>, 1, Hz>>(lower, upper, step, &AverageInterpolator<Hz, double>::singleton, attenuationFunction);
         receptionPower = propagatedTransmissionPowerFunction->multiply(approximatedAttenuationFunction);
     }
+    Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> scalarInterferencePower = receptionPower;
     if (auto widebandChannelModel = radioMedium->getWidebandChannelModel()) {
         auto channelSnapshot = widebandChannelModel->computeChannel(receiverRadio, transmission, arrival);
-        receptionPower = receptionPower->multiply(channelSnapshot->getPowerGain());
+        if (auto channelMatrixSnapshot = dynamic_cast<const IChannelMatrixSnapshot *>(channelSnapshot.get())) {
+            if (!enableChannelMatrixMrc)
+                throw cRuntimeError("Received a channel matrix snapshot but selected-antenna MRC is not enabled in the dimensional medium analog model");
+            auto transmitterRadio = transmission->getTransmitterRadio();
+            if (transmitterRadio == nullptr)
+                throw cRuntimeError("Channel matrix combining requires the transmitting radio");
+            auto channelMatrixResponse = channelMatrixSnapshot->getChannelMatrixResponse();
+            auto numTransmitAntennas = transmitterRadio->getAntenna()->getNumAntennas();
+            auto numReceiveAntennas = receiverRadio->getAntenna()->getNumAntennas();
+            if (channelMatrixResponse->getNumTransmitAntennas() != numTransmitAntennas ||
+                    channelMatrixResponse->getNumReceiveAntennas() != numReceiveAntennas)
+                throw cRuntimeError("Channel matrix dimensions (%d receive x %d transmit) do not match radio antennas (%d receive x %d transmit)",
+                        channelMatrixResponse->getNumReceiveAntennas(), channelMatrixResponse->getNumTransmitAntennas(),
+                        numReceiveAntennas, numTransmitAntennas);
+            scalarInterferencePower = receptionPower->multiply(channelMatrixSnapshot->getPowerGain());
+            auto mrcPowerGain = ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(
+                    channelMatrixResponse, channelMatrixTransmitAntenna,
+                    arrival->getStartTime(), arrival->getEndTime(),
+                    analogModel->getCenterFrequency(), analogModel->getBandwidth(), channelMatrixFrequencyResolution);
+            receptionPower = receptionPower->multiply(mrcPowerGain);
+            if (numReceiveAntennas == 1)
+                scalarInterferencePower = receptionPower;
+            if (channelMatrixCombined != nullptr)
+                *channelMatrixCombined = numReceiveAntennas > 1;
+        }
+        else {
+            receptionPower = receptionPower->multiply(channelSnapshot->getPowerGain());
+            scalarInterferencePower = receptionPower;
+        }
     }
+    if (interferencePower != nullptr)
+        *interferencePower = scalarInterferencePower;
     EV_TRACE << "Reception power begin " << endl;
     EV_TRACE << *receptionPower << endl;
     EV_TRACE << "Reception power end" << endl;
@@ -85,10 +128,17 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
         receptionPowers.push_back(backgroundNoisePower);
     }
     const std::vector<const IReception *> *interferingReceptions = interference->getInterferingReceptions();
+    bool hasOverlappingReception = false;
+    auto listeningLowerFrequency = centerFrequency - bandwidth / 2;
+    auto listeningUpperFrequency = centerFrequency + bandwidth / 2;
     for (const auto & interferingReception : *interferingReceptions) {
         auto dimensionalSignal = check_and_cast<const DimensionalReceptionAnalogModel *>(interferingReception->getAnalogModel());
-        auto receptionPower = dimensionalSignal->getPower();
+        auto receptionPower = dimensionalSignal->getInterferencePower();
         receptionPowers.push_back(receptionPower);
+        auto receptionLowerFrequency = dimensionalSignal->getCenterFrequency() - dimensionalSignal->getBandwidth() / 2;
+        auto receptionUpperFrequency = dimensionalSignal->getCenterFrequency() + dimensionalSignal->getBandwidth() / 2;
+        hasOverlappingReception |= std::min(listeningUpperFrequency, receptionUpperFrequency) >
+                std::max(listeningLowerFrequency, receptionLowerFrequency);
         EV_TRACE << "Interference power begin " << endl;
         EV_TRACE << *receptionPower << endl;
         EV_TRACE << "Interference power end" << endl;
@@ -98,7 +148,8 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
     EV_TRACE << *noisePower << endl;
     EV_TRACE << "Noise power end" << endl;
     const auto& bandpassFilter = makeShared<Boxcar2DFunction<double, simsec, Hz>>(simsec(listening->getStartTime()), simsec(listening->getEndTime()), centerFrequency - bandwidth / 2, centerFrequency + bandwidth / 2, 1);
-    return new DimensionalNoise(listening->getStartTime(), listening->getEndTime(), centerFrequency, bandwidth, noisePower->multiply(bandpassFilter));
+    return new DimensionalNoise(listening->getStartTime(), listening->getEndTime(), centerFrequency, bandwidth,
+            noisePower->multiply(bandpassFilter), hasOverlappingReception);
 }
 
 const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *reception, const INoise *noise) const
@@ -106,11 +157,16 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *recep
     auto dimensionalReception = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
     auto dimensionalNoise = check_and_cast<const DimensionalNoise *>(noise);
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& noisePower = makeShared<AddedFunction<WpHz, Domain<simsec, Hz>>>(dimensionalReception->getPower(), dimensionalNoise->getPower());
-    return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getCenterFrequency(), dimensionalReception->getBandwidth(), noisePower);
+    return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getCenterFrequency(),
+            dimensionalReception->getBandwidth(), noisePower, dimensionalNoise->hasInterferingReceptions());
 }
 
 const ISnir *DimensionalMediumAnalogModel::computeSNIR(const IReception *reception, const INoise *noise) const
 {
+    auto dimensionalReception = check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
+    auto dimensionalNoise = check_and_cast<const DimensionalNoise *>(noise);
+    if (dimensionalReception->isChannelMatrixCombined() && dimensionalNoise->hasInterferingReceptions())
+        throw cRuntimeError("Selected-antenna MRC with overlapping receptions requires receive-antenna interference covariance, which is not available in the dimensional analog pipeline");
     return new DimensionalSnir(reception, noise);
 }
 
@@ -123,8 +179,14 @@ const IReception *DimensionalMediumAnalogModel::computeReception(const IRadio *r
     const Coord& receptionEndPosition = arrival->getEndPosition();
     const Quaternion& receptionStartOrientation = arrival->getStartOrientation();
     const Quaternion& receptionEndOrientation = arrival->getEndOrientation();
-    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& receptionPower = computeReceptionPower(receiverRadio, transmission, arrival);
-    auto receptionAnalogModel = new DimensionalReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(), transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(), transmissionAnalogModel->getCenterFrequency(), transmissionAnalogModel->getBandwidth(), receptionPower);
+    bool channelMatrixCombined = false;
+    Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> interferencePower;
+    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& receptionPower = computeReceptionPower(
+            receiverRadio, transmission, arrival, &channelMatrixCombined, &interferencePower);
+    auto receptionAnalogModel = new DimensionalReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(),
+            transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(),
+            transmissionAnalogModel->getCenterFrequency(), transmissionAnalogModel->getBandwidth(),
+            receptionPower, interferencePower, channelMatrixCombined);
     return new Reception(receiverRadio, transmission, receptionStartTime, receptionEndTime, receptionStartPosition, receptionEndPosition, receptionStartOrientation, receptionEndOrientation, receptionAnalogModel);
 }
 

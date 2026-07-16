@@ -16,8 +16,19 @@ namespace physicallayer {
 
 class INET_API DimensionalReceptionAnalogModel : public DimensionalSignalAnalogModel, public virtual IReceptionAnalogModel
 {
+  protected:
+    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> interferencePower;
+    const bool channelMatrixCombined;
+
   public:
-    DimensionalReceptionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
+    DimensionalReceptionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration,
+            const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth,
+            const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power,
+            const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& interferencePower = nullptr,
+            bool channelMatrixCombined = false);
+
+    const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& getInterferencePower() const { return interferencePower; }
+    bool isChannelMatrixCombined() const { return channelMatrixCombined; }
 };
 
 } // namespace physicallayer
@@ -25,4 +36,3 @@ class INET_API DimensionalReceptionAnalogModel : public DimensionalSignalAnalogM
 } // namespace inet
 
 #endif
-

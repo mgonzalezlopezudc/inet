@@ -18,7 +18,9 @@ module DimensionalMediumAnalogModel extends Module like IMediumAnalogModel
 {
     parameters:
         bool attenuateWithCenterFrequency = default(true); // True means frequency selectivity will always use the carrier frequency as opposed to using the frequency where the change in power occurs
+        bool enableChannelMatrixMrc = default(false); // Enables selected-transmit-antenna, single-stream MRC for matrix channel snapshots
+        int channelMatrixTransmitAntenna = default(0); // Explicit one-hot transmit precoder for the selected antenna
+        double channelMatrixFrequencyResolution @unit(Hz) = default(78.125kHz);
         @display("i=block/tunnel");
         @class(DimensionalMediumAnalogModel);
 }
-

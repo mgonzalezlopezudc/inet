@@ -21,12 +21,15 @@ class INET_API DimensionalNoise : public NarrowbandNoiseBase
 {
   protected:
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> power;
+    const bool containsInterferingReceptions;
 
   public:
-    DimensionalNoise(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power);
+    DimensionalNoise(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth,
+            const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power, bool hasInterferingReceptions = false);
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
     virtual const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& getPower() const { return power; }
+    bool hasInterferingReceptions() const { return containsInterferingReceptions; }
 
     virtual W computeMinPower(simtime_t startTime, simtime_t endTime) const override;
     virtual W computeMaxPower(simtime_t startTime, simtime_t endTime) const override;
@@ -37,4 +40,3 @@ class INET_API DimensionalNoise : public NarrowbandNoiseBase
 } // namespace inet
 
 #endif
-

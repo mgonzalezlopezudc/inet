@@ -7,10 +7,15 @@
 #ifndef __INET_CHANNELMATRIXCOMBINER_H
 #define __INET_CHANNELMATRIXCOMBINER_H
 
+#include <memory>
+
+#include "inet/common/math/IFunction.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IChannelMatrixResponse.h"
 
 namespace inet {
 namespace physicallayer {
+
+using namespace inet::math;
 
 /**
  * Single-stream MRC for spatially white, equal-variance, uncorrelated receive
@@ -22,6 +27,10 @@ class INET_API ChannelMatrixCombiner
     static double computeSingleStreamMrcPowerGain(const ChannelMatrix& channelMatrix);
     static double computeSingleStreamMrcPowerGain(const ChannelMatrix& channelMatrix,
             const std::vector<std::complex<double>>& transmitWeights);
+    static Ptr<const IFunction<double, Domain<simsec, Hz>>> createStaticSingleStreamMrcPowerGain(
+            const std::shared_ptr<const IChannelMatrixResponse>& channelMatrixResponse,
+            int selectedTransmitAntenna, simtime_t startTime, simtime_t endTime,
+            Hz centerFrequency, Hz bandwidth, Hz frequencyResolution);
 };
 
 } // namespace physicallayer

@@ -17,7 +17,11 @@ namespace physicallayer {
 
 /**
  * Channel snapshot extension carrying phase-preserving antenna-pair response
- * data in addition to the legacy scalar power gain.
+ * data. For matrix-aware consumers, this response is the complete small-scale
+ * channel gain and replaces getPowerGain() for the desired matrix-combined
+ * signal. The scalar function is a legacy fallback projection for scalar-only
+ * contexts such as energy detection; it is not an independent multiplicative
+ * term on the desired matrix response.
  */
 class INET_API IChannelMatrixSnapshot : public virtual IChannelSnapshot
 {

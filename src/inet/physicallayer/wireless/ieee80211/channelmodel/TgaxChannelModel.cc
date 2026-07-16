@@ -16,6 +16,7 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IDimensionalSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/signal/ChannelSnapshot.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
 
 namespace inet {
 
@@ -66,6 +67,7 @@ void TgaxChannelModel::initialize(int stage)
         environmentalSpeed = mps(par("environmentalSpeed"));
         numDopplerOscillators = par("numDopplerOscillators");
         timeResolution = simsec(par("timeResolution"));
+        spatialChannel = par("spatialChannel");
 
         if (rngStream < 0)
             throw cRuntimeError("TGax channel model RNG stream must be non-negative");
@@ -83,7 +85,11 @@ void TgaxChannelModel::initialize(int stage)
             throw cRuntimeError("TGax channel model must use at least one Doppler oscillator");
         if (!std::isfinite(timeResolution.get<s>().dbl()) || timeResolution <= simsec(0))
             throw cRuntimeError("TGax channel model time resolution must be finite and positive");
+        if (spatialChannel && timeVariation)
+            throw cRuntimeError("TGax spatial channel currently supports static fading only");
         profile.reset(new TgaxChannelProfile(TgaxChannelProfile::create(channelModel.c_str(), systemBandwidth)));
+        if (spatialChannel && !profile->hasSpatialMetadata())
+            throw cRuntimeError("TGax spatial channel is currently available only for Models B and D");
     }
 }
 
@@ -144,6 +150,39 @@ const TgaxSisoChannel *TgaxChannelModel::getOrCreateChannel(int transmitterRadio
     if (it == channels.end())
         it = channels.emplace(key, createChannel(key)).first;
     return it->second.get();
+}
+
+std::shared_ptr<const TgaxMimoChannel> TgaxChannelModel::createMatrixChannel(const LinkKey& key,
+        int numReceiveAntennas, int numTransmitAntennas) const
+{
+    auto seed = realizationSeed ^ ((uint64_t)(uint32_t)key.transmitterRadioId << 32) ^
+            (uint32_t)key.receiverRadioId;
+    return TgaxMimoChannel::create(*profile, referenceFrequency, numReceiveAntennas, numTransmitAntennas, seed);
+}
+
+std::shared_ptr<const TgaxMimoChannel> TgaxChannelModel::getOrCreateMatrixChannel(int transmitterRadioId,
+        int receiverRadioId, int numTransmitAntennas, int numReceiveAntennas) const
+{
+    auto key = makeLinkKey(transmitterRadioId, receiverRadioId);
+    auto reversed = reciprocal && transmitterRadioId > receiverRadioId;
+    auto canonicalNumReceiveAntennas = reversed ? numTransmitAntennas : numReceiveAntennas;
+    auto canonicalNumTransmitAntennas = reversed ? numReceiveAntennas : numTransmitAntennas;
+    auto it = matrixChannels.find(key);
+    if (it == matrixChannels.end())
+        it = matrixChannels.emplace(key, createMatrixChannel(key,
+                canonicalNumReceiveAntennas, canonicalNumTransmitAntennas)).first;
+    else if (it->second->getNumReceiveAntennas() != canonicalNumReceiveAntennas ||
+            it->second->getNumTransmitAntennas() != canonicalNumTransmitAntennas)
+        throw cRuntimeError("TGax matrix channel antenna dimensions changed for a cached radio link");
+    return reversed ? it->second->transposed() : it->second;
+}
+
+void TgaxChannelModel::validateSpatialTransmissionBand(Hz centerFrequency, Hz bandwidth) const
+{
+    if (centerFrequency != referenceFrequency)
+        throw cRuntimeError("TGax spatial channel reference frequency must match the transmission center frequency");
+    if (bandwidth > systemBandwidth)
+        throw cRuntimeError("TGax spatial channel transmission bandwidth exceeds the configured system bandwidth");
 }
 
 Ptr<const IFunction<double, Domain<simsec, Hz>>> TgaxChannelModel::createPowerGain(const TgaxSisoChannel& channel,
@@ -258,7 +297,9 @@ std::ostream& TgaxChannelModel::printToStream(std::ostream& stream, int level, i
                << EV_FIELD(environmentalSpeed)
                << EV_FIELD(numDopplerOscillators)
                << EV_FIELD(timeResolution)
-               << EV_FIELD(numChannels, channels.size());
+               << EV_FIELD(spatialChannel)
+               << EV_FIELD(numChannels, channels.size())
+               << EV_FIELD(numMatrixChannels, matrixChannels.size());
     return stream;
 }
 
@@ -272,6 +313,21 @@ Ptr<const IChannelSnapshot> TgaxChannelModel::computeChannel(const IRadio *recei
     auto dimensionalAnalogModel = dynamic_cast<const IDimensionalSignalAnalogModel *>(analogModel);
     if (narrowbandAnalogModel == nullptr || dimensionalAnalogModel == nullptr)
         throw cRuntimeError("TGax channel model requires a narrowband dimensional transmission");
+
+    if (spatialChannel) {
+        auto transmitter = transmission->getTransmitterRadio();
+        if (transmitter == nullptr)
+            throw cRuntimeError("TGax spatial channel requires the transmitter radio");
+        validateSpatialTransmissionBand(narrowbandAnalogModel->getCenterFrequency(), narrowbandAnalogModel->getBandwidth());
+        auto numTransmitAntennas = transmitter->getAntenna()->getNumAntennas();
+        auto numReceiveAntennas = receiver->getAntenna()->getNumAntennas();
+        if (numTransmitAntennas < 1 || numTransmitAntennas > 2 || numReceiveAntennas < 1 || numReceiveAntennas > 2)
+            throw cRuntimeError("TGax spatial integration currently supports one or two antennas per endpoint");
+        auto matrixChannel = getOrCreateMatrixChannel(transmission->getTransmitterRadioId(), receiver->getId(),
+                numTransmitAntennas, numReceiveAntennas);
+        auto identityPowerGain = makeShared<ConstantFunction<double, Domain<simsec, Hz>>>(1);
+        return Ptr<const IChannelSnapshot>(new ChannelMatrixSnapshot(identityPowerGain, matrixChannel));
+    }
 
     auto channel = getOrCreateChannel(transmission->getTransmitterRadioId(), receiver->getId());
     auto powerGain = createPowerGain(*channel, arrival->getStartTime(), arrival->getEndTime(),

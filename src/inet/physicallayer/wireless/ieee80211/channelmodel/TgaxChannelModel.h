@@ -15,6 +15,7 @@
 #include "inet/common/Module.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IWidebandChannelModel.h"
 #include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxChannelProfile.h"
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxMimoChannel.h"
 #include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxSisoChannel.h"
 
 namespace inet {
@@ -42,14 +43,21 @@ class INET_API TgaxChannelModel : public Module, public IWidebandChannelModel
     mps environmentalSpeed = mps(NaN);
     int numDopplerOscillators = 0;
     simsec timeResolution = simsec(0);
+    bool spatialChannel = false;
     std::unique_ptr<TgaxChannelProfile> profile;
     mutable std::map<LinkKey, std::shared_ptr<const TgaxSisoChannel>> channels;
+    mutable std::map<LinkKey, std::shared_ptr<const TgaxMimoChannel>> matrixChannels;
 
   protected:
     virtual void initialize(int stage) override;
     virtual LinkKey makeLinkKey(int transmitterRadioId, int receiverRadioId) const;
     virtual std::shared_ptr<const TgaxSisoChannel> createChannel(const LinkKey& key) const;
     virtual const TgaxSisoChannel *getOrCreateChannel(int transmitterRadioId, int receiverRadioId) const;
+    virtual std::shared_ptr<const TgaxMimoChannel> createMatrixChannel(const LinkKey& key,
+            int numReceiveAntennas, int numTransmitAntennas) const;
+    virtual std::shared_ptr<const TgaxMimoChannel> getOrCreateMatrixChannel(int transmitterRadioId,
+            int receiverRadioId, int numTransmitAntennas, int numReceiveAntennas) const;
+    virtual void validateSpatialTransmissionBand(Hz centerFrequency, Hz bandwidth) const;
     virtual Ptr<const IFunction<double, Domain<simsec, Hz>>> createPowerGain(const TgaxSisoChannel& channel,
             simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth) const;
 
