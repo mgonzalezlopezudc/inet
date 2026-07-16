@@ -57,7 +57,7 @@ class INET_API TgaxChannelModel : public Module, public IWidebandChannelModel
             int numReceiveAntennas, int numTransmitAntennas) const;
     virtual std::shared_ptr<const TgaxMimoChannel> getOrCreateMatrixChannel(int transmitterRadioId,
             int receiverRadioId, int numTransmitAntennas, int numReceiveAntennas) const;
-    virtual void validateSpatialTransmissionBand(Hz centerFrequency, Hz bandwidth) const;
+    virtual void validateTransmissionBand(Hz centerFrequency, Hz bandwidth) const;
     virtual Ptr<const IFunction<double, Domain<simsec, Hz>>> createPowerGain(const TgaxSisoChannel& channel,
             simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth) const;
 

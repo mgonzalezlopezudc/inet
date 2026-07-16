@@ -124,10 +124,10 @@ the TGac channel-model addendum. Each cached tap uses a deterministic
 at ±5 times its Doppler spread and sampled on a 1 ms piecewise-constant time
 grid. The configured equivalent environmental speed is `0.089 km/h`; at 5 GHz
 the source target is approximately `0.414 Hz` RMS Doppler and `800 ms` channel
-coherence time. Packet boundaries do not redraw the channel. Because Doppler
-scales with carrier frequency, `referenceFrequency` must match the radio's
-center frequency when time variation is enabled; the channel model rejects a
-mismatch instead of silently evolving at the wrong rate.
+coherence time. Packet boundaries do not redraw the channel. Doppler scales
+from the configured `referenceFrequency`; time-varying transmissions may use
+offset narrow RUs, but their complete passband must remain inside the system
+band centered on that reference frequency.
 
 `TgaxModelBSimoMrcOFDMA` opts into the static Model B matrix response. The AP
 has one antenna and each station has two, so downlink data uses a 2x1 SIMO
@@ -142,6 +142,9 @@ The reported MRC signal gain assumes spatially white, equal-variance receive
 noise. Its default `reject` interference mode remains deliberately
 noise-limited: SNIR evaluation rejects an overlapping reception rather than
 applying an incorrect scalar interference shortcut.
+Energy detection and other scalar-only consumers use a normalized unit-gain
+fallback for matrix snapshots; they do not project the realized matrix fading
+into CCA power.
 
 `TgaxModelBSimoLmmseInterferenceOFDMA` opts into covariance-aware L-MMSE
 combining and adds an independent cochannel 80 MHz 802.11ax transmitter. For

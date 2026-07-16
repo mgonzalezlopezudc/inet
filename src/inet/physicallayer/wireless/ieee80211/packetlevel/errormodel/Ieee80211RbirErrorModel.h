@@ -63,8 +63,8 @@ class INET_API Ieee80211RbirCalibration
 };
 
 /**
- * Opt-in SISO HE MCS 0-9 RBIR packet error model. Header and non-HE data
- * retain the inherited NIST behavior.
+ * Opt-in single-spatial-stream HE MCS 0-9 RBIR packet error model. Header and
+ * non-HE data retain the inherited NIST behavior.
  */
 class INET_API Ieee80211RbirErrorModel : public Ieee80211NistErrorModel
 {

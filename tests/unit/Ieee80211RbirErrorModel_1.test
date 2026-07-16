@@ -98,7 +98,7 @@ for (auto modulation : {Calibration::Modulation::BPSK, Calibration::Modulation::
     calibration.addRbirPoint(modulation, 10, 0.9);
 }
 calibration.addRbirPoint(Calibration::Modulation::QAM256, -10, 0.1);
-calibration.addRbirPoint(Calibration::Modulation::QAM256, 10, 8.0);
+calibration.addRbirPoint(Calibration::Modulation::QAM256, 10, 1.0);
 calibration.addPerPoint(Calibration::Coding::BCC, 32, 0, -10, 1);
 calibration.addPerPoint(Calibration::Coding::BCC, 32, 0, 0, 0.5);
 calibration.addPerPoint(Calibration::Coding::BCC, 32, 0, 10, 0);
@@ -171,7 +171,7 @@ expectRuntimeError([&] { calibration.addPerPoint(Calibration::Coding::BCC, 33, 0
         "invalid BCC reference length");
 expectRuntimeError([&] { calibration.addPerPoint(Calibration::Coding::BCC, 32, 10, 0, 0); },
         "MCS10 calibration");
-expectRuntimeError([&] { calibration.addRbirPoint(Calibration::Modulation::QAM256, 20, 8.1); },
+expectRuntimeError([&] { calibration.addRbirPoint(Calibration::Modulation::QAM256, 20, 1.1); },
         "RBIR above modulation capacity");
 expectRuntimeError([&] { calibration.computeEffectiveSnirDb(Calibration::Modulation::BPSK, {}); },
         "empty tone set");
@@ -212,7 +212,7 @@ auto model = check_and_cast<TestRbirErrorModel *>(getParentModule()->getSubmodul
 expectRuntimeError([&] { model->checkScope(10, Calibration::Coding::LDPC, 1, false); },
         "MCS10 HE evaluation");
 expectRuntimeError([&] { model->checkScope(0, Calibration::Coding::BCC, 2, false); },
-        "MIMO HE evaluation");
+        "multiple-spatial-stream HE evaluation");
 expectRuntimeError([&] { model->checkScope(0, Calibration::Coding::BCC, 1, true); },
         "DCM HE evaluation");
 model->checkStationary(2, 2);

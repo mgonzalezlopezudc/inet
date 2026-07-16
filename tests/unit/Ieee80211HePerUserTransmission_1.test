@@ -215,6 +215,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     ASSERT(resolved.guardInterval == HE_GI_0_8_US);
     ASSERT(resolved.duration == expected.duration);
     auto analog = check_and_cast<const IScalarSignalAnalogModel *>(transmission->getAnalogModel());
+    ASSERT(analog->getCenterFrequency() == rus[2].centerFrequency);
     ASSERT(analog->getBandwidth() == rus[2].bandwidth);
 
     delete transmission;

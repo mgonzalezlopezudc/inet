@@ -13,6 +13,7 @@
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
 
 
 namespace inet {
@@ -96,7 +97,10 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
                     static_cast<Ieee80211HeCoding>(heMuHeader->getCoding()));
             dataLength = 16 + selectedUser->psduLength.get<B>() * 8 + 6;
             double userSnir = snr;
-            if (heMuHeader->getMuMimo() && heMuHeader->getTotalNsts() > 0) {
+            auto dimensionalSnir = dynamic_cast<const DimensionalSnir *>(snir);
+            bool channelMatrixLmmse = dimensionalSnir != nullptr && dimensionalSnir->isChannelMatrixLmmse();
+            if (heMuHeader->getMuMimo() && heMuHeader->getTotalNsts() > 0 &&
+                    !channelMatrixLmmse) {
                 double desiredNsts = selectedUser->numberOfSpatialStreams;
                 double totalNsts = heMuHeader->getTotalNsts();
                 double signalShare = desiredNsts / totalNsts;

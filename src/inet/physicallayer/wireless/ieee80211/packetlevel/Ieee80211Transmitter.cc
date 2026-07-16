@@ -303,17 +303,12 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         // Clause 27.3.2.2 fixes HE subcarrier spacing at 78.125 kHz. The PHY
         // header carries canonical RU tone size/offset values; these are
         // resolved into the calculator's RU model before duration validation.
-        constexpr double HE_TONE_SPACING = 78125;
+        int channelTones = getHeChannelToneCount(transmissionBandwidth);
         std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
         for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i) {
             const auto& user = heMuHeader->getUsers(i);
-            Ieee80211HeRu ru;
-            ru.index = user.ruIndex;
-            ru.toneSize = std::max<int>(user.ruToneSize, 26);
-            ru.toneOffset = user.ruToneOffset;
-            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
-            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
-            ru.bandwidth = Hz(ru.toneSize * HE_TONE_SPACING);
+            auto ru = makeHeRu(centerFrequency, channelTones, user.ruIndex,
+                    std::max<int>(user.ruToneSize, 26), user.ruToneOffset);
             Ieee80211HeUserPhyParameters requested;
             requested.ru = ru;
             requested.mcs = user.mcs;
@@ -349,10 +344,10 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             // packet-level analog model narrows the transmit center
             // frequency/bandwidth to that RU for single-user UL-TB transmissions.
             const auto& user = heMuHeader->getUsers(0);
-            int channelTones = getHeChannelToneCount(transmissionBandwidth);
-            transmissionBandwidth = Hz(user.ruToneSize * HE_TONE_SPACING);
-            double centerTone = user.ruToneOffset + user.ruToneSize / 2.0 - channelTones / 2.0;
-            transmissionCenterFrequency = centerFrequency + Hz(centerTone * HE_TONE_SPACING);
+            auto ru = makeHeRu(centerFrequency, channelTones,
+                    user.ruIndex, user.ruToneSize, user.ruToneOffset);
+            transmissionBandwidth = ru.bandwidth;
+            transmissionCenterFrequency = ru.centerFrequency;
             if (auto request = packet->findTag<Ieee80211HeMuReq>())
                 if (!std::isnan(request->getTransmitPower().get()))
                     transmissionPower = request->getTransmitPower();
