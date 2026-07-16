@@ -17,6 +17,8 @@ namespace physicallayer {
 
 using namespace inet::math;
 
+class ChannelMatrixSignal;
+
 /**
  * Single-stream MRC for spatially white, equal-variance, uncorrelated receive
  * noise. Multi-transmit-antenna use requires an explicit unit-norm precoder.
@@ -36,6 +38,12 @@ class INET_API ChannelMatrixCombiner
             const std::shared_ptr<const IChannelMatrixResponse>& channelMatrixResponse,
             int selectedTransmitAntenna, simtime_t startTime, simtime_t endTime,
             Hz centerFrequency, Hz bandwidth, Hz frequencyResolution);
+    static Ptr<const IFunction<double, Domain<simsec, Hz>>> createStaticSingleStreamLmmseSnir(
+            const std::shared_ptr<const ChannelMatrixSignal>& desiredSignal,
+            const std::vector<std::shared_ptr<const ChannelMatrixSignal>>& interferingSignals,
+            const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& backgroundNoisePower,
+            simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth,
+            simtime_t timeResolution, Hz frequencyResolution);
 };
 
 } // namespace physicallayer

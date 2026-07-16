@@ -107,6 +107,46 @@ expectRuntimeError([&] {
 expectRuntimeError([&] {
     ChannelMatrixSignal(unitInputPower, simoResponse, {{2, 0}});
 }, "matrix signal weight norm");
+
+auto desiredLmmseResponse = std::make_shared<const ConstantChannelMatrixResponse>(
+        ChannelMatrix(2, 1, {{1, 0}, {1, 0}}));
+auto interferingLmmseResponse = std::make_shared<const ConstantChannelMatrixResponse>(
+        ChannelMatrix(2, 1, {{1, 0}, {0, 1}}));
+auto desiredLmmseSignal = std::make_shared<const ChannelMatrixSignal>(unitInputPower,
+        desiredLmmseResponse, std::vector<std::complex<double>>{{1, 0}});
+auto lmmseStartTime = SimTime(1, SIMTIME_S);
+auto lmmseEndTime = lmmseStartTime + SimTime(4, SIMTIME_US);
+auto lmmseCenterFrequency = GHz(5);
+auto lmmseBandwidth = MHz(1);
+auto transientInterferencePower = makeShared<Boxcar2DFunction<WpHz, simsec, Hz>>(
+        simsec(lmmseStartTime), simsec(lmmseStartTime + SimTime(2, SIMTIME_US)),
+        lmmseCenterFrequency - lmmseBandwidth / 2, lmmseCenterFrequency + lmmseBandwidth / 2, WpHz(3));
+auto interferingLmmseSignal = std::make_shared<const ChannelMatrixSignal>(transientInterferencePower,
+        interferingLmmseResponse, std::vector<std::complex<double>>{{1, 0}});
+auto lmmseSnir = ChannelMatrixCombiner::createStaticSingleStreamLmmseSnir(
+        desiredLmmseSignal, {interferingLmmseSignal}, unitInputPower,
+        lmmseStartTime, lmmseEndTime, lmmseCenterFrequency, lmmseBandwidth,
+        SimTime(1, SIMTIME_US), kHz(500));
+ASSERT(std::abs(lmmseSnir->getValue(Point<simsec, Hz>(
+        simsec(lmmseStartTime + SimTime(500, SIMTIME_NS)), lmmseCenterFrequency)) - 8.0 / 7) < 1e-12);
+ASSERT(std::abs(lmmseSnir->getValue(Point<simsec, Hz>(
+        simsec(lmmseStartTime + SimTime(2500, SIMTIME_NS)), lmmseCenterFrequency)) - 2) < 1e-12);
+auto lmmseInterval = Interval<simsec, Hz>(
+        Point<simsec, Hz>(simsec(lmmseStartTime), lmmseCenterFrequency - lmmseBandwidth / 2),
+        Point<simsec, Hz>(simsec(lmmseEndTime), lmmseCenterFrequency + lmmseBandwidth / 2),
+        0b11, 0b00, 0b00);
+ASSERT(std::abs(lmmseSnir->getMin(lmmseInterval) - 8.0 / 7) < 1e-12);
+ASSERT(std::abs(lmmseSnir->getMax(lmmseInterval) - 2) < 1e-12);
+ASSERT(std::abs(lmmseSnir->getMean(lmmseInterval) - 11.0 / 7) < 1e-12);
+ASSERT(lmmseSnir->getValue(Point<simsec, Hz>(simsec(lmmseStartTime - SimTime(1, SIMTIME_US)),
+        lmmseCenterFrequency)) == 0);
+ASSERT(lmmseSnir->getValue(Point<simsec, Hz>(simsec(lmmseStartTime),
+        lmmseCenterFrequency + lmmseBandwidth)) == 0);
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::createStaticSingleStreamLmmseSnir(desiredLmmseSignal,
+            {interferingLmmseSignal}, nullptr, lmmseStartTime, lmmseEndTime,
+            lmmseCenterFrequency, lmmseBandwidth, SimTime(1, SIMTIME_US), kHz(500));
+}, "L-MMSE background noise");
 auto simoGain = ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(simoResponse, 0,
         SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20), MHz(1));
 ASSERT(std::abs(simoGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5))) - 169) < 1e-14);

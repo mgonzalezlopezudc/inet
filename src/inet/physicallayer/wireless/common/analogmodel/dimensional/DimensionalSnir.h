@@ -18,6 +18,7 @@ namespace physicallayer {
 class INET_API DimensionalSnir : public SnirBase
 {
   protected:
+    const Ptr<const IFunction<double, Domain<simsec, Hz>>> snir;
     mutable double minSNIR;
     mutable double maxSNIR;
     mutable double meanSNIR;
@@ -28,7 +29,8 @@ class INET_API DimensionalSnir : public SnirBase
     virtual double computeMean() const;
 
   public:
-    DimensionalSnir(const IReception *reception, const INoise *noise);
+    DimensionalSnir(const IReception *reception, const INoise *noise,
+            const Ptr<const IFunction<double, Domain<simsec, Hz>>>& snir = nullptr);
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
@@ -44,4 +46,3 @@ class INET_API DimensionalSnir : public SnirBase
 } // namespace inet
 
 #endif
-

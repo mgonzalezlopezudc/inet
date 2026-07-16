@@ -13,10 +13,13 @@ and opt-in RBIR sampling of a narrow HE trigger-based uplink RU.
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
 #include "inet/physicallayer/wireless/common/signal/Interference.h"
 #include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
 #include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
@@ -33,6 +36,7 @@ import inet.networklayer.common.InterfaceTable;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadio;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
 import inet.physicallayer.wireless.ieee80211.channelmodel.TgaxChannelModel;
+import inet.physicallayer.wireless.common.analogmodel.dimensional.DimensionalMediumAnalogModel;
 
 module DeterministicTgaxChannelModel extends TgaxChannelModel
 {
@@ -44,6 +48,12 @@ module TgaxInspectableDimensionalRadioMedium extends Ieee80211DimensionalRadioMe
 {
     parameters:
         @class(TgaxInspectableDimensionalRadioMedium);
+}
+
+module TgaxInspectableDimensionalMediumAnalogModel extends DimensionalMediumAnalogModel
+{
+    parameters:
+        @class(TgaxInspectableDimensionalMediumAnalogModel);
 }
 
 module TestRbirErrorModel
@@ -77,7 +87,7 @@ network TestNetwork
             parameters:
                 sameTransmissionStartTimeCheck = "ignore";
                 signalAnalogRepresentation = "scalar";
-                analogModel.typename = "DimensionalMediumAnalogModel";
+                analogModel.typename = "TgaxInspectableDimensionalMediumAnalogModel";
                 backgroundNoise.typename = "IsotropicDimensionalBackgroundNoise";
                 analogModel.enableChannelMatrixMrc = true;
                 analogModel.channelMatrixTransmitAntenna = 0;
@@ -125,6 +135,12 @@ class TgaxInspectableDimensionalRadioMedium : public Ieee80211RadioMedium
     const INoise *testComputeNoise(const IListening *listening, const IInterference *interference) const { return analogModel->computeNoise(listening, interference); }
     bool testIsInCommunicationRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInCommunicationRange(transmission, startPosition, endPosition); }
     bool testIsInInterferenceRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInInterferenceRange(transmission, startPosition, endPosition); }
+};
+
+class TgaxInspectableDimensionalMediumAnalogModel : public DimensionalMediumAnalogModel
+{
+  public:
+    void setChannelMatrixLmmse(bool enabled) { enableChannelMatrixLmmse = enabled; }
 };
 
 class TgaxDimensionalMockNicModule : public NetworkInterface
@@ -201,6 +217,7 @@ class TestRbirErrorModel : public Ieee80211RbirErrorModel
 };
 
 Define_Module(TgaxInspectableDimensionalRadioMedium);
+Define_Module(TgaxInspectableDimensionalMediumAnalogModel);
 Define_Module(TgaxDimensionalMockNicModule);
 Define_Module(DeterministicTgaxChannelModel);
 Define_Module(TestRbirErrorModel);
@@ -378,6 +395,7 @@ BandListening spatialListening(rxRadio, matrixReception->getStartTime(), matrixR
         Coord::ZERO, Coord::ZERO, matrixReceptionAnalogModel->getCenterFrequency(), matrixReceptionAnalogModel->getBandwidth());
 auto spatialNoise = check_and_cast<const DimensionalNoise *>(medium->testComputeNoise(&spatialListening, &spatialInterference));
 ASSERT(spatialNoise->getBackgroundNoisePower() != nullptr);
+ASSERT(!spatialNoise->hasNonChannelMatrixInterference());
 ASSERT(spatialNoise->getBackgroundNoisePower()->getValue(matrixSamplePoint) == WpHz(0.5));
 ASSERT(spatialNoise->getChannelMatrixInterferers().size() == 1);
 ASSERT(spatialNoise->getChannelMatrixInterferers()[0]->computeEffectiveChannel(
@@ -397,6 +415,75 @@ catch (const cRuntimeError&) {
     rejectedSpatialInterference = true;
 }
 ASSERT(rejectedSpatialInterference);
+
+auto dimensionalMediumAnalogModel = const_cast<TgaxInspectableDimensionalMediumAnalogModel *>(
+        check_and_cast<const TgaxInspectableDimensionalMediumAnalogModel *>(medium->getAnalogModel()));
+dimensionalMediumAnalogModel->setChannelMatrixLmmse(true);
+auto desiredInputPower = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(1));
+auto interferingInputPower = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(3));
+auto desiredResponse = std::make_shared<const ConstantChannelMatrixResponse>(
+        ChannelMatrix(2, 1, {{1, 0}, {1, 0}}));
+auto interferingResponse = std::make_shared<const ConstantChannelMatrixResponse>(
+        ChannelMatrix(2, 1, {{1, 0}, {0, 1}}));
+auto desiredSignal = std::make_shared<const ChannelMatrixSignal>(desiredInputPower, desiredResponse,
+        std::vector<std::complex<double>>{{1, 0}});
+auto interferingSignal = std::make_shared<const ChannelMatrixSignal>(interferingInputPower, interferingResponse,
+        std::vector<std::complex<double>>{{1, 0}});
+auto desiredCombinedPower = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(2));
+auto canonicalStartTime = matrixReception->getStartTime();
+auto canonicalEndTime = canonicalStartTime + SimTime(10, SIMTIME_US);
+auto canonicalCenterFrequency = GHz(5);
+auto canonicalBandwidth = MHz(1);
+auto canonicalAnalogModel = new DimensionalReceptionAnalogModel(
+        SimTime(0), SimTime(0), canonicalEndTime - canonicalStartTime,
+        canonicalCenterFrequency, canonicalBandwidth, desiredCombinedPower, desiredCombinedPower, true, desiredSignal);
+auto canonicalReception = new Reception(rxRadio, matrixTransmission, canonicalStartTime, canonicalEndTime,
+        matrixReception->getStartPosition(), matrixReception->getEndPosition(),
+        matrixReception->getStartOrientation(), matrixReception->getEndOrientation(), canonicalAnalogModel);
+auto aggregateNoiseSentinel = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(7));
+auto whiteBackgroundNoise = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(1));
+DimensionalNoise canonicalNoise(canonicalStartTime, canonicalEndTime, canonicalCenterFrequency, canonicalBandwidth,
+        aggregateNoiseSentinel, true, whiteBackgroundNoise, {interferingSignal});
+auto canonicalSnir = dimensionalMediumAnalogModel->computeSNIR(canonicalReception, &canonicalNoise);
+auto canonicalDimensionalSnir = check_and_cast<const DimensionalSnir *>(canonicalSnir);
+auto canonicalPoint = Point<simsec, Hz>(simsec(canonicalStartTime + SimTime(5, SIMTIME_US)), canonicalCenterFrequency);
+auto canonicalLmmseSinr = canonicalDimensionalSnir->getSnir()->getValue(canonicalPoint);
+ASSERT(std::abs(canonicalLmmseSinr - 8.0 / 7) < 1e-12);
+ASSERT(std::abs(canonicalDimensionalSnir->getMin() - 8.0 / 7) < 1e-12);
+ASSERT(std::abs(canonicalDimensionalSnir->getMax() - 8.0 / 7) < 1e-12);
+ASSERT(std::abs(canonicalDimensionalSnir->getMean() - 8.0 / 7) < 1e-12);
+ASSERT(std::abs(canonicalLmmseSinr - 0.5) > 0.1);
+ASSERT(std::abs(canonicalLmmseSinr - 2.0 / 7) > 0.1);
+delete canonicalSnir;
+
+DimensionalNoise canonicalNoiseOnly(canonicalStartTime, canonicalEndTime, canonicalCenterFrequency,
+        canonicalBandwidth, whiteBackgroundNoise, false, whiteBackgroundNoise);
+auto canonicalNoiseOnlySnir = dimensionalMediumAnalogModel->computeSNIR(canonicalReception, &canonicalNoiseOnly);
+ASSERT(std::abs(canonicalNoiseOnlySnir->getMean() - 2) < 1e-12);
+delete canonicalNoiseOnlySnir;
+
+DimensionalNoise mixedMetadataNoise(canonicalStartTime, canonicalEndTime, canonicalCenterFrequency,
+        canonicalBandwidth, aggregateNoiseSentinel, true, whiteBackgroundNoise, {interferingSignal}, true);
+bool rejectedMixedMetadata = false;
+try {
+    (void)dimensionalMediumAnalogModel->computeSNIR(canonicalReception, &mixedMetadataNoise);
+}
+catch (const cRuntimeError&) {
+    rejectedMixedMetadata = true;
+}
+ASSERT(rejectedMixedMetadata);
+DimensionalNoise missingMetadataNoise(canonicalStartTime, canonicalEndTime, canonicalCenterFrequency,
+        canonicalBandwidth, aggregateNoiseSentinel, true, whiteBackgroundNoise);
+bool rejectedMissingMetadata = false;
+try {
+    (void)dimensionalMediumAnalogModel->computeSNIR(canonicalReception, &missingMetadataNoise);
+}
+catch (const cRuntimeError&) {
+    rejectedMissingMetadata = true;
+}
+ASSERT(rejectedMissingMetadata);
+delete canonicalReception;
+dimensionalMediumAnalogModel->setChannelMatrixLmmse(false);
 delete matrixReception;
 medium->testRemoveTransmission(matrixTransmission);
 
