@@ -136,12 +136,28 @@ and acknowledgment path, a station transmits from antenna 0 through the 1x2
 reverse channel. This selected-antenna rule is an explicit one-hot precoder;
 the current packet-level transmitter does not otherwise expose an antenna
 mapping. Existing TGax configurations leave matrix emission and combining
-disabled and therefore retain their original scalar SISO behavior.
+disabled unless they extend a selected-antenna matrix control, and therefore
+retain their original scalar SISO behavior.
 The reported MRC signal gain assumes spatially white, equal-variance receive
-noise. Because the current analog pipeline does not retain receive-antenna
-interference covariance, it rejects SNIR evaluation when another reception
-overlaps a matrix-combined reception instead of applying an incorrect combiner.
-This mode therefore does not model spatial interference suppression.
+noise. Its default `reject` interference mode remains deliberately
+noise-limited: SNIR evaluation rejects an overlapping reception rather than
+applying an incorrect scalar interference shortcut.
+
+`TgaxModelBSimoLmmseInterferenceOFDMA` opts into covariance-aware L-MMSE
+combining and adds an independent cochannel 80 MHz 802.11ax transmitter. For
+each time-frequency cell, the dimensional analog model retains the desired and
+interfering effective channel vectors and computes
+`R = N0 I + sum(Pk gk gk^H)` followed by `Ps h^H R^-1 h`. Background noise is
+modeled as spatially white with equal power on each receive antenna. The
+piecewise-constant covariance grid defaults to 10 us by 78.125 kHz and is
+bounded to two million cells per reception. Mixed scalar and matrix channel
+metadata is rejected instead of being combined ambiguously.
+
+The legacy ideal HE-TB spatial-separation shortcut is preserved for the
+default, scalar, and matrix-MRC modes. When L-MMSE is explicitly enabled and
+the desired reception has matrix metadata, same-trigger, same-RU users on
+disjoint stream ranges are retained as covariance terms so the combiner can
+evaluate their actual spatial separation.
 
 `TgaxModelBRbirOFDMA` additionally selects `Ieee80211RbirErrorModel`. It must
 be given the Appendix-3 Mean RBIR and PER curves from a user-supplied
@@ -162,11 +178,10 @@ channels. The profile catalog preserves the visually verified TGn Appendix C
 cluster AoA/AoD/angular-spread metadata for Models B and D. Their opt-in matrix
 path supports one or two half-wavelength-ULA antennas per endpoint, ordinary-
 transpose reciprocity, an explicit selected transmit antenna, and single-stream
-MRC. It is not a general spatial-stream mapper. General L-MMSE still requires
-per-receive-antenna interference/noise covariance that the current scalar
-analog pipeline does not retain; a scalar Frobenius-gain shortcut would not be
-equivalent. Outdoor UMi median
-LOS/NLOS path loss is available as
+MRC or L-MMSE combining. It is not a general spatial-stream mapper: multi-stream
+precoders and decoders, colored receiver noise, channel-estimation error,
+timing/CFO error, and time-varying matrix channels are not modeled. Outdoor UMi
+median LOS/NLOS path loss is available as
 `TgaxUmiPathLoss`, but fixed outdoor UMi delay profiles are not exposed: the
 primary ITU-R table contains an internally inconsistent printed delay row, so
 the implementation does not silently guess a correction.
@@ -269,6 +284,15 @@ Run the static selected-antenna/SIMO-MRC variant:
 ../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
   -c TgaxModelBSimoMrcOFDMA -r 0 --seed-set=0 \
   --result-dir=results/tgax/model-b/simo-mrc/seed0
+```
+
+Run the covariance-aware SIMO L-MMSE variant with a cochannel 802.11ax
+interferer:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c TgaxModelBSimoLmmseInterferenceOFDMA -r 0 --seed-set=0 \
+  --result-dir=results/tgax/model-b/simo-lmmse-interference/seed0
 ```
 
 Run the calibrated RBIR variant after extracting the user-supplied workbook:
