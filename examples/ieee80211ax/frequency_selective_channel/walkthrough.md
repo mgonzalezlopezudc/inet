@@ -1,0 +1,221 @@
+# Walkthrough: 802.11ax on frequency-selective channels
+
+This example shows why assigning users to frequency-domain resource units can
+be useful when an otherwise wide channel is not equally usable at every
+frequency. It uses the dimensional radio model, which retains power spectral
+density as a function of frequency. A scalar radio can tell that interference
+exists, but it cannot preserve which part of a channel is impaired.
+
+The central lesson is deliberately qualified:
+
+- HE OFDMA can keep useful work on clean RUs while another part of the channel
+  has poor SNIR;
+- HE preamble puncturing can avoid an impaired secondary 20 MHz subchannel;
+- neither mechanism guarantees higher throughput in every load, seed, or
+  scheduler state; and
+- common signaling, acknowledgments, Block Ack setup, contention, and a poor
+  allocation decision can still make the whole exchange fail.
+
+The last two points matter. This is a controlled experiment, not a claim that
+"OFDMA always wins."
+
+## Topology and traffic
+
+`FrequencySelectiveChannelNetwork` contains a wired server, one AP, and four
+equidistant stations. A conditional legacy interferer is 21.2 m from the AP.
+The symmetric station geometry removes distance as the intended explanation
+for different reception quality.
+
+Four short, staggered warm-up bursts establish Block Ack state before measured
+traffic starts at `0.3 s`. Each measured flow sends a 100-byte UDP packet every
+`0.25 ms`, for `12.8 Mbps` aggregate offered load. The AP is capped at HE MCS 1
+so rate-selection changes do not hide the frequency-allocation effect.
+
+The 40 MHz experiment is the clearest frequency-selective comparison:
+
+| Signal | Frequency range | Role |
+|---|---:|---|
+| HE BSS | 5.16–5.20 GHz | 40 MHz channel centered at 5.18 GHz |
+| Lower-half interferer | 5.16–5.18 GHz | legacy 20 MHz channel centered at 5.17 GHz |
+| Upper-half interferer | 5.18–5.20 GHz | legacy 20 MHz channel centered at 5.19 GHz |
+
+The interferer sends 1000-byte frames with exponentially distributed `0.5 ms`
+mean intervals. It and all its submodules use RNG stream 1; the BSS remains on
+RNG stream 0. The silent controls instantiate the identical interferer but
+start its application at `10 s`, after the simulation limit. This preserves
+the topology and RNG mapping between clean and impaired runs.
+
+## Why the dimensional model is essential
+
+The INI explicitly instantiates `Ieee80211DimensionalRadioMedium` and
+`Ieee80211DimensionalRadio`. For HE MU reception, the radio medium resolves the
+STA's RU from the HE PHY header, creates a reception centered on that RU, and
+band-pass filters dimensional signal and noise power to the RU bandwidth.
+
+Consequently, a legacy transmission overlapping only the lower 20 MHz half is
+interference for lower-half RUs, not automatically for upper-half RUs. In a
+scalar model, the total receive power has no frequency axis from which to make
+that distinction.
+
+The receiver energy-detection threshold is intentionally set to `-40 dBm`.
+This keeps the experiment focused on PHY decoding and per-RU SNIR instead of
+letting CCA defer every AP transmission as soon as the interferer is present.
+Do not reuse that threshold for a regulatory CCA or spatial-reuse study.
+
+## Scenario catalogue
+
+### Controlled flat references
+
+| Configuration | Width | Access method |
+|---|---:|---|
+| `FlatChannelOFDMA` / `FlatChannelSU` | 80 MHz | HE OFDMA / matched HE SU |
+| `FortyMHzFlatOFDMA` / `FortyMHzFlatSU` | 40 MHz | HE OFDMA / matched HE SU |
+| `TwentyMHzFlatOFDMA` / `TwentyMHzFlatSU` | 20 MHz | HE OFDMA / matched HE SU |
+
+The 40 MHz comparison with an identical but silent interferer is stricter:
+
+- `FortyMHzSilentInterfererOFDMA`
+- `FortyMHzSilentInterfererSU`
+
+### Partially overlapping legacy channels
+
+These are the main didactic scenarios:
+
+| Configuration pair | Impaired part of the 40 MHz HE channel |
+|---|---|
+| `FortyMHzLowerHalfOFDMA` / `FortyMHzLowerHalfSU` | lower 20 MHz |
+| `FortyMHzUpperHalfOFDMA` / `FortyMHzUpperHalfSU` | upper 20 MHz |
+
+Moving the interferer from the lower to the upper half is a useful symmetry
+check. The aggregate behavior should not depend on calling one side "lower";
+the RU tone offsets should move with the impaired band.
+
+### Synthetic frequency-domain SNIR profiles
+
+`DimensionalBackgroundNoise` provides a second way to construct a controlled
+frequency-selective impairment. The four pairs
+`Lower20MHzNotch*`, `MiddleLower20MHzNotch*`,
+`MiddleUpper20MHzNotch*`, and `Upper20MHzNotch*` move a high-noise 20 MHz slice
+across an 80 MHz channel. The profile uses absolute 5.16–5.24 GHz coordinates,
+so it remains fixed when a receiver narrows its listening band to an RU.
+
+`NotchDepthSweepOFDMA` and `NotchDepthSweepSU` sweep total power through
+`-110`, `-90`, `-75`, and `-65 dBm`. The severe points may also prevent
+wideband SU setup/control exchanges; that is an intended warning that data-RU
+isolation does not isolate every part of the protocol.
+
+These profiles model frequency-selective noise/SNIR, not a multipath impulse
+response or coherence bandwidth.
+
+### 80 MHz puncturing and time variation
+
+The synthetic puncturing trio uses the same backlog-aware scheduler:
+
+- `PuncturingCleanOFDMA`
+- `PuncturingImpairedUnpunctured`
+- `PuncturingImpairedPunctured`
+
+The punctured case applies mask `0100` and avoids the second 20 MHz subchannel.
+When an HE MU transmission occurs, that mask is represented as numeric value
+`2` in the `hePuncturedSubchannelMask` vector.
+
+The real-interferer variants are:
+
+- `NarrowbandInterferenceSU`
+- `NarrowbandInterferenceOFDMA`
+- `NarrowbandInterferencePunctured`
+- `TransientInterferenceSU`
+- `TransientInterferenceOFDMA`
+- `TransientInterferenceStaticPuncturing`
+- `TransientInterferenceScriptedDynamicPuncturing`
+
+The transient interferer is active from `0.5 s` to `0.85 s`. "Scripted
+dynamic" means INET changes a predetermined mask at those times; it does not
+claim to implement autonomous channel sounding, classification, or an
+802.11-mandated adaptation algorithm. Compare throughput vectors before,
+during, and after the interval. Static puncturing pays a capacity cost outside
+the impaired interval, while scripted puncturing can incur transition and
+scheduler costs.
+
+## Verified five-seed result
+
+The following counts are full-run application packets received by all four
+sinks, summed per seed. The `0.25 s` warm-up period excludes the staggered
+setup bursts from recorded statistics. Runs use seed sets 0 through 4, the
+release model library, run number 0, and the checked-in `1.2 s` limit.
+
+| Configuration | Seed 0 | Seed 1 | Seed 2 | Seed 3 | Seed 4 | Mean |
+|---|---:|---:|---:|---:|---:|---:|
+| Silent control, OFDMA | 4297 | 2149 | 4056 | 3050 | 2112 | 3132.8 |
+| Silent control, SU | 2162 | 13481 | 3802 | 4690 | 3773 | 5581.6 |
+| Lower-half interference, OFDMA | 3916 | 2793 | 1649 | 1406 | 1473 | 2247.4 |
+| Lower-half interference, SU | 1337 | 5424 | 941 | 1795 | 624 | 2024.2 |
+
+The clean controls are an important counterexample: SU delivers more on
+average when the entire 40 MHz channel is usable. Under half-band interference,
+SU loses about 64% of its clean mean, while OFDMA loses about 28%. OFDMA's
+impaired-channel mean is about 11% higher than SU's (`2247.4` versus `2024.2`).
+
+The seed spread is large and the ordering is not unanimous. That variability
+is itself didactic: random contention, interference overlap, Block Ack state,
+and RU scheduling all matter. The defensible conclusion is that frequency
+partitioning makes the OFDMA case substantially more resilient in this
+experiment, not that OFDMA must win every run.
+
+In lower-half OFDMA seed 0, the AP recorded 892 RU user entries. RU sizes were
+106 or 242 tones and tone offsets ranged from 0 to 378, confirming real HE MU
+frequency allocations rather than a configuration label. Use the per-host RU
+vectors together with sink counts; aggregate throughput alone does not prove
+the mechanism.
+
+## Running the scenarios
+
+From this directory, run one configuration and seed with:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c FortyMHzLowerHalfOFDMA -r 0 --seed-set=0 \
+  --result-dir=results/forty-lower/ofdma/seed0
+```
+
+Repeat seed sets 0 through 4 for the four rows in the table. Every verified
+run exited successfully at the simulation-time limit and produced `.sca`,
+`.vec`, and `.vci` files.
+
+List application counts:
+
+```sh
+opp_scavetool query -s -l \
+  -f 'module =~ **.host[*].app[0] AND name =~ packetReceived:count' \
+  results/forty-lower/*/seed*/*.sca
+```
+
+Verify actual RU sizes, positions, and puncturing masks:
+
+```sh
+opp_scavetool query -v -l \
+  -f 'name =~ heRuToneSize:vector OR name =~ heRuToneOffset:vector OR name =~ hePuncturedSubchannelMask:vector' \
+  results/forty-lower/*/seed*/*.vec
+```
+
+For transient configurations, export only the application throughput and RU
+mask vectors, then compare `0.3–0.5 s`, `0.5–0.85 s`, and `0.85–1.2 s` rather
+than collapsing the entire run into one number.
+
+## Standards baseline and model boundary
+
+IEEE Std 802.11-2024 provides the protocol baseline:
+
+- Clause 26.5.1.1 states that HE DL MU operation allows simultaneous AP
+  transmission to one or more non-AP STAs using DL OFDMA, DL MU-MIMO, or both.
+- Clause 27.3.2.5 defines HE MU resource indication and user identification;
+  HE-SIG-B carries user allocation for one or more 20 MHz subchannels.
+- The channel-access rules associated with Table 10-17 permit specified 80 MHz
+  HE MU puncturing patterns when the unpunctured 20 MHz subchannels satisfy the
+  required idle conditions.
+
+The standard does not define INET's `fBW`, backlog-aware scheduler, synthetic
+noise profile, scripted mask timing, or the chosen CCA threshold. The model
+also assumes ideal non-overlapping RU isolation and does not model adjacent-RU
+leakage, oscillator error, or a waveform-level multipath channel. Those are
+model boundaries, not 802.11 guarantees.
