@@ -1,0 +1,110 @@
+%description:
+This test checks the TGax indoor median path loss for Models B and D.
+
+%includes:
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxIndoorPathLoss.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TestableTgaxIndoorPathLoss : public TgaxIndoorPathLoss
+{
+  public:
+    void setChannelModel(const char *channelModel) { configureChannelModel(channelModel); }
+    m getBreakpointDistance() const { return breakpointDistance; }
+};
+
+static void checkClose(double actual, double expected, double relativeTolerance, const char *message)
+{
+    auto scale = std::max(std::abs(expected), 1e-300);
+    if (std::abs(actual - expected) > relativeTolerance * scale)
+        throw cRuntimeError("%s: actual = %.17g, expected = %.17g", message, actual, expected);
+}
+
+static void checkRangeClose(m actual, m expected, const char *message)
+{
+    checkClose(actual.get<m>(), expected.get<m>(), 1e-12, message);
+}
+
+template<typename Function>
+static void expectRuntimeError(Function function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+static void testChannelModel(const char *channelModel, m expectedBreakpointDistance, double expectedBreakpointLoss, double expectedFarLoss)
+{
+    const mps propagationSpeed(299792458);
+    const Hz frequency = GHz(5.18);
+    TestableTgaxIndoorPathLoss pathLoss;
+    pathLoss.setChannelModel(channelModel);
+
+    ASSERT(pathLoss.getBreakpointDistance() == expectedBreakpointDistance);
+
+    checkClose(pathLoss.computePathLoss(propagationSpeed, frequency, m(1)), 2.12110495413882e-5, 1e-12,
+            "free-space region");
+
+    checkClose(pathLoss.computePathLoss(propagationSpeed, frequency, expectedBreakpointDistance), expectedBreakpointLoss, 1e-12,
+            "breakpoint");
+
+    checkClose(pathLoss.computePathLoss(propagationSpeed, frequency, 2.0 * expectedBreakpointDistance), expectedFarLoss, 1e-12,
+            "far region");
+
+    for (auto distance : {expectedBreakpointDistance / 2, expectedBreakpointDistance, 2.0 * expectedBreakpointDistance}) {
+        auto loss = pathLoss.computePathLoss(propagationSpeed, frequency, distance);
+        checkRangeClose(pathLoss.computeRange(propagationSpeed, frequency, loss), distance, "inverse range");
+    }
+
+    auto belowBreakpoint = expectedBreakpointDistance * (1 - 1e-9);
+    auto aboveBreakpoint = expectedBreakpointDistance * (1 + 1e-9);
+    auto belowLoss = pathLoss.computePathLoss(propagationSpeed, frequency, belowBreakpoint);
+    auto aboveLoss = pathLoss.computePathLoss(propagationSpeed, frequency, aboveBreakpoint);
+    checkClose(aboveLoss, belowLoss, 1e-8, "breakpoint continuity");
+
+    ASSERT(pathLoss.computePathLoss(propagationSpeed, frequency, m(0)) == 1);
+    ASSERT(pathLoss.computePathLoss(propagationSpeed, frequency, m(INFINITY)) == 0);
+    ASSERT(std::isinf(pathLoss.computeRange(propagationSpeed, frequency, 0).get<m>()));
+
+    auto unityGainDistance = propagationSpeed / frequency / (4 * M_PI);
+    ASSERT(pathLoss.computePathLoss(propagationSpeed, frequency, unityGainDistance / 2) == 1);
+    checkRangeClose(pathLoss.computeRange(propagationSpeed, frequency, 1), unityGainDistance, "unity-gain range");
+
+    const Hz lowFrequency = MHz(1);
+    auto lowFrequencyBreakpointLoss = pathLoss.computePathLoss(propagationSpeed, lowFrequency, expectedBreakpointDistance);
+    ASSERT(lowFrequencyBreakpointLoss == 1);
+    checkClose(pathLoss.computePathLoss(propagationSpeed, lowFrequency, expectedBreakpointDistance * (1 + 1e-9)),
+            lowFrequencyBreakpointLoss, 1e-8, "saturated breakpoint continuity");
+    checkRangeClose(pathLoss.computeRange(propagationSpeed, lowFrequency, 1), expectedBreakpointDistance,
+            "saturated unity-gain range");
+
+    expectRuntimeError([&] { pathLoss.computePathLoss(propagationSpeed, frequency, m(-1)); }, "negative distance");
+    expectRuntimeError([&] { pathLoss.computePathLoss(propagationSpeed, Hz(0), m(1)); }, "zero frequency");
+    expectRuntimeError([&] { pathLoss.computePathLoss(mps(0), frequency, m(1)); }, "zero propagation speed");
+    expectRuntimeError([&] { pathLoss.computeRange(propagationSpeed, frequency, -0.1); }, "negative loss factor");
+    expectRuntimeError([&] { pathLoss.computeRange(propagationSpeed, frequency, 1.1); }, "loss factor above one");
+    expectRuntimeError([&] { pathLoss.computeRange(propagationSpeed, frequency, std::numeric_limits<double>::quiet_NaN()); }, "NaN loss factor");
+
+    std::cout << "Model " << channelModel << " passed" << std::endl;
+}
+
+%activity:
+testChannelModel("B", m(5), 8.48441981655530e-7, 7.49923848339971e-8);
+testChannelModel("D", m(10), 2.12110495413882e-7, 1.87480962084993e-8);
+expectRuntimeError([] { TestableTgaxIndoorPathLoss pathLoss; pathLoss.setChannelModel("E"); }, "unsupported channel model");
+
+%contains: stdout
+Model B passed
+Model D passed

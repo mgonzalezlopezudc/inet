@@ -60,6 +60,10 @@ class INET_API RadioMedium : public SimpleModule, public cListener, public IRadi
      */
     const IMediumAnalogModel *analogModel;
     /**
+     * The link-specific wideband channel model or nullptr if unused.
+     */
+    const IWidebandChannelModel *widebandChannelModel;
+    /**
      * The background noise model or nullptr if unused.
      */
     const IBackgroundNoise *backgroundNoise;
@@ -312,6 +316,7 @@ class INET_API RadioMedium : public SimpleModule, public cListener, public IRadi
     virtual const IPathLoss *getPathLoss() const override { return pathLoss; }
     virtual const IObstacleLoss *getObstacleLoss() const override { return obstacleLoss; }
     virtual const IMediumAnalogModel *getAnalogModel() const override { return analogModel; }
+    virtual const IWidebandChannelModel *getWidebandChannelModel() const override { return widebandChannelModel; }
     virtual const IBackgroundNoise *getBackgroundNoise() const override { return backgroundNoise; }
     virtual const physicalenvironment::IPhysicalEnvironment *getPhysicalEnvironment() const override { return physicalEnvironment; }
     virtual const IMediumLimitCache *getMediumLimitCache() const override { return mediumLimitCache; }
@@ -352,4 +357,3 @@ class INET_API RadioMedium : public SimpleModule, public cListener, public IRadi
 } // namespace inet
 
 #endif
-

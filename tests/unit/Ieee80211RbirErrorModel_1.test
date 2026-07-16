@@ -1,0 +1,225 @@
+%description:
+Test TGax RBIR interpolation, effective-SNR mapping, PER scaling, calibration parsing, and scope validation.
+
+%includes:
+#include <algorithm>
+#include <cmath>
+#include <functional>
+
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211RbirErrorModel.h"
+
+%file: TestNetwork.ned
+module TestRbirErrorModel
+{
+    parameters:
+        @class(TestRbirErrorModel);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        rbir: TestRbirErrorModel;
+}
+
+%file: calibration.txt
+# A deliberately small synthetic fixture; it is not IEEE calibration data.
+RBIR BPSK -10 0.1
+RBIR BPSK 0 0.5
+RBIR BPSK 10 0.9
+PER BCC 32 0 -10 1
+PER BCC 32 0 0 0.5
+PER BCC 32 0 10 0
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+class TestRbirErrorModel : public Ieee80211RbirErrorModel
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+
+    void checkScope(int mcs, Ieee80211RbirCalibration::Coding coding,
+            int numberOfSpatialStreams, bool dcm) const
+    {
+        computeHeSuccessRate(mcs, coding, numberOfSpatialStreams, dcm,
+                100, 26, 0, nullptr, 1);
+    }
+
+    void checkStationary(double minimum, double maximum) const
+    {
+        validateStationaryToneSnir(minimum, maximum);
+    }
+};
+
+Define_Module(TestRbirErrorModel);
+
+static void checkClose(double actual, double expected, double tolerance, const char *message)
+{
+    if (std::abs(actual - expected) > tolerance)
+        throw cRuntimeError("%s: actual=%g expected=%g", message, actual, expected);
+}
+
+static void expectRuntimeError(const std::function<void()>& function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+static void expectException(const std::function<void()>& function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const std::exception&) {
+        return;
+    }
+    throw cRuntimeError("Expected exception: %s", message);
+}
+
+%activity:
+using Calibration = Ieee80211RbirCalibration;
+
+Calibration calibration;
+for (auto modulation : {Calibration::Modulation::BPSK, Calibration::Modulation::QPSK}) {
+    calibration.addRbirPoint(modulation, -10, 0.1);
+    calibration.addRbirPoint(modulation, 0, 0.5);
+    calibration.addRbirPoint(modulation, 10, 0.9);
+}
+calibration.addRbirPoint(Calibration::Modulation::QAM256, -10, 0.1);
+calibration.addRbirPoint(Calibration::Modulation::QAM256, 10, 8.0);
+calibration.addPerPoint(Calibration::Coding::BCC, 32, 0, -10, 1);
+calibration.addPerPoint(Calibration::Coding::BCC, 32, 0, 0, 0.5);
+calibration.addPerPoint(Calibration::Coding::BCC, 32, 0, 10, 0);
+calibration.addPerPoint(Calibration::Coding::BCC, 1458, 0, -10, 1);
+calibration.addPerPoint(Calibration::Coding::BCC, 1458, 0, 0, 0.2);
+calibration.addPerPoint(Calibration::Coding::BCC, 1458, 0, 10, 0);
+calibration.addPerPoint(Calibration::Coding::LDPC, 1458, 0, -10, 1);
+calibration.addPerPoint(Calibration::Coding::LDPC, 1458, 0, 0, 0.1);
+calibration.addPerPoint(Calibration::Coding::LDPC, 1458, 0, 10, 0);
+
+checkClose(calibration.mapSnirToRbir(Calibration::Modulation::BPSK, -5),
+        0.3, 1e-12, "forward interpolation");
+checkClose(calibration.mapRbirToSnir(Calibration::Modulation::BPSK, 0.3),
+        -5, 1e-12, "inverse interpolation");
+checkClose(calibration.computeEffectiveSnirDb(Calibration::Modulation::BPSK, {3, 3, 3}),
+        3, 1e-12, "flat-channel identity");
+checkClose(calibration.computeEffectiveSnirDb(Calibration::Modulation::BPSK, {1, 1}),
+        1, 1e-12, "flat-channel identity across inverse plateau");
+checkClose(calibration.computeEffectiveSnirDb(Calibration::Modulation::BPSK, {-10, 10}),
+        0, 1e-12, "two-tone RBIR mapping");
+
+Calibration noisy;
+noisy.addRbirPoint(Calibration::Modulation::BPSK, -10, 0.1);
+noisy.addRbirPoint(Calibration::Modulation::BPSK, 0, 0.5);
+noisy.addRbirPoint(Calibration::Modulation::BPSK, 1, 0.49);
+noisy.addRbirPoint(Calibration::Modulation::BPSK, 10, 0.9);
+checkClose(noisy.computeEffectiveSnirDb(Calibration::Modulation::BPSK, {0, 0}),
+        0, 1e-12, "noisy-table flat-channel identity");
+double noisyInverse = noisy.mapRbirToSnir(Calibration::Modulation::BPSK, 0.6);
+ASSERT(noisyInverse > 1 && noisyInverse < 10);
+
+checkClose(calibration.lookupPer(Calibration::Coding::BCC, 0, 16, 0),
+        1 - std::pow(0.5, 0.5), 1e-12, "short BCC length scaling");
+checkClose(calibration.lookupPer(Calibration::Coding::BCC, 0, 400, 0),
+        1 - std::pow(0.8, 400.0 / 1458), 1e-12, "long BCC table selection");
+checkClose(calibration.lookupPer(Calibration::Coding::BCC, 0, 399, 0),
+        1 - std::pow(0.5, 399.0 / 32), 1e-12, "BCC 399-byte boundary");
+checkClose(calibration.lookupPer(Calibration::Coding::BCC, 0, 400, 0),
+        1 - std::pow(0.8, 400.0 / 1458), 1e-12, "BCC 400-byte boundary");
+checkClose(calibration.lookupPer(Calibration::Coding::LDPC, 0, 100, 0),
+        1 - std::pow(0.9, 100.0 / 1458), 1e-12, "LDPC length scaling");
+expectRuntimeError([&] { calibration.lookupPer(Calibration::Coding::BCC, 0, 0, 0); },
+        "zero-length packet");
+
+Calibration parsed;
+parsed.load("calibration.txt", false);
+checkClose(parsed.mapSnirToRbir(Calibration::Modulation::BPSK, -5),
+        0.3, 1e-12, "synthetic fixture parsing");
+checkClose(parsed.lookupPer(Calibration::Coding::BCC, 0, 32, 0),
+        0.5, 1e-12, "synthetic PER parsing");
+expectRuntimeError([&] { parsed.validateTgaxCompleteness(); }, "incomplete TGax calibration");
+
+Calibration truncated;
+for (auto modulation : {Calibration::Modulation::BPSK, Calibration::Modulation::QPSK,
+        Calibration::Modulation::QAM16, Calibration::Modulation::QAM64,
+        Calibration::Modulation::QAM256})
+    for (int index = 0; index <= 2600; ++index)
+        truncated.addRbirPoint(modulation, -20 + index * 0.02, 0);
+for (int mcs = 0; mcs <= 9; ++mcs) {
+    for (auto codingAndLength : {std::make_pair(Calibration::Coding::BCC, 32),
+            std::make_pair(Calibration::Coding::BCC, 1458),
+            std::make_pair(Calibration::Coding::LDPC, 1458)}) {
+        truncated.addPerPoint(codingAndLength.first, codingAndLength.second, mcs, 0, 1);
+        truncated.addPerPoint(codingAndLength.first, codingAndLength.second, mcs, 0.1, 0);
+    }
+}
+expectRuntimeError([&] { truncated.validateTgaxCompleteness(); },
+        "all PER keys present but curves truncated");
+expectRuntimeError([&] { calibration.addPerPoint(Calibration::Coding::BCC, 33, 0, 0, 0); },
+        "invalid BCC reference length");
+expectRuntimeError([&] { calibration.addPerPoint(Calibration::Coding::BCC, 32, 10, 0, 0); },
+        "MCS10 calibration");
+expectRuntimeError([&] { calibration.addRbirPoint(Calibration::Modulation::QAM256, 20, 8.1); },
+        "RBIR above modulation capacity");
+expectRuntimeError([&] { calibration.computeEffectiveSnirDb(Calibration::Modulation::BPSK, {}); },
+        "empty tone set");
+
+auto full20 = getHeRuDataToneIndices(242, 242, 0);
+ASSERT(full20.size() == 234);
+ASSERT(std::find(full20.begin(), full20.end(), -122) != full20.end());
+ASSERT(std::find(full20.begin(), full20.end(), 0) == full20.end());
+ASSERT(std::find(full20.begin(), full20.end(), -116) == full20.end());
+ASSERT(std::find(full20.begin(), full20.end(), 116) == full20.end());
+auto center26 = getHeRuDataToneIndices(242, 26, 108);
+ASSERT(center26.size() == 24);
+ASSERT(std::find(center26.begin(), center26.end(), -10) == center26.end());
+ASSERT(std::find(center26.begin(), center26.end(), 10) == center26.end());
+ASSERT(getHeRuDataToneIndices(996, 996, 0).size() == 980);
+ASSERT(getHeRuDataToneIndices(1992, 1992, 0).size() == 1960);
+expectException([] { getHeRuDataToneIndices(242, 26, 1); }, "noncanonical RU offset");
+
+for (auto channel : {std::make_pair(242, MHz(20)), std::make_pair(484, MHz(40)),
+        std::make_pair(996, MHz(80)), std::make_pair(1992, MHz(160))}) {
+    for (const auto& ru : getHeRuAllocationCatalog(Hz(0), channel.second)) {
+        auto dataTones = getHeRuDataToneIndices(channel.first, ru.toneSize, ru.toneOffset);
+        auto pilotTones = getHeRuPilotToneIndices(channel.first, ru.toneSize, ru.toneOffset);
+        ASSERT(dataTones.size() == static_cast<size_t>(getHeRuDataSubcarrierCount(ru.toneSize)));
+        ASSERT(pilotTones.size() == static_cast<size_t>(getHeRuPilotSubcarrierCount(ru.toneSize)));
+        for (int pilot : pilotTones)
+            ASSERT(std::find(dataTones.begin(), dataTones.end(), pilot) == dataTones.end());
+    }
+}
+auto second20Mhz106Pilots = getHeRuPilotToneIndices(242, 106, 136);
+ASSERT(std::find(second20Mhz106Pilots.begin(), second20Mhz106Pilots.end(), 22) != second20Mhz106Pilots.end());
+auto second20Mhz52Pilots = getHeRuPilotToneIndices(242, 52, 54);
+ASSERT(std::find(second20Mhz52Pilots.begin(), second20Mhz52Pilots.end(), -62) != second20Mhz52Pilots.end());
+auto second80Mhz484Pilots = getHeRuPilotToneIndices(996, 484, 512);
+ASSERT(std::find(second80Mhz484Pilots.begin(), second80Mhz484Pilots.end(), 24) != second80Mhz484Pilots.end());
+
+auto model = check_and_cast<TestRbirErrorModel *>(getParentModule()->getSubmodule("rbir"));
+expectRuntimeError([&] { model->checkScope(10, Calibration::Coding::LDPC, 1, false); },
+        "MCS10 HE evaluation");
+expectRuntimeError([&] { model->checkScope(0, Calibration::Coding::BCC, 2, false); },
+        "MIMO HE evaluation");
+expectRuntimeError([&] { model->checkScope(0, Calibration::Coding::BCC, 1, true); },
+        "DCM HE evaluation");
+model->checkStationary(2, 2);
+expectRuntimeError([&] { model->checkStationary(1, 2); }, "time-varying per-tone SNIR");
+
+EV << "TGax RBIR engine and scope validation passed.\n";
+EV << ".\n";
+
+%contains: stdout
+TGax RBIR engine and scope validation passed.

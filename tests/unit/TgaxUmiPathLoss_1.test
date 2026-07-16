@@ -1,0 +1,113 @@
+%description:
+Test the source-backed TGax/ITU-R UMi LOS and NLOS median path-loss model.
+
+%includes:
+#include <algorithm>
+#include <cmath>
+#include <functional>
+#include <limits>
+
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxUmiPathLoss.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TestableTgaxUmiPathLoss : public TgaxUmiPathLoss
+{
+  public:
+    void setConfiguration(const char *condition, m baseStationHeight = m(10),
+            m userTerminalHeight = m(1.5), bool enforceRange = true) {
+        configure(condition, baseStationHeight, userTerminalHeight, enforceRange);
+    }
+    m getBreakpoint(mps propagationSpeed, Hz frequency) const {
+        return computeBreakpointDistance(propagationSpeed, frequency);
+    }
+};
+
+static void checkClose(double actual, double expected, double relativeTolerance, const char *message)
+{
+    double scale = std::max(std::abs(expected), 1e-300);
+    if (std::abs(actual - expected) > relativeTolerance * scale)
+        throw cRuntimeError("%s: actual=%.17g expected=%.17g", message, actual, expected);
+}
+
+static void checkRangeClose(m actual, m expected, const char *message)
+{
+    checkClose(actual.get<m>(), expected.get<m>(), 1e-11, message);
+}
+
+static void expectRuntimeError(const std::function<void()>& function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+%activity:
+ASSERT(cModuleType::get("inet.physicallayer.wireless.ieee80211.channelmodel.TgaxUmiPathLoss") != nullptr);
+
+const mps propagationSpeed(3e8);
+const Hz frequency = GHz(5);
+
+TestableTgaxUmiPathLoss los;
+los.setConfiguration("LOS");
+checkRangeClose(los.getBreakpoint(propagationSpeed, frequency), m(300), "default breakpoint");
+checkClose(los.computePathLoss(propagationSpeed, frequency, m(10)),
+        4.0e-7, 1e-12, "LOS near at 10 m");
+checkClose(los.computePathLoss(propagationSpeed, frequency, m(100)),
+        2.52382937792078e-9, 1e-12, "LOS near at 100 m");
+checkClose(los.computePathLoss(propagationSpeed, frequency, m(500)),
+        2.88475215585589e-11, 1e-12, "LOS far primary +2 coefficient");
+
+auto belowBreakpointLoss = los.computePathLoss(propagationSpeed, frequency, m(300 * (1 - 1e-9)));
+auto aboveBreakpointLoss = los.computePathLoss(propagationSpeed, frequency, m(300 * (1 + 1e-9)));
+checkClose(aboveBreakpointLoss, belowBreakpointLoss, 0.012, "LOS breakpoint continuity");
+
+for (m distance : {m(100), m(500)}) {
+    auto loss = los.computePathLoss(propagationSpeed, frequency, distance);
+    checkRangeClose(los.computeRange(propagationSpeed, frequency, loss), distance, "LOS inverse range");
+}
+
+TestableTgaxUmiPathLoss nlos;
+nlos.setConfiguration("NLOS");
+checkClose(nlos.computePathLoss(propagationSpeed, frequency, m(10)),
+        1.74854973105075e-8, 1e-12, "NLOS at 10 m");
+checkClose(nlos.computePathLoss(propagationSpeed, frequency, m(100)),
+        3.73833303659583e-12, 1e-12, "NLOS at 100 m");
+auto nlos100 = nlos.computePathLoss(propagationSpeed, frequency, m(100));
+checkRangeClose(nlos.computeRange(propagationSpeed, frequency, nlos100), m(100), "NLOS inverse range");
+
+ASSERT(los.computePathLoss(propagationSpeed, GHz(2), m(100)) > 0);
+ASSERT(los.computePathLoss(propagationSpeed, GHz(6), m(100)) > 0);
+ASSERT(std::isinf(los.computeRange(propagationSpeed, frequency, 0).get<m>()));
+
+expectRuntimeError([&] { los.computePathLoss(propagationSpeed, GHz(1.999), m(100)); }, "frequency below applicability");
+expectRuntimeError([&] { los.computePathLoss(propagationSpeed, GHz(6.001), m(100)); }, "frequency above applicability");
+expectRuntimeError([&] { los.computePathLoss(propagationSpeed, frequency, m(9.999)); }, "LOS distance below applicability");
+expectRuntimeError([&] { los.computePathLoss(propagationSpeed, frequency, m(5000.001)); }, "LOS distance above applicability");
+expectRuntimeError([&] { nlos.computePathLoss(propagationSpeed, frequency, m(2000.001)); }, "NLOS distance above applicability");
+expectRuntimeError([&] { los.computePathLoss(propagationSpeed, frequency, m(NAN)); }, "NaN distance");
+expectRuntimeError([&] { los.computePathLoss(mps(0), frequency, m(100)); }, "zero propagation speed");
+expectRuntimeError([&] { los.computeRange(propagationSpeed, frequency, -0.1); }, "negative loss");
+expectRuntimeError([&] { los.computeRange(propagationSpeed, frequency, 1.1); }, "loss above one");
+expectRuntimeError([&] { los.computeRange(propagationSpeed, frequency, NAN); }, "NaN loss");
+expectRuntimeError([&] { los.computeRange(propagationSpeed, frequency, 1); }, "inverse outside applicability");
+
+expectRuntimeError([&] { los.setConfiguration("O-to-I"); }, "unsupported propagation condition");
+expectRuntimeError([&] { los.setConfiguration("LOS", m(1), m(1.5)); }, "nonpositive effective BS height");
+expectRuntimeError([&] { los.setConfiguration("LOS", m(10), m(1)); }, "nonpositive effective UT height");
+
+TestableTgaxUmiPathLoss unrestricted;
+unrestricted.setConfiguration("NLOS", m(10), m(1.5), false);
+ASSERT(unrestricted.computePathLoss(propagationSpeed, GHz(1), m(1)) > 0);
+
+std::cout << "TGax UMi path loss passed" << std::endl;
+
+%contains: stdout
+TGax UMi path loss passed

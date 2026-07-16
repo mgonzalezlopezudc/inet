@@ -63,6 +63,10 @@ const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogMode
         const auto& approximatedAttenuationFunction = makeShared<ApproximatedFunction<double, Domain<simsec, Hz>, 1, Hz>>(lower, upper, step, &AverageInterpolator<Hz, double>::singleton, attenuationFunction);
         receptionPower = propagatedTransmissionPowerFunction->multiply(approximatedAttenuationFunction);
     }
+    if (auto widebandChannelModel = radioMedium->getWidebandChannelModel()) {
+        auto channelSnapshot = widebandChannelModel->computeChannel(receiverRadio, transmission, arrival);
+        receptionPower = receptionPower->multiply(channelSnapshot->getPowerGain());
+    }
     EV_TRACE << "Reception power begin " << endl;
     EV_TRACE << *receptionPower << endl;
     EV_TRACE << "Reception power end" << endl;
@@ -127,4 +131,3 @@ const IReception *DimensionalMediumAnalogModel::computeReception(const IRadio *r
 } // namespace physicallayer
 
 } // namespace inet
-

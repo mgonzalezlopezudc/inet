@@ -1,0 +1,185 @@
+%description:
+This test checks the TGax A-F channel profile catalog and TGac bandwidth expansion.
+
+%includes:
+#include <cmath>
+#include <limits>
+
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxChannelProfile.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static void checkClose(double actual, double expected, double tolerance, const char *message)
+{
+    if (std::abs(actual - expected) > tolerance)
+        throw cRuntimeError("%s: actual = %.17g, expected = %.17g", message, actual, expected);
+}
+
+static const TgaxChannelProfile::Component& findComponent(const TgaxChannelProfile& profile, int clusterIndex, double excessDelayNs)
+{
+    for (const auto& component : profile.getComponents()) {
+        if (component.clusterIndex == clusterIndex && component.excessDelayNs == excessDelayNs)
+            return component;
+    }
+    throw cRuntimeError("Missing component: cluster = %d, delay = %g ns", clusterIndex, excessDelayNs);
+}
+
+static int countComponentsAtDelay(const TgaxChannelProfile& profile, double excessDelayNs)
+{
+    int count = 0;
+    for (const auto& component : profile.getComponents()) {
+        if (component.excessDelayNs == excessDelayNs)
+            count++;
+    }
+    return count;
+}
+
+static bool hasComponent(const TgaxChannelProfile& profile, int clusterIndex, double excessDelayNs)
+{
+    for (const auto& component : profile.getComponents()) {
+        if (component.clusterIndex == clusterIndex && component.excessDelayNs == excessDelayNs)
+            return true;
+    }
+    return false;
+}
+
+static void checkNormalized(const TgaxChannelProfile& profile)
+{
+    double totalPower = 0;
+    double normalizationScale = -1;
+    for (const auto& component : profile.getComponents()) {
+        ASSERT(std::isfinite(component.normalizedPower));
+        ASSERT(component.normalizedPower > 0);
+        auto rawLinearPower = pow(10.0, component.powerDb / 10.0);
+        auto componentNormalizationScale = component.normalizedPower / rawLinearPower;
+        if (normalizationScale == -1)
+            normalizationScale = componentNormalizationScale;
+        else
+            checkClose(componentNormalizationScale, normalizationScale, 1e-12, "common normalization scale");
+        totalPower += component.normalizedPower;
+    }
+    checkClose(totalPower, 1.0, 1e-12, "normalized power sum");
+}
+
+static bool rejectsModel(const char *model)
+{
+    try {
+        TgaxChannelProfile::create(model, MHz(20));
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+static bool rejectsBandwidth(Hz bandwidth)
+{
+    try {
+        TgaxChannelProfile::create("A", bandwidth);
+        return false;
+    }
+    catch (const cRuntimeError&) {
+        return true;
+    }
+}
+
+%activity:
+struct BaseExpectation {
+    const char *model;
+    int componentCount;
+    double rmsDelaySpreadNs;
+};
+const BaseExpectation baseExpectations[] = {
+    // Moments recomputed from the rounded Appendix C literals, not the nominal
+    // 0/15/30/50/100/150 ns labels in the TGax summary table.
+    {"A", 1, 0.0},
+    {"B", 12, 15.646635},
+    {"C", 18, 33.439325},
+    {"D", 27, 50.162605},
+    {"E", 38, 98.984244},
+    {"F", 41, 148.803723},
+};
+for (const auto& expectation : baseExpectations) {
+    auto profile = TgaxChannelProfile::create(expectation.model, MHz(20));
+    ASSERT(profile.getExpansionFactor() == 1);
+    ASSERT((int)profile.getComponents().size() == expectation.componentCount);
+    checkNormalized(profile);
+    checkClose(profile.computeRmsDelaySpreadNs(), expectation.rmsDelaySpreadNs, 1e-6, "base RMS delay spread");
+}
+
+struct ExpansionExpectation {
+    const char *model;
+    int componentCount80Mhz;
+    int componentCount160Mhz;
+};
+const ExpansionExpectation expansionExpectations[] = {
+    {"A", 1, 1},
+    {"B", 22, 42},
+    {"C", 34, 66},
+    {"D", 51, 99},
+    {"E", 72, 140},
+    {"F", 76, 146},
+};
+for (const auto& expectation : expansionExpectations) {
+    auto profile80Mhz = TgaxChannelProfile::create(expectation.model, MHz(80));
+    auto profile160Mhz = TgaxChannelProfile::create(expectation.model, MHz(160));
+    ASSERT(profile80Mhz.getExpansionFactor() == 2);
+    ASSERT(profile160Mhz.getExpansionFactor() == 4);
+    ASSERT((int)profile80Mhz.getComponents().size() == expectation.componentCount80Mhz);
+    ASSERT((int)profile160Mhz.getComponents().size() == expectation.componentCount160Mhz);
+    checkNormalized(profile80Mhz);
+    checkNormalized(profile160Mhz);
+}
+
+auto modelB = TgaxChannelProfile::create("B", MHz(40));
+checkClose(findComponent(modelB, 1, 40).powerDb, -21.7, 1e-12, "Model B literal");
+checkClose(findComponent(modelB, 2, 80).powerDb, -21.8, 1e-12, "Model B last literal");
+ASSERT(countComponentsAtDelay(modelB, 20) == 2);
+checkClose(findComponent(modelB, 1, 20).powerDb, -10.8, 1e-12, "Model B overlapping cluster 1");
+checkClose(findComponent(modelB, 2, 20).powerDb, -3.2, 1e-12, "Model B overlapping cluster 2");
+
+auto modelE = TgaxChannelProfile::create("E", MHz(20));
+checkClose(findComponent(modelE, 3, 330).powerDb, -13.8, 1e-12, "Model E literal");
+auto modelF = TgaxChannelProfile::create("F", MHz(20));
+checkClose(findComponent(modelF, 6, 1050).powerDb, -21.2, 1e-12, "Model F literal");
+
+auto modelB80 = TgaxChannelProfile::create("B", MHz(80));
+ASSERT(modelB80.getExpansionFactor() == 2);
+ASSERT(modelB80.getComponents().size() == 22);
+checkClose(findComponent(modelB80, 1, 5).powerDb, -2.7, 1e-12, "80 MHz interpolation");
+checkNormalized(modelB80);
+
+auto modelB160 = TgaxChannelProfile::create("B", MHz(160));
+ASSERT(modelB160.getExpansionFactor() == 4);
+ASSERT(modelB160.getComponents().size() == 42);
+checkClose(findComponent(modelB160, 1, 2.5).powerDb, -1.35, 1e-12, "160 MHz first interpolation");
+checkClose(findComponent(modelB160, 1, 7.5).powerDb, -4.05, 1e-12, "160 MHz third interpolation");
+checkNormalized(modelB160);
+
+auto modelC80 = TgaxChannelProfile::create("C", MHz(80));
+ASSERT(modelC80.getComponents().size() == 34);
+ASSERT(hasComponent(modelC80, 2, 95));
+ASSERT(!hasComponent(modelC80, 2, 100));
+
+auto modelA160 = TgaxChannelProfile::create("A", MHz(160));
+ASSERT(modelA160.getExpansionFactor() == 4);
+ASSERT(modelA160.getComponents().size() == 1);
+checkClose(modelA160.getComponents()[0].powerDb, 0.0, 1e-12, "Model A power");
+checkClose(modelA160.getComponents()[0].normalizedPower, 1.0, 1e-12, "Model A normalization");
+
+ASSERT(rejectsModel("G"));
+ASSERT(rejectsModel("a"));
+ASSERT(rejectsModel(nullptr));
+ASSERT(rejectsBandwidth(Hz(0)));
+ASSERT(rejectsBandwidth(MHz(161)));
+ASSERT(rejectsBandwidth(Hz(std::numeric_limits<double>::quiet_NaN())));
+ASSERT(rejectsBandwidth(Hz(std::numeric_limits<double>::infinity())));
+
+std::cout << "TGax channel profiles passed" << std::endl;
+
+%contains: stdout
+TGax channel profiles passed

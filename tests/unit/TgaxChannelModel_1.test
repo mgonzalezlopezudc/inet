@@ -1,0 +1,143 @@
+%description:
+This test checks deterministic TGax channel grids, profile flatness, link-state persistence, reciprocity, and NED registration.
+
+%includes:
+#include <cmath>
+#include <memory>
+
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxChannelModel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+class TestableTgaxChannelModel : public TgaxChannelModel
+{
+  protected:
+    mutable int numCreatedChannels = 0;
+
+    virtual std::shared_ptr<const TgaxSisoChannel> createChannel(const LinkKey&) const override {
+        numCreatedChannels++;
+        std::vector<TgaxSisoChannel::Tap> taps;
+        for (const auto& component : profile->getComponents())
+            taps.push_back({nsimsec(component.excessDelayNs), {std::sqrt(component.normalizedPower), 0}});
+        return std::make_shared<const TgaxSisoChannel>(std::move(taps));
+    }
+
+  public:
+    void configure(const char *model, Hz bandwidth, bool isReciprocal, Hz reference, Hz resolution) {
+        channelModel = model;
+        systemBandwidth = bandwidth;
+        reciprocal = isReciprocal;
+        referenceFrequency = reference;
+        frequencyResolution = resolution;
+        profile.reset(new TgaxChannelProfile(TgaxChannelProfile::create(model, bandwidth)));
+    }
+
+    const TgaxSisoChannel *getChannel(int transmitterRadioId, int receiverRadioId) const {
+        return getOrCreateChannel(transmitterRadioId, receiverRadioId);
+    }
+
+    Ptr<const IFunction<double, Domain<simsec, Hz>>> buildPowerGain(const TgaxSisoChannel& channel,
+            simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth) const {
+        return createPowerGain(channel, startTime, endTime, centerFrequency, bandwidth);
+    }
+
+    int getNumCreatedChannels() const { return numCreatedChannels; }
+};
+
+class ProductionTgaxChannelModel : public TgaxChannelModel
+{
+  public:
+    void configure(const char *model, Hz bandwidth, bool isReciprocal, uint64_t seed) {
+        channelModel = model;
+        systemBandwidth = bandwidth;
+        reciprocal = isReciprocal;
+        realizationSeed = seed;
+        profile.reset(new TgaxChannelProfile(TgaxChannelProfile::create(model, bandwidth)));
+    }
+
+    const TgaxSisoChannel *getChannel(int transmitterRadioId, int receiverRadioId) const {
+        return getOrCreateChannel(transmitterRadioId, receiverRadioId);
+    }
+};
+
+static void checkSameChannel(const TgaxSisoChannel *left, const TgaxSisoChannel *right)
+{
+    ASSERT(left->getTaps().size() == right->getTaps().size());
+    for (size_t i = 0; i < left->getTaps().size(); i++) {
+        ASSERT(left->getTaps()[i].excessDelay == right->getTaps()[i].excessDelay);
+        ASSERT(left->getTaps()[i].coefficient == right->getTaps()[i].coefficient);
+    }
+}
+
+static void checkClose(double actual, double expected, double tolerance, const char *message)
+{
+    if (std::abs(actual - expected) > tolerance)
+        throw cRuntimeError("%s: actual = %.17g, expected = %.17g", message, actual, expected);
+}
+
+%activity:
+ASSERT(cModuleType::get("inet.physicallayer.wireless.ieee80211.channelmodel.TgaxChannelModel") != nullptr);
+
+TestableTgaxChannelModel modelA;
+modelA.configure("A", MHz(20), true, GHz(5), MHz(1));
+auto modelAChannel = modelA.getChannel(1, 2);
+auto modelAGain = modelA.buildPowerGain(*modelAChannel, SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20));
+auto flatGain = modelAGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5) - MHz(7.25)));
+for (auto frequency : {GHz(5) - MHz(9.25), GHz(5) + MHz(0.25), GHz(5) + MHz(8.25)})
+    checkClose(modelAGain->getValue(Point<simsec, Hz>(simsec(1.5), frequency)), flatGain, 1e-14, "Model A flatness");
+
+ASSERT(modelA.getChannel(1, 2) == modelAChannel);
+ASSERT(modelA.getChannel(2, 1) == modelAChannel);
+ASSERT(modelA.getNumCreatedChannels() == 1);
+
+TestableTgaxChannelModel directionalModel;
+directionalModel.configure("A", MHz(20), false, GHz(5), MHz(1));
+ASSERT(directionalModel.getChannel(1, 2) != directionalModel.getChannel(2, 1));
+ASSERT(directionalModel.getNumCreatedChannels() == 2);
+
+ProductionTgaxChannelModel firstQueryOrder;
+firstQueryOrder.configure("B", MHz(20), true, 0x123456789ABCDEF0ULL);
+auto firstOrderLink12 = firstQueryOrder.getChannel(1, 2);
+auto firstOrderLink34 = firstQueryOrder.getChannel(3, 4);
+ProductionTgaxChannelModel secondQueryOrder;
+secondQueryOrder.configure("B", MHz(20), true, 0x123456789ABCDEF0ULL);
+auto secondOrderLink34 = secondQueryOrder.getChannel(3, 4);
+auto secondOrderLink12 = secondQueryOrder.getChannel(1, 2);
+checkSameChannel(firstOrderLink12, secondOrderLink12);
+checkSameChannel(firstOrderLink34, secondOrderLink34);
+
+const double coefficient = 1 / std::sqrt(2.0);
+TgaxSisoChannel twoTapChannel({
+        {simsec(0), {coefficient, 0}},
+        {nsimsec(50), {coefficient, 0}}
+});
+TestableTgaxChannelModel gridModel;
+gridModel.configure("A", MHz(20), true, GHz(5), MHz(5));
+auto gridGain = gridModel.buildPowerGain(twoTapChannel, SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20));
+auto firstCellExpected = twoTapChannel.computePowerGain(MHz(2.5));
+checkClose(gridGain->getValue(Point<simsec, Hz>(simsec(1.25), GHz(5) + MHz(1))), firstCellExpected, 1e-14, "grid cell sample");
+checkClose(gridGain->getValue(Point<simsec, Hz>(simsec(1.75), GHz(5) + MHz(4))), firstCellExpected, 1e-14, "grid is constant over time and cell");
+auto secondCellExpected = twoTapChannel.computePowerGain(MHz(7.5));
+checkClose(gridGain->getValue(Point<simsec, Hz>(simsec(1.25), GHz(5) + MHz(6))), secondCellExpected, 1e-14, "next grid cell sample");
+
+int partitions = 0;
+Interval<simsec, Hz> gridDomain(Point<simsec, Hz>(simsec(1), GHz(5) - MHz(10)),
+        Point<simsec, Hz>(simsec(2), GHz(5) + MHz(10)), 0b11, 0b00, 0b00);
+gridGain->partition(gridDomain, [&] (const auto&, const auto *function) {
+    ASSERT((dynamic_cast<const ConstantFunction<double, Domain<simsec, Hz>> *>(function) != nullptr));
+    partitions++;
+});
+ASSERT(partitions == 4);
+ASSERT(gridGain->getValue(Point<simsec, Hz>(simsec(0), GHz(5))) == 1);
+ASSERT(gridGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5) + MHz(20))) == 1);
+
+std::cout << "TGax channel model passed" << std::endl;
+
+%contains: stdout
+TGax channel model passed
