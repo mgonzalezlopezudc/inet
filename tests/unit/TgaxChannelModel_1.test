@@ -35,7 +35,13 @@ class TestableTgaxChannelModel : public TgaxChannelModel
         reciprocal = isReciprocal;
         referenceFrequency = reference;
         frequencyResolution = resolution;
+        timeVariation = false;
         profile.reset(new TgaxChannelProfile(TgaxChannelProfile::create(model, bandwidth)));
+    }
+
+    void enableTimeVariation(simsec resolution) {
+        timeVariation = true;
+        timeResolution = resolution;
     }
 
     const TgaxSisoChannel *getChannel(int transmitterRadioId, int receiverRadioId) const {
@@ -58,7 +64,16 @@ class ProductionTgaxChannelModel : public TgaxChannelModel
         systemBandwidth = bandwidth;
         reciprocal = isReciprocal;
         realizationSeed = seed;
+        referenceFrequency = GHz(5);
+        timeVariation = false;
         profile.reset(new TgaxChannelProfile(TgaxChannelProfile::create(model, bandwidth)));
+    }
+
+    void enableTimeVariation(mps speed, int oscillators, simsec resolution) {
+        timeVariation = true;
+        environmentalSpeed = speed;
+        numDopplerOscillators = oscillators;
+        timeResolution = resolution;
     }
 
     const TgaxSisoChannel *getChannel(int transmitterRadioId, int receiverRadioId) const {
@@ -72,6 +87,11 @@ static void checkSameChannel(const TgaxSisoChannel *left, const TgaxSisoChannel 
     for (size_t i = 0; i < left->getTaps().size(); i++) {
         ASSERT(left->getTaps()[i].excessDelay == right->getTaps()[i].excessDelay);
         ASSERT(left->getTaps()[i].coefficient == right->getTaps()[i].coefficient);
+        ASSERT(left->getTaps()[i].dopplerComponents.size() == right->getTaps()[i].dopplerComponents.size());
+        for (size_t j = 0; j < left->getTaps()[i].dopplerComponents.size(); j++) {
+            ASSERT(left->getTaps()[i].dopplerComponents[j].frequency == right->getTaps()[i].dopplerComponents[j].frequency);
+            ASSERT(left->getTaps()[i].dopplerComponents[j].coefficient == right->getTaps()[i].dopplerComponents[j].coefficient);
+        }
     }
 }
 
@@ -136,6 +156,80 @@ gridGain->partition(gridDomain, [&] (const auto&, const auto *function) {
 ASSERT(partitions == 4);
 ASSERT(gridGain->getValue(Point<simsec, Hz>(simsec(0), GHz(5))) == 1);
 ASSERT(gridGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5) + MHz(20))) == 1);
+
+TgaxSisoChannel dynamicChannel({
+        {simsec(0), {0, 0}, {
+                {Hz(0.5), {0.5, 0}},
+                {Hz(-0.5), {0.5, 0}}
+        }}
+});
+TestableTgaxChannelModel dynamicGridModel;
+dynamicGridModel.configure("A", MHz(20), true, GHz(5), MHz(5));
+dynamicGridModel.enableTimeVariation(simsec(0.25));
+auto dynamicGain = dynamicGridModel.buildPowerGain(dynamicChannel,
+        SimTime(0, SIMTIME_S), SimTime(1, SIMTIME_S), GHz(5), MHz(20));
+checkClose(dynamicGain->getValue(Point<simsec, Hz>(simsec(0.125), GHz(5) + MHz(1))),
+        0.8535533905932737, 1e-14, "dynamic grid first time cell");
+checkClose(dynamicGain->getValue(Point<simsec, Hz>(simsec(0.375), GHz(5) + MHz(1))),
+        0.1464466094067263, 1e-14, "dynamic grid second time cell");
+checkClose(dynamicGain->getValue(Point<simsec, Hz>(simsec(0.249999), GHz(5) + MHz(1))),
+        0.8535533905932737, 1e-14, "dynamic grid immediately before time-cell boundary");
+checkClose(dynamicGain->getValue(Point<simsec, Hz>(simsec(0.25), GHz(5) + MHz(1))),
+        0.1464466094067263, 1e-14, "dynamic grid at time-cell boundary");
+ASSERT(dynamicGain->getValue(Point<simsec, Hz>(simsec(-1), GHz(5))) == 1);
+bool rejectedCarrierMismatch = false;
+try {
+    dynamicGridModel.buildPowerGain(dynamicChannel,
+            SimTime(0, SIMTIME_S), SimTime(1, SIMTIME_S), GHz(6), MHz(20));
+}
+catch (const cRuntimeError&) {
+    rejectedCarrierMismatch = true;
+}
+ASSERT(rejectedCarrierMismatch);
+auto overlappingDynamicGain = dynamicGridModel.buildPowerGain(dynamicChannel,
+        SimTime(100, SIMTIME_MS), SimTime(410, SIMTIME_MS), GHz(5), MHz(20));
+checkClose(overlappingDynamicGain->getValue(Point<simsec, Hz>(simsec(0.2), GHz(5) + MHz(1))),
+        dynamicGain->getValue(Point<simsec, Hz>(simsec(0.2), GHz(5) + MHz(1))), 1e-14,
+        "overlapping snapshots share the absolute time grid");
+
+ProductionTgaxChannelModel dynamicProduction1;
+dynamicProduction1.configure("B", MHz(20), true, 0xABCDEF1234567890ULL);
+dynamicProduction1.enableTimeVariation(mps(0.0247222), 32, simsec(0.001));
+auto dynamicProductionChannel1 = dynamicProduction1.getChannel(5, 6);
+ProductionTgaxChannelModel dynamicProduction2;
+dynamicProduction2.configure("B", MHz(20), true, 0xABCDEF1234567890ULL);
+dynamicProduction2.enableTimeVariation(mps(0.0247222), 32, simsec(0.001));
+auto dynamicProductionChannel2 = dynamicProduction2.getChannel(6, 5);
+checkSameChannel(dynamicProductionChannel1, dynamicProductionChannel2);
+ASSERT(!dynamicProductionChannel1->getTaps().front().dopplerComponents.empty());
+auto maximumDoppler = (mps(0.0247222) * GHz(5) / mps(SPEED_OF_LIGHT)).get<Hz>() * 5;
+double correlation = 0;
+double correlationWeight = 0;
+for (const auto& tap : dynamicProductionChannel1->getTaps())
+    for (const auto& component : tap.dopplerComponents) {
+        ASSERT(std::abs(component.frequency.get<Hz>()) <= maximumDoppler);
+        auto weight = std::norm(component.coefficient);
+        correlation += weight * std::cos(2 * M_PI * component.frequency.get<Hz>() * 0.8);
+        correlationWeight += weight;
+    }
+correlation /= correlationWeight;
+ASSERT(correlation > 0.35 && correlation < 0.65);
+
+double normalizedSecondMoment = 0;
+double momentWeight = 0;
+auto dopplerSpread = mps(0.0247222) * GHz(5) / mps(SPEED_OF_LIGHT);
+for (int radioId = 10; radioId < 74; radioId++) {
+    auto channel = dynamicProduction1.getChannel(radioId, radioId + 100);
+    for (const auto& tap : channel->getTaps())
+        for (const auto& component : tap.dopplerComponents) {
+            auto weight = std::norm(component.coefficient);
+            auto normalizedFrequency = (component.frequency / dopplerSpread).get<unit>();
+            normalizedSecondMoment += weight * normalizedFrequency * normalizedFrequency;
+            momentWeight += weight;
+        }
+}
+normalizedSecondMoment /= momentWeight;
+ASSERT(normalizedSecondMoment > 0.9 && normalizedSecondMoment < 1.1);
 
 std::cout << "TGax channel model passed" << std::endl;
 

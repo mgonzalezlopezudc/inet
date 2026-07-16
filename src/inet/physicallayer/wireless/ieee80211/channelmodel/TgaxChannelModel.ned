@@ -21,8 +21,15 @@ module TgaxChannelModel extends Module like IWidebandChannelModel
         double systemBandwidth @unit(Hz) = default(20MHz);
         bool reciprocal = default(true);
         int rngStream = default(0);
+        // The reference frequency must match the carrier when timeVariation is enabled.
         double referenceFrequency @unit(Hz) = default(5GHz);
         double frequencyResolution @unit(Hz) = default(78.125kHz);
+        // IEEE 802.11-09/0308r12 stationary-user ambient Doppler. Mobile
+        // indoor Doppler is explicitly TBD in that source.
+        bool timeVariation = default(false);
+        double environmentalSpeed @unit(mps) = default(0.0247222mps); // 0.089 km/h
+        int numDopplerOscillators = default(32); // finite spectral approximation per tap
+        double timeResolution @unit(s) = default(1ms); // piecewise-constant snapshot grid
         @class(TgaxChannelModel);
         @display("i=block/tunnel");
 }
