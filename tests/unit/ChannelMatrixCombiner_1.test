@@ -1,0 +1,44 @@
+%description:
+This test checks single-stream MRC for SIMO and explicitly precoded MIMO channels.
+
+%includes:
+#include <cmath>
+
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixCombiner.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+
+template<typename Function>
+static void expectRuntimeError(Function function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+%activity:
+ChannelMatrix simo(2, 1, {{3, 4}, {0, 12}});
+ASSERT(ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(simo) == 169);
+
+ChannelMatrix mimo(2, 2, {{1, 0}, {1, 0}, {1, 0}, {-1, 0}});
+auto scale = 1 / std::sqrt(2.0);
+ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo,
+        {{scale, 0}, {scale, 0}}) - 2) < 1e-14);
+ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo,
+        {{1, 0}, {0, 0}}) - 2) < 1e-14);
+
+expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo); }, "missing MIMO precoder");
+expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo, {{1, 0}}); }, "precoder size");
+expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo, {{1, 0}, {1, 0}}); }, "precoder norm");
+
+std::cout << "Channel matrix combiner passed" << std::endl;
+
+%contains: stdout
+Channel matrix combiner passed

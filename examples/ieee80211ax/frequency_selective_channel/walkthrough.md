@@ -147,8 +147,12 @@ mobility-coupled non-stationarity, antenna-array correlation, polarization, or
 MIMO channel matrices. The profile catalog now preserves the visually verified
 TGn Appendix C cluster AoA/AoD/angular-spread metadata for Models B and D. An
 immutable receive-row/transmit-column matrix snapshot contract is available,
-but the TGax matrix generator and MRC/MMSE consumer are not wired yet; a scalar
-Frobenius-gain shortcut would not be equivalent. Outdoor UMi median
+along with a standalone B/D NLOS 1x1/2x2 half-wavelength-ULA Kronecker generator
+and a single-stream MRC combiner. These are not wired into the dimensional
+medium yet. Multi-transmit MRC requires an explicit unit-norm precoder, and
+general L-MMSE requires per-receive-antenna interference/noise covariance that
+the current scalar analog pipeline does not retain; a scalar Frobenius-gain
+shortcut would not be equivalent. Outdoor UMi median
 LOS/NLOS path loss is available as
 `TgaxUmiPathLoss`, but fixed outdoor UMi delay profiles are not exposed: the
 primary ITU-R table contains an internally inconsistent printed delay row, so
