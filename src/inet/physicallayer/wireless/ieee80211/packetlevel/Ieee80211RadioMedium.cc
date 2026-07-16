@@ -190,8 +190,10 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
             return nullptr;
         bool channelMatrixCombined = false;
         Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> aggregateInterferencePower;
+        std::shared_ptr<const ChannelMatrixSignal> aggregateChannelMatrixSignal;
         auto aggregatePower = dimensionalMediumAnalogModel->computeReceptionPower(
-                receiver, transmission, arrival, &channelMatrixCombined, &aggregateInterferencePower);
+                receiver, transmission, arrival, &channelMatrixCombined, &aggregateInterferencePower,
+                &aggregateChannelMatrixSignal);
         const auto& ruBandpassFilter = makeShared<Boxcar2DFunction<double, simsec, Hz>>(
                 simsec(arrival->getStartTime()), simsec(arrival->getEndTime()),
                 ru.centerFrequency - ru.bandwidth / 2, ru.centerFrequency + ru.bandwidth / 2, 1);
@@ -203,7 +205,9 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
                 ru.bandwidth,
                 aggregatePower->multiply(ruBandpassFilter),
                 aggregateInterferencePower->multiply(ruBandpassFilter),
-                channelMatrixCombined);
+                channelMatrixCombined,
+                aggregateChannelMatrixSignal == nullptr ? nullptr : aggregateChannelMatrixSignal->withInputPower(
+                        aggregateChannelMatrixSignal->getInputPower()->multiply(ruBandpassFilter)));
     }
     if (ruAnalogModel == nullptr)
         return nullptr;

@@ -11,6 +11,7 @@
 #include "inet/common/math/IFunction.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/AnalogModelBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadioMedium.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSignal.h"
 
 namespace inet {
 
@@ -36,7 +37,8 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
 
     virtual const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> computeReceptionPower(const IRadio *radio,
             const ITransmission *transmission, const IArrival *arrival, bool *channelMatrixCombined = nullptr,
-            Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> *interferencePower = nullptr) const;
+            Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> *interferencePower = nullptr,
+            std::shared_ptr<const ChannelMatrixSignal> *channelMatrixSignal = nullptr) const;
     virtual const INoise *computeNoise(const IListening *listening, const IInterference *interference) const override;
     virtual const INoise *computeNoise(const IReception *reception, const INoise *noise) const override;
     virtual const ISnir *computeSNIR(const IReception *reception, const INoise *noise) const override;

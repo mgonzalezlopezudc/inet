@@ -16,6 +16,27 @@
 namespace inet {
 namespace physicallayer {
 
+std::vector<std::complex<double>> ChannelMatrixCombiner::computeEffectiveChannel(
+        const ChannelMatrix& channelMatrix, const std::vector<std::complex<double>>& transmitWeights)
+{
+    if ((int)transmitWeights.size() != channelMatrix.getNumTransmitAntennas())
+        throw cRuntimeError("Single-stream transmit precoder size does not match the channel matrix");
+    double weightNorm = 0;
+    for (const auto& weight : transmitWeights) {
+        if (!std::isfinite(weight.real()) || !std::isfinite(weight.imag()))
+            throw cRuntimeError("Single-stream transmit precoder must be finite");
+        weightNorm += std::norm(weight);
+    }
+    if (std::abs(weightNorm - 1) > 1e-12)
+        throw cRuntimeError("Single-stream transmit precoder must have unit norm");
+    std::vector<std::complex<double>> effectiveChannel(channelMatrix.getNumReceiveAntennas(), {0, 0});
+    for (int receiveAntenna = 0; receiveAntenna < channelMatrix.getNumReceiveAntennas(); receiveAntenna++)
+        for (int transmitAntenna = 0; transmitAntenna < channelMatrix.getNumTransmitAntennas(); transmitAntenna++)
+            effectiveChannel[receiveAntenna] += channelMatrix.getCoefficient(receiveAntenna, transmitAntenna) *
+                    transmitWeights[transmitAntenna];
+    return effectiveChannel;
+}
+
 double ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(const ChannelMatrix& channelMatrix)
 {
     if (channelMatrix.getNumTransmitAntennas() != 1)
@@ -26,25 +47,93 @@ double ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(const ChannelMatri
 double ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(const ChannelMatrix& channelMatrix,
         const std::vector<std::complex<double>>& transmitWeights)
 {
-    if ((int)transmitWeights.size() != channelMatrix.getNumTransmitAntennas())
-        throw cRuntimeError("Single-stream MRC transmit precoder size does not match the channel matrix");
-    double weightNorm = 0;
-    for (const auto& weight : transmitWeights) {
-        if (!std::isfinite(weight.real()) || !std::isfinite(weight.imag()))
-            throw cRuntimeError("Single-stream MRC transmit precoder must be finite");
-        weightNorm += std::norm(weight);
-    }
-    if (std::abs(weightNorm - 1) > 1e-12)
-        throw cRuntimeError("Single-stream MRC transmit precoder must have unit norm");
+    auto effectiveChannel = computeEffectiveChannel(channelMatrix, transmitWeights);
     double powerGain = 0;
-    for (int receiveAntenna = 0; receiveAntenna < channelMatrix.getNumReceiveAntennas(); receiveAntenna++) {
-        std::complex<double> effectiveCoefficient(0, 0);
-        for (int transmitAntenna = 0; transmitAntenna < channelMatrix.getNumTransmitAntennas(); transmitAntenna++)
-            effectiveCoefficient += channelMatrix.getCoefficient(receiveAntenna, transmitAntenna) *
-                    transmitWeights[transmitAntenna];
-        powerGain += std::norm(effectiveCoefficient);
-    }
+    for (const auto& coefficient : effectiveChannel)
+        powerGain += std::norm(coefficient);
     return powerGain;
+}
+
+double ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        const std::vector<std::complex<double>>& desiredChannel, double desiredPower,
+        const std::vector<std::vector<std::complex<double>>>& interferingChannels,
+        const std::vector<double>& interferingPowers, double noisePower)
+{
+    auto numReceiveAntennas = desiredChannel.size();
+    if (numReceiveAntennas == 0)
+        throw cRuntimeError("L-MMSE desired channel must contain at least one receive antenna");
+    if (!std::isfinite(desiredPower) || desiredPower < 0)
+        throw cRuntimeError("L-MMSE desired power must be finite and non-negative");
+    if (!std::isfinite(noisePower) || noisePower <= 0)
+        throw cRuntimeError("L-MMSE per-antenna noise power must be finite and positive");
+    if (interferingChannels.size() != interferingPowers.size())
+        throw cRuntimeError("L-MMSE interfering channel and power counts differ");
+    for (const auto& coefficient : desiredChannel)
+        if (!std::isfinite(coefficient.real()) || !std::isfinite(coefficient.imag()))
+            throw cRuntimeError("L-MMSE desired channel must be finite");
+
+    std::vector<std::complex<double>> covariance(numReceiveAntennas * numReceiveAntennas, {0, 0});
+    for (size_t row = 0; row < numReceiveAntennas; row++)
+        covariance[row * numReceiveAntennas + row] = noisePower;
+    for (size_t i = 0; i < interferingChannels.size(); i++) {
+        const auto& channel = interferingChannels[i];
+        auto power = interferingPowers[i];
+        if (channel.size() != numReceiveAntennas)
+            throw cRuntimeError("L-MMSE interfering channel receive dimension differs from desired channel");
+        if (!std::isfinite(power) || power < 0)
+            throw cRuntimeError("L-MMSE interfering power must be finite and non-negative");
+        for (const auto& coefficient : channel)
+            if (!std::isfinite(coefficient.real()) || !std::isfinite(coefficient.imag()))
+                throw cRuntimeError("L-MMSE interfering channel must be finite");
+        for (size_t row = 0; row < numReceiveAntennas; row++)
+            for (size_t column = 0; column < numReceiveAntennas; column++)
+                covariance[row * numReceiveAntennas + column] +=
+                        power * channel[row] * std::conj(channel[column]);
+    }
+
+    // Cholesky factorization R = L L^H. Positive per-antenna noise makes R
+    // Hermitian positive definite even when interferer channels are dependent.
+    std::vector<std::complex<double>> lower(numReceiveAntennas * numReceiveAntennas, {0, 0});
+    for (size_t row = 0; row < numReceiveAntennas; row++) {
+        for (size_t column = 0; column <= row; column++) {
+            auto value = covariance[row * numReceiveAntennas + column];
+            for (size_t k = 0; k < column; k++)
+                value -= lower[row * numReceiveAntennas + k] *
+                        std::conj(lower[column * numReceiveAntennas + k]);
+            if (row == column) {
+                auto tolerance = 1e-12 * std::max(1.0, std::abs(covariance[row * numReceiveAntennas + row]));
+                if (std::abs(value.imag()) > tolerance || value.real() <= 0)
+                    throw cRuntimeError("L-MMSE interference covariance is not positive definite");
+                lower[row * numReceiveAntennas + column] = std::sqrt(value.real());
+            }
+            else
+                lower[row * numReceiveAntennas + column] = value /
+                        lower[column * numReceiveAntennas + column];
+        }
+    }
+
+    std::vector<std::complex<double>> forward(numReceiveAntennas);
+    for (size_t row = 0; row < numReceiveAntennas; row++) {
+        auto value = desiredChannel[row];
+        for (size_t column = 0; column < row; column++)
+            value -= lower[row * numReceiveAntennas + column] * forward[column];
+        forward[row] = value / lower[row * numReceiveAntennas + row];
+    }
+    std::vector<std::complex<double>> solution(numReceiveAntennas);
+    for (size_t reverseRow = numReceiveAntennas; reverseRow-- > 0;) {
+        auto value = forward[reverseRow];
+        for (size_t column = reverseRow + 1; column < numReceiveAntennas; column++)
+            value -= std::conj(lower[column * numReceiveAntennas + reverseRow]) * solution[column];
+        solution[reverseRow] = value / std::conj(lower[reverseRow * numReceiveAntennas + reverseRow]);
+    }
+    std::complex<double> quadraticForm(0, 0);
+    for (size_t i = 0; i < numReceiveAntennas; i++)
+        quadraticForm += std::conj(desiredChannel[i]) * solution[i];
+    auto tolerance = 1e-12 * std::max(1.0, std::abs(quadraticForm));
+    if (!std::isfinite(quadraticForm.real()) || !std::isfinite(quadraticForm.imag()) ||
+            std::abs(quadraticForm.imag()) > tolerance || quadraticForm.real() < -tolerance)
+        throw cRuntimeError("L-MMSE SINR quadratic form is not finite non-negative real");
+    return desiredPower * std::max(0.0, quadraticForm.real());
 }
 
 Ptr<const IFunction<double, Domain<simsec, Hz>>> ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(

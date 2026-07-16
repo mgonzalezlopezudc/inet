@@ -24,9 +24,14 @@ using namespace inet::math;
 class INET_API ChannelMatrixCombiner
 {
   public:
+    static std::vector<std::complex<double>> computeEffectiveChannel(const ChannelMatrix& channelMatrix,
+            const std::vector<std::complex<double>>& transmitWeights);
     static double computeSingleStreamMrcPowerGain(const ChannelMatrix& channelMatrix);
     static double computeSingleStreamMrcPowerGain(const ChannelMatrix& channelMatrix,
             const std::vector<std::complex<double>>& transmitWeights);
+    static double computeSingleStreamLmmseSinr(const std::vector<std::complex<double>>& desiredChannel,
+            double desiredPower, const std::vector<std::vector<std::complex<double>>>& interferingChannels,
+            const std::vector<double>& interferingPowers, double noisePower);
     static Ptr<const IFunction<double, Domain<simsec, Hz>>> createStaticSingleStreamMrcPowerGain(
             const std::shared_ptr<const IChannelMatrixResponse>& channelMatrixResponse,
             int selectedTransmitAntenna, simtime_t startTime, simtime_t endTime,

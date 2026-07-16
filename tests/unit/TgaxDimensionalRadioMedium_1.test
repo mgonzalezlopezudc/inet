@@ -16,6 +16,8 @@ and opt-in RBIR sampling of a narrow HE trigger-based uplink RU.
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
+#include "inet/physicallayer/wireless/common/signal/Interference.h"
 #include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
 #include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxChannelModel.h"
@@ -120,6 +122,7 @@ class TgaxInspectableDimensionalRadioMedium : public Ieee80211RadioMedium
     void testAddTransmission(const IRadio *transmitter, const ITransmission *transmission) { addTransmission(transmitter, transmission); }
     void testRemoveTransmission(const ITransmission *transmission) { removeTransmission(transmission); }
     const IReception *testComputeReception(const IRadio *receiver, const ITransmission *transmission) const { return computeReception(receiver, transmission); }
+    const INoise *testComputeNoise(const IListening *listening, const IInterference *interference) const { return analogModel->computeNoise(listening, interference); }
     bool testIsInCommunicationRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInCommunicationRange(transmission, startPosition, endPosition); }
     bool testIsInInterferenceRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInInterferenceRange(transmission, startPosition, endPosition); }
 };
@@ -291,6 +294,7 @@ auto computeAndCheckFadingFactor = [&](Ieee80211Transmission *transmission) {
 
     auto reception = medium->testComputeReception(rxRadio, transmission);
     auto ruAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(reception->getAnalogModel());
+    ASSERT(check_and_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel())->getChannelMatrixSignal() == nullptr);
     ASSERT(ruAnalogModel->getCenterFrequency() == rus[0].centerFrequency);
     ASSERT(ruAnalogModel->getBandwidth() == rus[0].bandwidth);
 
@@ -350,11 +354,37 @@ auto matrixSamplePoint = Point<simsec, Hz>(simsec(matrixSampleTime), rus[0].cent
 auto matrixBaselinePsd = matrixAggregateAnalogModel->getPower()->getValue(matrixSamplePoint) * ordinaryAttenuationFactor;
 auto matrixReceivedPsd = matrixReceptionAnalogModel->getPower()->getValue(matrixSamplePoint);
 auto matrixInterferencePsd = matrixReceptionAnalogModel->getInterferencePower()->getValue(matrixSamplePoint);
+auto matrixSignal = matrixReceptionAnalogModel->getChannelMatrixSignal();
+ASSERT(matrixSignal != nullptr);
+ASSERT(matrixSignal->getNumReceiveAntennas() == 2);
+ASSERT(matrixSignal->getTransmitWeights() == std::vector<std::complex<double>>({{1, 0}}));
+ASSERT(matrixSignal->computeEffectiveChannel(simsec(matrixSampleTime), rus[0].centerFrequency) ==
+        std::vector<std::complex<double>>({{3, 4}, {0, 12}}));
 ASSERT(matrixBaselinePsd > WpHz(0));
 // The matrix snapshot's scalar fallback sentinel is 0.25. An exact 169 ratio
 // proves matrix-aware reception replaces rather than multiplies that fallback.
 ASSERT(std::abs(matrixReceivedPsd.get<WpHz>() / matrixBaselinePsd.get<WpHz>() - 169) < 1e-12);
 ASSERT(std::abs(matrixInterferencePsd.get<WpHz>() / matrixBaselinePsd.get<WpHz>() - 0.25) < 1e-12);
+ASSERT(std::abs(matrixSignal->getInputPower()->getValue(matrixSamplePoint).get<WpHz>() /
+        matrixBaselinePsd.get<WpHz>() - 1) < 1e-12);
+auto outsideMatrixRuPoint = Point<simsec, Hz>(simsec(matrixSampleTime), centerFrequency + channelBandwidth / 2 - Hz(1));
+ASSERT(matrixSignal->getInputPower()->getValue(outsideMatrixRuPoint) == WpHz(0));
+auto backgroundPsd = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(0.5));
+auto backgroundNoise = new DimensionalNoise(matrixReception->getStartTime(), matrixReception->getEndTime(),
+        matrixReceptionAnalogModel->getCenterFrequency(), matrixReceptionAnalogModel->getBandwidth(), backgroundPsd);
+auto interferingReceptions = new std::vector<const IReception *>{matrixReception};
+Interference spatialInterference(backgroundNoise, interferingReceptions);
+BandListening spatialListening(rxRadio, matrixReception->getStartTime(), matrixReception->getEndTime(),
+        Coord::ZERO, Coord::ZERO, matrixReceptionAnalogModel->getCenterFrequency(), matrixReceptionAnalogModel->getBandwidth());
+auto spatialNoise = check_and_cast<const DimensionalNoise *>(medium->testComputeNoise(&spatialListening, &spatialInterference));
+ASSERT(spatialNoise->getBackgroundNoisePower() != nullptr);
+ASSERT(spatialNoise->getBackgroundNoisePower()->getValue(matrixSamplePoint) == WpHz(0.5));
+ASSERT(spatialNoise->getChannelMatrixInterferers().size() == 1);
+ASSERT(spatialNoise->getChannelMatrixInterferers()[0]->computeEffectiveChannel(
+        simsec(matrixSampleTime), rus[0].centerFrequency) ==
+        std::vector<std::complex<double>>({{3, 4}, {0, 12}}));
+ASSERT(spatialNoise->getChannelMatrixInterferers()[0]->getInputPower()->getValue(outsideMatrixRuPoint) == WpHz(0));
+delete spatialNoise;
 auto syntheticNoisePower = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(1));
 DimensionalNoise syntheticInterference(matrixReception->getStartTime(), matrixReception->getEndTime(),
         matrixReceptionAnalogModel->getCenterFrequency(), matrixReceptionAnalogModel->getBandwidth(),
@@ -375,6 +405,10 @@ medium->testAddTransmission(txRadio, singleRxMatrixTransmission);
 auto singleRxAggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(singleRxMatrixTransmission->getAnalogModel());
 auto singleRxMatrixReception = medium->testComputeReception(rxSingleRadio, singleRxMatrixTransmission);
 auto singleRxReceptionAnalogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(singleRxMatrixReception->getAnalogModel());
+ASSERT(singleRxReceptionAnalogModel->getChannelMatrixSignal() != nullptr);
+ASSERT(singleRxReceptionAnalogModel->getChannelMatrixSignal()->computeEffectiveChannel(
+        simsec(singleRxMatrixReception->getStartTime()), centerFrequency) ==
+        std::vector<std::complex<double>>({{2, 0}}));
 auto singleRxSamplePoint = Point<simsec, Hz>(simsec(singleRxMatrixReception->getStartTime() + SimTime(500, SIMTIME_US)), centerFrequency);
 auto singleRxBaselinePsd = singleRxAggregateAnalogModel->getPower()->getValue(singleRxSamplePoint) * ordinaryAttenuationFactor;
 ASSERT(std::abs(singleRxReceptionAnalogModel->getPower()->getValue(singleRxSamplePoint).get<WpHz>() /

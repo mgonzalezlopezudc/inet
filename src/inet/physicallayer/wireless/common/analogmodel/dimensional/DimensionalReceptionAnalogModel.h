@@ -9,6 +9,7 @@
 #define __INET_DIMENSIONALRECEPTIONANALOGMODEL_H
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSignal.h"
 
 namespace inet {
 
@@ -19,16 +20,19 @@ class INET_API DimensionalReceptionAnalogModel : public DimensionalSignalAnalogM
   protected:
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> interferencePower;
     const bool channelMatrixCombined;
+    const std::shared_ptr<const ChannelMatrixSignal> channelMatrixSignal;
 
   public:
     DimensionalReceptionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration,
             const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth,
             const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power,
             const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& interferencePower = nullptr,
-            bool channelMatrixCombined = false);
+            bool channelMatrixCombined = false,
+            const std::shared_ptr<const ChannelMatrixSignal>& channelMatrixSignal = nullptr);
 
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& getInterferencePower() const { return interferencePower; }
     bool isChannelMatrixCombined() const { return channelMatrixCombined; }
+    const std::shared_ptr<const ChannelMatrixSignal>& getChannelMatrixSignal() const { return channelMatrixSignal; }
 };
 
 } // namespace physicallayer
