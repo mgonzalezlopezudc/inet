@@ -14,11 +14,15 @@ DimensionalReceptionAnalogModel::DimensionalReceptionAnalogModel(const simtime_t
         const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth,
         const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power,
         const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& interferencePower,
-        bool channelMatrixCombined) :
+        bool channelMatrixCombined,
+        const std::shared_ptr<const ChannelMatrixSignal>& channelMatrixSignal) :
     DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, bandwidth, power),
     interferencePower(interferencePower == nullptr ? power : interferencePower),
-    channelMatrixCombined(channelMatrixCombined)
+    channelMatrixCombined(channelMatrixCombined),
+    channelMatrixSignal(channelMatrixSignal)
 {
+    if (channelMatrixCombined && channelMatrixSignal == nullptr)
+        throw cRuntimeError("Channel-matrix-combined reception requires channel matrix signal metadata");
 }
 
 } // namespace physicallayer

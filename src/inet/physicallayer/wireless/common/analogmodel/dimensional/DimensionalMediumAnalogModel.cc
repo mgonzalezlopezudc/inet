@@ -46,10 +46,13 @@ std::ostream& DimensionalMediumAnalogModel::printToStream(std::ostream& stream, 
 
 const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogModel::computeReceptionPower(
         const IRadio *receiverRadio, const ITransmission *transmission, const IArrival *arrival,
-        bool *channelMatrixCombined, Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> *interferencePower) const
+        bool *channelMatrixCombined, Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> *interferencePower,
+        std::shared_ptr<const ChannelMatrixSignal> *channelMatrixSignal) const
 {
     if (channelMatrixCombined != nullptr)
         *channelMatrixCombined = false;
+    if (channelMatrixSignal != nullptr)
+        *channelMatrixSignal = nullptr;
     const IRadioMedium *radioMedium = receiverRadio->getMedium();
     auto analogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
     const Coord& transmissionStartPosition = transmission->getStartPosition();
@@ -93,6 +96,14 @@ const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> DimensionalMediumAnalogMode
                         channelMatrixResponse->getNumReceiveAntennas(), channelMatrixResponse->getNumTransmitAntennas(),
                         numReceiveAntennas, numTransmitAntennas);
             scalarInterferencePower = receptionPower->multiply(channelMatrixSnapshot->getPowerGain());
+            std::vector<std::complex<double>> transmitWeights(numTransmitAntennas, {0, 0});
+            if (channelMatrixTransmitAntenna < 0 || channelMatrixTransmitAntenna >= numTransmitAntennas)
+                throw cRuntimeError("Selected channel matrix transmit antenna is out of range");
+            transmitWeights[channelMatrixTransmitAntenna] = {1, 0};
+            auto spatialSignal = std::make_shared<const ChannelMatrixSignal>(
+                    receptionPower, channelMatrixResponse, std::move(transmitWeights));
+            if (channelMatrixSignal != nullptr)
+                *channelMatrixSignal = spatialSignal;
             auto mrcPowerGain = ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(
                     channelMatrixResponse, channelMatrixTransmitAntenna,
                     arrival->getStartTime(), arrival->getEndTime(),
@@ -121,13 +132,17 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
     const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     Hz centerFrequency = bandListening->getCenterFrequency();
     Hz bandwidth = bandListening->getBandwidth();
+    const auto& bandpassFilter = makeShared<Boxcar2DFunction<double, simsec, Hz>>(simsec(listening->getStartTime()),
+            simsec(listening->getEndTime()), centerFrequency - bandwidth / 2, centerFrequency + bandwidth / 2, 1);
     std::vector<Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>> receptionPowers;
+    Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> backgroundNoisePower;
     const DimensionalNoise *dimensionalBackgroundNoise = check_and_cast_nullable<const DimensionalNoise *>(interference->getBackgroundNoise());
     if (dimensionalBackgroundNoise) {
-        const auto& backgroundNoisePower = dimensionalBackgroundNoise->getPower();
-        receptionPowers.push_back(backgroundNoisePower);
+        receptionPowers.push_back(dimensionalBackgroundNoise->getPower());
+        backgroundNoisePower = dimensionalBackgroundNoise->getPower()->multiply(bandpassFilter);
     }
     const std::vector<const IReception *> *interferingReceptions = interference->getInterferingReceptions();
+    std::vector<std::shared_ptr<const ChannelMatrixSignal>> channelMatrixInterferers;
     bool hasOverlappingReception = false;
     auto listeningLowerFrequency = centerFrequency - bandwidth / 2;
     auto listeningUpperFrequency = centerFrequency + bandwidth / 2;
@@ -137,8 +152,12 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
         receptionPowers.push_back(receptionPower);
         auto receptionLowerFrequency = dimensionalSignal->getCenterFrequency() - dimensionalSignal->getBandwidth() / 2;
         auto receptionUpperFrequency = dimensionalSignal->getCenterFrequency() + dimensionalSignal->getBandwidth() / 2;
-        hasOverlappingReception |= std::min(listeningUpperFrequency, receptionUpperFrequency) >
+        auto overlaps = std::min(listeningUpperFrequency, receptionUpperFrequency) >
                 std::max(listeningLowerFrequency, receptionLowerFrequency);
+        hasOverlappingReception |= overlaps;
+        if (overlaps && dimensionalSignal->getChannelMatrixSignal() != nullptr)
+            channelMatrixInterferers.push_back(dimensionalSignal->getChannelMatrixSignal()->withInputPower(
+                    dimensionalSignal->getChannelMatrixSignal()->getInputPower()->multiply(bandpassFilter)));
         EV_TRACE << "Interference power begin " << endl;
         EV_TRACE << *receptionPower << endl;
         EV_TRACE << "Interference power end" << endl;
@@ -147,9 +166,9 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IListening *liste
     EV_TRACE << "Noise power begin " << endl;
     EV_TRACE << *noisePower << endl;
     EV_TRACE << "Noise power end" << endl;
-    const auto& bandpassFilter = makeShared<Boxcar2DFunction<double, simsec, Hz>>(simsec(listening->getStartTime()), simsec(listening->getEndTime()), centerFrequency - bandwidth / 2, centerFrequency + bandwidth / 2, 1);
     return new DimensionalNoise(listening->getStartTime(), listening->getEndTime(), centerFrequency, bandwidth,
-            noisePower->multiply(bandpassFilter), hasOverlappingReception);
+            noisePower->multiply(bandpassFilter), hasOverlappingReception, backgroundNoisePower,
+            std::move(channelMatrixInterferers));
 }
 
 const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *reception, const INoise *noise) const
@@ -158,7 +177,8 @@ const INoise *DimensionalMediumAnalogModel::computeNoise(const IReception *recep
     auto dimensionalNoise = check_and_cast<const DimensionalNoise *>(noise);
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& noisePower = makeShared<AddedFunction<WpHz, Domain<simsec, Hz>>>(dimensionalReception->getPower(), dimensionalNoise->getPower());
     return new DimensionalNoise(reception->getStartTime(), reception->getEndTime(), dimensionalReception->getCenterFrequency(),
-            dimensionalReception->getBandwidth(), noisePower, dimensionalNoise->hasInterferingReceptions());
+            dimensionalReception->getBandwidth(), noisePower, dimensionalNoise->hasInterferingReceptions(),
+            dimensionalNoise->getBackgroundNoisePower(), dimensionalNoise->getChannelMatrixInterferers());
 }
 
 const ISnir *DimensionalMediumAnalogModel::computeSNIR(const IReception *reception, const INoise *noise) const
@@ -181,12 +201,13 @@ const IReception *DimensionalMediumAnalogModel::computeReception(const IRadio *r
     const Quaternion& receptionEndOrientation = arrival->getEndOrientation();
     bool channelMatrixCombined = false;
     Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> interferencePower;
+    std::shared_ptr<const ChannelMatrixSignal> channelMatrixSignal;
     const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& receptionPower = computeReceptionPower(
-            receiverRadio, transmission, arrival, &channelMatrixCombined, &interferencePower);
+            receiverRadio, transmission, arrival, &channelMatrixCombined, &interferencePower, &channelMatrixSignal);
     auto receptionAnalogModel = new DimensionalReceptionAnalogModel(transmissionAnalogModel->getPreambleDuration(),
             transmissionAnalogModel->getHeaderDuration(), transmissionAnalogModel->getDataDuration(),
             transmissionAnalogModel->getCenterFrequency(), transmissionAnalogModel->getBandwidth(),
-            receptionPower, interferencePower, channelMatrixCombined);
+            receptionPower, interferencePower, channelMatrixCombined, channelMatrixSignal);
     return new Reception(receiverRadio, transmission, receptionStartTime, receptionEndTime, receptionStartPosition, receptionEndPosition, receptionStartOrientation, receptionEndOrientation, receptionAnalogModel);
 }
 

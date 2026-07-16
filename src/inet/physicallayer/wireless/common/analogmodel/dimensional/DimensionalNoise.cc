@@ -7,6 +7,8 @@
 
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
 
+#include <utility>
+
 #include "inet/common/math/Functions.h"
 
 namespace inet {
@@ -14,10 +16,14 @@ namespace inet {
 namespace physicallayer {
 
 DimensionalNoise::DimensionalNoise(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth,
-        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power, bool hasInterferingReceptions) :
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power, bool hasInterferingReceptions,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& backgroundNoisePower,
+        std::vector<std::shared_ptr<const ChannelMatrixSignal>> channelMatrixInterferers) :
     NarrowbandNoiseBase(startTime, endTime, centerFrequency, bandwidth),
     power(power),
-    containsInterferingReceptions(hasInterferingReceptions)
+    containsInterferingReceptions(hasInterferingReceptions),
+    backgroundNoisePower(backgroundNoisePower),
+    channelMatrixInterferers(std::move(channelMatrixInterferers))
 {
 }
 

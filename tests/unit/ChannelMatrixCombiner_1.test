@@ -3,13 +3,17 @@ This test checks single-stream MRC for SIMO and explicitly precoded MIMO channel
 
 %includes:
 #include <cmath>
+#include <limits>
 
+#include "inet/common/math/Functions.h"
 #include "inet/physicallayer/wireless/common/signal/ChannelMatrixCombiner.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSignal.h"
 #include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
 
 %global:
 
 using namespace inet;
+using namespace inet::math;
 using namespace inet::physicallayer;
 
 class TimeVaryingTestChannelMatrixResponse : public IChannelMatrixResponse
@@ -46,11 +50,63 @@ ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo,
 ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo,
         {{1, 0}, {0, 0}}) - 2) < 1e-14);
 
+auto effectiveChannel = ChannelMatrixCombiner::computeEffectiveChannel(mimo, {{1, 0}, {0, 0}});
+ASSERT(effectiveChannel == std::vector<std::complex<double>>({{1, 0}, {1, 0}}));
+
+ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        {{1, 0}, {1, 0}}, 1, {}, {}, 1) - 2) < 1e-14);
+ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        {{1, 0}, {1, 0}}, 1, {{{1, 0}, {0, 0}}}, {9}, 1) - 1.1) < 1e-14);
+ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        {{1, 0}, {1, 0}}, 1, {{{1, 0}, {0, 1}}}, {3}, 1) - 8.0 / 7) < 1e-14);
+ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        {{1, 0}, {1, 0}}, 1, {{{1, 0}, {-1, 0}}}, {100}, 1) - 2) < 1e-12);
+ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        {{1, 0}, {0, 1}}, 1, {{{1, 0}, {1, 0}}}, {3}, 2) - 0.625) < 1e-14);
+auto firstInterfererOrder = ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        {{1, 0}, {1, 0}}, 2, {{{1, 0}, {0, 1}}, {{2, 0}, {1, 0}}}, {3, 0.5}, 1);
+auto secondInterfererOrder = ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        {{1, 0}, {1, 0}}, 2, {{{2, 0}, {1, 0}}, {{1, 0}, {0, 1}}}, {0.5, 3}, 1);
+ASSERT(std::abs(firstInterfererOrder - secondInterfererOrder) < 1e-14);
+
 expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo); }, "missing MIMO precoder");
 expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo, {{1, 0}}); }, "precoder size");
 expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo, {{1, 0}, {1, 0}}); }, "precoder norm");
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::computeSingleStreamLmmseSinr({{1, 0}}, 1, {{{1, 0}}}, {}, 1);
+}, "interferer count");
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::computeSingleStreamLmmseSinr({{1, 0}, {1, 0}}, 1, {{{1, 0}}}, {1}, 1);
+}, "interferer dimension");
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::computeSingleStreamLmmseSinr({{1, 0}}, 1, {}, {}, 0);
+}, "positive noise");
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::computeSingleStreamLmmseSinr({{1, 0}}, -1, {}, {}, 1);
+}, "desired power");
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::computeSingleStreamLmmseSinr({{1, 0}}, 1, {{{1, 0}}}, {-1}, 1);
+}, "interferer power");
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+            {{std::numeric_limits<double>::infinity(), 0}}, 1, {}, {}, 1);
+}, "finite desired channel");
 
 auto simoResponse = std::make_shared<const ConstantChannelMatrixResponse>(simo);
+auto unitInputPower = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(1));
+auto matrixSignal = std::make_shared<const ChannelMatrixSignal>(unitInputPower, simoResponse,
+        std::vector<std::complex<double>>{{1, 0}});
+ASSERT(matrixSignal->computeEffectiveChannel(simsec(0), GHz(5)) == simo.getCoefficients());
+auto doubledInputPower = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(2));
+auto doubledMatrixSignal = matrixSignal->withInputPower(doubledInputPower);
+ASSERT(doubledMatrixSignal->getInputPower()->getValue(Point<simsec, Hz>(simsec(0), GHz(5))) == WpHz(2));
+ASSERT(doubledMatrixSignal->getChannelMatrixResponse() == matrixSignal->getChannelMatrixResponse());
+expectRuntimeError([&] {
+    ChannelMatrixSignal(unitInputPower, simoResponse, {});
+}, "matrix signal weight count");
+expectRuntimeError([&] {
+    ChannelMatrixSignal(unitInputPower, simoResponse, {{2, 0}});
+}, "matrix signal weight norm");
 auto simoGain = ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(simoResponse, 0,
         SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20), MHz(1));
 ASSERT(std::abs(simoGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5))) - 169) < 1e-14);
