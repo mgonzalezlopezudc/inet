@@ -20,9 +20,10 @@
 //   - Clause 27.3.11.8: HE-SIG-B RU allocation and user identification.
 //
 // Approximations / simplifications:
-//   - Per-RU receive power is approximated as total transmit power scaled by
-//     RU bandwidth over channel bandwidth.  The standard specifies per-
-//     subcarrier power and does not scale total TX power linearly with RU size.
+//   - With the scalar analog representation, per-RU receive power is
+//     approximated as total transmit power scaled by RU bandwidth over channel
+//     bandwidth. The dimensional representation retains the power spectral
+//     density and limits it to the selected RU band instead.
 //   - Single-user HE TB transmissions intentionally skip bandwidth scaling and
 //     use the full aggregate power, which is inconsistent with multi-RU UL.
 //   - Perfect RU isolation is assumed; adjacent-RU leakage and in-band
@@ -35,10 +36,14 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarMediumAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
-#include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/signal/Interference.h"
+#include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 
@@ -94,9 +99,9 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
     auto receiverStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
     if (!receiverStaId.has_value() && heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)
         return false;
-    auto scalarTransmissionAnalogModel = dynamic_cast<const ScalarSignalAnalogModel *>(transmission->getAnalogModel());
+    auto narrowbandTransmissionAnalogModel = dynamic_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
-    if (scalarTransmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
+    if (narrowbandTransmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
         return false;
     if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
             heMuPhyHeader->getUsersArraySize() == 1) {
@@ -114,7 +119,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
         ru.bandwidth = Hz(ru.toneSize * HE_TONE_SPACING);
         double centerTone = ru.toneOffset + ru.toneSize / 2.0 - channelTones / 2.0;
-        auto fullChannelCenter = scalarTransmissionAnalogModel->getCenterFrequency() -
+        auto fullChannelCenter = narrowbandTransmissionAnalogModel->getCenterFrequency() -
                 Hz(centerTone * HE_TONE_SPACING);
         ru.centerFrequency = fullChannelCenter + Hz(centerTone * HE_TONE_SPACING);
         return true;
@@ -127,7 +132,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
             constexpr double HE_TONE_SPACING = 78125;
             auto channelBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
             if (user.ruToneSize == 0) {
-                auto legacyRus = calculateHeRus(scalarTransmissionAnalogModel->getCenterFrequency(),
+                auto legacyRus = calculateHeRus(narrowbandTransmissionAnalogModel->getCenterFrequency(),
                         channelBandwidth, heMuPhyHeader->getUsersArraySize());
                 if (user.ruIndex >= 0 && user.ruIndex < (int)legacyRus.size()) {
                     ru = legacyRus[user.ruIndex];
@@ -143,7 +148,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
             ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
             ru.bandwidth = Hz(ru.toneSize * HE_TONE_SPACING);
             double centerTone = ru.toneOffset + ru.toneSize / 2.0 - channelTones / 2.0;
-            ru.centerFrequency = scalarTransmissionAnalogModel->getCenterFrequency() + Hz(centerTone * HE_TONE_SPACING);
+            ru.centerFrequency = narrowbandTransmissionAnalogModel->getCenterFrequency() + Hz(centerTone * HE_TONE_SPACING);
             return true;
         }
     }
@@ -152,32 +157,51 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
 
 const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *receiver, const ITransmission *transmission, const Ieee80211HeRu& ru) const
 {
-    auto scalarMediumAnalogModel = dynamic_cast<const ScalarMediumAnalogModel *>(analogModel);
-    auto scalarTransmissionAnalogModel = dynamic_cast<const ScalarSignalAnalogModel *>(transmission->getAnalogModel());
+    auto transmissionAnalogModel = dynamic_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
-    if (scalarMediumAnalogModel == nullptr || scalarTransmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
+    if (transmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
         return nullptr;
 
     auto arrival = getArrival(receiver, transmission);
-    auto totalBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
-    auto aggregatePower = scalarMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
-    auto packet = transmission->getPacket();
-    auto heMuHeader = packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>() ?
-            packet->peekAtFront<Ieee80211HeMuPhyHeader>() : nullptr;
-    bool isTriggerBasedUplink = heMuHeader != nullptr &&
-            heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK;
-    // The standard defines the RU's subcarrier allocation, not this packet-level
-    // power scaling. For DL MU, scale the aggregate receive power by occupied
-    // RU bandwidth; for UL TB, the transmitter already emits on the assigned RU.
-    auto ruPower = isTriggerBasedUplink ? aggregatePower :
-            aggregatePower * (ru.bandwidth.get() / totalBandwidth.get());
-    auto ruAnalogModel = new ScalarReceptionAnalogModel(
-            scalarTransmissionAnalogModel->getPreambleDuration(),
-            scalarTransmissionAnalogModel->getHeaderDuration(),
-            scalarTransmissionAnalogModel->getDataDuration(),
-            ru.centerFrequency,
-            ru.bandwidth,
-            ruPower);
+    IReceptionAnalogModel *ruAnalogModel = nullptr;
+    if (auto scalarMediumAnalogModel = dynamic_cast<const ScalarMediumAnalogModel *>(analogModel)) {
+        auto totalBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
+        auto aggregatePower = scalarMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
+        auto packet = transmission->getPacket();
+        auto heMuHeader = packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>() ?
+                packet->peekAtFront<Ieee80211HeMuPhyHeader>() : nullptr;
+        bool isTriggerBasedUplink = heMuHeader != nullptr &&
+                heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK;
+        // The standard defines the RU's subcarrier allocation, not this packet-level
+        // power scaling. For DL MU, scale the aggregate receive power by occupied
+        // RU bandwidth; for UL TB, the transmitter already emits on the assigned RU.
+        auto ruPower = isTriggerBasedUplink ? aggregatePower :
+                aggregatePower * (ru.bandwidth.get() / totalBandwidth.get());
+        ruAnalogModel = new ScalarReceptionAnalogModel(
+                transmissionAnalogModel->getPreambleDuration(),
+                transmissionAnalogModel->getHeaderDuration(),
+                transmissionAnalogModel->getDataDuration(),
+                ru.centerFrequency,
+                ru.bandwidth,
+                ruPower);
+    }
+    else if (auto dimensionalMediumAnalogModel = dynamic_cast<const DimensionalMediumAnalogModel *>(analogModel)) {
+        if (dynamic_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel()) == nullptr)
+            return nullptr;
+        auto aggregatePower = dimensionalMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
+        const auto& ruBandpassFilter = makeShared<Boxcar2DFunction<double, simsec, Hz>>(
+                simsec(arrival->getStartTime()), simsec(arrival->getEndTime()),
+                ru.centerFrequency - ru.bandwidth / 2, ru.centerFrequency + ru.bandwidth / 2, 1);
+        ruAnalogModel = new DimensionalReceptionAnalogModel(
+                transmissionAnalogModel->getPreambleDuration(),
+                transmissionAnalogModel->getHeaderDuration(),
+                transmissionAnalogModel->getDataDuration(),
+                ru.centerFrequency,
+                ru.bandwidth,
+                aggregatePower->multiply(ruBandpassFilter));
+    }
+    if (ruAnalogModel == nullptr)
+        return nullptr;
     return new Reception(receiver, transmission, arrival->getStartTime(), arrival->getEndTime(),
             arrival->getStartPosition(), arrival->getEndPosition(),
             arrival->getStartOrientation(), arrival->getEndOrientation(), ruAnalogModel);
@@ -216,7 +240,7 @@ const IInterference *Ieee80211RadioMedium::computeInterference(const IRadio *rec
         // overlapping stream ranges, remain ordinary interference.
         if (areSpatiallyOrthogonalHeTbUsers(transmission, interferingReception->getTransmission()))
             continue;
-        auto analogModel = dynamic_cast<const ScalarReceptionAnalogModel *>(
+        auto analogModel = dynamic_cast<const INarrowbandSignalAnalogModel *>(
                 interferingReception->getAnalogModel());
         if (analogModel == nullptr) {
             overlappingReceptions->push_back(interferingReception);
