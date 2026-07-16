@@ -118,6 +118,17 @@ distance loss. These configurations retain the default NIST receiver error
 model, so they are useful for channel integration and comparison but do not
 constitute an RBIR-calibrated TGax system result.
 
+`TgaxModelBAmbientDopplerOFDMA` enables stationary-user ambient evolution from
+the TGac channel-model addendum. Each cached tap uses a deterministic
+32-oscillator approximation of the TGn bell-shaped Doppler spectrum, truncated
+at ±5 times its Doppler spread and sampled on a 1 ms piecewise-constant time
+grid. The configured equivalent environmental speed is `0.089 km/h`; at 5 GHz
+the source target is approximately `0.414 Hz` RMS Doppler and `800 ms` channel
+coherence time. Packet boundaries do not redraw the channel. Because Doppler
+scales with carrier frequency, `referenceFrequency` must match the radio's
+center frequency when time variation is enabled; the channel model rejects a
+mismatch instead of silently evolving at the wrong rate.
+
 `TgaxModelBRbirOFDMA` additionally selects `Ieee80211RbirErrorModel`. It must
 be given the Appendix-3 Mean RBIR and PER curves from a user-supplied
 IEEE 802.11-14/0571r12 workbook. The workbook and extracted data are not
@@ -128,10 +139,16 @@ redistributed with INET. Extract them with:
   /path/to/Microsoft_Excel_Worksheet1.xlsx /tmp/tgax-rbir.txt
 ```
 
-The current TGax channel implementation is deliberately a static NLOS SISO
-baseline. It does not yet implement LOS/K-factor evolution, Doppler,
-non-stationarity, antenna-array correlation, polarization, or MIMO channel
-matrices. Outdoor UMi median LOS/NLOS path loss is available as
+The current TGax channel implementation remains a NLOS SISO baseline. Static
+operation is the default; the opt-in ambient process covers stationary indoor
+users only because the TGac source leaves mobile-user indoor Doppler speed and
+spectral shape TBD. It does not yet implement LOS/K-factor evolution,
+mobility-coupled non-stationarity, antenna-array correlation, polarization, or
+MIMO channel matrices. The profile catalog now preserves the visually verified
+TGn Appendix C cluster AoA/AoD/angular-spread metadata for Models B and D, but
+the next slice still requires a matrix-valued snapshot and MRC/MMSE consumer; a
+scalar Frobenius-gain shortcut would not be equivalent. Outdoor UMi median
+LOS/NLOS path loss is available as
 `TgaxUmiPathLoss`, but fixed outdoor UMi delay profiles are not exposed: the
 primary ITU-R table contains an internally inconsistent printed delay row, so
 the implementation does not silently guess a correction.
@@ -214,6 +231,19 @@ Run the static TGax Model B channel with the default NIST error model:
   -c TgaxModelBOFDMA -r 0 --seed-set=0 \
   --result-dir=results/tgax/model-b/nist/seed0
 ```
+
+Run the stationary ambient-Doppler variant:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c TgaxModelBAmbientDopplerOFDMA -r 0 --seed-set=0 \
+  --result-dir=results/tgax/model-b/ambient-doppler/seed0
+```
+
+This dynamic configuration intentionally retains the NIST receiver. The
+current RBIR implementation rejects time-varying per-tone SNIR rather than
+silently reducing it to one sample; combining `TgaxRbir` with ambient Doppler
+is therefore unsupported.
 
 Run the calibrated RBIR variant after extracting the user-supplied workbook:
 

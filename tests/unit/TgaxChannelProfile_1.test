@@ -136,6 +136,12 @@ for (const auto& expectation : expansionExpectations) {
 }
 
 auto modelB = TgaxChannelProfile::create("B", MHz(40));
+ASSERT(modelB.hasSpatialMetadata());
+ASSERT(modelB.getClusters().size() == 2);
+checkClose(modelB.getClusters()[0].angleOfArrivalDegrees, 4.3, 1e-12, "Model B cluster 1 AoA");
+checkClose(modelB.getClusters()[0].receiverAngularSpreadDegrees, 14.4, 1e-12, "Model B cluster 1 receiver AS");
+checkClose(modelB.getClusters()[0].angleOfDepartureDegrees, 225.1, 1e-12, "Model B cluster 1 AoD");
+checkClose(modelB.getClusters()[1].transmitterAngularSpreadDegrees, 25.4, 1e-12, "Model B cluster 2 transmitter AS");
 checkClose(findComponent(modelB, 1, 40).powerDb, -21.7, 1e-12, "Model B literal");
 checkClose(findComponent(modelB, 2, 80).powerDb, -21.8, 1e-12, "Model B last literal");
 ASSERT(countComponentsAtDelay(modelB, 20) == 2);
@@ -143,9 +149,18 @@ checkClose(findComponent(modelB, 1, 20).powerDb, -10.8, 1e-12, "Model B overlapp
 checkClose(findComponent(modelB, 2, 20).powerDb, -3.2, 1e-12, "Model B overlapping cluster 2");
 
 auto modelE = TgaxChannelProfile::create("E", MHz(20));
+ASSERT(!modelE.hasSpatialMetadata());
 checkClose(findComponent(modelE, 3, 330).powerDb, -13.8, 1e-12, "Model E literal");
 auto modelF = TgaxChannelProfile::create("F", MHz(20));
 checkClose(findComponent(modelF, 6, 1050).powerDb, -21.2, 1e-12, "Model F literal");
+
+auto modelD = TgaxChannelProfile::create("D", MHz(20));
+ASSERT(modelD.hasSpatialMetadata());
+ASSERT(modelD.getClusters().size() == 3);
+checkClose(modelD.getClusters()[1].angleOfArrivalDegrees, 320.2, 1e-12, "Model D cluster 2 AoA");
+checkClose(modelD.getClusters()[2].receiverAngularSpreadDegrees, 37.4, 1e-12, "Model D cluster 3 receiver AS");
+checkClose(modelD.getClusters()[2].angleOfDepartureDegrees, 275.9, 1e-12, "Model D cluster 3 AoD");
+checkClose(modelD.getClusters()[2].transmitterAngularSpreadDegrees, 36.8, 1e-12, "Model D cluster 3 transmitter AS");
 
 auto modelB80 = TgaxChannelProfile::create("B", MHz(80));
 ASSERT(modelB80.getExpansionFactor() == 2);

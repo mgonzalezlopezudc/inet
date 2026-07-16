@@ -41,13 +41,22 @@ class INET_API TgaxChannelProfile
         double normalizedPower;
     };
 
+    struct Cluster {
+        int clusterIndex;
+        double angleOfArrivalDegrees;
+        double receiverAngularSpreadDegrees;
+        double angleOfDepartureDegrees;
+        double transmitterAngularSpreadDegrees;
+    };
+
   protected:
     Model model;
     int expansionFactor;
     std::vector<Component> components;
+    std::vector<Cluster> clusters;
 
   protected:
-    TgaxChannelProfile(Model model, int expansionFactor, std::vector<Component> components);
+    TgaxChannelProfile(Model model, int expansionFactor, std::vector<Component> components, std::vector<Cluster> clusters);
 
   public:
     static TgaxChannelProfile create(Model model, Hz bandwidth);
@@ -56,6 +65,8 @@ class INET_API TgaxChannelProfile
     Model getModel() const { return model; }
     int getExpansionFactor() const { return expansionFactor; }
     const std::vector<Component>& getComponents() const { return components; }
+    const std::vector<Cluster>& getClusters() const { return clusters; }
+    bool hasSpatialMetadata() const { return !clusters.empty(); }
 
     double computeRmsDelaySpreadNs() const;
 };

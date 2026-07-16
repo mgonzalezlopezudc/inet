@@ -18,6 +18,29 @@ namespace {
 
 using Model = TgaxChannelProfile::Model;
 using Component = TgaxChannelProfile::Component;
+using Cluster = TgaxChannelProfile::Cluster;
+
+const std::vector<Cluster>& getBaseClusters(Model model)
+{
+    // IEEE 802.11-03/940r4, Appendix C. Keep this deliberately limited to
+    // the B-NLOS and D-NLOS profiles selected for the first matrix-valued
+    // slice. Empty metadata makes unsupported spatial profiles explicit.
+    static const std::vector<Cluster> noClusters;
+    static const std::vector<Cluster> modelB = {
+        {1, 4.3, 14.4, 225.1, 14.4},
+        {2, 118.4, 25.2, 106.5, 25.4},
+    };
+    static const std::vector<Cluster> modelD = {
+        {1, 158.9, 27.7, 332.1, 27.4},
+        {2, 320.2, 31.4, 49.3, 32.1},
+        {3, 276.1, 37.4, 275.9, 36.8},
+    };
+    switch (model) {
+        case Model::B: return modelB;
+        case Model::D: return modelD;
+        default: return noClusters;
+    }
+}
 
 const std::vector<Component>& getBaseComponents(Model model)
 {
@@ -146,10 +169,12 @@ void normalizeComponents(std::vector<Component>& components)
 
 } // namespace
 
-TgaxChannelProfile::TgaxChannelProfile(Model model, int expansionFactor, std::vector<Component> components) :
+TgaxChannelProfile::TgaxChannelProfile(Model model, int expansionFactor, std::vector<Component> components,
+        std::vector<Cluster> clusters) :
     model(model),
     expansionFactor(expansionFactor),
-    components(std::move(components))
+    components(std::move(components)),
+    clusters(std::move(clusters))
 {
 }
 
@@ -158,7 +183,7 @@ TgaxChannelProfile TgaxChannelProfile::create(Model model, Hz bandwidth)
     auto expansionFactor = computeExpansionFactor(bandwidth);
     auto components = expandComponents(getBaseComponents(model), expansionFactor);
     normalizeComponents(components);
-    return TgaxChannelProfile(model, expansionFactor, std::move(components));
+    return TgaxChannelProfile(model, expansionFactor, std::move(components), getBaseClusters(model));
 }
 
 TgaxChannelProfile TgaxChannelProfile::create(const char *model, Hz bandwidth)

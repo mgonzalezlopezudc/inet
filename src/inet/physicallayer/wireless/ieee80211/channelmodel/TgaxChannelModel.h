@@ -38,6 +38,10 @@ class INET_API TgaxChannelModel : public Module, public IWidebandChannelModel
     uint64_t realizationSeed = 0;
     Hz referenceFrequency = Hz(NaN);
     Hz frequencyResolution = Hz(NaN);
+    bool timeVariation = false;
+    mps environmentalSpeed = mps(NaN);
+    int numDopplerOscillators = 0;
+    simsec timeResolution = simsec(0);
     std::unique_ptr<TgaxChannelProfile> profile;
     mutable std::map<LinkKey, std::shared_ptr<const TgaxSisoChannel>> channels;
 

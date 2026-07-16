@@ -14,7 +14,7 @@ are not waveform implementations or interoperability certification tests.
 | Uplink multi-user access | [ul_ofdma](ul_ofdma/walkthrough.md) | Scheduled OFDMA, UORA, UL MU-MIMO, fragmentation, NDP feedback, OM Control |
 | Buffer reporting | [he_bsr](he_bsr/walkthrough.md) | Explicit, stale, and implicit Buffer Status Reports |
 | Channel bandwidth | [he_channel_widths](he_channel_widths/walkthrough.md) | 20, 40, 80, and 160 MHz operation |
-| Frequency-selective channels | [frequency_selective_channel](frequency_selective_channel/walkthrough.md) | Dimensional radio, per-RU isolation, TGax static SISO Model B, opt-in RBIR, notch sweeps, and preamble puncturing |
+| Frequency-selective channels | [frequency_selective_channel](frequency_selective_channel/walkthrough.md) | Dimensional radio, per-RU isolation, TGax static/dynamic SISO Model B, opt-in RBIR, notch sweeps, and preamble puncturing |
 | PHY and MAC feature combinations | [he_features](he_features/walkthrough.md) | LDPC, packet extension, puncturing, mixed capabilities, interference |
 | Rate selection | [he_rate_adaptation](he_rate_adaptation/walkthrough.md) | Fixed MCS and HE Minstrel, including mobility |
 | Extended range | [he_er_su](he_er_su/walkthrough.md) | HE SU and HE ER SU with DCM |

@@ -89,6 +89,24 @@ expectRuntimeError([] {
     TgaxSisoChannel channel({{simsec(0), {0, std::numeric_limits<double>::infinity()}}});
 }, "infinite coefficient");
 expectRuntimeError([&] { flatChannel.computeResponse(Hz(std::numeric_limits<double>::quiet_NaN())); }, "NaN frequency offset");
+
+TgaxSisoChannel dynamicChannel({
+        {simsec(0), {0, 0}, {
+                {Hz(1), {0.5, 0}},
+                {Hz(-1), {0.5, 0}}
+        }}
+});
+checkClose(dynamicChannel.computePowerGain(Hz(0), simsec(0)), 1, 1e-14, "dynamic tap at zero time");
+checkClose(dynamicChannel.computePowerGain(Hz(0), simsec(0.25)), 0, 1e-14, "dynamic tap destructive time phase");
+checkClose(dynamicChannel.computePowerGain(Hz(0), simsec(0.5)), 1, 1e-14, "dynamic tap half-period");
+auto vectorGains = dynamicChannel.computePowerGains({Hz(0), MHz(1)}, simsec(0.125));
+checkClose(vectorGains[0], dynamicChannel.computePowerGain(Hz(0), simsec(0.125)), 1e-14,
+        "vector gain first frequency");
+checkClose(vectorGains[1], dynamicChannel.computePowerGain(MHz(1), simsec(0.125)), 1e-14,
+        "vector gain second frequency");
+expectRuntimeError([&] {
+    dynamicChannel.computeResponse(Hz(0), simsec(std::numeric_limits<double>::quiet_NaN()));
+}, "NaN time");
 std::cout << "TGax SISO channel passed" << std::endl;
 
 %contains: stdout
