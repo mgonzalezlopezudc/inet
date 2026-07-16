@@ -1,0 +1,178 @@
+%description:
+Test that Ieee80211RadioMedium computes an HE MU receiver's assigned RU using
+the dimensional signal analog representation.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/packet/Packet.h"
+
+%file: TestNetwork.ned
+import inet.mobility.static.StationaryMobility;
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadio;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+
+module InspectableDimensionalRadioMedium extends Ieee80211DimensionalRadioMedium
+{
+    parameters:
+        @class(InspectableDimensionalRadioMedium);
+}
+
+module DimensionalMockNic
+{
+    parameters:
+        @class(DimensionalMockNicModule);
+    submodules:
+        radio: Ieee80211DimensionalRadio {
+            parameters:
+                transmitter.power = 20mW;
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: InspectableDimensionalRadioMedium {
+            parameters:
+                sameTransmissionStartTimeCheck = "ignore";
+        }
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.nic*.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.radio.opMode = "ax"
+**.radio.bandName = "5 GHz (20 MHz)"
+**.radio.channelNumber = 0
+**.radio.transmitter.bitrate = 7.3125Mbps
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+class InspectableDimensionalRadioMedium : public Ieee80211RadioMedium
+{
+  public:
+    void testAddTransmission(const IRadio *transmitter, const ITransmission *transmission) { addTransmission(transmitter, transmission); }
+    void testRemoveTransmission(const ITransmission *transmission) { removeTransmission(transmission); }
+    const IReception *testComputeReception(const IRadio *receiver, const ITransmission *transmission) const { return computeReception(receiver, transmission); }
+};
+
+class DimensionalMockNicModule : public NetworkInterface
+{
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(InspectableDimensionalRadioMedium);
+Define_Module(DimensionalMockNicModule);
+
+%activity:
+auto nicType = cModuleType::get("DimensionalMockNic");
+
+auto txNic = nicType->create("txNic", getSystemModule());
+txNic->buildInside();
+auto txNetworkInterface = check_and_cast<DimensionalMockNicModule *>(txNic);
+txNetworkInterface->setMacAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
+txNic->callInitialize();
+
+auto rxNic = nicType->create("rxNic", getSystemModule());
+rxNic->buildInside();
+auto rxNetworkInterface = check_and_cast<DimensionalMockNicModule *>(rxNic);
+rxNetworkInterface->setMacAddress(MacAddress("00:11:22:33:44:55"));
+rxNic->callInitialize();
+
+auto medium = check_and_cast<InspectableDimensionalRadioMedium *>(getParentModule()->getSubmodule("radioMedium"));
+auto txRadio = check_and_cast<IRadio *>(txNic->getSubmodule("radio"));
+auto rxRadio = check_and_cast<IRadio *>(rxNic->getSubmodule("radio"));
+
+auto modeSet = Ieee80211ModeSet::getModeSet("ax");
+auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto band = Ieee80211CompliantBands::getBand("5 GHz (20 MHz)");
+auto channel = new Ieee80211Channel(band, 0);
+auto centerFrequency = channel->getCenterFrequency();
+auto channelBandwidth = channel->getBand()->getSpacing();
+auto rus = calculateHeRus(centerFrequency, channelBandwidth, 4);
+
+auto packet = new Packet("HE-MU-dimensional-PPDU");
+auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+phyHeader->setPpduFormat(HE_MU_DOWNLINK);
+Ieee80211HeMuUserInfo user;
+user.ruIndex = rus[0].index;
+user.ruToneSize = rus[0].toneSize;
+user.ruToneOffset = rus[0].toneOffset;
+user.staId = computeHeMuStaId(rxNetworkInterface->getMacAddress());
+phyHeader->appendUsers(user);
+phyHeader->setChunkLength(b(16 + 73));
+packet->insertAtFront(phyHeader);
+packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
+auto transmissionAnalogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
+        SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+        centerFrequency, channelBandwidth, flatTransmitter->getPower());
+auto transmission = new Ieee80211Transmission(
+        txRadio, packet, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
+        SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+        Coord(), Coord(), Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
+        transmissionAnalogModel, mode, channel);
+
+medium->testAddTransmission(txRadio, transmission);
+auto aggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
+ASSERT(aggregateAnalogModel->getCenterFrequency() == centerFrequency);
+ASSERT(aggregateAnalogModel->getBandwidth() == channelBandwidth);
+
+auto reception = medium->testComputeReception(rxRadio, transmission);
+auto ruAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(reception->getAnalogModel());
+ASSERT(ruAnalogModel->getCenterFrequency() == rus[0].centerFrequency);
+ASSERT(ruAnalogModel->getBandwidth() == rus[0].bandwidth);
+auto middleTime = simsec((reception->getStartTime() + reception->getEndTime()) / 2);
+ASSERT(ruAnalogModel->getPower()->getValue(Point<simsec, Hz>(middleTime, rus[0].centerFrequency)) > WpHz(0));
+ASSERT(ruAnalogModel->getPower()->getValue(Point<simsec, Hz>(middleTime, centerFrequency + channelBandwidth / 2 - Hz(1))) == WpHz(0));
+
+delete reception;
+medium->testRemoveTransmission(transmission);
+delete channel;
+txNic->deleteModule();
+rxNic->deleteModule();
+
+EV << "Ieee80211RadioMedium selected the assigned HE MU RU for a dimensional signal.\n";
+EV << "Dimensional reception power was limited to the selected RU band.\n";
+EV << ".\n";
+
+%contains: stdout
+Ieee80211RadioMedium selected the assigned HE MU RU for a dimensional signal.
+Dimensional reception power was limited to the selected RU band.
+.
