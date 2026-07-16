@@ -1,0 +1,111 @@
+%description:
+This test checks TGn Kronecker-correlated 1x1/2x2 TGax NLOS matrix channels.
+
+%includes:
+#include <cmath>
+
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxMimoChannel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+template<typename Function>
+static void expectRuntimeError(Function function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+static void checkClose(std::complex<double> actual, std::complex<double> expected, double tolerance, const char *message)
+{
+    if (std::abs(actual - expected) > tolerance)
+        throw cRuntimeError("%s: difference = %.17g", message, std::abs(actual - expected));
+}
+
+%activity:
+auto profileB = TgaxChannelProfile::create("B", MHz(20));
+auto channel = TgaxMimoChannel::create(profileB, GHz(5.2), 2, 2, 0x123456789ABCDEF0ULL);
+ASSERT(channel->getNumReceiveAntennas() == 2);
+ASSERT(channel->getNumTransmitAntennas() == 2);
+ASSERT(channel->getTaps().size() == profileB.getComponents().size());
+bool foundIndependentOverlap = false;
+for (size_t i = 0; i < channel->getTaps().size(); i++)
+    for (size_t j = i + 1; j < channel->getTaps().size(); j++)
+        if (channel->getTaps()[i].excessDelay == channel->getTaps()[j].excessDelay) {
+            ASSERT(channel->getTaps()[i].coefficient.getCoefficient(0, 0) !=
+                    channel->getTaps()[j].coefficient.getCoefficient(0, 0));
+            foundIndependentOverlap = true;
+        }
+ASSERT(foundIndependentOverlap);
+
+auto sameChannel = TgaxMimoChannel::create(profileB, GHz(5.2), 2, 2, 0x123456789ABCDEF0ULL);
+auto forward = channel->getChannelMatrix(simsec(1), GHz(5.2) + MHz(3));
+auto same = sameChannel->getChannelMatrix(simsec(2), GHz(5.2) + MHz(3));
+for (int receiveAntenna = 0; receiveAntenna < 2; receiveAntenna++)
+    for (int transmitAntenna = 0; transmitAntenna < 2; transmitAntenna++)
+        ASSERT(forward.getCoefficient(receiveAntenna, transmitAntenna) ==
+                same.getCoefficient(receiveAntenna, transmitAntenna));
+
+auto reverse = channel->transposed()->getChannelMatrix(simsec(1), GHz(5.2) + MHz(3));
+for (int receiveAntenna = 0; receiveAntenna < 2; receiveAntenna++)
+    for (int transmitAntenna = 0; transmitAntenna < 2; transmitAntenna++)
+        ASSERT(reverse.getCoefficient(receiveAntenna, transmitAntenna) ==
+                forward.getCoefficient(transmitAntenna, receiveAntenna));
+
+auto receiveCorrelation = TgaxMimoChannel::computeHalfWavelengthUlaCorrelation(4.3, 14.4);
+auto transmitCorrelation = TgaxMimoChannel::computeHalfWavelengthUlaCorrelation(225.1, 14.4);
+ASSERT(std::abs(receiveCorrelation) <= 1);
+ASSERT(std::abs(transmitCorrelation) <= 1);
+
+std::complex<double> empiricalReceiveCorrelation(0, 0);
+std::complex<double> empiricalTransmitCorrelation(0, 0);
+double empiricalPower = 0;
+for (uint64_t seed = 1; seed <= 4000; seed++) {
+    auto realization = TgaxMimoChannel::create(profileB, GHz(5.2), 2, 2, seed);
+    const auto& firstTap = realization->getTaps().front().coefficient;
+    empiricalReceiveCorrelation += firstTap.getCoefficient(0, 0) * std::conj(firstTap.getCoefficient(1, 0));
+    empiricalTransmitCorrelation += firstTap.getCoefficient(0, 0) * std::conj(firstTap.getCoefficient(0, 1));
+    empiricalPower += std::norm(firstTap.getCoefficient(0, 0));
+}
+empiricalReceiveCorrelation /= empiricalPower;
+empiricalTransmitCorrelation /= empiricalPower;
+checkClose(empiricalReceiveCorrelation, receiveCorrelation, 0.04, "receive covariance");
+checkClose(empiricalTransmitCorrelation, transmitCorrelation, 0.04, "transmit covariance");
+
+double meanSisoPower = 0;
+for (uint64_t seed = 1; seed <= 2000; seed++) {
+    auto realization = TgaxMimoChannel::create(profileB, GHz(5.2), 1, 1, seed);
+    meanSisoPower += std::norm(realization->getChannelMatrix(simsec(0), GHz(5.2)).getCoefficient(0, 0));
+}
+meanSisoPower /= 2000;
+ASSERT(meanSisoPower > 0.94 && meanSisoPower < 1.06);
+
+TgaxMimoChannel analyticChannel(GHz(5), 1, 1, {
+        {simsec(0), ChannelMatrix(1, 1, {{1, 0}})},
+        {simsec(0.00000025), ChannelMatrix(1, 1, {{1, 0}})},
+});
+checkClose(analyticChannel.getChannelMatrix(simsec(0), GHz(5) + MHz(1)).getCoefficient(0, 0),
+        {1, -1}, 1e-12, "frequency phase sign");
+
+auto profileD = TgaxChannelProfile::create("D", MHz(20));
+auto channelD = TgaxMimoChannel::create(profileD, GHz(5.2), 2, 2, 42);
+ASSERT(channelD->getTaps().size() == profileD.getComponents().size());
+auto responseD = channelD->getChannelMatrix(simsec(0), GHz(5.2));
+ASSERT(responseD.getNumReceiveAntennas() == 2);
+ASSERT(responseD.getNumTransmitAntennas() == 2);
+expectRuntimeError([&] {
+    TgaxMimoChannel::create(TgaxChannelProfile::create("C", MHz(20)), GHz(5.2), 2, 2, 42);
+}, "unsupported spatial profile");
+
+std::cout << "TGax MIMO channel passed" << std::endl;
+
+%contains: stdout
+TGax MIMO channel passed
