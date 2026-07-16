@@ -15,7 +15,6 @@ Use repository skills for detailed simulation, test, result-analysis, and standa
 * Preserve the exact command, working directory, configuration, run number, exit status, and generated artifact paths in reports.
 * Do not infer packet delivery, loss, retransmission, or protocol behavior without supporting logs, captures, event logs, or recorded results.
 * Never update fingerprint CSV files without explicit user approval, even when the changed trajectory is explained and `.UPDATED` files have been generated.
-* When discovering skill files or other paths, still prefix commands with `rtk`, but prefer `rtk rg --files` or `rtk proxy find` over `rtk find` so path discovery uses reliable file-listing semantics.
 * Always use `-j$(nproc)` for `make` and other parallel build commands unless the user explicitly requests a different job count.
 * When a simulation error requires source-level C++ debugging, use a debug build with `opp_run_dbg`, the corresponding debug model libraries, and the `inet-lldb-debugging` skill. Do not mix release and debug binaries.
 
