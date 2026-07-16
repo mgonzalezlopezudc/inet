@@ -19,7 +19,7 @@ module DimensionalMediumAnalogModel extends Module like IMediumAnalogModel
     parameters:
         bool attenuateWithCenterFrequency = default(true); // True means frequency selectivity will always use the carrier frequency as opposed to using the frequency where the change in power occurs
         bool enableChannelMatrixMrc = default(false); // Enables selected-transmit-antenna, single-stream MRC for matrix channel snapshots
-        string channelMatrixInterferenceMode @enum("reject", "lmmse") = default("reject"); // Controls overlapping interference for channel-matrix receptions
+        string channelMatrixInterferenceMode @enum("reject", "lmmse") = default("reject"); // Controls overlapping interference for channel-matrix receptions; lmmse requires enableChannelMatrixMrc
         int channelMatrixTransmitAntenna = default(0); // Explicit one-hot transmit precoder for the selected antenna
         double channelMatrixTimeResolution @unit(s) = default(10us); // Piecewise-constant effective L-MMSE SINR grid
         double channelMatrixFrequencyResolution @unit(Hz) = default(78.125kHz); // Shared MRC/L-MMSE frequency grid

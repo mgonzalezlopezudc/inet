@@ -19,6 +19,7 @@ class INET_API DimensionalSnir : public SnirBase
 {
   protected:
     const Ptr<const IFunction<double, Domain<simsec, Hz>>> snir;
+    const bool channelMatrixLmmse;
     mutable double minSNIR;
     mutable double maxSNIR;
     mutable double meanSNIR;
@@ -30,7 +31,8 @@ class INET_API DimensionalSnir : public SnirBase
 
   public:
     DimensionalSnir(const IReception *reception, const INoise *noise,
-            const Ptr<const IFunction<double, Domain<simsec, Hz>>>& snir = nullptr);
+            const Ptr<const IFunction<double, Domain<simsec, Hz>>>& snir = nullptr,
+            bool channelMatrixLmmse = false);
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
@@ -39,6 +41,7 @@ class INET_API DimensionalSnir : public SnirBase
     virtual double getMean() const override;
 
     virtual const Ptr<const IFunction<double, Domain<simsec, Hz>>> getSnir() const;
+    bool isChannelMatrixLmmse() const { return channelMatrixLmmse; }
 };
 
 } // namespace physicallayer

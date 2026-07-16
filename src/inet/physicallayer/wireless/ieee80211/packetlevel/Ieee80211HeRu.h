@@ -30,8 +30,9 @@ namespace physicallayer {
  * fine-grained multi-user orthogonal frequency-division multiple access (OFDMA).
  *
  * The allocationIndex is local to the selected RU layout. The toneOffset is
- * measured from the first occupied HE tone of the channel and makes the
- * frequency placement independent of the number of scheduled users.
+ * the allocation-tree coordinate carried by INET's HE MU metadata; guard and
+ * DC gaps mean it is not itself a signed physical subcarrier index. Physical
+ * data and pilot indices are provided by the table-derived helpers below.
  *
  * Implementation note: the RU allocation tree models the standard RU splits
  * from Figures 27-5..27-8.  The small fixed gaps (e.g. the central 26-tone DC/
@@ -124,7 +125,7 @@ std::vector<int> getHeEqualRuCounts(Hz bandwidth);
  */
 int getHeEqualRuToneSize(Hz bandwidth, int count);
 
-/** Instantiates an RU structure, mapping physical center frequency and tone offset based on the HE subcarrier spacing. */
+/** Instantiates an RU structure with table-derived physical occupied-band bounds. */
 Ieee80211HeRu makeHeRu(Hz centerFrequency, int channelTones,
         int index, int toneSize, int toneOffset);
 

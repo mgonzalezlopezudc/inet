@@ -1,5 +1,5 @@
 %description:
-This test checks single-stream MRC for SIMO and explicitly precoded MIMO channels.
+This test checks single-stream MRC/L-MMSE for SIMO and explicitly precoded MIMO channels.
 
 %includes:
 #include <cmath>

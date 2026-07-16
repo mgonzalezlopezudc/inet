@@ -33,6 +33,8 @@ void DimensionalMediumAnalogModel::initialize(int stage)
         channelMatrixTransmitAntenna = par("channelMatrixTransmitAntenna");
         channelMatrixTimeResolution = par("channelMatrixTimeResolution");
         channelMatrixFrequencyResolution = Hz(par("channelMatrixFrequencyResolution"));
+        if (enableChannelMatrixLmmse && !enableChannelMatrixMrc)
+            throw cRuntimeError("Channel matrix L-MMSE interference processing requires selected-antenna MRC to be enabled");
         if (!std::isfinite(channelMatrixTimeResolution.dbl()) || channelMatrixTimeResolution <= 0)
             throw cRuntimeError("Channel matrix time resolution must be finite and positive");
         if (!std::isfinite(channelMatrixFrequencyResolution.get<Hz>()) || channelMatrixFrequencyResolution <= Hz(0))
@@ -44,7 +46,12 @@ std::ostream& DimensionalMediumAnalogModel::printToStream(std::ostream& stream, 
 {
     stream << "DimensionalMediumAnalogModel";
     if (level <= PRINT_LEVEL_DEBUG)
-        stream << EV_FIELD(attenuateWithCenterFrequency);
+        stream << EV_FIELD(attenuateWithCenterFrequency)
+               << EV_FIELD(enableChannelMatrixMrc)
+               << EV_FIELD(enableChannelMatrixLmmse)
+               << EV_FIELD(channelMatrixTransmitAntenna)
+               << EV_FIELD(channelMatrixTimeResolution)
+               << EV_FIELD(channelMatrixFrequencyResolution);
     return stream;
 }
 
@@ -206,7 +213,7 @@ const ISnir *DimensionalMediumAnalogModel::computeSNIR(const IReception *recepti
                 dimensionalNoise->getBackgroundNoisePower(), reception->getStartTime(), reception->getEndTime(),
                 dimensionalReception->getCenterFrequency(), dimensionalReception->getBandwidth(),
                 channelMatrixTimeResolution, channelMatrixFrequencyResolution);
-        return new DimensionalSnir(reception, noise, lmmseSnir);
+        return new DimensionalSnir(reception, noise, lmmseSnir, true);
     }
     if (dimensionalReception->isChannelMatrixCombined() && dimensionalNoise->hasInterferingReceptions())
         throw cRuntimeError("Selected-antenna MRC with overlapping receptions requires receive-antenna interference covariance, which is not available in the dimensional analog pipeline");

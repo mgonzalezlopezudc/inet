@@ -49,16 +49,16 @@ Calibration::Coding Calibration::parseCoding(const std::string& text)
 
 void Calibration::addRbirPoint(Modulation modulation, double snrDb, double rbir)
 {
-    double maximumRbir;
     switch (modulation) {
-        case Modulation::BPSK: maximumRbir = 1; break;
-        case Modulation::QPSK: maximumRbir = 2; break;
-        case Modulation::QAM16: maximumRbir = 4; break;
-        case Modulation::QAM64: maximumRbir = 6; break;
-        case Modulation::QAM256: maximumRbir = 8; break;
+        case Modulation::BPSK:
+        case Modulation::QPSK:
+        case Modulation::QAM16:
+        case Modulation::QAM64:
+        case Modulation::QAM256:
+            break;
         default: throw cRuntimeError("Unknown RBIR modulation");
     }
-    if (!std::isfinite(snrDb) || !std::isfinite(rbir) || rbir < 0 || rbir > maximumRbir)
+    if (!std::isfinite(snrDb) || !std::isfinite(rbir) || rbir < 0 || rbir > 1)
         throw cRuntimeError("Invalid RBIR point (SNR=%g dB, RBIR=%g)", snrDb, rbir);
     auto& curve = rbirCurves[modulation];
     curve.arguments.push_back(snrDb);
@@ -416,7 +416,7 @@ double Ieee80211RbirErrorModel::computeHeSuccessRate(int mcs,
     if (mcs < 0 || mcs > 9)
         throw cRuntimeError("RBIR calibration supports HE MCS 0-9 only, got MCS %d", mcs);
     if (numberOfSpatialStreams != 1)
-        throw cRuntimeError("Ieee80211RbirErrorModel supports SISO HE receptions only");
+        throw cRuntimeError("Ieee80211RbirErrorModel supports single-spatial-stream HE receptions only");
     if (dcm)
         throw cRuntimeError("Ieee80211RbirErrorModel has no DCM calibration");
     Calibration::Modulation modulation;

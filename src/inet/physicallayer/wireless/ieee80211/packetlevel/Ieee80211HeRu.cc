@@ -161,36 +161,78 @@ std::vector<std::vector<int>> getPilotGroups(int channelTones, int toneSize)
     return groups;
 }
 
-} // namespace
-
-std::vector<int> getHeRuDataToneIndices(int channelTones, int toneSize, int toneOffset)
+void appendHeRuToneOffsets(std::vector<int>& offsets, int toneSize, int toneOffset, int requestedToneSize)
 {
-    Hz bandwidth;
-    switch (channelTones) {
-        case 242: bandwidth = MHz(20); break;
-        case 484: bandwidth = MHz(40); break;
-        case 996: bandwidth = MHz(80); break;
-        case 1992: bandwidth = MHz(160); break;
-        default: throw std::invalid_argument("Unsupported HE channel tone count");
+    if (toneSize == requestedToneSize)
+        offsets.push_back(toneOffset);
+    switch (toneSize) {
+        case 1992:
+            appendHeRuToneOffsets(offsets, 996, toneOffset, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 996, toneOffset + 996, requestedToneSize);
+            break;
+        case 996:
+            appendHeRuToneOffsets(offsets, 484, toneOffset, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 26, toneOffset + 485, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 484, toneOffset + 512, requestedToneSize);
+            break;
+        case 484:
+            appendHeRuToneOffsets(offsets, 242, toneOffset, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 242, toneOffset + 242, requestedToneSize);
+            break;
+        case 242:
+            appendHeRuToneOffsets(offsets, 106, toneOffset, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 26, toneOffset + 108, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 106, toneOffset + 136, requestedToneSize);
+            break;
+        case 106:
+            appendHeRuToneOffsets(offsets, 52, toneOffset, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 52, toneOffset + 54, requestedToneSize);
+            break;
+        case 52:
+            appendHeRuToneOffsets(offsets, 26, toneOffset, requestedToneSize);
+            appendHeRuToneOffsets(offsets, 26, toneOffset + 26, requestedToneSize);
+            break;
+        case 26:
+            break;
+        default:
+            throw std::invalid_argument("Unsupported HE channel tone count");
     }
-    auto catalog = getHeRuAllocationCatalog(Hz(0), bandwidth);
+}
+
+std::vector<int> getHeRuToneOffsets(int channelTones, int toneSize)
+{
     std::vector<int> offsets;
-    for (const auto& ru : catalog)
-        if (ru.toneSize == toneSize)
-            offsets.push_back(ru.toneOffset);
+    appendHeRuToneOffsets(offsets, channelTones, 0, toneSize);
     std::sort(offsets.begin(), offsets.end());
     offsets.erase(std::unique(offsets.begin(), offsets.end()), offsets.end());
+    if (offsets.empty())
+        throw std::invalid_argument("Unsupported HE channel/RU tone-size combination");
+    return offsets;
+}
+
+std::vector<std::pair<int, int>> getHeRuPhysicalRanges(
+        int channelTones, int toneSize, int toneOffset)
+{
+    auto offsets = getHeRuToneOffsets(channelTones, toneSize);
     auto offsetIt = std::find(offsets.begin(), offsets.end(), toneOffset);
     if (offsetIt == offsets.end())
         throw std::invalid_argument("Noncanonical HE RU tone offset");
     auto ranges = getHeRuRanges(channelTones, toneSize);
     size_t index = offsetIt - offsets.begin();
     if (index >= ranges.size())
-        throw std::logic_error("HE RU catalog does not match the standard subcarrier table");
+        throw std::logic_error("HE RU allocation tree does not match the standard subcarrier table");
+    return ranges[index];
+}
+
+} // namespace
+
+std::vector<int> getHeRuDataToneIndices(int channelTones, int toneSize, int toneOffset)
+{
+    auto ranges = getHeRuPhysicalRanges(channelTones, toneSize, toneOffset);
     auto pilots = getHeRuPilotToneIndices(channelTones, toneSize, toneOffset);
     std::set<int> pilotSet(pilots.begin(), pilots.end());
     std::vector<int> result;
-    for (auto range : ranges[index])
+    for (auto range : ranges)
         for (int tone = range.first; tone <= range.second; ++tone)
             if (pilotSet.find(tone) == pilotSet.end())
                 result.push_back(tone);
@@ -201,21 +243,7 @@ std::vector<int> getHeRuDataToneIndices(int channelTones, int toneSize, int tone
 
 std::vector<int> getHeRuPilotToneIndices(int channelTones, int toneSize, int toneOffset)
 {
-    Hz bandwidth;
-    switch (channelTones) {
-        case 242: bandwidth = MHz(20); break;
-        case 484: bandwidth = MHz(40); break;
-        case 996: bandwidth = MHz(80); break;
-        case 1992: bandwidth = MHz(160); break;
-        default: throw std::invalid_argument("Unsupported HE channel tone count");
-    }
-    auto catalog = getHeRuAllocationCatalog(Hz(0), bandwidth);
-    std::vector<int> offsets;
-    for (const auto& ru : catalog)
-        if (ru.toneSize == toneSize)
-            offsets.push_back(ru.toneOffset);
-    std::sort(offsets.begin(), offsets.end());
-    offsets.erase(std::unique(offsets.begin(), offsets.end()), offsets.end());
+    auto offsets = getHeRuToneOffsets(channelTones, toneSize);
     auto offsetIt = std::find(offsets.begin(), offsets.end(), toneOffset);
     if (offsetIt == offsets.end())
         throw std::invalid_argument("Noncanonical HE RU tone offset");
@@ -306,8 +334,11 @@ Ieee80211HeRu makeHeRu(Hz centerFrequency, int channelTones,
     ru.toneOffset = toneOffset;
     ru.dataSubcarriers = getHeRuDataSubcarrierCount(toneSize);
     ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(toneSize);
-    ru.bandwidth = Hz(toneSize * HE_TONE_SPACING);
-    double centerTone = toneOffset + toneSize / 2.0 - channelTones / 2.0;
+    auto ranges = getHeRuPhysicalRanges(channelTones, toneSize, toneOffset);
+    int lowerTone = ranges.front().first;
+    int upperTone = ranges.back().second;
+    ru.bandwidth = Hz((upperTone - lowerTone + 1) * HE_TONE_SPACING);
+    double centerTone = (lowerTone + upperTone) / 2.0;
     ru.centerFrequency = centerFrequency + Hz(centerTone * HE_TONE_SPACING);
     return ru;
 }

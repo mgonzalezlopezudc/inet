@@ -23,6 +23,7 @@ and opt-in RBIR sampling of a narrow HE trigger-based uplink RU.
 #include "inet/physicallayer/wireless/common/signal/Interference.h"
 #include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
 #include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixCombiner.h"
 #include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxChannelModel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211RbirErrorModel.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -113,6 +114,7 @@ seed-set = 314159
 **.radio.channelNumber = 0
 **.radio.transmitter.bitrate = 7.3125Mbps
 **.txNic.radio.antenna.numAntennas = 1
+**.interfererTxNic.radio.antenna.numAntennas = 1
 **.rxNic.radio.antenna.numAntennas = 2
 **.rxSingleNic.radio.antenna.numAntennas = 1
 **.constraintAreaMinX = 0m
@@ -166,10 +168,17 @@ class DeterministicTgaxChannelModel : public TgaxChannelModel
 
     virtual std::shared_ptr<const TgaxMimoChannel> createMatrixChannel(const LinkKey&,
             int numReceiveAntennas, int numTransmitAntennas) const override {
-        ASSERT(numTransmitAntennas == 1);
-        ChannelMatrix channelMatrix = numReceiveAntennas == 1 ?
-                ChannelMatrix(1, 1, {{2, 0}}) : ChannelMatrix(2, 1, {{3, 4}, {0, 12}});
-        return std::make_shared<const TgaxMimoChannel>(referenceFrequency, numReceiveAntennas, 1,
+        ChannelMatrix channelMatrix = [&] {
+            if (numReceiveAntennas == 1 && numTransmitAntennas == 1)
+                return ChannelMatrix(1, 1, {{2, 0}});
+            else if (numReceiveAntennas == 2 && numTransmitAntennas == 1)
+                return ChannelMatrix(2, 1, {{3, 4}, {0, 12}});
+            else if (numReceiveAntennas == 1 && numTransmitAntennas == 2)
+                return ChannelMatrix(1, 2, {{1, 0}, {0, 1}});
+            else
+                throw cRuntimeError("Unsupported deterministic test matrix dimensions");
+        }();
+        return std::make_shared<const TgaxMimoChannel>(referenceFrequency, numReceiveAntennas, numTransmitAntennas,
                 std::vector<TgaxMimoChannel::Tap>{{simsec(0), channelMatrix}});
     }
 
@@ -178,6 +187,8 @@ class DeterministicTgaxChannelModel : public TgaxChannelModel
             const ITransmission *transmission, const IArrival *arrival) const override {
         if (!spatialChannel)
             return TgaxChannelModel::computeChannel(receiver, transmission, arrival);
+        auto analogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
+        validateTransmissionBand(analogModel->getCenterFrequency(), analogModel->getBandwidth());
         auto transmitter = transmission->getTransmitterRadio();
         auto response = getOrCreateMatrixChannel(transmission->getTransmitterRadioId(), receiver->getId(),
                 transmitter->getAntenna()->getNumAntennas(), receiver->getAntenna()->getNumAntennas());
@@ -214,6 +225,11 @@ class TestRbirErrorModel : public Ieee80211RbirErrorModel
         return computeHeSuccessRate(0, Ieee80211RbirCalibration::Coding::BCC,
                 1, false, 100, ru.toneSize, ru.toneOffset, snir, getScalarSnir(snir));
     }
+
+    double evaluate(const ISnir *snir, const Ieee80211HeRu& ru, double scalarSnir) const {
+        return computeHeSuccessRate(0, Ieee80211RbirCalibration::Coding::BCC,
+                1, false, 100, ru.toneSize, ru.toneOffset, snir, scalarSnir);
+    }
 };
 
 Define_Module(TgaxInspectableDimensionalRadioMedium);
@@ -243,10 +259,17 @@ auto rxSingleNetworkInterface = check_and_cast<TgaxDimensionalMockNicModule *>(r
 rxSingleNetworkInterface->setMacAddress(MacAddress("00:11:22:33:44:66"));
 rxSingleNic->callInitialize();
 
+auto interfererTxNic = nicType->create("interfererTxNic", getSystemModule());
+interfererTxNic->buildInside();
+auto interfererTxNetworkInterface = check_and_cast<TgaxDimensionalMockNicModule *>(interfererTxNic);
+interfererTxNetworkInterface->setMacAddress(MacAddress("AA:BB:CC:DD:EE:00"));
+interfererTxNic->callInitialize();
+
 auto medium = check_and_cast<TgaxInspectableDimensionalRadioMedium *>(getParentModule()->getSubmodule("radioMedium"));
 auto txRadio = check_and_cast<IRadio *>(txNic->getSubmodule("radio"));
 auto rxRadio = check_and_cast<IRadio *>(rxNic->getSubmodule("radio"));
 auto rxSingleRadio = check_and_cast<IRadio *>(rxSingleNic->getSubmodule("radio"));
+auto interfererTxRadio = check_and_cast<IRadio *>(interfererTxNic->getSubmodule("radio"));
 ASSERT(medium->getWidebandChannelModel() != nullptr);
 auto channelModelModule = medium->getSubmodule("channelModel");
 ASSERT(channelModelModule != nullptr);
@@ -264,33 +287,39 @@ ASSERT(channelBandwidth == MHz(20));
 auto rus = calculateHeRus(centerFrequency, channelBandwidth, 4);
 
 auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = false,
-        bool muMimo = false, int triggerId = 0, int streamStartIndex = 0) {
+        bool muMimo = false, int triggerId = 0, int streamStartIndex = 0,
+        const IRadio *sourceRadio = nullptr, int ruPosition = 0) {
+    if (sourceRadio == nullptr)
+        sourceRadio = txRadio;
+    const auto& assignedRu = rus.at(ruPosition);
     auto packet = new Packet(packetName);
     auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
     phyHeader->setPpduFormat(triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
     phyHeader->setMuMimo(muMimo);
     phyHeader->setTriggerId(triggerId);
+    phyHeader->setTotalNsts(muMimo ? 2 : 0);
     Ieee80211HeMuUserInfo user;
-    user.ruIndex = rus[0].index;
-    user.ruToneSize = rus[0].toneSize;
-    user.ruToneOffset = rus[0].toneOffset;
+    user.ruIndex = assignedRu.index;
+    user.ruToneSize = assignedRu.toneSize;
+    user.ruToneOffset = assignedRu.toneOffset;
     user.staId = computeHeMuStaId(rxNetworkInterface->getMacAddress());
     user.psduLength = B(100);
     user.numberOfSpatialStreams = 1;
     user.streamStartIndex = streamStartIndex;
+    user.leakageSum = muMimo ? 1 : 0;
     phyHeader->appendUsers(user);
     phyHeader->setChunkLength(b(16 + 73));
     packet->insertAtFront(phyHeader);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
-    auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
-    auto transmissionCenterFrequency = triggerBasedUplink ? rus[0].centerFrequency : centerFrequency;
-    auto transmissionBandwidth = triggerBasedUplink ? rus[0].bandwidth : channelBandwidth;
+    auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(sourceRadio->getTransmitter());
+    auto transmissionCenterFrequency = triggerBasedUplink ? assignedRu.centerFrequency : centerFrequency;
+    auto transmissionBandwidth = triggerBasedUplink ? assignedRu.bandwidth : channelBandwidth;
     auto transmissionAnalogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
             SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
             transmissionCenterFrequency, transmissionBandwidth, flatTransmitter->getPower());
     return new Ieee80211Transmission(
-            txRadio, packet, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
+            sourceRadio, packet, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
             SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
             Coord(), Coord(), Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
             transmissionAnalogModel, mode, channel);
@@ -531,9 +560,9 @@ deterministicChannelModel->enableSpatialChannel(centerFrequency);
 auto idealDesiredTbTransmission = createTransmission(
         "ideal-spatially-orthogonal-HE-TB-desired", true, true, 1234, 0);
 auto idealOtherTbTransmission = createTransmission(
-        "ideal-spatially-orthogonal-HE-TB-other", true, true, 1234, 1);
+        "ideal-spatially-orthogonal-HE-TB-other", true, true, 1234, 1, interfererTxRadio);
 medium->testAddTransmission(txRadio, idealDesiredTbTransmission);
-medium->testAddTransmission(txRadio, idealOtherTbTransmission);
+medium->testAddTransmission(interfererTxRadio, idealOtherTbTransmission);
 auto idealTbSnir = medium->getSNIR(rxRadio, idealDesiredTbTransmission);
 auto idealTbMeanSnir = idealTbSnir->getMean();
 ASSERT(std::isfinite(idealTbMeanSnir));
@@ -545,22 +574,74 @@ dimensionalMediumAnalogModel->setChannelMatrixLmmse(true);
 auto lmmseDesiredTbTransmission = createTransmission(
         "L-MMSE-spatial-HE-TB-desired", true, true, 5678, 0);
 auto lmmseOtherTbTransmission = createTransmission(
-        "L-MMSE-spatial-HE-TB-other", true, true, 5678, 1);
+        "L-MMSE-spatial-HE-TB-other", true, true, 5678, 1, interfererTxRadio);
 medium->testAddTransmission(txRadio, lmmseDesiredTbTransmission);
-medium->testAddTransmission(txRadio, lmmseOtherTbTransmission);
+medium->testAddTransmission(interfererTxRadio, lmmseOtherTbTransmission);
 auto lmmseTbSnir = medium->getSNIR(rxRadio, lmmseDesiredTbTransmission);
 auto lmmseTbMeanSnir = lmmseTbSnir->getMean();
 ASSERT(std::isfinite(lmmseTbMeanSnir));
 ASSERT(lmmseTbMeanSnir > 0);
 ASSERT(lmmseTbMeanSnir < idealTbMeanSnir);
+auto lmmseReception = medium->getReception(rxRadio, lmmseDesiredTbTransmission);
+auto lmmseReceptionAnalogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(
+        lmmseReception->getAnalogModel());
+auto lmmseNoise = check_and_cast<const DimensionalNoise *>(medium->getNoise(rxRadio, lmmseDesiredTbTransmission));
+ASSERT(lmmseReceptionAnalogModel->getCenterFrequency() == rus[0].centerFrequency);
+ASSERT(lmmseReceptionAnalogModel->getBandwidth() == rus[0].bandwidth);
+ASSERT(lmmseReceptionAnalogModel->getChannelMatrixSignal() != nullptr);
+ASSERT(lmmseNoise->getChannelMatrixInterferers().size() == 1);
+ASSERT(!lmmseNoise->hasNonChannelMatrixInterference());
+auto lmmseSampleTime = simsec(lmmseReception->getStartTime() + SimTime(500, SIMTIME_US));
+auto lmmseSampleFrequency = rus[0].centerFrequency;
+auto lmmseSamplePoint = Point<simsec, Hz>(lmmseSampleTime, lmmseSampleFrequency);
+auto desiredSpatialChannel = lmmseReceptionAnalogModel->getChannelMatrixSignal()->computeEffectiveChannel(
+        lmmseSampleTime, lmmseSampleFrequency);
+auto interferingSpatialChannel = lmmseNoise->getChannelMatrixInterferers()[0]->computeEffectiveChannel(
+        lmmseSampleTime, lmmseSampleFrequency);
+ASSERT(desiredSpatialChannel != interferingSpatialChannel);
+auto expectedLmmseSnir = ChannelMatrixCombiner::computeSingleStreamLmmseSinr(
+        desiredSpatialChannel,
+        lmmseReceptionAnalogModel->getChannelMatrixSignal()->getInputPower()->getValue(lmmseSamplePoint).get<WpHz>(),
+        {interferingSpatialChannel},
+        {lmmseNoise->getChannelMatrixInterferers()[0]->getInputPower()->getValue(lmmseSamplePoint).get<WpHz>()},
+        lmmseNoise->getBackgroundNoisePower()->getValue(lmmseSamplePoint).get<WpHz>());
+auto lmmseDimensionalSnir = check_and_cast<const DimensionalSnir *>(lmmseTbSnir);
+ASSERT(lmmseDimensionalSnir->isChannelMatrixLmmse());
+ASSERT(std::abs(lmmseDimensionalSnir->getSnir()->getValue(lmmseSamplePoint) - expectedLmmseSnir) < 1e-12);
 auto lmmseToneSnirDb = rbir->sample(lmmseTbSnir, rus[0]);
 ASSERT(lmmseToneSnirDb.size() == static_cast<size_t>(rus[0].dataSubcarriers));
 for (auto snirDb : lmmseToneSnirDb)
-    ASSERT(std::isfinite(snirDb));
+    ASSERT(std::abs(snirDb - 10 * std::log10(expectedLmmseSnir)) < 1e-9);
 double lmmseSuccessRate = rbir->evaluate(lmmseTbSnir, rus[0]);
 ASSERT(0 <= lmmseSuccessRate && lmmseSuccessRate <= 1);
+double lmmsePacketErrorRate = rbir->computePacketErrorRate(
+        lmmseTbSnir, IRadioSignal::SIGNAL_PART_DATA);
+ASSERT(std::abs(lmmsePacketErrorRate - (1 - lmmseSuccessRate)) < 1e-12);
+DimensionalSnir unmarkedMatrixSnir(lmmseReception, lmmseNoise, lmmseDimensionalSnir->getSnir());
+ASSERT(!unmarkedMatrixSnir.isChannelMatrixLmmse());
+double legacyAdjustedSnir = (lmmseTbMeanSnir * 0.5) / (1 + lmmseTbMeanSnir * 0.5);
+double legacySuccessRate = rbir->evaluate(&unmarkedMatrixSnir, rus[0], legacyAdjustedSnir);
+double legacyPacketErrorRate = rbir->computePacketErrorRate(
+        &unmarkedMatrixSnir, IRadioSignal::SIGNAL_PART_DATA);
+ASSERT(std::abs(legacyPacketErrorRate - (1 - legacySuccessRate)) < 1e-12);
+ASSERT(std::abs(legacyPacketErrorRate - lmmsePacketErrorRate) > 1e-6);
 medium->testRemoveTransmission(lmmseOtherTbTransmission);
 medium->testRemoveTransmission(lmmseDesiredTbTransmission);
+
+auto adjacentDesiredTbTransmission = createTransmission(
+        "L-MMSE-adjacent-RU-HE-TB-desired", true, true, 6789, 0);
+auto adjacentOtherTbTransmission = createTransmission(
+        "L-MMSE-adjacent-RU-HE-TB-other", true, true, 6789, 1, interfererTxRadio, 1);
+medium->testAddTransmission(txRadio, adjacentDesiredTbTransmission);
+medium->testAddTransmission(interfererTxRadio, adjacentOtherTbTransmission);
+auto adjacentInterference = medium->getInterference(rxRadio, adjacentDesiredTbTransmission);
+ASSERT(adjacentInterference->getInterferingReceptions()->empty());
+auto adjacentNoise = check_and_cast<const DimensionalNoise *>(
+        medium->getNoise(rxRadio, adjacentDesiredTbTransmission));
+ASSERT(adjacentNoise->getChannelMatrixInterferers().empty());
+ASSERT(std::abs(medium->getSNIR(rxRadio, adjacentDesiredTbTransmission)->getMean() - idealTbMeanSnir) < 1e-12);
+medium->testRemoveTransmission(adjacentOtherTbTransmission);
+medium->testRemoveTransmission(adjacentDesiredTbTransmission);
 dimensionalMediumAnalogModel->setChannelMatrixLmmse(false);
 deterministicChannelModel->disableSpatialChannel();
 
@@ -568,6 +649,7 @@ delete channel;
 txNic->deleteModule();
 rxNic->deleteModule();
 rxSingleNic->deleteModule();
+interfererTxNic->deleteModule();
 
 EV << "TGax frequency-selective fading persisted across two HE MU packets.\n";
 EV << "TGax analytic 2x1 matrix produced exact MRC power gain 169.\n";

@@ -54,6 +54,15 @@ auto invalid = mixed;
 invalid[2].toneOffset++;
 if (validateHeRuLayout(invalid, bandwidth))
     throw cRuntimeError("A non-catalog RU position passed validation");
+bool noncanonicalPilotOffsetRejected = false;
+try {
+    getHeRuPilotToneIndices(242, 52, 1);
+}
+catch (const std::invalid_argument&) {
+    noncanonicalPilotOffsetRejected = true;
+}
+if (!noncanonicalPilotOffsetRejected)
+    throw cRuntimeError("A noncanonical pilot-tone offset was not rejected as invalid input");
 
 auto catalog80 = getHeRuAllocationCatalog(centerFrequency, Hz(80e6));
 int central26Count = 0;
@@ -63,16 +72,34 @@ for (const auto& ru : catalog80)
 if (central26Count != 1)
     throw cRuntimeError("The 80 MHz allocation tree does not contain exactly one central 26-tone RU");
 
+constexpr double toneSpacing = 78125;
+for (auto channelBandwidth : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
+    auto channelTones = getHeChannelToneCount(channelBandwidth);
+    for (const auto& ru : getHeRuAllocationCatalog(centerFrequency, channelBandwidth)) {
+        auto lowerFrequency = ru.centerFrequency - ru.bandwidth / 2;
+        auto upperFrequency = ru.centerFrequency + ru.bandwidth / 2;
+        auto checkToneContainment = [&] (int tone) {
+            auto toneCenter = centerFrequency + Hz(tone * toneSpacing);
+            if (toneCenter < lowerFrequency || toneCenter > upperFrequency)
+                throw cRuntimeError("Physical HE RU tone %d lies outside its modeled passband", tone);
+        };
+        for (auto tone : getHeRuDataToneIndices(channelTones, ru.toneSize, ru.toneOffset))
+            checkToneContainment(tone);
+        for (auto tone : getHeRuPilotToneIndices(channelTones, ru.toneSize, ru.toneOffset))
+            checkToneContainment(tone);
+    }
+}
+
 EV << "Mixed allocation used the standard central 26-tone RU.\n";
 EV << "Non-catalog RU placement was rejected.\n";
 EV << ".\n";
 
 %contains: stdout
 Number of RUs: 4
-RU 2: center=5.17258e+09 Hz, bandwidth=4.0625e+06 Hz
-RU 5: center=5.1768e+09 Hz, bandwidth=4.0625e+06 Hz
-RU 10: center=5.1832e+09 Hz, bandwidth=4.0625e+06 Hz
-RU 13: center=5.18742e+09 Hz, bandwidth=4.0625e+06 Hz
+RU 2: center=5.17254e+09 Hz, bandwidth=4.0625e+06 Hz
+RU 5: center=5.17668e+09 Hz, bandwidth=4.0625e+06 Hz
+RU 10: center=5.18332e+09 Hz, bandwidth=4.0625e+06 Hz
+RU 13: center=5.18746e+09 Hz, bandwidth=4.0625e+06 Hz
 Users in HE-MU PHY header: 2
 User 0: RU 2, STA-ID=1109
 User 1: RU 10, STA-ID=699

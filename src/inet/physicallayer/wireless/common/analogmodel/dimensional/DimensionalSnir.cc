@@ -21,9 +21,10 @@ static Ptr<const IFunction<double, Domain<simsec, Hz>>> computeLegacySnir(
 }
 
 DimensionalSnir::DimensionalSnir(const IReception *reception, const INoise *noise,
-        const Ptr<const IFunction<double, Domain<simsec, Hz>>>& snir) :
+        const Ptr<const IFunction<double, Domain<simsec, Hz>>>& snir, bool channelMatrixLmmse) :
     SnirBase(reception, noise),
     snir(snir == nullptr ? computeLegacySnir(reception, noise) : snir),
+    channelMatrixLmmse(channelMatrixLmmse),
     minSNIR(NaN),
     maxSNIR(NaN),
     meanSNIR(NaN)

@@ -110,19 +110,14 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         // transmitter model. Reconstruct the full-channel center from the RU
         // offset, then return the user RU for reception/interference filtering.
         const auto& user = heMuPhyHeader->getUsers(0);
-        constexpr double HE_TONE_SPACING = 78125;
         auto channelBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
         int channelTones = getHeChannelToneCount(channelBandwidth);
-        ru.index = user.ruIndex;
-        ru.toneSize = user.ruToneSize;
-        ru.toneOffset = user.ruToneOffset;
-        ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
-        ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
-        ru.bandwidth = Hz(ru.toneSize * HE_TONE_SPACING);
-        double centerTone = ru.toneOffset + ru.toneSize / 2.0 - channelTones / 2.0;
+        auto relativeRu = makeHeRu(Hz(0), channelTones,
+                user.ruIndex, user.ruToneSize, user.ruToneOffset);
         auto fullChannelCenter = narrowbandTransmissionAnalogModel->getCenterFrequency() -
-                Hz(centerTone * HE_TONE_SPACING);
-        ru.centerFrequency = fullChannelCenter + Hz(centerTone * HE_TONE_SPACING);
+                relativeRu.centerFrequency;
+        ru = makeHeRu(fullChannelCenter, channelTones,
+                user.ruIndex, user.ruToneSize, user.ruToneOffset);
         return true;
     }
     for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
@@ -130,7 +125,6 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         if (receiverStaId.has_value() && user.staId == *receiverStaId) {
             // DL HE MU receiver filtering follows the STA-ID and RU location
             // carried in the HE-SIG-B User field (Clause 27.3.11.8.4).
-            constexpr double HE_TONE_SPACING = 78125;
             auto channelBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
             if (user.ruToneSize == 0) {
                 auto legacyRus = calculateHeRus(narrowbandTransmissionAnalogModel->getCenterFrequency(),
@@ -142,14 +136,8 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
                 return false;
             }
             int channelTones = getHeChannelToneCount(channelBandwidth);
-            ru.index = user.ruIndex;
-            ru.toneSize = user.ruToneSize;
-            ru.toneOffset = user.ruToneOffset;
-            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
-            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
-            ru.bandwidth = Hz(ru.toneSize * HE_TONE_SPACING);
-            double centerTone = ru.toneOffset + ru.toneSize / 2.0 - channelTones / 2.0;
-            ru.centerFrequency = narrowbandTransmissionAnalogModel->getCenterFrequency() + Hz(centerTone * HE_TONE_SPACING);
+            ru = makeHeRu(narrowbandTransmissionAnalogModel->getCenterFrequency(), channelTones,
+                    user.ruIndex, user.ruToneSize, user.ruToneOffset);
             return true;
         }
     }

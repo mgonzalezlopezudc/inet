@@ -177,12 +177,19 @@ std::shared_ptr<const TgaxMimoChannel> TgaxChannelModel::getOrCreateMatrixChanne
     return reversed ? it->second->transposed() : it->second;
 }
 
-void TgaxChannelModel::validateSpatialTransmissionBand(Hz centerFrequency, Hz bandwidth) const
+void TgaxChannelModel::validateTransmissionBand(Hz centerFrequency, Hz bandwidth) const
 {
-    if (centerFrequency != referenceFrequency)
-        throw cRuntimeError("TGax spatial channel reference frequency must match the transmission center frequency");
-    if (bandwidth > systemBandwidth)
-        throw cRuntimeError("TGax spatial channel transmission bandwidth exceeds the configured system bandwidth");
+    if (!std::isfinite(centerFrequency.get<Hz>()) || centerFrequency <= Hz(0) ||
+            !std::isfinite(bandwidth.get<Hz>()) || bandwidth <= Hz(0))
+        throw cRuntimeError("TGax transmission center frequency and bandwidth must be finite and positive");
+    auto lowerFrequency = centerFrequency - bandwidth / 2;
+    auto upperFrequency = centerFrequency + bandwidth / 2;
+    auto systemLowerFrequency = referenceFrequency - systemBandwidth / 2;
+    auto systemUpperFrequency = referenceFrequency + systemBandwidth / 2;
+    if (lowerFrequency < systemLowerFrequency || upperFrequency > systemUpperFrequency)
+        throw cRuntimeError("TGax transmission band [%g, %g] Hz is outside the configured system band [%g, %g] Hz",
+                lowerFrequency.get<Hz>(), upperFrequency.get<Hz>(),
+                systemLowerFrequency.get<Hz>(), systemUpperFrequency.get<Hz>());
 }
 
 Ptr<const IFunction<double, Domain<simsec, Hz>>> TgaxChannelModel::createPowerGain(const TgaxSisoChannel& channel,
@@ -194,11 +201,10 @@ Ptr<const IFunction<double, Domain<simsec, Hz>>> TgaxChannelModel::createPowerGa
         throw cRuntimeError("TGax channel model transmission center frequency must be finite and positive");
     if (!std::isfinite(bandwidth.get<Hz>()) || bandwidth <= Hz(0))
         throw cRuntimeError("TGax channel model transmission bandwidth must be finite and positive");
-    if (bandwidth > systemBandwidth)
+    if (timeVariation)
+        validateTransmissionBand(centerFrequency, bandwidth);
+    else if (bandwidth > systemBandwidth)
         throw cRuntimeError("TGax channel model transmission bandwidth exceeds the configured system bandwidth");
-    if (timeVariation && centerFrequency != referenceFrequency)
-        throw cRuntimeError("Time-varying TGax channel model reference frequency (%g Hz) must match the transmission center frequency (%g Hz)",
-                referenceFrequency.get<Hz>(), centerFrequency.get<Hz>());
 
     auto lowerFrequency = centerFrequency - bandwidth / 2;
     auto upperFrequency = centerFrequency + bandwidth / 2;
@@ -318,7 +324,7 @@ Ptr<const IChannelSnapshot> TgaxChannelModel::computeChannel(const IRadio *recei
         auto transmitter = transmission->getTransmitterRadio();
         if (transmitter == nullptr)
             throw cRuntimeError("TGax spatial channel requires the transmitter radio");
-        validateSpatialTransmissionBand(narrowbandAnalogModel->getCenterFrequency(), narrowbandAnalogModel->getBandwidth());
+        validateTransmissionBand(narrowbandAnalogModel->getCenterFrequency(), narrowbandAnalogModel->getBandwidth());
         auto numTransmitAntennas = transmitter->getAntenna()->getNumAntennas();
         auto numReceiveAntennas = receiver->getAntenna()->getNumAntennas();
         if (numTransmitAntennas < 1 || numTransmitAntennas > 2 || numReceiveAntennas < 1 || numReceiveAntennas > 2)
