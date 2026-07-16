@@ -13,9 +13,11 @@ namespace inet {
 
 namespace physicallayer {
 
-DimensionalNoise::DimensionalNoise(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
+DimensionalNoise::DimensionalNoise(simtime_t startTime, simtime_t endTime, Hz centerFrequency, Hz bandwidth,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power, bool hasInterferingReceptions) :
     NarrowbandNoiseBase(startTime, endTime, centerFrequency, bandwidth),
-    power(power)
+    power(power),
+    containsInterferingReceptions(hasInterferingReceptions)
 {
 }
 
@@ -51,4 +53,3 @@ W DimensionalNoise::computeMaxPower(simtime_t startTime, simtime_t endTime) cons
 } // namespace physicallayer
 
 } // namespace inet
-

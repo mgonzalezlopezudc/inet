@@ -10,12 +10,17 @@
 namespace inet {
 namespace physicallayer {
 
-DimensionalReceptionAnalogModel::DimensionalReceptionAnalogModel(const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth, const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power) :
-    DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, bandwidth, power)
+DimensionalReceptionAnalogModel::DimensionalReceptionAnalogModel(const simtime_t preambleDuration,
+        const simtime_t headerDuration, const simtime_t dataDuration, Hz centerFrequency, Hz bandwidth,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& power,
+        const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>>& interferencePower,
+        bool channelMatrixCombined) :
+    DimensionalSignalAnalogModel(preambleDuration, headerDuration, dataDuration, centerFrequency, bandwidth, power),
+    interferencePower(interferencePower == nullptr ? power : interferencePower),
+    channelMatrixCombined(channelMatrixCombined)
 {
 }
 
 } // namespace physicallayer
 
 } // namespace inet
-

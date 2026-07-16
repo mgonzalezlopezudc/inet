@@ -129,6 +129,20 @@ scales with carrier frequency, `referenceFrequency` must match the radio's
 center frequency when time variation is enabled; the channel model rejects a
 mismatch instead of silently evolving at the wrong rate.
 
+`TgaxModelBSimoMrcOFDMA` opts into the static Model B matrix response. The AP
+has one antenna and each station has two, so downlink data uses a 2x1 SIMO
+channel and receive-side maximum-ratio combining. On the reciprocal control
+and acknowledgment path, a station transmits from antenna 0 through the 1x2
+reverse channel. This selected-antenna rule is an explicit one-hot precoder;
+the current packet-level transmitter does not otherwise expose an antenna
+mapping. Existing TGax configurations leave matrix emission and combining
+disabled and therefore retain their original scalar SISO behavior.
+The reported MRC signal gain assumes spatially white, equal-variance receive
+noise. Because the current analog pipeline does not retain receive-antenna
+interference covariance, it rejects SNIR evaluation when another reception
+overlaps a matrix-combined reception instead of applying an incorrect combiner.
+This mode therefore does not model spatial interference suppression.
+
 `TgaxModelBRbirOFDMA` additionally selects `Ieee80211RbirErrorModel`. It must
 be given the Appendix-3 Mean RBIR and PER curves from a user-supplied
 IEEE 802.11-14/0571r12 workbook. The workbook and extracted data are not
@@ -139,20 +153,19 @@ redistributed with INET. Extract them with:
   /path/to/Microsoft_Excel_Worksheet1.xlsx /tmp/tgax-rbir.txt
 ```
 
-The current TGax channel implementation remains a NLOS SISO baseline. Static
+The current TGax channel implementation remains a NLOS baseline. Static
 operation is the default; the opt-in ambient process covers stationary indoor
 users only because the TGac source leaves mobile-user indoor Doppler speed and
 spectral shape TBD. It does not yet implement LOS/K-factor evolution,
-mobility-coupled non-stationarity, antenna-array correlation, polarization, or
-MIMO channel matrices. The profile catalog now preserves the visually verified
-TGn Appendix C cluster AoA/AoD/angular-spread metadata for Models B and D. An
-immutable receive-row/transmit-column matrix snapshot contract is available,
-along with a standalone B/D NLOS 1x1/2x2 half-wavelength-ULA Kronecker generator
-and a single-stream MRC combiner. These are not wired into the dimensional
-medium yet. Multi-transmit MRC requires an explicit unit-norm precoder, and
-general L-MMSE requires per-receive-antenna interference/noise covariance that
-the current scalar analog pipeline does not retain; a scalar Frobenius-gain
-shortcut would not be equivalent. Outdoor UMi median
+mobility-coupled non-stationarity, polarization, or time-varying spatial
+channels. The profile catalog preserves the visually verified TGn Appendix C
+cluster AoA/AoD/angular-spread metadata for Models B and D. Their opt-in matrix
+path supports one or two half-wavelength-ULA antennas per endpoint, ordinary-
+transpose reciprocity, an explicit selected transmit antenna, and single-stream
+MRC. It is not a general spatial-stream mapper. General L-MMSE still requires
+per-receive-antenna interference/noise covariance that the current scalar
+analog pipeline does not retain; a scalar Frobenius-gain shortcut would not be
+equivalent. Outdoor UMi median
 LOS/NLOS path loss is available as
 `TgaxUmiPathLoss`, but fixed outdoor UMi delay profiles are not exposed: the
 primary ITU-R table contains an internally inconsistent printed delay row, so
@@ -249,6 +262,14 @@ This dynamic configuration intentionally retains the NIST receiver. The
 current RBIR implementation rejects time-varying per-tone SNIR rather than
 silently reducing it to one sample; combining `TgaxRbir` with ambient Doppler
 is therefore unsupported.
+
+Run the static selected-antenna/SIMO-MRC variant:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c TgaxModelBSimoMrcOFDMA -r 0 --seed-set=0 \
+  --result-dir=results/tgax/model-b/simo-mrc/seed0
+```
 
 Run the calibrated RBIR variant after extracting the user-supplied workbook:
 

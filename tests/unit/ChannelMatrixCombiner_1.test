@@ -5,11 +5,23 @@ This test checks single-stream MRC for SIMO and explicitly precoded MIMO channel
 #include <cmath>
 
 #include "inet/physicallayer/wireless/common/signal/ChannelMatrixCombiner.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
 
 %global:
 
 using namespace inet;
 using namespace inet::physicallayer;
+
+class TimeVaryingTestChannelMatrixResponse : public IChannelMatrixResponse
+{
+  public:
+    virtual bool isTimeInvariant() const override { return false; }
+    virtual int getNumReceiveAntennas() const override { return 1; }
+    virtual int getNumTransmitAntennas() const override { return 1; }
+    virtual ChannelMatrix getChannelMatrix(simsec, Hz) const override {
+        return ChannelMatrix(1, 1, {{1, 0}});
+    }
+};
 
 template<typename Function>
 static void expectRuntimeError(Function function, const char *message)
@@ -37,6 +49,31 @@ ASSERT(std::abs(ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo,
 expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo); }, "missing MIMO precoder");
 expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo, {{1, 0}}); }, "precoder size");
 expectRuntimeError([&] { ChannelMatrixCombiner::computeSingleStreamMrcPowerGain(mimo, {{1, 0}, {1, 0}}); }, "precoder norm");
+
+auto simoResponse = std::make_shared<const ConstantChannelMatrixResponse>(simo);
+auto simoGain = ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(simoResponse, 0,
+        SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20), MHz(1));
+ASSERT(std::abs(simoGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5))) - 169) < 1e-14);
+ASSERT(simoGain->getValue(Point<simsec, Hz>(simsec(0), GHz(5))) == 1);
+ASSERT(simoGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5) + MHz(20))) == 1);
+
+ChannelMatrix selectedColumns(1, 2, {{2, 0}, {3, 0}});
+auto selectedResponse = std::make_shared<const ConstantChannelMatrixResponse>(selectedColumns);
+auto firstColumnGain = ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(selectedResponse, 0,
+        SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20), MHz(1));
+auto secondColumnGain = ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(selectedResponse, 1,
+        SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20), MHz(1));
+ASSERT(std::abs(firstColumnGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5))) - 4) < 1e-14);
+ASSERT(std::abs(secondColumnGain->getValue(Point<simsec, Hz>(simsec(1.5), GHz(5))) - 9) < 1e-14);
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(selectedResponse, 2,
+            SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20), MHz(1));
+}, "selected antenna range");
+expectRuntimeError([&] {
+    ChannelMatrixCombiner::createStaticSingleStreamMrcPowerGain(
+            std::make_shared<const TimeVaryingTestChannelMatrixResponse>(), 0,
+            SimTime(1, SIMTIME_S), SimTime(2, SIMTIME_S), GHz(5), MHz(20), MHz(1));
+}, "time-varying matrix response");
 
 std::cout << "Channel matrix combiner passed" << std::endl;
 

@@ -43,6 +43,7 @@ class INET_API TgaxMimoChannel : public IChannelMatrixResponse
     const std::vector<Tap>& getTaps() const { return taps; }
     std::shared_ptr<const TgaxMimoChannel> transposed() const;
 
+    virtual bool isTimeInvariant() const override { return true; }
     virtual int getNumReceiveAntennas() const override { return numReceiveAntennas; }
     virtual int getNumTransmitAntennas() const override { return numTransmitAntennas; }
     virtual ChannelMatrix getChannelMatrix(simsec time, Hz frequency) const override;

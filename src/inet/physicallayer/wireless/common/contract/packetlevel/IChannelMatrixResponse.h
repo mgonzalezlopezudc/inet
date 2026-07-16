@@ -50,6 +50,7 @@ class INET_API IChannelMatrixResponse
   public:
     virtual ~IChannelMatrixResponse() {}
 
+    virtual bool isTimeInvariant() const = 0;
     virtual int getNumReceiveAntennas() const = 0;
     virtual int getNumTransmitAntennas() const = 0;
     virtual ChannelMatrix getChannelMatrix(simsec time, Hz frequency) const = 0;

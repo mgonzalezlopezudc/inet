@@ -188,7 +188,10 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
     else if (auto dimensionalMediumAnalogModel = dynamic_cast<const DimensionalMediumAnalogModel *>(analogModel)) {
         if (dynamic_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel()) == nullptr)
             return nullptr;
-        auto aggregatePower = dimensionalMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
+        bool channelMatrixCombined = false;
+        Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> aggregateInterferencePower;
+        auto aggregatePower = dimensionalMediumAnalogModel->computeReceptionPower(
+                receiver, transmission, arrival, &channelMatrixCombined, &aggregateInterferencePower);
         const auto& ruBandpassFilter = makeShared<Boxcar2DFunction<double, simsec, Hz>>(
                 simsec(arrival->getStartTime()), simsec(arrival->getEndTime()),
                 ru.centerFrequency - ru.bandwidth / 2, ru.centerFrequency + ru.bandwidth / 2, 1);
@@ -198,7 +201,9 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
                 transmissionAnalogModel->getDataDuration(),
                 ru.centerFrequency,
                 ru.bandwidth,
-                aggregatePower->multiply(ruBandpassFilter));
+                aggregatePower->multiply(ruBandpassFilter),
+                aggregateInterferencePower->multiply(ruBandpassFilter),
+                channelMatrixCombined);
     }
     if (ruAnalogModel == nullptr)
         return nullptr;

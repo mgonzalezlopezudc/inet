@@ -13,8 +13,11 @@ and opt-in RBIR sampling of a narrow HE trigger-based uplink RU.
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalReceptionAnalogModel.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalNoise.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
 #include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
 #include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxChannelModel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211RbirErrorModel.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -74,6 +77,9 @@ network TestNetwork
                 signalAnalogRepresentation = "scalar";
                 analogModel.typename = "DimensionalMediumAnalogModel";
                 backgroundNoise.typename = "IsotropicDimensionalBackgroundNoise";
+                analogModel.enableChannelMatrixMrc = true;
+                analogModel.channelMatrixTransmitAntenna = 0;
+                analogModel.channelMatrixFrequencyResolution = 1MHz;
                 mediumLimitCache.maxInterferenceRange = 1m;
         }
         mobility: StationaryMobility;
@@ -94,6 +100,9 @@ seed-set = 314159
 **.radio.bandName = "5 GHz (20 MHz)"
 **.radio.channelNumber = 0
 **.radio.transmitter.bitrate = 7.3125Mbps
+**.txNic.radio.antenna.numAntennas = 1
+**.rxNic.radio.antenna.numAntennas = 2
+**.rxSingleNic.radio.antenna.numAntennas = 1
 **.constraintAreaMinX = 0m
 **.constraintAreaMinY = 0m
 **.constraintAreaMinZ = 0m
@@ -135,6 +144,34 @@ class DeterministicTgaxChannelModel : public TgaxChannelModel
                 std::vector<TgaxSisoChannel::Tap>{{simsec(0), {std::sqrt(0.5), 0}},
                         {nsimsec(50), {std::sqrt(0.5), 0}}});
     }
+
+    virtual std::shared_ptr<const TgaxMimoChannel> createMatrixChannel(const LinkKey&,
+            int numReceiveAntennas, int numTransmitAntennas) const override {
+        ASSERT(numTransmitAntennas == 1);
+        ChannelMatrix channelMatrix = numReceiveAntennas == 1 ?
+                ChannelMatrix(1, 1, {{2, 0}}) : ChannelMatrix(2, 1, {{3, 4}, {0, 12}});
+        return std::make_shared<const TgaxMimoChannel>(referenceFrequency, numReceiveAntennas, 1,
+                std::vector<TgaxMimoChannel::Tap>{{simsec(0), channelMatrix}});
+    }
+
+  public:
+    virtual Ptr<const IChannelSnapshot> computeChannel(const IRadio *receiver,
+            const ITransmission *transmission, const IArrival *arrival) const override {
+        if (!spatialChannel)
+            return TgaxChannelModel::computeChannel(receiver, transmission, arrival);
+        auto transmitter = transmission->getTransmitterRadio();
+        auto response = getOrCreateMatrixChannel(transmission->getTransmitterRadioId(), receiver->getId(),
+                transmitter->getAntenna()->getNumAntennas(), receiver->getAntenna()->getNumAntennas());
+        auto scalarFallbackSentinel = makeShared<ConstantFunction<double, Domain<simsec, Hz>>>(0.25);
+        return Ptr<const IChannelSnapshot>(new ChannelMatrixSnapshot(scalarFallbackSentinel, response));
+    }
+
+    void enableSpatialChannel(Hz centerFrequency) {
+        referenceFrequency = centerFrequency;
+        spatialChannel = true;
+    }
+
+    void disableSpatialChannel() { spatialChannel = false; }
 };
 
 class TestRbirErrorModel : public Ieee80211RbirErrorModel
@@ -180,9 +217,16 @@ auto rxNetworkInterface = check_and_cast<TgaxDimensionalMockNicModule *>(rxNic);
 rxNetworkInterface->setMacAddress(MacAddress("00:11:22:33:44:55"));
 rxNic->callInitialize();
 
+auto rxSingleNic = nicType->create("rxSingleNic", getSystemModule());
+rxSingleNic->buildInside();
+auto rxSingleNetworkInterface = check_and_cast<TgaxDimensionalMockNicModule *>(rxSingleNic);
+rxSingleNetworkInterface->setMacAddress(MacAddress("00:11:22:33:44:66"));
+rxSingleNic->callInitialize();
+
 auto medium = check_and_cast<TgaxInspectableDimensionalRadioMedium *>(getParentModule()->getSubmodule("radioMedium"));
 auto txRadio = check_and_cast<IRadio *>(txNic->getSubmodule("radio"));
 auto rxRadio = check_and_cast<IRadio *>(rxNic->getSubmodule("radio"));
+auto rxSingleRadio = check_and_cast<IRadio *>(rxSingleNic->getSubmodule("radio"));
 ASSERT(medium->getWidebandChannelModel() != nullptr);
 auto channelModelModule = medium->getSubmodule("channelModel");
 ASSERT(channelModelModule != nullptr);
@@ -229,6 +273,9 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
 
 auto transmitterGain = txRadio->getAntenna()->getGain().get();
 auto receiverGain = rxRadio->getAntenna()->getGain().get();
+ASSERT(txRadio->getAntenna()->getNumAntennas() == 1);
+ASSERT(rxRadio->getAntenna()->getNumAntennas() == 2);
+ASSERT(rxSingleRadio->getAntenna()->getNumAntennas() == 1);
 ASSERT(transmitterGain->getMinGain() == transmitterGain->getMaxGain());
 ASSERT(receiverGain->getMinGain() == receiverGain->getMaxGain());
 FrequencyDependentAttenuationFunction ordinaryAttenuation(medium,
@@ -291,6 +338,54 @@ ASSERT(firstFadingFactors.size() == secondFadingFactors.size());
 for (size_t i = 0; i < firstFadingFactors.size(); ++i)
     ASSERT(std::fabs(secondFadingFactors[i] / firstFadingFactors[i] - 1) < 1e-12);
 
+auto deterministicChannelModel = check_and_cast<DeterministicTgaxChannelModel *>(channelModelModule);
+deterministicChannelModel->enableSpatialChannel(centerFrequency);
+auto matrixTransmission = createTransmission("analytic-SIMO-MRC-PPDU");
+medium->testAddTransmission(txRadio, matrixTransmission);
+auto matrixAggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(matrixTransmission->getAnalogModel());
+auto matrixReception = medium->testComputeReception(rxRadio, matrixTransmission);
+auto matrixReceptionAnalogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(matrixReception->getAnalogModel());
+auto matrixSampleTime = matrixReception->getStartTime() + SimTime(500, SIMTIME_US);
+auto matrixSamplePoint = Point<simsec, Hz>(simsec(matrixSampleTime), rus[0].centerFrequency);
+auto matrixBaselinePsd = matrixAggregateAnalogModel->getPower()->getValue(matrixSamplePoint) * ordinaryAttenuationFactor;
+auto matrixReceivedPsd = matrixReceptionAnalogModel->getPower()->getValue(matrixSamplePoint);
+auto matrixInterferencePsd = matrixReceptionAnalogModel->getInterferencePower()->getValue(matrixSamplePoint);
+ASSERT(matrixBaselinePsd > WpHz(0));
+// The matrix snapshot's scalar fallback sentinel is 0.25. An exact 169 ratio
+// proves matrix-aware reception replaces rather than multiplies that fallback.
+ASSERT(std::abs(matrixReceivedPsd.get<WpHz>() / matrixBaselinePsd.get<WpHz>() - 169) < 1e-12);
+ASSERT(std::abs(matrixInterferencePsd.get<WpHz>() / matrixBaselinePsd.get<WpHz>() - 0.25) < 1e-12);
+auto syntheticNoisePower = makeShared<ConstantFunction<WpHz, Domain<simsec, Hz>>>(WpHz(1));
+DimensionalNoise syntheticInterference(matrixReception->getStartTime(), matrixReception->getEndTime(),
+        matrixReceptionAnalogModel->getCenterFrequency(), matrixReceptionAnalogModel->getBandwidth(),
+        syntheticNoisePower, true);
+bool rejectedSpatialInterference = false;
+try {
+    (void)medium->getAnalogModel()->computeSNIR(matrixReception, &syntheticInterference);
+}
+catch (const cRuntimeError&) {
+    rejectedSpatialInterference = true;
+}
+ASSERT(rejectedSpatialInterference);
+delete matrixReception;
+medium->testRemoveTransmission(matrixTransmission);
+
+auto singleRxMatrixTransmission = createTransmission("analytic-single-Rx-matrix-PPDU");
+medium->testAddTransmission(txRadio, singleRxMatrixTransmission);
+auto singleRxAggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(singleRxMatrixTransmission->getAnalogModel());
+auto singleRxMatrixReception = medium->testComputeReception(rxSingleRadio, singleRxMatrixTransmission);
+auto singleRxReceptionAnalogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(singleRxMatrixReception->getAnalogModel());
+auto singleRxSamplePoint = Point<simsec, Hz>(simsec(singleRxMatrixReception->getStartTime() + SimTime(500, SIMTIME_US)), centerFrequency);
+auto singleRxBaselinePsd = singleRxAggregateAnalogModel->getPower()->getValue(singleRxSamplePoint) * ordinaryAttenuationFactor;
+ASSERT(std::abs(singleRxReceptionAnalogModel->getPower()->getValue(singleRxSamplePoint).get<WpHz>() /
+        singleRxBaselinePsd.get<WpHz>() - 4) < 1e-12);
+ASSERT(std::abs(singleRxReceptionAnalogModel->getInterferencePower()->getValue(singleRxSamplePoint).get<WpHz>() /
+        singleRxBaselinePsd.get<WpHz>() - 4) < 1e-12);
+ASSERT(!singleRxReceptionAnalogModel->isChannelMatrixCombined());
+delete singleRxMatrixReception;
+medium->testRemoveTransmission(singleRxMatrixTransmission);
+deterministicChannelModel->disableSpatialChannel();
+
 auto rbir = check_and_cast<TestRbirErrorModel *>(getParentModule()->getSubmodule("rbir"));
 auto triggerTransmission = createTransmission("HE-TB-narrow-RU-TGax-PPDU", true);
 auto triggerAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(triggerTransmission->getAnalogModel());
@@ -309,12 +404,15 @@ medium->testRemoveTransmission(triggerTransmission);
 delete channel;
 txNic->deleteModule();
 rxNic->deleteModule();
+rxSingleNic->deleteModule();
 
 EV << "TGax frequency-selective fading persisted across two HE MU packets.\n";
+EV << "TGax analytic 2x1 matrix produced exact MRC power gain 169.\n";
 EV << "RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.\n";
 EV << ".\n";
 
 %contains: stdout
 TGax frequency-selective fading persisted across two HE MU packets.
+TGax analytic 2x1 matrix produced exact MRC power gain 169.
 RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.
 .
