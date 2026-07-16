@@ -17,6 +17,7 @@ import inet.physicallayer.wireless.common.contract.packetlevel.IPathLoss;
 import inet.physicallayer.wireless.common.contract.packetlevel.IPropagation;
 import inet.physicallayer.wireless.common.contract.packetlevel.IBackgroundNoise;
 import inet.physicallayer.wireless.common.contract.packetlevel.IRadioMedium;
+import inet.physicallayer.wireless.common.contract.packetlevel.IWidebandChannelModel;
 
 //
 // The medium model describes the shared physical medium where communication
@@ -64,6 +65,10 @@ module RadioMedium extends Module like IRadioMedium
             parameters:
                 @display("p=100,200");
         }
+        channelModel: <default("")> like IWidebandChannelModel if typename != "" {
+            parameters:
+                @display("p=300,300");
+        }
         backgroundNoise: <default(signalAnalogRepresentation == "scalar" ? "IsotropicScalarBackgroundNoise" : signalAnalogRepresentation == "dimensional" ? "IsotropicDimensionalBackgroundNoise" : "")> like IBackgroundNoise if typename != "" {
             parameters:
                 @display("p=100,300");
@@ -89,4 +94,3 @@ module RadioMedium extends Module like IRadioMedium
                 @display("p=500,200");
         }
 }
-

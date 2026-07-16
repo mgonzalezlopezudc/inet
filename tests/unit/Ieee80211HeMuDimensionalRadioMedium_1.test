@@ -117,6 +117,7 @@ rxNic->callInitialize();
 auto medium = check_and_cast<InspectableDimensionalRadioMedium *>(getParentModule()->getSubmodule("radioMedium"));
 auto txRadio = check_and_cast<IRadio *>(txNic->getSubmodule("radio"));
 auto rxRadio = check_and_cast<IRadio *>(rxNic->getSubmodule("radio"));
+ASSERT(medium->getWidebandChannelModel() == nullptr);
 
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");
 auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);

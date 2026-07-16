@@ -28,6 +28,12 @@ class INET_API IMediumAnalogModel : public virtual IPrintableObject
 {
   public:
     /**
+     * Returns whether this analog model applies the radio medium's optional
+     * wideband channel snapshots while computing receptions.
+     */
+    virtual bool supportsWidebandChannelModel() const { return false; }
+
+    /**
      * Returns the reception for the provided transmission at the receiver.
      * The result incorporates all modeled attenuation. This function never
      * returns nullptr.
@@ -57,4 +63,3 @@ class INET_API IMediumAnalogModel : public virtual IPrintableObject
 } // namespace inet
 
 #endif
-

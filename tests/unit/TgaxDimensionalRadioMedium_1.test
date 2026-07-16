@@ -1,0 +1,320 @@
+%description:
+Test persistent frequency-selective TGax snapshots, wideband range handling,
+and opt-in RBIR sampling of a narrow HE trigger-based uplink RU.
+
+%includes:
+#include <cmath>
+#include <algorithm>
+
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
+#include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxChannelModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211RbirErrorModel.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/common/Protocol.h"
+#include "inet/common/packet/Packet.h"
+
+%file: TestNetwork.ned
+import inet.mobility.static.StationaryMobility;
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadio;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211DimensionalRadioMedium;
+import inet.physicallayer.wireless.ieee80211.channelmodel.TgaxChannelModel;
+
+module DeterministicTgaxChannelModel extends TgaxChannelModel
+{
+    parameters:
+        @class(DeterministicTgaxChannelModel);
+}
+
+module TgaxInspectableDimensionalRadioMedium extends Ieee80211DimensionalRadioMedium
+{
+    parameters:
+        @class(TgaxInspectableDimensionalRadioMedium);
+}
+
+module TestRbirErrorModel
+{
+    parameters:
+        @class(TestRbirErrorModel);
+}
+
+module TgaxDimensionalMockNic
+{
+    parameters:
+        @class(TgaxDimensionalMockNicModule);
+    submodules:
+        radio: Ieee80211DimensionalRadio {
+            parameters:
+                transmitter.power = 20mW;
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        rbir: TestRbirErrorModel;
+        interfaceTable: InterfaceTable;
+        radioMedium: TgaxInspectableDimensionalRadioMedium {
+            parameters:
+                sameTransmissionStartTimeCheck = "ignore";
+                signalAnalogRepresentation = "scalar";
+                analogModel.typename = "DimensionalMediumAnalogModel";
+                backgroundNoise.typename = "IsotropicDimensionalBackgroundNoise";
+                mediumLimitCache.maxInterferenceRange = 1m;
+        }
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+seed-set = 314159
+**.nic*.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.radioMedium.channelModel.typename = "DeterministicTgaxChannelModel"
+**.radioMedium.channelModel.channelModel = "A"
+**.radioMedium.channelModel.systemBandwidth = 20MHz
+**.radioMedium.channelModel.referenceFrequency = 5GHz
+**.radio.opMode = "ax"
+**.radio.bandName = "5 GHz (20 MHz)"
+**.radio.channelNumber = 0
+**.radio.transmitter.bitrate = 7.3125Mbps
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+class TgaxInspectableDimensionalRadioMedium : public Ieee80211RadioMedium
+{
+  public:
+    void testAddTransmission(const IRadio *transmitter, const ITransmission *transmission) { addTransmission(transmitter, transmission); }
+    void testRemoveTransmission(const ITransmission *transmission) { removeTransmission(transmission); }
+    const IReception *testComputeReception(const IRadio *receiver, const ITransmission *transmission) const { return computeReception(receiver, transmission); }
+    bool testIsInCommunicationRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInCommunicationRange(transmission, startPosition, endPosition); }
+    bool testIsInInterferenceRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInInterferenceRange(transmission, startPosition, endPosition); }
+};
+
+class TgaxDimensionalMockNicModule : public NetworkInterface
+{
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+class DeterministicTgaxChannelModel : public TgaxChannelModel
+{
+  protected:
+    virtual std::shared_ptr<const TgaxSisoChannel> createChannel(const LinkKey&) const override {
+        return std::make_shared<const TgaxSisoChannel>(
+                std::vector<TgaxSisoChannel::Tap>{{simsec(0), {std::sqrt(0.5), 0}},
+                        {nsimsec(50), {std::sqrt(0.5), 0}}});
+    }
+};
+
+class TestRbirErrorModel : public Ieee80211RbirErrorModel
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {
+        snirMode = SnirMode::SM_MEAN;
+        snirOffset = 1;
+        calibration.addRbirPoint(Ieee80211RbirCalibration::Modulation::BPSK, -20, 0);
+        calibration.addRbirPoint(Ieee80211RbirCalibration::Modulation::BPSK, 32, 1);
+        calibration.addPerPoint(Ieee80211RbirCalibration::Coding::BCC, 32, 0, -20, 1);
+        calibration.addPerPoint(Ieee80211RbirCalibration::Coding::BCC, 32, 0, 32, 0);
+    }
+
+    std::vector<double> sample(const ISnir *snir, const Ieee80211HeRu& ru) const {
+        return sampleHeSnirDb(snir, ru.toneSize, ru.toneOffset, getScalarSnir(snir));
+    }
+
+    double evaluate(const ISnir *snir, const Ieee80211HeRu& ru) const {
+        return computeHeSuccessRate(0, Ieee80211RbirCalibration::Coding::BCC,
+                1, false, 100, ru.toneSize, ru.toneOffset, snir, getScalarSnir(snir));
+    }
+};
+
+Define_Module(TgaxInspectableDimensionalRadioMedium);
+Define_Module(TgaxDimensionalMockNicModule);
+Define_Module(DeterministicTgaxChannelModel);
+Define_Module(TestRbirErrorModel);
+
+%activity:
+auto nicType = cModuleType::get("TgaxDimensionalMockNic");
+
+auto txNic = nicType->create("txNic", getSystemModule());
+txNic->buildInside();
+auto txNetworkInterface = check_and_cast<TgaxDimensionalMockNicModule *>(txNic);
+txNetworkInterface->setMacAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
+txNic->callInitialize();
+
+auto rxNic = nicType->create("rxNic", getSystemModule());
+rxNic->buildInside();
+auto rxNetworkInterface = check_and_cast<TgaxDimensionalMockNicModule *>(rxNic);
+rxNetworkInterface->setMacAddress(MacAddress("00:11:22:33:44:55"));
+rxNic->callInitialize();
+
+auto medium = check_and_cast<TgaxInspectableDimensionalRadioMedium *>(getParentModule()->getSubmodule("radioMedium"));
+auto txRadio = check_and_cast<IRadio *>(txNic->getSubmodule("radio"));
+auto rxRadio = check_and_cast<IRadio *>(rxNic->getSubmodule("radio"));
+ASSERT(medium->getWidebandChannelModel() != nullptr);
+auto channelModelModule = medium->getSubmodule("channelModel");
+ASSERT(channelModelModule != nullptr);
+ASSERT(channelModelModule->par("channelModel").stdstringValue() == "A");
+ASSERT(Hz(channelModelModule->par("systemBandwidth")) == MHz(20));
+ASSERT(Hz(channelModelModule->par("referenceFrequency")) == GHz(5));
+
+auto modeSet = Ieee80211ModeSet::getModeSet("ax");
+auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto band = Ieee80211CompliantBands::getBand("5 GHz (20 MHz)");
+auto channel = new Ieee80211Channel(band, 0);
+auto centerFrequency = channel->getCenterFrequency();
+auto channelBandwidth = channel->getBand()->getSpacing();
+ASSERT(channelBandwidth == MHz(20));
+auto rus = calculateHeRus(centerFrequency, channelBandwidth, 4);
+
+auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = false) {
+    auto packet = new Packet(packetName);
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    phyHeader->setPpduFormat(triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = rus[0].index;
+    user.ruToneSize = rus[0].toneSize;
+    user.ruToneOffset = rus[0].toneOffset;
+    user.staId = computeHeMuStaId(rxNetworkInterface->getMacAddress());
+    user.psduLength = B(100);
+    phyHeader->appendUsers(user);
+    phyHeader->setChunkLength(b(16 + 73));
+    packet->insertAtFront(phyHeader);
+    packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+
+    auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
+    auto transmissionCenterFrequency = triggerBasedUplink ? rus[0].centerFrequency : centerFrequency;
+    auto transmissionBandwidth = triggerBasedUplink ? rus[0].bandwidth : channelBandwidth;
+    auto transmissionAnalogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
+            SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+            transmissionCenterFrequency, transmissionBandwidth, flatTransmitter->getPower());
+    return new Ieee80211Transmission(
+            txRadio, packet, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
+            SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+            Coord(), Coord(), Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
+            transmissionAnalogModel, mode, channel);
+};
+
+auto transmitterGain = txRadio->getAntenna()->getGain().get();
+auto receiverGain = rxRadio->getAntenna()->getGain().get();
+ASSERT(transmitterGain->getMinGain() == transmitterGain->getMaxGain());
+ASSERT(receiverGain->getMinGain() == receiverGain->getMaxGain());
+FrequencyDependentAttenuationFunction ordinaryAttenuation(medium,
+        transmitterGain->getMinGain(), receiverGain->getMinGain(), Coord(), Coord());
+double ordinaryAttenuationFactor = ordinaryAttenuation.getValue(
+        Point<simsec, Hz>(simsec(SIMTIME_ZERO), centerFrequency));
+
+auto computeAndCheckFadingFactor = [&](Ieee80211Transmission *transmission) {
+    medium->testAddTransmission(txRadio, transmission);
+    auto aggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());
+    ASSERT(aggregateAnalogModel->getCenterFrequency() == centerFrequency);
+    ASSERT(aggregateAnalogModel->getBandwidth() == channelBandwidth);
+
+    auto reception = medium->testComputeReception(rxRadio, transmission);
+    auto ruAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(reception->getAnalogModel());
+    ASSERT(ruAnalogModel->getCenterFrequency() == rus[0].centerFrequency);
+    ASSERT(ruAnalogModel->getBandwidth() == rus[0].bandwidth);
+
+    std::vector<double> fadingFactors;
+    auto checkSample = [&](simtime_t sampleTime, Hz sampleFrequency) {
+        Point<simsec, Hz> samplePoint(simsec(sampleTime), sampleFrequency);
+        auto transmittedPsd = aggregateAnalogModel->getPower()->getValue(samplePoint);
+        auto baselinePsd = transmittedPsd * ordinaryAttenuationFactor;
+        auto receivedPsd = ruAnalogModel->getPower()->getValue(samplePoint);
+        ASSERT(baselinePsd > WpHz(0));
+        ASSERT(receivedPsd > WpHz(0));
+        double sampleFadingFactor = receivedPsd.get<WpHz>() / baselinePsd.get<WpHz>();
+        ASSERT(std::isfinite(sampleFadingFactor));
+        ASSERT(sampleFadingFactor > 0);
+        fadingFactors.push_back(sampleFadingFactor);
+    };
+
+    auto earlyDataTime = reception->getStartTime() + SimTime(250, SIMTIME_US);
+    auto lateDataTime = reception->getStartTime() + SimTime(750, SIMTIME_US);
+    checkSample(earlyDataTime, rus[0].centerFrequency - rus[0].bandwidth / 4);
+    checkSample(earlyDataTime, rus[0].centerFrequency);
+    checkSample(earlyDataTime, rus[0].centerFrequency + rus[0].bandwidth / 4);
+    checkSample(lateDataTime, rus[0].centerFrequency - rus[0].bandwidth / 4);
+    checkSample(lateDataTime, rus[0].centerFrequency);
+    checkSample(lateDataTime, rus[0].centerFrequency + rus[0].bandwidth / 4);
+
+    auto outsideRuFrequency = centerFrequency + channelBandwidth / 2 - Hz(1);
+    ASSERT(ruAnalogModel->getPower()->getValue(
+            Point<simsec, Hz>(simsec(earlyDataTime), outsideRuFrequency)) == WpHz(0));
+
+    delete reception;
+    medium->testRemoveTransmission(transmission);
+    return fadingFactors;
+};
+
+auto firstTransmission = createTransmission("first-HE-MU-TGax-PPDU");
+ASSERT(medium->testIsInCommunicationRange(firstTransmission, Coord(100, 0, 0), Coord(100, 0, 0)));
+ASSERT(medium->testIsInInterferenceRange(firstTransmission, Coord(100, 0, 0), Coord(100, 0, 0)));
+auto firstFadingFactors = computeAndCheckFadingFactor(firstTransmission);
+ASSERT(*std::max_element(firstFadingFactors.begin(), firstFadingFactors.end()) >
+        *std::min_element(firstFadingFactors.begin(), firstFadingFactors.end()));
+auto secondTransmission = createTransmission("second-HE-MU-TGax-PPDU");
+auto secondFadingFactors = computeAndCheckFadingFactor(secondTransmission);
+ASSERT(firstFadingFactors.size() == secondFadingFactors.size());
+for (size_t i = 0; i < firstFadingFactors.size(); ++i)
+    ASSERT(std::fabs(secondFadingFactors[i] / firstFadingFactors[i] - 1) < 1e-12);
+
+auto rbir = check_and_cast<TestRbirErrorModel *>(getParentModule()->getSubmodule("rbir"));
+auto triggerTransmission = createTransmission("HE-TB-narrow-RU-TGax-PPDU", true);
+auto triggerAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(triggerTransmission->getAnalogModel());
+ASSERT(triggerAnalogModel->getBandwidth() == rus[0].bandwidth);
+ASSERT(triggerAnalogModel->getCenterFrequency() == rus[0].centerFrequency);
+medium->testAddTransmission(txRadio, triggerTransmission);
+auto triggerSnir = medium->getSNIR(rxRadio, triggerTransmission);
+auto toneSnirDb = rbir->sample(triggerSnir, rus[0]);
+ASSERT(toneSnirDb.size() == static_cast<size_t>(rus[0].dataSubcarriers));
+ASSERT(*std::max_element(toneSnirDb.begin(), toneSnirDb.end()) >
+        *std::min_element(toneSnirDb.begin(), toneSnirDb.end()));
+double triggerSuccessRate = rbir->evaluate(triggerSnir, rus[0]);
+ASSERT(0 <= triggerSuccessRate && triggerSuccessRate <= 1);
+medium->testRemoveTransmission(triggerTransmission);
+
+delete channel;
+txNic->deleteModule();
+rxNic->deleteModule();
+
+EV << "TGax frequency-selective fading persisted across two HE MU packets.\n";
+EV << "RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.\n";
+EV << ".\n";
+
+%contains: stdout
+TGax frequency-selective fading persisted across two HE MU packets.
+RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.
+.

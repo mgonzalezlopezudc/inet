@@ -23,11 +23,24 @@ Ieee80211ErrorModelBase::Ieee80211ErrorModelBase()
 {
 }
 
+double Ieee80211ErrorModelBase::getDataSuccessRate(const IIeee80211Mode *mode,
+        unsigned int bitLength, const ISnir *snir, double scalarSnir) const
+{
+    return getDataSuccessRate(mode, bitLength, scalarSnir);
+}
+
 double Ieee80211ErrorModelBase::getHeDataSuccessRate(
         const Ieee80211HeUserPhyParameters& parameters,
         unsigned int bitLength, double snir) const
 {
     throw cRuntimeError("Per-user HE error evaluation is unsupported by this error model");
+}
+
+double Ieee80211ErrorModelBase::getHeDataSuccessRate(
+        const Ieee80211HeUserPhyParameters& parameters,
+        unsigned int bitLength, const ISnir *snir, double scalarSnir) const
+{
+    return getHeDataSuccessRate(parameters, bitLength, scalarSnir);
 }
 
 double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const
@@ -92,11 +105,11 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
             }
             if (selectedUser->dcm)
                 userSnir *= 2.0;
-            dataSuccessRate = getHeDataSuccessRate(parameters, dataLength, userSnir);
+            dataSuccessRate = getHeDataSuccessRate(parameters, dataLength, snir, userSnir);
         }
     }
     else
-        dataSuccessRate = getDataSuccessRate(mode, dataLength, snr);
+        dataSuccessRate = getDataSuccessRate(mode, dataLength, snir, snr);
     switch (part) {
         case IRadioSignal::SIGNAL_PART_WHOLE:
             return 1.0 - headerSuccessRate * dataSuccessRate;

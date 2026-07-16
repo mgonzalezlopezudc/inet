@@ -91,6 +91,18 @@ int getHeRuDataSubcarrierCount(int toneSize);
 int getHeRuPilotSubcarrierCount(int toneSize);
 
 /**
+ * Returns the signed physical data-subcarrier indices for a canonical HE RU.
+ * The indices are relative to the channel DC tone and exclude pilots, DC, and
+ * guard/null tones (IEEE 802.11-2024 Tables 27-8 through 27-10 and 27-38,
+ * 27-40, 27-42, 27-43, 27-45, and 27-46). For 160 MHz, the 80 MHz mappings
+ * are replicated with -512/+512 shifts as specified by the pilot tables.
+ */
+std::vector<int> getHeRuDataToneIndices(int channelTones, int toneSize, int toneOffset);
+
+/** Returns the corresponding table-defined HE pilot-subcarrier indices. */
+std::vector<int> getHeRuPilotToneIndices(int channelTones, int toneSize, int toneOffset);
+
+/**
  * Returns the total tone size for the given channel bandwidth.
  * IEEE 802.11-2024, Clause 27.3.2.2, where:
  * - 20 MHz bandwidth maps to a 242-tone RU.

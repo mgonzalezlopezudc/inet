@@ -107,6 +107,35 @@ isolation does not isolate every part of the protocol.
 These profiles model frequency-selective noise/SNIR, not a multipath impulse
 response or coherence bandwidth.
 
+### TGax multipath channel
+
+The opt-in `TgaxModelBOFDMA` and `TgaxModelBSU` configurations replace the
+flat channel with a persistent reciprocal SISO realization of TGax indoor
+Model B. The realization is cached per unordered radio pair, uses the Model B
+cluster delay/power profile at 80 MHz, and is sampled on the HE 78.125 kHz
+subcarrier grid. `TgaxIndoorPathLoss` separately applies the Model B median
+distance loss. These configurations retain the default NIST receiver error
+model, so they are useful for channel integration and comparison but do not
+constitute an RBIR-calibrated TGax system result.
+
+`TgaxModelBRbirOFDMA` additionally selects `Ieee80211RbirErrorModel`. It must
+be given the Appendix-3 Mean RBIR and PER curves from a user-supplied
+IEEE 802.11-14/0571r12 workbook. The workbook and extracted data are not
+redistributed with INET. Extract them with:
+
+```sh
+../../../bin/inet_extract_tgax_rbir_calibration.py \
+  /path/to/Microsoft_Excel_Worksheet1.xlsx /tmp/tgax-rbir.txt
+```
+
+The current TGax channel implementation is deliberately a static NLOS SISO
+baseline. It does not yet implement LOS/K-factor evolution, Doppler,
+non-stationarity, antenna-array correlation, polarization, or MIMO channel
+matrices. Outdoor UMi median LOS/NLOS path loss is available as
+`TgaxUmiPathLoss`, but fixed outdoor UMi delay profiles are not exposed: the
+primary ITU-R table contains an internally inconsistent printed delay row, so
+the implementation does not silently guess a correction.
+
 ### 80 MHz puncturing and time variation
 
 The synthetic puncturing trio uses the same backlog-aware scheduler:
@@ -177,6 +206,28 @@ From this directory, run one configuration and seed with:
   -c FortyMHzLowerHalfOFDMA -r 0 --seed-set=0 \
   --result-dir=results/forty-lower/ofdma/seed0
 ```
+
+Run the static TGax Model B channel with the default NIST error model:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c TgaxModelBOFDMA -r 0 --seed-set=0 \
+  --result-dir=results/tgax/model-b/nist/seed0
+```
+
+Run the calibrated RBIR variant after extracting the user-supplied workbook:
+
+```sh
+../../../bin/inet --release -u Cmdenv -f omnetpp.ini \
+  -c TgaxModelBRbirOFDMA -r 0 --seed-set=0 \
+  '--**.wlan[*].radio.receiver.errorModel.calibrationFile="/tmp/tgax-rbir.txt"' \
+  --result-dir=results/tgax/model-b/rbir/seed0
+```
+
+The RBIR model accepts HE MCS 0–9 and evaluates the assigned RU's physical
+data subcarriers. Its packet-length scaling uses the 32-byte and 1458-byte
+reference PER curves defined by the TGax methodology; it rejects incomplete
+or malformed calibration input at initialization.
 
 Repeat seed sets 0 through 4 for the four rows in the table. Every verified
 run exited successfully at the simulation-time limit and produced `.sca`,

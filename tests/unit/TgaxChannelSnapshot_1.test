@@ -1,0 +1,38 @@
+%description:
+This test checks the immutable generic channel snapshot value object.
+
+%includes:
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelSnapshot.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+template<typename Function>
+static void expectRuntimeError(Function function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+%activity:
+auto powerGain = makeShared<ConstantFunction<double, Domain<simsec, Hz>>>(0.25);
+Ptr<const IChannelSnapshot> snapshot(new ChannelSnapshot(powerGain));
+ASSERT(snapshot->getPowerGain() == powerGain);
+ASSERT(snapshot->getPowerGain()->getValue(Point<simsec, Hz>(simsec(1), GHz(5))) == 0.25);
+ASSERT(snapshot->getPowerGain()->isFinite());
+expectRuntimeError([] { ChannelSnapshot snapshot(nullptr); }, "null power gain");
+
+std::cout << "Channel snapshot passed" << std::endl;
+
+%contains: stdout
+Channel snapshot passed

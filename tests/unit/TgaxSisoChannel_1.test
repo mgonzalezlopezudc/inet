@@ -1,0 +1,95 @@
+%description:
+This test checks the immutable TGax SISO tapped-delay channel realization.
+
+%includes:
+#include <algorithm>
+#include <cmath>
+#include <complex>
+#include <limits>
+#include <vector>
+
+#include "inet/physicallayer/wireless/ieee80211/channelmodel/TgaxSisoChannel.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static void checkClose(double actual, double expected, double absoluteTolerance, const char *message)
+{
+    if (std::abs(actual - expected) > absoluteTolerance)
+        throw cRuntimeError("%s: actual = %.17g, expected = %.17g", message, actual, expected);
+}
+
+static void checkComplexClose(const std::complex<double>& actual, const std::complex<double>& expected,
+        double absoluteTolerance, const char *message)
+{
+    if (std::abs(actual - expected) > absoluteTolerance)
+        throw cRuntimeError("%s: actual = (%.17g, %.17g), expected = (%.17g, %.17g)",
+                message, actual.real(), actual.imag(), expected.real(), expected.imag());
+}
+
+template<typename Function>
+static void expectRuntimeError(Function function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+%activity:
+TgaxSisoChannel flatChannel({{simsec(0), {0.6, -0.8}}});
+for (auto frequencyOffset : {MHz(-40), MHz(0), MHz(17), MHz(80)}) {
+    checkComplexClose(flatChannel.computeResponse(frequencyOffset), {0.6, -0.8}, 1e-14, "one-tap flat response");
+    checkClose(flatChannel.computePowerGain(frequencyOffset), 1, 1e-14, "one-tap flat power");
+}
+
+const double coefficient = 1 / std::sqrt(2.0);
+TgaxSisoChannel twoTapChannel({
+        {simsec(0), {coefficient, 0}},
+        {nsimsec(50), {coefficient, 0}}
+});
+checkClose(twoTapChannel.computePowerGain(MHz(0)), 2, 1e-14, "two-tap peak at zero");
+checkClose(twoTapChannel.computePowerGain(MHz(20)), 2, 1e-14, "two-tap peak at 20 MHz");
+checkClose(twoTapChannel.computePowerGain(MHz(10)), 0, 1e-14, "two-tap null at 10 MHz");
+checkClose(twoTapChannel.computePowerGain(MHz(-10)), 0, 1e-14, "two-tap null at -10 MHz");
+
+TgaxSisoChannel signedPhaseChannel({
+        {simsec(0), {1, 0}},
+        {nsimsec(25), {0, 1}}
+});
+const double squareRootHalf = std::sqrt(0.5);
+checkComplexClose(signedPhaseChannel.computeResponse(MHz(5)),
+        {1 + squareRootHalf, squareRootHalf}, 1e-14, "complex response sign");
+
+for (auto frequencyOffset : {MHz(-13), MHz(0), MHz(7)}) {
+    auto response = twoTapChannel.computeResponse(frequencyOffset);
+    checkClose(twoTapChannel.computePowerGain(frequencyOffset), std::norm(response), 1e-14, "power equals response norm");
+}
+
+TgaxSisoChannel duplicateDelayChannel({
+        {nsimsec(25), {1, 0}},
+        {nsimsec(25), {0, 1}}
+});
+ASSERT(duplicateDelayChannel.getTaps().size() == 2);
+ASSERT(duplicateDelayChannel.getTaps()[0].excessDelay == duplicateDelayChannel.getTaps()[1].excessDelay);
+checkClose(duplicateDelayChannel.computePowerGain(MHz(3)), 2, 1e-14, "duplicate delays add coherently");
+
+expectRuntimeError([] { TgaxSisoChannel channel({}); }, "empty taps");
+expectRuntimeError([] { TgaxSisoChannel channel({{simsec(-1), {1, 0}}}); }, "negative delay");
+expectRuntimeError([] {
+    TgaxSisoChannel channel({{simsec(0), {std::numeric_limits<double>::quiet_NaN(), 0}}});
+}, "NaN coefficient");
+expectRuntimeError([] {
+    TgaxSisoChannel channel({{simsec(0), {0, std::numeric_limits<double>::infinity()}}});
+}, "infinite coefficient");
+expectRuntimeError([&] { flatChannel.computeResponse(Hz(std::numeric_limits<double>::quiet_NaN())); }, "NaN frequency offset");
+std::cout << "TGax SISO channel passed" << std::endl;
+
+%contains: stdout
+TGax SISO channel passed

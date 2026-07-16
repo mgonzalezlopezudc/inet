@@ -28,6 +28,7 @@ RadioMedium::RadioMedium() :
     pathLoss(nullptr),
     obstacleLoss(nullptr),
     analogModel(nullptr),
+    widebandChannelModel(nullptr),
     backgroundNoise(nullptr),
     physicalEnvironment(nullptr),
     material(nullptr),
@@ -78,6 +79,7 @@ void RadioMedium::initialize(int stage)
         pathLoss = check_and_cast<IPathLoss *>(getSubmodule("pathLoss"));
         obstacleLoss = dynamic_cast<IObstacleLoss *>(getSubmodule("obstacleLoss"));
         analogModel = check_and_cast<IMediumAnalogModel *>(getSubmodule("analogModel"));
+        widebandChannelModel = check_and_cast_nullable<IWidebandChannelModel *>(getSubmodule("channelModel"));
         backgroundNoise = dynamic_cast<IBackgroundNoise *>(getSubmodule("backgroundNoise"));
         mediumLimitCache = check_and_cast<IMediumLimitCache *>(getSubmodule("mediumLimitCache"));
         neighborCache = dynamic_cast<INeighborCache *>(getSubmodule("neighborCache"));
@@ -93,6 +95,10 @@ void RadioMedium::initialize(int stage)
             rangeFilter = RANGE_FILTER_COMMUNICATION_RANGE;
         else
             throw cRuntimeError("Unknown range filter: '%d'", rangeFilter);
+        if (widebandChannelModel != nullptr && !analogModel->supportsWidebandChannelModel())
+            throw cRuntimeError("The configured medium analog model does not support wideband channel snapshots");
+        if (widebandChannelModel != nullptr && rangeFilter != RANGE_FILTER_ANYWHERE)
+            throw cRuntimeError("Range filtering is not supported with an unbounded wideband fading gain");
         radioModeFilter = par("radioModeFilter");
         listeningFilter = par("listeningFilter");
         macAddressFilter = par("macAddressFilter");
@@ -207,6 +213,10 @@ bool RadioMedium::matchesMacAddressFilter(const IRadio *radio, const Packet *pac
 
 bool RadioMedium::isInCommunicationRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const
 {
+    // The current wideband contract does not provide a finite maximum gain.
+    // Consequently, path-loss-only range limits cannot safely exclude a link.
+    if (widebandChannelModel != nullptr)
+        return true;
     m maxCommunicationRange = mediumLimitCache->getMaxCommunicationRange();
     return std::isnan(maxCommunicationRange.get()) ||
            (transmission->getStartPosition().distance(startPosition) < maxCommunicationRange.get() &&
@@ -215,6 +225,10 @@ bool RadioMedium::isInCommunicationRange(const ITransmission *transmission, cons
 
 bool RadioMedium::isInInterferenceRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const
 {
+    // A constructive fading realization may raise a signal above the
+    // interference threshold outside the path-loss-only cached range.
+    if (widebandChannelModel != nullptr)
+        return true;
     m maxInterferenceRange = mediumLimitCache->getMaxInterferenceRange();
     return std::isnan(maxInterferenceRange.get()) ||
            (transmission->getStartPosition().distance(startPosition) < maxInterferenceRange.get() &&

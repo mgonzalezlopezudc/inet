@@ -27,6 +27,8 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
     virtual void initialize(int stage) override;
 
   public:
+    virtual bool supportsWidebandChannelModel() const override { return true; }
+
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
     virtual const Ptr<const IFunction<WpHz, Domain<simsec, Hz>>> computeReceptionPower(const IRadio *radio, const ITransmission *transmission, const IArrival *arrival) const;
@@ -41,4 +43,3 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
 } // namespace inet
 
 #endif
-
