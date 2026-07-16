@@ -1,5 +1,4 @@
 .agent
-.codex
 .github
 standards/**
 !python/inet/standards/
