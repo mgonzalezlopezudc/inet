@@ -263,16 +263,21 @@ auto channelBandwidth = channel->getBand()->getSpacing();
 ASSERT(channelBandwidth == MHz(20));
 auto rus = calculateHeRus(centerFrequency, channelBandwidth, 4);
 
-auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = false) {
+auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = false,
+        bool muMimo = false, int triggerId = 0, int streamStartIndex = 0) {
     auto packet = new Packet(packetName);
     auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
     phyHeader->setPpduFormat(triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
+    phyHeader->setMuMimo(muMimo);
+    phyHeader->setTriggerId(triggerId);
     Ieee80211HeMuUserInfo user;
     user.ruIndex = rus[0].index;
     user.ruToneSize = rus[0].toneSize;
     user.ruToneOffset = rus[0].toneOffset;
     user.staId = computeHeMuStaId(rxNetworkInterface->getMacAddress());
     user.psduLength = B(100);
+    user.numberOfSpatialStreams = 1;
+    user.streamStartIndex = streamStartIndex;
     phyHeader->appendUsers(user);
     phyHeader->setChunkLength(b(16 + 73));
     packet->insertAtFront(phyHeader);
@@ -522,6 +527,43 @@ double triggerSuccessRate = rbir->evaluate(triggerSnir, rus[0]);
 ASSERT(0 <= triggerSuccessRate && triggerSuccessRate <= 1);
 medium->testRemoveTransmission(triggerTransmission);
 
+deterministicChannelModel->enableSpatialChannel(centerFrequency);
+auto idealDesiredTbTransmission = createTransmission(
+        "ideal-spatially-orthogonal-HE-TB-desired", true, true, 1234, 0);
+auto idealOtherTbTransmission = createTransmission(
+        "ideal-spatially-orthogonal-HE-TB-other", true, true, 1234, 1);
+medium->testAddTransmission(txRadio, idealDesiredTbTransmission);
+medium->testAddTransmission(txRadio, idealOtherTbTransmission);
+auto idealTbSnir = medium->getSNIR(rxRadio, idealDesiredTbTransmission);
+auto idealTbMeanSnir = idealTbSnir->getMean();
+ASSERT(std::isfinite(idealTbMeanSnir));
+ASSERT(idealTbMeanSnir > 0);
+medium->testRemoveTransmission(idealOtherTbTransmission);
+medium->testRemoveTransmission(idealDesiredTbTransmission);
+
+dimensionalMediumAnalogModel->setChannelMatrixLmmse(true);
+auto lmmseDesiredTbTransmission = createTransmission(
+        "L-MMSE-spatial-HE-TB-desired", true, true, 5678, 0);
+auto lmmseOtherTbTransmission = createTransmission(
+        "L-MMSE-spatial-HE-TB-other", true, true, 5678, 1);
+medium->testAddTransmission(txRadio, lmmseDesiredTbTransmission);
+medium->testAddTransmission(txRadio, lmmseOtherTbTransmission);
+auto lmmseTbSnir = medium->getSNIR(rxRadio, lmmseDesiredTbTransmission);
+auto lmmseTbMeanSnir = lmmseTbSnir->getMean();
+ASSERT(std::isfinite(lmmseTbMeanSnir));
+ASSERT(lmmseTbMeanSnir > 0);
+ASSERT(lmmseTbMeanSnir < idealTbMeanSnir);
+auto lmmseToneSnirDb = rbir->sample(lmmseTbSnir, rus[0]);
+ASSERT(lmmseToneSnirDb.size() == static_cast<size_t>(rus[0].dataSubcarriers));
+for (auto snirDb : lmmseToneSnirDb)
+    ASSERT(std::isfinite(snirDb));
+double lmmseSuccessRate = rbir->evaluate(lmmseTbSnir, rus[0]);
+ASSERT(0 <= lmmseSuccessRate && lmmseSuccessRate <= 1);
+medium->testRemoveTransmission(lmmseOtherTbTransmission);
+medium->testRemoveTransmission(lmmseDesiredTbTransmission);
+dimensionalMediumAnalogModel->setChannelMatrixLmmse(false);
+deterministicChannelModel->disableSpatialChannel();
+
 delete channel;
 txNic->deleteModule();
 rxNic->deleteModule();
@@ -530,10 +572,12 @@ rxSingleNic->deleteModule();
 EV << "TGax frequency-selective fading persisted across two HE MU packets.\n";
 EV << "TGax analytic 2x1 matrix produced exact MRC power gain 169.\n";
 EV << "RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.\n";
+EV << "L-MMSE retained same-RU HE-TB spatial interference for covariance-aware RBIR sampling.\n";
 EV << ".\n";
 
 %contains: stdout
 TGax frequency-selective fading persisted across two HE MU packets.
 TGax analytic 2x1 matrix produced exact MRC power gain 169.
 RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.
+L-MMSE retained same-RU HE-TB spatial interference for covariance-aware RBIR sampling.
 .

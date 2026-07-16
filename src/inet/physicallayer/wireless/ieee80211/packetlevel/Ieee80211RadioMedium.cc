@@ -30,8 +30,9 @@
 //     emissions are not modeled.
 //   - Multiple simultaneous HE TB users are treated as independent receptions.
 //     Co-triggered MU-MIMO users with disjoint spatial-stream ranges are assumed
-//     to be perfectly spatially separated; multi-user synchronization, channel
-//     estimation, CFO, and timing misalignment impairments are not modeled.
+//     to be perfectly separated unless covariance-aware channel-matrix L-MMSE
+//     is active; multi-user synchronization, channel estimation, CFO, and
+//     timing misalignment impairments are not modeled.
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -237,6 +238,12 @@ const IInterference *Ieee80211RadioMedium::computeInterference(const IRadio *rec
     // admits only overlapping analog receptions as interference for this RU.
     interferenceComputationCount++;
     auto reception = getReception(receiver, transmission);
+    auto dimensionalMediumAnalogModel = dynamic_cast<const DimensionalMediumAnalogModel *>(analogModel);
+    auto desiredDimensionalAnalogModel = dynamic_cast<const DimensionalReceptionAnalogModel *>(reception->getAnalogModel());
+    bool useSpatialCovariance = dimensionalMediumAnalogModel != nullptr &&
+            dimensionalMediumAnalogModel->isChannelMatrixLmmseEnabled() &&
+            desiredDimensionalAnalogModel != nullptr &&
+            desiredDimensionalAnalogModel->getChannelMatrixSignal() != nullptr;
     auto allInterferingReceptions = computeInterferingReceptions(reception);
     auto overlappingReceptions = new std::vector<const IReception *>();
     double desiredMin = desiredRu.centerFrequency.get() - desiredRu.bandwidth.get() / 2;
@@ -245,9 +252,12 @@ const IInterference *Ieee80211RadioMedium::computeInterference(const IRadio *rec
         // Clause 27.3.3.2.4 assigns non-overlapping spatial streams to users in
         // one UL MU-MIMO exchange. The scalar analog model has no channel
         // matrix with which to separate those streams, so model ideal spatial
-        // separation here. Same-RU transmissions from another Trigger, or with
-        // overlapping stream ranges, remain ordinary interference.
-        if (areSpatiallyOrthogonalHeTbUsers(transmission, interferingReception->getTransmission()))
+        // separation here unless L-MMSE has the desired channel vector and
+        // can retain the other reception for covariance processing. Same-RU
+        // transmissions from another Trigger, or with overlapping stream
+        // ranges, remain ordinary interference in every mode.
+        if (!useSpatialCovariance &&
+                areSpatiallyOrthogonalHeTbUsers(transmission, interferingReception->getTransmission()))
             continue;
         auto analogModel = dynamic_cast<const INarrowbandSignalAnalogModel *>(
                 interferingReception->getAnalogModel());

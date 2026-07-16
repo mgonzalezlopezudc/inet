@@ -34,6 +34,7 @@ class INET_API DimensionalMediumAnalogModel : public AnalogModelBase
 
   public:
     virtual bool supportsWidebandChannelModel() const override { return true; }
+    bool isChannelMatrixLmmseEnabled() const { return enableChannelMatrixLmmse; }
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
