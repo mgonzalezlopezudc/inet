@@ -145,9 +145,10 @@ users only because the TGac source leaves mobile-user indoor Doppler speed and
 spectral shape TBD. It does not yet implement LOS/K-factor evolution,
 mobility-coupled non-stationarity, antenna-array correlation, polarization, or
 MIMO channel matrices. The profile catalog now preserves the visually verified
-TGn Appendix C cluster AoA/AoD/angular-spread metadata for Models B and D, but
-the next slice still requires a matrix-valued snapshot and MRC/MMSE consumer; a
-scalar Frobenius-gain shortcut would not be equivalent. Outdoor UMi median
+TGn Appendix C cluster AoA/AoD/angular-spread metadata for Models B and D. An
+immutable receive-row/transmit-column matrix snapshot contract is available,
+but the TGax matrix generator and MRC/MMSE consumer are not wired yet; a scalar
+Frobenius-gain shortcut would not be equivalent. Outdoor UMi median
 LOS/NLOS path loss is available as
 `TgaxUmiPathLoss`, but fixed outdoor UMi delay profiles are not exposed: the
 primary ITU-R table contains an internally inconsistent printed delay row, so

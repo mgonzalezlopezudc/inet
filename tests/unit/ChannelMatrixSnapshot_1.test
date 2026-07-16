@@ -1,0 +1,72 @@
+%description:
+This test checks the immutable phase-preserving matrix channel snapshot contract.
+
+%includes:
+#include <limits>
+
+#include "inet/common/math/Functions.h"
+#include "inet/physicallayer/wireless/common/signal/ChannelMatrixSnapshot.h"
+
+%global:
+
+using namespace inet;
+using namespace inet::math;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+template<typename Function>
+static void expectRuntimeError(Function function, const char *message)
+{
+    try {
+        function();
+    }
+    catch (const cRuntimeError&) {
+        return;
+    }
+    throw cRuntimeError("Expected cRuntimeError: %s", message);
+}
+
+%activity:
+ChannelMatrix forward(2, 2, {{1, 2}, {3, 4}, {5, 6}, {7, 8}});
+ASSERT(forward.getNumReceiveAntennas() == 2);
+ASSERT(forward.getNumTransmitAntennas() == 2);
+ASSERT(forward.getCoefficient(0, 1) == std::complex<double>(3, 4));
+ASSERT(forward.getCoefficient(1, 0) == std::complex<double>(5, 6));
+
+auto reverse = forward.transposed();
+ASSERT(reverse.getNumReceiveAntennas() == 2);
+ASSERT(reverse.getNumTransmitAntennas() == 2);
+ASSERT(reverse.getCoefficient(0, 1) == std::complex<double>(5, 6));
+ASSERT(reverse.getCoefficient(1, 0) == std::complex<double>(3, 4));
+ASSERT(reverse.getCoefficient(0, 1) != std::conj(forward.getCoefficient(1, 0)));
+
+auto response = std::make_shared<const ConstantChannelMatrixResponse>(forward);
+auto powerGain = makeShared<ConstantFunction<double, Domain<simsec, Hz>>>(0.25);
+Ptr<const IChannelSnapshot> genericSnapshot(new ChannelMatrixSnapshot(powerGain, response));
+ASSERT(genericSnapshot->getPowerGain() == powerGain);
+auto matrixSnapshot = dynamic_cast<const IChannelMatrixSnapshot *>(genericSnapshot.get());
+ASSERT(matrixSnapshot != nullptr);
+ASSERT(matrixSnapshot->getChannelMatrixResponse() == response);
+auto queried = matrixSnapshot->getChannelMatrixResponse()->getChannelMatrix(simsec(1.25), GHz(5.2));
+ASSERT(queried.getCoefficient(1, 0) == std::complex<double>(5, 6));
+
+ChannelMatrix rectangular(2, 1, {{1, -2}, {3, -4}});
+auto rectangularTranspose = rectangular.transposed();
+ASSERT(rectangularTranspose.getNumReceiveAntennas() == 1);
+ASSERT(rectangularTranspose.getNumTransmitAntennas() == 2);
+ASSERT(rectangularTranspose.getCoefficient(0, 1) == std::complex<double>(3, -4));
+
+expectRuntimeError([] { ChannelMatrix(0, 1, {}); }, "non-positive dimensions");
+expectRuntimeError([] { ChannelMatrix(2, 2, {{1, 0}}); }, "coefficient count");
+expectRuntimeError([] { ChannelMatrix(1, 1, {{std::numeric_limits<double>::quiet_NaN(), 0}}); }, "finite coefficient");
+expectRuntimeError([&] { forward.getCoefficient(-1, 0); }, "negative index");
+expectRuntimeError([&] { forward.getCoefficient(0, 2); }, "large index");
+expectRuntimeError([&] { response->getChannelMatrix(simsec(std::numeric_limits<double>::quiet_NaN()), GHz(5)); }, "finite time");
+expectRuntimeError([&] { response->getChannelMatrix(simsec(0), Hz(0)); }, "positive frequency");
+expectRuntimeError([&] { ChannelMatrixSnapshot(nullptr, response); }, "null power gain");
+expectRuntimeError([&] { ChannelMatrixSnapshot(powerGain, nullptr); }, "null matrix response");
+
+std::cout << "Channel matrix snapshot passed" << std::endl;
+
+%contains: stdout
+Channel matrix snapshot passed
