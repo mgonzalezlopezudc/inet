@@ -128,3 +128,23 @@ the didactic evidence is the causal chain: OM Control field, updated peer state,
 then changed scheduler eligibility. A throughput comparison would mix the
 energy/capability trade-off with the chosen traffic and is not the purpose of
 this scenario.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `OperatingModeIndication`
+Total over-the-air packets captured (Global BSS/AP): **2637**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1558 | 59.08% | 1070.0 B | 0.0 B | 97.64% | 55.25% |
+| Control: Ack | 1073 | 40.69% | 14.0 B | 0.0 B | 2.34% | 1.32% |
+| Control: Trigger | 3 | 0.11% | 40.0 B | 0.0 B | 0.01% | 0.01% |
+| Control: Block Ack (BA) | 3 | 0.11% | 46.0 B | 0.0 B | 0.01% | 0.01% |
+
+### Analysis of Packet Distribution
+Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.

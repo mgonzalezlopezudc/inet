@@ -311,3 +311,35 @@ The decoded output timeline shows:
 * Mixed capability is intentionally included because an AP can use a feature
   only when the scheduled peers support the relevant mode. Negotiation is part
   of the advantage: it permits modern and less-capable stations to coexist.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `BccBaseline`
+Total over-the-air packets captured (Global BSS/AP): **94**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 64 | 68.09% | 1066.0 B | 0.0 B | 97.29% | 4.53% |
+| Control: Ack | 13 | 13.83% | 14.0 B | 0.0 B | 0.69% | 0.03% |
+| Management: Action | 11 | 11.70% | 37.0 B | 0.0 B | 1.64% | 0.08% |
+| Control: Block Ack Request (BAR) | 3 | 3.19% | 24.0 B | 0.0 B | 0.18% | 0.01% |
+| Control: Block Ack (BA) | 3 | 3.19% | 32.0 B | 0.0 B | 0.20% | 0.01% |
+
+### Configuration: `PreamblePuncturing`
+Total over-the-air packets captured (Global BSS/AP): **94**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 64 | 68.09% | 1066.0 B | 0.0 B | 97.29% | 4.53% |
+| Control: Ack | 13 | 13.83% | 14.0 B | 0.0 B | 0.69% | 0.03% |
+| Management: Action | 11 | 11.70% | 37.0 B | 0.0 B | 1.64% | 0.08% |
+| Control: Block Ack Request (BAR) | 3 | 3.19% | 24.0 B | 0.0 B | 0.18% | 0.01% |
+| Control: Block Ack (BA) | 3 | 3.19% | 32.0 B | 0.0 B | 0.20% | 0.01% |
+
+### Analysis of Packet Distribution
+Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.

@@ -1,0 +1,2648 @@
+{
+  "twt": {
+    "IndividualUnannounced": {
+      "global": {
+        "total": 2686,
+        "used_ap_only": true,
+        "stats": {
+          "0,8": {
+            "count": 1000,
+            "mean": 93.0,
+            "std": 0.0,
+            "airtime_pct": 36.27517823131169,
+            "airtime_sim_pct": 0.14400000000000002
+          },
+          "0,4": {
+            "count": 25,
+            "mean": 68.0,
+            "std": 0.0,
+            "airtime_pct": 0.6969536558330717,
+            "airtime_sim_pct": 0.002766666666666667
+          },
+          "0,5": {
+            "count": 25,
+            "mean": 93.0,
+            "std": 0.0,
+            "airtime_pct": 0.906879455782792,
+            "airtime_sim_pct": 0.0036
+          },
+          "1,13": {
+            "count": 225,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 1.398105827665138,
+            "airtime_sim_pct": 0.00555
+          },
+          "0,11": {
+            "count": 100,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 1.6458182716058078,
+            "airtime_sim_pct": 0.006533333333333334
+          },
+          "0,0": {
+            "count": 25,
+            "mean": 76.0,
+            "std": 0.0,
+            "airtime_pct": 0.7641299118169822,
+            "airtime_sim_pct": 0.003033333333333333
+          },
+          "0,1": {
+            "count": 25,
+            "mean": 81.0,
+            "std": 0.0,
+            "airtime_pct": 0.8061150718069262,
+            "airtime_sim_pct": 0.0031999999999999997
+          },
+          "0,13": {
+            "count": 561,
+            "mean": 37.98039215686274,
+            "std": 3.134189679048192,
+            "airtime_pct": 9.983063401768941,
+            "airtime_sim_pct": 0.03962933333333333
+          },
+          "2,8": {
+            "count": 700,
+            "mean": 266.0,
+            "std": 0.0,
+            "airtime_pct": 47.5237561724124,
+            "airtime_sim_pct": 0.18865299145299147
+          }
+        }
+      }
+    },
+    "IndividualAnnounced": {
+      "global": {
+        "total": 3110,
+        "used_ap_only": true,
+        "stats": {
+          "0,8": {
+            "count": 1000,
+            "mean": 93.0,
+            "std": 0.0,
+            "airtime_pct": 42.24268966787091,
+            "airtime_sim_pct": 0.14400000000000002
+          },
+          "0,4": {
+            "count": 2,
+            "mean": 68.0,
+            "std": 0.0,
+            "airtime_pct": 0.06492857856357936,
+            "airtime_sim_pct": 0.00022133333333333334
+          },
+          "0,5": {
+            "count": 2,
+            "mean": 93.0,
+            "std": 0.0,
+            "airtime_pct": 0.08448537933574182,
+            "airtime_sim_pct": 0.000288
+          },
+          "1,13": {
+            "count": 24,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.17366439085680263,
+            "airtime_sim_pct": 0.0005920000000000001
+          },
+          "0,11": {
+            "count": 8,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 0.15332531805375368,
+            "airtime_sim_pct": 0.0005226666666666667
+          },
+          "0,0": {
+            "count": 2,
+            "mean": 76.0,
+            "std": 0.0,
+            "airtime_pct": 0.07118675481067135,
+            "airtime_sim_pct": 0.00024266666666666667
+          },
+          "0,1": {
+            "count": 2,
+            "mean": 81.0,
+            "std": 0.0,
+            "airtime_pct": 0.07509811496510384,
+            "airtime_sim_pct": 0.000256
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 42.5,
+            "std": 5.5,
+            "airtime_pct": 0.17992256710389462,
+            "airtime_sim_pct": 0.0006133333333333334
+          },
+          "1,10": {
+            "count": 1992,
+            "mean": 20.0,
+            "std": 0.0,
+            "airtime_pct": 15.582858855259046,
+            "airtime_sim_pct": 0.05312
+          },
+          "2,8": {
+            "count": 2,
+            "mean": 270.0,
+            "std": 0.0,
+            "airtime_pct": 0.15940296998602568,
+            "airtime_sim_pct": 0.0005433846153846154
+          },
+          "Aggregation Overhead,": {
+            "count": 68,
+            "mean": 6138.0,
+            "std": 2668.512694367407,
+            "airtime_pct": 41.21243740319339,
+            "airtime_sim_pct": 0.140488
+          }
+        }
+      }
+    },
+    "Broadcast": {
+      "global": {
+        "total": 1158,
+        "used_ap_only": true,
+        "stats": {
+          "0,8": {
+            "count": 1000,
+            "mean": 111.0,
+            "std": 0.0,
+            "airtime_pct": 87.13628050434718,
+            "airtime_sim_pct": 0.16799999999999998
+          },
+          "0,4": {
+            "count": 2,
+            "mean": 68.0,
+            "std": 0.0,
+            "airtime_pct": 0.11479859177556853,
+            "airtime_sim_pct": 0.00022133333333333334
+          },
+          "0,5": {
+            "count": 2,
+            "mean": 93.0,
+            "std": 0.0,
+            "airtime_pct": 0.14937648086459518,
+            "airtime_sim_pct": 0.000288
+          },
+          "1,13": {
+            "count": 24,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.3070516551105568,
+            "airtime_sim_pct": 0.0005920000000000001
+          },
+          "0,11": {
+            "count": 8,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 0.2710906504579691,
+            "airtime_sim_pct": 0.0005226666666666667
+          },
+          "0,0": {
+            "count": 2,
+            "mean": 76.0,
+            "std": 0.0,
+            "airtime_pct": 0.12586351628405706,
+            "airtime_sim_pct": 0.00024266666666666667
+          },
+          "0,1": {
+            "count": 2,
+            "mean": 81.0,
+            "std": 0.0,
+            "airtime_pct": 0.1327790941018624,
+            "airtime_sim_pct": 0.000256
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 42.5,
+            "std": 5.5,
+            "airtime_pct": 0.3181165796190453,
+            "airtime_sim_pct": 0.0006133333333333334
+          },
+          "2,8": {
+            "count": 69,
+            "mean": 270.0,
+            "std": 0.0,
+            "airtime_pct": 9.723355608586742,
+            "airtime_sim_pct": 0.01874676923076923
+          },
+          "1,8": {
+            "count": 17,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.24688612809565044,
+            "airtime_sim_pct": 0.0004760000000000001
+          },
+          "Aggregation Overhead,": {
+            "count": 8,
+            "mean": 822.0,
+            "std": 478.04602288901015,
+            "airtime_pct": 1.2199079270608608,
+            "airtime_sim_pct": 0.0023520000000000004
+          },
+          "1,9": {
+            "count": 16,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.2544932636952363,
+            "airtime_sim_pct": 0.0004906666666666667
+          }
+        }
+      }
+    },
+    "Baseline": {
+      "global": {
+        "total": 1140,
+        "used_ap_only": true,
+        "stats": {
+          "0,8": {
+            "count": 1000,
+            "mean": 93.0,
+            "std": 0.0,
+            "airtime_pct": 53.66162219389663,
+            "airtime_sim_pct": 0.14400000000000002
+          },
+          "0,4": {
+            "count": 2,
+            "mean": 68.0,
+            "std": 0.0,
+            "airtime_pct": 0.08247990077950777,
+            "airtime_sim_pct": 0.00022133333333333334
+          },
+          "0,5": {
+            "count": 2,
+            "mean": 93.0,
+            "std": 0.0,
+            "airtime_pct": 0.10732324438779324,
+            "airtime_sim_pct": 0.000288
+          },
+          "1,13": {
+            "count": 20,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.1838407427013125,
+            "airtime_sim_pct": 0.0004933333333333334
+          },
+          "0,11": {
+            "count": 8,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 0.19477181388895812,
+            "airtime_sim_pct": 0.0005226666666666667
+          },
+          "0,0": {
+            "count": 2,
+            "mean": 76.0,
+            "std": 0.0,
+            "airtime_pct": 0.09042977073415912,
+            "airtime_sim_pct": 0.00024266666666666667
+          },
+          "0,1": {
+            "count": 2,
+            "mean": 81.0,
+            "std": 0.0,
+            "airtime_pct": 0.09539843945581622,
+            "airtime_sim_pct": 0.000256
+          },
+          "2,8": {
+            "count": 8,
+            "mean": 270.0,
+            "std": 0.0,
+            "airtime_pct": 0.8099694426873626,
+            "airtime_sim_pct": 0.0021735384615384616
+          },
+          "0,13": {
+            "count": 4,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.10334830941046756,
+            "airtime_sim_pct": 0.0002773333333333333
+          },
+          "1,8": {
+            "count": 34,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.35476294672631664,
+            "airtime_sim_pct": 0.0009520000000000002
+          },
+          "Aggregation Overhead,": {
+            "count": 58,
+            "mean": 6091.103448275862,
+            "std": 2682.880365999194,
+            "airtime_pct": 44.3160531953318,
+            "airtime_sim_pct": 0.11892133333333334
+          }
+        }
+      }
+    }
+  },
+  "mac_features/dynamic_fragmentation": {
+    "DynamicFragmentation": {
+      "global": {
+        "total": 1660,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 20,
+            "mean": 415.2,
+            "std": 177.6,
+            "airtime_pct": 0.7358374030188628,
+            "airtime_sim_pct": 0.35111794871794877
+          },
+          "1,13": {
+            "count": 24,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.062032679357143135,
+            "airtime_sim_pct": 0.029600000000000005
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.04359053144015463,
+            "airtime_sim_pct": 0.0208
+          },
+          "Aggregation Overhead,": {
+            "count": 767,
+            "mean": 3448.2868318122555,
+            "std": 2155.27170470856,
+            "airtime_pct": 93.9870537411288,
+            "airtime_sim_pct": 44.84760000000001
+          },
+          "1,8": {
+            "count": 487,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 1.4288473238412227,
+            "airtime_sim_pct": 0.6818000000000001
+          },
+          "0,0": {
+            "count": 2,
+            "mean": 3998.0,
+            "std": 786.0,
+            "airtime_pct": 1.1213384786496188,
+            "airtime_sim_pct": 0.5350666666666667
+          },
+          "1,9": {
+            "count": 354,
+            "mean": 152.0,
+            "std": 0.0,
+            "airtime_pct": 2.6212998425646834,
+            "airtime_sim_pct": 1.2508000000000001
+          }
+        }
+      }
+    }
+  },
+  "mac_features/multi_tid_block_ack": {
+    "UlMuMultiTidBlockAck": {
+      "global": {
+        "total": 3269,
+        "used_ap_only": true,
+        "stats": {
+          "1,2": {
+            "count": 362,
+            "mean": 46.149171270718234,
+            "std": 2.0013426096959446,
+            "airtime_pct": 1.7695411140759298,
+            "airtime_sim_pct": 0.6404333333333334
+          },
+          "2,12": {
+            "count": 1086,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 21.39443779832945,
+            "airtime_sim_pct": 7.743087179487179
+          },
+          "1,9": {
+            "count": 362,
+            "mean": 58.0,
+            "std": 0.0,
+            "airtime_pct": 1.9670982727545776,
+            "airtime_sim_pct": 0.7119333333333333
+          },
+          "2,8": {
+            "count": 739,
+            "mean": 1070.0,
+            "std": 0.0,
+            "airtime_pct": 72.41534579516517,
+            "airtime_sim_pct": 26.208603418803417
+          },
+          "1,13": {
+            "count": 720,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.453577019673282,
+            "airtime_sim_pct": 0.8880000000000001
+          }
+        }
+      }
+    },
+    "MultiTidBlockAck": {
+      "global": {
+        "total": 2780,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 322,
+            "mean": 973.0807453416149,
+            "std": 374.49633215421477,
+            "airtime_pct": 74.44929113532594,
+            "airtime_sim_pct": 21.132328205128204
+          },
+          "1,13": {
+            "count": 12,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.10428093848508724,
+            "airtime_sim_pct": 0.029600000000000005
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.19540932617025353,
+            "airtime_sim_pct": 0.055466666666666664
+          },
+          "1,8": {
+            "count": 1219,
+            "mean": 24.196882690730106,
+            "std": 0.5958209358113278,
+            "airtime_pct": 12.052903606256097,
+            "airtime_sim_pct": 3.4212000000000007
+          },
+          "1,9": {
+            "count": 1219,
+            "mean": 32.196882690730106,
+            "std": 0.5958209358113278,
+            "airtime_pct": 13.198114993763493,
+            "airtime_sim_pct": 3.746266666666667
+          }
+        }
+      }
+    },
+    "UlSuMultiTidBlockAck": {
+      "global": {
+        "total": 968,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 535,
+            "mean": 808.3177570093458,
+            "std": 375.3241240526694,
+            "airtime_pct": 96.46879046971983,
+            "airtime_sim_pct": 15.144692307692306
+          },
+          "1,13": {
+            "count": 363,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.851763285501478,
+            "airtime_sim_pct": 0.4477
+          },
+          "0,13": {
+            "count": 2,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.04416400591052843,
+            "airtime_sim_pct": 0.006933333333333333
+          },
+          "1,8": {
+            "count": 34,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.30320288673189716,
+            "airtime_sim_pct": 0.04760000000000001
+          },
+          "1,9": {
+            "count": 34,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.332079352134935,
+            "airtime_sim_pct": 0.05213333333333334
+          }
+        }
+      }
+    }
+  },
+  "mac_features/operating_mode_indication": {
+    "OperatingModeIndication": {
+      "global": {
+        "total": 2637,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1558,
+            "mean": 1070.0,
+            "std": 0.0,
+            "airtime_pct": 97.64320171256628,
+            "airtime_sim_pct": 55.25440341880341
+          },
+          "1,13": {
+            "count": 1073,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.3385965710933045,
+            "airtime_sim_pct": 1.3233666666666668
+          },
+          "1,2": {
+            "count": 3,
+            "mean": 40.0,
+            "std": 0.0,
+            "airtime_pct": 0.008835784631722014,
+            "airtime_sim_pct": 0.005
+          },
+          "1,9": {
+            "count": 3,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 0.009365931709625333,
+            "airtime_sim_pct": 0.0053
+          }
+        }
+      }
+    }
+  },
+  "bss_coloring": {
+    "BssColoringCollision": {
+      "global": {
+        "total": 2316,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1046,
+            "mean": 1441.281070745698,
+            "std": 531.4895725610331,
+            "airtime_pct": 94.36242496884869,
+            "airtime_sim_pct": 95.43631452991453
+          },
+          "1,13": {
+            "count": 32,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.0780451422594814,
+            "airtime_sim_pct": 0.07893333333333334
+          },
+          "0,13": {
+            "count": 16,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.10968506479710899,
+            "airtime_sim_pct": 0.11093333333333333
+          },
+          "1,0": {
+            "count": 18,
+            "mean": 2737.5555555555557,
+            "std": 1142.4736428869412,
+            "airtime_pct": 1.6596457701091405,
+            "airtime_sim_pct": 1.6785333333333332
+          },
+          "1,8": {
+            "count": 80,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.22147945776339314,
+            "airtime_sim_pct": 0.22400000000000003
+          },
+          "1,9": {
+            "count": 776,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.3529555727149054,
+            "airtime_sim_pct": 2.3797333333333333
+          },
+          "1,2": {
+            "count": 348,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.2157640235083402,
+            "airtime_sim_pct": 1.2296
+          }
+        }
+      }
+    },
+    "BssColoringDisabled": {
+      "global": {
+        "total": 2316,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1046,
+            "mean": 1441.281070745698,
+            "std": 531.4895725610331,
+            "airtime_pct": 94.36242496884869,
+            "airtime_sim_pct": 95.43631452991453
+          },
+          "1,13": {
+            "count": 32,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.0780451422594814,
+            "airtime_sim_pct": 0.07893333333333334
+          },
+          "0,13": {
+            "count": 16,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.10968506479710899,
+            "airtime_sim_pct": 0.11093333333333333
+          },
+          "1,0": {
+            "count": 18,
+            "mean": 2737.5555555555557,
+            "std": 1142.4736428869412,
+            "airtime_pct": 1.6596457701091405,
+            "airtime_sim_pct": 1.6785333333333332
+          },
+          "1,8": {
+            "count": 80,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.22147945776339314,
+            "airtime_sim_pct": 0.22400000000000003
+          },
+          "1,9": {
+            "count": 776,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.3529555727149054,
+            "airtime_sim_pct": 2.3797333333333333
+          },
+          "1,2": {
+            "count": 348,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.2157640235083402,
+            "airtime_sim_pct": 1.2296
+          }
+        }
+      }
+    },
+    "BssColoringEnabled": {
+      "global": {
+        "total": 2129,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 882,
+            "mean": 1291.0884353741496,
+            "std": 450.8158730156449,
+            "airtime_pct": 93.28009637891282,
+            "airtime_sim_pct": 73.22685128205127
+          },
+          "1,13": {
+            "count": 32,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.10054930414093767,
+            "airtime_sim_pct": 0.07893333333333334
+          },
+          "0,13": {
+            "count": 16,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.14131253554942588,
+            "airtime_sim_pct": 0.11093333333333333
+          },
+          "1,0": {
+            "count": 16,
+            "mean": 2410.0,
+            "std": 599.2662179699437,
+            "airtime_pct": 1.6780863596494326,
+            "airtime_sim_pct": 1.3173333333333335
+          },
+          "1,8": {
+            "count": 78,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.27820905436293225,
+            "airtime_sim_pct": 0.2184
+          },
+          "1,9": {
+            "count": 760,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.968922020918227,
+            "airtime_sim_pct": 2.330666666666667
+          },
+          "1,2": {
+            "count": 345,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.552824346467099,
+            "airtime_sim_pct": 1.219
+          }
+        }
+      }
+    },
+    "ObssPdAggressive": {
+      "global": {
+        "total": 166,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 16,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 2.62888301387971,
+            "airtime_sim_pct": 1.1313777777777776
+          },
+          "1,13": {
+            "count": 20,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.11463152676801061,
+            "airtime_sim_pct": 0.04933333333333333
+          },
+          "0,13": {
+            "count": 14,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.22554527428949112,
+            "airtime_sim_pct": 0.09706666666666666
+          },
+          "1,0": {
+            "count": 44,
+            "mean": 28262.363636363636,
+            "std": 17298.188824123794,
+            "airtime_pct": 96.52160442828819,
+            "airtime_sim_pct": 41.53946666666666
+          },
+          "1,8": {
+            "count": 36,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.2342200925313947,
+            "airtime_sim_pct": 0.10080000000000003
+          },
+          "1,9": {
+            "count": 36,
+            "mean": 38.666666666666664,
+            "std": 27.48737083745107,
+            "airtime_pct": 0.2751156642432255,
+            "airtime_sim_pct": 0.11840000000000002
+          }
+        }
+      }
+    },
+    "ObssPdConservative": {
+      "global": {
+        "total": 166,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 16,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 2.62888301387971,
+            "airtime_sim_pct": 1.1313777777777776
+          },
+          "1,13": {
+            "count": 20,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.11463152676801061,
+            "airtime_sim_pct": 0.04933333333333333
+          },
+          "0,13": {
+            "count": 14,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.22554527428949112,
+            "airtime_sim_pct": 0.09706666666666666
+          },
+          "1,0": {
+            "count": 44,
+            "mean": 28262.363636363636,
+            "std": 17298.188824123794,
+            "airtime_pct": 96.52160442828819,
+            "airtime_sim_pct": 41.53946666666666
+          },
+          "1,8": {
+            "count": 36,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.2342200925313947,
+            "airtime_sim_pct": 0.10080000000000003
+          },
+          "1,9": {
+            "count": 36,
+            "mean": 38.666666666666664,
+            "std": 27.48737083745107,
+            "airtime_pct": 0.2751156642432255,
+            "airtime_sim_pct": 0.11840000000000002
+          }
+        }
+      }
+    },
+    "TwoNav": {
+      "global": {
+        "total": 1503,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 642,
+            "mean": 1235.6697819314643,
+            "std": 401.84472209505674,
+            "airtime_pct": 92.88600306892302,
+            "airtime_sim_pct": 51.35498803418803
+          },
+          "1,13": {
+            "count": 193,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.8610639697077501,
+            "airtime_sim_pct": 0.47606666666666675
+          },
+          "0,13": {
+            "count": 17,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.21318598213741802,
+            "airtime_sim_pct": 0.11786666666666666
+          },
+          "1,0": {
+            "count": 16,
+            "mean": 2410.0,
+            "std": 599.2662179699437,
+            "airtime_pct": 2.3826668591829074,
+            "airtime_sim_pct": 1.3173333333333335
+          },
+          "1,8": {
+            "count": 44,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.22283240666852291,
+            "airtime_sim_pct": 0.1232
+          },
+          "1,9": {
+            "count": 406,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.2519578067864363,
+            "airtime_sim_pct": 1.2450666666666668
+          },
+          "1,2": {
+            "count": 185,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.1822899065935428,
+            "airtime_sim_pct": 0.6536666666666667
+          }
+        }
+      }
+    }
+  },
+  "frequency_selective_channel": {
+    "FlatChannelOFDMA": {
+      "global": {
+        "total": 0,
+        "used_ap_only": false,
+        "stats": {}
+      }
+    },
+    "TgaxModelBOFDMA": {
+      "global": {
+        "total": 5232,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1575,
+            "mean": 166.0,
+            "std": 0.0,
+            "airtime_pct": 64.87135320808018,
+            "airtime_sim_pct": 28.192948717948717
+          },
+          "1,13": {
+            "count": 1575,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 7.449416097346785,
+            "airtime_sim_pct": 3.2375000000000003
+          },
+          "0,13": {
+            "count": 2082,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 27.679230694574073,
+            "airtime_sim_pct": 12.029333333333332
+          }
+        }
+      }
+    }
+  },
+  "he_features": {
+    "BccBaseline": {
+      "global": {
+        "total": 94,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 64,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 97.29259728160918,
+            "airtime_sim_pct": 4.52551111111111
+          },
+          "1,13": {
+            "count": 13,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.6893915868427977,
+            "airtime_sim_pct": 0.03206666666666667
+          },
+          "0,13": {
+            "count": 11,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 1.6396340443828699,
+            "airtime_sim_pct": 0.07626666666666666
+          },
+          "1,8": {
+            "count": 3,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.18058906432888255,
+            "airtime_sim_pct": 0.008400000000000001
+          },
+          "1,9": {
+            "count": 3,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.19778802283639518,
+            "airtime_sim_pct": 0.009200000000000002
+          }
+        }
+      }
+    },
+    "PreamblePuncturing": {
+      "global": {
+        "total": 94,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 64,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 97.29259728160918,
+            "airtime_sim_pct": 4.52551111111111
+          },
+          "1,13": {
+            "count": 13,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.6893915868427977,
+            "airtime_sim_pct": 0.03206666666666667
+          },
+          "0,13": {
+            "count": 11,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 1.6396340443828699,
+            "airtime_sim_pct": 0.07626666666666666
+          },
+          "1,8": {
+            "count": 3,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.18058906432888255,
+            "airtime_sim_pct": 0.008400000000000001
+          },
+          "1,9": {
+            "count": 3,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.19778802283639518,
+            "airtime_sim_pct": 0.009200000000000002
+          }
+        }
+      }
+    }
+  },
+  "he_channel_widths": {
+    "Width20MHz": {
+      "global": {
+        "total": 900,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 224,
+            "mean": 4264.964285714285,
+            "std": 483.36181229140624,
+            "airtime_pct": 96.15694876845592,
+            "airtime_sim_pct": 122.30260208926876
+          },
+          "1,13": {
+            "count": 11,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.047406251174105886,
+            "airtime_sim_pct": 0.06029629629629629
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.09690909330922873,
+            "airtime_sim_pct": 0.12325925925925924
+          },
+          "1,2": {
+            "count": 219,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.3519517380291082,
+            "airtime_sim_pct": 1.7195555555555557
+          },
+          "1,9": {
+            "count": 438,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.3467841490316594,
+            "airtime_sim_pct": 2.984888888888889
+          }
+        }
+      }
+    },
+    "Width80MHz": {
+      "global": {
+        "total": 846,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 210,
+            "mean": 12688.32380952381,
+            "std": 1619.531340176552,
+            "airtime_pct": 94.7635436714028,
+            "airtime_sim_pct": 83.12502131519274
+          },
+          "1,13": {
+            "count": 11,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.06873851719847429,
+            "airtime_sim_pct": 0.06029629629629629
+          },
+          "0,13": {
+            "count": 7,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.12295243371127586,
+            "airtime_sim_pct": 0.10785185185185184
+          },
+          "1,2": {
+            "count": 206,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.8439487242578434,
+            "airtime_sim_pct": 1.6174814814814815
+          },
+          "1,9": {
+            "count": 412,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 3.200816653428709,
+            "airtime_sim_pct": 2.807703703703704
+          }
+        }
+      }
+    },
+    "Width160MHz": {
+      "global": {
+        "total": 817,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 138,
+            "mean": 16473.36231884058,
+            "std": 3307.7524484201363,
+            "airtime_pct": 88.04941880029381,
+            "airtime_sim_pct": 36.794216780045346
+          },
+          "1,13": {
+            "count": 12,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.15740775616806263,
+            "airtime_sim_pct": 0.06577777777777778
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.2949622818284416,
+            "airtime_sim_pct": 0.12325925925925924
+          },
+          "1,2": {
+            "count": 133,
+            "mean": 63.86466165413534,
+            "std": 1.5549192125967597,
+            "airtime_pct": 2.9201974944962426,
+            "airtime_sim_pct": 1.2202962962962964
+          },
+          "1,9": {
+            "count": 526,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 8.578013667212709,
+            "airtime_sim_pct": 3.5845925925925926
+          }
+        }
+      }
+    },
+    "Width40MHz": {
+      "global": {
+        "total": 1382,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 374,
+            "mean": 2699.614973262032,
+            "std": 1697.5595699313885,
+            "airtime_pct": 90.02291640652916,
+            "airtime_sim_pct": 72.63022222222223
+          },
+          "1,13": {
+            "count": 12,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.08152952323591231,
+            "airtime_sim_pct": 0.06577777777777778
+          },
+          "0,13": {
+            "count": 9,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.1718730489838151,
+            "airtime_sim_pct": 0.13866666666666666
+          },
+          "1,2": {
+            "count": 183,
+            "mean": 63.80327868852459,
+            "std": 1.8714391072564376,
+            "airtime_pct": 2.0801045928297626,
+            "airtime_sim_pct": 1.6782222222222227
+          },
+          "1,9": {
+            "count": 765,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 6.46176559160305,
+            "airtime_sim_pct": 5.213333333333334
+          },
+          "1,0": {
+            "count": 2,
+            "mean": 4822.0,
+            "std": 536.0,
+            "airtime_pct": 0.896457505490369,
+            "airtime_sim_pct": 0.7232592592592594
+          },
+          "1,8": {
+            "count": 37,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.28535333132569307,
+            "airtime_sim_pct": 0.23022222222222224
+          }
+        }
+      }
+    }
+  },
+  "multi_user/ndp_feedback": {
+    "NdpFeedbackReport": {
+      "global": {
+        "total": 2863,
+        "used_ap_only": true,
+        "stats": {
+          "1,2": {
+            "count": 80,
+            "mean": 43.0,
+            "std": 0.0,
+            "airtime_pct": 0.22661309939926894,
+            "airtime_sim_pct": 0.1373333333333333
+          },
+          "2,12": {
+            "count": 105,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 1.2353291006647602,
+            "airtime_sim_pct": 0.7486410256410256
+          },
+          "2,8": {
+            "count": 1648,
+            "mean": 1070.0,
+            "std": 0.0,
+            "airtime_pct": 96.44188663049502,
+            "airtime_sim_pct": 58.44624957264956
+          },
+          "1,13": {
+            "count": 1030,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.096171169443238,
+            "airtime_sim_pct": 1.2703333333333333
+          }
+        }
+      }
+    }
+  },
+  "multi_user/mu_mimo": {
+    "UlMuMimo": {
+      "global": {
+        "total": 9016,
+        "used_ap_only": true,
+        "stats": {
+          "1,2": {
+            "count": 920,
+            "mean": 45.90869565217391,
+            "std": 2.1377381471156074,
+            "airtime_pct": 0.8830803908691657,
+            "airtime_sim_pct": 1.6239333333333335
+          },
+          "2,12": {
+            "count": 20,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 0.07754367227645634,
+            "airtime_sim_pct": 0.1425982905982906
+          },
+          "1,9": {
+            "count": 918,
+            "mean": 57.58169934640523,
+            "std": 2.339248466224056,
+            "airtime_pct": 0.9782800750278925,
+            "airtime_sim_pct": 1.799
+          },
+          "2,8": {
+            "count": 5010,
+            "mean": 1070.0,
+            "std": 0.0,
+            "airtime_pct": 96.62048464739144,
+            "airtime_sim_pct": 177.6794358974359
+          },
+          "1,13": {
+            "count": 2148,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 1.440611214432403,
+            "airtime_sim_pct": 2.6492
+          }
+        }
+      }
+    },
+    "DlMuMimo": {
+      "global": {
+        "total": 4234,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 972,
+            "mean": 6151.90329218107,
+            "std": 3563.8216313779267,
+            "airtime_pct": 96.89412878358277,
+            "airtime_sim_pct": 339.14476581196584
+          },
+          "1,13": {
+            "count": 18,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.012685141425347298,
+            "airtime_sim_pct": 0.04440000000000001
+          },
+          "0,13": {
+            "count": 47,
+            "mean": 35.46808510638298,
+            "std": 1.4996604414217953,
+            "airtime_pct": 0.09035782420697835,
+            "airtime_sim_pct": 0.3162666666666667
+          },
+          "2,0": {
+            "count": 8,
+            "mean": 64.0,
+            "std": 0.0,
+            "airtime_pct": 0.0363431694890523,
+            "airtime_sim_pct": 0.1272068376068376
+          },
+          "1,2": {
+            "count": 796,
+            "mean": 54.89824120603015,
+            "std": 0.9515641300398229,
+            "airtime_pct": 0.8709987609766054,
+            "airtime_sim_pct": 3.0486333333333335
+          },
+          "1,9": {
+            "count": 2378,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.083486862216051,
+            "airtime_sim_pct": 7.292533333333334
+          },
+          "1,8": {
+            "count": 15,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.011999458105058255,
+            "airtime_sim_pct": 0.042
+          }
+        }
+      }
+    }
+  },
+  "dl_ofdma": {
+    "EqualSizedRUs80MHz_fHoL": {
+      "global": {
+        "total": 4715,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 944,
+            "mean": 1589.6716101694915,
+            "std": 178.98638275289738,
+            "airtime_pct": 71.7885995028256,
+            "airtime_sim_pct": 31.305926530612243
+          },
+          "1,13": {
+            "count": 9,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.05090751450541913,
+            "airtime_sim_pct": 0.022200000000000004
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.09539426141556016,
+            "airtime_sim_pct": 0.0416
+          },
+          "1,2": {
+            "count": 940,
+            "mean": 54.990425531914894,
+            "std": 0.2933914489668108,
+            "airtime_pct": 8.262228454061951,
+            "airtime_sim_pct": 3.6030333333333338
+          },
+          "1,9": {
+            "count": 2816,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 19.802870267189107,
+            "airtime_sim_pct": 8.635733333333334
+          }
+        }
+      }
+    },
+    "SuEdcaBaseline": {
+      "global": {
+        "total": 2043,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1317,
+            "mean": 169.52923310554291,
+            "std": 23.945713796144425,
+            "airtime_pct": 21.66540009567822,
+            "airtime_sim_pct": 28.54385982905983
+          },
+          "1,13": {
+            "count": 18,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.03370054961063047,
+            "airtime_sim_pct": 0.04440000000000001
+          },
+          "0,13": {
+            "count": 12,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.06315057945055078,
+            "airtime_sim_pct": 0.0832
+          },
+          "0,0": {
+            "count": 157,
+            "mean": 4734.535031847134,
+            "std": 1876.7331472794983,
+            "airtime_pct": 75.46463883485313,
+            "airtime_sim_pct": 99.42360000000001
+          },
+          "1,8": {
+            "count": 264,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.5610686097337397,
+            "airtime_sim_pct": 0.7392000000000001
+          },
+          "1,9": {
+            "count": 264,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.6145037154226674,
+            "airtime_sim_pct": 0.8096000000000001
+          },
+          "Aggregation Overhead,": {
+            "count": 11,
+            "mean": 5680.181818181818,
+            "std": 85.89826771649248,
+            "airtime_pct": 1.597537615251073,
+            "airtime_sim_pct": 2.1047333333333333
+          }
+        }
+      }
+    },
+    "EqualSizedRUs80MHz_fBW": {
+      "global": {
+        "total": 4393,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1098,
+            "mean": 1365.1730418943534,
+            "std": 160.8565447223086,
+            "airtime_pct": 75.7383971156709,
+            "airtime_sim_pct": 33.193453061224496
+          },
+          "1,13": {
+            "count": 9,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.05065433875971289,
+            "airtime_sim_pct": 0.022200000000000004
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.0949198420001827,
+            "airtime_sim_pct": 0.0416
+          },
+          "1,2": {
+            "count": 1094,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 8.819939549446465,
+            "airtime_sim_pct": 3.8654666666666673
+          },
+          "1,9": {
+            "count": 2186,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 15.296089154119189,
+            "airtime_sim_pct": 6.703733333333334
+          }
+        }
+      }
+    },
+    "SuEdcaBaseline80MHz": {
+      "global": {
+        "total": 2380,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1825,
+            "mean": 167.03013698630136,
+            "std": 21.97960876246658,
+            "airtime_pct": 69.90396960216471,
+            "airtime_sim_pct": 26.611453061224488
+          },
+          "1,13": {
+            "count": 9,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.05831579814892865,
+            "airtime_sim_pct": 0.022200000000000004
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.10927645058537978,
+            "airtime_sim_pct": 0.0416
+          },
+          "0,0": {
+            "count": 34,
+            "mean": 549.4117647058823,
+            "std": 123.60518684316153,
+            "airtime_pct": 6.721202201068713,
+            "airtime_sim_pct": 2.558666666666667
+          },
+          "1,8": {
+            "count": 227,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 1.6696180767323894,
+            "airtime_sim_pct": 0.6356
+          },
+          "1,9": {
+            "count": 227,
+            "mean": 46.801762114537446,
+            "std": 39.4603508860367,
+            "airtime_pct": 2.122835150634574,
+            "airtime_sim_pct": 0.8081333333333335
+          },
+          "Aggregation Overhead,": {
+            "count": 52,
+            "mean": 4204.0,
+            "std": 0.0,
+            "airtime_pct": 19.414782720669148,
+            "airtime_sim_pct": 7.390933333333334
+          }
+        }
+      }
+    },
+    "EqualSizedRUs_fHoL_ACVO": {
+      "global": {
+        "total": 2720,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 549,
+            "mean": 716.7322404371585,
+            "std": 245.81411387070628,
+            "airtime_pct": 79.98969699373801,
+            "airtime_sim_pct": 28.331620512820514
+          },
+          "1,13": {
+            "count": 9,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.0626780692780146,
+            "airtime_sim_pct": 0.022200000000000004
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.11745079648492825,
+            "airtime_sim_pct": 0.0416
+          },
+          "1,2": {
+            "count": 540,
+            "mean": 54.9,
+            "std": 0.9433981132056604,
+            "airtime_pct": 5.83922445408963,
+            "airtime_sim_pct": 2.0682
+          },
+          "1,9": {
+            "count": 1615,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 13.983044344335449,
+            "airtime_sim_pct": 4.952666666666667
+          },
+          "1,8": {
+            "count": 1,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.00790534207110094,
+            "airtime_sim_pct": 0.0028000000000000004
+          }
+        }
+      }
+    },
+    "HoLMinDelay": {
+      "global": {
+        "total": 1611,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 323,
+            "mean": 1758.8482972136223,
+            "std": 159.19086784178688,
+            "airtime_pct": 89.28005595594566,
+            "airtime_sim_pct": 35.08119316239316
+          },
+          "1,13": {
+            "count": 9,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.05649799974154541,
+            "airtime_sim_pct": 0.022200000000000004
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.1058701256418148,
+            "airtime_sim_pct": 0.0416
+          },
+          "1,2": {
+            "count": 319,
+            "mean": 55.0,
+            "std": 0.0,
+            "airtime_pct": 3.1120557365144044,
+            "airtime_sim_pct": 1.2228333333333334
+          },
+          "1,9": {
+            "count": 954,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 7.445520182156091,
+            "airtime_sim_pct": 2.9256
+          }
+        }
+      },
+      "per_flow": {
+        "host[0]": {
+          "total": 323,
+          "stats": {
+            "2,8": {
+              "count": 2,
+              "mean": 616.0,
+              "std": 450.0,
+              "airtime_pct": 8.506906380179778,
+              "airtime_sim_pct": 0.09219145299145298
+            },
+            "0,13": {
+              "count": 2,
+              "mean": 37.0,
+              "std": 0.0,
+              "airtime_pct": 1.279537650300719,
+              "airtime_sim_pct": 0.013866666666666666
+            },
+            "1,13": {
+              "count": 1,
+              "mean": 14.0,
+              "std": 0.0,
+              "airtime_pct": 0.2276100627938779,
+              "airtime_sim_pct": 0.002466666666666667
+            },
+            "1,9": {
+              "count": 318,
+              "mean": 32.0,
+              "std": 0.0,
+              "airtime_pct": 89.98594590672556,
+              "airtime_sim_pct": 0.9752000000000001
+            }
+          }
+        },
+        "host[1]": {
+          "total": 322,
+          "stats": {
+            "2,8": {
+              "count": 1,
+              "mean": 166.0,
+              "std": 0.0,
+              "airtime_pct": 2.120439477365497,
+              "airtime_sim_pct": 0.021480341880341883
+            },
+            "0,13": {
+              "count": 2,
+              "mean": 37.0,
+              "std": 0.0,
+              "airtime_pct": 1.3688528601296284,
+              "airtime_sim_pct": 0.013866666666666666
+            },
+            "1,13": {
+              "count": 1,
+              "mean": 14.0,
+              "std": 0.0,
+              "airtime_pct": 0.2434978645422897,
+              "airtime_sim_pct": 0.002466666666666667
+            },
+            "1,9": {
+              "count": 318,
+              "mean": 32.0,
+              "std": 0.0,
+              "airtime_pct": 96.26720979796252,
+              "airtime_sim_pct": 0.9752000000000001
+            }
+          }
+        },
+        "host[2]": {
+          "total": 322,
+          "stats": {
+            "2,8": {
+              "count": 1,
+              "mean": 166.0,
+              "std": 0.0,
+              "airtime_pct": 2.120439477365497,
+              "airtime_sim_pct": 0.021480341880341883
+            },
+            "0,13": {
+              "count": 2,
+              "mean": 37.0,
+              "std": 0.0,
+              "airtime_pct": 1.3688528601296284,
+              "airtime_sim_pct": 0.013866666666666666
+            },
+            "1,13": {
+              "count": 1,
+              "mean": 14.0,
+              "std": 0.0,
+              "airtime_pct": 0.2434978645422897,
+              "airtime_sim_pct": 0.002466666666666667
+            },
+            "1,9": {
+              "count": 318,
+              "mean": 32.0,
+              "std": 0.0,
+              "airtime_pct": 96.26720979796252,
+              "airtime_sim_pct": 0.9752000000000001
+            }
+          }
+        }
+      }
+    },
+    "BacklogBased": {
+      "global": {
+        "total": 599,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 120,
+            "mean": 5816.933333333333,
+            "std": 1031.7821130882667,
+            "airtime_pct": 96.17988841684281,
+            "airtime_sim_pct": 39.67094700854701
+          },
+          "1,13": {
+            "count": 9,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.05382260026194707,
+            "airtime_sim_pct": 0.022200000000000004
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.10085676445481973,
+            "airtime_sim_pct": 0.0416
+          },
+          "1,2": {
+            "count": 116,
+            "mean": 55.0,
+            "std": 0.0,
+            "airtime_pct": 1.078068299541102,
+            "airtime_sim_pct": 0.44466666666666665
+          },
+          "1,9": {
+            "count": 348,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.587363918898645,
+            "airtime_sim_pct": 1.0672000000000001
+          }
+        }
+      },
+      "per_flow": {
+        "host[0]": {
+          "total": 121,
+          "stats": {
+            "2,8": {
+              "count": 2,
+              "mean": 616.0,
+              "std": 450.0,
+              "airtime_pct": 19.8578008844181,
+              "airtime_sim_pct": 0.09219145299145298
+            },
+            "0,13": {
+              "count": 2,
+              "mean": 37.0,
+              "std": 0.0,
+              "airtime_pct": 2.9868441885040355,
+              "airtime_sim_pct": 0.013866666666666666
+            },
+            "1,13": {
+              "count": 1,
+              "mean": 14.0,
+              "std": 0.0,
+              "airtime_pct": 0.5313136296858141,
+              "airtime_sim_pct": 0.002466666666666667
+            },
+            "1,9": {
+              "count": 116,
+              "mean": 32.0,
+              "std": 0.0,
+              "airtime_pct": 76.62404129739201,
+              "airtime_sim_pct": 0.3557333333333334
+            }
+          }
+        },
+        "host[1]": {
+          "total": 120,
+          "stats": {
+            "2,8": {
+              "count": 1,
+              "mean": 166.0,
+              "std": 0.0,
+              "airtime_pct": 5.45813877728309,
+              "airtime_sim_pct": 0.021480341880341883
+            },
+            "0,13": {
+              "count": 2,
+              "mean": 37.0,
+              "std": 0.0,
+              "airtime_pct": 3.5235096101639676,
+              "airtime_sim_pct": 0.013866666666666666
+            },
+            "1,13": {
+              "count": 1,
+              "mean": 14.0,
+              "std": 0.0,
+              "airtime_pct": 0.6267781518080137,
+              "airtime_sim_pct": 0.002466666666666667
+            },
+            "1,9": {
+              "count": 116,
+              "mean": 32.0,
+              "std": 0.0,
+              "airtime_pct": 90.3915734607449,
+              "airtime_sim_pct": 0.3557333333333334
+            }
+          }
+        },
+        "host[2]": {
+          "total": 120,
+          "stats": {
+            "2,8": {
+              "count": 1,
+              "mean": 166.0,
+              "std": 0.0,
+              "airtime_pct": 5.45813877728309,
+              "airtime_sim_pct": 0.021480341880341883
+            },
+            "0,13": {
+              "count": 2,
+              "mean": 37.0,
+              "std": 0.0,
+              "airtime_pct": 3.5235096101639676,
+              "airtime_sim_pct": 0.013866666666666666
+            },
+            "1,13": {
+              "count": 1,
+              "mean": 14.0,
+              "std": 0.0,
+              "airtime_pct": 0.6267781518080137,
+              "airtime_sim_pct": 0.002466666666666667
+            },
+            "1,9": {
+              "count": 116,
+              "mean": 32.0,
+              "std": 0.0,
+              "airtime_pct": 90.3915734607449,
+              "airtime_sim_pct": 0.3557333333333334
+            }
+          }
+        }
+      }
+    },
+    "EqualSizedRUs_fBW": {
+      "global": {
+        "total": 5034,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1454,
+            "mean": 2013.6836313617607,
+            "std": 2397.0434239682777,
+            "airtime_pct": 93.91622279142967,
+            "airtime_sim_pct": 178.18801367521365
+          },
+          "1,13": {
+            "count": 18,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.023401575706096543,
+            "airtime_sim_pct": 0.04440000000000001
+          },
+          "0,13": {
+            "count": 12,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.043851601323135855,
+            "airtime_sim_pct": 0.0832
+          },
+          "1,2": {
+            "count": 1156,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 2.152804414956641,
+            "airtime_sim_pct": 4.084533333333334
+          },
+          "1,9": {
+            "count": 2353,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 3.803212839754471,
+            "airtime_sim_pct": 7.215866666666668
+          },
+          "1,8": {
+            "count": 41,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.06050677682567304,
+            "airtime_sim_pct": 0.11480000000000001
+          }
+        }
+      }
+    },
+    "EqualSizedRUs_fHoL": {
+      "global": {
+        "total": 3856,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 771,
+            "mean": 3323.37224383917,
+            "std": 3577.8558455557145,
+            "airtime_pct": 93.69117741230795,
+            "airtime_sim_pct": 149.72149401709402
+          },
+          "1,13": {
+            "count": 18,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.027784175574894616,
+            "airtime_sim_pct": 0.04440000000000001
+          },
+          "0,13": {
+            "count": 12,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.052064040716919634,
+            "airtime_sim_pct": 0.0832
+          },
+          "1,2": {
+            "count": 764,
+            "mean": 54.988219895287955,
+            "std": 0.3253954079905712,
+            "airtime_pct": 1.832483189512062,
+            "airtime_sim_pct": 2.928366666666667
+          },
+          "1,9": {
+            "count": 2291,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 4.396491181885652,
+            "airtime_sim_pct": 7.025733333333334
+          }
+        }
+      }
+    },
+    "MultiTidBlockAck": {
+      "global": {
+        "total": 322,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 230,
+            "mean": 822.5217391304348,
+            "std": 368.10453023507347,
+            "airtime_pct": 97.8048750832117,
+            "airtime_sim_pct": 13.200307692307693
+          },
+          "1,13": {
+            "count": 12,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.21931491067818856,
+            "airtime_sim_pct": 0.029600000000000005
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.4109684812708397,
+            "airtime_sim_pct": 0.055466666666666664
+          },
+          "1,8": {
+            "count": 36,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.746856182309507,
+            "airtime_sim_pct": 0.10080000000000003
+          },
+          "1,9": {
+            "count": 36,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.8179853425294601,
+            "airtime_sim_pct": 0.11040000000000001
+          }
+        }
+      }
+    },
+    "EqualSizedRUs_fBW_ACVO": {
+      "global": {
+        "total": 2836,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1885,
+            "mean": 192.3681697612732,
+            "std": 72.91544643634138,
+            "airtime_pct": 93.51117251774262,
+            "airtime_sim_pct": 43.209295726495725
+          },
+          "1,13": {
+            "count": 9,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.04804401448785765,
+            "airtime_sim_pct": 0.022200000000000004
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.09002842354481431,
+            "airtime_sim_pct": 0.0416
+          },
+          "1,2": {
+            "count": 218,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.6669685987768987,
+            "airtime_sim_pct": 0.7702666666666668
+          },
+          "1,9": {
+            "count": 577,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 3.829382079689843,
+            "airtime_sim_pct": 1.7694666666666667
+          },
+          "1,8": {
+            "count": 141,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.854404365757036,
+            "airtime_sim_pct": 0.39480000000000004
+          }
+        }
+      }
+    }
+  },
+  "he_rate_adaptation": {
+    "HeMinstrel": {
+      "global": {
+        "total": 4795,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1518,
+            "mean": 1637.0013175230567,
+            "std": 493.3441836377783,
+            "airtime_pct": 92.10256751673296,
+            "airtime_sim_pct": 77.37653675213674
+          },
+          "1,13": {
+            "count": 171,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.25103774741821305,
+            "airtime_sim_pct": 0.21090000000000003
+          },
+          "0,13": {
+            "count": 28,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.11554005381410402,
+            "airtime_sim_pct": 0.09706666666666666
+          },
+          "1,8": {
+            "count": 52,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.08665504036057806,
+            "airtime_sim_pct": 0.07280000000000002
+          },
+          "1,9": {
+            "count": 2021,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 3.6886320889017847,
+            "airtime_sim_pct": 3.098866666666667
+          },
+          "Aggregation Overhead,": {
+            "count": 17,
+            "mean": 4915.176470588235,
+            "std": 228.7058823529412,
+            "airtime_pct": 1.6779097993628593,
+            "airtime_sim_pct": 1.4096333333333333
+          },
+          "1,2": {
+            "count": 988,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 2.0776577534071925,
+            "airtime_sim_pct": 1.7454666666666667
+          }
+        }
+      }
+    },
+    "FixedMcs": {
+      "global": {
+        "total": 2044,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1416,
+            "mean": 977.2994350282486,
+            "std": 149.90394532679773,
+            "airtime_pct": 95.55253205893013,
+            "airtime_sim_pct": 46.62825299145299
+          },
+          "1,13": {
+            "count": 367,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.927554826087985,
+            "airtime_sim_pct": 0.45263333333333333
+          },
+          "0,13": {
+            "count": 22,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.1562887872515877,
+            "airtime_sim_pct": 0.07626666666666666
+          },
+          "1,8": {
+            "count": 104,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.2983695029348493,
+            "airtime_sim_pct": 0.14560000000000003
+          },
+          "1,9": {
+            "count": 111,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.3487808337878527,
+            "airtime_sim_pct": 0.17020000000000002
+          },
+          "Aggregation Overhead,": {
+            "count": 16,
+            "mean": 4858.0,
+            "std": 0.0,
+            "airtime_pct": 2.6875113835780016,
+            "airtime_sim_pct": 1.3114666666666668
+          },
+          "1,2": {
+            "count": 8,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 0.028962607427741784,
+            "airtime_sim_pct": 0.014133333333333335
+          }
+        }
+      }
+    },
+    "HeMinstrelMobile": {
+      "global": {
+        "total": 3327,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1332,
+            "mean": 1699.5045045045044,
+            "std": 963.4469309300061,
+            "airtime_pct": 93.2242184737078,
+            "airtime_sim_pct": 70.17265641025641
+          },
+          "1,13": {
+            "count": 297,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.48662873794140854,
+            "airtime_sim_pct": 0.36630000000000007
+          },
+          "0,13": {
+            "count": 26,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.11974193351474827,
+            "airtime_sim_pct": 0.09013333333333333
+          },
+          "1,8": {
+            "count": 97,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.1804099989419691,
+            "airtime_sim_pct": 0.1358
+          },
+          "1,9": {
+            "count": 1062,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 2.1633257899639355,
+            "airtime_sim_pct": 1.6284
+          },
+          "Aggregation Overhead,": {
+            "count": 24,
+            "mean": 4979.5,
+            "std": 901.068116182123,
+            "airtime_pct": 2.6779858311282863,
+            "airtime_sim_pct": 2.0158
+          },
+          "1,2": {
+            "count": 489,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 1.147689234800936,
+            "airtime_sim_pct": 0.8639000000000001
+          }
+        }
+      }
+    }
+  },
+  "he_bsr": {
+    "ImplicitBsr": {
+      "global": {
+        "total": 2373,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1308,
+            "mean": 1293.1422018348624,
+            "std": 313.58101532639625,
+            "airtime_pct": 94.98392705835676,
+            "airtime_sim_pct": 54.370933333333326
+          },
+          "1,13": {
+            "count": 844,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 1.8184704536850358,
+            "airtime_sim_pct": 1.0409333333333335
+          },
+          "0,13": {
+            "count": 7,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.04239293231339522,
+            "airtime_sim_pct": 0.024266666666666666
+          },
+          "1,8": {
+            "count": 93,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.22745438683533212,
+            "airtime_sim_pct": 0.1302
+          },
+          "1,9": {
+            "count": 90,
+            "mean": 148.86666666666667,
+            "std": 16.873516395688114,
+            "airtime_pct": 0.5473230368318706,
+            "airtime_sim_pct": 0.3133
+          },
+          "Aggregation Overhead,": {
+            "count": 22,
+            "mean": 3525.090909090909,
+            "std": 1130.0411460365226,
+            "airtime_pct": 2.296439119108591,
+            "airtime_sim_pct": 1.3145333333333333
+          },
+          "1,2": {
+            "count": 3,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 0.009258895931084945,
+            "airtime_sim_pct": 0.0053
+          },
+          "2,12": {
+            "count": 6,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 0.07473411693963292,
+            "airtime_sim_pct": 0.04277948717948717
+          }
+        }
+      }
+    },
+    "StaleBsr": {
+      "global": {
+        "total": 4121,
+        "used_ap_only": true,
+        "stats": {
+          "1,2": {
+            "count": 505,
+            "mean": 47.41386138613861,
+            "std": 6.515252929339078,
+            "airtime_pct": 1.3378145280613936,
+            "airtime_sim_pct": 0.9040666666666667
+          },
+          "2,12": {
+            "count": 935,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 9.86487043495527,
+            "airtime_sim_pct": 6.666470085470086
+          },
+          "1,9": {
+            "count": 561,
+            "mean": 66.524064171123,
+            "std": 29.044741598068242,
+            "airtime_pct": 1.7505728781394756,
+            "airtime_sim_pct": 1.183
+          },
+          "2,8": {
+            "count": 1458,
+            "mean": 1148.962962962963,
+            "std": 354.15586379070277,
+            "airtime_pct": 81.17554071866356,
+            "airtime_sim_pct": 54.856707692307694
+          },
+          "1,13": {
+            "count": 527,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.9618039039403109,
+            "airtime_sim_pct": 0.6499666666666668
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.030779303351902865,
+            "airtime_sim_pct": 0.0208
+          },
+          "1,8": {
+            "count": 79,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.16366302647694508,
+            "airtime_sim_pct": 0.11060000000000002
+          },
+          "Aggregation Overhead,": {
+            "count": 50,
+            "mean": 3763.52,
+            "std": 1012.4912293941119,
+            "airtime_pct": 4.7149552064129665,
+            "airtime_sim_pct": 3.1862666666666666
+          }
+        }
+      }
+    },
+    "FullBsrAccounting": {
+      "global": {
+        "total": 4129,
+        "used_ap_only": true,
+        "stats": {
+          "1,2": {
+            "count": 498,
+            "mean": 46.16265060240964,
+            "std": 2.089284817011798,
+            "airtime_pct": 1.3177775719414004,
+            "airtime_sim_pct": 0.88115
+          },
+          "2,12": {
+            "count": 942,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 10.044480795383773,
+            "airtime_sim_pct": 6.716379487179487
+          },
+          "1,9": {
+            "count": 561,
+            "mean": 68.55614973262033,
+            "std": 29.67904610476573,
+            "airtime_pct": 1.7976152090717394,
+            "airtime_sim_pct": 1.202
+          },
+          "2,8": {
+            "count": 1427,
+            "mean": 1149.3300630693764,
+            "std": 359.81212058035817,
+            "airtime_pct": 80.31641831669518,
+            "airtime_sim_pct": 53.70467179487179
+          },
+          "1,13": {
+            "count": 536,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.9886385143181015,
+            "airtime_sim_pct": 0.6610666666666667
+          },
+          "0,13": {
+            "count": 6,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.031106818925700646,
+            "airtime_sim_pct": 0.0208
+          },
+          "Aggregation Overhead,": {
+            "count": 61,
+            "mean": 3425.0163934426228,
+            "std": 1172.9858564379138,
+            "airtime_pct": 5.298777410367786,
+            "airtime_sim_pct": 3.5431
+          },
+          "1,8": {
+            "count": 98,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.2051853632983716,
+            "airtime_sim_pct": 0.13720000000000002
+          }
+        }
+      }
+    }
+  },
+  "ul_ofdma": {
+    "OperatingModeIndication": {
+      "global": {
+        "total": 2633,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1554,
+            "mean": 1071.2921492921494,
+            "std": 2.641779486529247,
+            "airtime_pct": 97.63957522852425,
+            "airtime_sim_pct": 55.167463247863246
+          },
+          "1,13": {
+            "count": 1073,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.342195047547815,
+            "airtime_sim_pct": 1.3233666666666668
+          },
+          "1,2": {
+            "count": 3,
+            "mean": 40.0,
+            "std": 0.0,
+            "airtime_pct": 0.008849380547899858,
+            "airtime_sim_pct": 0.005
+          },
+          "1,9": {
+            "count": 3,
+            "mean": 46.0,
+            "std": 0.0,
+            "airtime_pct": 0.00938034338077385,
+            "airtime_sim_pct": 0.0053
+          }
+        }
+      }
+    },
+    "UlMuMultiTidBlockAck": {
+      "global": {
+        "total": 3269,
+        "used_ap_only": true,
+        "stats": {
+          "1,2": {
+            "count": 362,
+            "mean": 46.149171270718234,
+            "std": 2.0013426096959446,
+            "airtime_pct": 1.7695411140759298,
+            "airtime_sim_pct": 0.6404333333333334
+          },
+          "2,12": {
+            "count": 1086,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 21.39443779832945,
+            "airtime_sim_pct": 7.743087179487179
+          },
+          "1,9": {
+            "count": 362,
+            "mean": 58.0,
+            "std": 0.0,
+            "airtime_pct": 1.9670982727545776,
+            "airtime_sim_pct": 0.7119333333333333
+          },
+          "2,8": {
+            "count": 739,
+            "mean": 1070.0,
+            "std": 0.0,
+            "airtime_pct": 72.41534579516517,
+            "airtime_sim_pct": 26.208603418803417
+          },
+          "1,13": {
+            "count": 720,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.453577019673282,
+            "airtime_sim_pct": 0.8880000000000001
+          }
+        }
+      }
+    },
+    "UlSuMultiTidBlockAck": {
+      "global": {
+        "total": 968,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 535,
+            "mean": 808.3177570093458,
+            "std": 375.3241240526694,
+            "airtime_pct": 96.46879046971983,
+            "airtime_sim_pct": 15.144692307692306
+          },
+          "1,13": {
+            "count": 363,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.851763285501478,
+            "airtime_sim_pct": 0.4477
+          },
+          "0,13": {
+            "count": 2,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.04416400591052843,
+            "airtime_sim_pct": 0.006933333333333333
+          },
+          "1,8": {
+            "count": 34,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.30320288673189716,
+            "airtime_sim_pct": 0.04760000000000001
+          },
+          "1,9": {
+            "count": 34,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.332079352134935,
+            "airtime_sim_pct": 0.05213333333333334
+          }
+        }
+      }
+    }
+  },
+  "he_er_su": {
+    "ErBss": {
+      "global": {
+        "total": 240,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 120,
+            "mean": 166.0,
+            "std": 0.0,
+            "airtime_pct": 89.69947890641758,
+            "airtime_sim_pct": 1.2888205128205128
+          },
+          "1,13": {
+            "count": 120,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 10.30052109358273,
+            "airtime_sim_pct": 0.14800000000000002
+          }
+        }
+      }
+    },
+    "HeSu": {
+      "global": {
+        "total": 3614,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1800,
+            "mean": 366.0,
+            "std": 0.0,
+            "airtime_pct": 92.78616814553551,
+            "airtime_sim_pct": 29.178461538461537
+          },
+          "1,13": {
+            "count": 1800,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 7.059498082569217,
+            "airtime_sim_pct": 2.22
+          },
+          "0,13": {
+            "count": 14,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.1543337718952069,
+            "airtime_sim_pct": 0.04853333333333333
+          }
+        }
+      }
+    },
+    "HeErSu": {
+      "global": {
+        "total": 3617,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1804,
+            "mean": 366.0,
+            "std": 0.0,
+            "airtime_pct": 92.8243810575523,
+            "airtime_sim_pct": 29.243302564102564
+          },
+          "1,13": {
+            "count": 1802,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 7.054575737543951,
+            "airtime_sim_pct": 2.2224666666666666
+          },
+          "0,13": {
+            "count": 11,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.12104320490371479,
+            "airtime_sim_pct": 0.03813333333333333
+          }
+        }
+      }
+    }
+  }
+}

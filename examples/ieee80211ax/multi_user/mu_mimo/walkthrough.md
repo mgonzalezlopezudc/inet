@@ -305,3 +305,37 @@ MU-MIMO result versus `23.568 Mbps` for OFDMA is credible only together with
 the observed three users, common 242-tone RU, and non-overlapping stream
 indices. Sounding cost, channel correlation, station capability, and a light
 load can all reduce or eliminate this advantage in another workload.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `DlMuMimo`
+Total over-the-air packets captured (Global BSS/AP): **4234**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 2378 | 56.16% | 32.0 B | 0.0 B | 2.08% | 7.29% |
+| Data: QoS Data | 972 | 22.96% | 6151.9 B | 3563.8 B | 96.89% | 339.14% |
+| Control: Trigger | 796 | 18.80% | 54.9 B | 1.0 B | 0.87% | 3.05% |
+| Management: Action | 47 | 1.11% | 35.5 B | 1.5 B | 0.09% | 0.32% |
+| Control: Ack | 18 | 0.43% | 14.0 B | 0.0 B | 0.01% | 0.04% |
+| Control: Block Ack Request (BAR) | 15 | 0.35% | 24.0 B | 0.0 B | 0.01% | 0.04% |
+| Data: Data | 8 | 0.19% | 64.0 B | 0.0 B | 0.04% | 0.13% |
+
+### Configuration: `UlMuMimo`
+Total over-the-air packets captured (Global BSS/AP): **9016**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 5010 | 55.57% | 1070.0 B | 0.0 B | 96.62% | 177.68% |
+| Control: Ack | 2148 | 23.82% | 14.0 B | 0.0 B | 1.44% | 2.65% |
+| Control: Trigger | 920 | 10.20% | 45.9 B | 2.1 B | 0.88% | 1.62% |
+| Control: Block Ack (BA) | 918 | 10.18% | 57.6 B | 2.3 B | 0.98% | 1.80% |
+| Data: QoS Null | 20 | 0.22% | 34.0 B | 0.0 B | 0.08% | 0.14% |
+
+### Analysis of Packet Distribution
+Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.

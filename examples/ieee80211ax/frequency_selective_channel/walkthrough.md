@@ -353,3 +353,22 @@ noise profile, scripted mask timing, or the chosen CCA threshold. The model
 also assumes ideal non-overlapping RU isolation and does not model adjacent-RU
 leakage, oscillator error, or a waveform-level multipath channel. Those are
 model boundaries, not 802.11 guarantees.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were aggregated across all active wireless interfaces (`wlan[0]`) in the network.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `TgaxModelBOFDMA`
+Total over-the-air packets captured (Global BSS/AP): **5232**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Management: Action | 2082 | 39.79% | 37.0 B | 0.0 B | 27.68% | 12.03% |
+| Data: QoS Data | 1575 | 30.10% | 166.0 B | 0.0 B | 64.87% | 28.19% |
+| Control: Ack | 1575 | 30.10% | 14.0 B | 0.0 B | 7.45% | 3.24% |
+
+### Analysis of Packet Distribution
+Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
