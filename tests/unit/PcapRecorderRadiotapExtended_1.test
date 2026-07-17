@@ -1,0 +1,122 @@
+%description:
+Test that PcapRecorder dynamically sizes the Radiotap present bitmap (using multiple 32-bit words with extension bits) when a high-bit flag (such as bit 34 for EHT) is present.
+
+%includes:
+#include <vector>
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/recorder/PcapRecorder.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+
+%file: TestNetwork.ned
+
+import inet.common.packet.recorder.PcapRecorder;
+
+simple TestablePcapRecorder extends PcapRecorder
+{
+    parameters:
+        @class(TestablePcapRecorder);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        recorder: TestablePcapRecorder {
+            pcapFile = "";
+            verbose = false;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+class RecordingPcapWriter : public IPcapWriter
+{
+  public:
+    std::vector<std::vector<uint8_t>> records;
+
+    virtual void open(const char *, unsigned int, int) override { }
+    virtual void close() override { }
+    virtual bool isOpen() const override { return true; }
+    virtual void setFlush(bool) override { }
+
+    virtual void writePacket(simtime_t, const Packet *packet, b frontOffset, b backOffset,
+            Direction, NetworkInterface *, PcapLinkType linkType) override
+    {
+        ASSERT(linkType == LINKTYPE_IEEE802_11_RADIOTAP);
+        auto length = packet->getDataLength() - frontOffset - backOffset;
+        records.push_back(packet->peekDataAt<BytesChunk>(frontOffset, length)->getBytes());
+    }
+};
+
+class TestablePcapRecorder : public PcapRecorder
+{
+  public:
+    void setWriter(IPcapWriter *writer)
+    {
+        delete pcapWriter;
+        pcapWriter = writer;
+    }
+
+    void writeIeee80211(const Packet *packet, b frontOffset = b(0), b backOffset = b(0))
+    {
+        writePacket(&Protocol::ieee80211Mac, packet, frontOffset, backOffset, DIRECTION_UNDEFINED, nullptr);
+    }
+};
+
+class MockEhtMode : public Ieee80211EhtMode
+{
+  public:
+    MockEhtMode() : Ieee80211EhtMode("mock-eht", nullptr, nullptr, BAND_6GHZ) {}
+};
+
+Define_Module(TestablePcapRecorder);
+
+%activity:
+
+auto recorder = check_and_cast<TestablePcapRecorder *>(getModuleByPath("recorder"));
+auto writer = new RecordingPcapWriter();
+recorder->setWriter(writer);
+
+Packet packet("eht-packet");
+// Set the EHT mode tag
+auto modeReq = packet.addTag<Ieee80211ModeReq>();
+MockEhtMode mockEhtMode;
+modeReq->setMode(&mockEhtMode);
+
+recorder->writeIeee80211(&packet);
+
+ASSERT(writer->records.size() == 1);
+const auto& record = writer->records[0];
+
+std::string hexDump = "";
+for (auto b : record) {
+    char buf[10];
+    sprintf(buf, "%02X ", b);
+    hexDump += buf;
+}
+EV << "Record Size: " << record.size() << ", Bytes: " << hexDump << "\n";
+
+ASSERT(record.size() >= 20);
+ASSERT(record[0] == 0); // version
+ASSERT(record[1] == 0); // pad
+ASSERT(record[2] == 20 && record[3] == 0); // length (20)
+ASSERT(record[4] == 0x02 && record[5] == 0 && record[6] == 0 && record[7] == 0x80); // Word 0 (flags + extension bit)
+ASSERT(record[8] == 0x08 && record[9] == 0 && record[10] == 0 && record[11] == 0); // Word 1 (EHT bit)
+ASSERT(record[12] == 0x10); // flags (RADIOTAP_F_FCS)
+ASSERT(record[13] == 0 && record[14] == 0 && record[15] == 0); // padding to 4-byte boundary
+ASSERT(record[16] == 0 && record[17] == 0 && record[18] == 0 && record[19] == 0); // EHT known u32 (0)
+
+EV << "Radiotap multi-word present flags and alignment tested successfully.\n";
+
+%contains: stdout
+Radiotap multi-word present flags and alignment tested successfully.
