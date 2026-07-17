@@ -29,6 +29,8 @@
 
 #ifdef INET_WITH_IEEE80211
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #endif
 
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
@@ -49,6 +51,8 @@ enum RadiotapPresentBit {
     RADIOTAP_DBM_TX_POWER = 10,
     RADIOTAP_RX_FLAGS = 14,
     RADIOTAP_TX_FLAGS = 15,
+    RADIOTAP_HE = 23,
+    RADIOTAP_HE_MU = 24,
 };
 
 enum RadiotapFlags {
@@ -141,6 +145,45 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
     uint32_t present = 1U << RADIOTAP_FLAGS;
     std::vector<uint8_t> bytes(8, 0); // version, pad, length, present bitmap
 
+    bool isHe = false;
+    bool isHeMu = false;
+    Ptr<const physicallayer::Ieee80211HeMuReq> heMuReq;
+    Ptr<const physicallayer::Ieee80211HeMuRxTag> heMuRx;
+    const physicallayer::Ieee80211HeMode *heMode = nullptr;
+
+#ifdef INET_WITH_IEEE80211
+    heMuReq = packet->findTag<physicallayer::Ieee80211HeMuReq>();
+    heMuRx = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
+    if (heMuReq != nullptr || heMuRx != nullptr) {
+        isHe = true;
+        isHeMu = true;
+    }
+    else {
+        const physicallayer::IIeee80211Mode *mode = nullptr;
+        auto modeReq = packet->findTag<physicallayer::Ieee80211ModeReq>();
+        if (modeReq != nullptr)
+            mode = modeReq->getMode();
+        else {
+            auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
+            if (modeInd != nullptr)
+                mode = modeInd->getMode();
+        }
+        if (mode != nullptr) {
+            heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(mode);
+            if (heMode != nullptr) {
+                isHe = true;
+            }
+        }
+    }
+#endif
+
+    if (isHe) {
+        present |= 1U << RADIOTAP_HE;
+        if (isHeMu) {
+            present |= 1U << RADIOTAP_HE_MU;
+        }
+    }
+
     // IEEE 802.11 packets recorded by PcapRecorder contain the MAC trailer.
     uint8_t flags = RADIOTAP_F_FCS;
     if (packet->hasBitError())
@@ -199,6 +242,107 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
         appendPadding(bytes, 2);
         appendUint16(bytes, 0);
     }
+
+#ifdef INET_WITH_IEEE80211
+    if (isHe) {
+        appendPadding(bytes, 2);
+
+        uint16_t data1 = 0;
+        uint16_t data2 = 0;
+        uint16_t data3 = 0;
+        uint16_t data4 = 0;
+        uint16_t data5 = 0;
+        uint16_t data6 = 0;
+
+        if (heMuReq != nullptr) {
+            // HE TB format is 3
+            data1 |= 3 & 0x3;
+            // Known flags: PPDU Format, UL/DL, Coding, MCS, GI, PE
+            data1 |= (1U << 0) | (1U << 4) | (1U << 5) | (1U << 7);
+            
+            // Uplink
+            data2 |= (1U << 1);
+            
+            // Guard Interval: 0=0.8us, 1=1.6us, 2=3.2us
+            data3 |= (heMuReq->getGuardInterval() & 0x7);
+            
+            // Set coding, MCS, NSS, DCM in data5
+            data5 |= (heMuReq->getMcs() & 0xF);
+            data5 |= ((heMuReq->getNumberOfSpatialStreams() - 1) & 0x7) << 4;
+            if (heMuReq->getDcm()) data5 |= (1U << 7);
+            data5 |= (heMuReq->getCoding() & 0x1) << 8; // Coding: 0=BCC, 1=LDPC
+            
+            // Punctured subchannel mask
+            data4 |= (heMuReq->getPuncturedSubchannelMask() & 0xF) << 3;
+        }
+        else if (heMuRx != nullptr) {
+            // Format from tag
+            uint8_t format = heMuRx->getPpduFormat(); // 0: DL MU, 1: UL TB
+            data1 |= (format == 0 ? 2 : 3) & 0x3;
+            data1 |= (1U << 0) | (1U << 4) | (1U << 7);
+            
+            data2 |= (format == 0 ? 0 : 1) << 1; // DL=0, UL=1
+            data3 |= (heMuRx->getGuardInterval() & 0x7);
+            
+            data4 |= (heMuRx->getPuncturedSubchannelMask() & 0xF) << 3;
+        }
+        else if (heMode != nullptr) {
+            // HE SU format = 0
+            data1 |= 0 & 0x3;
+            data1 |= (1U << 0) | (1U << 5) | (1U << 7);
+            
+            auto dm = heMode->getDataMode();
+            if (dm != nullptr) {
+                data5 |= (dm->getMcsIndex() & 0xF);
+                data5 |= ((dm->getNumberOfSpatialStreams() - 1) & 0x7) << 4;
+                
+                auto gi = dm->getGuardIntervalType();
+                data3 |= (gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT ? 0 :
+                          gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM ? 1 : 2);
+                
+                double bw = dm->getBandwidth().get();
+                uint8_t cbw = (bw < 30e6 ? 0 : bw < 60e6 ? 1 : bw < 100e6 ? 2 : 3);
+                data4 |= cbw & 0x7;
+            }
+        }
+
+        appendUint16(bytes, data1);
+        appendUint16(bytes, data2);
+        appendUint16(bytes, data3);
+        appendUint16(bytes, data4);
+        appendUint16(bytes, data5);
+        appendUint16(bytes, data6);
+    }
+
+    if (isHeMu) {
+        appendPadding(bytes, 2);
+        
+        uint16_t flags1 = 0;
+        uint16_t flags2 = 0;
+        uint8_t ruChannel1[4] = {0};
+        uint8_t ruChannel2[4] = {0};
+
+        if (heMuReq != nullptr) {
+            flags1 |= (1U << 5); // DL MU-MIMO configuration known
+            if (heMuReq->getRuIndex() >= 0 && heMuReq->getRuIndex() < 8) {
+                ruChannel1[heMuReq->getRuIndex() / 2] = heMuReq->getRuIndex();
+            }
+        }
+        else if (heMuRx != nullptr) {
+            for (size_t i = 0; i < heMuRx->getAllocationsArraySize(); ++i) {
+                const auto& alloc = heMuRx->getAllocations(i);
+                if (alloc.ruIndex >= 0 && alloc.ruIndex < 8) {
+                    ruChannel1[alloc.ruIndex / 2] = alloc.ruIndex;
+                }
+            }
+        }
+
+        appendUint16(bytes, flags1);
+        appendUint16(bytes, flags2);
+        for (int i = 0; i < 4; ++i) bytes.push_back(ruChannel1[i]);
+        for (int i = 0; i < 4; ++i) bytes.push_back(ruChannel2[i]);
+    }
+#endif
 
     setUint16(bytes, 2, bytes.size());
     setUint32(bytes, 4, present);
