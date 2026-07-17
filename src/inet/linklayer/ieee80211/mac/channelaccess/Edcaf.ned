@@ -30,6 +30,10 @@ module Edcaf extends Module
         int aifsn = default(-1);
         int cwMin = default(-1);
         int cwMax = default(-1);
+        int muAifsn = default(-1);
+        int muCwMin = default(-1);
+        int muCwMax = default(-1);
+        double muEdcaTimer @unit(s) = default(-1s);
         @class(Edcaf);
         displayStringTextFormat = default("{accessCategory}\n{contentionState}");
         @display("i=block/queue");

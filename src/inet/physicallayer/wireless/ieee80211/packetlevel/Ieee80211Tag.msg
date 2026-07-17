@@ -78,6 +78,7 @@ class Ieee80211HeMuReq extends TagBase
     bool nonSrgObssPdDisallowed = false;
     bool srgObssPdDisallowed = false;
     bool psrDisallowed = false;
+    B psduLength = B(-1);
     simtime_t commonDuration;
     W transmitPower = W(NaN);
 }

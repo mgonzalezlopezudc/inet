@@ -31,8 +31,7 @@ class INET_API Edca : public SimpleModule
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int stage) override;
-
-    virtual AccessCategory mapTidToAc(Tid tid);
+    virtual void handleMessage(omnetpp::cMessage *msg) override;
 
   public:
     virtual ~Edca();
@@ -45,6 +44,7 @@ class INET_API Edca : public SimpleModule
 
     virtual void requestChannelAccess(AccessCategory ac, IChannelAccess::ICallback *callback);
     virtual void releaseChannelAccess(AccessCategory ac, IChannelAccess::ICallback *callback);
+    virtual AccessCategory mapTidToAc(Tid tid);
 };
 
 } /* namespace ieee80211 */

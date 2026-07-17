@@ -24,6 +24,14 @@ inline simtime_t fallback(simtime_t a, simtime_t b) { return a != -1 ? a : b; }
 Edcaf::~Edcaf()
 {
     delete stationRetryCounters;
+    if (muEdcaTimer != nullptr) {
+        auto edca = dynamic_cast<omnetpp::cSimpleModule *>(getParentModule());
+        if (edca != nullptr) {
+            edca->cancelAndDelete(muEdcaTimer);
+        } else {
+            delete muEdcaTimer;
+        }
+    }
 }
 
 void Edcaf::initialize(int stage)
@@ -44,6 +52,8 @@ void Edcaf::initialize(int stage)
         inProgressFrames = check_and_cast<InProgressFrames *>(getSubmodule("inProgressFrames"));
         txopProcedure = check_and_cast<TxopProcedure *>(getSubmodule("txopProcedure"));
         stationRetryCounters = new StationRetryCounters();
+        muEdcaTimer = nullptr;
+        isMuEdcaTimerActive = false;
         WATCH(owning);
         WATCH(slotTime);
         WATCH(sifs);
@@ -53,6 +63,7 @@ void Edcaf::initialize(int stage)
         WATCH(cw);
         WATCH(cwMin);
         WATCH(cwMax);
+        WATCH(isMuEdcaTimerActive);
         WATCH_EXPR("accessCategory", printAccessCategory(ac));
         WATCH_EXPR("contentionState", owning ? "Owning" : contention->isContentionInProgress() ? "Contending" : "Idle");
     }
@@ -67,23 +78,38 @@ void Edcaf::calculateTimingParameters()
 {
     slotTime = modeSet->getSlotTime();
     sifs = modeSet->getSifsTime();
-    int aifsn = par("aifsn");
+    int aifsnVal = par("aifsn");
+    int cwMinVal = par("cwMin");
+    int cwMaxVal = par("cwMax");
+
+    if (isMuEdcaTimerActive) {
+        int muAifsn = par("muAifsn");
+        int muCwMin = par("muCwMin");
+        int muCwMax = par("muCwMax");
+        if (muAifsn != -1) aifsnVal = muAifsn;
+        if (muCwMin != -1) cwMinVal = muCwMin;
+        if (muCwMax != -1) cwMaxVal = muCwMax;
+    }
+
     // IEEE Std 802.11-2024, 10.3.2.3.6 and 10.23.2.4:
     // AIFS[AC] = AIFSN[AC] * aSlotTime + aSIFSTime.
-    simtime_t aifs = sifs + fallback(aifsn, getAifsNumber(ac)) * slotTime;
+    simtime_t aifs = sifs + fallback(aifsnVal, getAifsNumber(ac)) * slotTime;
     ifs = aifs;
     // IEEE Std 802.11-2024, 10.3.2.3.7: after erroneous reception, EDCA uses
     // EIFS-DIFS+AIFS[AC]; this implementation folds that interval into eifs.
     eifs = sifs + aifs + modeSet->getSlowestMandatoryMode()->getDuration(LENGTH_ACK);
     EV_DEBUG << "Timing parameters are initialized: slotTime = " << slotTime << ", sifs = " << sifs << ", ifs = " << ifs << ", eifs = " << eifs << std::endl;
     ASSERT(ifs > sifs);
-    cwMin = par("cwMin");
-    cwMax = par("cwMax");
-    if (cwMin == -1)
+    if (cwMinVal == -1)
         cwMin = getCwMin(ac, modeSet->getCwMin());
-    if (cwMax == -1)
+    else
+        cwMin = cwMinVal;
+    if (cwMaxVal == -1)
         cwMax = getCwMax(ac, modeSet->getCwMax(), modeSet->getCwMin());
-    cw = cwMin;
+    else
+        cwMax = cwMaxVal;
+    if (cw < cwMin || cw > cwMax)
+        cw = cwMin;
     EV_DEBUG << "Contention window parameters are initialized: cw = " << cw << ", cwMin = " << cwMin << ", cwMax = " << cwMax << std::endl;
 }
 
@@ -215,6 +241,39 @@ void Edcaf::receiveSignal(cComponent *source, simsignal_t signalID, cObject *obj
         modeSet = check_and_cast<Ieee80211ModeSet *>(obj);
         calculateTimingParameters();
     }
+}
+
+void Edcaf::startMuEdcaTimer()
+{
+    double timerDuration = par("muEdcaTimer").doubleValue();
+    if (timerDuration <= 0)
+        return;
+
+    auto edca = check_and_cast<omnetpp::cSimpleModule *>(getParentModule());
+
+    if (muEdcaTimer == nullptr) {
+        std::string name = "MU-EDCA-Timer-";
+        switch (ac) {
+            case AC_BK: name += "BK"; break;
+            case AC_BE: name += "BE"; break;
+            case AC_VI: name += "VI"; break;
+            case AC_VO: name += "VO"; break;
+            default: break;
+        }
+        muEdcaTimer = new omnetpp::cMessage(name.c_str());
+    } else if (muEdcaTimer->isScheduled()) {
+        edca->cancelEvent(muEdcaTimer);
+    }
+
+    isMuEdcaTimerActive = true;
+    edca->scheduleAt(simTime() + timerDuration, muEdcaTimer);
+    calculateTimingParameters();
+}
+
+void Edcaf::muEdcaTimerExpired()
+{
+    isMuEdcaTimerActive = false;
+    calculateTimingParameters();
 }
 
 } // namespace ieee80211
