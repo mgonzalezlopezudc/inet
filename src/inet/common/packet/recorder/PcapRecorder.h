@@ -91,6 +91,7 @@ class INET_API PcapRecorder : public SimpleModule, protected cListener, public P
     virtual Packet *tryConvertToLinkType(const Packet *packet, b frontOffset, b backOffset, PcapLinkType pcapLinkType, const Protocol *protocol) const;
     virtual PcapLinkType protocolToLinkType(const Protocol *protocol) const;
     virtual void writePacket(const Protocol *protocol, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *networkInterface);
+    virtual void writePacketRecord(const Protocol *protocol, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *networkInterface);
 };
 
 } // namespace inet
