@@ -229,6 +229,12 @@ bool PcapRecorder::shouldDissectProtocolDataUnit(const Protocol *protocol)
     return !contains(dumpProtocols, protocol);
 }
 
+void PcapRecorder::startProtocolDataUnit(const Protocol *protocol)
+{
+    if (contains(dumpProtocols, protocol))
+        dumpProtocol = protocol;
+}
+
 void PcapRecorder::visitChunk(const Ptr<const Chunk>& chunk, const Protocol *protocol)
 {
     if (!contains(dumpProtocols, protocol)) {

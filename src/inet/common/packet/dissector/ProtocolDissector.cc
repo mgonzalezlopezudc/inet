@@ -17,7 +17,8 @@ Register_Protocol_Dissector(nullptr, DefaultProtocolDissector);
 void DefaultProtocolDissector::dissect(Packet *packet, const Protocol *protocol, ICallback& callback) const
 {
     callback.startProtocolDataUnit(protocol);
-    callback.visitChunk(packet->peekData(), protocol);
+    if (packet->getDataLength() > b(0))
+        callback.visitChunk(packet->peekData(), protocol);
     packet->setFrontOffset(packet->getBackOffset());
     callback.endProtocolDataUnit(protocol);
 }

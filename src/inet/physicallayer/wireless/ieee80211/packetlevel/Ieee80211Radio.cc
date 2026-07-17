@@ -365,15 +365,19 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             self->emit(heStreamStartIndexSignal, (long)user.streamStartIndex);
         }
     }
-    auto frontChunk = packet->peekAtFront<Chunk>();
-    if (auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(frontChunk)) {
-        bool acknowledgment = dynamicPtrCast<const ieee80211::Ieee80211AckFrame>(macHeader) != nullptr ||
-                dynamicPtrCast<const ieee80211::Ieee80211BlockAckReq>(macHeader) != nullptr ||
-                dynamicPtrCast<const ieee80211::Ieee80211BlockAck>(macHeader) != nullptr;
-        if (acknowledgment) {
-            self->emit(acknowledgmentFrameTypeSignal, (long)macHeader->getType());
-            self->emit(acknowledgmentAirtimeSignal,
-                    SimTime(mode->getDuration(packet->getDataLength()).dbl()));
+    // An HE TB NDP (preamble-only) has no PSDU and therefore no MAC header chunk.
+    // Guard the peek so it is not attempted on an empty packet.
+    if (packet->getDataLength() > b(0)) {
+        auto frontChunk = packet->peekAtFront<Chunk>();
+        if (auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(frontChunk)) {
+            bool acknowledgment = dynamicPtrCast<const ieee80211::Ieee80211AckFrame>(macHeader) != nullptr ||
+                    dynamicPtrCast<const ieee80211::Ieee80211BlockAckReq>(macHeader) != nullptr ||
+                    dynamicPtrCast<const ieee80211::Ieee80211BlockAck>(macHeader) != nullptr;
+            if (acknowledgment) {
+                self->emit(acknowledgmentFrameTypeSignal, (long)macHeader->getType());
+                self->emit(acknowledgmentAirtimeSignal,
+                        SimTime(mode->getDuration(packet->getDataLength()).dbl()));
+            }
         }
     }
     auto phyHeader = !heMuUsers.empty() ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
@@ -597,8 +601,9 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         std::optional<uint16_t> myStaId;
         if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
             MacAddress transmitterAddress;
-            if (auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211TwoAddressHeader>(packet->peekAtFront()))
-                transmitterAddress = macHeader->getTransmitterAddress();
+            if (packet->getDataLength() > b(0))
+                if (auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211TwoAddressHeader>(packet->peekAtFront()))
+                    transmitterAddress = macHeader->getTransmitterAddress();
             if (!transmitterAddress.isUnspecified())
                 myStaId = resolveHeMuStaIdForReception(networkInterface, transmitterAddress);
         }

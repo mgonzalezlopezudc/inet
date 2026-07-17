@@ -75,7 +75,7 @@ class INET_API PcapRecorder : public SimpleModule, protected cListener, public P
 
     virtual bool shouldDissectProtocolDataUnit(const Protocol *protocol) override;
 
-    virtual void startProtocolDataUnit(const Protocol *protocol) override { }
+    virtual void startProtocolDataUnit(const Protocol *protocol) override;
     virtual void endProtocolDataUnit(const Protocol *protocol) override { }
     virtual void markIncorrect() override { }
 

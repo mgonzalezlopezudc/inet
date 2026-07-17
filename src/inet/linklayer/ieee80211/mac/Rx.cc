@@ -121,9 +121,11 @@ bool Rx::lowerFrameReceived(Packet *packet)
     bool isFrameOk = isFcsOk(packet) && !selfInterference;
     if (isFrameOk) {
         EV_INFO << "Received frame from PHY: " << packet << endl;
-        const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
-        if (header->getReceiverAddress() != address)
-            setOrExtendNav(header->getDurationField(), isIntraBssFrame(header));
+        if (packet->getDataLength() > b(0)) {
+            const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
+            if (header->getReceiverAddress() != address)
+                setOrExtendNav(header->getDurationField(), isIntraBssFrame(header));
+        }
         return true;
     }
     else {
@@ -164,6 +166,8 @@ bool Rx::isReceptionInProgress() const
 
 bool Rx::isFcsOk(Packet *packet) const
 {
+    if (packet->getDataLength() == b(0))
+        return !packet->hasBitError();
     if (packet->hasBitError() || !packet->peekData()->isCorrect())
         return false;
     else {

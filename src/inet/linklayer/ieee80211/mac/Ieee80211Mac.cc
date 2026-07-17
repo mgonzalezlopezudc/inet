@@ -236,6 +236,11 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
         return;
     }
     if (rx->lowerFrameReceived(packet)) {
+        if (packet->getDataLength() == b(0)) {
+            take(packet);
+            delete packet;
+            return;
+        }
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
             if (auto twoAddressHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header)) {

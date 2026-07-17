@@ -141,18 +141,22 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
     auto mib = nic ? dynamic_cast<const ieee80211::Ieee80211Mib *>(nic->getSubmodule("mib")) : nullptr;
     if (mib != nullptr) {
         Ptr<const ieee80211::Ieee80211MacHeader> macHeader;
-        auto frontChunk = packet->peekAtFront();
-        if (dynamic_cast<const Ieee80211PhyHeader *>(frontChunk.get()) != nullptr) {
-            auto packetCopy = packet->dup();
-            packetCopy->popAtFront<Ieee80211PhyHeader>();
-            auto innerFront = packetCopy->peekAtFront();
-            if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(innerFront.get()) != nullptr) {
-                macHeader = packetCopy->peekAtFront<ieee80211::Ieee80211MacHeader>();
+        if (packet->getDataLength() > b(0)) {
+            auto frontChunk = packet->peekAtFront();
+            if (dynamic_cast<const Ieee80211PhyHeader *>(frontChunk.get()) != nullptr) {
+                auto packetCopy = packet->dup();
+                packetCopy->popAtFront<Ieee80211PhyHeader>();
+                if (packetCopy->getDataLength() > b(0)) {
+                    auto innerFront = packetCopy->peekAtFront();
+                    if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(innerFront.get()) != nullptr) {
+                        macHeader = packetCopy->peekAtFront<ieee80211::Ieee80211MacHeader>();
+                    }
+                }
+                delete packetCopy;
             }
-            delete packetCopy;
-        }
-        else if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(frontChunk.get()) != nullptr) {
-            macHeader = packet->peekAtFront<ieee80211::Ieee80211MacHeader>();
+            else if (dynamic_cast<const ieee80211::Ieee80211MacHeader *>(frontChunk.get()) != nullptr) {
+                macHeader = packet->peekAtFront<ieee80211::Ieee80211MacHeader>();
+            }
         }
         MacAddress receiverAddress = macHeader != nullptr ? macHeader->getReceiverAddress() : MacAddress::UNSPECIFIED_ADDRESS;
 

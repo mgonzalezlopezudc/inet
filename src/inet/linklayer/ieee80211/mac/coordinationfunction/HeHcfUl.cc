@@ -707,16 +707,35 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     exchange.ru.toneSize = selected->ruToneSize;
     exchange.ru.toneOffset = selected->ruToneOffset;
     exchange.expectedResponseTime = simTime() + modeSet->getSifsTime();
-    auto responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
-            selectedTid, queueBytes, availableSlots, selected, trigger, exchange);
-    auto responseHeader = exchange.packets.empty() ?
-            responsePacket->peekAtFront<Ieee80211MacHeader>() :
-            exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
+    Packet *responsePacket;
+    Ptr<const Ieee80211MacHeader> responseHeader;
+    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        // IEEE 802.11ax 27.3.11.11: the NFRP response is a preamble-only NDP with no PSDU.
+        // Create a truly empty packet so the PCAP recorder writes only a Radiotap header
+        // followed by a zero-byte 802.11 body — matching real hardware monitor-mode captures.
+        responsePacket = new Packet("HE-TB-NDP-Feedback-Report");
+        // Synthesise a detached header solely for address-stamping in Tx::transmitFrame().
+        // This header is NOT serialised into the PPDU.
+        auto ndpHeader = makeShared<Ieee80211DataHeader>();
+        ndpHeader->setType(ST_QOS_NULL);
+        ndpHeader->setReceiverAddress(mac->getMib()->bssData.bssid);
+        ndpHeader->setTransmitterAddress(mac->getAddress());
+        ndpHeader->setAddress3(mac->getMib()->bssData.bssid);
+        ndpHeader->setToDS(true);
+        ndpHeader->setChunkLength(B(30));
+        responseHeader = ndpHeader;
+        // NDP carries no MPDU; no triggered exchange state to track.
+    }
+    else {
+        responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
+                selectedTid, queueBytes, availableSlots, selected, trigger, exchange);
+        responseHeader = exchange.packets.empty() ?
+                responsePacket->peekAtFront<Ieee80211MacHeader>() :
+                exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
+        if (!exchange.packets.empty() || exchange.randomAccess)
+            triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
+    }
     auto responsePacketCount = exchange.packets.size();
-    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
-        responsePacket->setName("HE-TB-NDP-Feedback-Report");
-    if (!exchange.packets.empty() || exchange.randomAccess)
-        triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
 
     auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
     auto transmitter = check_and_cast<const physicallayer::FlatTransmitterBase *>(radio->getTransmitter());

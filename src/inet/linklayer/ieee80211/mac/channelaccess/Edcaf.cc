@@ -250,6 +250,7 @@ void Edcaf::startMuEdcaTimer()
         return;
 
     auto edca = check_and_cast<omnetpp::cSimpleModule *>(getParentModule());
+    omnetpp::cContextSwitcher switcher(edca);
 
     if (muEdcaTimer == nullptr) {
         std::string name = "MU-EDCA-Timer-";
@@ -273,6 +274,7 @@ void Edcaf::startMuEdcaTimer()
 void Edcaf::muEdcaTimerExpired()
 {
     isMuEdcaTimerActive = false;
+    muEdcaTimer = nullptr;
     calculateTimingParameters();
 }
 
