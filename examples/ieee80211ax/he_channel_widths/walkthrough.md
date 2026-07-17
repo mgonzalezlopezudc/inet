@@ -117,13 +117,15 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `Width160MHz`
-Total over-the-air packets captured (Global BSS/AP): **25**
+Total over-the-air packets captured (Global BSS/AP): **815**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Control: Ack | 12 | 48.00% | 14.0 B | 0.0 B | 5240 MHz | -72.0 dBm | 15.0 dBm | 16.27% | 0.07% |
-| Management: Action | 8 | 32.00% | 37.0 B | 0.0 B | 5240 MHz | -72.0 dBm | 15.0 dBm | 30.50% | 0.12% |
-| Data: QoS Data | 5 | 20.00% | 1066.0 B | 0.0 B | 5240 MHz | - | 15.0 dBm | 53.23% | 0.22% |
+| Control: Block Ack (BA) | 526 | 64.54% | 32.0 B | 0.0 B | 5180 MHz, 5200 MHz, 5220 MHz, 5260 MHz, 5280 MHz, 5300 MHz | -71.7 dBm | - | 8.64% | 3.58% |
+| Data: QoS Data | 137 | 16.81% | 16467.9 B | 3319.2 B | 5240 MHz | - | 15.0 dBm | 87.99% | 36.52% |
+| Control: Trigger | 132 | 16.20% | 63.9 B | 1.6 B | 5240 MHz | - | 15.0 dBm | 2.92% | 1.21% |
+| Control: Ack | 12 | 1.47% | 14.0 B | 0.0 B | 5240 MHz | -72.0 dBm | 15.0 dBm | 0.16% | 0.07% |
+| Management: Action | 8 | 0.98% | 37.0 B | 0.0 B | 5240 MHz | -72.0 dBm | 15.0 dBm | 0.30% | 0.12% |
 
 ### Configuration: `Width20MHz`
 Total over-the-air packets captured (Global BSS/AP): **693**
@@ -137,13 +139,15 @@ Total over-the-air packets captured (Global BSS/AP): **693**
 | Management: Action | 8 | 1.15% | 37.0 B | 0.0 B | 5050 MHz | -71.0 dBm | 15.0 dBm | 0.18% | 0.12% |
 
 ### Configuration: `Width40MHz`
-Total over-the-air packets captured (Global BSS/AP): **25**
+Total over-the-air packets captured (Global BSS/AP): **1023**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Control: Ack | 12 | 48.00% | 14.0 B | 0.0 B | 5100 MHz | -71.0 dBm | 15.0 dBm | 10.03% | 0.07% |
-| Management: Action | 8 | 32.00% | 37.0 B | 0.0 B | 5100 MHz | -71.0 dBm | 15.0 dBm | 18.79% | 0.12% |
-| Data: QoS Data | 5 | 20.00% | 1066.0 B | 0.0 B | 5100 MHz | - | 15.0 dBm | 71.18% | 0.47% |
+| Control: Block Ack (BA) | 664 | 64.91% | 32.0 B | 0.0 B | 5085 MHz, 5096 MHz, 5104 MHz, 5115 MHz | -71.0 dBm | - | 8.05% | 4.53% |
+| Data: QoS Data | 172 | 16.81% | 4262.3 B | 553.1 B | 5100 MHz | - | 15.0 dBm | 88.89% | 49.99% |
+| Control: Trigger | 167 | 16.32% | 64.0 B | 0.0 B | 5100 MHz | - | 15.0 dBm | 2.73% | 1.53% |
+| Control: Ack | 12 | 1.17% | 14.0 B | 0.0 B | 5100 MHz | -71.0 dBm | 15.0 dBm | 0.12% | 0.07% |
+| Management: Action | 8 | 0.78% | 37.0 B | 0.0 B | 5100 MHz | -71.0 dBm | 15.0 dBm | 0.22% | 0.12% |
 
 ### Configuration: `Width80MHz`
 Total over-the-air packets captured (Global BSS/AP): **959**

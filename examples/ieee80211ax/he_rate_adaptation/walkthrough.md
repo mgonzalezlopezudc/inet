@@ -153,43 +153,40 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `FixedMcs`
-Total over-the-air packets captured (Global BSS/AP): **3831**
+Total over-the-air packets captured (Global BSS/AP): **3863**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Control: Block Ack (BA) | 1506 | 39.31% | 32.0 B | 0.0 B | 5005 MHz, 5010 MHz, 5015 MHz | -73.1 dBm | - | 2.64% | 2.31% |
-| Data: QoS Data | 1318 | 34.40% | 2075.3 B | 994.0 B | 5010 MHz | - | 13.0 dBm | 94.70% | 82.98% |
-| Control: Trigger | 731 | 19.08% | 46.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 1.47% | 1.29% |
-| Control: Ack | 199 | 5.19% | 14.0 B | 0.0 B | 5010 MHz | -80.8 dBm | 13.0 dBm | 0.28% | 0.25% |
-| Control: Block Ack Request (BAR) | 49 | 1.28% | 24.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.08% | 0.07% |
+| Control: Block Ack (BA) | 1506 | 38.99% | 32.0 B | 0.0 B | 5005 MHz, 5010 MHz, 5015 MHz | -73.1 dBm | - | 2.62% | 2.31% |
+| Data: QoS Data | 1358 | 35.15% | 2042.6 B | 997.1 B | 5010 MHz | - | 13.0 dBm | 95.49% | 84.28% |
+| Control: Trigger | 731 | 18.92% | 46.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 1.46% | 1.29% |
+| Control: Ack | 199 | 5.15% | 14.0 B | 0.0 B | 5010 MHz | -80.8 dBm | 13.0 dBm | 0.28% | 0.25% |
+| Control: Block Ack Request (BAR) | 49 | 1.27% | 24.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.08% | 0.07% |
 | Management: Action | 20 | 0.52% | 37.0 B | 0.0 B | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.08% | 0.07% |
-| A-MPDU Delimiter / Aggregation Overhead | 8 | 0.21% | 4858.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.75% | 0.66% |
 
 ### Configuration: `HeMinstrel`
-Total over-the-air packets captured (Global BSS/AP): **3106**
+Total over-the-air packets captured (Global BSS/AP): **3164**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1308 | 42.11% | 1638.8 B | 944.9 B | 5010 MHz | - | 13.0 dBm | 94.38% | 66.74% |
-| Control: Block Ack (BA) | 977 | 31.46% | 32.0 B | 0.0 B | 5005 MHz, 5010 MHz, 5015 MHz | -73.2 dBm | - | 2.12% | 1.50% |
-| Control: Trigger | 440 | 14.17% | 46.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 1.10% | 0.78% |
-| Control: Ack | 241 | 7.76% | 14.0 B | 0.0 B | 5010 MHz | -80.8 dBm | 13.0 dBm | 0.42% | 0.30% |
-| Control: Block Ack Request (BAR) | 103 | 3.32% | 24.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.20% | 0.14% |
-| Management: Action | 23 | 0.74% | 37.0 B | 0.0 B | 5010 MHz | -79.9 dBm | 13.0 dBm | 0.11% | 0.08% |
-| A-MPDU Delimiter / Aggregation Overhead | 14 | 0.45% | 4996.9 B | 340.1 B | 5010 MHz | - | 13.0 dBm | 1.67% | 1.18% |
+| Data: QoS Data | 1380 | 43.62% | 1603.7 B | 932.1 B | 5010 MHz | - | 13.0 dBm | 96.11% | 69.08% |
+| Control: Block Ack (BA) | 977 | 30.88% | 32.0 B | 0.0 B | 5005 MHz, 5010 MHz, 5015 MHz | -73.2 dBm | - | 2.08% | 1.50% |
+| Control: Trigger | 440 | 13.91% | 46.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 1.08% | 0.78% |
+| Control: Ack | 241 | 7.62% | 14.0 B | 0.0 B | 5010 MHz | -80.8 dBm | 13.0 dBm | 0.41% | 0.30% |
+| Control: Block Ack Request (BAR) | 103 | 3.26% | 24.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.20% | 0.14% |
+| Management: Action | 23 | 0.73% | 37.0 B | 0.0 B | 5010 MHz | -79.9 dBm | 13.0 dBm | 0.11% | 0.08% |
 
 ### Configuration: `HeMinstrelMobile`
-Total over-the-air packets captured (Global BSS/AP): **3106**
+Total over-the-air packets captured (Global BSS/AP): **3184**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1278 | 41.15% | 1649.9 B | 948.7 B | 5010 MHz | - | 13.0 dBm | 93.68% | 65.59% |
-| Control: Block Ack (BA) | 958 | 30.84% | 32.0 B | 0.0 B | 5005 MHz, 5010 MHz, 5015 MHz | -73.3 dBm | - | 2.10% | 1.47% |
-| Control: Trigger | 437 | 14.07% | 46.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 1.10% | 0.77% |
-| Control: Ack | 296 | 9.53% | 14.0 B | 0.0 B | 5010 MHz | -81.8 dBm | 13.0 dBm | 0.52% | 0.37% |
-| Control: Block Ack Request (BAR) | 92 | 2.96% | 24.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.18% | 0.13% |
-| Management: Action | 25 | 0.80% | 37.0 B | 0.0 B | 5010 MHz | -80.1 dBm | 13.0 dBm | 0.12% | 0.09% |
-| A-MPDU Delimiter / Aggregation Overhead | 20 | 0.64% | 4760.8 B | 680.4 B | 5010 MHz | - | 13.0 dBm | 2.29% | 1.61% |
+| Data: QoS Data | 1376 | 43.22% | 1601.2 B | 931.1 B | 5010 MHz | - | 13.0 dBm | 96.06% | 68.79% |
+| Control: Block Ack (BA) | 958 | 30.09% | 32.0 B | 0.0 B | 5005 MHz, 5010 MHz, 5015 MHz | -73.3 dBm | - | 2.05% | 1.47% |
+| Control: Trigger | 437 | 13.72% | 46.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 1.08% | 0.77% |
+| Control: Ack | 296 | 9.30% | 14.0 B | 0.0 B | 5010 MHz | -81.8 dBm | 13.0 dBm | 0.51% | 0.37% |
+| Control: Block Ack Request (BAR) | 92 | 2.89% | 24.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.18% | 0.13% |
+| Management: Action | 25 | 0.79% | 37.0 B | 0.0 B | 5010 MHz | -80.1 dBm | 13.0 dBm | 0.12% | 0.09% |
 
 ### Analysis of Packet Distribution
 Rate adaptation simulations (such as HE Minstrel) show how the MAC dynamically adjusts modulation and coding schemes (MCS). The distribution of **QoS Data** frames indicates the volume of traffic successfully transmitted, while the presence of **Block Ack (BA)** confirms reception. Retransmissions and rate sweeps can be inferred from the ratio of control frames to data frames.
