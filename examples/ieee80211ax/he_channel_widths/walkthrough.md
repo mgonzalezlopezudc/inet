@@ -164,3 +164,6 @@ Total over-the-air packets captured (Global BSS/AP): **959**
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
+
+### Model Limitations
+- **Preamble Puncturing and Interference**: While preamble puncturing is modeled by selecting non-punctured subchannels for transmissions, the channel model and radio medium do not dynamically apply localized interference/noise on a per-subchannel basis. Interference is modeled over the entire bandwidth.

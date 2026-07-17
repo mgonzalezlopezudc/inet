@@ -201,7 +201,22 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         result.error = "HE PPDU has an unsupported total number of space-time streams";
         return result;
     }
-    parameters.common.numberOfHeLtfSymbols = getHeNumberOfLtfSymbols(totalSpaceTimeStreams);
+    bool isFeedbackNdp = false;
+    for (const auto& requested : requestedUsers) {
+        if (requested.psduLength == B(0) && ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+            isFeedbackNdp = true;
+            break;
+        }
+    }
+
+    if (isFeedbackNdp) {
+        parameters.common.numberOfHeLtfSymbols = 2;
+        parameters.common.heStfDuration = SimTime(8, SIMTIME_US);
+    } else {
+        parameters.common.numberOfHeLtfSymbols = getHeNumberOfLtfSymbols(totalSpaceTimeStreams);
+        parameters.common.heStfDuration = ppduFormat == HE_TRIGGER_BASED_UPLINK ?
+                SimTime(8, SIMTIME_US) : SimTime(4, SIMTIME_US);
+    }
     parameters.common.heLtfDuration =
             parameters.common.numberOfHeLtfSymbols * getHeLtfSymbolDuration(ltfType);
     parameters.common.commonPreambleDuration =
@@ -266,6 +281,20 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         user.dataBitsPerSymbol = user.codedBitsPerSymbol * codeRate.first / codeRate.second;
         if (user.dcm)
             user.dataBitsPerSymbol /= 2;
+        if (user.psduLength == B(0)) {
+            user.numberOfDataSymbols = 0;
+            user.numberOfSymbols = 0;
+            user.preFecPaddingFactor = 0;
+            user.postFecPaddingBits = 0;
+            user.ldpcCodewordLength = 0;
+            user.ldpcCodewordCount = 0;
+            user.ldpcShorteningBits = 0;
+            user.ldpcRepetitionBits = 0;
+            user.numberOfEncoders = 0;
+            user.tailBits = 0;
+            parameters.users.push_back(user);
+            continue;
+        }
         if (user.dataBitsPerSymbol <= 0) {
             result.error = "HE user has no data bits per symbol";
             return result;

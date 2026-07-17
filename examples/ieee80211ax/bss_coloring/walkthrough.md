@@ -213,3 +213,6 @@ Total over-the-air packets captured (Global BSS/AP): **1246**
 
 ### Analysis of Packet Distribution
 BSS Coloring simulations show packet exchanges across multiple overlapping BSSs (OBSS). In addition to standard **QoS Data** and **Block Ack (BA)** frames, the statistics reflect management traffic like **Beacons** from multiple APs. When BSS coloring is disabled, collisions and backoffs occur, altering the proportion of retransmitted data frames. Enabling BSS coloring reduces mutual interference, allowing smoother channel access and higher successful data frame delivery rates.
+
+### Model Limitations
+- **Spatial Reuse**: The current INET implementation of Spatial Reuse only supports static OBSS/PD threshold classification based on BSS color. It does not support dynamic OBSS/PD parameter adaptation or transmit power control (TPC) adjustments for concurrent transmissions.

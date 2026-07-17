@@ -732,6 +732,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     // carry that standard information to INET's packet-level PHY.
     auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
     request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
+    if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+        request->setPsduLength(B(0));
     request->setTriggerId(trigger->getTriggerId());
     request->setRuIndex(selected->ruIndex);
     request->setRuToneSize(selected->ruToneSize);
@@ -791,6 +793,12 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
         // attempt and must reset OCW and be counted.
         bool exchangeSuccess = exchange.randomAccess && exchange.packets.empty() &&
                 record != nullptr && record->responseReceived;
+        if (record != nullptr && record->responseReceived) {
+            AccessCategory ac = edca->mapTidToAc(exchange.tid);
+            if (ac >= 0 && ac < 4) {
+                edca->getEdcaf(ac)->startMuEdcaTimer();
+            }
+        }
         for (size_t i = 0; i < exchange.packets.size(); ++i) {
             bool acknowledged = false;
             if (record != nullptr && record->responseReceived) {

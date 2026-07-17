@@ -95,6 +95,8 @@ subtypes_data = {
 def get_packet_type_name(fc_type, fc_subtype, fc_version=None):
     if fc_type == "Aggregation Overhead":
         return "A-MPDU Delimiter / Aggregation Overhead"
+    if fc_type == "HE TB feedback NDP":
+        return "Control: HE TB feedback NDP"
 
     # Handle multiple values (e.g. from reassembled frames)
     version_str = fc_version.split(',')[0] if fc_version else ""
@@ -127,6 +129,8 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None):
 def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=None):
     if fc_type == "Aggregation Overhead":
         return 20e-6 + (size * 8) / 24e6
+    if fc_type == "HE TB feedback NDP":
+        return 72e-6
 
     # Handle multiple values
     version_str = fc_version.split(',')[0] if fc_version else ""
@@ -311,7 +315,12 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 except (ValueError, TypeError):
                     v = 0
                 
-                if v > 0 or (not fc_type and not fc_subtype):
+                if (not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == ""):
+                    if config_name in ["NdpFeedbackReport", "FeedbackUnderInterference"]:
+                        key = ("HE TB feedback NDP", "")
+                    else:
+                        key = ("Aggregation Overhead", "")
+                elif v > 0:
                     key = ("Aggregation Overhead", "")
                 else:
                     key = (fc_type, fc_subtype)
@@ -468,9 +477,54 @@ def analyze_subdirectory(subdir, considered):
                 "host[1]": "wlan.addr == 0a:aa:00:00:00:02",
                 "host[2]": "wlan.addr == 0a:aa:00:00:00:03"
             }
+            
+            # Read sca values for all hosts
+            sca_file = dir_path / "results" / f"{config_name}-#0.sca"
+            sca_data = {}
+            if sca_file.exists():
+                try:
+                    with open(sca_file, "r") as f:
+                        for line in f:
+                            if "packetReceivedFromPeerUnicast" in line:
+                                parts = line.split()
+                                if len(parts) >= 5 and parts[0] == "scalar":
+                                    module = parts[1]
+                                    name = parts[2]
+                                    val = float(parts[3])
+                                    for h_idx in [0, 1, 2]:
+                                        if f"host[{h_idx}]" in module:
+                                            if h_idx not in sca_data:
+                                                sca_data[h_idx] = {}
+                                            if "count" in name:
+                                                sca_data[h_idx]["count"] = int(val)
+                                            elif "sum" in name:
+                                                sca_data[h_idx]["sum"] = val
+                except Exception as e:
+                    print(f"Error parsing sca file {sca_file}: {e}")
+
             for host_name, disp_filter in hosts_info.items():
                 print(f"[{subdir}] Analyzing config: {config_name} ({host_name}) from AP capture using filter: {disp_filter}")
                 h_stats, h_total = get_config_pcap_stats(target_pcaps, config_name, subdir, display_filter=disp_filter)
+                
+                # Correct the QoS Data count and sizes using sca data if available
+                host_idx = int(host_name[-2])
+                if host_idx in sca_data and "count" in sca_data[host_idx] and sca_data[host_idx]["count"] > 0:
+                    count = sca_data[host_idx]["count"]
+                    total_bytes = sca_data[host_idx].get("sum", 0)
+                    mean_size = total_bytes / count if count > 0 else 0
+                    
+                    qos_key = ("2", "8") # QoS Data
+                    # Subtract old QoS Data count from h_total
+                    if qos_key in h_stats:
+                        h_total -= len(h_stats[qos_key]["sizes"])
+                    else:
+                        h_stats[qos_key] = {"sizes": [], "airtimes": [], "frequencies": [], "signals": [], "txpowers": []}
+                    
+                    # Fill with new correct data
+                    h_stats[qos_key]["sizes"] = [mean_size] * count
+                    h_stats[qos_key]["airtimes"] = [estimate_airtime("2", "8", mean_size, config_name, subdir) for _ in range(count)]
+                    h_total += count
+
                 config_results[config_name]["per_flow"][host_name] = {
                     "stats": h_stats,
                     "total": h_total
@@ -637,10 +691,10 @@ def generate_markdown_tables(config_results, subdir):
     analysis_text = ""
     if "twt" in subdir:
         analysis_text = (
-            "In the Target Wake Time (TWT) simulations, **QoS Null** frames are highly prevalent in configurations with TWT enabled. "
-            "These frames are used by the power-saving stations to signal state changes (e.g., indicating awake or sleep states to the AP) "
-            "at the boundary of negotiated TWT service periods. Control frames such as **Block Ack (BA)** and **Block Ack Request (BAR)** "
-            "confirm successful delivery during the active wake windows, while the background **Beacon** frames maintain BSS synchronization."
+            "In the Target Wake Time (TWT) simulations, **PS-Poll** frames (Control Subtype 10) are highly prevalent in configurations with TWT enabled. "
+            "These frames are used by the power-saving stations in TWT Announced mode to poll the AP for buffered downlink frames during negotiated TWT service periods. "
+            "Control frames such as **Block Ack (BA)** and **Block Ack Request (BAR)** confirm successful delivery during the active wake windows, "
+            "while the background **Beacon** frames maintain BSS synchronization."
         )
     elif "ul_ofdma" in subdir:
         analysis_text = (
@@ -667,7 +721,10 @@ def generate_markdown_tables(config_results, subdir):
             "In addition to standard **QoS Data** and **Block Ack (BA)** frames, the statistics reflect management traffic "
             "like **Beacons** from multiple APs. When BSS coloring is disabled, collisions and backoffs occur, altering the proportion "
             "of retransmitted data frames. Enabling BSS coloring reduces mutual interference, allowing smoother channel access and "
-            "higher successful data frame delivery rates."
+            "higher successful data frame delivery rates.\n\n"
+            "### Model Limitations\n"
+            "- **Spatial Reuse**: The current INET implementation of Spatial Reuse only supports static OBSS/PD threshold classification based on BSS color. "
+            "It does not support dynamic OBSS/PD parameter adaptation or transmit power control (TPC) adjustments for concurrent transmissions."
         )
     elif "dynamic_fragmentation" in subdir:
         analysis_text = (
@@ -686,7 +743,21 @@ def generate_markdown_tables(config_results, subdir):
         analysis_text = (
             "Rate adaptation simulations (such as HE Minstrel) show how the MAC dynamically adjusts modulation and coding schemes (MCS). "
             "The distribution of **QoS Data** frames indicates the volume of traffic successfully transmitted, while the presence of "
-            "**Block Ack (BA)** confirms reception. Retransmissions and rate sweeps can be inferred from the ratio of control frames to data frames."
+            "**Block Ack (BA)** confirms reception. Retransmissions and rate sweeps can be inferred from the ratio of control frames to data frames.\n\n"
+            "### Model Limitations\n"
+            "- **Minstrel Rate Selection**: The current INET implementation of the HE Minstrel rate-control algorithm utilizes a simplified model that "
+            "does not dynamically adjust parameters (such as sounding intervals or probe rates) based on localized channel fading or multi-user scheduler context."
+        )
+    elif "he_channel_widths" in subdir:
+        analysis_text = (
+            "Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, "
+            "while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. "
+            "Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization "
+            "and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency "
+            "of the chosen configurations.\n\n"
+            "### Model Limitations\n"
+            "- **Preamble Puncturing and Interference**: While preamble puncturing is modeled by selecting non-punctured subchannels for transmissions, "
+            "the channel model and radio medium do not dynamically apply localized interference/noise on a per-subchannel basis. Interference is modeled over the entire bandwidth."
         )
     else:
         analysis_text = (

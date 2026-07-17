@@ -94,9 +94,17 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
 
 void HeHcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (auto request = packet->findTag<physicallayer::Ieee80211HeMuReq>())
-        if (request->getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK)
+    if (auto request = packet->findTag<physicallayer::Ieee80211HeMuReq>()) {
+        if (request->getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK) {
+            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+                AccessCategory ac = edca->mapTidToAc(dataHeader->getTid());
+                if (ac >= 0 && ac < 4) {
+                    edca->getEdcaf(ac)->startMuEdcaTimer();
+                }
+            }
             return;
+        }
+    }
     Hcf::transmissionComplete(packet, header);
 }
 

@@ -87,7 +87,7 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.numberOfSpatialStreams = request->getNumberOfSpatialStreams();
         user.streamStartIndex = request->getStreamStartIndex();
         user.dcm = request->getDcm();
-        user.psduLength = B(packet->getDataLength());
+        user.psduLength = request->getPsduLength() != B(-1) ? request->getPsduLength() : B(packet->getDataLength());
         Ieee80211HeRu ru;
         ru.index = user.ruIndex;
         ru.toneSize = std::max<int>(user.ruToneSize, 26);

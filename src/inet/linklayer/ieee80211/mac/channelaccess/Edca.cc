@@ -74,5 +74,26 @@ Edca::~Edca()
     delete[] edcafs;
 }
 
+void Edca::handleMessage(omnetpp::cMessage *msg)
+{
+    if (msg->isSelfMessage()) {
+        std::string name = msg->getName();
+        if (name.rfind("MU-EDCA-Timer-", 0) == 0) {
+            std::string acStr = name.substr(14);
+            int ac = -1;
+            if (acStr == "BK") ac = AC_BK;
+            else if (acStr == "BE") ac = AC_BE;
+            else if (acStr == "VI") ac = AC_VI;
+            else if (acStr == "VO") ac = AC_VO;
+            if (ac >= 0 && ac < numEdcafs) {
+                edcafs[ac]->muEdcaTimerExpired();
+            }
+            delete msg;
+            return;
+        }
+    }
+    throw cRuntimeError("Edca received unexpected message: %s", msg->getName());
+}
+
 } // namespace ieee80211
 } // namespace inet

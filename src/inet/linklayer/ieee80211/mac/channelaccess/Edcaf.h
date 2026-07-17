@@ -57,6 +57,8 @@ class INET_API Edcaf : public IChannelAccess, public IContention::ICallback, pub
     int cw = -1;
     int cwMin = -1;
     int cwMax = -1;
+    omnetpp::cMessage *muEdcaTimer = nullptr;
+    bool isMuEdcaTimerActive = false;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -100,6 +102,8 @@ class INET_API Edcaf : public IChannelAccess, public IContention::ICallback, pub
     virtual bool isOwning() { return owning; }
     virtual bool isInternalCollision();
     virtual AccessCategory getAccessCategory() { return ac; }
+    virtual void startMuEdcaTimer();
+    virtual void muEdcaTimerExpired();
 };
 
 } /* namespace ieee80211 */
