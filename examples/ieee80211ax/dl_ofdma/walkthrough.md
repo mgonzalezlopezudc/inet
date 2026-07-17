@@ -458,30 +458,38 @@ Total packets captured for flow: **322**
 | Data: QoS Data | 1 | 0.31% | 166.0 B | 0.0 B | 5010 MHz | - | 20.0 dBm | 2.12% | 0.02% |
 | Control: Ack | 1 | 0.31% | 14.0 B | 0.0 B | 5010 MHz | - | 20.0 dBm | 0.24% | 0.00% |
 
-### Configuration: `SuEdcaBaseline`
-Total over-the-air packets captured (Global BSS/AP): **1593**
+### Configuration: `MultiTidBlockAck`
+Total over-the-air packets captured (Global BSS/AP): **1045**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1314 | 82.49% | 169.5 B | 24.0 B | 5010 MHz | - | 20.0 dBm | 93.71% | 28.48% |
-| Control: Block Ack Request (BAR) | 120 | 7.53% | 24.0 B | 0.0 B | 5010 MHz | - | 20.0 dBm | 1.11% | 0.34% |
-| Control: Block Ack (BA) | 120 | 7.53% | 32.0 B | 0.0 B | 5010 MHz | -65.1 dBm | - | 1.21% | 0.37% |
-| Management: Association Request | 24 | 1.51% | 342.0 B | 0.0 B | 5010 MHz | - | 20.0 dBm | 3.76% | 1.14% |
+| Data: QoS Data | 401 | 38.37% | 798.7 B | 377.4 B | 5010 MHz | - | 20.0 dBm | 92.15% | 22.49% |
+| Control: Block Ack Request (BAR) | 312 | 29.86% | 24.0 B | 0.0 B | 5010 MHz | - | 20.0 dBm | 3.58% | 0.87% |
+| Control: Block Ack (BA) | 312 | 29.86% | 32.0 B | 0.0 B | 5010 MHz | -66.0 dBm | - | 3.92% | 0.96% |
+| Control: Ack | 12 | 1.15% | 14.0 B | 0.0 B | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.12% | 0.03% |
+| Management: Action | 8 | 0.77% | 37.0 B | 0.0 B | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.23% | 0.06% |
+
+### Configuration: `SuEdcaBaseline`
+Total over-the-air packets captured (Global BSS/AP): **1617**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1362 | 84.23% | 169.4 B | 23.6 B | 5010 MHz | - | 20.0 dBm | 97.46% | 29.51% |
+| Control: Block Ack Request (BAR) | 120 | 7.42% | 24.0 B | 0.0 B | 5010 MHz | - | 20.0 dBm | 1.11% | 0.34% |
+| Control: Block Ack (BA) | 120 | 7.42% | 32.0 B | 0.0 B | 5010 MHz | -65.1 dBm | - | 1.22% | 0.37% |
 | Control: Ack | 9 | 0.56% | 14.0 B | 0.0 B | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.07% | 0.02% |
-| Management: Action | 6 | 0.38% | 37.0 B | 0.0 B | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.14% | 0.04% |
+| Management: Action | 6 | 0.37% | 37.0 B | 0.0 B | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.14% | 0.04% |
 
 ### Configuration: `SuEdcaBaseline80MHz`
-Total over-the-air packets captured (Global BSS/AP): **2380**
+Total over-the-air packets captured (Global BSS/AP): **2559**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1825 | 76.68% | 167.0 B | 22.0 B | 5200 MHz | - | 20.0 dBm | 69.90% | 26.61% |
-| Control: Block Ack Request (BAR) | 227 | 9.54% | 24.0 B | 0.0 B | 5200 MHz | - | 20.0 dBm | 1.67% | 0.64% |
-| Control: Block Ack (BA) | 227 | 9.54% | 46.8 B | 39.5 B | 5200 MHz | -66.4 dBm | - | 2.12% | 0.81% |
-| A-MPDU Delimiter / Aggregation Overhead | 52 | 2.18% | 4204.0 B | 0.0 B | 5200 MHz | - | 20.0 dBm | 19.41% | 7.39% |
-| Management: Association Request | 34 | 1.43% | 549.4 B | 123.6 B | 5200 MHz | - | 20.0 dBm | 6.72% | 2.56% |
-| Control: Ack | 9 | 0.38% | 14.0 B | 0.0 B | 5200 MHz | -66.3 dBm | 20.0 dBm | 0.06% | 0.02% |
-| Management: Action | 6 | 0.25% | 37.0 B | 0.0 B | 5200 MHz | -66.3 dBm | 20.0 dBm | 0.11% | 0.04% |
+| Data: QoS Data | 2090 | 81.67% | 258.8 B | 326.4 B | 5200 MHz | - | 20.0 dBm | 95.63% | 32.98% |
+| Control: Block Ack Request (BAR) | 227 | 8.87% | 24.0 B | 0.0 B | 5200 MHz | - | 20.0 dBm | 1.84% | 0.64% |
+| Control: Block Ack (BA) | 227 | 8.87% | 46.8 B | 39.5 B | 5200 MHz | -66.4 dBm | - | 2.34% | 0.81% |
+| Control: Ack | 9 | 0.35% | 14.0 B | 0.0 B | 5200 MHz | -66.3 dBm | 20.0 dBm | 0.06% | 0.02% |
+| Management: Action | 6 | 0.23% | 37.0 B | 0.0 B | 5200 MHz | -66.3 dBm | 20.0 dBm | 0.12% | 0.04% |
 
 ### Analysis of Packet Distribution
 Downlink OFDMA simulations are dominated by **QoS Data** and **Block Ack (BA)** frames. For the asymmetric flow cases (`BacklogBased` and `HoLMinDelay`), comparing individual flows reveals clear scheduling priorities. The heavy flow (`host[0]`) dominates airtime and packet counts due to its high load, but suffers from low delivery satisfaction (about 5%). In contrast, under `BacklogBased`, the light flow (`host[2]`) occupies small airtime but achieves 82% satisfaction. The per-flow statistics clearly isolate the packet sizes: the average size of data packets successfully received by `host[0]` is ~1070 B, while for `host[1]` it is ~470 B, and for `host[2]` it is ~170 B, reflecting their different application payload limits. The airtime percentages also show that the heavy flow consumes the vast majority of wireless resources, which helps visualize the cross-flow resource allocations in OFDMA scheduling.

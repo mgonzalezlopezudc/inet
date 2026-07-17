@@ -115,6 +115,17 @@ Two airtime occupancy percentages are provided:
 - **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
+### Configuration: `MultiTidBlockAck`
+Total over-the-air packets captured (Global BSS/AP): **1045**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 401 | 38.37% | 798.7 B | 377.4 B | 5010 MHz | - | 20.0 dBm | 92.15% | 22.49% |
+| Control: Block Ack Request (BAR) | 312 | 29.86% | 24.0 B | 0.0 B | 5010 MHz | - | 20.0 dBm | 3.58% | 0.87% |
+| Control: Block Ack (BA) | 312 | 29.86% | 32.0 B | 0.0 B | 5010 MHz | -66.0 dBm | - | 3.92% | 0.96% |
+| Control: Ack | 12 | 1.15% | 14.0 B | 0.0 B | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.12% | 0.03% |
+| Management: Action | 8 | 0.77% | 37.0 B | 0.0 B | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.23% | 0.06% |
+
 ### Configuration: `UlMuMultiTidBlockAck`
 Total over-the-air packets captured (Global BSS/AP): **3093**
 

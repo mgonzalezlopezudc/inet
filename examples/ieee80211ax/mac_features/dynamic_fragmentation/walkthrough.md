@@ -120,16 +120,15 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `DynamicFragmentation`
-Total over-the-air packets captured (Global BSS/AP): **1490**
+Total over-the-air packets captured (Global BSS/AP): **6764**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| A-MPDU Delimiter / Aggregation Overhead | 756 | 50.74% | 3034.6 B | 1937.1 B | 5010 MHz | -63.3 dBm | - | 95.58% | 38.99% |
-| Control: Block Ack Request (BAR) | 435 | 29.19% | 24.0 B | 0.0 B | 5010 MHz | -62.8 dBm | - | 1.49% | 0.61% |
-| Control: Block Ack (BA) | 261 | 17.52% | 152.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 2.26% | 0.92% |
-| Control: Ack | 18 | 1.21% | 14.0 B | 0.0 B | 5010 MHz | -63.7 dBm | 10.0 dBm | 0.05% | 0.02% |
-| Data: QoS Data | 13 | 0.87% | 401.5 B | 187.1 B | 5010 MHz | -63.5 dBm | - | 0.55% | 0.22% |
-| Management: Action | 7 | 0.47% | 37.0 B | 0.0 B | 5010 MHz | -63.0 dBm | 10.0 dBm | 0.06% | 0.02% |
+| Data: QoS Data | 6043 | 89.34% | 376.1 B | 176.8 B | 5010 MHz | -63.3 dBm | - | 98.44% | 99.63% |
+| Control: Block Ack Request (BAR) | 435 | 6.43% | 24.0 B | 0.0 B | 5010 MHz | -62.8 dBm | - | 0.60% | 0.61% |
+| Control: Block Ack (BA) | 261 | 3.86% | 152.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 0.91% | 0.92% |
+| Control: Ack | 18 | 0.27% | 14.0 B | 0.0 B | 5010 MHz | -63.7 dBm | 10.0 dBm | 0.02% | 0.02% |
+| Management: Action | 7 | 0.10% | 37.0 B | 0.0 B | 5010 MHz | -63.0 dBm | 10.0 dBm | 0.02% | 0.02% |
 
 ### Analysis of Packet Distribution
 In dynamic fragmentation scenarios, large application layer packets are dynamically fragmented into smaller MAC-layer **QoS Data** frames depending on channel conditions. This results in a higher count of QoS Data frames for fragmented configurations compared to non-fragmented baselines. The corresponding **Block Ack (BA)** count also reflects the fragment-level acknowledgment bitmap.
