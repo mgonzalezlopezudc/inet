@@ -31,6 +31,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #endif
 
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
@@ -53,6 +54,7 @@ enum RadiotapPresentBit {
     RADIOTAP_TX_FLAGS = 15,
     RADIOTAP_HE = 23,
     RADIOTAP_HE_MU = 24,
+    RADIOTAP_EHT = 34,
 };
 
 enum RadiotapFlags {
@@ -74,6 +76,12 @@ void appendUint16(std::vector<uint8_t>& bytes, uint16_t value)
 {
     bytes.push_back(value & 0xff);
     bytes.push_back(value >> 8);
+}
+
+void appendUint32(std::vector<uint8_t>& bytes, uint32_t value)
+{
+    for (int i = 0; i < 4; ++i)
+        bytes.push_back((value >> (8 * i)) & 0xff);
 }
 
 void setUint16(std::vector<uint8_t>& bytes, size_t offset, uint16_t value)
@@ -142,15 +150,26 @@ bool getIeee80211AmpduMpduRanges(const Packet *packet, b frontOffset, b backOffs
 
 std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction direction, const physicallayer::ITransmission *transmission, const physicallayer::IReception *reception)
 {
-    uint32_t present = 1U << RADIOTAP_FLAGS;
-    std::vector<uint8_t> bytes(8, 0); // version, pad, length, present bitmap
+    std::vector<uint32_t> presentWords;
+    auto setPresentBit = [&](int bitIndex) {
+        int wordIndex = bitIndex / 31;
+        int bitOffset = bitIndex % 31;
+        if (wordIndex >= (int)presentWords.size())
+            presentWords.resize(wordIndex + 1, 0);
+        presentWords[wordIndex] |= 1U << bitOffset;
+    };
+
+    setPresentBit(RADIOTAP_FLAGS);
+    std::vector<uint8_t> bytes(4, 0); // version, pad, length
 
     bool isHe = false;
     bool isHeMu = false;
+    bool isEht = false;
     Ptr<const physicallayer::Ieee80211HeMuReq> heMuReq;
     Ptr<const physicallayer::Ieee80211HeMuRxTag> heMuRx;
     Ptr<const physicallayer::Ieee80211HeMuCommonReq> heMuCommonReq;
     const physicallayer::Ieee80211HeMode *heMode = nullptr;
+    const physicallayer::Ieee80211EhtMode *ehtMode = nullptr;
 
 #ifdef INET_WITH_IEEE80211
     heMuReq = packet->findTag<physicallayer::Ieee80211HeMuReq>();
@@ -175,15 +194,24 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
             if (heMode != nullptr) {
                 isHe = true;
             }
+            else {
+                ehtMode = dynamic_cast<const physicallayer::Ieee80211EhtMode *>(mode);
+                if (ehtMode != nullptr) {
+                    isEht = true;
+                }
+            }
         }
     }
 #endif
 
     if (isHe) {
-        present |= 1U << RADIOTAP_HE;
+        setPresentBit(RADIOTAP_HE);
         if (isHeMu) {
-            present |= 1U << RADIOTAP_HE_MU;
+            setPresentBit(RADIOTAP_HE_MU);
         }
+    }
+    else if (isEht) {
+        setPresentBit(RADIOTAP_EHT);
     }
 
     // IEEE 802.11 packets recorded by PcapRecorder contain the MAC trailer.
@@ -211,7 +239,7 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
     if (narrowbandAnalogModel != nullptr) {
         double frequencyMHz = narrowbandAnalogModel->getCenterFrequency().get() / 1E6;
         if (std::isfinite(frequencyMHz) && 0 < frequencyMHz && frequencyMHz <= UINT16_MAX) {
-            present |= 1U << RADIOTAP_CHANNEL;
+            setPresentBit(RADIOTAP_CHANNEL);
             appendPadding(bytes, 2);
             appendUint16(bytes, static_cast<uint16_t>(std::round(frequencyMHz)));
             uint16_t channelFlags = frequencyMHz < 3000 ? RADIOTAP_CHANNEL_2GHZ :
@@ -226,21 +254,21 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
             int powerDbm = static_cast<int>(std::round(math::mW2dBmW(powerMilliwatts)));
             powerDbm = std::clamp(powerDbm, -128, 127);
             if (direction == DIRECTION_INBOUND)
-                present |= 1U << RADIOTAP_ANTENNA_SIGNAL;
+                setPresentBit(RADIOTAP_ANTENNA_SIGNAL);
             else if (direction == DIRECTION_OUTBOUND)
-                present |= 1U << RADIOTAP_DBM_TX_POWER;
+                setPresentBit(RADIOTAP_DBM_TX_POWER);
             bytes.push_back(static_cast<uint8_t>(static_cast<int8_t>(powerDbm)));
         }
     }
 #endif
 
     if (direction == DIRECTION_INBOUND) {
-        present |= 1U << RADIOTAP_RX_FLAGS;
+        setPresentBit(RADIOTAP_RX_FLAGS);
         appendPadding(bytes, 2);
         appendUint16(bytes, 0);
     }
     else if (direction == DIRECTION_OUTBOUND) {
-        present |= 1U << RADIOTAP_TX_FLAGS;
+        setPresentBit(RADIOTAP_TX_FLAGS);
         appendPadding(bytes, 2);
         appendUint16(bytes, 0);
     }
@@ -358,10 +386,33 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
         for (int i = 0; i < 4; ++i) bytes.push_back(ruChannel1[i]);
         for (int i = 0; i < 4; ++i) bytes.push_back(ruChannel2[i]);
     }
+
+    if (isEht) {
+        appendPadding(bytes, 4);
+        appendUint32(bytes, 0); // EHT known: 0
+    }
 #endif
 
+    // Set the extension flags for all intermediate present words
+    for (size_t i = 0; i < presentWords.size(); i++) {
+        if (i < presentWords.size() - 1) {
+            presentWords[i] |= 1U << 31;
+        }
+    }
+
+    // Insert the present words at index 4
+    std::vector<uint8_t> presentBytes(4 * presentWords.size(), 0);
+    for (size_t i = 0; i < presentWords.size(); i++) {
+        uint32_t val = presentWords[i];
+        presentBytes[4 * i] = val & 0xff;
+        presentBytes[4 * i + 1] = (val >> 8) & 0xff;
+        presentBytes[4 * i + 2] = (val >> 16) & 0xff;
+        presentBytes[4 * i + 3] = (val >> 24) & 0xff;
+    }
+    bytes.insert(bytes.begin() + 4, presentBytes.begin(), presentBytes.end());
+
+    // Update length
     setUint16(bytes, 2, bytes.size());
-    setUint32(bytes, 4, present);
     return bytes;
 }
 
