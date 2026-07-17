@@ -111,3 +111,26 @@ static overlap because this example gives both the same 500-byte sizing rule.
 The HE-specific advantage demonstrated here is negotiated eligibility and the
 ability to choose boundaries per opportunity; showing adaptive sizing would
 require varying the available TXOP or RU budget during the run.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `DynamicFragmentation`
+Total over-the-air packets captured (Global BSS/AP): **1660**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| A-MPDU Delimiter / Aggregation Overhead | 767 | 46.20% | 3448.3 B | 2155.3 B | 93.99% | 44.85% |
+| Control: Block Ack Request (BAR) | 487 | 29.34% | 24.0 B | 0.0 B | 1.43% | 0.68% |
+| Control: Block Ack (BA) | 354 | 21.33% | 152.0 B | 0.0 B | 2.62% | 1.25% |
+| Control: Ack | 24 | 1.45% | 14.0 B | 0.0 B | 0.06% | 0.03% |
+| Data: QoS Data | 20 | 1.20% | 415.2 B | 177.6 B | 0.74% | 0.35% |
+| Management: Action | 6 | 0.36% | 37.0 B | 0.0 B | 0.04% | 0.02% |
+| Management: Association Request | 2 | 0.12% | 3998.0 B | 786.0 B | 1.12% | 0.54% |
+
+### Analysis of Packet Distribution
+In dynamic fragmentation scenarios, large application layer packets are dynamically fragmented into smaller MAC-layer **QoS Data** frames depending on channel conditions. This results in a higher count of QoS Data frames for fragmented configurations compared to non-fragmented baselines. The corresponding **Block Ack (BA)** count also reflects the fragment-level acknowledgment bitmap.

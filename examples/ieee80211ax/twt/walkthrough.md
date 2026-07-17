@@ -171,3 +171,80 @@ The decoded output timeline shows:
      modest nominal sleep opportunity, but keeps the periodic uplink workload
      reliable. A shorter service period could save more energy while increasing
      queueing delay or loss; that is the trade-off TWT exposes.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `Baseline`
+Total over-the-air packets captured (Global BSS/AP): **1140**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Management: Beacon | 1000 | 87.72% | 93.0 B | 0.0 B | 53.66% | 0.14% |
+| A-MPDU Delimiter / Aggregation Overhead | 58 | 5.09% | 6091.1 B | 2682.9 B | 44.32% | 0.12% |
+| Control: Block Ack Request (BAR) | 34 | 2.98% | 24.0 B | 0.0 B | 0.35% | 0.00% |
+| Control: Ack | 20 | 1.75% | 14.0 B | 0.0 B | 0.18% | 0.00% |
+| Management: Authentication | 8 | 0.70% | 34.0 B | 0.0 B | 0.19% | 0.00% |
+| Data: QoS Data | 8 | 0.70% | 270.0 B | 0.0 B | 0.81% | 0.00% |
+| Management: Action | 4 | 0.35% | 37.0 B | 0.0 B | 0.10% | 0.00% |
+| Management: Probe Request | 2 | 0.18% | 68.0 B | 0.0 B | 0.08% | 0.00% |
+| Management: Probe Response | 2 | 0.18% | 93.0 B | 0.0 B | 0.11% | 0.00% |
+| Management: Association Request | 2 | 0.18% | 76.0 B | 0.0 B | 0.09% | 0.00% |
+| Management: Association Response | 2 | 0.18% | 81.0 B | 0.0 B | 0.10% | 0.00% |
+
+### Configuration: `Broadcast`
+Total over-the-air packets captured (Global BSS/AP): **1158**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Management: Beacon | 1000 | 86.36% | 111.0 B | 0.0 B | 87.14% | 0.17% |
+| Data: QoS Data | 69 | 5.96% | 270.0 B | 0.0 B | 9.72% | 0.02% |
+| Control: Ack | 24 | 2.07% | 14.0 B | 0.0 B | 0.31% | 0.00% |
+| Control: Block Ack Request (BAR) | 17 | 1.47% | 24.0 B | 0.0 B | 0.25% | 0.00% |
+| Control: Block Ack (BA) | 16 | 1.38% | 32.0 B | 0.0 B | 0.25% | 0.00% |
+| Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 0.27% | 0.00% |
+| Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 0.32% | 0.00% |
+| A-MPDU Delimiter / Aggregation Overhead | 8 | 0.69% | 822.0 B | 478.0 B | 1.22% | 0.00% |
+| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 0.11% | 0.00% |
+| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 0.15% | 0.00% |
+| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 0.13% | 0.00% |
+| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 0.13% | 0.00% |
+
+### Configuration: `IndividualAnnounced`
+Total over-the-air packets captured (Global BSS/AP): **3110**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: PS-Poll | 1992 | 64.05% | 20.0 B | 0.0 B | 15.58% | 0.05% |
+| Management: Beacon | 1000 | 32.15% | 93.0 B | 0.0 B | 42.24% | 0.14% |
+| A-MPDU Delimiter / Aggregation Overhead | 68 | 2.19% | 6138.0 B | 2668.5 B | 41.21% | 0.14% |
+| Control: Ack | 24 | 0.77% | 14.0 B | 0.0 B | 0.17% | 0.00% |
+| Management: Authentication | 8 | 0.26% | 34.0 B | 0.0 B | 0.15% | 0.00% |
+| Management: Action | 8 | 0.26% | 42.5 B | 5.5 B | 0.18% | 0.00% |
+| Management: Probe Request | 2 | 0.06% | 68.0 B | 0.0 B | 0.06% | 0.00% |
+| Management: Probe Response | 2 | 0.06% | 93.0 B | 0.0 B | 0.08% | 0.00% |
+| Management: Association Request | 2 | 0.06% | 76.0 B | 0.0 B | 0.07% | 0.00% |
+| Management: Association Response | 2 | 0.06% | 81.0 B | 0.0 B | 0.08% | 0.00% |
+| Data: QoS Data | 2 | 0.06% | 270.0 B | 0.0 B | 0.16% | 0.00% |
+
+### Configuration: `IndividualUnannounced`
+Total over-the-air packets captured (Global BSS/AP): **2686**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Management: Beacon | 1000 | 37.23% | 93.0 B | 0.0 B | 36.28% | 0.14% |
+| Data: QoS Data | 700 | 26.06% | 266.0 B | 0.0 B | 47.52% | 0.19% |
+| Management: Action | 561 | 20.89% | 38.0 B | 3.1 B | 9.98% | 0.04% |
+| Control: Ack | 225 | 8.38% | 14.0 B | 0.0 B | 1.40% | 0.01% |
+| Management: Authentication | 100 | 3.72% | 34.0 B | 0.0 B | 1.65% | 0.01% |
+| Management: Probe Request | 25 | 0.93% | 68.0 B | 0.0 B | 0.70% | 0.00% |
+| Management: Probe Response | 25 | 0.93% | 93.0 B | 0.0 B | 0.91% | 0.00% |
+| Management: Association Request | 25 | 0.93% | 76.0 B | 0.0 B | 0.76% | 0.00% |
+| Management: Association Response | 25 | 0.93% | 81.0 B | 0.0 B | 0.81% | 0.00% |
+
+### Analysis of Packet Distribution
+In the Target Wake Time (TWT) simulations, **QoS Null** frames are highly prevalent in configurations with TWT enabled. These frames are used by the power-saving stations to signal state changes (e.g., indicating awake or sleep states to the AP) at the boundary of negotiated TWT service periods. Control frames such as **Block Ack (BA)** and **Block Ack Request (BAR)** confirm successful delivery during the active wake windows, while the background **Beacon** frames maintain BSS synchronization.

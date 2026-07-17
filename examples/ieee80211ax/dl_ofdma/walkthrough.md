@@ -295,3 +295,205 @@ The normative reference is IEEE Std 802.11-2024:
 The standard defines frame formats and protocol behavior. It does not define
 INET's `fBW`, `fHoL`, `BacklogBased`, or `HoLMinDelay` heuristics, and it does
 not require OFDMA to outperform SU for every workload.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `BacklogBased`
+Total over-the-air packets captured (Global BSS/AP): **599**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 348 | 58.10% | 32.0 B | 0.0 B | 2.59% | 1.07% |
+| Data: QoS Data | 120 | 20.03% | 5816.9 B | 1031.8 B | 96.18% | 39.67% |
+| Control: Trigger | 116 | 19.37% | 55.0 B | 0.0 B | 1.08% | 0.44% |
+| Control: Ack | 9 | 1.50% | 14.0 B | 0.0 B | 0.05% | 0.02% |
+| Management: Action | 6 | 1.00% | 37.0 B | 0.0 B | 0.10% | 0.04% |
+
+#### Per-Flow Traffic Statistics for `BacklogBased`
+
+##### Heavy Flow (destined to `host[0]`, offered load: 80 Mbps, size: 1000 B)
+Total packets captured for flow: **121**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 116 | 95.87% | 32.0 B | 0.0 B | 76.62% | 0.36% |
+| Data: QoS Data | 2 | 1.65% | 616.0 B | 450.0 B | 19.86% | 0.09% |
+| Management: Action | 2 | 1.65% | 37.0 B | 0.0 B | 2.99% | 0.01% |
+| Control: Ack | 1 | 0.83% | 14.0 B | 0.0 B | 0.53% | 0.00% |
+
+##### Medium Flow (destined to `host[1]`, offered load: 8 Mbps, size: 400 B)
+Total packets captured for flow: **120**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 116 | 96.67% | 32.0 B | 0.0 B | 90.39% | 0.36% |
+| Management: Action | 2 | 1.67% | 37.0 B | 0.0 B | 3.52% | 0.01% |
+| Data: QoS Data | 1 | 0.83% | 166.0 B | 0.0 B | 5.46% | 0.02% |
+| Control: Ack | 1 | 0.83% | 14.0 B | 0.0 B | 0.63% | 0.00% |
+
+##### Light Flow (destined to `host[2]`, offered load: 0.8 Mbps, size: 100 B)
+Total packets captured for flow: **120**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 116 | 96.67% | 32.0 B | 0.0 B | 90.39% | 0.36% |
+| Management: Action | 2 | 1.67% | 37.0 B | 0.0 B | 3.52% | 0.01% |
+| Data: QoS Data | 1 | 0.83% | 166.0 B | 0.0 B | 5.46% | 0.02% |
+| Control: Ack | 1 | 0.83% | 14.0 B | 0.0 B | 0.63% | 0.00% |
+
+### Configuration: `EqualSizedRUs80MHz_fBW`
+Total over-the-air packets captured (Global BSS/AP): **4393**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 2186 | 49.76% | 32.0 B | 0.0 B | 15.30% | 6.70% |
+| Data: QoS Data | 1098 | 24.99% | 1365.2 B | 160.9 B | 75.74% | 33.19% |
+| Control: Trigger | 1094 | 24.90% | 46.0 B | 0.0 B | 8.82% | 3.87% |
+| Control: Ack | 9 | 0.20% | 14.0 B | 0.0 B | 0.05% | 0.02% |
+| Management: Action | 6 | 0.14% | 37.0 B | 0.0 B | 0.09% | 0.04% |
+
+### Configuration: `EqualSizedRUs80MHz_fHoL`
+Total over-the-air packets captured (Global BSS/AP): **4715**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 2816 | 59.72% | 32.0 B | 0.0 B | 19.80% | 8.64% |
+| Data: QoS Data | 944 | 20.02% | 1589.7 B | 179.0 B | 71.79% | 31.31% |
+| Control: Trigger | 940 | 19.94% | 55.0 B | 0.3 B | 8.26% | 3.60% |
+| Control: Ack | 9 | 0.19% | 14.0 B | 0.0 B | 0.05% | 0.02% |
+| Management: Action | 6 | 0.13% | 37.0 B | 0.0 B | 0.10% | 0.04% |
+
+### Configuration: `EqualSizedRUs_fBW`
+Total over-the-air packets captured (Global BSS/AP): **5034**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 2353 | 46.74% | 32.0 B | 0.0 B | 3.80% | 7.22% |
+| Data: QoS Data | 1454 | 28.88% | 2013.7 B | 2397.0 B | 93.92% | 178.19% |
+| Control: Trigger | 1156 | 22.96% | 46.0 B | 0.0 B | 2.15% | 4.08% |
+| Control: Block Ack Request (BAR) | 41 | 0.81% | 24.0 B | 0.0 B | 0.06% | 0.11% |
+| Control: Ack | 18 | 0.36% | 14.0 B | 0.0 B | 0.02% | 0.04% |
+| Management: Action | 12 | 0.24% | 37.0 B | 0.0 B | 0.04% | 0.08% |
+
+### Configuration: `EqualSizedRUs_fBW_ACVO`
+Total over-the-air packets captured (Global BSS/AP): **2836**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1885 | 66.47% | 192.4 B | 72.9 B | 93.51% | 43.21% |
+| Control: Block Ack (BA) | 577 | 20.35% | 32.0 B | 0.0 B | 3.83% | 1.77% |
+| Control: Trigger | 218 | 7.69% | 46.0 B | 0.0 B | 1.67% | 0.77% |
+| Control: Block Ack Request (BAR) | 141 | 4.97% | 24.0 B | 0.0 B | 0.85% | 0.39% |
+| Control: Ack | 9 | 0.32% | 14.0 B | 0.0 B | 0.05% | 0.02% |
+| Management: Action | 6 | 0.21% | 37.0 B | 0.0 B | 0.09% | 0.04% |
+
+### Configuration: `EqualSizedRUs_fHoL`
+Total over-the-air packets captured (Global BSS/AP): **3856**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 2291 | 59.41% | 32.0 B | 0.0 B | 4.40% | 7.03% |
+| Data: QoS Data | 771 | 19.99% | 3323.4 B | 3577.9 B | 93.69% | 149.72% |
+| Control: Trigger | 764 | 19.81% | 55.0 B | 0.3 B | 1.83% | 2.93% |
+| Control: Ack | 18 | 0.47% | 14.0 B | 0.0 B | 0.03% | 0.04% |
+| Management: Action | 12 | 0.31% | 37.0 B | 0.0 B | 0.05% | 0.08% |
+
+### Configuration: `EqualSizedRUs_fHoL_ACVO`
+Total over-the-air packets captured (Global BSS/AP): **2720**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 1615 | 59.38% | 32.0 B | 0.0 B | 13.98% | 4.95% |
+| Data: QoS Data | 549 | 20.18% | 716.7 B | 245.8 B | 79.99% | 28.33% |
+| Control: Trigger | 540 | 19.85% | 54.9 B | 0.9 B | 5.84% | 2.07% |
+| Control: Ack | 9 | 0.33% | 14.0 B | 0.0 B | 0.06% | 0.02% |
+| Management: Action | 6 | 0.22% | 37.0 B | 0.0 B | 0.12% | 0.04% |
+| Control: Block Ack Request (BAR) | 1 | 0.04% | 24.0 B | 0.0 B | 0.01% | 0.00% |
+
+### Configuration: `HoLMinDelay`
+Total over-the-air packets captured (Global BSS/AP): **1611**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 954 | 59.22% | 32.0 B | 0.0 B | 7.45% | 2.93% |
+| Data: QoS Data | 323 | 20.05% | 1758.8 B | 159.2 B | 89.28% | 35.08% |
+| Control: Trigger | 319 | 19.80% | 55.0 B | 0.0 B | 3.11% | 1.22% |
+| Control: Ack | 9 | 0.56% | 14.0 B | 0.0 B | 0.06% | 0.02% |
+| Management: Action | 6 | 0.37% | 37.0 B | 0.0 B | 0.11% | 0.04% |
+
+#### Per-Flow Traffic Statistics for `HoLMinDelay`
+
+##### Heavy Flow (destined to `host[0]`, offered load: 80 Mbps, size: 1000 B)
+Total packets captured for flow: **323**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 318 | 98.45% | 32.0 B | 0.0 B | 89.99% | 0.98% |
+| Data: QoS Data | 2 | 0.62% | 616.0 B | 450.0 B | 8.51% | 0.09% |
+| Management: Action | 2 | 0.62% | 37.0 B | 0.0 B | 1.28% | 0.01% |
+| Control: Ack | 1 | 0.31% | 14.0 B | 0.0 B | 0.23% | 0.00% |
+
+##### Medium Flow (destined to `host[1]`, offered load: 8 Mbps, size: 400 B)
+Total packets captured for flow: **322**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 318 | 98.76% | 32.0 B | 0.0 B | 96.27% | 0.98% |
+| Management: Action | 2 | 0.62% | 37.0 B | 0.0 B | 1.37% | 0.01% |
+| Data: QoS Data | 1 | 0.31% | 166.0 B | 0.0 B | 2.12% | 0.02% |
+| Control: Ack | 1 | 0.31% | 14.0 B | 0.0 B | 0.24% | 0.00% |
+
+##### Light Flow (destined to `host[2]`, offered load: 0.8 Mbps, size: 100 B)
+Total packets captured for flow: **322**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 318 | 98.76% | 32.0 B | 0.0 B | 96.27% | 0.98% |
+| Management: Action | 2 | 0.62% | 37.0 B | 0.0 B | 1.37% | 0.01% |
+| Data: QoS Data | 1 | 0.31% | 166.0 B | 0.0 B | 2.12% | 0.02% |
+| Control: Ack | 1 | 0.31% | 14.0 B | 0.0 B | 0.24% | 0.00% |
+
+### Configuration: `MultiTidBlockAck`
+Total over-the-air packets captured (Global BSS/AP): **322**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 230 | 71.43% | 822.5 B | 368.1 B | 97.80% | 13.20% |
+| Control: Block Ack Request (BAR) | 36 | 11.18% | 24.0 B | 0.0 B | 0.75% | 0.10% |
+| Control: Block Ack (BA) | 36 | 11.18% | 32.0 B | 0.0 B | 0.82% | 0.11% |
+| Control: Ack | 12 | 3.73% | 14.0 B | 0.0 B | 0.22% | 0.03% |
+| Management: Action | 8 | 2.48% | 37.0 B | 0.0 B | 0.41% | 0.06% |
+
+### Configuration: `SuEdcaBaseline`
+Total over-the-air packets captured (Global BSS/AP): **2043**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1317 | 64.46% | 169.5 B | 23.9 B | 21.67% | 28.54% |
+| Control: Block Ack Request (BAR) | 264 | 12.92% | 24.0 B | 0.0 B | 0.56% | 0.74% |
+| Control: Block Ack (BA) | 264 | 12.92% | 32.0 B | 0.0 B | 0.61% | 0.81% |
+| Management: Association Request | 157 | 7.68% | 4734.5 B | 1876.7 B | 75.46% | 99.42% |
+| Control: Ack | 18 | 0.88% | 14.0 B | 0.0 B | 0.03% | 0.04% |
+| Management: Action | 12 | 0.59% | 37.0 B | 0.0 B | 0.06% | 0.08% |
+| A-MPDU Delimiter / Aggregation Overhead | 11 | 0.54% | 5680.2 B | 85.9 B | 1.60% | 2.10% |
+
+### Configuration: `SuEdcaBaseline80MHz`
+Total over-the-air packets captured (Global BSS/AP): **2380**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1825 | 76.68% | 167.0 B | 22.0 B | 69.90% | 26.61% |
+| Control: Block Ack Request (BAR) | 227 | 9.54% | 24.0 B | 0.0 B | 1.67% | 0.64% |
+| Control: Block Ack (BA) | 227 | 9.54% | 46.8 B | 39.5 B | 2.12% | 0.81% |
+| A-MPDU Delimiter / Aggregation Overhead | 52 | 2.18% | 4204.0 B | 0.0 B | 19.41% | 7.39% |
+| Management: Association Request | 34 | 1.43% | 549.4 B | 123.6 B | 6.72% | 2.56% |
+| Control: Ack | 9 | 0.38% | 14.0 B | 0.0 B | 0.06% | 0.02% |
+| Management: Action | 6 | 0.25% | 37.0 B | 0.0 B | 0.11% | 0.04% |
+
+### Analysis of Packet Distribution
+Downlink OFDMA simulations are dominated by **QoS Data** and **Block Ack (BA)** frames. For the asymmetric flow cases (`BacklogBased` and `HoLMinDelay`), comparing individual flows reveals clear scheduling priorities. The heavy flow (`host[0]`) dominates airtime and packet counts due to its high load, but suffers from low delivery satisfaction (about 5%). In contrast, under `BacklogBased`, the light flow (`host[2]`) occupies small airtime but achieves 82% satisfaction. The per-flow statistics clearly isolate the packet sizes: the average size of data packets successfully received by `host[0]` is ~1070 B, while for `host[1]` it is ~470 B, and for `host[2]` it is ~170 B, reflecting their different application payload limits. The airtime percentages also show that the heavy flow consumes the vast majority of wireless resources, which helps visualize the cross-flow resource allocations in OFDMA scheduling.

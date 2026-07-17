@@ -70,3 +70,18 @@ Conventional single-BSS examples derive from
 the `server`, `ap`, `host[]`, `radioMedium`, and `configurator` paths stable, so
 scenario INI files remain explicit. Examples with materially different
 topology or management behavior retain dedicated networks.
+
+## 802.11 Packet Statistics Analysis
+
+To analyze the 802.11 frame type counts, size distribution, and physical airtime occupancy across the examples:
+
+```sh
+python3 examples/ieee80211ax/analysis/analyze_pcap_types.py
+```
+
+This script will:
+- Discover all considered configurations in the examples.
+- Automatically execute the simulation for any configuration missing its packet capture (PCAP) results.
+- Apply MAC display filters in TShark to separate heavy, medium, and light destination traffic flows in asymmetric configurations.
+- Regenerate the packet statistics tables directly inside each example's `walkthrough.md`.
+

@@ -48,3 +48,19 @@ capinfos "$FILTERED"
 ```
 
 Report capture points and files, recorder options that affect interpretation, filters, matching frames and `frame.time_epoch` values, packet identifiers, observation-point differences, decoding limitations, and whether each conclusion is direct packet evidence, another evidence source, or a TShark heuristic.
+
+## Walkthrough Tables for IEEE 802.11ax Examples
+
+When asked to generate, update, or analyze 802.11 frame type statistics, packet sizes, or estimated airtime percentages inside any of the `walkthrough.md` files under `examples/ieee80211ax/`, run the project's pre-existing automated Python analysis script:
+
+```sh
+python3 examples/ieee80211ax/analysis/analyze_pcap_types.py
+```
+
+This script automatically:
+- Identifies the runnable configurations mentioned in each example's `walkthrough.md`.
+- Generates any missing PCAPs by executing short Cmdenv simulations with PCAP overrides.
+- Parses the captures, aggregates frame type distribution, calculates mean and standard deviation of sizes, and estimates airtime percentages.
+- For asymmetric traffic cases (`BacklogBased` and `HoLMinDelay` in `dl_ofdma`), separates traffic flows into individual tables for `host[0]`, `host[1]`, and `host[2]`.
+- Overwrites the `## 802.11 Packet Type Statistics` sections in all `walkthrough.md` files with the correct tables.
+

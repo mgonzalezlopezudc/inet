@@ -145,3 +145,55 @@ The decoded output timeline shows:
    makes report freshness observable. A permanently empty or permanently
    saturated queue would reveal much less about whether the AP's view tracks
    changes in demand.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `FullBsrAccounting`
+Total over-the-air packets captured (Global BSS/AP): **4129**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1427 | 34.56% | 1149.3 B | 359.8 B | 80.32% | 53.70% |
+| Data: QoS Null | 942 | 22.81% | 34.0 B | 0.0 B | 10.04% | 6.72% |
+| Control: Block Ack (BA) | 561 | 13.59% | 68.6 B | 29.7 B | 1.80% | 1.20% |
+| Control: Ack | 536 | 12.98% | 14.0 B | 0.0 B | 0.99% | 0.66% |
+| Control: Trigger | 498 | 12.06% | 46.2 B | 2.1 B | 1.32% | 0.88% |
+| Control: Block Ack Request (BAR) | 98 | 2.37% | 24.0 B | 0.0 B | 0.21% | 0.14% |
+| A-MPDU Delimiter / Aggregation Overhead | 61 | 1.48% | 3425.0 B | 1173.0 B | 5.30% | 3.54% |
+| Management: Action | 6 | 0.15% | 37.0 B | 0.0 B | 0.03% | 0.02% |
+
+### Configuration: `ImplicitBsr`
+Total over-the-air packets captured (Global BSS/AP): **2373**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1308 | 55.12% | 1293.1 B | 313.6 B | 94.98% | 54.37% |
+| Control: Ack | 844 | 35.57% | 14.0 B | 0.0 B | 1.82% | 1.04% |
+| Control: Block Ack Request (BAR) | 93 | 3.92% | 24.0 B | 0.0 B | 0.23% | 0.13% |
+| Control: Block Ack (BA) | 90 | 3.79% | 148.9 B | 16.9 B | 0.55% | 0.31% |
+| A-MPDU Delimiter / Aggregation Overhead | 22 | 0.93% | 3525.1 B | 1130.0 B | 2.30% | 1.31% |
+| Management: Action | 7 | 0.29% | 37.0 B | 0.0 B | 0.04% | 0.02% |
+| Data: QoS Null | 6 | 0.25% | 34.0 B | 0.0 B | 0.07% | 0.04% |
+| Control: Trigger | 3 | 0.13% | 46.0 B | 0.0 B | 0.01% | 0.01% |
+
+### Configuration: `StaleBsr`
+Total over-the-air packets captured (Global BSS/AP): **4121**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1458 | 35.38% | 1149.0 B | 354.2 B | 81.18% | 54.86% |
+| Data: QoS Null | 935 | 22.69% | 34.0 B | 0.0 B | 9.86% | 6.67% |
+| Control: Block Ack (BA) | 561 | 13.61% | 66.5 B | 29.0 B | 1.75% | 1.18% |
+| Control: Ack | 527 | 12.79% | 14.0 B | 0.0 B | 0.96% | 0.65% |
+| Control: Trigger | 505 | 12.25% | 47.4 B | 6.5 B | 1.34% | 0.90% |
+| Control: Block Ack Request (BAR) | 79 | 1.92% | 24.0 B | 0.0 B | 0.16% | 0.11% |
+| A-MPDU Delimiter / Aggregation Overhead | 50 | 1.21% | 3763.5 B | 1012.5 B | 4.71% | 3.19% |
+| Management: Action | 6 | 0.15% | 37.0 B | 0.0 B | 0.03% | 0.02% |
+
+### Analysis of Packet Distribution
+Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.

@@ -158,3 +158,39 @@ The decoded output timeline shows:
      DCM intentionally trades half the data rate for frequency diversity, so
      its expected advantage is lower packet-error rate or extended coverage,
      not higher peak throughput.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `ErBss`
+Total over-the-air packets captured (Global BSS/AP): **240**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 120 | 50.00% | 166.0 B | 0.0 B | 89.70% | 1.29% |
+| Control: Ack | 120 | 50.00% | 14.0 B | 0.0 B | 10.30% | 0.15% |
+
+### Configuration: `HeErSu`
+Total over-the-air packets captured (Global BSS/AP): **3617**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1804 | 49.88% | 366.0 B | 0.0 B | 92.82% | 29.24% |
+| Control: Ack | 1802 | 49.82% | 14.0 B | 0.0 B | 7.05% | 2.22% |
+| Management: Action | 11 | 0.30% | 37.0 B | 0.0 B | 0.12% | 0.04% |
+
+### Configuration: `HeSu`
+Total over-the-air packets captured (Global BSS/AP): **3614**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1800 | 49.81% | 366.0 B | 0.0 B | 92.79% | 29.18% |
+| Control: Ack | 1800 | 49.81% | 14.0 B | 0.0 B | 7.06% | 2.22% |
+| Management: Action | 14 | 0.39% | 37.0 B | 0.0 B | 0.15% | 0.05% |
+
+### Analysis of Packet Distribution
+Extended Range (ER) simulations demonstrate HE SU versus HE ER SU transmissions. Because the channel conditions are poor at cell boundaries, configurations utilizing HE ER SU (which uses a robust DCM coding and extended preambles) show successful delivery of **QoS Data** and **Block Ack (BA)** frames, whereas standard HE SU configurations suffer from packet loss, resulting in fewer successful data and acknowledgment frames.

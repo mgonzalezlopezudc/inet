@@ -144,3 +144,52 @@ The decoded output timeline shows:
      implementation policy available to earlier Wi-Fi too; the HE-specific
      benefit demonstrated here is selecting within the larger 802.11ax MCS,
      NSS, RU, and PPDU-format envelope.
+
+## 802.11 Packet Type Statistics
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+
+Two airtime occupancy percentages are provided:
+- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
+- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `FixedMcs`
+Total over-the-air packets captured (Global BSS/AP): **2044**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1416 | 69.28% | 977.3 B | 149.9 B | 95.55% | 46.63% |
+| Control: Ack | 367 | 17.95% | 14.0 B | 0.0 B | 0.93% | 0.45% |
+| Control: Block Ack (BA) | 111 | 5.43% | 32.0 B | 0.0 B | 0.35% | 0.17% |
+| Control: Block Ack Request (BAR) | 104 | 5.09% | 24.0 B | 0.0 B | 0.30% | 0.15% |
+| Management: Action | 22 | 1.08% | 37.0 B | 0.0 B | 0.16% | 0.08% |
+| A-MPDU Delimiter / Aggregation Overhead | 16 | 0.78% | 4858.0 B | 0.0 B | 2.69% | 1.31% |
+| Control: Trigger | 8 | 0.39% | 46.0 B | 0.0 B | 0.03% | 0.01% |
+
+### Configuration: `HeMinstrel`
+Total over-the-air packets captured (Global BSS/AP): **4795**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 2021 | 42.15% | 32.0 B | 0.0 B | 3.69% | 3.10% |
+| Data: QoS Data | 1518 | 31.66% | 1637.0 B | 493.3 B | 92.10% | 77.38% |
+| Control: Trigger | 988 | 20.60% | 46.0 B | 0.0 B | 2.08% | 1.75% |
+| Control: Ack | 171 | 3.57% | 14.0 B | 0.0 B | 0.25% | 0.21% |
+| Control: Block Ack Request (BAR) | 52 | 1.08% | 24.0 B | 0.0 B | 0.09% | 0.07% |
+| Management: Action | 28 | 0.58% | 37.0 B | 0.0 B | 0.12% | 0.10% |
+| A-MPDU Delimiter / Aggregation Overhead | 17 | 0.35% | 4915.2 B | 228.7 B | 1.68% | 1.41% |
+
+### Configuration: `HeMinstrelMobile`
+Total over-the-air packets captured (Global BSS/AP): **3327**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1332 | 40.04% | 1699.5 B | 963.4 B | 93.22% | 70.17% |
+| Control: Block Ack (BA) | 1062 | 31.92% | 32.0 B | 0.0 B | 2.16% | 1.63% |
+| Control: Trigger | 489 | 14.70% | 46.0 B | 0.0 B | 1.15% | 0.86% |
+| Control: Ack | 297 | 8.93% | 14.0 B | 0.0 B | 0.49% | 0.37% |
+| Control: Block Ack Request (BAR) | 97 | 2.92% | 24.0 B | 0.0 B | 0.18% | 0.14% |
+| Management: Action | 26 | 0.78% | 37.0 B | 0.0 B | 0.12% | 0.09% |
+| A-MPDU Delimiter / Aggregation Overhead | 24 | 0.72% | 4979.5 B | 901.1 B | 2.68% | 2.02% |
+
+### Analysis of Packet Distribution
+Rate adaptation simulations (such as HE Minstrel) show how the MAC dynamically adjusts modulation and coding schemes (MCS). The distribution of **QoS Data** frames indicates the volume of traffic successfully transmitted, while the presence of **Block Ack (BA)** confirms reception. Retransmissions and rate sweeps can be inferred from the ratio of control frames to data frames.
