@@ -27,6 +27,10 @@
 #include "inet/linklayer/common/InterfaceTag_m.h"
 #include "inet/networklayer/common/InterfaceTable.h"
 
+#ifdef INET_WITH_IEEE80211
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#endif
+
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
 #include "inet/physicallayer/common/Signal.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
@@ -79,6 +83,58 @@ void setUint32(std::vector<uint8_t>& bytes, size_t offset, uint32_t value)
     for (size_t i = 0; i < 4; i++)
         bytes.at(offset + i) = value >> (8 * i);
 }
+
+#ifdef INET_WITH_IEEE80211
+
+struct MpduRange
+{
+    b offset;
+    b length;
+};
+
+bool getIeee80211AmpduMpduRanges(const Packet *packet, b frontOffset, b backOffset, std::vector<MpduRange>& mpduRanges)
+{
+    const int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
+    auto dataLength = packet->getDataLength();
+    auto endOffset = dataLength - backOffset;
+    if (frontOffset + ieee80211::LENGTH_A_MPDU_SUBFRAME_HEADER > endOffset)
+        return false;
+
+    auto peekDelimiter = [&] (b offset) {
+        return dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(packet->peekDataAt(offset, b(-1), parsingFlags));
+    };
+
+    try {
+        if (peekDelimiter(frontOffset) == nullptr)
+            return false;
+        auto offset = frontOffset;
+        while (offset < endOffset) {
+            if (offset + ieee80211::LENGTH_A_MPDU_SUBFRAME_HEADER > endOffset)
+                return false;
+            const auto& delimiter = peekDelimiter(offset);
+            if (delimiter == nullptr || delimiter->getLength() <= 0)
+                return false;
+            auto mpduOffset = offset + delimiter->getChunkLength();
+            auto mpduLength = B(delimiter->getLength());
+            if (mpduOffset + mpduLength > endOffset)
+                return false;
+            mpduRanges.push_back({mpduOffset, mpduLength});
+            offset = mpduOffset + mpduLength;
+            if (offset == endOffset)
+                return true;
+            auto paddingLength = B((4 - (delimiter->getChunkLength() + mpduLength).get<B>() % 4) % 4);
+            if (offset + paddingLength >= endOffset)
+                return false;
+            offset += paddingLength;
+        }
+    }
+    catch (cRuntimeError&) {
+        return false;
+    }
+    return false;
+}
+
+#endif
 
 std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction direction, const physicallayer::ITransmission *transmission, const physicallayer::IReception *reception)
 {
@@ -330,6 +386,21 @@ void PcapRecorder::receiveSignal(cComponent *source, simsignal_t signalID, cObje
 }
 
 void PcapRecorder::writePacket(const Protocol *protocol, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *networkInterface)
+{
+#ifdef INET_WITH_IEEE80211
+    if (*protocol == Protocol::ieee80211Mac) {
+        std::vector<MpduRange> mpduRanges;
+        if (getIeee80211AmpduMpduRanges(packet, frontOffset, backOffset, mpduRanges)) {
+            for (const auto& mpduRange : mpduRanges)
+                writePacketRecord(protocol, packet, mpduRange.offset, packet->getDataLength() - mpduRange.offset - mpduRange.length, direction, networkInterface);
+            return;
+        }
+    }
+#endif
+    writePacketRecord(protocol, packet, frontOffset, backOffset, direction, networkInterface);
+}
+
+void PcapRecorder::writePacketRecord(const Protocol *protocol, const Packet *packet, b frontOffset, b backOffset, Direction direction, NetworkInterface *networkInterface)
 {
     auto pcapLinkType = protocolToLinkType(protocol);
     if (pcapLinkType == LINKTYPE_INVALID)

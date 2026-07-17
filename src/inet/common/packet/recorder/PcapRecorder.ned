@@ -35,6 +35,8 @@ import inet.common.SimpleModule;
 // prepends a Radiotap header containing the FCS state and direction. Channel
 // frequency and received or transmitted power are also included when the packet
 // signal provides the corresponding physical-layer transmission or reception.
+// A-MPDUs are written as one packet record per MPDU; A-MPDU delimiters and
+// inter-subframe padding are not included in the packet records.
 //
 simple PcapRecorder extends SimpleModule
 {

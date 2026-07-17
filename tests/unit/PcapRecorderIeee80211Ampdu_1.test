@@ -1,0 +1,128 @@
+%description:
+Test that PcapRecorder writes an IEEE 802.11 A-MPDU as one Radiotap packet
+record per MPDU, without A-MPDU delimiters or inter-subframe padding.
+
+%includes:
+#include <vector>
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+#include "inet/common/packet/recorder/PcapRecorder.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+
+%file: TestNetwork.ned
+
+import inet.common.packet.recorder.PcapRecorder;
+
+simple TestablePcapRecorder extends PcapRecorder
+{
+    parameters:
+        @class(TestablePcapRecorder);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        recorder: TestablePcapRecorder {
+            pcapFile = "";
+            verbose = false;
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+class RecordingPcapWriter : public IPcapWriter
+{
+  public:
+    std::vector<std::vector<uint8_t>> records;
+
+    virtual void open(const char *, unsigned int, int) override { }
+    virtual void close() override { }
+    virtual bool isOpen() const override { return true; }
+    virtual void setFlush(bool) override { }
+
+    virtual void writePacket(simtime_t, const Packet *packet, b frontOffset, b backOffset,
+            Direction, NetworkInterface *, PcapLinkType linkType) override
+    {
+        ASSERT(linkType == LINKTYPE_IEEE802_11_RADIOTAP);
+        auto length = packet->getDataLength() - frontOffset - backOffset;
+        records.push_back(packet->peekDataAt<BytesChunk>(frontOffset, length)->getBytes());
+    }
+};
+
+class TestablePcapRecorder : public PcapRecorder
+{
+  public:
+    void setWriter(IPcapWriter *writer)
+    {
+        delete pcapWriter;
+        pcapWriter = writer;
+    }
+
+    void writeIeee80211(const Packet *packet, b frontOffset = b(0), b backOffset = b(0))
+    {
+        writePacket(&Protocol::ieee80211Mac, packet, frontOffset, backOffset, DIRECTION_UNDEFINED, nullptr);
+    }
+};
+
+Define_Module(TestablePcapRecorder);
+
+static void appendMpdu(Packet& aggregate, const std::vector<uint8_t>& bytes, bool appendPadding)
+{
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(bytes.size());
+    aggregate.insertAtBack(delimiter);
+    aggregate.insertAtBack(makeShared<BytesChunk>(bytes));
+    auto paddingLength = (4 - (4 + bytes.size()) % 4) % 4;
+    if (appendPadding && paddingLength != 0)
+        aggregate.insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
+}
+
+%activity:
+
+auto recorder = check_and_cast<TestablePcapRecorder *>(getModuleByPath("recorder"));
+auto writer = new RecordingPcapWriter();
+recorder->setWriter(writer);
+
+const std::vector<uint8_t> firstMpdu = {0x08, 0x01, 0x02, 0x03, 0x04};
+const std::vector<uint8_t> secondMpdu = {0x88, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16};
+
+Packet aggregate("ampdu");
+aggregate.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xAA, 0xBB}));
+appendMpdu(aggregate, firstMpdu, true);
+appendMpdu(aggregate, secondMpdu, false);
+aggregate.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xCC, 0xDD, 0xEE}));
+
+recorder->writeIeee80211(&aggregate, B(2), B(3));
+
+ASSERT(writer->records.size() == 2);
+for (size_t i = 0; i < writer->records.size(); i++) {
+    const auto& record = writer->records[i];
+    ASSERT(record.size() >= 9);
+    ASSERT(record[0] == 0); // Radiotap version
+    ASSERT(record[2] == 9 && record[3] == 0); // Radiotap header length
+    const auto& expectedMpdu = i == 0 ? firstMpdu : secondMpdu;
+    ASSERT(record.size() == 9 + expectedMpdu.size());
+    ASSERT(std::equal(expectedMpdu.begin(), expectedMpdu.end(), record.begin() + 9));
+}
+
+Packet bareMpdu("bare-mpdu");
+const std::vector<uint8_t> bareBytes = {0x08, 0x21, 0x22, 0x23, 0x24, 0x25};
+bareMpdu.insertAtBack(makeShared<BytesChunk>(bareBytes));
+recorder->writeIeee80211(&bareMpdu);
+
+ASSERT(writer->records.size() == 3);
+ASSERT(writer->records.back().size() == 9 + bareBytes.size());
+ASSERT(std::equal(bareBytes.begin(), bareBytes.end(), writer->records.back().begin() + 9));
+
+EV << "PcapRecorder split A-MPDU into delimiter-free MPDU records.\n";
+
+%contains: stdout
+PcapRecorder split A-MPDU into delimiter-free MPDU records.
