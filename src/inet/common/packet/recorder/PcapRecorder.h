@@ -18,6 +18,11 @@
 
 namespace inet {
 
+namespace physicallayer {
+class IReception;
+class ITransmission;
+} // namespace physicallayer
+
 /**
  * Dumps every packet using the IPacketWriter and PacketDump classes
  */
@@ -53,6 +58,9 @@ class INET_API PcapRecorder : public SimpleModule, protected cListener, public P
     bool recordPcap = false;
     std::vector<IHelper *> helpers;
     PacketPrinter packetPrinter;
+    const physicallayer::ITransmission *physicalLayerTransmission = nullptr;
+    const physicallayer::IReception *physicalLayerReception = nullptr;
+    Direction recordingDirection = DIRECTION_UNDEFINED;
 
     static simsignal_t packetRecordedSignal;
 
@@ -88,4 +96,3 @@ class INET_API PcapRecorder : public SimpleModule, protected cListener, public P
 } // namespace inet
 
 #endif
-

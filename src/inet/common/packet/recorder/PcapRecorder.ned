@@ -31,6 +31,11 @@ import inet.common.SimpleModule;
 // `sendingSignalNames` and `receivingSignalNames` parameters. The packets
 // themselves are expected as `cPacket*` signal values.
 //
+// IEEE 802.11 MAC frames are written using the Radiotap link type. The recorder
+// prepends a Radiotap header containing the FCS state and direction. Channel
+// frequency and received or transmitted power are also included when the packet
+// signal provides the corresponding physical-layer transmission or reception.
+//
 simple PcapRecorder extends SimpleModule
 {
     parameters:
@@ -55,4 +60,3 @@ simple PcapRecorder extends SimpleModule
         @display("i=block/blackboard");
         @signal[packetRecorded](type=Packet);
 }
-

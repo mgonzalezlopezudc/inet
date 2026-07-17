@@ -10,8 +10,15 @@
 
 #include "inet/common/packet/recorder/PcapRecorder.h"
 
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <vector>
+
 #include "inet/common/DirectionTag_m.h"
+#include "inet/common/INETMath.h"
 #include "inet/common/ModuleAccess.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/common/packet/recorder/PcapngWriter.h"
 #include "inet/common/packet/recorder/PcapWriter.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -22,11 +29,127 @@
 
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
 #include "inet/physicallayer/common/Signal.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReception.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ITransmission.h"
 #endif
 
 namespace inet {
+
+namespace {
+
+enum RadiotapPresentBit {
+    RADIOTAP_FLAGS = 1,
+    RADIOTAP_CHANNEL = 3,
+    RADIOTAP_ANTENNA_SIGNAL = 5,
+    RADIOTAP_DBM_TX_POWER = 10,
+    RADIOTAP_RX_FLAGS = 14,
+    RADIOTAP_TX_FLAGS = 15,
+};
+
+enum RadiotapFlags {
+    RADIOTAP_F_FCS = 0x10,
+    RADIOTAP_F_BADFCS = 0x40,
+};
+
+enum RadiotapChannelFlags {
+    RADIOTAP_CHANNEL_2GHZ = 0x0080,
+    RADIOTAP_CHANNEL_5GHZ = 0x0100,
+};
+
+void appendPadding(std::vector<uint8_t>& bytes, size_t alignment)
+{
+    bytes.resize(bytes.size() + (alignment - bytes.size() % alignment) % alignment, 0);
+}
+
+void appendUint16(std::vector<uint8_t>& bytes, uint16_t value)
+{
+    bytes.push_back(value & 0xff);
+    bytes.push_back(value >> 8);
+}
+
+void setUint16(std::vector<uint8_t>& bytes, size_t offset, uint16_t value)
+{
+    bytes.at(offset) = value & 0xff;
+    bytes.at(offset + 1) = value >> 8;
+}
+
+void setUint32(std::vector<uint8_t>& bytes, size_t offset, uint32_t value)
+{
+    for (size_t i = 0; i < 4; i++)
+        bytes.at(offset + i) = value >> (8 * i);
+}
+
+std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction direction, const physicallayer::ITransmission *transmission, const physicallayer::IReception *reception)
+{
+    uint32_t present = 1U << RADIOTAP_FLAGS;
+    std::vector<uint8_t> bytes(8, 0); // version, pad, length, present bitmap
+
+    // IEEE 802.11 packets recorded by PcapRecorder contain the MAC trailer.
+    uint8_t flags = RADIOTAP_F_FCS;
+    if (packet->hasBitError())
+        flags |= RADIOTAP_F_BADFCS;
+    bytes.push_back(flags);
+
+#ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
+    const physicallayer::ISignalAnalogModel *analogModel = nullptr;
+    simtime_t startTime;
+    simtime_t endTime;
+    if (reception != nullptr) {
+        analogModel = reception->getAnalogModel();
+        startTime = reception->getStartTime();
+        endTime = reception->getEndTime();
+    }
+    else if (transmission != nullptr) {
+        analogModel = transmission->getAnalogModel();
+        startTime = transmission->getStartTime();
+        endTime = transmission->getEndTime();
+    }
+
+    auto narrowbandAnalogModel = dynamic_cast<const physicallayer::INarrowbandSignalAnalogModel *>(analogModel);
+    if (narrowbandAnalogModel != nullptr) {
+        double frequencyMHz = narrowbandAnalogModel->getCenterFrequency().get() / 1E6;
+        if (std::isfinite(frequencyMHz) && 0 < frequencyMHz && frequencyMHz <= UINT16_MAX) {
+            present |= 1U << RADIOTAP_CHANNEL;
+            appendPadding(bytes, 2);
+            appendUint16(bytes, static_cast<uint16_t>(std::round(frequencyMHz)));
+            uint16_t channelFlags = frequencyMHz < 3000 ? RADIOTAP_CHANNEL_2GHZ :
+                    frequencyMHz < 6000 ? RADIOTAP_CHANNEL_5GHZ : 0;
+            appendUint16(bytes, channelFlags);
+        }
+
+        auto power = narrowbandAnalogModel->computeMinPower(startTime, endTime);
+        double powerMilliwatts = power.get<units::values::mW>();
+        if (std::isfinite(powerMilliwatts) && 0 < powerMilliwatts &&
+                (direction == DIRECTION_INBOUND || direction == DIRECTION_OUTBOUND)) {
+            int powerDbm = static_cast<int>(std::round(math::mW2dBmW(powerMilliwatts)));
+            powerDbm = std::clamp(powerDbm, -128, 127);
+            if (direction == DIRECTION_INBOUND)
+                present |= 1U << RADIOTAP_ANTENNA_SIGNAL;
+            else if (direction == DIRECTION_OUTBOUND)
+                present |= 1U << RADIOTAP_DBM_TX_POWER;
+            bytes.push_back(static_cast<uint8_t>(static_cast<int8_t>(powerDbm)));
+        }
+    }
+#endif
+
+    if (direction == DIRECTION_INBOUND) {
+        present |= 1U << RADIOTAP_RX_FLAGS;
+        appendPadding(bytes, 2);
+        appendUint16(bytes, 0);
+    }
+    else if (direction == DIRECTION_OUTBOUND) {
+        present |= 1U << RADIOTAP_TX_FLAGS;
+        appendPadding(bytes, 2);
+        appendUint16(bytes, 0);
+    }
+
+    setUint16(bytes, 2, bytes.size());
+    setUint32(bytes, 4, present);
+    return bytes;
+}
+
+} // namespace
 
 // ----
 
@@ -190,10 +313,18 @@ void PcapRecorder::receiveSignal(cComponent *source, simsignal_t signalID, cObje
         else if (auto packet = dynamic_cast<cPacket *>(obj))
             recordPacket(packet, direction, source);
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
-        else if (auto transmission = dynamic_cast<const physicallayer::ITransmission *>(obj))
+        else if (auto transmission = dynamic_cast<const physicallayer::ITransmission *>(obj)) {
+            physicalLayerTransmission = transmission;
             recordPacket(transmission->getPacket(), direction, source);
-        else if (auto reception = dynamic_cast<const physicallayer::IReception *>(obj))
+            physicalLayerTransmission = nullptr;
+        }
+        else if (auto reception = dynamic_cast<const physicallayer::IReception *>(obj)) {
+            physicalLayerTransmission = reception->getTransmission();
+            physicalLayerReception = reception;
             recordPacket(reception->getTransmission()->getPacket(), direction, source);
+            physicalLayerTransmission = nullptr;
+            physicalLayerReception = nullptr;
+        }
 #endif
     }
 }
@@ -205,7 +336,9 @@ void PcapRecorder::writePacket(const Protocol *protocol, const Packet *packet, b
         throw cRuntimeError("Cannot determine the PCAP link type from protocol '%s'", protocol->getName());
     bool convertPacket = !matchesLinkType(pcapLinkType, protocol);
     if (convertPacket) {
+        recordingDirection = direction;
         packet = tryConvertToLinkType(packet, frontOffset, backOffset, pcapLinkType, protocol);
+        recordingDirection = DIRECTION_UNDEFINED;
         if (packet == nullptr)
             throw cRuntimeError("The protocol '%s' doesn't match PCAP link type %d", protocol->getName(), pcapLinkType);
         frontOffset = b(0);
@@ -287,6 +420,7 @@ bool PcapRecorder::matchesLinkType(PcapLinkType pcapLinkType, const Protocol *pr
     else if (*protocol == Protocol::ppp)
         return pcapLinkType == LINKTYPE_PPP_WITH_DIR;
     else if (*protocol == Protocol::ieee80211Mac)
+        // A bare MAC frame only matches the non-Radiotap IEEE 802.11 link type.
         return pcapLinkType == LINKTYPE_IEEE802_11;
     else if (*protocol == Protocol::ipv4)
         return pcapLinkType == LINKTYPE_RAW || pcapLinkType == LINKTYPE_IPV4;
@@ -312,7 +446,7 @@ PcapLinkType PcapRecorder::protocolToLinkType(const Protocol *protocol) const
     else if (*protocol == Protocol::ppp)
         return LINKTYPE_PPP_WITH_DIR;
     else if (*protocol == Protocol::ieee80211Mac)
-        return LINKTYPE_IEEE802_11;
+        return LINKTYPE_IEEE802_11_RADIOTAP;
     else if (*protocol == Protocol::ipv4 || *protocol == Protocol::ipv6)
         return LINKTYPE_RAW;
     else if (*protocol == Protocol::ieee802154)
@@ -330,6 +464,15 @@ PcapLinkType PcapRecorder::protocolToLinkType(const Protocol *protocol) const
 Packet *PcapRecorder::tryConvertToLinkType(const Packet *packet, b frontOffset, b backOffset, PcapLinkType pcapLinkType, const Protocol *protocol) const
 {
     if (enableConvertingPackets) {
+        if (*protocol == Protocol::ieee80211Mac && pcapLinkType == LINKTYPE_IEEE802_11_RADIOTAP) {
+            auto convertedPacket = new Packet(packet->getName());
+            convertedPacket->insertAtBack(makeShared<BytesChunk>(makeRadiotapHeader(packet, recordingDirection, physicalLayerTransmission, physicalLayerReception)));
+            b dataLength = packet->getDataLength() - frontOffset - backOffset;
+            if (dataLength != b(0))
+                convertedPacket->insertAtBack(packet->peekDataAt(frontOffset, dataLength));
+            convertedPacket->setBitError(packet->hasBitError());
+            return convertedPacket;
+        }
         for (IHelper *helper : helpers) {
             if (auto newPacket = helper->tryConvertToLinkType(packet, frontOffset, backOffset, pcapLinkType, protocol))
                 return newPacket;
@@ -339,4 +482,3 @@ Packet *PcapRecorder::tryConvertToLinkType(const Packet *packet, b frontOffset, 
 }
 
 } // namespace inet
-
