@@ -10,77 +10,110 @@
             "mean": 93.0,
             "std": 0.0,
             "airtime_pct": 85.05977205919633,
-            "airtime_sim_pct": 0.14400000000000002
+            "airtime_sim_pct": 0.14400000000000002,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "0,4": {
             "count": 2,
             "mean": 68.0,
             "std": 0.0,
             "airtime_pct": 0.1307400200169129,
-            "airtime_sim_pct": 0.00022133333333333334
+            "airtime_sim_pct": 0.00022133333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,5": {
             "count": 2,
             "mean": 93.0,
             "std": 0.0,
             "airtime_pct": 0.17011954411839267,
-            "airtime_sim_pct": 0.000288
+            "airtime_sim_pct": 0.000288,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 24,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.34969017402114055,
-            "airtime_sim_pct": 0.0005920000000000001
+            "airtime_sim_pct": 0.0005920000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,11": {
             "count": 8,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 0.3087354689556015,
-            "airtime_sim_pct": 0.0005226666666666667
+            "airtime_sim_pct": 0.0005226666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,0": {
             "count": 2,
             "mean": 76.0,
             "std": 0.0,
             "airtime_pct": 0.1433414677293864,
-            "airtime_sim_pct": 0.00024266666666666667
+            "airtime_sim_pct": 0.00024266666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,1": {
             "count": 2,
             "mean": 81.0,
             "std": 0.0,
             "airtime_pct": 0.15121737254968234,
-            "airtime_sim_pct": 0.000256
+            "airtime_sim_pct": 0.000256,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 42.5,
             "std": 5.5,
             "airtime_pct": 0.362291621733614,
-            "airtime_sim_pct": 0.0006133333333333334
+            "airtime_sim_pct": 0.0006133333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "2,8": {
             "count": 80,
             "mean": 270.0,
             "std": 0.0,
             "airtime_pct": 12.83893653474707,
-            "airtime_sim_pct": 0.021735384615384615
+            "airtime_sim_pct": 0.021735384615384615,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 14,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.23155160171670114,
-            "airtime_sim_pct": 0.00039200000000000004
+            "airtime_sim_pct": 0.00039200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 14,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 0.2536041352135298,
-            "airtime_sim_pct": 0.0004293333333333333
+            "airtime_sim_pct": 0.0004293333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           }
         }
       }
@@ -95,77 +128,110 @@
             "mean": 93.0,
             "std": 0.0,
             "airtime_pct": 42.24268966787091,
-            "airtime_sim_pct": 0.14400000000000002
+            "airtime_sim_pct": 0.14400000000000002,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "0,4": {
             "count": 2,
             "mean": 68.0,
             "std": 0.0,
             "airtime_pct": 0.06492857856357936,
-            "airtime_sim_pct": 0.00022133333333333334
+            "airtime_sim_pct": 0.00022133333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,5": {
             "count": 2,
             "mean": 93.0,
             "std": 0.0,
             "airtime_pct": 0.08448537933574182,
-            "airtime_sim_pct": 0.000288
+            "airtime_sim_pct": 0.000288,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 24,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.17366439085680263,
-            "airtime_sim_pct": 0.0005920000000000001
+            "airtime_sim_pct": 0.0005920000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,11": {
             "count": 8,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 0.15332531805375368,
-            "airtime_sim_pct": 0.0005226666666666667
+            "airtime_sim_pct": 0.0005226666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,0": {
             "count": 2,
             "mean": 76.0,
             "std": 0.0,
             "airtime_pct": 0.07118675481067135,
-            "airtime_sim_pct": 0.00024266666666666667
+            "airtime_sim_pct": 0.00024266666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,1": {
             "count": 2,
             "mean": 81.0,
             "std": 0.0,
             "airtime_pct": 0.07509811496510384,
-            "airtime_sim_pct": 0.000256
+            "airtime_sim_pct": 0.000256,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 42.5,
             "std": 5.5,
             "airtime_pct": 0.17992256710389462,
-            "airtime_sim_pct": 0.0006133333333333334
+            "airtime_sim_pct": 0.0006133333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,10": {
             "count": 1992,
             "mean": 20.0,
             "std": 0.0,
             "airtime_pct": 15.582858855259046,
-            "airtime_sim_pct": 0.05312
+            "airtime_sim_pct": 0.05312,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "2,8": {
             "count": 2,
             "mean": 270.0,
             "std": 0.0,
             "airtime_pct": 0.15940296998602568,
-            "airtime_sim_pct": 0.0005433846153846154
+            "airtime_sim_pct": 0.0005433846153846154,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 68,
             "mean": 6138.0,
             "std": 2668.512694367407,
             "airtime_pct": 41.21243740319339,
-            "airtime_sim_pct": 0.140488
+            "airtime_sim_pct": 0.140488,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -180,84 +246,120 @@
             "mean": 111.0,
             "std": 0.0,
             "airtime_pct": 87.13628050434718,
-            "airtime_sim_pct": 0.16799999999999998
+            "airtime_sim_pct": 0.16799999999999998,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "0,4": {
             "count": 2,
             "mean": 68.0,
             "std": 0.0,
             "airtime_pct": 0.11479859177556853,
-            "airtime_sim_pct": 0.00022133333333333334
+            "airtime_sim_pct": 0.00022133333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,5": {
             "count": 2,
             "mean": 93.0,
             "std": 0.0,
             "airtime_pct": 0.14937648086459518,
-            "airtime_sim_pct": 0.000288
+            "airtime_sim_pct": 0.000288,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 24,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.3070516551105568,
-            "airtime_sim_pct": 0.0005920000000000001
+            "airtime_sim_pct": 0.0005920000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,11": {
             "count": 8,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 0.2710906504579691,
-            "airtime_sim_pct": 0.0005226666666666667
+            "airtime_sim_pct": 0.0005226666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,0": {
             "count": 2,
             "mean": 76.0,
             "std": 0.0,
             "airtime_pct": 0.12586351628405706,
-            "airtime_sim_pct": 0.00024266666666666667
+            "airtime_sim_pct": 0.00024266666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,1": {
             "count": 2,
             "mean": 81.0,
             "std": 0.0,
             "airtime_pct": 0.1327790941018624,
-            "airtime_sim_pct": 0.000256
+            "airtime_sim_pct": 0.000256,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 42.5,
             "std": 5.5,
             "airtime_pct": 0.3181165796190453,
-            "airtime_sim_pct": 0.0006133333333333334
+            "airtime_sim_pct": 0.0006133333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "2,8": {
             "count": 69,
             "mean": 270.0,
             "std": 0.0,
             "airtime_pct": 9.723355608586742,
-            "airtime_sim_pct": 0.01874676923076923
+            "airtime_sim_pct": 0.01874676923076923,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 17,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.24688612809565044,
-            "airtime_sim_pct": 0.0004760000000000001
+            "airtime_sim_pct": 0.0004760000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 8,
             "mean": 822.0,
             "std": 478.04602288901015,
             "airtime_pct": 1.2199079270608608,
-            "airtime_sim_pct": 0.0023520000000000004
+            "airtime_sim_pct": 0.0023520000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 16,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 0.2544932636952363,
-            "airtime_sim_pct": 0.0004906666666666667
+            "airtime_sim_pct": 0.0004906666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           }
         }
       }
@@ -272,77 +374,110 @@
             "mean": 93.0,
             "std": 0.0,
             "airtime_pct": 53.66162219389663,
-            "airtime_sim_pct": 0.14400000000000002
+            "airtime_sim_pct": 0.14400000000000002,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "0,4": {
             "count": 2,
             "mean": 68.0,
             "std": 0.0,
             "airtime_pct": 0.08247990077950777,
-            "airtime_sim_pct": 0.00022133333333333334
+            "airtime_sim_pct": 0.00022133333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,5": {
             "count": 2,
             "mean": 93.0,
             "std": 0.0,
             "airtime_pct": 0.10732324438779324,
-            "airtime_sim_pct": 0.000288
+            "airtime_sim_pct": 0.000288,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 20,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.1838407427013125,
-            "airtime_sim_pct": 0.0004933333333333334
+            "airtime_sim_pct": 0.0004933333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,11": {
             "count": 8,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 0.19477181388895812,
-            "airtime_sim_pct": 0.0005226666666666667
+            "airtime_sim_pct": 0.0005226666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,0": {
             "count": 2,
             "mean": 76.0,
             "std": 0.0,
             "airtime_pct": 0.09042977073415912,
-            "airtime_sim_pct": 0.00024266666666666667
+            "airtime_sim_pct": 0.00024266666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,1": {
             "count": 2,
             "mean": 81.0,
             "std": 0.0,
             "airtime_pct": 0.09539843945581622,
-            "airtime_sim_pct": 0.000256
+            "airtime_sim_pct": 0.000256,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "2,8": {
             "count": 8,
             "mean": 270.0,
             "std": 0.0,
             "airtime_pct": 0.8099694426873626,
-            "airtime_sim_pct": 0.0021735384615384616
+            "airtime_sim_pct": 0.0021735384615384616,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "0,13": {
             "count": 4,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.10334830941046756,
-            "airtime_sim_pct": 0.0002773333333333333
+            "airtime_sim_pct": 0.0002773333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 34,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.35476294672631664,
-            "airtime_sim_pct": 0.0009520000000000002
+            "airtime_sim_pct": 0.0009520000000000002,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 58,
             "mean": 6091.103448275862,
             "std": 2682.880365999194,
             "airtime_pct": 44.3160531953318,
-            "airtime_sim_pct": 0.11892133333333334
+            "airtime_sim_pct": 0.11892133333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-69.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -359,53 +494,187 @@
             "mean": 401.53846153846155,
             "std": 187.06831964022595,
             "airtime_pct": 0.5475760172339891,
-            "airtime_sim_pct": 0.22336923076923082
+            "airtime_sim_pct": 0.22336923076923082,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.5 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 18,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.05442194316885779,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.7 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "0,13": {
             "count": 7,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.05948825019058327,
-            "airtime_sim_pct": 0.024266666666666666
+            "airtime_sim_pct": 0.024266666666666666,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "Aggregation Overhead,": {
             "count": 756,
             "mean": 3034.5502645502647,
             "std": 1937.12179278074,
             "airtime_pct": 95.58487057408362,
-            "airtime_sim_pct": 38.99133333333333
+            "airtime_sim_pct": 38.99133333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.3 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 435,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 1.4929262788213689,
-            "airtime_sim_pct": 0.6090000000000001
+            "airtime_sim_pct": 0.6090000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-62.8 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 261,
             "mean": 152.0,
             "std": 0.0,
             "airtime_pct": 2.26071693650093,
-            "airtime_sim_pct": 0.9222000000000001
+            "airtime_sim_pct": 0.9222000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
     }
   },
   "mac_features/multi_tid_block_ack": {
+    "UlMuMultiTidBlockAck": {
+      "global": {
+        "total": 3093,
+        "used_ap_only": true,
+        "stats": {
+          "1,2": {
+            "count": 343,
+            "mean": 46.23615160349854,
+            "std": 2.5140257983214314,
+            "airtime_pct": 1.77516868381397,
+            "airtime_sim_pct": 0.6073166666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
+          },
+          "2,12": {
+            "count": 1029,
+            "mean": 34.0,
+            "std": 0.0,
+            "airtime_pct": 21.444904998275366,
+            "airtime_sim_pct": 7.33668205128205,
+            "freq": "5002 MHz, 5004 MHz, 5006 MHz",
+            "rx_sig": "-63.7 dBm",
+            "tx_pwr": "-"
+          },
+          "1,9": {
+            "count": 343,
+            "mean": 58.0,
+            "std": 0.0,
+            "airtime_pct": 1.9717384480552873,
+            "airtime_sim_pct": 0.6745666666666666,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
+          },
+          "2,8": {
+            "count": 698,
+            "mean": 1070.0,
+            "std": 0.0,
+            "airtime_pct": 72.35678996734472,
+            "airtime_sim_pct": 24.75454017094017,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.9 dBm",
+            "tx_pwr": "-"
+          },
+          "1,13": {
+            "count": 680,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.451397902508822,
+            "airtime_sim_pct": 0.8386666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
+          }
+        }
+      }
+    },
     "MultiTidBlockAck": {
       "global": {
         "total": 0,
         "used_ap_only": true,
         "stats": {}
+      }
+    },
+    "UlSuMultiTidBlockAck": {
+      "global": {
+        "total": 921,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 510,
+            "mean": 803.3333333333334,
+            "std": 377.12361663282536,
+            "airtime_pct": 96.4632852597077,
+            "airtime_sim_pct": 14.367470085470085,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "-"
+          },
+          "1,13": {
+            "count": 343,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 2.840248482505415,
+            "airtime_sim_pct": 0.4230333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "10.0 dBm"
+          },
+          "0,13": {
+            "count": 2,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.04655044396510332,
+            "airtime_sim_pct": 0.006933333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "10.0 dBm"
+          },
+          "1,8": {
+            "count": 33,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.3101870929597751,
+            "airtime_sim_pct": 0.046200000000000005,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "-"
+          },
+          "1,9": {
+            "count": 33,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.339728720860706,
+            "airtime_sim_pct": 0.050600000000000006,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
+          }
+        }
       }
     }
   },
@@ -420,28 +689,40 @@
             "mean": 1070.0,
             "std": 0.0,
             "airtime_pct": 97.63441199616317,
-            "airtime_sim_pct": 52.346276923076914
+            "airtime_sim_pct": 52.346276923076914,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.0 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 1020,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 2.3463768105545277,
-            "airtime_sim_pct": 1.258
+            "airtime_sim_pct": 1.258,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "1,2": {
             "count": 3,
             "mean": 40.0,
             "std": 0.0,
             "airtime_pct": 0.009325821981536277,
-            "airtime_sim_pct": 0.005
+            "airtime_sim_pct": 0.005,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "1,9": {
             "count": 3,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 0.009885371300428455,
-            "airtime_sim_pct": 0.0053
+            "airtime_sim_pct": 0.0053,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
@@ -458,42 +739,60 @@
             "mean": 1066.0,
             "std": 0.0,
             "airtime_pct": 2.62888301387971,
-            "airtime_sim_pct": 1.1313777777777776
+            "airtime_sim_pct": 1.1313777777777776,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 20,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.11463152676801061,
-            "airtime_sim_pct": 0.04933333333333333
+            "airtime_sim_pct": 0.04933333333333333,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.2 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 14,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.22554527428949112,
-            "airtime_sim_pct": 0.09706666666666666
+            "airtime_sim_pct": 0.09706666666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-74.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,0": {
             "count": 44,
             "mean": 28262.363636363636,
             "std": 17298.188824123794,
             "airtime_pct": 96.52160442828819,
-            "airtime_sim_pct": 41.53946666666666
+            "airtime_sim_pct": 41.53946666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 36,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.2342200925313947,
-            "airtime_sim_pct": 0.10080000000000003
+            "airtime_sim_pct": 0.10080000000000003,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 36,
             "mean": 38.666666666666664,
             "std": 27.48737083745107,
             "airtime_pct": 0.2751156642432255,
-            "airtime_sim_pct": 0.11840000000000002
+            "airtime_sim_pct": 0.11840000000000002,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -508,42 +807,60 @@
             "mean": 1066.0,
             "std": 0.0,
             "airtime_pct": 2.62888301387971,
-            "airtime_sim_pct": 1.1313777777777776
+            "airtime_sim_pct": 1.1313777777777776,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 20,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.11463152676801061,
-            "airtime_sim_pct": 0.04933333333333333
+            "airtime_sim_pct": 0.04933333333333333,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.2 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 14,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.22554527428949112,
-            "airtime_sim_pct": 0.09706666666666666
+            "airtime_sim_pct": 0.09706666666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-74.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,0": {
             "count": 44,
             "mean": 28262.363636363636,
             "std": 17298.188824123794,
             "airtime_pct": 96.52160442828819,
-            "airtime_sim_pct": 41.53946666666666
+            "airtime_sim_pct": 41.53946666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 36,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.2342200925313947,
-            "airtime_sim_pct": 0.10080000000000003
+            "airtime_sim_pct": 0.10080000000000003,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 36,
             "mean": 38.666666666666664,
             "std": 27.48737083745107,
             "airtime_pct": 0.2751156642432255,
-            "airtime_sim_pct": 0.11840000000000002
+            "airtime_sim_pct": 0.11840000000000002,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -558,42 +875,60 @@
             "mean": 1066.0,
             "std": 0.0,
             "airtime_pct": 2.62888301387971,
-            "airtime_sim_pct": 1.1313777777777776
+            "airtime_sim_pct": 1.1313777777777776,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 20,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.11463152676801061,
-            "airtime_sim_pct": 0.04933333333333333
+            "airtime_sim_pct": 0.04933333333333333,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.2 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 14,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.22554527428949112,
-            "airtime_sim_pct": 0.09706666666666666
+            "airtime_sim_pct": 0.09706666666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-74.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,0": {
             "count": 44,
             "mean": 28262.363636363636,
             "std": 17298.188824123794,
             "airtime_pct": 96.52160442828819,
-            "airtime_sim_pct": 41.53946666666666
+            "airtime_sim_pct": 41.53946666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 36,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.2342200925313947,
-            "airtime_sim_pct": 0.10080000000000003
+            "airtime_sim_pct": 0.10080000000000003,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 36,
             "mean": 38.666666666666664,
             "std": 27.48737083745107,
             "airtime_pct": 0.2751156642432255,
-            "airtime_sim_pct": 0.11840000000000002
+            "airtime_sim_pct": 0.11840000000000002,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -608,42 +943,60 @@
             "mean": 1066.0,
             "std": 0.0,
             "airtime_pct": 2.62888301387971,
-            "airtime_sim_pct": 1.1313777777777776
+            "airtime_sim_pct": 1.1313777777777776,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 20,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.11463152676801061,
-            "airtime_sim_pct": 0.04933333333333333
+            "airtime_sim_pct": 0.04933333333333333,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.2 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 14,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.22554527428949112,
-            "airtime_sim_pct": 0.09706666666666666
+            "airtime_sim_pct": 0.09706666666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-74.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,0": {
             "count": 44,
             "mean": 28262.363636363636,
             "std": 17298.188824123794,
             "airtime_pct": 96.52160442828819,
-            "airtime_sim_pct": 41.53946666666666
+            "airtime_sim_pct": 41.53946666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 36,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.2342200925313947,
-            "airtime_sim_pct": 0.10080000000000003
+            "airtime_sim_pct": 0.10080000000000003,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 36,
             "mean": 38.666666666666664,
             "std": 27.48737083745107,
             "airtime_pct": 0.2751156642432255,
-            "airtime_sim_pct": 0.11840000000000002
+            "airtime_sim_pct": 0.11840000000000002,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -658,42 +1011,60 @@
             "mean": 1066.0,
             "std": 0.0,
             "airtime_pct": 2.62888301387971,
-            "airtime_sim_pct": 1.1313777777777776
+            "airtime_sim_pct": 1.1313777777777776,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 20,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.11463152676801061,
-            "airtime_sim_pct": 0.04933333333333333
+            "airtime_sim_pct": 0.04933333333333333,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.2 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 14,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.22554527428949112,
-            "airtime_sim_pct": 0.09706666666666666
+            "airtime_sim_pct": 0.09706666666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-74.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,0": {
             "count": 44,
             "mean": 28262.363636363636,
             "std": 17298.188824123794,
             "airtime_pct": 96.52160442828819,
-            "airtime_sim_pct": 41.53946666666666
+            "airtime_sim_pct": 41.53946666666666,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 36,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.2342200925313947,
-            "airtime_sim_pct": 0.10080000000000003
+            "airtime_sim_pct": 0.10080000000000003,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 36,
             "mean": 38.666666666666664,
             "std": 27.48737083745107,
             "airtime_pct": 0.2751156642432255,
-            "airtime_sim_pct": 0.11840000000000002
+            "airtime_sim_pct": 0.11840000000000002,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -708,42 +1079,60 @@
             "mean": 1158.421052631579,
             "std": 178.45840317017817,
             "airtime_pct": 3.504460629674856,
-            "airtime_sim_pct": 1.439565811965812
+            "airtime_sim_pct": 1.439565811965812,
+            "freq": "5050 MHz",
+            "rx_sig": "-75.4 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 26,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.15612536769650545,
-            "airtime_sim_pct": 0.06413333333333333
+            "airtime_sim_pct": 0.06413333333333333,
+            "freq": "5050 MHz",
+            "rx_sig": "-73.1 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 15,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.25317627194027903,
-            "airtime_sim_pct": 0.104
+            "airtime_sim_pct": 0.104,
+            "freq": "5050 MHz",
+            "rx_sig": "-73.1 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,0": {
             "count": 56,
             "mean": 20940.285714285714,
             "std": 14136.245022881387,
             "airtime_pct": 95.42927776349974,
-            "airtime_sim_pct": 39.20053333333333
+            "airtime_sim_pct": 39.20053333333333,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 46,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.31354907524911485,
-            "airtime_sim_pct": 0.1288
+            "airtime_sim_pct": 0.1288,
+            "freq": "5050 MHz",
+            "rx_sig": "-80.0 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 46,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 0.3434108919395068,
-            "airtime_sim_pct": 0.14106666666666667
+            "airtime_sim_pct": 0.14106666666666667,
+            "freq": "5050 MHz",
+            "rx_sig": "-72.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -760,35 +1149,50 @@
             "mean": 2094.143790849673,
             "std": 305.25353050584533,
             "airtime_pct": 88.6691787528786,
-            "airtime_sim_pct": 129.49048433048435
+            "airtime_sim_pct": 129.49048433048435,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.01689060850465473,
-            "airtime_sim_pct": 0.024666666666666674
+            "airtime_sim_pct": 0.024666666666666674,
+            "freq": "5200 MHz",
+            "rx_sig": "-59.0 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.03165086999070436,
-            "airtime_sim_pct": 0.04622222222222222
+            "airtime_sim_pct": 0.04622222222222222,
+            "freq": "5200 MHz",
+            "rx_sig": "-59.0 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 1206,
             "mean": 63.985074626865675,
             "std": 0.5181061181405905,
             "airtime_pct": 2.8441273955709496,
-            "airtime_sim_pct": 4.1535
+            "airtime_sim_pct": 4.1535,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 4822,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 8.43815237305062,
-            "airtime_sim_pct": 12.32288888888889
+            "airtime_sim_pct": 12.32288888888889,
+            "freq": "5170 MHz, 5180 MHz, 5189 MHz, 5211 MHz, 5220 MHz, 5230 MHz",
+            "rx_sig": "-59.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -803,21 +1207,30 @@
             "mean": 166.0,
             "std": 0.0,
             "airtime_pct": 64.87135320808018,
-            "airtime_sim_pct": 28.192948717948717
+            "airtime_sim_pct": 28.192948717948717,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 1575,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 7.449416097346785,
-            "airtime_sim_pct": 3.2375000000000003
+            "airtime_sim_pct": 3.2375000000000003,
+            "freq": "5200 MHz",
+            "rx_sig": "-72.2 dBm",
+            "tx_pwr": "-"
           },
           "0,13": {
             "count": 2082,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 27.679230694574073,
-            "airtime_sim_pct": 12.029333333333332
+            "airtime_sim_pct": 12.029333333333332,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -834,42 +1247,60 @@
             "mean": 2164.721590909091,
             "std": 1104.9821634665816,
             "airtime_pct": 94.79991407879508,
-            "airtime_sim_pct": 92.09173333333332
+            "airtime_sim_pct": 92.09173333333332,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.03047045978139553,
-            "airtime_sim_pct": 0.029600000000000005
+            "airtime_sim_pct": 0.029600000000000005,
+            "freq": "5200 MHz",
+            "rx_sig": "-67.0 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.0570977985092817,
-            "airtime_sim_pct": 0.055466666666666664
+            "airtime_sim_pct": 0.055466666666666664,
+            "freq": "5200 MHz",
+            "rx_sig": "-67.0 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 350,
             "mean": 55.0,
             "std": 0.0,
             "airtime_pct": 1.381121628604921,
-            "airtime_sim_pct": 1.3416666666666668
+            "airtime_sim_pct": 1.3416666666666668,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 1119,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 3.532514519791786,
-            "airtime_sim_pct": 3.4316
+            "airtime_sim_pct": 3.4316,
+            "freq": "5165 MHz, 5176 MHz, 5184 MHz, 5200 MHz",
+            "rx_sig": "-67.0 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 69,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.19888151451910863,
-            "airtime_sim_pct": 0.1932
+            "airtime_sim_pct": 0.1932,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -884,42 +1315,60 @@
             "mean": 2164.721590909091,
             "std": 1104.9821634665816,
             "airtime_pct": 94.79991407879508,
-            "airtime_sim_pct": 92.09173333333332
+            "airtime_sim_pct": 92.09173333333332,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.03047045978139553,
-            "airtime_sim_pct": 0.029600000000000005
+            "airtime_sim_pct": 0.029600000000000005,
+            "freq": "5200 MHz",
+            "rx_sig": "-67.0 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.0570977985092817,
-            "airtime_sim_pct": 0.055466666666666664
+            "airtime_sim_pct": 0.055466666666666664,
+            "freq": "5200 MHz",
+            "rx_sig": "-67.0 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 350,
             "mean": 55.0,
             "std": 0.0,
             "airtime_pct": 1.381121628604921,
-            "airtime_sim_pct": 1.3416666666666668
+            "airtime_sim_pct": 1.3416666666666668,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 1119,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 3.532514519791786,
-            "airtime_sim_pct": 3.4316
+            "airtime_sim_pct": 3.4316,
+            "freq": "5165 MHz, 5176 MHz, 5200 MHz, 5206 MHz",
+            "rx_sig": "-67.0 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 69,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.19888151451910863,
-            "airtime_sim_pct": 0.1932
+            "airtime_sim_pct": 0.1932,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -936,35 +1385,50 @@
             "mean": 4217.316239316239,
             "std": 665.837081913297,
             "airtime_pct": 93.70832621345912,
-            "airtime_sim_pct": 63.203608736942066
+            "airtime_sim_pct": 63.203608736942066,
+            "freq": "5050 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "15.0 dBm"
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.09752489740342393,
-            "airtime_sim_pct": 0.06577777777777778
+            "airtime_sim_pct": 0.06577777777777778,
+            "freq": "5050 MHz",
+            "rx_sig": "-71.0 dBm",
+            "tx_pwr": "15.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.18274935729650604,
-            "airtime_sim_pct": 0.12325925925925924
+            "airtime_sim_pct": 0.12325925925925924,
+            "freq": "5050 MHz",
+            "rx_sig": "-71.0 dBm",
+            "tx_pwr": "15.0 dBm"
           },
           "1,2": {
             "count": 112,
             "mean": 64.0,
             "std": 0.0,
             "airtime_pct": 1.525254251282378,
-            "airtime_sim_pct": 1.028740740740741
+            "airtime_sim_pct": 1.028740740740741,
+            "freq": "5050 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "15.0 dBm"
           },
           "1,9": {
             "count": 444,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 4.4861452805575,
-            "airtime_sim_pct": 3.025777777777778
+            "airtime_sim_pct": 3.025777777777778,
+            "freq": "5043 MHz, 5047 MHz, 5053 MHz, 5057 MHz",
+            "rx_sig": "-71.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -979,35 +1443,50 @@
             "mean": 8370.521739130434,
             "std": 1402.509490394066,
             "airtime_pct": 88.1415958314287,
-            "airtime_sim_pct": 43.55202539682539
+            "airtime_sim_pct": 43.55202539682539,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "15.0 dBm"
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.1331225873137242,
-            "airtime_sim_pct": 0.06577777777777778
+            "airtime_sim_pct": 0.06577777777777778,
+            "freq": "5200 MHz",
+            "rx_sig": "-71.0 dBm",
+            "tx_pwr": "15.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.24945493838968133,
-            "airtime_sim_pct": 0.12325925925925924
+            "airtime_sim_pct": 0.12325925925925924,
+            "freq": "5200 MHz",
+            "rx_sig": "-71.0 dBm",
+            "tx_pwr": "15.0 dBm"
           },
           "1,2": {
             "count": 156,
             "mean": 63.88461538461539,
             "std": 1.4365268766910075,
             "airtime_pct": 2.897215227956119,
-            "airtime_sim_pct": 1.4315555555555557
+            "airtime_sim_pct": 1.4315555555555557,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "15.0 dBm"
           },
           "1,9": {
             "count": 622,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 8.578611414910533,
-            "airtime_sim_pct": 4.238814814814814
+            "airtime_sim_pct": 4.238814814814814,
+            "freq": "5170 MHz, 5180 MHz, 5189 MHz, 5211 MHz, 5220 MHz, 5230 MHz",
+            "rx_sig": "-71.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -1022,21 +1501,30 @@
             "mean": 1066.0,
             "std": 0.0,
             "airtime_pct": 53.22790586334324,
-            "airtime_sim_pct": 0.21512925170068029
+            "airtime_sim_pct": 0.21512925170068029,
+            "freq": "5240 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "15.0 dBm"
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 16.274929307739487,
-            "airtime_sim_pct": 0.06577777777777778
+            "airtime_sim_pct": 0.06577777777777778,
+            "freq": "5240 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "15.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 30.497164828917235,
-            "airtime_sim_pct": 0.12325925925925924
+            "airtime_sim_pct": 0.12325925925925924,
+            "freq": "5240 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "15.0 dBm"
           }
         }
       }
@@ -1051,21 +1539,30 @@
             "mean": 1066.0,
             "std": 0.0,
             "airtime_pct": 71.17578404427543,
-            "airtime_sim_pct": 0.4667901234567901
+            "airtime_sim_pct": 0.4667901234567901,
+            "freq": "5100 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "15.0 dBm"
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 10.029742856067166,
-            "airtime_sim_pct": 0.06577777777777778
+            "airtime_sim_pct": 0.06577777777777778,
+            "freq": "5100 MHz",
+            "rx_sig": "-71.0 dBm",
+            "tx_pwr": "15.0 dBm"
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 18.79447309965739,
-            "airtime_sim_pct": 0.12325925925925924
+            "airtime_sim_pct": 0.12325925925925924,
+            "freq": "5100 MHz",
+            "rx_sig": "-71.0 dBm",
+            "tx_pwr": "15.0 dBm"
           }
         }
       }
@@ -1082,28 +1579,40 @@
             "mean": 43.0,
             "std": 0.0,
             "airtime_pct": 0.24252568388039986,
-            "airtime_sim_pct": 0.13905
+            "airtime_sim_pct": 0.13905,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,12": {
             "count": 114,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 1.417672515648332,
-            "airtime_sim_pct": 0.8128102564102563
+            "airtime_sim_pct": 0.8128102564102563,
+            "freq": "5002 MHz, 5004 MHz, 5006 MHz",
+            "rx_sig": "-63.7 dBm",
+            "tx_pwr": "-"
           },
           "2,8": {
             "count": 1556,
             "mean": 1070.0,
             "std": 0.0,
             "airtime_pct": 96.2489007588627,
-            "airtime_sim_pct": 55.18347350427351
+            "airtime_sim_pct": 55.18347350427351,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.4 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 972,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 2.090901041609661,
-            "airtime_sim_pct": 1.1988
+            "airtime_sim_pct": 1.1988,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
@@ -1120,35 +1629,50 @@
             "mean": 45.90869565217391,
             "std": 2.1377381471156074,
             "airtime_pct": 0.8830803908692585,
-            "airtime_sim_pct": 0.8119666666666667
+            "airtime_sim_pct": 0.8119666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,12": {
             "count": 10,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 0.07754367227646448,
-            "airtime_sim_pct": 0.0712991452991453
+            "airtime_sim_pct": 0.0712991452991453,
+            "freq": "5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5010 MHz",
+            "rx_sig": "-64.0 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 459,
             "mean": 57.58169934640523,
             "std": 2.339248466224056,
             "airtime_pct": 0.9782800750279954,
-            "airtime_sim_pct": 0.8995
+            "airtime_sim_pct": 0.8995,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,8": {
             "count": 2505,
             "mean": 1070.0,
             "std": 0.0,
             "airtime_pct": 96.6204846474016,
-            "airtime_sim_pct": 88.83971794871795
+            "airtime_sim_pct": 88.83971794871795,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.6 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 1074,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 1.4406112144325545,
-            "airtime_sim_pct": 1.3246
+            "airtime_sim_pct": 1.3246,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
@@ -1163,49 +1687,70 @@
             "mean": 283.3838383838384,
             "std": 117.89742220695322,
             "airtime_pct": 82.9274126470952,
-            "airtime_sim_pct": 38.6712547008547
+            "airtime_sim_pct": 38.6712547008547,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.04760612436825911,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 28,
             "mean": 34.964285714285715,
             "std": 1.2387246568589019,
             "airtime_pct": 0.4000058137609279,
-            "airtime_sim_pct": 0.18653333333333333
+            "airtime_sim_pct": 0.18653333333333333,
+            "freq": "5003 MHz, 5005 MHz, 5007 MHz, 5010 MHz, 5013 MHz, 5015 MHz",
+            "rx_sig": "-65.1 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "2,0": {
             "count": 7,
             "mean": 53.714285714285715,
             "std": 4.199125273342591,
             "airtime_pct": 0.23024106195197921,
-            "airtime_sim_pct": 0.10736752136752137
+            "airtime_sim_pct": 0.10736752136752137,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 707,
             "mean": 46.16548797736917,
             "std": 1.491910248791634,
             "airtime_pct": 5.3652674008365775,
-            "airtime_sim_pct": 2.501966666666667
+            "airtime_sim_pct": 2.501966666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 1553,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 10.212871809668751,
-            "airtime_sim_pct": 4.762533333333334
+            "airtime_sim_pct": 4.762533333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.1 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 136,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.8165951423168049,
-            "airtime_sim_pct": 0.3808000000000001
+            "airtime_sim_pct": 0.3808000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -1222,35 +1767,50 @@
             "mean": 1589.6716101694915,
             "std": 178.98638275289738,
             "airtime_pct": 71.7885995028256,
-            "airtime_sim_pct": 31.305926530612243
+            "airtime_sim_pct": 31.305926530612243,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.05090751450541913,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5200 MHz",
+            "rx_sig": "-66.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.09539426141556016,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5200 MHz",
+            "rx_sig": "-66.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 940,
             "mean": 54.990425531914894,
             "std": 0.2933914489668108,
             "airtime_pct": 8.262228454061951,
-            "airtime_sim_pct": 3.6030333333333338
+            "airtime_sim_pct": 3.6030333333333338,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 2816,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 19.802870267189107,
-            "airtime_sim_pct": 8.635733333333334
+            "airtime_sim_pct": 8.635733333333334,
+            "freq": "5170 MHz, 5180 MHz, 5189 MHz, 5211 MHz, 5220 MHz",
+            "rx_sig": "-66.3 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -1265,42 +1825,60 @@
             "mean": 169.5372907153729,
             "std": 23.97243903208097,
             "airtime_pct": 93.71430088558577,
-            "airtime_sim_pct": 28.479418803418806
+            "airtime_sim_pct": 28.479418803418806,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.07305126182597015,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.1368888509892053,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,0": {
             "count": 24,
             "mean": 342.0,
             "std": 0.0,
             "airtime_pct": 3.7591784463958686,
-            "airtime_sim_pct": 1.1424
+            "airtime_sim_pct": 1.1424,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,8": {
             "count": 120,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 1.1056407195281968,
-            "airtime_sim_pct": 0.336
+            "airtime_sim_pct": 0.336,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 120,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 1.210939835673739,
-            "airtime_sim_pct": 0.368
+            "airtime_sim_pct": 0.368,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.1 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -1315,35 +1893,50 @@
             "mean": 1365.1730418943534,
             "std": 160.8565447223086,
             "airtime_pct": 75.7383971156709,
-            "airtime_sim_pct": 33.193453061224496
+            "airtime_sim_pct": 33.193453061224496,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.05065433875971289,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5200 MHz",
+            "rx_sig": "-66.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.0949198420001827,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5200 MHz",
+            "rx_sig": "-66.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 1094,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 8.819939549446465,
-            "airtime_sim_pct": 3.8654666666666673
+            "airtime_sim_pct": 3.8654666666666673,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 2186,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 15.296089154119189,
-            "airtime_sim_pct": 6.703733333333334
+            "airtime_sim_pct": 6.703733333333334,
+            "freq": "5180 MHz, 5220 MHz",
+            "rx_sig": "-66.5 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -1358,49 +1951,70 @@
             "mean": 167.03013698630136,
             "std": 21.97960876246658,
             "airtime_pct": 69.90396960216471,
-            "airtime_sim_pct": 26.611453061224488
+            "airtime_sim_pct": 26.611453061224488,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.05831579814892865,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5200 MHz",
+            "rx_sig": "-66.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.10927645058537978,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5200 MHz",
+            "rx_sig": "-66.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,0": {
             "count": 34,
             "mean": 549.4117647058823,
             "std": 123.60518684316153,
             "airtime_pct": 6.721202201068713,
-            "airtime_sim_pct": 2.558666666666667
+            "airtime_sim_pct": 2.558666666666667,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,8": {
             "count": 227,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 1.6696180767323894,
-            "airtime_sim_pct": 0.6356
+            "airtime_sim_pct": 0.6356,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 227,
             "mean": 46.801762114537446,
             "std": 39.4603508860367,
             "airtime_pct": 2.122835150634574,
-            "airtime_sim_pct": 0.8081333333333335
+            "airtime_sim_pct": 0.8081333333333335,
+            "freq": "5200 MHz",
+            "rx_sig": "-66.4 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 52,
             "mean": 4204.0,
             "std": 0.0,
             "airtime_pct": 19.414782720669148,
-            "airtime_sim_pct": 7.390933333333334
+            "airtime_sim_pct": 7.390933333333334,
+            "freq": "5200 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -1415,42 +2029,60 @@
             "mean": 716.7322404371585,
             "std": 245.81411387070628,
             "airtime_pct": 79.98969699373801,
-            "airtime_sim_pct": 28.331620512820514
+            "airtime_sim_pct": 28.331620512820514,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.0626780692780146,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.11745079648492825,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 540,
             "mean": 54.9,
             "std": 0.9433981132056604,
             "airtime_pct": 5.83922445408963,
-            "airtime_sim_pct": 2.0682
+            "airtime_sim_pct": 2.0682,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 1615,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 13.983044344335449,
-            "airtime_sim_pct": 4.952666666666667
+            "airtime_sim_pct": 4.952666666666667,
+            "freq": "5003 MHz, 5005 MHz, 5007 MHz, 5010 MHz, 5013 MHz, 5015 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 1,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.00790534207110094,
-            "airtime_sim_pct": 0.0028000000000000004
+            "airtime_sim_pct": 0.0028000000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -1465,35 +2097,50 @@
             "mean": 1758.8482972136223,
             "std": 159.19086784178688,
             "airtime_pct": 89.28005595594566,
-            "airtime_sim_pct": 35.08119316239316
+            "airtime_sim_pct": 35.08119316239316,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.05649799974154541,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.1058701256418148,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 319,
             "mean": 55.0,
             "std": 0.0,
             "airtime_pct": 3.1120557365144044,
-            "airtime_sim_pct": 1.2228333333333334
+            "airtime_sim_pct": 1.2228333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 954,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 7.445520182156091,
-            "airtime_sim_pct": 2.9256
+            "airtime_sim_pct": 2.9256,
+            "freq": "5005 MHz, 5010 MHz, 5013 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "-"
           }
         }
       },
@@ -1506,28 +2153,40 @@
               "mean": 616.0,
               "std": 450.0,
               "airtime_pct": 8.506906380179778,
-              "airtime_sim_pct": 0.09219145299145298
+              "airtime_sim_pct": 0.09219145299145298,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "0,13": {
               "count": 2,
               "mean": 37.0,
               "std": 0.0,
               "airtime_pct": 1.279537650300719,
-              "airtime_sim_pct": 0.013866666666666666
+              "airtime_sim_pct": 0.013866666666666666,
+              "freq": "5010 MHz",
+              "rx_sig": "-66.0 dBm",
+              "tx_pwr": "20.0 dBm"
             },
             "1,13": {
               "count": 1,
               "mean": 14.0,
               "std": 0.0,
               "airtime_pct": 0.2276100627938779,
-              "airtime_sim_pct": 0.002466666666666667
+              "airtime_sim_pct": 0.002466666666666667,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "1,9": {
               "count": 318,
               "mean": 32.0,
               "std": 0.0,
               "airtime_pct": 89.98594590672556,
-              "airtime_sim_pct": 0.9752000000000001
+              "airtime_sim_pct": 0.9752000000000001,
+              "freq": "5005 MHz",
+              "rx_sig": "-66.0 dBm",
+              "tx_pwr": "-"
             }
           }
         },
@@ -1539,28 +2198,40 @@
               "mean": 166.0,
               "std": 0.0,
               "airtime_pct": 2.120439477365497,
-              "airtime_sim_pct": 0.021480341880341883
+              "airtime_sim_pct": 0.021480341880341883,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "0,13": {
               "count": 2,
               "mean": 37.0,
               "std": 0.0,
               "airtime_pct": 1.3688528601296284,
-              "airtime_sim_pct": 0.013866666666666666
+              "airtime_sim_pct": 0.013866666666666666,
+              "freq": "5010 MHz",
+              "rx_sig": "-63.0 dBm",
+              "tx_pwr": "20.0 dBm"
             },
             "1,13": {
               "count": 1,
               "mean": 14.0,
               "std": 0.0,
               "airtime_pct": 0.2434978645422897,
-              "airtime_sim_pct": 0.002466666666666667
+              "airtime_sim_pct": 0.002466666666666667,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "1,9": {
               "count": 318,
               "mean": 32.0,
               "std": 0.0,
               "airtime_pct": 96.26720979796252,
-              "airtime_sim_pct": 0.9752000000000001
+              "airtime_sim_pct": 0.9752000000000001,
+              "freq": "5013 MHz",
+              "rx_sig": "-63.0 dBm",
+              "tx_pwr": "-"
             }
           }
         },
@@ -1572,28 +2243,40 @@
               "mean": 166.0,
               "std": 0.0,
               "airtime_pct": 2.120439477365497,
-              "airtime_sim_pct": 0.021480341880341883
+              "airtime_sim_pct": 0.021480341880341883,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "0,13": {
               "count": 2,
               "mean": 37.0,
               "std": 0.0,
               "airtime_pct": 1.3688528601296284,
-              "airtime_sim_pct": 0.013866666666666666
+              "airtime_sim_pct": 0.013866666666666666,
+              "freq": "5010 MHz",
+              "rx_sig": "-67.0 dBm",
+              "tx_pwr": "20.0 dBm"
             },
             "1,13": {
               "count": 1,
               "mean": 14.0,
               "std": 0.0,
               "airtime_pct": 0.2434978645422897,
-              "airtime_sim_pct": 0.002466666666666667
+              "airtime_sim_pct": 0.002466666666666667,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "1,9": {
               "count": 318,
               "mean": 32.0,
               "std": 0.0,
               "airtime_pct": 96.26720979796252,
-              "airtime_sim_pct": 0.9752000000000001
+              "airtime_sim_pct": 0.9752000000000001,
+              "freq": "5010 MHz",
+              "rx_sig": "-67.0 dBm",
+              "tx_pwr": "-"
             }
           }
         }
@@ -1609,35 +2292,50 @@
             "mean": 5816.933333333333,
             "std": 1031.7821130882667,
             "airtime_pct": 96.17988841684281,
-            "airtime_sim_pct": 39.67094700854701
+            "airtime_sim_pct": 39.67094700854701,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.05382260026194707,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.10085676445481973,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 116,
             "mean": 55.0,
             "std": 0.0,
             "airtime_pct": 1.078068299541102,
-            "airtime_sim_pct": 0.44466666666666665
+            "airtime_sim_pct": 0.44466666666666665,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 348,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 2.587363918898645,
-            "airtime_sim_pct": 1.0672000000000001
+            "airtime_sim_pct": 1.0672000000000001,
+            "freq": "5003 MHz, 5005 MHz, 5007 MHz, 5010 MHz, 5013 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "-"
           }
         }
       },
@@ -1650,28 +2348,40 @@
               "mean": 616.0,
               "std": 450.0,
               "airtime_pct": 19.8578008844181,
-              "airtime_sim_pct": 0.09219145299145298
+              "airtime_sim_pct": 0.09219145299145298,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "0,13": {
               "count": 2,
               "mean": 37.0,
               "std": 0.0,
               "airtime_pct": 2.9868441885040355,
-              "airtime_sim_pct": 0.013866666666666666
+              "airtime_sim_pct": 0.013866666666666666,
+              "freq": "5010 MHz",
+              "rx_sig": "-66.0 dBm",
+              "tx_pwr": "20.0 dBm"
             },
             "1,13": {
               "count": 1,
               "mean": 14.0,
               "std": 0.0,
               "airtime_pct": 0.5313136296858141,
-              "airtime_sim_pct": 0.002466666666666667
+              "airtime_sim_pct": 0.002466666666666667,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "1,9": {
               "count": 116,
               "mean": 32.0,
               "std": 0.0,
               "airtime_pct": 76.62404129739201,
-              "airtime_sim_pct": 0.3557333333333334
+              "airtime_sim_pct": 0.3557333333333334,
+              "freq": "5005 MHz, 5007 MHz",
+              "rx_sig": "-66.0 dBm",
+              "tx_pwr": "-"
             }
           }
         },
@@ -1683,28 +2393,40 @@
               "mean": 166.0,
               "std": 0.0,
               "airtime_pct": 5.45813877728309,
-              "airtime_sim_pct": 0.021480341880341883
+              "airtime_sim_pct": 0.021480341880341883,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "0,13": {
               "count": 2,
               "mean": 37.0,
               "std": 0.0,
               "airtime_pct": 3.5235096101639676,
-              "airtime_sim_pct": 0.013866666666666666
+              "airtime_sim_pct": 0.013866666666666666,
+              "freq": "5010 MHz",
+              "rx_sig": "-63.0 dBm",
+              "tx_pwr": "20.0 dBm"
             },
             "1,13": {
               "count": 1,
               "mean": 14.0,
               "std": 0.0,
               "airtime_pct": 0.6267781518080137,
-              "airtime_sim_pct": 0.002466666666666667
+              "airtime_sim_pct": 0.002466666666666667,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "1,9": {
               "count": 116,
               "mean": 32.0,
               "std": 0.0,
               "airtime_pct": 90.3915734607449,
-              "airtime_sim_pct": 0.3557333333333334
+              "airtime_sim_pct": 0.3557333333333334,
+              "freq": "5003 MHz, 5013 MHz",
+              "rx_sig": "-63.0 dBm",
+              "tx_pwr": "-"
             }
           }
         },
@@ -1716,28 +2438,40 @@
               "mean": 166.0,
               "std": 0.0,
               "airtime_pct": 5.45813877728309,
-              "airtime_sim_pct": 0.021480341880341883
+              "airtime_sim_pct": 0.021480341880341883,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "0,13": {
               "count": 2,
               "mean": 37.0,
               "std": 0.0,
               "airtime_pct": 3.5235096101639676,
-              "airtime_sim_pct": 0.013866666666666666
+              "airtime_sim_pct": 0.013866666666666666,
+              "freq": "5010 MHz",
+              "rx_sig": "-67.0 dBm",
+              "tx_pwr": "20.0 dBm"
             },
             "1,13": {
               "count": 1,
               "mean": 14.0,
               "std": 0.0,
               "airtime_pct": 0.6267781518080137,
-              "airtime_sim_pct": 0.002466666666666667
+              "airtime_sim_pct": 0.002466666666666667,
+              "freq": "5010 MHz",
+              "rx_sig": "-",
+              "tx_pwr": "20.0 dBm"
             },
             "1,9": {
               "count": 116,
               "mean": 32.0,
               "std": 0.0,
               "airtime_pct": 90.3915734607449,
-              "airtime_sim_pct": 0.3557333333333334
+              "airtime_sim_pct": 0.3557333333333334,
+              "freq": "5010 MHz",
+              "rx_sig": "-67.0 dBm",
+              "tx_pwr": "-"
             }
           }
         }
@@ -1753,42 +2487,60 @@
             "mean": 396.75778894472364,
             "std": 165.8491190164371,
             "airtime_pct": 82.7551202351681,
-            "airtime_sim_pct": 33.93247521367522
+            "airtime_sim_pct": 33.93247521367522,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.054141752337605244,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.10145481519118818,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 700,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 6.0320090442196825,
-            "airtime_sim_pct": 2.4733333333333336
+            "airtime_sim_pct": 2.4733333333333336,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 1441,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 10.777297884235738,
-            "airtime_sim_pct": 4.419066666666667
+            "airtime_sim_pct": 4.419066666666667,
+            "freq": "5005 MHz, 5010 MHz, 5015 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 41,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.27997626884491356,
-            "airtime_sim_pct": 0.11480000000000001
+            "airtime_sim_pct": 0.11480000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -1803,35 +2555,50 @@
             "mean": 771.8856015779093,
             "std": 256.35581998392047,
             "airtime_pct": 80.71638711281798,
-            "airtime_sim_pct": 27.693760683760683
+            "airtime_sim_pct": 27.693760683760683,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.06470424202644723,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.12124758866217134,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 503,
             "mean": 54.98210735586481,
             "std": 0.40089107061962764,
             "airtime_pct": 5.618970783545947,
-            "airtime_sim_pct": 1.9278666666666666
+            "airtime_sim_pct": 1.9278666666666666,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 1508,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 13.478690272944716,
-            "airtime_sim_pct": 4.624533333333334
+            "airtime_sim_pct": 4.624533333333334,
+            "freq": "5003 MHz, 5005 MHz, 5007 MHz, 5013 MHz, 5015 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -1853,42 +2620,60 @@
             "mean": 192.3681697612732,
             "std": 72.91544643634138,
             "airtime_pct": 93.51117251774262,
-            "airtime_sim_pct": 43.209295726495725
+            "airtime_sim_pct": 43.209295726495725,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,13": {
             "count": 9,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.04804401448785765,
-            "airtime_sim_pct": 0.022200000000000004
+            "airtime_sim_pct": 0.022200000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.09002842354481431,
-            "airtime_sim_pct": 0.0416
+            "airtime_sim_pct": 0.0416,
+            "freq": "5010 MHz",
+            "rx_sig": "-65.3 dBm",
+            "tx_pwr": "20.0 dBm"
           },
           "1,2": {
             "count": 218,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 1.6669685987768987,
-            "airtime_sim_pct": 0.7702666666666668
+            "airtime_sim_pct": 0.7702666666666668,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           },
           "1,9": {
             "count": 577,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 3.829382079689843,
-            "airtime_sim_pct": 1.7694666666666667
+            "airtime_sim_pct": 1.7694666666666667,
+            "freq": "5005 MHz, 5010 MHz, 5015 MHz",
+            "rx_sig": "-65.0 dBm",
+            "tx_pwr": "-"
           },
           "1,8": {
             "count": 141,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.854404365757036,
-            "airtime_sim_pct": 0.39480000000000004
+            "airtime_sim_pct": 0.39480000000000004,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "20.0 dBm"
           }
         }
       }
@@ -1905,49 +2690,70 @@
             "mean": 1638.782874617737,
             "std": 944.9491800391005,
             "airtime_pct": 94.37652520347976,
-            "airtime_sim_pct": 66.73600683760684
+            "airtime_sim_pct": 66.73600683760684,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 241,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.4203405403459045,
-            "airtime_sim_pct": 0.29723333333333335
+            "airtime_sim_pct": 0.29723333333333335,
+            "freq": "5010 MHz",
+            "rx_sig": "-80.8 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 23,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.11275704525147509,
-            "airtime_sim_pct": 0.07973333333333332
+            "airtime_sim_pct": 0.07973333333333332,
+            "freq": "5010 MHz",
+            "rx_sig": "-79.9 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 103,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.20392432180513434,
-            "airtime_sim_pct": 0.14420000000000002
+            "airtime_sim_pct": 0.14420000000000002,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 977,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 2.1185314078979074,
-            "airtime_sim_pct": 1.4980666666666669
+            "airtime_sim_pct": 1.4980666666666669,
+            "freq": "5005 MHz, 5010 MHz, 5015 MHz",
+            "rx_sig": "-73.2 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 14,
             "mean": 4996.857142857143,
             "std": 340.12914714074986,
             "airtime_pct": 1.668634568483159,
-            "airtime_sim_pct": 1.1799333333333333
+            "airtime_sim_pct": 1.1799333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,2": {
             "count": 440,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 1.0992869127359532,
-            "airtime_sim_pct": 0.7773333333333334
+            "airtime_sim_pct": 0.7773333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           }
         }
       }
@@ -1962,49 +2768,70 @@
             "mean": 2075.256449165402,
             "std": 994.0135956392991,
             "airtime_pct": 94.70470332635828,
-            "airtime_sim_pct": 82.98016068376069
+            "airtime_sim_pct": 82.98016068376069,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 199,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.28011142456465926,
-            "airtime_sim_pct": 0.24543333333333336
+            "airtime_sim_pct": 0.24543333333333336,
+            "freq": "5010 MHz",
+            "rx_sig": "-80.8 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 20,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.07912967039175489,
-            "airtime_sim_pct": 0.06933333333333333
+            "airtime_sim_pct": 0.06933333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-74.7 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 49,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.07829272195491903,
-            "airtime_sim_pct": 0.06860000000000001
+            "airtime_sim_pct": 0.06860000000000001,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 1506,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 2.635474541374621,
-            "airtime_sim_pct": 2.3092
+            "airtime_sim_pct": 2.3092,
+            "freq": "5005 MHz, 5010 MHz, 5015 MHz",
+            "rx_sig": "-73.1 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 8,
             "mean": 4858.0,
             "std": 0.0,
             "airtime_pct": 0.748384074974328,
-            "airtime_sim_pct": 0.6557333333333334
+            "airtime_sim_pct": 0.6557333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,2": {
             "count": 731,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 1.4739042403787308,
-            "airtime_sim_pct": 1.2914333333333334
+            "airtime_sim_pct": 1.2914333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           }
         }
       }
@@ -2019,49 +2846,70 @@
             "mean": 1649.8810641627542,
             "std": 948.719567841376,
             "airtime_pct": 93.6756292293407,
-            "airtime_sim_pct": 65.59328888888889
+            "airtime_sim_pct": 65.59328888888889,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,13": {
             "count": 296,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.5213620217852942,
-            "airtime_sim_pct": 0.3650666666666667
+            "airtime_sim_pct": 0.3650666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-81.8 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "0,13": {
             "count": 25,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.12377111547130794,
-            "airtime_sim_pct": 0.08666666666666667
+            "airtime_sim_pct": 0.08666666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-80.1 dBm",
+            "tx_pwr": "13.0 dBm"
           },
           "1,8": {
             "count": 92,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.18394291930043613,
-            "airtime_sim_pct": 0.1288
+            "airtime_sim_pct": 0.1288,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,9": {
             "count": 958,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 2.097825198688307,
-            "airtime_sim_pct": 1.4689333333333334
+            "airtime_sim_pct": 1.4689333333333334,
+            "freq": "5005 MHz, 5010 MHz, 5015 MHz",
+            "rx_sig": "-73.3 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 20,
             "mean": 4760.8,
             "std": 680.4,
             "airtime_pct": 2.2949068979387746,
-            "airtime_sim_pct": 1.6069333333333335
+            "airtime_sim_pct": 1.6069333333333335,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           },
           "1,2": {
             "count": 437,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 1.1025626174734475,
-            "airtime_sim_pct": 0.7720333333333335
+            "airtime_sim_pct": 0.7720333333333335,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "13.0 dBm"
           }
         }
       }
@@ -2078,56 +2926,80 @@
             "mean": 1291.2021521906227,
             "std": 314.8081414107956,
             "airtime_pct": 94.80190536990236,
-            "airtime_sim_pct": 54.010924786324786
+            "airtime_sim_pct": 54.010924786324786,
+            "freq": "5005 MHz, 5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 828,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 1.7924467345587163,
-            "airtime_sim_pct": 1.0212
+            "airtime_sim_pct": 1.0212,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.036508903328262135,
-            "airtime_sim_pct": 0.0208
+            "airtime_sim_pct": 0.0208,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "1,8": {
             "count": 92,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.22607436291731553,
-            "airtime_sim_pct": 0.1288
+            "airtime_sim_pct": 0.1288,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 89,
             "mean": 148.8314606741573,
             "std": 16.964759213434238,
             "airtime_pct": 0.5437135234447757,
-            "airtime_sim_pct": 0.3097666666666667
+            "airtime_sim_pct": 0.3097666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "Aggregation Overhead,": {
             "count": 23,
             "mean": 3677.8260869565215,
             "std": 1074.3206408328338,
             "airtime_pct": 2.5149602717393393,
-            "airtime_sim_pct": 1.4328333333333334
+            "airtime_sim_pct": 1.4328333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "1,2": {
             "count": 3,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 0.009302749405759102,
-            "airtime_sim_pct": 0.0053
+            "airtime_sim_pct": 0.0053,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,12": {
             "count": 6,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 0.07508808470521763,
-            "airtime_sim_pct": 0.04277948717948717
+            "airtime_sim_pct": 0.04277948717948717,
+            "freq": "5013 MHz, 5017 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -2142,56 +3014,80 @@
             "mean": 47.82164328657315,
             "std": 6.945987762514704,
             "airtime_pct": 1.339782951812245,
-            "airtime_sim_pct": 0.8967166666666667
+            "airtime_sim_pct": 0.8967166666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,12": {
             "count": 920,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 9.800570488916906,
-            "airtime_sim_pct": 6.559521367521367
+            "airtime_sim_pct": 6.559521367521367,
+            "freq": "5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5013 MHz, 5017 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 559,
             "mean": 67.35957066189624,
             "std": 29.52330652955744,
             "airtime_pct": 1.7728473778659362,
-            "airtime_sim_pct": 1.1865666666666668
+            "airtime_sim_pct": 1.1865666666666668,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,8": {
             "count": 1437,
             "mean": 1148.5024356297843,
             "std": 357.3146669517521,
             "airtime_pct": 80.75376422293272,
-            "airtime_sim_pct": 54.0484905982906
+            "airtime_sim_pct": 54.0484905982906,
+            "freq": "5005 MHz, 5010 MHz, 5015 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 511,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.9416306254266162,
-            "airtime_sim_pct": 0.6302333333333334
+            "airtime_sim_pct": 0.6302333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.031077247065436527,
-            "airtime_sim_pct": 0.0208
+            "airtime_sim_pct": 0.0208,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "1,8": {
             "count": 89,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.18616466270929768,
-            "airtime_sim_pct": 0.12460000000000002
+            "airtime_sim_pct": 0.12460000000000002,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 55,
             "mean": 3717.890909090909,
             "std": 1036.7971954354477,
             "airtime_pct": 5.174162423272968,
-            "airtime_sim_pct": 3.4630666666666663
+            "airtime_sim_pct": 3.4630666666666663,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -2206,63 +3102,90 @@
             "mean": 46.05802707930368,
             "std": 1.7593404709958025,
             "airtime_pct": 1.3365719182368139,
-            "airtime_sim_pct": 0.9138666666666668
+            "airtime_sim_pct": 0.9138666666666668,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,12": {
             "count": 983,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 10.250553982999508,
-            "airtime_sim_pct": 7.008705982905983
+            "airtime_sim_pct": 7.008705982905983,
+            "freq": "5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5010 MHz, 5013 MHz, 5017 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 581,
             "mean": 68.20998278829605,
             "std": 29.53484426892034,
             "airtime_pct": 1.8157506964812564,
-            "airtime_sim_pct": 1.2414999999999998
+            "airtime_sim_pct": 1.2414999999999998,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,8": {
             "count": 1462,
             "mean": 1132.4651162790697,
             "std": 362.0654872337046,
             "airtime_pct": 79.48573787145567,
-            "airtime_sim_pct": 54.34751794871795
+            "airtime_sim_pct": 54.34751794871795,
+            "freq": "5005 MHz, 5010 MHz, 5015 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 553,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 0.9975050342516577,
-            "airtime_sim_pct": 0.6820333333333334
+            "airtime_sim_pct": 0.6820333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.030420954077172883,
-            "airtime_sim_pct": 0.0208
+            "airtime_sim_pct": 0.0208,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "1,8": {
             "count": 88,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.18018565107248555,
-            "airtime_sim_pct": 0.1232
+            "airtime_sim_pct": 0.1232,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "Aggregation Overhead,": {
             "count": 61,
             "mean": 3729.2131147540986,
             "std": 972.6824345676896,
             "airtime_pct": 5.634262954572031,
-            "airtime_sim_pct": 3.8523666666666663
+            "airtime_sim_pct": 3.8523666666666663,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           },
           "0,0": {
             "count": 1,
             "mean": 2744.0,
             "std": 0.0,
             "airtime_pct": 0.2690109368555128,
-            "airtime_sim_pct": 0.18393333333333334
+            "airtime_sim_pct": 0.18393333333333334,
+            "freq": "5010 MHz",
+            "rx_sig": "-72.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -2279,28 +3202,40 @@
             "mean": 1070.0,
             "std": 0.0,
             "airtime_pct": 97.63441199616317,
-            "airtime_sim_pct": 52.346276923076914
+            "airtime_sim_pct": 52.346276923076914,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.0 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 1020,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 2.3463768105545277,
-            "airtime_sim_pct": 1.258
+            "airtime_sim_pct": 1.258,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "1,2": {
             "count": 3,
             "mean": 40.0,
             "std": 0.0,
             "airtime_pct": 0.009325821981536277,
-            "airtime_sim_pct": 0.005
+            "airtime_sim_pct": 0.005,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "1,9": {
             "count": 3,
             "mean": 46.0,
             "std": 0.0,
             "airtime_pct": 0.009885371300428455,
-            "airtime_sim_pct": 0.0053
+            "airtime_sim_pct": 0.0053,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
@@ -2315,35 +3250,50 @@
             "mean": 46.23615160349854,
             "std": 2.5140257983214314,
             "airtime_pct": 1.77516868381397,
-            "airtime_sim_pct": 0.6073166666666667
+            "airtime_sim_pct": 0.6073166666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,12": {
             "count": 1029,
             "mean": 34.0,
             "std": 0.0,
             "airtime_pct": 21.444904998275366,
-            "airtime_sim_pct": 7.33668205128205
+            "airtime_sim_pct": 7.33668205128205,
+            "freq": "5002 MHz, 5004 MHz, 5006 MHz",
+            "rx_sig": "-63.7 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 343,
             "mean": 58.0,
             "std": 0.0,
             "airtime_pct": 1.9717384480552873,
-            "airtime_sim_pct": 0.6745666666666666
+            "airtime_sim_pct": 0.6745666666666666,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "2,8": {
             "count": 698,
             "mean": 1070.0,
             "std": 0.0,
             "airtime_pct": 72.35678996734472,
-            "airtime_sim_pct": 24.75454017094017
+            "airtime_sim_pct": 24.75454017094017,
+            "freq": "5010 MHz",
+            "rx_sig": "-63.9 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 680,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 2.451397902508822,
-            "airtime_sim_pct": 0.8386666666666667
+            "airtime_sim_pct": 0.8386666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
@@ -2358,35 +3308,50 @@
             "mean": 803.3333333333334,
             "std": 377.12361663282536,
             "airtime_pct": 96.4632852597077,
-            "airtime_sim_pct": 14.367470085470085
+            "airtime_sim_pct": 14.367470085470085,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "-"
           },
           "1,13": {
             "count": 343,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 2.840248482505415,
-            "airtime_sim_pct": 0.4230333333333333
+            "airtime_sim_pct": 0.4230333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "0,13": {
             "count": 2,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.04655044396510332,
-            "airtime_sim_pct": 0.006933333333333333
+            "airtime_sim_pct": 0.006933333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "10.0 dBm"
           },
           "1,8": {
             "count": 33,
             "mean": 24.0,
             "std": 0.0,
             "airtime_pct": 0.3101870929597751,
-            "airtime_sim_pct": 0.046200000000000005
+            "airtime_sim_pct": 0.046200000000000005,
+            "freq": "5010 MHz",
+            "rx_sig": "-60.0 dBm",
+            "tx_pwr": "-"
           },
           "1,9": {
             "count": 33,
             "mean": 32.0,
             "std": 0.0,
             "airtime_pct": 0.339728720860706,
-            "airtime_sim_pct": 0.050600000000000006
+            "airtime_sim_pct": 0.050600000000000006,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
@@ -2403,14 +3368,20 @@
             "mean": 166.0,
             "std": 0.0,
             "airtime_pct": 89.69947890641758,
-            "airtime_sim_pct": 1.2888205128205128
+            "airtime_sim_pct": 1.2888205128205128,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "1,13": {
             "count": 120,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 10.30052109358273,
-            "airtime_sim_pct": 0.14800000000000002
+            "airtime_sim_pct": 0.14800000000000002,
+            "freq": "5010 MHz",
+            "rx_sig": "-87.0 dBm",
+            "tx_pwr": "-"
           }
         }
       }
@@ -2425,21 +3396,30 @@
             "mean": 366.0,
             "std": 0.0,
             "airtime_pct": 92.77774535765899,
-            "airtime_sim_pct": 27.557435897435894
+            "airtime_sim_pct": 27.557435897435894,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "1,13": {
             "count": 1700,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 7.058857247237263,
-            "airtime_sim_pct": 2.0966666666666667
+            "airtime_sim_pct": 2.0966666666666667,
+            "freq": "5010 MHz",
+            "rx_sig": "-87.0 dBm",
+            "tx_pwr": "-"
           },
           "0,13": {
             "count": 14,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.16339739510298018,
-            "airtime_sim_pct": 0.04853333333333333
+            "airtime_sim_pct": 0.04853333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }
@@ -2454,21 +3434,30 @@
             "mean": 366.0,
             "std": 0.0,
             "airtime_pct": 92.81821423026304,
-            "airtime_sim_pct": 27.62227692307692
+            "airtime_sim_pct": 27.62227692307692,
+            "freq": "5010 MHz",
+            "rx_sig": "-",
+            "tx_pwr": "10.0 dBm"
           },
           "1,13": {
             "count": 1702,
             "mean": 14.0,
             "std": 0.0,
             "airtime_pct": 7.0536476038455405,
-            "airtime_sim_pct": 2.0991333333333335
+            "airtime_sim_pct": 2.0991333333333335,
+            "freq": "5010 MHz",
+            "rx_sig": "-87.0 dBm",
+            "tx_pwr": "-"
           },
           "0,13": {
             "count": 11,
             "mean": 37.0,
             "std": 0.0,
             "airtime_pct": 0.1281381658906739,
-            "airtime_sim_pct": 0.03813333333333333
+            "airtime_sim_pct": 0.03813333333333333,
+            "freq": "5010 MHz",
+            "rx_sig": "-87.0 dBm",
+            "tx_pwr": "10.0 dBm"
           }
         }
       }

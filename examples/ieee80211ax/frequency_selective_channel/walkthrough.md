@@ -364,22 +364,22 @@ Two airtime occupancy percentages are provided:
 ### Configuration: `FlatChannelOFDMA`
 Total over-the-air packets captured (Global BSS/AP): **7272**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|
-| Control: Block Ack (BA) | 4822 | 66.31% | 32.0 B | 0.0 B | 8.44% | 12.32% |
-| Data: QoS Data | 1224 | 16.83% | 2094.1 B | 305.3 B | 88.67% | 129.49% |
-| Control: Trigger | 1206 | 16.58% | 64.0 B | 0.5 B | 2.84% | 4.15% |
-| Control: Ack | 12 | 0.17% | 14.0 B | 0.0 B | 0.02% | 0.02% |
-| Management: Action | 8 | 0.11% | 37.0 B | 0.0 B | 0.03% | 0.05% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 4822 | 66.31% | 32.0 B | 0.0 B | 5170 MHz, 5180 MHz, 5189 MHz, 5211 MHz, 5220 MHz, 5230 MHz | -59.0 dBm | - | 8.44% | 12.32% |
+| Data: QoS Data | 1224 | 16.83% | 2094.1 B | 305.3 B | 5200 MHz | - | 20.0 dBm | 88.67% | 129.49% |
+| Control: Trigger | 1206 | 16.58% | 64.0 B | 0.5 B | 5200 MHz | - | 20.0 dBm | 2.84% | 4.15% |
+| Control: Ack | 12 | 0.17% | 14.0 B | 0.0 B | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.02% | 0.02% |
+| Management: Action | 8 | 0.11% | 37.0 B | 0.0 B | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.03% | 0.05% |
 
 ### Configuration: `TgaxModelBOFDMA`
 Total over-the-air packets captured (Global BSS/AP): **5232**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|
-| Management: Action | 2082 | 39.79% | 37.0 B | 0.0 B | 27.68% | 12.03% |
-| Data: QoS Data | 1575 | 30.10% | 166.0 B | 0.0 B | 64.87% | 28.19% |
-| Control: Ack | 1575 | 30.10% | 14.0 B | 0.0 B | 7.45% | 3.24% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Management: Action | 2082 | 39.79% | 37.0 B | 0.0 B | 5200 MHz | - | 20.0 dBm | 27.68% | 12.03% |
+| Data: QoS Data | 1575 | 30.10% | 166.0 B | 0.0 B | 5200 MHz | - | 20.0 dBm | 64.87% | 28.19% |
+| Control: Ack | 1575 | 30.10% | 14.0 B | 0.0 B | 5200 MHz | -72.2 dBm | - | 7.45% | 3.24% |
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
