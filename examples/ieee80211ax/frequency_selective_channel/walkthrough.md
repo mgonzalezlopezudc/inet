@@ -368,7 +368,7 @@ Total over-the-air packets captured (Global BSS/AP): **7272**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Control: Block Ack (BA) | 4822 | 66.31% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5170 MHz, 5180 MHz, 5189 MHz, 5211 MHz, 5220 MHz, 5230 MHz | -59.0 dBm | - | 8.44% | 12.32% |
+| Control: Block Ack (BA) (HE-MU OFDMA) | 4822 | 66.31% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5170 MHz, 5180 MHz, 5189 MHz, 5211 MHz, 5220 MHz, 5230 MHz | -59.0 dBm | - | 8.44% | 12.32% |
 | Data: QoS Data | 1224 | 16.83% | 2094.1 B | 305.3 B | 1269.5 us | 167.0 us | 5200 MHz | - | 20.0 dBm | 88.67% | 129.49% |
 | Control: Trigger | 1206 | 16.58% | 64.0 B | 0.5 B | 41.3 us | 0.2 us | 5200 MHz | - | 20.0 dBm | 2.84% | 4.15% |
 | Control: Ack | 12 | 0.17% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.02% | 0.02% |

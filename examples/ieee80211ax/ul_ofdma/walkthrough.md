@@ -244,7 +244,7 @@ Total over-the-air packets captured (Global BSS/AP): **3093**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Null | 1029 | 33.27% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 21.44% | 7.34% |
+| Data: QoS Null (HE-MU OFDMA) | 1029 | 33.27% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 21.44% | 7.34% |
 | Data: QoS Data | 698 | 22.57% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.9 dBm | - | 72.36% | 24.75% |
 | Control: Ack | 680 | 21.99% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.45% | 0.84% |
 | Control: Trigger | 343 | 11.09% | 46.2 B | 2.5 B | 35.4 us | 0.8 us | 5010 MHz | - | 10.0 dBm | 1.78% | 0.61% |
