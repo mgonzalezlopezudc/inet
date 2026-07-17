@@ -92,8 +92,40 @@ subtypes_data = {
     12: "QoS Null",
 }
 
-def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False):
-    suffix = " (HE-MU OFDMA)" if is_he_mu else ""
+def unpack_key_to_name(key):
+    fc_type = key[0]
+    fc_subtype = key[1]
+    if len(key) > 3:
+        standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding = key[2:10]
+        return get_packet_type_name(fc_type, fc_subtype, standard=standard, mcs=mcs, bw=bw, gi=gi, nss=nss, coding=coding, is_ampdu=is_ampdu, is_sounding=is_sounding)
+    else:
+        is_he_mu = key[2] if len(key) > 2 else False
+        return get_packet_type_name(fc_type, fc_subtype, is_he_mu=is_he_mu)
+
+def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, standard=None, mcs=None, bw=None, gi=None, nss=None, coding=None, is_ampdu=False, is_sounding=False):
+    suffix = ""
+    if is_sounding:
+        suffix += " [NDP Sounding]"
+    elif standard and standard != "Legacy":
+        parts = []
+        if standard:
+            parts.append(standard)
+        if mcs and mcs != standard:
+            parts.append(mcs)
+        if bw:
+            parts.append(bw)
+        if gi:
+            parts.append(f"GI {gi}")
+        if nss and nss != "1":
+            parts.append(f"NSS {nss}")
+        if coding:
+            parts.append(coding)
+        if is_ampdu:
+            parts.append("A-MPDU")
+        suffix += " [" + ", ".join(parts) + "]"
+    elif is_he_mu:
+        suffix += " (HE-MU OFDMA)"
+
     if fc_type == "Aggregation Overhead":
         return "A-MPDU Delimiter / Aggregation Overhead" + suffix
     if fc_type == "HE TB feedback NDP":
@@ -127,47 +159,165 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False):
     else:
         return f"Unknown (Type {t}, Subtype {st})" + suffix
 
-def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=None):
+def decode_he(raw_d1, raw_d3, raw_d4, raw_d5):
+    try:
+        d1 = int(raw_d1, 16) if raw_d1 else 0
+        d3 = int(raw_d3, 16) if raw_d3 else 0
+        d4 = int(raw_d4, 16) if raw_d4 else 0
+        d5 = int(raw_d5, 16) if raw_d5 else 0
+    except ValueError:
+        return "HE-SU", "HE-MCS 0", "20 MHz", "0.8 us", "1", "BCC"
+
+    # PPDU Format
+    fmt = d1 & 0x3
+    if fmt == 0:
+        standard = "HE-SU"
+    elif fmt == 1:
+        standard = "HE-ER-SU"
+    elif fmt == 2:
+        standard = "HE-MU"
+    elif fmt == 3:
+        standard = "HE-TB"
+    else:
+        standard = "HE"
+
+    # MCS
+    mcs_val = d5 & 0xF
+    mcs = f"HE-MCS {mcs_val}"
+
+    # NSS
+    nss_val = ((d5 >> 4) & 0x7) + 1
+    nss = f"{nss_val}"
+
+    # Coding
+    coding_val = (d5 >> 8) & 0x1
+    coding = "LDPC" if coding_val == 1 else "BCC"
+
+    # GI
+    gi_val = d3 & 0x7
+    if gi_val == 0:
+        gi = "0.8 us"
+    elif gi_val == 1:
+        gi = "1.6 us"
+    elif gi_val == 2:
+        gi = "3.2 us"
+    else:
+        gi = "0.8 us"
+
+    # BW
+    bw_val = d4 & 0x7
+    if bw_val == 0:
+        bw = "20 MHz"
+    elif bw_val == 1:
+        bw = "40 MHz"
+    elif bw_val == 2:
+        bw = "80 MHz"
+    elif bw_val == 3:
+        bw = "160 MHz"
+    else:
+        bw = "20 MHz"
+
+    return standard, mcs, bw, gi, nss, coding
+
+def calculate_phy_rate(standard, mcs_str, bw_str, gi_str, nss_str):
+    try:
+        bw_mhz = 20
+        if "160" in bw_str:
+            bw_mhz = 160
+        elif "80" in bw_str:
+            bw_mhz = 80
+        elif "40" in bw_str:
+            bw_mhz = 40
+
+        nss = 1
+        if nss_str:
+            try:
+                nss = int(nss_str)
+            except ValueError:
+                pass
+
+        if standard == "Legacy":
+            rate_val = float(mcs_str.split()[0])
+            return rate_val * 1e6
+
+        mcs = 0
+        if "MCS" in mcs_str:
+            try:
+                mcs = int(mcs_str.split()[-1])
+            except ValueError:
+                pass
+
+        if standard == "HT":
+            nsd = 108 if bw_mhz == 40 else 52
+            duration = 3.6e-6 if "0.4" in gi_str else 4.0e-6
+            base_mcs = mcs % 8
+            nss = (mcs // 8) + 1
+            mcs_bits = {0: 0.5, 1: 1.0, 2: 1.5, 3: 2.0, 4: 3.0, 5: 4.0, 6: 4.5, 7: 5.0}[base_mcs]
+            return (nsd * nss * mcs_bits) / duration
+
+        elif standard == "VHT":
+            nsd_map = {20: 52, 40: 108, 80: 242, 160: 484}
+            nsd = nsd_map.get(bw_mhz, 52)
+            duration = 3.6e-6 if "0.4" in gi_str else 4.0e-6
+            mcs_bits = {0: 0.5, 1: 1.0, 2: 1.5, 3: 2.0, 4: 3.0, 5: 4.0, 6: 4.5, 7: 5.0, 8: 6.0, 9: 6.6667}.get(mcs, 0.5)
+            return (nsd * nss * mcs_bits) / duration
+
+        elif "HE" in standard or standard == "EHT":
+            nsd_map = {20: 234, 40: 468, 80: 980, 160: 1960}
+            nsd = nsd_map.get(bw_mhz, 234)
+            if "1.6" in gi_str:
+                duration = 14.4e-6
+            elif "3.2" in gi_str:
+                duration = 16.0e-6
+            else:
+                duration = 13.6e-6
+            mcs_bits = {0: 0.5, 1: 1.0, 2: 1.5, 3: 2.0, 4: 3.0, 5: 4.0, 6: 4.5, 7: 5.0, 8: 6.0, 9: 6.6667, 10: 7.5, 11: 8.3333}.get(mcs, 0.5)
+            return (nsd * nss * mcs_bits) / duration
+
+    except Exception:
+        pass
+    # Fallback to config name heuristics
+    if "160mhz" in bw_str.lower():
+        return 122.5e6
+    elif "80mhz" in bw_str.lower():
+        return 61.25e6
+    elif "40mhz" in bw_str.lower():
+        return 28.8e6
+    else:
+        return 14.625e6
+
+def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=None, standard="Legacy", data_rate=14.625e6, is_sounding=False):
     if fc_type == "Aggregation Overhead":
         return 20e-6 + (size * 8) / 24e6
-    if fc_type == "HE TB feedback NDP":
+    if fc_type == "HE TB feedback NDP" or is_sounding:
         return 72e-6
 
     # Handle multiple values
-    version_str = fc_version.split(',')[0] if fc_version else ""
     type_str = fc_type.split(',')[0] if fc_type else ""
     subtype_str = fc_subtype.split(',')[0] if fc_subtype else ""
-
-    try:
-        v = int(version_str, 0) if version_str else 0
-    except (ValueError, TypeError):
-        v = 0
-
-    if v > 0:
-        return 20e-6 + (size * 8) / 24e6
 
     try:
         t = int(type_str, 0)
         st = int(subtype_str, 0)
     except (ValueError, TypeError):
         return 20e-6 + (size * 8) / 6e6
-        
-    config_lower = (config_name + "_" + subdir).lower()
-    if "160mhz" in config_lower:
-        data_rate = 122.5e6
-    elif "80mhz" in config_lower:
-        data_rate = 61.25e6
-    elif "40mhz" in config_lower:
-        data_rate = 28.8e6
+
+    # Preamble duration based on standard
+    if "HE" in standard or standard == "EHT":
+        preamble = 124e-6
+    elif standard == "VHT":
+        preamble = 40e-6
+    elif standard == "HT":
+        preamble = 36e-6
     else:
-        data_rate = 14.625e6
-        
+        preamble = 20e-6
+
     if t == 0:  # Management
         return 20e-6 + (size * 8) / 6e6
     elif t == 1:  # Control
         return 20e-6 + (size * 8) / 24e6
     elif t == 2:  # Data
-        return 124e-6 + (size * 8) / data_rate
+        return preamble + (size * 8) / data_rate
     else:
         return 20e-6 + (size * 8) / 6e6
 
@@ -260,22 +410,57 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
     stats = {}
     total = 0
     total_airtime = 0.0
+    
+    fields = [
+        "wlan.fc.version",                    # 0
+        "wlan.fc.type",                       # 1
+        "wlan.fc.subtype",                    # 2
+        "frame.len",                          # 3
+        "radiotap.length",                    # 4
+        "radiotap.channel.freq",              # 5
+        "radiotap.dbm_antsignal",             # 6
+        "radiotap.txpower",                   # 7
+        "radiotap.datarate",                  # 8
+        "radiotap.present.mcs",               # 9
+        "radiotap.mcs.index",                 # 10
+        "radiotap.mcs.bw",                    # 11
+        "radiotap.mcs.gi",                    # 12
+        "radiotap.mcs.fec",                   # 13
+        "radiotap.present.ampdu",             # 14
+        "radiotap.ampdu.reference",           # 15
+        "radiotap.ampdu.flags.last",          # 16
+        "radiotap.present.vht",               # 17
+        "radiotap.vht.mcs.0",                 # 18
+        "radiotap.vht.nss.0",                 # 19
+        "radiotap.vht.bw",                    # 20
+        "radiotap.vht.gi",                    # 21
+        "radiotap.vht.coding.0",              # 22
+        "radiotap.present.he",                # 23
+        "radiotap.present.he_mu",             # 24
+        "radiotap.he.data_1.ppdu_format",     # 25
+        "radiotap.he.data_3.data_mcs",        # 26
+        "radiotap.he.data_3.coding",          # 27
+        "radiotap.he.data_5.gi",              # 28
+        "radiotap.he.data_6.nsts",            # 29
+        "radiotap.present.0_length.psdu",     # 30
+        "radiotap.present.word",              # 31
+        "radiotap.he.data_3",                 # 32
+        "radiotap.he.data_4",                 # 33
+        "radiotap.he.data_5",                 # 34
+    ]
+
+    def get_field_val(parts, idx):
+        if idx < len(parts) and parts[idx]:
+            return parts[idx].split(',')[0].strip()
+        return ""
+
     for pf in pcap_files:
         if not os.path.exists(pf):
             continue
         try:
-            cmd = [
-                "tshark", "-n", "-r", pf, "-T", "fields",
-                "-e", "wlan.fc.version",
-                "-e", "wlan.fc.type",
-                "-e", "wlan.fc.subtype",
-                "-e", "frame.len",
-                "-e", "radiotap.length",
-                "-e", "radiotap.channel.freq",
-                "-e", "radiotap.dbm_antsignal",
-                "-e", "radiotap.txpower",
-                "-e", "radiotap.present.he_mu"
-            ]
+            cmd = ["tshark", "-n", "-r", pf, "-T", "fields"]
+            for f in fields:
+                cmd.extend(["-e", f])
             if display_filter:
                 cmd.extend(["-Y", display_filter])
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
@@ -291,7 +476,9 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 if len(parts) < 4:
                     continue
                 
-                is_wlan_present = parts[0] in ["0", "1", "2"]
+                fc_version = get_field_val(parts, 0)
+                is_wlan_present = fc_version in ["0", "1", "2"]
+                
                 if not is_wlan_present:
                     fc_version = ""
                     fc_type = ""
@@ -301,17 +488,99 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     freq_str = parts[2] if len(parts) > 2 else ""
                     antsig_str = parts[3] if len(parts) > 3 else ""
                     txpower_str = ""
-                    is_he_mu_str = ""
+                    present_word_str = ""
+                    is_ampdu = False
+                    is_sounding = False
+                    standard = "Legacy"
+                    mcs = "Legacy"
+                    bw = "20 MHz"
+                    gi = "0.8 us"
+                    nss = "1"
+                    coding = ""
                 else:
-                    fc_version = parts[0].split(',')[0] if parts[0] else ""
-                    fc_type = parts[1].split(',')[0] if parts[1] else ""
-                    fc_subtype = parts[2].split(',')[0] if parts[2] else ""
-                    size_str = parts[3].split(',')[0] if parts[3] else ""
-                    radiotap_len_str = parts[4].split(',')[0] if len(parts) > 4 and parts[4] else ""
-                    freq_str = parts[5].split(',')[0] if len(parts) > 5 and parts[5] else ""
-                    antsig_str = parts[6].split(',')[0] if len(parts) > 6 and parts[6] else ""
-                    txpower_str = parts[7].split(',')[0] if len(parts) > 7 and parts[7] else ""
-                    is_he_mu_str = parts[8].split(',')[0] if len(parts) > 8 and parts[8] else ""
+                    fc_type = get_field_val(parts, 1)
+                    fc_subtype = get_field_val(parts, 2)
+                    size_str = get_field_val(parts, 3)
+                    radiotap_len_str = get_field_val(parts, 4)
+                    freq_str = get_field_val(parts, 5)
+                    antsig_str = get_field_val(parts, 6)
+                    txpower_str = get_field_val(parts, 7)
+                    present_word_str = get_field_val(parts, 31)
+                    
+                    is_sounding = get_field_val(parts, 30) in ("True", "1")
+                    is_ampdu = get_field_val(parts, 14) in ("True", "1")
+                    
+                    is_eht = False
+                    if present_word_str:
+                        try:
+                            words = [int(w, 16) for w in present_word_str.split(',')]
+                            if len(words) > 1 and (words[1] & 0x00000008):
+                                is_eht = True
+                        except ValueError:
+                            pass
+
+                    if is_eht:
+                        standard = "EHT"
+                        mcs = "EHT"
+                        bw = "20 MHz"
+                        gi = "0.8 us"
+                        nss = "1"
+                        coding = ""
+                    elif get_field_val(parts, 23) in ("True", "1"):
+                        raw_d1 = get_field_val(parts, 25)
+                        raw_d3 = get_field_val(parts, 32)
+                        raw_d4 = get_field_val(parts, 33)
+                        raw_d5 = get_field_val(parts, 34)
+                        standard, mcs, bw, gi, nss, coding = decode_he(raw_d1, raw_d3, raw_d4, raw_d5)
+                        if standard == "HE-SU" and get_field_val(parts, 24) in ("True", "1"):
+                            standard = "HE-MU"
+                    elif get_field_val(parts, 17) in ("True", "1"):
+                        standard = "VHT"
+                        vht_mcs_val = get_field_val(parts, 18)
+                        mcs = f"VHT-MCS {vht_mcs_val}" if vht_mcs_val else "VHT"
+                        vht_nss_val = get_field_val(parts, 19)
+                        nss = vht_nss_val if vht_nss_val else "1"
+                        
+                        vht_bw_val = get_field_val(parts, 20)
+                        if vht_bw_val == "0": bw = "20 MHz"
+                        elif vht_bw_val == "1": bw = "40 MHz"
+                        elif vht_bw_val == "4": bw = "80 MHz"
+                        elif vht_bw_val == "11": bw = "160 MHz"
+                        else: bw = "20 MHz"
+                        
+                        vht_gi_val = get_field_val(parts, 21)
+                        gi = "0.4 us" if vht_gi_val == "1" else "0.8 us"
+                        
+                        vht_coding_val = get_field_val(parts, 22)
+                        coding = "LDPC" if vht_coding_val == "1" else "BCC"
+                    elif get_field_val(parts, 9) in ("True", "1"):
+                        standard = "HT"
+                        ht_mcs_val = get_field_val(parts, 10)
+                        mcs = f"HT-MCS {ht_mcs_val}" if ht_mcs_val else "HT"
+                        if ht_mcs_val:
+                            try:
+                                nss = str((int(ht_mcs_val) // 8) + 1)
+                            except ValueError:
+                                nss = "1"
+                        else:
+                            nss = "1"
+                        
+                        ht_bw_val = get_field_val(parts, 11)
+                        bw = "40 MHz" if ht_bw_val == "1" else "20 MHz"
+                        
+                        ht_gi_val = get_field_val(parts, 12)
+                        gi = "0.4 us" if ht_gi_val == "1" else "0.8 us"
+                        
+                        ht_fec_val = get_field_val(parts, 13)
+                        coding = "LDPC" if ht_fec_val == "1" else "BCC"
+                    else:
+                        standard = "Legacy"
+                        datarate_val = get_field_val(parts, 8)
+                        mcs = f"{datarate_val} Mbps" if datarate_val else "Legacy"
+                        bw = "20 MHz"
+                        gi = "0.8 us"
+                        nss = "1"
+                        coding = ""
                 
                 try:
                     size = int(size_str)
@@ -330,17 +599,15 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 except (ValueError, TypeError):
                     v = 0
                 
-                is_he_mu = (is_he_mu_str.strip() == "True")
-                
                 if (not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == ""):
                     if config_name in ["NdpFeedbackReport", "FeedbackUnderInterference"]:
-                        key = ("HE TB feedback NDP", "", is_he_mu)
+                        key = ("HE TB feedback NDP", "", standard, mcs, bw, gi, nss, coding, is_ampdu, True)
                     else:
-                        key = ("Aggregation Overhead", "", is_he_mu)
+                        key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding)
                 elif v > 0:
-                    key = ("Aggregation Overhead", "", is_he_mu)
+                    key = ("Aggregation Overhead", "", standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding)
                 else:
-                    key = (fc_type, fc_subtype, is_he_mu)
+                    key = (fc_type, fc_subtype, standard, mcs, bw, gi, nss, coding, is_ampdu, is_sounding)
                 
                 if key not in stats:
                     stats[key] = {
@@ -351,7 +618,8 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                         "txpowers": []
                     }
                     
-                airtime = estimate_airtime(key[0], key[1], size, config_name, subdir, fc_version)
+                data_rate = calculate_phy_rate(standard, mcs, bw, gi, nss)
+                airtime = estimate_airtime(key[0], key[1], size, config_name, subdir, fc_version, standard, data_rate, is_sounding)
                 stats[key]["sizes"].append(size)
                 stats[key]["airtimes"].append(airtime)
                 
@@ -558,10 +826,7 @@ def make_table_md(stats, total):
     
     sorted_stats = sorted(stats.items(), key=lambda x: x[1]["count"], reverse=True)
     for key, stat in sorted_stats:
-        fc_type = key[0]
-        fc_subtype = key[1]
-        is_he_mu = key[2] if len(key) > 2 else False
-        name = get_packet_type_name(fc_type, fc_subtype, is_he_mu=is_he_mu)
+        name = unpack_key_to_name(key)
         pct = (stat["count"] / total) * 100
         mean_sz = f"{stat['mean']:.1f} B"
         std_sz = f"{stat['std']:.1f} B"
@@ -591,7 +856,7 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
     for cfg in valid_configs:
         stats = config_results[cfg]["global"]["stats"]
         for key in stats.keys():
-            name = get_packet_type_name(key[0], key[1], is_he_mu=key[2] if len(key) > 2 else False)
+            name = unpack_key_to_name(key)
             packet_types.add(name)
             
     packet_types = sorted(list(packet_types))
@@ -607,7 +872,7 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
         stats = global_res["stats"]
         
         for key, stat in stats.items():
-            name = get_packet_type_name(key[0], key[1], is_he_mu=key[2] if len(key) > 2 else False)
+            name = unpack_key_to_name(key)
             pct = (stat["count"] / total) * 100
             count_data[name][idx] = pct
             airtime_data[name][idx] = stat["airtime_pct"]
@@ -825,7 +1090,7 @@ def main():
             if "global" in res:
                 stats = res["global"]["stats"]
                 for key in stats.keys():
-                    name = get_packet_type_name(key[0], key[1], is_he_mu=key[2] if len(key) > 2 else False)
+                    name = unpack_key_to_name(key)
                     global_packet_types.add(name)
                     
     global_packet_types = sorted(list(global_packet_types))
@@ -852,14 +1117,14 @@ def main():
                     serialized[subdir][config_name]["global"] = {
                         "total": g["total"],
                         "used_ap_only": g["used_ap_only"],
-                        "stats": {f"{k[0]},{k[1]},{k[2] if len(k) > 2 else False}": v for k, v in g["stats"].items()}
+                        "stats": {",".join(str(x) for x in k): v for k, v in g["stats"].items()}
                     }
                 if "per_flow" in res:
                     serialized[subdir][config_name]["per_flow"] = {}
                     for h_name, h_val in res["per_flow"].items():
                         serialized[subdir][config_name]["per_flow"][h_name] = {
                             "total": h_val["total"],
-                            "stats": {f"{k[0]},{k[1]},{k[2] if len(k) > 2 else False}": v for k, v in h_val["stats"].items()}
+                            "stats": {",".join(str(x) for x in k): v for k, v in h_val["stats"].items()}
                         }
         json.dump(serialized, f, indent=2)
     print(f"Finished analysis. Output written to: {summary_json_path.relative_to(REPOSITORY_ROOT)}")

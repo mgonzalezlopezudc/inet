@@ -160,42 +160,47 @@ Total over-the-air packets captured (Global BSS/AP): **4465**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1239 | 27.75% | 1211.7 B | 344.0 B | 786.8 us | 188.2 us | 5010 MHz | -72.0 dBm | - | 67.41% | 48.74% |
-| Data: QoS Null (HE-MU OFDMA) | 983 | 22.02% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5010 MHz, 5013 MHz, 5017 MHz | -72.0 dBm | - | 9.69% | 7.01% |
-| Control: Block Ack (BA) | 581 | 13.01% | 68.2 B | 29.5 B | 42.7 us | 9.8 us | 5010 MHz | - | 10.0 dBm | 1.72% | 1.24% |
-| Control: Ack | 553 | 12.39% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.94% | 0.68% |
-| Control: Trigger | 517 | 11.58% | 46.1 B | 1.8 B | 35.4 us | 0.6 us | 5010 MHz | - | 10.0 dBm | 1.26% | 0.91% |
-| Data: QoS Data (HE-MU OFDMA) | 498 | 11.15% | 770.0 B | 0.0 B | 545.2 us | 0.0 us | 5005 MHz, 5015 MHz | -72.0 dBm | - | 18.77% | 13.58% |
-| Control: Block Ack Request (BAR) | 88 | 1.97% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.17% | 0.12% |
-| Management: Action | 6 | 0.13% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 1239 | 27.75% | 1211.7 B | 344.0 B | 786.8 us | 188.2 us | 5010 MHz | -72.0 dBm | - | 71.14% | 48.74% |
+| Data: QoS Null [HE-TB, HE-MCS 2, 20 MHz, GI 3.2 us, LDPC] | 977 | 21.88% | 34.0 B | 0.0 B | 136.4 us | 0.0 us | 5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5010 MHz, 5013 MHz, 5017 MHz | -72.0 dBm | - | 9.72% | 6.66% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 581 | 13.01% | 68.2 B | 29.5 B | 42.7 us | 9.8 us | 5010 MHz | - | 10.0 dBm | 1.81% | 1.24% |
+| Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 547 | 12.25% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.98% | 0.67% |
+| Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 517 | 11.58% | 46.1 B | 1.8 B | 35.4 us | 0.6 us | 5010 MHz | - | 10.0 dBm | 1.33% | 0.91% |
+| Data: QoS Data [HE-TB, HE-MCS 2, 20 MHz, GI 3.2 us, LDPC] | 498 | 11.15% | 770.0 B | 0.0 B | 404.8 us | 0.0 us | 5005 MHz, 5015 MHz | -72.0 dBm | - | 14.71% | 10.08% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 88 | 1.97% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.18% | 0.12% |
+| Data: QoS Null [HE-TB, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 6 | 0.13% | 34.0 B | 0.0 B | 161.2 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -72.0 dBm | - | 0.07% | 0.05% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.13% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.01% | 0.01% |
 
 ### Configuration: `ImplicitBsr`
 Total over-the-air packets captured (Global BSS/AP): **2425**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1398 | 57.65% | 1260.2 B | 324.9 B | 813.3 us | 177.7 us | 5010 MHz | -72.0 dBm | - | 97.25% | 56.85% |
-| Control: Ack | 828 | 34.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 1.75% | 1.02% |
-| Control: Block Ack Request (BAR) | 92 | 3.79% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.22% | 0.13% |
-| Control: Block Ack (BA) | 89 | 3.67% | 148.8 B | 17.0 B | 69.6 us | 5.7 us | 5010 MHz | - | 10.0 dBm | 0.53% | 0.31% |
-| Management: Action | 6 | 0.25% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.04% | 0.02% |
-| Data: QoS Null (HE-MU OFDMA) | 6 | 0.25% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5013 MHz, 5017 MHz | -72.0 dBm | - | 0.07% | 0.04% |
-| Control: Trigger | 3 | 0.12% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
-| Data: QoS Data (HE-MU OFDMA) | 3 | 0.12% | 770.0 B | 0.0 B | 545.2 us | 0.0 us | 5005 MHz | -72.0 dBm | - | 0.14% | 0.08% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 1398 | 57.65% | 1260.2 B | 324.9 B | 813.3 us | 177.7 us | 5010 MHz | -72.0 dBm | - | 97.28% | 56.85% |
+| Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 822 | 33.90% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.73% | 1.01% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 92 | 3.79% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.22% | 0.13% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 89 | 3.67% | 148.8 B | 17.0 B | 69.6 us | 5.7 us | 5010 MHz | - | 10.0 dBm | 0.53% | 0.31% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.25% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.04% | 0.02% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.25% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.01% | 0.01% |
+| Data: QoS Null [HE-TB, HE-MCS 2, 20 MHz, GI 3.2 us, LDPC] | 6 | 0.25% | 34.0 B | 0.0 B | 136.4 us | 0.0 us | 5013 MHz, 5017 MHz | -72.0 dBm | - | 0.07% | 0.04% |
+| Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 3 | 0.12% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
+| Data: QoS Data [HE-TB, HE-MCS 2, 20 MHz, GI 3.2 us, LDPC] | 3 | 0.12% | 770.0 B | 0.0 B | 404.8 us | 0.0 us | 5005 MHz | -72.0 dBm | - | 0.10% | 0.06% |
 
 ### Configuration: `StaleBsr`
 Total over-the-air packets captured (Global BSS/AP): **4261**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1207 | 28.33% | 1236.1 B | 327.1 B | 800.2 us | 178.9 us | 5010 MHz | -72.0 dBm | - | 68.48% | 48.29% |
-| Data: QoS Null (HE-MU OFDMA) | 920 | 21.59% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5013 MHz, 5017 MHz | -72.0 dBm | - | 9.30% | 6.56% |
-| Control: Block Ack (BA) | 559 | 13.12% | 67.4 B | 29.5 B | 42.5 us | 9.8 us | 5010 MHz | - | 10.0 dBm | 1.68% | 1.19% |
-| Control: Ack | 511 | 11.99% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.89% | 0.63% |
-| Control: Trigger | 499 | 11.71% | 47.8 B | 6.9 B | 35.9 us | 2.3 us | 5010 MHz | - | 10.0 dBm | 1.27% | 0.90% |
-| Data: QoS Data (HE-MU OFDMA) | 470 | 11.03% | 770.0 B | 0.0 B | 545.2 us | 0.0 us | 5005 MHz, 5015 MHz | -72.0 dBm | - | 18.17% | 12.81% |
-| Control: Block Ack Request (BAR) | 89 | 2.09% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.18% | 0.12% |
-| Management: Action | 6 | 0.14% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 1207 | 28.33% | 1236.1 B | 327.1 B | 800.2 us | 178.9 us | 5010 MHz | -72.0 dBm | - | 72.00% | 48.29% |
+| Data: QoS Null [HE-TB, HE-MCS 2, 20 MHz, GI 3.2 us, LDPC] | 815 | 19.13% | 34.0 B | 0.0 B | 136.4 us | 0.0 us | 5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5013 MHz, 5017 MHz | -72.0 dBm | - | 8.29% | 5.56% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 559 | 13.12% | 67.4 B | 29.5 B | 42.5 us | 9.8 us | 5010 MHz | - | 10.0 dBm | 1.77% | 1.19% |
+| Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 505 | 11.85% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.93% | 0.62% |
+| Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 499 | 11.71% | 47.8 B | 6.9 B | 35.9 us | 2.3 us | 5010 MHz | - | 10.0 dBm | 1.34% | 0.90% |
+| Data: QoS Data [HE-TB, HE-MCS 2, 20 MHz, GI 3.2 us, LDPC] | 470 | 11.03% | 770.0 B | 0.0 B | 404.8 us | 0.0 us | 5005 MHz, 5015 MHz | -72.0 dBm | - | 14.18% | 9.51% |
+| Data: QoS Null [HE-TB, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 105 | 2.46% | 34.0 B | 0.0 B | 161.2 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -72.0 dBm | - | 1.26% | 0.85% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 89 | 2.09% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.19% | 0.12% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.14% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.01% | 0.01% |
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
