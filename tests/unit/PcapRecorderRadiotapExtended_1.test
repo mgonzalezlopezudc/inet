@@ -1,13 +1,16 @@
 %description:
-Test that PcapRecorder dynamically sizes the Radiotap present bitmap (using multiple 32-bit words with extension bits) when a high-bit flag (such as bit 34 for EHT) is present.
+Test that PcapRecorder dynamically sizes the Radiotap present bitmap and populates the Rate, MCS, A-MPDU, VHT, and 0-length-PSDU fields.
 
 %includes:
 #include <vector>
+#include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/common/packet/recorder/PcapRecorder.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 
 %file: TestNetwork.ned
 
@@ -79,6 +82,17 @@ class MockEhtMode : public Ieee80211EhtMode
     MockEhtMode() : Ieee80211EhtMode("mock-eht", nullptr, nullptr, BAND_6GHZ) {}
 };
 
+static void appendMpdu(Packet& aggregate, const std::vector<uint8_t>& bytes, bool appendPadding)
+{
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(bytes.size());
+    aggregate.insertAtBack(delimiter);
+    aggregate.insertAtBack(makeShared<BytesChunk>(bytes));
+    auto paddingLength = (4 - (4 + bytes.size()) % 4) % 4;
+    if (appendPadding && paddingLength != 0)
+        aggregate.insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
+}
+
 Define_Module(TestablePcapRecorder);
 
 %activity:
@@ -87,36 +101,142 @@ auto recorder = check_and_cast<TestablePcapRecorder *>(getModuleByPath("recorder
 auto writer = new RecordingPcapWriter();
 recorder->setWriter(writer);
 
-Packet packet("eht-packet");
-// Set the EHT mode tag
-auto modeReq = packet.addTag<Ieee80211ModeReq>();
-MockEhtMode mockEhtMode;
-modeReq->setMode(&mockEhtMode);
+auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
+    std::string hexDump = "";
+    for (auto b : rec) {
+        char buf[10];
+        sprintf(buf, "%02X ", b);
+        hexDump += buf;
+    }
+    EV << "Test " << idx << " Size: " << rec.size() << ", Bytes: " << hexDump << "\n";
+};
 
-recorder->writeIeee80211(&packet);
+// Test 1: EHT Packet
+{
+    Packet packet("eht-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto modeReq = packet.addTag<Ieee80211ModeReq>();
+    MockEhtMode mockEhtMode;
+    modeReq->setMode(&mockEhtMode);
 
-ASSERT(writer->records.size() == 1);
-const auto& record = writer->records[0];
+    recorder->writeIeee80211(&packet);
 
-std::string hexDump = "";
-for (auto b : record) {
-    char buf[10];
-    sprintf(buf, "%02X ", b);
-    hexDump += buf;
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(1, record);
+
+    ASSERT(record.size() >= 20);
+    ASSERT(record[0] == 0); // version
+    ASSERT(record[1] == 0); // pad
+    ASSERT(record[2] == 20 && record[3] == 0); // length (20)
+    ASSERT(record[4] == 0x02 && record[5] == 0 && record[6] == 0 && record[7] == 0x80); // Word 0 (flags + extension bit)
+    ASSERT(record[8] == 0x08 && record[9] == 0 && record[10] == 0 && record[11] == 0); // Word 1 (EHT bit)
+    ASSERT(record[12] == 0x10); // flags (RADIOTAP_F_FCS)
+    ASSERT(record[13] == 0 && record[14] == 0 && record[15] == 0); // padding to 4-byte boundary
+    ASSERT(record[16] == 0 && record[17] == 0 && record[18] == 0 && record[19] == 0); // EHT known u32 (0)
 }
-EV << "Record Size: " << record.size() << ", Bytes: " << hexDump << "\n";
 
-ASSERT(record.size() >= 20);
-ASSERT(record[0] == 0); // version
-ASSERT(record[1] == 0); // pad
-ASSERT(record[2] == 20 && record[3] == 0); // length (20)
-ASSERT(record[4] == 0x02 && record[5] == 0 && record[6] == 0 && record[7] == 0x80); // Word 0 (flags + extension bit)
-ASSERT(record[8] == 0x08 && record[9] == 0 && record[10] == 0 && record[11] == 0); // Word 1 (EHT bit)
-ASSERT(record[12] == 0x10); // flags (RADIOTAP_F_FCS)
-ASSERT(record[13] == 0 && record[14] == 0 && record[15] == 0); // padding to 4-byte boundary
-ASSERT(record[16] == 0 && record[17] == 0 && record[18] == 0 && record[19] == 0); // EHT known u32 (0)
+// Test 2: HT Packet
+{
+    writer->records.clear();
+    Packet packet("ht-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto modeReq = packet.addTag<Ieee80211ModeReq>();
+    auto htMode = Ieee80211HtCompliantModes::getCompliantMode(&Ieee80211HtmcsTable::htMcs0BW20MHz, Ieee80211HtMode::BAND_5GHZ, Ieee80211HtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG);
+    modeReq->setMode(htMode);
 
-EV << "Radiotap multi-word present flags and alignment tested successfully.\n";
+    recorder->writeIeee80211(&packet);
+
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(2, record);
+    ASSERT(record.size() == 13 + 4);
+    ASSERT(record[0] == 0);
+    ASSERT(record[2] == 13 && record[3] == 0);
+    ASSERT(record[4] == 0x06 && record[5] == 0 && record[6] == 0x08 && record[7] == 0);
+    ASSERT(record[8] == 0x10);
+    ASSERT(record[9] == 13); // 6.5 Mbps / 0.5 = 13
+    ASSERT(record[10] == 0x17);
+    ASSERT(record[11] == 0x00);
+    ASSERT(record[12] == 0);
+}
+
+// Test 3: VHT Packet
+{
+    writer->records.clear();
+    Packet packet("vht-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto modeReq = packet.addTag<Ieee80211ModeReq>();
+    auto vhtMode = Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs0BW20MHzNss1, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG);
+    modeReq->setMode(vhtMode);
+
+    recorder->writeIeee80211(&packet);
+
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(3, record);
+    ASSERT(record.size() == 22 + 4);
+    ASSERT(record[0] == 0);
+    ASSERT(record[2] == 22 && record[3] == 0);
+    ASSERT(record[4] == 0x06 && record[5] == 0 && record[6] == 0x20 && record[7] == 0);
+    ASSERT(record[8] == 0x10);
+    ASSERT(record[9] == 13); // 6.5 Mbps / 0.5 = 13
+    ASSERT(record[10] == 0x45 && record[11] == 0);
+    ASSERT(record[12] == 0);
+    ASSERT(record[13] == 0);
+    ASSERT(record[14] == 1);
+    ASSERT(record[18] == 0);
+}
+
+// Test 4: A-MPDU Packet
+{
+    writer->records.clear();
+    const std::vector<uint8_t> firstMpdu = {0x08, 0x01, 0x02, 0x03, 0x04};
+    const std::vector<uint8_t> secondMpdu = {0x88, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16};
+
+    Packet aggregate("ampdu");
+    aggregate.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xAA, 0xBB}));
+    appendMpdu(aggregate, firstMpdu, true);
+    appendMpdu(aggregate, secondMpdu, false);
+    aggregate.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xCC, 0xDD, 0xEE}));
+
+    recorder->writeIeee80211(&aggregate, B(2), B(3));
+
+    ASSERT(writer->records.size() == 2);
+    for (size_t i = 0; i < writer->records.size(); i++) {
+        const auto& record = writer->records[i];
+        printRecord(4 + i, record);
+        const auto& expectedMpdu = (i == 0 ? firstMpdu : secondMpdu);
+        ASSERT(record.size() == 20 + expectedMpdu.size());
+        ASSERT(record[2] == 20 && record[3] == 0);
+        ASSERT(record[4] == 0x02 && record[5] == 0 && record[6] == 0x10 && record[7] == 0);
+        ASSERT(record[8] == 0x10);
+        if (i == 0) {
+            ASSERT(record[16] == 0x04 && record[17] == 0);
+        } else {
+            ASSERT(record[16] == 0x0C && record[17] == 0);
+        }
+    }
+}
+
+// Test 5: 0-length-PSDU Packet
+{
+    writer->records.clear();
+    Packet packet("ndp-packet");
+
+    recorder->writeIeee80211(&packet);
+
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(6, record);
+    ASSERT(record.size() == 10);
+    ASSERT(record[2] == 10 && record[3] == 0);
+    ASSERT(record[4] == 0x02 && record[5] == 0 && record[6] == 0 && record[7] == 0x04);
+    ASSERT(record[8] == 0x10);
+    ASSERT(record[9] == 0);
+}
+
+EV << "Radiotap extended fields and present bitmaps tested successfully.\n";
 
 %contains: stdout
-Radiotap multi-word present flags and alignment tested successfully.
+Radiotap extended fields and present bitmaps tested successfully.
