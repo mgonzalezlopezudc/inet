@@ -137,14 +137,14 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `OperatingModeIndication`
-Total over-the-air packets captured (Global BSS/AP): **2637**
+Total over-the-air packets captured (Global BSS/AP): **2502**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1558 | 59.08% | 1070.0 B | 0.0 B | 97.64% | 55.25% |
-| Control: Ack | 1073 | 40.69% | 14.0 B | 0.0 B | 2.34% | 1.32% |
-| Control: Trigger | 3 | 0.11% | 40.0 B | 0.0 B | 0.01% | 0.01% |
-| Control: Block Ack (BA) | 3 | 0.11% | 46.0 B | 0.0 B | 0.01% | 0.01% |
+| Data: QoS Data | 1476 | 58.99% | 1070.0 B | 0.0 B | 97.63% | 52.35% |
+| Control: Ack | 1020 | 40.77% | 14.0 B | 0.0 B | 2.35% | 1.26% |
+| Control: Trigger | 3 | 0.12% | 40.0 B | 0.0 B | 0.01% | 0.01% |
+| Control: Block Ack (BA) | 3 | 0.12% | 46.0 B | 0.0 B | 0.01% | 0.01% |
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.

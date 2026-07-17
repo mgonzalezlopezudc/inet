@@ -154,45 +154,46 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `FullBsrAccounting`
-Total over-the-air packets captured (Global BSS/AP): **4129**
+Total over-the-air packets captured (Global BSS/AP): **4252**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1427 | 34.56% | 1149.3 B | 359.8 B | 80.32% | 53.70% |
-| Data: QoS Null | 942 | 22.81% | 34.0 B | 0.0 B | 10.04% | 6.72% |
-| Control: Block Ack (BA) | 561 | 13.59% | 68.6 B | 29.7 B | 1.80% | 1.20% |
-| Control: Ack | 536 | 12.98% | 14.0 B | 0.0 B | 0.99% | 0.66% |
-| Control: Trigger | 498 | 12.06% | 46.2 B | 2.1 B | 1.32% | 0.88% |
-| Control: Block Ack Request (BAR) | 98 | 2.37% | 24.0 B | 0.0 B | 0.21% | 0.14% |
-| A-MPDU Delimiter / Aggregation Overhead | 61 | 1.48% | 3425.0 B | 1173.0 B | 5.30% | 3.54% |
-| Management: Action | 6 | 0.15% | 37.0 B | 0.0 B | 0.03% | 0.02% |
+| Data: QoS Data | 1462 | 34.38% | 1132.5 B | 362.1 B | 79.49% | 54.35% |
+| Data: QoS Null | 983 | 23.12% | 34.0 B | 0.0 B | 10.25% | 7.01% |
+| Control: Block Ack (BA) | 581 | 13.66% | 68.2 B | 29.5 B | 1.82% | 1.24% |
+| Control: Ack | 553 | 13.01% | 14.0 B | 0.0 B | 1.00% | 0.68% |
+| Control: Trigger | 517 | 12.16% | 46.1 B | 1.8 B | 1.34% | 0.91% |
+| Control: Block Ack Request (BAR) | 88 | 2.07% | 24.0 B | 0.0 B | 0.18% | 0.12% |
+| A-MPDU Delimiter / Aggregation Overhead | 61 | 1.43% | 3729.2 B | 972.7 B | 5.63% | 3.85% |
+| Management: Action | 6 | 0.14% | 37.0 B | 0.0 B | 0.03% | 0.02% |
+| Management: Association Request | 1 | 0.02% | 2744.0 B | 0.0 B | 0.27% | 0.18% |
 
 ### Configuration: `ImplicitBsr`
-Total over-the-air packets captured (Global BSS/AP): **2373**
+Total over-the-air packets captured (Global BSS/AP): **2348**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1308 | 55.12% | 1293.1 B | 313.6 B | 94.98% | 54.37% |
-| Control: Ack | 844 | 35.57% | 14.0 B | 0.0 B | 1.82% | 1.04% |
-| Control: Block Ack Request (BAR) | 93 | 3.92% | 24.0 B | 0.0 B | 0.23% | 0.13% |
-| Control: Block Ack (BA) | 90 | 3.79% | 148.9 B | 16.9 B | 0.55% | 0.31% |
-| A-MPDU Delimiter / Aggregation Overhead | 22 | 0.93% | 3525.1 B | 1130.0 B | 2.30% | 1.31% |
-| Management: Action | 7 | 0.29% | 37.0 B | 0.0 B | 0.04% | 0.02% |
-| Data: QoS Null | 6 | 0.25% | 34.0 B | 0.0 B | 0.07% | 0.04% |
+| Data: QoS Data | 1301 | 55.41% | 1291.2 B | 314.8 B | 94.80% | 54.01% |
+| Control: Ack | 828 | 35.26% | 14.0 B | 0.0 B | 1.79% | 1.02% |
+| Control: Block Ack Request (BAR) | 92 | 3.92% | 24.0 B | 0.0 B | 0.23% | 0.13% |
+| Control: Block Ack (BA) | 89 | 3.79% | 148.8 B | 17.0 B | 0.54% | 0.31% |
+| A-MPDU Delimiter / Aggregation Overhead | 23 | 0.98% | 3677.8 B | 1074.3 B | 2.51% | 1.43% |
+| Management: Action | 6 | 0.26% | 37.0 B | 0.0 B | 0.04% | 0.02% |
+| Data: QoS Null | 6 | 0.26% | 34.0 B | 0.0 B | 0.08% | 0.04% |
 | Control: Trigger | 3 | 0.13% | 46.0 B | 0.0 B | 0.01% | 0.01% |
 
 ### Configuration: `StaleBsr`
-Total over-the-air packets captured (Global BSS/AP): **4121**
+Total over-the-air packets captured (Global BSS/AP): **4076**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1458 | 35.38% | 1149.0 B | 354.2 B | 81.18% | 54.86% |
-| Data: QoS Null | 935 | 22.69% | 34.0 B | 0.0 B | 9.86% | 6.67% |
-| Control: Block Ack (BA) | 561 | 13.61% | 66.5 B | 29.0 B | 1.75% | 1.18% |
-| Control: Ack | 527 | 12.79% | 14.0 B | 0.0 B | 0.96% | 0.65% |
-| Control: Trigger | 505 | 12.25% | 47.4 B | 6.5 B | 1.34% | 0.90% |
-| Control: Block Ack Request (BAR) | 79 | 1.92% | 24.0 B | 0.0 B | 0.16% | 0.11% |
-| A-MPDU Delimiter / Aggregation Overhead | 50 | 1.21% | 3763.5 B | 1012.5 B | 4.71% | 3.19% |
+| Data: QoS Data | 1437 | 35.26% | 1148.5 B | 357.3 B | 80.75% | 54.05% |
+| Data: QoS Null | 920 | 22.57% | 34.0 B | 0.0 B | 9.80% | 6.56% |
+| Control: Block Ack (BA) | 559 | 13.71% | 67.4 B | 29.5 B | 1.77% | 1.19% |
+| Control: Ack | 511 | 12.54% | 14.0 B | 0.0 B | 0.94% | 0.63% |
+| Control: Trigger | 499 | 12.24% | 47.8 B | 6.9 B | 1.34% | 0.90% |
+| Control: Block Ack Request (BAR) | 89 | 2.18% | 24.0 B | 0.0 B | 0.19% | 0.12% |
+| A-MPDU Delimiter / Aggregation Overhead | 55 | 1.35% | 3717.9 B | 1036.8 B | 5.17% | 3.46% |
 | Management: Action | 6 | 0.15% | 37.0 B | 0.0 B | 0.03% | 0.02% |
 
 ### Analysis of Packet Distribution

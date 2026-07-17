@@ -153,43 +153,43 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `FixedMcs`
-Total over-the-air packets captured (Global BSS/AP): **2044**
+Total over-the-air packets captured (Global BSS/AP): **3831**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1416 | 69.28% | 977.3 B | 149.9 B | 95.55% | 46.63% |
-| Control: Ack | 367 | 17.95% | 14.0 B | 0.0 B | 0.93% | 0.45% |
-| Control: Block Ack (BA) | 111 | 5.43% | 32.0 B | 0.0 B | 0.35% | 0.17% |
-| Control: Block Ack Request (BAR) | 104 | 5.09% | 24.0 B | 0.0 B | 0.30% | 0.15% |
-| Management: Action | 22 | 1.08% | 37.0 B | 0.0 B | 0.16% | 0.08% |
-| A-MPDU Delimiter / Aggregation Overhead | 16 | 0.78% | 4858.0 B | 0.0 B | 2.69% | 1.31% |
-| Control: Trigger | 8 | 0.39% | 46.0 B | 0.0 B | 0.03% | 0.01% |
+| Control: Block Ack (BA) | 1506 | 39.31% | 32.0 B | 0.0 B | 2.64% | 2.31% |
+| Data: QoS Data | 1318 | 34.40% | 2075.3 B | 994.0 B | 94.70% | 82.98% |
+| Control: Trigger | 731 | 19.08% | 46.0 B | 0.0 B | 1.47% | 1.29% |
+| Control: Ack | 199 | 5.19% | 14.0 B | 0.0 B | 0.28% | 0.25% |
+| Control: Block Ack Request (BAR) | 49 | 1.28% | 24.0 B | 0.0 B | 0.08% | 0.07% |
+| Management: Action | 20 | 0.52% | 37.0 B | 0.0 B | 0.08% | 0.07% |
+| A-MPDU Delimiter / Aggregation Overhead | 8 | 0.21% | 4858.0 B | 0.0 B | 0.75% | 0.66% |
 
 ### Configuration: `HeMinstrel`
-Total over-the-air packets captured (Global BSS/AP): **4795**
+Total over-the-air packets captured (Global BSS/AP): **3106**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Control: Block Ack (BA) | 2021 | 42.15% | 32.0 B | 0.0 B | 3.69% | 3.10% |
-| Data: QoS Data | 1518 | 31.66% | 1637.0 B | 493.3 B | 92.10% | 77.38% |
-| Control: Trigger | 988 | 20.60% | 46.0 B | 0.0 B | 2.08% | 1.75% |
-| Control: Ack | 171 | 3.57% | 14.0 B | 0.0 B | 0.25% | 0.21% |
-| Control: Block Ack Request (BAR) | 52 | 1.08% | 24.0 B | 0.0 B | 0.09% | 0.07% |
-| Management: Action | 28 | 0.58% | 37.0 B | 0.0 B | 0.12% | 0.10% |
-| A-MPDU Delimiter / Aggregation Overhead | 17 | 0.35% | 4915.2 B | 228.7 B | 1.68% | 1.41% |
+| Data: QoS Data | 1308 | 42.11% | 1638.8 B | 944.9 B | 94.38% | 66.74% |
+| Control: Block Ack (BA) | 977 | 31.46% | 32.0 B | 0.0 B | 2.12% | 1.50% |
+| Control: Trigger | 440 | 14.17% | 46.0 B | 0.0 B | 1.10% | 0.78% |
+| Control: Ack | 241 | 7.76% | 14.0 B | 0.0 B | 0.42% | 0.30% |
+| Control: Block Ack Request (BAR) | 103 | 3.32% | 24.0 B | 0.0 B | 0.20% | 0.14% |
+| Management: Action | 23 | 0.74% | 37.0 B | 0.0 B | 0.11% | 0.08% |
+| A-MPDU Delimiter / Aggregation Overhead | 14 | 0.45% | 4996.9 B | 340.1 B | 1.67% | 1.18% |
 
 ### Configuration: `HeMinstrelMobile`
-Total over-the-air packets captured (Global BSS/AP): **3327**
+Total over-the-air packets captured (Global BSS/AP): **3106**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1332 | 40.04% | 1699.5 B | 963.4 B | 93.22% | 70.17% |
-| Control: Block Ack (BA) | 1062 | 31.92% | 32.0 B | 0.0 B | 2.16% | 1.63% |
-| Control: Trigger | 489 | 14.70% | 46.0 B | 0.0 B | 1.15% | 0.86% |
-| Control: Ack | 297 | 8.93% | 14.0 B | 0.0 B | 0.49% | 0.37% |
-| Control: Block Ack Request (BAR) | 97 | 2.92% | 24.0 B | 0.0 B | 0.18% | 0.14% |
-| Management: Action | 26 | 0.78% | 37.0 B | 0.0 B | 0.12% | 0.09% |
-| A-MPDU Delimiter / Aggregation Overhead | 24 | 0.72% | 4979.5 B | 901.1 B | 2.68% | 2.02% |
+| Data: QoS Data | 1278 | 41.15% | 1649.9 B | 948.7 B | 93.68% | 65.59% |
+| Control: Block Ack (BA) | 958 | 30.84% | 32.0 B | 0.0 B | 2.10% | 1.47% |
+| Control: Trigger | 437 | 14.07% | 46.0 B | 0.0 B | 1.10% | 0.77% |
+| Control: Ack | 296 | 9.53% | 14.0 B | 0.0 B | 0.52% | 0.37% |
+| Control: Block Ack Request (BAR) | 92 | 2.96% | 24.0 B | 0.0 B | 0.18% | 0.13% |
+| Management: Action | 25 | 0.80% | 37.0 B | 0.0 B | 0.12% | 0.09% |
+| A-MPDU Delimiter / Aggregation Overhead | 20 | 0.64% | 4760.8 B | 680.4 B | 2.29% | 1.61% |
 
 ### Analysis of Packet Distribution
 Rate adaptation simulations (such as HE Minstrel) show how the MAC dynamically adjusts modulation and coding schemes (MCS). The distribution of **QoS Data** frames indicates the volume of traffic successfully transmitted, while the presence of **Block Ack (BA)** confirms reception. Retransmissions and rate sweeps can be inferred from the ratio of control frames to data frames.

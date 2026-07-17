@@ -2,71 +2,85 @@
   "twt": {
     "IndividualUnannounced": {
       "global": {
-        "total": 2686,
+        "total": 1156,
         "used_ap_only": true,
         "stats": {
           "0,8": {
             "count": 1000,
             "mean": 93.0,
             "std": 0.0,
-            "airtime_pct": 36.27517823131169,
+            "airtime_pct": 85.05977205919633,
             "airtime_sim_pct": 0.14400000000000002
           },
           "0,4": {
-            "count": 25,
+            "count": 2,
             "mean": 68.0,
             "std": 0.0,
-            "airtime_pct": 0.6969536558330717,
-            "airtime_sim_pct": 0.002766666666666667
+            "airtime_pct": 0.1307400200169129,
+            "airtime_sim_pct": 0.00022133333333333334
           },
           "0,5": {
-            "count": 25,
+            "count": 2,
             "mean": 93.0,
             "std": 0.0,
-            "airtime_pct": 0.906879455782792,
-            "airtime_sim_pct": 0.0036
+            "airtime_pct": 0.17011954411839267,
+            "airtime_sim_pct": 0.000288
           },
           "1,13": {
-            "count": 225,
+            "count": 24,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 1.398105827665138,
-            "airtime_sim_pct": 0.00555
+            "airtime_pct": 0.34969017402114055,
+            "airtime_sim_pct": 0.0005920000000000001
           },
           "0,11": {
-            "count": 100,
+            "count": 8,
             "mean": 34.0,
             "std": 0.0,
-            "airtime_pct": 1.6458182716058078,
-            "airtime_sim_pct": 0.006533333333333334
+            "airtime_pct": 0.3087354689556015,
+            "airtime_sim_pct": 0.0005226666666666667
           },
           "0,0": {
-            "count": 25,
+            "count": 2,
             "mean": 76.0,
             "std": 0.0,
-            "airtime_pct": 0.7641299118169822,
-            "airtime_sim_pct": 0.003033333333333333
+            "airtime_pct": 0.1433414677293864,
+            "airtime_sim_pct": 0.00024266666666666667
           },
           "0,1": {
-            "count": 25,
+            "count": 2,
             "mean": 81.0,
             "std": 0.0,
-            "airtime_pct": 0.8061150718069262,
-            "airtime_sim_pct": 0.0031999999999999997
+            "airtime_pct": 0.15121737254968234,
+            "airtime_sim_pct": 0.000256
           },
           "0,13": {
-            "count": 561,
-            "mean": 37.98039215686274,
-            "std": 3.134189679048192,
-            "airtime_pct": 9.983063401768941,
-            "airtime_sim_pct": 0.03962933333333333
+            "count": 8,
+            "mean": 42.5,
+            "std": 5.5,
+            "airtime_pct": 0.362291621733614,
+            "airtime_sim_pct": 0.0006133333333333334
           },
           "2,8": {
-            "count": 700,
-            "mean": 266.0,
+            "count": 80,
+            "mean": 270.0,
             "std": 0.0,
-            "airtime_pct": 47.5237561724124,
-            "airtime_sim_pct": 0.18865299145299147
+            "airtime_pct": 12.83893653474707,
+            "airtime_sim_pct": 0.021735384615384615
+          },
+          "1,8": {
+            "count": 14,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.23155160171670114,
+            "airtime_sim_pct": 0.00039200000000000004
+          },
+          "1,9": {
+            "count": 14,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 0.2536041352135298,
+            "airtime_sim_pct": 0.0004293333333333333
           }
         }
       }
@@ -337,225 +351,96 @@
   "mac_features/dynamic_fragmentation": {
     "DynamicFragmentation": {
       "global": {
-        "total": 1660,
+        "total": 1490,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 20,
-            "mean": 415.2,
-            "std": 177.6,
-            "airtime_pct": 0.7358374030188628,
-            "airtime_sim_pct": 0.35111794871794877
+            "count": 13,
+            "mean": 401.53846153846155,
+            "std": 187.06831964022595,
+            "airtime_pct": 0.5475760172339891,
+            "airtime_sim_pct": 0.22336923076923082
           },
           "1,13": {
-            "count": 24,
+            "count": 18,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.062032679357143135,
-            "airtime_sim_pct": 0.029600000000000005
+            "airtime_pct": 0.05442194316885779,
+            "airtime_sim_pct": 0.022200000000000004
           },
           "0,13": {
-            "count": 6,
+            "count": 7,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.04359053144015463,
-            "airtime_sim_pct": 0.0208
+            "airtime_pct": 0.05948825019058327,
+            "airtime_sim_pct": 0.024266666666666666
           },
           "Aggregation Overhead,": {
-            "count": 767,
-            "mean": 3448.2868318122555,
-            "std": 2155.27170470856,
-            "airtime_pct": 93.9870537411288,
-            "airtime_sim_pct": 44.84760000000001
+            "count": 756,
+            "mean": 3034.5502645502647,
+            "std": 1937.12179278074,
+            "airtime_pct": 95.58487057408362,
+            "airtime_sim_pct": 38.99133333333333
           },
           "1,8": {
-            "count": 487,
+            "count": 435,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 1.4288473238412227,
-            "airtime_sim_pct": 0.6818000000000001
-          },
-          "0,0": {
-            "count": 2,
-            "mean": 3998.0,
-            "std": 786.0,
-            "airtime_pct": 1.1213384786496188,
-            "airtime_sim_pct": 0.5350666666666667
+            "airtime_pct": 1.4929262788213689,
+            "airtime_sim_pct": 0.6090000000000001
           },
           "1,9": {
-            "count": 354,
+            "count": 261,
             "mean": 152.0,
             "std": 0.0,
-            "airtime_pct": 2.6212998425646834,
-            "airtime_sim_pct": 1.2508000000000001
+            "airtime_pct": 2.26071693650093,
+            "airtime_sim_pct": 0.9222000000000001
           }
         }
       }
     }
   },
   "mac_features/multi_tid_block_ack": {
-    "UlMuMultiTidBlockAck": {
-      "global": {
-        "total": 3269,
-        "used_ap_only": true,
-        "stats": {
-          "1,2": {
-            "count": 362,
-            "mean": 46.149171270718234,
-            "std": 2.0013426096959446,
-            "airtime_pct": 1.7695411140759298,
-            "airtime_sim_pct": 0.6404333333333334
-          },
-          "2,12": {
-            "count": 1086,
-            "mean": 34.0,
-            "std": 0.0,
-            "airtime_pct": 21.39443779832945,
-            "airtime_sim_pct": 7.743087179487179
-          },
-          "1,9": {
-            "count": 362,
-            "mean": 58.0,
-            "std": 0.0,
-            "airtime_pct": 1.9670982727545776,
-            "airtime_sim_pct": 0.7119333333333333
-          },
-          "2,8": {
-            "count": 739,
-            "mean": 1070.0,
-            "std": 0.0,
-            "airtime_pct": 72.41534579516517,
-            "airtime_sim_pct": 26.208603418803417
-          },
-          "1,13": {
-            "count": 720,
-            "mean": 14.0,
-            "std": 0.0,
-            "airtime_pct": 2.453577019673282,
-            "airtime_sim_pct": 0.8880000000000001
-          }
-        }
-      }
-    },
     "MultiTidBlockAck": {
       "global": {
-        "total": 2780,
+        "total": 0,
         "used_ap_only": true,
-        "stats": {
-          "2,8": {
-            "count": 322,
-            "mean": 973.0807453416149,
-            "std": 374.49633215421477,
-            "airtime_pct": 74.44929113532594,
-            "airtime_sim_pct": 21.132328205128204
-          },
-          "1,13": {
-            "count": 12,
-            "mean": 14.0,
-            "std": 0.0,
-            "airtime_pct": 0.10428093848508724,
-            "airtime_sim_pct": 0.029600000000000005
-          },
-          "0,13": {
-            "count": 8,
-            "mean": 37.0,
-            "std": 0.0,
-            "airtime_pct": 0.19540932617025353,
-            "airtime_sim_pct": 0.055466666666666664
-          },
-          "1,8": {
-            "count": 1219,
-            "mean": 24.196882690730106,
-            "std": 0.5958209358113278,
-            "airtime_pct": 12.052903606256097,
-            "airtime_sim_pct": 3.4212000000000007
-          },
-          "1,9": {
-            "count": 1219,
-            "mean": 32.196882690730106,
-            "std": 0.5958209358113278,
-            "airtime_pct": 13.198114993763493,
-            "airtime_sim_pct": 3.746266666666667
-          }
-        }
-      }
-    },
-    "UlSuMultiTidBlockAck": {
-      "global": {
-        "total": 968,
-        "used_ap_only": true,
-        "stats": {
-          "2,8": {
-            "count": 535,
-            "mean": 808.3177570093458,
-            "std": 375.3241240526694,
-            "airtime_pct": 96.46879046971983,
-            "airtime_sim_pct": 15.144692307692306
-          },
-          "1,13": {
-            "count": 363,
-            "mean": 14.0,
-            "std": 0.0,
-            "airtime_pct": 2.851763285501478,
-            "airtime_sim_pct": 0.4477
-          },
-          "0,13": {
-            "count": 2,
-            "mean": 37.0,
-            "std": 0.0,
-            "airtime_pct": 0.04416400591052843,
-            "airtime_sim_pct": 0.006933333333333333
-          },
-          "1,8": {
-            "count": 34,
-            "mean": 24.0,
-            "std": 0.0,
-            "airtime_pct": 0.30320288673189716,
-            "airtime_sim_pct": 0.04760000000000001
-          },
-          "1,9": {
-            "count": 34,
-            "mean": 32.0,
-            "std": 0.0,
-            "airtime_pct": 0.332079352134935,
-            "airtime_sim_pct": 0.05213333333333334
-          }
-        }
+        "stats": {}
       }
     }
   },
   "mac_features/operating_mode_indication": {
     "OperatingModeIndication": {
       "global": {
-        "total": 2637,
+        "total": 2502,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1558,
+            "count": 1476,
             "mean": 1070.0,
             "std": 0.0,
-            "airtime_pct": 97.64320171256628,
-            "airtime_sim_pct": 55.25440341880341
+            "airtime_pct": 97.63441199616317,
+            "airtime_sim_pct": 52.346276923076914
           },
           "1,13": {
-            "count": 1073,
+            "count": 1020,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 2.3385965710933045,
-            "airtime_sim_pct": 1.3233666666666668
+            "airtime_pct": 2.3463768105545277,
+            "airtime_sim_pct": 1.258
           },
           "1,2": {
             "count": 3,
             "mean": 40.0,
             "std": 0.0,
-            "airtime_pct": 0.008835784631722014,
+            "airtime_pct": 0.009325821981536277,
             "airtime_sim_pct": 0.005
           },
           "1,9": {
             "count": 3,
             "mean": 46.0,
             "std": 0.0,
-            "airtime_pct": 0.009365931709625333,
+            "airtime_pct": 0.009885371300428455,
             "airtime_sim_pct": 0.0053
           }
         }
@@ -565,171 +450,150 @@
   "bss_coloring": {
     "BssColoringCollision": {
       "global": {
-        "total": 2316,
+        "total": 166,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1046,
-            "mean": 1441.281070745698,
-            "std": 531.4895725610331,
-            "airtime_pct": 94.36242496884869,
-            "airtime_sim_pct": 95.43631452991453
+            "count": 16,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 2.62888301387971,
+            "airtime_sim_pct": 1.1313777777777776
           },
           "1,13": {
-            "count": 32,
+            "count": 20,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.0780451422594814,
-            "airtime_sim_pct": 0.07893333333333334
+            "airtime_pct": 0.11463152676801061,
+            "airtime_sim_pct": 0.04933333333333333
           },
           "0,13": {
-            "count": 16,
+            "count": 14,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.10968506479710899,
-            "airtime_sim_pct": 0.11093333333333333
+            "airtime_pct": 0.22554527428949112,
+            "airtime_sim_pct": 0.09706666666666666
           },
           "1,0": {
-            "count": 18,
-            "mean": 2737.5555555555557,
-            "std": 1142.4736428869412,
-            "airtime_pct": 1.6596457701091405,
-            "airtime_sim_pct": 1.6785333333333332
+            "count": 44,
+            "mean": 28262.363636363636,
+            "std": 17298.188824123794,
+            "airtime_pct": 96.52160442828819,
+            "airtime_sim_pct": 41.53946666666666
           },
           "1,8": {
-            "count": 80,
+            "count": 36,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.22147945776339314,
-            "airtime_sim_pct": 0.22400000000000003
+            "airtime_pct": 0.2342200925313947,
+            "airtime_sim_pct": 0.10080000000000003
           },
           "1,9": {
-            "count": 776,
-            "mean": 32.0,
-            "std": 0.0,
-            "airtime_pct": 2.3529555727149054,
-            "airtime_sim_pct": 2.3797333333333333
-          },
-          "1,2": {
-            "count": 348,
-            "mean": 46.0,
-            "std": 0.0,
-            "airtime_pct": 1.2157640235083402,
-            "airtime_sim_pct": 1.2296
+            "count": 36,
+            "mean": 38.666666666666664,
+            "std": 27.48737083745107,
+            "airtime_pct": 0.2751156642432255,
+            "airtime_sim_pct": 0.11840000000000002
           }
         }
       }
     },
     "BssColoringDisabled": {
       "global": {
-        "total": 2316,
+        "total": 166,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1046,
-            "mean": 1441.281070745698,
-            "std": 531.4895725610331,
-            "airtime_pct": 94.36242496884869,
-            "airtime_sim_pct": 95.43631452991453
+            "count": 16,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 2.62888301387971,
+            "airtime_sim_pct": 1.1313777777777776
           },
           "1,13": {
-            "count": 32,
+            "count": 20,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.0780451422594814,
-            "airtime_sim_pct": 0.07893333333333334
+            "airtime_pct": 0.11463152676801061,
+            "airtime_sim_pct": 0.04933333333333333
           },
           "0,13": {
-            "count": 16,
+            "count": 14,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.10968506479710899,
-            "airtime_sim_pct": 0.11093333333333333
+            "airtime_pct": 0.22554527428949112,
+            "airtime_sim_pct": 0.09706666666666666
           },
           "1,0": {
-            "count": 18,
-            "mean": 2737.5555555555557,
-            "std": 1142.4736428869412,
-            "airtime_pct": 1.6596457701091405,
-            "airtime_sim_pct": 1.6785333333333332
+            "count": 44,
+            "mean": 28262.363636363636,
+            "std": 17298.188824123794,
+            "airtime_pct": 96.52160442828819,
+            "airtime_sim_pct": 41.53946666666666
           },
           "1,8": {
-            "count": 80,
+            "count": 36,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.22147945776339314,
-            "airtime_sim_pct": 0.22400000000000003
+            "airtime_pct": 0.2342200925313947,
+            "airtime_sim_pct": 0.10080000000000003
           },
           "1,9": {
-            "count": 776,
-            "mean": 32.0,
-            "std": 0.0,
-            "airtime_pct": 2.3529555727149054,
-            "airtime_sim_pct": 2.3797333333333333
-          },
-          "1,2": {
-            "count": 348,
-            "mean": 46.0,
-            "std": 0.0,
-            "airtime_pct": 1.2157640235083402,
-            "airtime_sim_pct": 1.2296
+            "count": 36,
+            "mean": 38.666666666666664,
+            "std": 27.48737083745107,
+            "airtime_pct": 0.2751156642432255,
+            "airtime_sim_pct": 0.11840000000000002
           }
         }
       }
     },
     "BssColoringEnabled": {
       "global": {
-        "total": 2129,
+        "total": 166,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 882,
-            "mean": 1291.0884353741496,
-            "std": 450.8158730156449,
-            "airtime_pct": 93.28009637891282,
-            "airtime_sim_pct": 73.22685128205127
+            "count": 16,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 2.62888301387971,
+            "airtime_sim_pct": 1.1313777777777776
           },
           "1,13": {
-            "count": 32,
+            "count": 20,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.10054930414093767,
-            "airtime_sim_pct": 0.07893333333333334
+            "airtime_pct": 0.11463152676801061,
+            "airtime_sim_pct": 0.04933333333333333
           },
           "0,13": {
-            "count": 16,
+            "count": 14,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.14131253554942588,
-            "airtime_sim_pct": 0.11093333333333333
+            "airtime_pct": 0.22554527428949112,
+            "airtime_sim_pct": 0.09706666666666666
           },
           "1,0": {
-            "count": 16,
-            "mean": 2410.0,
-            "std": 599.2662179699437,
-            "airtime_pct": 1.6780863596494326,
-            "airtime_sim_pct": 1.3173333333333335
+            "count": 44,
+            "mean": 28262.363636363636,
+            "std": 17298.188824123794,
+            "airtime_pct": 96.52160442828819,
+            "airtime_sim_pct": 41.53946666666666
           },
           "1,8": {
-            "count": 78,
+            "count": 36,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.27820905436293225,
-            "airtime_sim_pct": 0.2184
+            "airtime_pct": 0.2342200925313947,
+            "airtime_sim_pct": 0.10080000000000003
           },
           "1,9": {
-            "count": 760,
-            "mean": 32.0,
-            "std": 0.0,
-            "airtime_pct": 2.968922020918227,
-            "airtime_sim_pct": 2.330666666666667
-          },
-          "1,2": {
-            "count": 345,
-            "mean": 46.0,
-            "std": 0.0,
-            "airtime_pct": 1.552824346467099,
-            "airtime_sim_pct": 1.219
+            "count": 36,
+            "mean": 38.666666666666664,
+            "std": 27.48737083745107,
+            "airtime_pct": 0.2751156642432255,
+            "airtime_sim_pct": 0.11840000000000002
           }
         }
       }
@@ -836,57 +700,50 @@
     },
     "TwoNav": {
       "global": {
-        "total": 1503,
+        "total": 208,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 642,
-            "mean": 1235.6697819314643,
-            "std": 401.84472209505674,
-            "airtime_pct": 92.88600306892302,
-            "airtime_sim_pct": 51.35498803418803
+            "count": 19,
+            "mean": 1158.421052631579,
+            "std": 178.45840317017817,
+            "airtime_pct": 3.504460629674856,
+            "airtime_sim_pct": 1.439565811965812
           },
           "1,13": {
-            "count": 193,
+            "count": 26,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.8610639697077501,
-            "airtime_sim_pct": 0.47606666666666675
+            "airtime_pct": 0.15612536769650545,
+            "airtime_sim_pct": 0.06413333333333333
           },
           "0,13": {
-            "count": 17,
+            "count": 15,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.21318598213741802,
-            "airtime_sim_pct": 0.11786666666666666
+            "airtime_pct": 0.25317627194027903,
+            "airtime_sim_pct": 0.104
           },
           "1,0": {
-            "count": 16,
-            "mean": 2410.0,
-            "std": 599.2662179699437,
-            "airtime_pct": 2.3826668591829074,
-            "airtime_sim_pct": 1.3173333333333335
+            "count": 56,
+            "mean": 20940.285714285714,
+            "std": 14136.245022881387,
+            "airtime_pct": 95.42927776349974,
+            "airtime_sim_pct": 39.20053333333333
           },
           "1,8": {
-            "count": 44,
+            "count": 46,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.22283240666852291,
-            "airtime_sim_pct": 0.1232
+            "airtime_pct": 0.31354907524911485,
+            "airtime_sim_pct": 0.1288
           },
           "1,9": {
-            "count": 406,
+            "count": 46,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 2.2519578067864363,
-            "airtime_sim_pct": 1.2450666666666668
-          },
-          "1,2": {
-            "count": 185,
-            "mean": 46.0,
-            "std": 0.0,
-            "airtime_pct": 1.1822899065935428,
-            "airtime_sim_pct": 0.6536666666666667
+            "airtime_pct": 0.3434108919395068,
+            "airtime_sim_pct": 0.14106666666666667
           }
         }
       }
@@ -895,9 +752,45 @@
   "frequency_selective_channel": {
     "FlatChannelOFDMA": {
       "global": {
-        "total": 0,
-        "used_ap_only": false,
-        "stats": {}
+        "total": 7272,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 1224,
+            "mean": 2094.143790849673,
+            "std": 305.25353050584533,
+            "airtime_pct": 88.6691787528786,
+            "airtime_sim_pct": 129.49048433048435
+          },
+          "1,13": {
+            "count": 12,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 0.01689060850465473,
+            "airtime_sim_pct": 0.024666666666666674
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 0.03165086999070436,
+            "airtime_sim_pct": 0.04622222222222222
+          },
+          "1,2": {
+            "count": 1206,
+            "mean": 63.985074626865675,
+            "std": 0.5181061181405905,
+            "airtime_pct": 2.8441273955709496,
+            "airtime_sim_pct": 4.1535
+          },
+          "1,9": {
+            "count": 4822,
+            "mean": 32.0,
+            "std": 0.0,
+            "airtime_pct": 8.43815237305062,
+            "airtime_sim_pct": 12.32288888888889
+          }
+        }
       }
     },
     "TgaxModelBOFDMA": {
@@ -933,86 +826,100 @@
   "he_features": {
     "BccBaseline": {
       "global": {
-        "total": 94,
+        "total": 2262,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 64,
-            "mean": 1066.0,
-            "std": 0.0,
-            "airtime_pct": 97.29259728160918,
-            "airtime_sim_pct": 4.52551111111111
+            "count": 704,
+            "mean": 2164.721590909091,
+            "std": 1104.9821634665816,
+            "airtime_pct": 94.79991407879508,
+            "airtime_sim_pct": 92.09173333333332
           },
           "1,13": {
-            "count": 13,
+            "count": 12,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.6893915868427977,
-            "airtime_sim_pct": 0.03206666666666667
+            "airtime_pct": 0.03047045978139553,
+            "airtime_sim_pct": 0.029600000000000005
           },
           "0,13": {
-            "count": 11,
+            "count": 8,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 1.6396340443828699,
-            "airtime_sim_pct": 0.07626666666666666
+            "airtime_pct": 0.0570977985092817,
+            "airtime_sim_pct": 0.055466666666666664
           },
-          "1,8": {
-            "count": 3,
-            "mean": 24.0,
+          "1,2": {
+            "count": 350,
+            "mean": 55.0,
             "std": 0.0,
-            "airtime_pct": 0.18058906432888255,
-            "airtime_sim_pct": 0.008400000000000001
+            "airtime_pct": 1.381121628604921,
+            "airtime_sim_pct": 1.3416666666666668
           },
           "1,9": {
-            "count": 3,
+            "count": 1119,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 0.19778802283639518,
-            "airtime_sim_pct": 0.009200000000000002
+            "airtime_pct": 3.532514519791786,
+            "airtime_sim_pct": 3.4316
+          },
+          "1,8": {
+            "count": 69,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.19888151451910863,
+            "airtime_sim_pct": 0.1932
           }
         }
       }
     },
     "PreamblePuncturing": {
       "global": {
-        "total": 94,
+        "total": 2262,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 64,
-            "mean": 1066.0,
-            "std": 0.0,
-            "airtime_pct": 97.29259728160918,
-            "airtime_sim_pct": 4.52551111111111
+            "count": 704,
+            "mean": 2164.721590909091,
+            "std": 1104.9821634665816,
+            "airtime_pct": 94.79991407879508,
+            "airtime_sim_pct": 92.09173333333332
           },
           "1,13": {
-            "count": 13,
+            "count": 12,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.6893915868427977,
-            "airtime_sim_pct": 0.03206666666666667
+            "airtime_pct": 0.03047045978139553,
+            "airtime_sim_pct": 0.029600000000000005
           },
           "0,13": {
-            "count": 11,
+            "count": 8,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 1.6396340443828699,
-            "airtime_sim_pct": 0.07626666666666666
+            "airtime_pct": 0.0570977985092817,
+            "airtime_sim_pct": 0.055466666666666664
           },
-          "1,8": {
-            "count": 3,
-            "mean": 24.0,
+          "1,2": {
+            "count": 350,
+            "mean": 55.0,
             "std": 0.0,
-            "airtime_pct": 0.18058906432888255,
-            "airtime_sim_pct": 0.008400000000000001
+            "airtime_pct": 1.381121628604921,
+            "airtime_sim_pct": 1.3416666666666668
           },
           "1,9": {
-            "count": 3,
+            "count": 1119,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 0.19778802283639518,
-            "airtime_sim_pct": 0.009200000000000002
+            "airtime_pct": 3.532514519791786,
+            "airtime_sim_pct": 3.4316
+          },
+          "1,8": {
+            "count": 69,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.19888151451910863,
+            "airtime_sim_pct": 0.1932
           }
         }
       }
@@ -1021,186 +928,144 @@
   "he_channel_widths": {
     "Width20MHz": {
       "global": {
-        "total": 900,
+        "total": 693,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 224,
-            "mean": 4264.964285714285,
-            "std": 483.36181229140624,
-            "airtime_pct": 96.15694876845592,
-            "airtime_sim_pct": 122.30260208926876
+            "count": 117,
+            "mean": 4217.316239316239,
+            "std": 665.837081913297,
+            "airtime_pct": 93.70832621345912,
+            "airtime_sim_pct": 63.203608736942066
           },
           "1,13": {
-            "count": 11,
+            "count": 12,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.047406251174105886,
-            "airtime_sim_pct": 0.06029629629629629
+            "airtime_pct": 0.09752489740342393,
+            "airtime_sim_pct": 0.06577777777777778
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.09690909330922873,
+            "airtime_pct": 0.18274935729650604,
             "airtime_sim_pct": 0.12325925925925924
           },
           "1,2": {
-            "count": 219,
-            "mean": 46.0,
+            "count": 112,
+            "mean": 64.0,
             "std": 0.0,
-            "airtime_pct": 1.3519517380291082,
-            "airtime_sim_pct": 1.7195555555555557
+            "airtime_pct": 1.525254251282378,
+            "airtime_sim_pct": 1.028740740740741
           },
           "1,9": {
-            "count": 438,
+            "count": 444,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 2.3467841490316594,
-            "airtime_sim_pct": 2.984888888888889
+            "airtime_pct": 4.4861452805575,
+            "airtime_sim_pct": 3.025777777777778
           }
         }
       }
     },
     "Width80MHz": {
       "global": {
-        "total": 846,
+        "total": 959,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 210,
-            "mean": 12688.32380952381,
-            "std": 1619.531340176552,
-            "airtime_pct": 94.7635436714028,
-            "airtime_sim_pct": 83.12502131519274
-          },
-          "1,13": {
-            "count": 11,
-            "mean": 14.0,
-            "std": 0.0,
-            "airtime_pct": 0.06873851719847429,
-            "airtime_sim_pct": 0.06029629629629629
-          },
-          "0,13": {
-            "count": 7,
-            "mean": 37.0,
-            "std": 0.0,
-            "airtime_pct": 0.12295243371127586,
-            "airtime_sim_pct": 0.10785185185185184
-          },
-          "1,2": {
-            "count": 206,
-            "mean": 46.0,
-            "std": 0.0,
-            "airtime_pct": 1.8439487242578434,
-            "airtime_sim_pct": 1.6174814814814815
-          },
-          "1,9": {
-            "count": 412,
-            "mean": 32.0,
-            "std": 0.0,
-            "airtime_pct": 3.200816653428709,
-            "airtime_sim_pct": 2.807703703703704
-          }
-        }
-      }
-    },
-    "Width160MHz": {
-      "global": {
-        "total": 817,
-        "used_ap_only": true,
-        "stats": {
-          "2,8": {
-            "count": 138,
-            "mean": 16473.36231884058,
-            "std": 3307.7524484201363,
-            "airtime_pct": 88.04941880029381,
-            "airtime_sim_pct": 36.794216780045346
+            "count": 161,
+            "mean": 8370.521739130434,
+            "std": 1402.509490394066,
+            "airtime_pct": 88.1415958314287,
+            "airtime_sim_pct": 43.55202539682539
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.15740775616806263,
+            "airtime_pct": 0.1331225873137242,
             "airtime_sim_pct": 0.06577777777777778
           },
           "0,13": {
             "count": 8,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.2949622818284416,
+            "airtime_pct": 0.24945493838968133,
             "airtime_sim_pct": 0.12325925925925924
           },
           "1,2": {
-            "count": 133,
-            "mean": 63.86466165413534,
-            "std": 1.5549192125967597,
-            "airtime_pct": 2.9201974944962426,
-            "airtime_sim_pct": 1.2202962962962964
+            "count": 156,
+            "mean": 63.88461538461539,
+            "std": 1.4365268766910075,
+            "airtime_pct": 2.897215227956119,
+            "airtime_sim_pct": 1.4315555555555557
           },
           "1,9": {
-            "count": 526,
+            "count": 622,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 8.578013667212709,
-            "airtime_sim_pct": 3.5845925925925926
+            "airtime_pct": 8.578611414910533,
+            "airtime_sim_pct": 4.238814814814814
+          }
+        }
+      }
+    },
+    "Width160MHz": {
+      "global": {
+        "total": 25,
+        "used_ap_only": true,
+        "stats": {
+          "2,8": {
+            "count": 5,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 53.22790586334324,
+            "airtime_sim_pct": 0.21512925170068029
+          },
+          "1,13": {
+            "count": 12,
+            "mean": 14.0,
+            "std": 0.0,
+            "airtime_pct": 16.274929307739487,
+            "airtime_sim_pct": 0.06577777777777778
+          },
+          "0,13": {
+            "count": 8,
+            "mean": 37.0,
+            "std": 0.0,
+            "airtime_pct": 30.497164828917235,
+            "airtime_sim_pct": 0.12325925925925924
           }
         }
       }
     },
     "Width40MHz": {
       "global": {
-        "total": 1382,
+        "total": 25,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 374,
-            "mean": 2699.614973262032,
-            "std": 1697.5595699313885,
-            "airtime_pct": 90.02291640652916,
-            "airtime_sim_pct": 72.63022222222223
+            "count": 5,
+            "mean": 1066.0,
+            "std": 0.0,
+            "airtime_pct": 71.17578404427543,
+            "airtime_sim_pct": 0.4667901234567901
           },
           "1,13": {
             "count": 12,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.08152952323591231,
+            "airtime_pct": 10.029742856067166,
             "airtime_sim_pct": 0.06577777777777778
           },
           "0,13": {
-            "count": 9,
+            "count": 8,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.1718730489838151,
-            "airtime_sim_pct": 0.13866666666666666
-          },
-          "1,2": {
-            "count": 183,
-            "mean": 63.80327868852459,
-            "std": 1.8714391072564376,
-            "airtime_pct": 2.0801045928297626,
-            "airtime_sim_pct": 1.6782222222222227
-          },
-          "1,9": {
-            "count": 765,
-            "mean": 32.0,
-            "std": 0.0,
-            "airtime_pct": 6.46176559160305,
-            "airtime_sim_pct": 5.213333333333334
-          },
-          "1,0": {
-            "count": 2,
-            "mean": 4822.0,
-            "std": 536.0,
-            "airtime_pct": 0.896457505490369,
-            "airtime_sim_pct": 0.7232592592592594
-          },
-          "1,8": {
-            "count": 37,
-            "mean": 24.0,
-            "std": 0.0,
-            "airtime_pct": 0.28535333132569307,
-            "airtime_sim_pct": 0.23022222222222224
+            "airtime_pct": 18.79447309965739,
+            "airtime_sim_pct": 0.12325925925925924
           }
         }
       }
@@ -1209,36 +1074,36 @@
   "multi_user/ndp_feedback": {
     "NdpFeedbackReport": {
       "global": {
-        "total": 2863,
+        "total": 2723,
         "used_ap_only": true,
         "stats": {
           "1,2": {
-            "count": 80,
+            "count": 81,
             "mean": 43.0,
             "std": 0.0,
-            "airtime_pct": 0.22661309939926894,
-            "airtime_sim_pct": 0.1373333333333333
+            "airtime_pct": 0.24252568388039986,
+            "airtime_sim_pct": 0.13905
           },
           "2,12": {
-            "count": 105,
+            "count": 114,
             "mean": 34.0,
             "std": 0.0,
-            "airtime_pct": 1.2353291006647602,
-            "airtime_sim_pct": 0.7486410256410256
+            "airtime_pct": 1.417672515648332,
+            "airtime_sim_pct": 0.8128102564102563
           },
           "2,8": {
-            "count": 1648,
+            "count": 1556,
             "mean": 1070.0,
             "std": 0.0,
-            "airtime_pct": 96.44188663049502,
-            "airtime_sim_pct": 58.44624957264956
+            "airtime_pct": 96.2489007588627,
+            "airtime_sim_pct": 55.18347350427351
           },
           "1,13": {
-            "count": 1030,
+            "count": 972,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 2.096171169443238,
-            "airtime_sim_pct": 1.2703333333333333
+            "airtime_pct": 2.090901041609661,
+            "airtime_sim_pct": 1.1988
           }
         }
       }
@@ -1247,100 +1112,100 @@
   "multi_user/mu_mimo": {
     "UlMuMimo": {
       "global": {
-        "total": 9016,
+        "total": 4508,
         "used_ap_only": true,
         "stats": {
           "1,2": {
-            "count": 920,
+            "count": 460,
             "mean": 45.90869565217391,
             "std": 2.1377381471156074,
-            "airtime_pct": 0.8830803908691657,
-            "airtime_sim_pct": 1.6239333333333335
+            "airtime_pct": 0.8830803908692585,
+            "airtime_sim_pct": 0.8119666666666667
           },
           "2,12": {
-            "count": 20,
+            "count": 10,
             "mean": 34.0,
             "std": 0.0,
-            "airtime_pct": 0.07754367227645634,
-            "airtime_sim_pct": 0.1425982905982906
+            "airtime_pct": 0.07754367227646448,
+            "airtime_sim_pct": 0.0712991452991453
           },
           "1,9": {
-            "count": 918,
+            "count": 459,
             "mean": 57.58169934640523,
             "std": 2.339248466224056,
-            "airtime_pct": 0.9782800750278925,
-            "airtime_sim_pct": 1.799
+            "airtime_pct": 0.9782800750279954,
+            "airtime_sim_pct": 0.8995
           },
           "2,8": {
-            "count": 5010,
+            "count": 2505,
             "mean": 1070.0,
             "std": 0.0,
-            "airtime_pct": 96.62048464739144,
-            "airtime_sim_pct": 177.6794358974359
+            "airtime_pct": 96.6204846474016,
+            "airtime_sim_pct": 88.83971794871795
           },
           "1,13": {
-            "count": 2148,
+            "count": 1074,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 1.440611214432403,
-            "airtime_sim_pct": 2.6492
+            "airtime_pct": 1.4406112144325545,
+            "airtime_sim_pct": 1.3246
           }
         }
       }
     },
     "DlMuMimo": {
       "global": {
-        "total": 4234,
+        "total": 3826,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 972,
-            "mean": 6151.90329218107,
-            "std": 3563.8216313779267,
-            "airtime_pct": 96.89412878358277,
-            "airtime_sim_pct": 339.14476581196584
+            "count": 1386,
+            "mean": 283.3838383838384,
+            "std": 117.89742220695322,
+            "airtime_pct": 82.9274126470952,
+            "airtime_sim_pct": 38.6712547008547
           },
           "1,13": {
-            "count": 18,
+            "count": 9,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.012685141425347298,
-            "airtime_sim_pct": 0.04440000000000001
+            "airtime_pct": 0.04760612436825911,
+            "airtime_sim_pct": 0.022200000000000004
           },
           "0,13": {
-            "count": 47,
-            "mean": 35.46808510638298,
-            "std": 1.4996604414217953,
-            "airtime_pct": 0.09035782420697835,
-            "airtime_sim_pct": 0.3162666666666667
+            "count": 28,
+            "mean": 34.964285714285715,
+            "std": 1.2387246568589019,
+            "airtime_pct": 0.4000058137609279,
+            "airtime_sim_pct": 0.18653333333333333
           },
           "2,0": {
-            "count": 8,
-            "mean": 64.0,
-            "std": 0.0,
-            "airtime_pct": 0.0363431694890523,
-            "airtime_sim_pct": 0.1272068376068376
+            "count": 7,
+            "mean": 53.714285714285715,
+            "std": 4.199125273342591,
+            "airtime_pct": 0.23024106195197921,
+            "airtime_sim_pct": 0.10736752136752137
           },
           "1,2": {
-            "count": 796,
-            "mean": 54.89824120603015,
-            "std": 0.9515641300398229,
-            "airtime_pct": 0.8709987609766054,
-            "airtime_sim_pct": 3.0486333333333335
+            "count": 707,
+            "mean": 46.16548797736917,
+            "std": 1.491910248791634,
+            "airtime_pct": 5.3652674008365775,
+            "airtime_sim_pct": 2.501966666666667
           },
           "1,9": {
-            "count": 2378,
+            "count": 1553,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 2.083486862216051,
-            "airtime_sim_pct": 7.292533333333334
+            "airtime_pct": 10.212871809668751,
+            "airtime_sim_pct": 4.762533333333334
           },
           "1,8": {
-            "count": 15,
+            "count": 136,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.011999458105058255,
-            "airtime_sim_pct": 0.042
+            "airtime_pct": 0.8165951423168049,
+            "airtime_sim_pct": 0.3808000000000001
           }
         }
       }
@@ -1392,57 +1257,50 @@
     },
     "SuEdcaBaseline": {
       "global": {
-        "total": 2043,
+        "total": 1593,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1317,
-            "mean": 169.52923310554291,
-            "std": 23.945713796144425,
-            "airtime_pct": 21.66540009567822,
-            "airtime_sim_pct": 28.54385982905983
+            "count": 1314,
+            "mean": 169.5372907153729,
+            "std": 23.97243903208097,
+            "airtime_pct": 93.71430088558577,
+            "airtime_sim_pct": 28.479418803418806
           },
           "1,13": {
-            "count": 18,
+            "count": 9,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.03370054961063047,
-            "airtime_sim_pct": 0.04440000000000001
+            "airtime_pct": 0.07305126182597015,
+            "airtime_sim_pct": 0.022200000000000004
           },
           "0,13": {
-            "count": 12,
+            "count": 6,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.06315057945055078,
-            "airtime_sim_pct": 0.0832
+            "airtime_pct": 0.1368888509892053,
+            "airtime_sim_pct": 0.0416
           },
           "0,0": {
-            "count": 157,
-            "mean": 4734.535031847134,
-            "std": 1876.7331472794983,
-            "airtime_pct": 75.46463883485313,
-            "airtime_sim_pct": 99.42360000000001
+            "count": 24,
+            "mean": 342.0,
+            "std": 0.0,
+            "airtime_pct": 3.7591784463958686,
+            "airtime_sim_pct": 1.1424
           },
           "1,8": {
-            "count": 264,
+            "count": 120,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.5610686097337397,
-            "airtime_sim_pct": 0.7392000000000001
+            "airtime_pct": 1.1056407195281968,
+            "airtime_sim_pct": 0.336
           },
           "1,9": {
-            "count": 264,
+            "count": 120,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 0.6145037154226674,
-            "airtime_sim_pct": 0.8096000000000001
-          },
-          "Aggregation Overhead,": {
-            "count": 11,
-            "mean": 5680.181818181818,
-            "std": 85.89826771649248,
-            "airtime_pct": 1.597537615251073,
-            "airtime_sim_pct": 2.1047333333333333
+            "airtime_pct": 1.210939835673739,
+            "airtime_sim_pct": 0.368
           }
         }
       }
@@ -1887,49 +1745,49 @@
     },
     "EqualSizedRUs_fBW": {
       "global": {
-        "total": 5034,
+        "total": 3192,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1454,
-            "mean": 2013.6836313617607,
-            "std": 2397.0434239682777,
-            "airtime_pct": 93.91622279142967,
-            "airtime_sim_pct": 178.18801367521365
+            "count": 995,
+            "mean": 396.75778894472364,
+            "std": 165.8491190164371,
+            "airtime_pct": 82.7551202351681,
+            "airtime_sim_pct": 33.93247521367522
           },
           "1,13": {
-            "count": 18,
+            "count": 9,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.023401575706096543,
-            "airtime_sim_pct": 0.04440000000000001
+            "airtime_pct": 0.054141752337605244,
+            "airtime_sim_pct": 0.022200000000000004
           },
           "0,13": {
-            "count": 12,
+            "count": 6,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.043851601323135855,
-            "airtime_sim_pct": 0.0832
+            "airtime_pct": 0.10145481519118818,
+            "airtime_sim_pct": 0.0416
           },
           "1,2": {
-            "count": 1156,
+            "count": 700,
             "mean": 46.0,
             "std": 0.0,
-            "airtime_pct": 2.152804414956641,
-            "airtime_sim_pct": 4.084533333333334
+            "airtime_pct": 6.0320090442196825,
+            "airtime_sim_pct": 2.4733333333333336
           },
           "1,9": {
-            "count": 2353,
+            "count": 1441,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 3.803212839754471,
-            "airtime_sim_pct": 7.215866666666668
+            "airtime_pct": 10.777297884235738,
+            "airtime_sim_pct": 4.419066666666667
           },
           "1,8": {
             "count": 41,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.06050677682567304,
+            "airtime_pct": 0.27997626884491356,
             "airtime_sim_pct": 0.11480000000000001
           }
         }
@@ -1937,88 +1795,52 @@
     },
     "EqualSizedRUs_fHoL": {
       "global": {
-        "total": 3856,
+        "total": 2533,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 771,
-            "mean": 3323.37224383917,
-            "std": 3577.8558455557145,
-            "airtime_pct": 93.69117741230795,
-            "airtime_sim_pct": 149.72149401709402
+            "count": 507,
+            "mean": 771.8856015779093,
+            "std": 256.35581998392047,
+            "airtime_pct": 80.71638711281798,
+            "airtime_sim_pct": 27.693760683760683
           },
           "1,13": {
-            "count": 18,
+            "count": 9,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.027784175574894616,
-            "airtime_sim_pct": 0.04440000000000001
+            "airtime_pct": 0.06470424202644723,
+            "airtime_sim_pct": 0.022200000000000004
           },
           "0,13": {
-            "count": 12,
+            "count": 6,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.052064040716919634,
-            "airtime_sim_pct": 0.0832
+            "airtime_pct": 0.12124758866217134,
+            "airtime_sim_pct": 0.0416
           },
           "1,2": {
-            "count": 764,
-            "mean": 54.988219895287955,
-            "std": 0.3253954079905712,
-            "airtime_pct": 1.832483189512062,
-            "airtime_sim_pct": 2.928366666666667
+            "count": 503,
+            "mean": 54.98210735586481,
+            "std": 0.40089107061962764,
+            "airtime_pct": 5.618970783545947,
+            "airtime_sim_pct": 1.9278666666666666
           },
           "1,9": {
-            "count": 2291,
+            "count": 1508,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 4.396491181885652,
-            "airtime_sim_pct": 7.025733333333334
+            "airtime_pct": 13.478690272944716,
+            "airtime_sim_pct": 4.624533333333334
           }
         }
       }
     },
     "MultiTidBlockAck": {
       "global": {
-        "total": 322,
+        "total": 0,
         "used_ap_only": true,
-        "stats": {
-          "2,8": {
-            "count": 230,
-            "mean": 822.5217391304348,
-            "std": 368.10453023507347,
-            "airtime_pct": 97.8048750832117,
-            "airtime_sim_pct": 13.200307692307693
-          },
-          "1,13": {
-            "count": 12,
-            "mean": 14.0,
-            "std": 0.0,
-            "airtime_pct": 0.21931491067818856,
-            "airtime_sim_pct": 0.029600000000000005
-          },
-          "0,13": {
-            "count": 8,
-            "mean": 37.0,
-            "std": 0.0,
-            "airtime_pct": 0.4109684812708397,
-            "airtime_sim_pct": 0.055466666666666664
-          },
-          "1,8": {
-            "count": 36,
-            "mean": 24.0,
-            "std": 0.0,
-            "airtime_pct": 0.746856182309507,
-            "airtime_sim_pct": 0.10080000000000003
-          },
-          "1,9": {
-            "count": 36,
-            "mean": 32.0,
-            "std": 0.0,
-            "airtime_pct": 0.8179853425294601,
-            "airtime_sim_pct": 0.11040000000000001
-          }
-        }
+        "stats": {}
       }
     },
     "EqualSizedRUs_fBW_ACVO": {
@@ -2075,171 +1897,171 @@
   "he_rate_adaptation": {
     "HeMinstrel": {
       "global": {
-        "total": 4795,
+        "total": 3106,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1518,
-            "mean": 1637.0013175230567,
-            "std": 493.3441836377783,
-            "airtime_pct": 92.10256751673296,
-            "airtime_sim_pct": 77.37653675213674
+            "count": 1308,
+            "mean": 1638.782874617737,
+            "std": 944.9491800391005,
+            "airtime_pct": 94.37652520347976,
+            "airtime_sim_pct": 66.73600683760684
           },
           "1,13": {
-            "count": 171,
+            "count": 241,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.25103774741821305,
-            "airtime_sim_pct": 0.21090000000000003
+            "airtime_pct": 0.4203405403459045,
+            "airtime_sim_pct": 0.29723333333333335
           },
           "0,13": {
-            "count": 28,
+            "count": 23,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.11554005381410402,
-            "airtime_sim_pct": 0.09706666666666666
+            "airtime_pct": 0.11275704525147509,
+            "airtime_sim_pct": 0.07973333333333332
           },
           "1,8": {
-            "count": 52,
+            "count": 103,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.08665504036057806,
-            "airtime_sim_pct": 0.07280000000000002
+            "airtime_pct": 0.20392432180513434,
+            "airtime_sim_pct": 0.14420000000000002
           },
           "1,9": {
-            "count": 2021,
+            "count": 977,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 3.6886320889017847,
-            "airtime_sim_pct": 3.098866666666667
+            "airtime_pct": 2.1185314078979074,
+            "airtime_sim_pct": 1.4980666666666669
           },
           "Aggregation Overhead,": {
-            "count": 17,
-            "mean": 4915.176470588235,
-            "std": 228.7058823529412,
-            "airtime_pct": 1.6779097993628593,
-            "airtime_sim_pct": 1.4096333333333333
+            "count": 14,
+            "mean": 4996.857142857143,
+            "std": 340.12914714074986,
+            "airtime_pct": 1.668634568483159,
+            "airtime_sim_pct": 1.1799333333333333
           },
           "1,2": {
-            "count": 988,
+            "count": 440,
             "mean": 46.0,
             "std": 0.0,
-            "airtime_pct": 2.0776577534071925,
-            "airtime_sim_pct": 1.7454666666666667
+            "airtime_pct": 1.0992869127359532,
+            "airtime_sim_pct": 0.7773333333333334
           }
         }
       }
     },
     "FixedMcs": {
       "global": {
-        "total": 2044,
+        "total": 3831,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1416,
-            "mean": 977.2994350282486,
-            "std": 149.90394532679773,
-            "airtime_pct": 95.55253205893013,
-            "airtime_sim_pct": 46.62825299145299
+            "count": 1318,
+            "mean": 2075.256449165402,
+            "std": 994.0135956392991,
+            "airtime_pct": 94.70470332635828,
+            "airtime_sim_pct": 82.98016068376069
           },
           "1,13": {
-            "count": 367,
+            "count": 199,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.927554826087985,
-            "airtime_sim_pct": 0.45263333333333333
+            "airtime_pct": 0.28011142456465926,
+            "airtime_sim_pct": 0.24543333333333336
           },
           "0,13": {
-            "count": 22,
+            "count": 20,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.1562887872515877,
-            "airtime_sim_pct": 0.07626666666666666
+            "airtime_pct": 0.07912967039175489,
+            "airtime_sim_pct": 0.06933333333333333
           },
           "1,8": {
-            "count": 104,
+            "count": 49,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.2983695029348493,
-            "airtime_sim_pct": 0.14560000000000003
+            "airtime_pct": 0.07829272195491903,
+            "airtime_sim_pct": 0.06860000000000001
           },
           "1,9": {
-            "count": 111,
+            "count": 1506,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 0.3487808337878527,
-            "airtime_sim_pct": 0.17020000000000002
+            "airtime_pct": 2.635474541374621,
+            "airtime_sim_pct": 2.3092
           },
           "Aggregation Overhead,": {
-            "count": 16,
+            "count": 8,
             "mean": 4858.0,
             "std": 0.0,
-            "airtime_pct": 2.6875113835780016,
-            "airtime_sim_pct": 1.3114666666666668
+            "airtime_pct": 0.748384074974328,
+            "airtime_sim_pct": 0.6557333333333334
           },
           "1,2": {
-            "count": 8,
+            "count": 731,
             "mean": 46.0,
             "std": 0.0,
-            "airtime_pct": 0.028962607427741784,
-            "airtime_sim_pct": 0.014133333333333335
+            "airtime_pct": 1.4739042403787308,
+            "airtime_sim_pct": 1.2914333333333334
           }
         }
       }
     },
     "HeMinstrelMobile": {
       "global": {
-        "total": 3327,
+        "total": 3106,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1332,
-            "mean": 1699.5045045045044,
-            "std": 963.4469309300061,
-            "airtime_pct": 93.2242184737078,
-            "airtime_sim_pct": 70.17265641025641
+            "count": 1278,
+            "mean": 1649.8810641627542,
+            "std": 948.719567841376,
+            "airtime_pct": 93.6756292293407,
+            "airtime_sim_pct": 65.59328888888889
           },
           "1,13": {
-            "count": 297,
+            "count": 296,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.48662873794140854,
-            "airtime_sim_pct": 0.36630000000000007
+            "airtime_pct": 0.5213620217852942,
+            "airtime_sim_pct": 0.3650666666666667
           },
           "0,13": {
-            "count": 26,
+            "count": 25,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.11974193351474827,
-            "airtime_sim_pct": 0.09013333333333333
+            "airtime_pct": 0.12377111547130794,
+            "airtime_sim_pct": 0.08666666666666667
           },
           "1,8": {
-            "count": 97,
+            "count": 92,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.1804099989419691,
-            "airtime_sim_pct": 0.1358
+            "airtime_pct": 0.18394291930043613,
+            "airtime_sim_pct": 0.1288
           },
           "1,9": {
-            "count": 1062,
+            "count": 958,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 2.1633257899639355,
-            "airtime_sim_pct": 1.6284
+            "airtime_pct": 2.097825198688307,
+            "airtime_sim_pct": 1.4689333333333334
           },
           "Aggregation Overhead,": {
-            "count": 24,
-            "mean": 4979.5,
-            "std": 901.068116182123,
-            "airtime_pct": 2.6779858311282863,
-            "airtime_sim_pct": 2.0158
+            "count": 20,
+            "mean": 4760.8,
+            "std": 680.4,
+            "airtime_pct": 2.2949068979387746,
+            "airtime_sim_pct": 1.6069333333333335
           },
           "1,2": {
-            "count": 489,
+            "count": 437,
             "mean": 46.0,
             "std": 0.0,
-            "airtime_pct": 1.147689234800936,
-            "airtime_sim_pct": 0.8639000000000001
+            "airtime_pct": 1.1025626174734475,
+            "airtime_sim_pct": 0.7720333333333335
           }
         }
       }
@@ -2248,63 +2070,63 @@
   "he_bsr": {
     "ImplicitBsr": {
       "global": {
-        "total": 2373,
+        "total": 2348,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1308,
-            "mean": 1293.1422018348624,
-            "std": 313.58101532639625,
-            "airtime_pct": 94.98392705835676,
-            "airtime_sim_pct": 54.370933333333326
+            "count": 1301,
+            "mean": 1291.2021521906227,
+            "std": 314.8081414107956,
+            "airtime_pct": 94.80190536990236,
+            "airtime_sim_pct": 54.010924786324786
           },
           "1,13": {
-            "count": 844,
+            "count": 828,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 1.8184704536850358,
-            "airtime_sim_pct": 1.0409333333333335
+            "airtime_pct": 1.7924467345587163,
+            "airtime_sim_pct": 1.0212
           },
           "0,13": {
-            "count": 7,
+            "count": 6,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.04239293231339522,
-            "airtime_sim_pct": 0.024266666666666666
+            "airtime_pct": 0.036508903328262135,
+            "airtime_sim_pct": 0.0208
           },
           "1,8": {
-            "count": 93,
+            "count": 92,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.22745438683533212,
-            "airtime_sim_pct": 0.1302
+            "airtime_pct": 0.22607436291731553,
+            "airtime_sim_pct": 0.1288
           },
           "1,9": {
-            "count": 90,
-            "mean": 148.86666666666667,
-            "std": 16.873516395688114,
-            "airtime_pct": 0.5473230368318706,
-            "airtime_sim_pct": 0.3133
+            "count": 89,
+            "mean": 148.8314606741573,
+            "std": 16.964759213434238,
+            "airtime_pct": 0.5437135234447757,
+            "airtime_sim_pct": 0.3097666666666667
           },
           "Aggregation Overhead,": {
-            "count": 22,
-            "mean": 3525.090909090909,
-            "std": 1130.0411460365226,
-            "airtime_pct": 2.296439119108591,
-            "airtime_sim_pct": 1.3145333333333333
+            "count": 23,
+            "mean": 3677.8260869565215,
+            "std": 1074.3206408328338,
+            "airtime_pct": 2.5149602717393393,
+            "airtime_sim_pct": 1.4328333333333334
           },
           "1,2": {
             "count": 3,
             "mean": 46.0,
             "std": 0.0,
-            "airtime_pct": 0.009258895931084945,
+            "airtime_pct": 0.009302749405759102,
             "airtime_sim_pct": 0.0053
           },
           "2,12": {
             "count": 6,
             "mean": 34.0,
             "std": 0.0,
-            "airtime_pct": 0.07473411693963292,
+            "airtime_pct": 0.07508808470521763,
             "airtime_sim_pct": 0.04277948717948717
           }
         }
@@ -2312,128 +2134,135 @@
     },
     "StaleBsr": {
       "global": {
-        "total": 4121,
+        "total": 4076,
         "used_ap_only": true,
         "stats": {
           "1,2": {
-            "count": 505,
-            "mean": 47.41386138613861,
-            "std": 6.515252929339078,
-            "airtime_pct": 1.3378145280613936,
-            "airtime_sim_pct": 0.9040666666666667
+            "count": 499,
+            "mean": 47.82164328657315,
+            "std": 6.945987762514704,
+            "airtime_pct": 1.339782951812245,
+            "airtime_sim_pct": 0.8967166666666667
           },
           "2,12": {
-            "count": 935,
+            "count": 920,
             "mean": 34.0,
             "std": 0.0,
-            "airtime_pct": 9.86487043495527,
-            "airtime_sim_pct": 6.666470085470086
+            "airtime_pct": 9.800570488916906,
+            "airtime_sim_pct": 6.559521367521367
           },
           "1,9": {
-            "count": 561,
-            "mean": 66.524064171123,
-            "std": 29.044741598068242,
-            "airtime_pct": 1.7505728781394756,
-            "airtime_sim_pct": 1.183
+            "count": 559,
+            "mean": 67.35957066189624,
+            "std": 29.52330652955744,
+            "airtime_pct": 1.7728473778659362,
+            "airtime_sim_pct": 1.1865666666666668
           },
           "2,8": {
-            "count": 1458,
-            "mean": 1148.962962962963,
-            "std": 354.15586379070277,
-            "airtime_pct": 81.17554071866356,
-            "airtime_sim_pct": 54.856707692307694
+            "count": 1437,
+            "mean": 1148.5024356297843,
+            "std": 357.3146669517521,
+            "airtime_pct": 80.75376422293272,
+            "airtime_sim_pct": 54.0484905982906
           },
           "1,13": {
-            "count": 527,
+            "count": 511,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.9618039039403109,
-            "airtime_sim_pct": 0.6499666666666668
+            "airtime_pct": 0.9416306254266162,
+            "airtime_sim_pct": 0.6302333333333334
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.030779303351902865,
+            "airtime_pct": 0.031077247065436527,
             "airtime_sim_pct": 0.0208
           },
           "1,8": {
-            "count": 79,
+            "count": 89,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.16366302647694508,
-            "airtime_sim_pct": 0.11060000000000002
+            "airtime_pct": 0.18616466270929768,
+            "airtime_sim_pct": 0.12460000000000002
           },
           "Aggregation Overhead,": {
-            "count": 50,
-            "mean": 3763.52,
-            "std": 1012.4912293941119,
-            "airtime_pct": 4.7149552064129665,
-            "airtime_sim_pct": 3.1862666666666666
+            "count": 55,
+            "mean": 3717.890909090909,
+            "std": 1036.7971954354477,
+            "airtime_pct": 5.174162423272968,
+            "airtime_sim_pct": 3.4630666666666663
           }
         }
       }
     },
     "FullBsrAccounting": {
       "global": {
-        "total": 4129,
+        "total": 4252,
         "used_ap_only": true,
         "stats": {
           "1,2": {
-            "count": 498,
-            "mean": 46.16265060240964,
-            "std": 2.089284817011798,
-            "airtime_pct": 1.3177775719414004,
-            "airtime_sim_pct": 0.88115
+            "count": 517,
+            "mean": 46.05802707930368,
+            "std": 1.7593404709958025,
+            "airtime_pct": 1.3365719182368139,
+            "airtime_sim_pct": 0.9138666666666668
           },
           "2,12": {
-            "count": 942,
+            "count": 983,
             "mean": 34.0,
             "std": 0.0,
-            "airtime_pct": 10.044480795383773,
-            "airtime_sim_pct": 6.716379487179487
+            "airtime_pct": 10.250553982999508,
+            "airtime_sim_pct": 7.008705982905983
           },
           "1,9": {
-            "count": 561,
-            "mean": 68.55614973262033,
-            "std": 29.67904610476573,
-            "airtime_pct": 1.7976152090717394,
-            "airtime_sim_pct": 1.202
+            "count": 581,
+            "mean": 68.20998278829605,
+            "std": 29.53484426892034,
+            "airtime_pct": 1.8157506964812564,
+            "airtime_sim_pct": 1.2414999999999998
           },
           "2,8": {
-            "count": 1427,
-            "mean": 1149.3300630693764,
-            "std": 359.81212058035817,
-            "airtime_pct": 80.31641831669518,
-            "airtime_sim_pct": 53.70467179487179
+            "count": 1462,
+            "mean": 1132.4651162790697,
+            "std": 362.0654872337046,
+            "airtime_pct": 79.48573787145567,
+            "airtime_sim_pct": 54.34751794871795
           },
           "1,13": {
-            "count": 536,
+            "count": 553,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 0.9886385143181015,
-            "airtime_sim_pct": 0.6610666666666667
+            "airtime_pct": 0.9975050342516577,
+            "airtime_sim_pct": 0.6820333333333334
           },
           "0,13": {
             "count": 6,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.031106818925700646,
+            "airtime_pct": 0.030420954077172883,
             "airtime_sim_pct": 0.0208
+          },
+          "1,8": {
+            "count": 88,
+            "mean": 24.0,
+            "std": 0.0,
+            "airtime_pct": 0.18018565107248555,
+            "airtime_sim_pct": 0.1232
           },
           "Aggregation Overhead,": {
             "count": 61,
-            "mean": 3425.0163934426228,
-            "std": 1172.9858564379138,
-            "airtime_pct": 5.298777410367786,
-            "airtime_sim_pct": 3.5431
+            "mean": 3729.2131147540986,
+            "std": 972.6824345676896,
+            "airtime_pct": 5.634262954572031,
+            "airtime_sim_pct": 3.8523666666666663
           },
-          "1,8": {
-            "count": 98,
-            "mean": 24.0,
+          "0,0": {
+            "count": 1,
+            "mean": 2744.0,
             "std": 0.0,
-            "airtime_pct": 0.2051853632983716,
-            "airtime_sim_pct": 0.13720000000000002
+            "airtime_pct": 0.2690109368555128,
+            "airtime_sim_pct": 0.18393333333333334
           }
         }
       }
@@ -2442,35 +2271,35 @@
   "ul_ofdma": {
     "OperatingModeIndication": {
       "global": {
-        "total": 2633,
+        "total": 2502,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1554,
-            "mean": 1071.2921492921494,
-            "std": 2.641779486529247,
-            "airtime_pct": 97.63957522852425,
-            "airtime_sim_pct": 55.167463247863246
+            "count": 1476,
+            "mean": 1070.0,
+            "std": 0.0,
+            "airtime_pct": 97.63441199616317,
+            "airtime_sim_pct": 52.346276923076914
           },
           "1,13": {
-            "count": 1073,
+            "count": 1020,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 2.342195047547815,
-            "airtime_sim_pct": 1.3233666666666668
+            "airtime_pct": 2.3463768105545277,
+            "airtime_sim_pct": 1.258
           },
           "1,2": {
             "count": 3,
             "mean": 40.0,
             "std": 0.0,
-            "airtime_pct": 0.008849380547899858,
+            "airtime_pct": 0.009325821981536277,
             "airtime_sim_pct": 0.005
           },
           "1,9": {
             "count": 3,
             "mean": 46.0,
             "std": 0.0,
-            "airtime_pct": 0.00938034338077385,
+            "airtime_pct": 0.009885371300428455,
             "airtime_sim_pct": 0.0053
           }
         }
@@ -2478,86 +2307,86 @@
     },
     "UlMuMultiTidBlockAck": {
       "global": {
-        "total": 3269,
+        "total": 3093,
         "used_ap_only": true,
         "stats": {
           "1,2": {
-            "count": 362,
-            "mean": 46.149171270718234,
-            "std": 2.0013426096959446,
-            "airtime_pct": 1.7695411140759298,
-            "airtime_sim_pct": 0.6404333333333334
+            "count": 343,
+            "mean": 46.23615160349854,
+            "std": 2.5140257983214314,
+            "airtime_pct": 1.77516868381397,
+            "airtime_sim_pct": 0.6073166666666667
           },
           "2,12": {
-            "count": 1086,
+            "count": 1029,
             "mean": 34.0,
             "std": 0.0,
-            "airtime_pct": 21.39443779832945,
-            "airtime_sim_pct": 7.743087179487179
+            "airtime_pct": 21.444904998275366,
+            "airtime_sim_pct": 7.33668205128205
           },
           "1,9": {
-            "count": 362,
+            "count": 343,
             "mean": 58.0,
             "std": 0.0,
-            "airtime_pct": 1.9670982727545776,
-            "airtime_sim_pct": 0.7119333333333333
+            "airtime_pct": 1.9717384480552873,
+            "airtime_sim_pct": 0.6745666666666666
           },
           "2,8": {
-            "count": 739,
+            "count": 698,
             "mean": 1070.0,
             "std": 0.0,
-            "airtime_pct": 72.41534579516517,
-            "airtime_sim_pct": 26.208603418803417
+            "airtime_pct": 72.35678996734472,
+            "airtime_sim_pct": 24.75454017094017
           },
           "1,13": {
-            "count": 720,
+            "count": 680,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 2.453577019673282,
-            "airtime_sim_pct": 0.8880000000000001
+            "airtime_pct": 2.451397902508822,
+            "airtime_sim_pct": 0.8386666666666667
           }
         }
       }
     },
     "UlSuMultiTidBlockAck": {
       "global": {
-        "total": 968,
+        "total": 921,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 535,
-            "mean": 808.3177570093458,
-            "std": 375.3241240526694,
-            "airtime_pct": 96.46879046971983,
-            "airtime_sim_pct": 15.144692307692306
+            "count": 510,
+            "mean": 803.3333333333334,
+            "std": 377.12361663282536,
+            "airtime_pct": 96.4632852597077,
+            "airtime_sim_pct": 14.367470085470085
           },
           "1,13": {
-            "count": 363,
+            "count": 343,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 2.851763285501478,
-            "airtime_sim_pct": 0.4477
+            "airtime_pct": 2.840248482505415,
+            "airtime_sim_pct": 0.4230333333333333
           },
           "0,13": {
             "count": 2,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.04416400591052843,
+            "airtime_pct": 0.04655044396510332,
             "airtime_sim_pct": 0.006933333333333333
           },
           "1,8": {
-            "count": 34,
+            "count": 33,
             "mean": 24.0,
             "std": 0.0,
-            "airtime_pct": 0.30320288673189716,
-            "airtime_sim_pct": 0.04760000000000001
+            "airtime_pct": 0.3101870929597751,
+            "airtime_sim_pct": 0.046200000000000005
           },
           "1,9": {
-            "count": 34,
+            "count": 33,
             "mean": 32.0,
             "std": 0.0,
-            "airtime_pct": 0.332079352134935,
-            "airtime_sim_pct": 0.05213333333333334
+            "airtime_pct": 0.339728720860706,
+            "airtime_sim_pct": 0.050600000000000006
           }
         }
       }
@@ -2588,28 +2417,28 @@
     },
     "HeSu": {
       "global": {
-        "total": 3614,
+        "total": 3414,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1800,
+            "count": 1700,
             "mean": 366.0,
             "std": 0.0,
-            "airtime_pct": 92.78616814553551,
-            "airtime_sim_pct": 29.178461538461537
+            "airtime_pct": 92.77774535765899,
+            "airtime_sim_pct": 27.557435897435894
           },
           "1,13": {
-            "count": 1800,
+            "count": 1700,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 7.059498082569217,
-            "airtime_sim_pct": 2.22
+            "airtime_pct": 7.058857247237263,
+            "airtime_sim_pct": 2.0966666666666667
           },
           "0,13": {
             "count": 14,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.1543337718952069,
+            "airtime_pct": 0.16339739510298018,
             "airtime_sim_pct": 0.04853333333333333
           }
         }
@@ -2617,28 +2446,28 @@
     },
     "HeErSu": {
       "global": {
-        "total": 3617,
+        "total": 3417,
         "used_ap_only": true,
         "stats": {
           "2,8": {
-            "count": 1804,
+            "count": 1704,
             "mean": 366.0,
             "std": 0.0,
-            "airtime_pct": 92.8243810575523,
-            "airtime_sim_pct": 29.243302564102564
+            "airtime_pct": 92.81821423026304,
+            "airtime_sim_pct": 27.62227692307692
           },
           "1,13": {
-            "count": 1802,
+            "count": 1702,
             "mean": 14.0,
             "std": 0.0,
-            "airtime_pct": 7.054575737543951,
-            "airtime_sim_pct": 2.2224666666666666
+            "airtime_pct": 7.0536476038455405,
+            "airtime_sim_pct": 2.0991333333333335
           },
           "0,13": {
             "count": 11,
             "mean": 37.0,
             "std": 0.0,
-            "airtime_pct": 0.12104320490371479,
+            "airtime_pct": 0.1281381658906739,
             "airtime_sim_pct": 0.03813333333333333
           }
         }

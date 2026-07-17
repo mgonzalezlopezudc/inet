@@ -175,22 +175,22 @@ Total over-the-air packets captured (Global BSS/AP): **240**
 | Control: Ack | 120 | 50.00% | 14.0 B | 0.0 B | 10.30% | 0.15% |
 
 ### Configuration: `HeErSu`
-Total over-the-air packets captured (Global BSS/AP): **3617**
+Total over-the-air packets captured (Global BSS/AP): **3417**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1804 | 49.88% | 366.0 B | 0.0 B | 92.82% | 29.24% |
-| Control: Ack | 1802 | 49.82% | 14.0 B | 0.0 B | 7.05% | 2.22% |
-| Management: Action | 11 | 0.30% | 37.0 B | 0.0 B | 0.12% | 0.04% |
+| Data: QoS Data | 1704 | 49.87% | 366.0 B | 0.0 B | 92.82% | 27.62% |
+| Control: Ack | 1702 | 49.81% | 14.0 B | 0.0 B | 7.05% | 2.10% |
+| Management: Action | 11 | 0.32% | 37.0 B | 0.0 B | 0.13% | 0.04% |
 
 ### Configuration: `HeSu`
-Total over-the-air packets captured (Global BSS/AP): **3614**
+Total over-the-air packets captured (Global BSS/AP): **3414**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1800 | 49.81% | 366.0 B | 0.0 B | 92.79% | 29.18% |
-| Control: Ack | 1800 | 49.81% | 14.0 B | 0.0 B | 7.06% | 2.22% |
-| Management: Action | 14 | 0.39% | 37.0 B | 0.0 B | 0.15% | 0.05% |
+| Data: QoS Data | 1700 | 49.79% | 366.0 B | 0.0 B | 92.78% | 27.56% |
+| Control: Ack | 1700 | 49.79% | 14.0 B | 0.0 B | 7.06% | 2.10% |
+| Management: Action | 14 | 0.41% | 37.0 B | 0.0 B | 0.16% | 0.05% |
 
 ### Analysis of Packet Distribution
 Extended Range (ER) simulations demonstrate HE SU versus HE ER SU transmissions. Because the channel conditions are poor at cell boundaries, configurations utilizing HE ER SU (which uses a robust DCM coding and extended preambles) show successful delivery of **QoS Data** and **Block Ack (BA)** frames, whereas standard HE SU configurations suffer from packet loss, resulting in fewer successful data and acknowledgment frames.

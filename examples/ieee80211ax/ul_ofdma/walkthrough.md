@@ -228,36 +228,36 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `OperatingModeIndication`
-Total over-the-air packets captured (Global BSS/AP): **2633**
+Total over-the-air packets captured (Global BSS/AP): **2502**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1554 | 59.02% | 1071.3 B | 2.6 B | 97.64% | 55.17% |
-| Control: Ack | 1073 | 40.75% | 14.0 B | 0.0 B | 2.34% | 1.32% |
-| Control: Trigger | 3 | 0.11% | 40.0 B | 0.0 B | 0.01% | 0.01% |
-| Control: Block Ack (BA) | 3 | 0.11% | 46.0 B | 0.0 B | 0.01% | 0.01% |
+| Data: QoS Data | 1476 | 58.99% | 1070.0 B | 0.0 B | 97.63% | 52.35% |
+| Control: Ack | 1020 | 40.77% | 14.0 B | 0.0 B | 2.35% | 1.26% |
+| Control: Trigger | 3 | 0.12% | 40.0 B | 0.0 B | 0.01% | 0.01% |
+| Control: Block Ack (BA) | 3 | 0.12% | 46.0 B | 0.0 B | 0.01% | 0.01% |
 
 ### Configuration: `UlMuMultiTidBlockAck`
-Total over-the-air packets captured (Global BSS/AP): **3269**
+Total over-the-air packets captured (Global BSS/AP): **3093**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Null | 1086 | 33.22% | 34.0 B | 0.0 B | 21.39% | 7.74% |
-| Data: QoS Data | 739 | 22.61% | 1070.0 B | 0.0 B | 72.42% | 26.21% |
-| Control: Ack | 720 | 22.03% | 14.0 B | 0.0 B | 2.45% | 0.89% |
-| Control: Trigger | 362 | 11.07% | 46.1 B | 2.0 B | 1.77% | 0.64% |
-| Control: Block Ack (BA) | 362 | 11.07% | 58.0 B | 0.0 B | 1.97% | 0.71% |
+| Data: QoS Null | 1029 | 33.27% | 34.0 B | 0.0 B | 21.44% | 7.34% |
+| Data: QoS Data | 698 | 22.57% | 1070.0 B | 0.0 B | 72.36% | 24.75% |
+| Control: Ack | 680 | 21.99% | 14.0 B | 0.0 B | 2.45% | 0.84% |
+| Control: Trigger | 343 | 11.09% | 46.2 B | 2.5 B | 1.78% | 0.61% |
+| Control: Block Ack (BA) | 343 | 11.09% | 58.0 B | 0.0 B | 1.97% | 0.67% |
 
 ### Configuration: `UlSuMultiTidBlockAck`
-Total over-the-air packets captured (Global BSS/AP): **968**
+Total over-the-air packets captured (Global BSS/AP): **921**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 535 | 55.27% | 808.3 B | 375.3 B | 96.47% | 15.14% |
-| Control: Ack | 363 | 37.50% | 14.0 B | 0.0 B | 2.85% | 0.45% |
-| Control: Block Ack Request (BAR) | 34 | 3.51% | 24.0 B | 0.0 B | 0.30% | 0.05% |
-| Control: Block Ack (BA) | 34 | 3.51% | 32.0 B | 0.0 B | 0.33% | 0.05% |
-| Management: Action | 2 | 0.21% | 37.0 B | 0.0 B | 0.04% | 0.01% |
+| Data: QoS Data | 510 | 55.37% | 803.3 B | 377.1 B | 96.46% | 14.37% |
+| Control: Ack | 343 | 37.24% | 14.0 B | 0.0 B | 2.84% | 0.42% |
+| Control: Block Ack Request (BAR) | 33 | 3.58% | 24.0 B | 0.0 B | 0.31% | 0.05% |
+| Control: Block Ack (BA) | 33 | 3.58% | 32.0 B | 0.0 B | 0.34% | 0.05% |
+| Management: Action | 2 | 0.22% | 37.0 B | 0.0 B | 0.05% | 0.01% |
 
 ### Analysis of Packet Distribution
 Uplink OFDMA simulations exhibit a substantial count of **Trigger** frames (Control Subtype 2). Trigger frames are initiated by the AP to allocate Resource Units (RUs) and synchronize uplink transmissions from multiple stations. The corresponding uplink traffic consists of **QoS Data** frames sent inside HE Trigger-Based (HE TB) PPDUs, acknowledged collectively or individually by **Block Ack (BA)** frames.
