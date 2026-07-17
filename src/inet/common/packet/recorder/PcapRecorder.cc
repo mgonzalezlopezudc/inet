@@ -32,6 +32,8 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 #endif
 
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
@@ -47,13 +49,18 @@ namespace {
 
 enum RadiotapPresentBit {
     RADIOTAP_FLAGS = 1,
+    RADIOTAP_RATE = 2,
     RADIOTAP_CHANNEL = 3,
     RADIOTAP_ANTENNA_SIGNAL = 5,
     RADIOTAP_DBM_TX_POWER = 10,
     RADIOTAP_RX_FLAGS = 14,
     RADIOTAP_TX_FLAGS = 15,
+    RADIOTAP_MCS = 19,
+    RADIOTAP_AMPDU = 20,
+    RADIOTAP_VHT = 21,
     RADIOTAP_HE = 23,
     RADIOTAP_HE_MU = 24,
+    RADIOTAP_0_LENGTH_PSDU = 26,
     RADIOTAP_EHT = 34,
 };
 
@@ -148,7 +155,7 @@ bool getIeee80211AmpduMpduRanges(const Packet *packet, b frontOffset, b backOffs
 
 #endif
 
-std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction direction, const physicallayer::ITransmission *transmission, const physicallayer::IReception *reception)
+std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b backOffset, Direction direction, const physicallayer::ITransmission *transmission, const physicallayer::IReception *reception)
 {
     std::vector<uint32_t> presentWords;
     auto setPresentBit = [&](int bitIndex) {
@@ -165,11 +172,35 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
     bool isHe = false;
     bool isHeMu = false;
     bool isEht = false;
+    bool isVht = false;
+    bool isHt = false;
+    bool hasRate = false;
+    uint8_t radiotapRate = 0;
+
+    uint8_t mcsKnown = 0;
+    uint8_t mcsFlags = 0;
+    uint8_t mcsIndex = 0;
+
+    uint16_t vhtKnown = 0;
+    uint8_t vhtFlags = 0;
+    uint8_t vhtBandwidth = 0;
+    uint8_t vhtMcsNss[4] = {0};
+    uint8_t vhtCoding = 0;
+    uint8_t vhtGroupId = 0;
+    uint16_t vhtPartialAid = 0;
+
+    std::vector<MpduRange> mpduRanges;
+    bool isAmpdu = false;
+    bool isLastSubframe = false;
+    uint32_t ampduRef = 0;
+
     Ptr<const physicallayer::Ieee80211HeMuReq> heMuReq;
     Ptr<const physicallayer::Ieee80211HeMuRxTag> heMuRx;
     Ptr<const physicallayer::Ieee80211HeMuCommonReq> heMuCommonReq;
     const physicallayer::Ieee80211HeMode *heMode = nullptr;
     const physicallayer::Ieee80211EhtMode *ehtMode = nullptr;
+    const physicallayer::Ieee80211VhtMode *vhtMode = nullptr;
+    const physicallayer::Ieee80211HtMode *htMode = nullptr;
 
 #ifdef INET_WITH_IEEE80211
     heMuReq = packet->findTag<physicallayer::Ieee80211HeMuReq>();
@@ -190,6 +221,15 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
                 mode = modeInd->getMode();
         }
         if (mode != nullptr) {
+            auto dm = mode->getDataMode();
+            if (dm != nullptr) {
+                double rateVal = dm->getNetBitrate().get() / 500000.0;
+                if (std::isfinite(rateVal) && rateVal >= 1 && rateVal <= 255) {
+                    hasRate = true;
+                    radiotapRate = static_cast<uint8_t>(std::round(rateVal));
+                }
+            }
+
             heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(mode);
             if (heMode != nullptr) {
                 isHe = true;
@@ -199,26 +239,74 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
                 if (ehtMode != nullptr) {
                     isEht = true;
                 }
+                else {
+                    vhtMode = dynamic_cast<const physicallayer::Ieee80211VhtMode *>(mode);
+                    if (vhtMode != nullptr && dm != nullptr) {
+                        isVht = true;
+                        auto vhtDm = dynamic_cast<const physicallayer::Ieee80211VhtDataMode *>(dm);
+                        if (vhtDm != nullptr) {
+                            vhtKnown = 0x0001 | 0x0004 | 0x0040; // STBC, GI, BW known
+                            vhtFlags = (vhtDm->getGuardIntervalType() == physicallayer::Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT ? 0x04 : 0);
+                            double bw = vhtDm->getBandwidth().get();
+                            vhtBandwidth = (bw < 30e6 ? 0 : bw < 60e6 ? 1 : bw < 100e6 ? 4 : 11);
+                            auto mcs = vhtDm->getModulationAndCodingScheme()->getMcsIndex();
+                            auto nss = vhtDm->getNumberOfSpatialStreams();
+                            vhtMcsNss[0] = (mcs << 4) | nss;
+                            vhtCoding = (vhtDm->getCode() != nullptr && vhtDm->getCode()->isLdpc() ? 1 : 0);
+                        }
+                    }
+                    else {
+                        htMode = dynamic_cast<const physicallayer::Ieee80211HtMode *>(mode);
+                        if (htMode != nullptr && dm != nullptr) {
+                            isHt = true;
+                            auto htDm = dynamic_cast<const physicallayer::Ieee80211HtDataMode *>(dm);
+                            if (htDm != nullptr) {
+                                mcsKnown = 0x01 | 0x02 | 0x04 | 0x10; // BW, MCS, GI, FEC known
+                                if (htDm->getBandwidth().get() > 30e6) mcsFlags |= 1; // 40 MHz
+                                if (htDm->getGuardIntervalType() == physicallayer::Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT) mcsFlags |= (1 << 2);
+                                if (htDm->getCode() != nullptr && htDm->getCode()->isLdpc()) mcsFlags |= (1 << 4);
+                                mcsIndex = htDm->getModulationAndCodingScheme()->getMcsIndex();
+                            }
+                        }
+                    }
+                }
             }
         }
     }
-#endif
 
-    if (isHe) {
-        setPresentBit(RADIOTAP_HE);
-        if (isHeMu) {
-            setPresentBit(RADIOTAP_HE_MU);
+    for (b startOffset = b(0); startOffset <= frontOffset; startOffset += b(8)) {
+        for (b backOffsetIdx = b(0); backOffsetIdx <= backOffset; backOffsetIdx += b(8)) {
+            std::vector<MpduRange> tempRanges;
+            if (getIeee80211AmpduMpduRanges(packet, startOffset, backOffsetIdx, tempRanges)) {
+                for (size_t i = 0; i < tempRanges.size(); ++i) {
+                    if (tempRanges[i].offset == frontOffset) {
+                        isAmpdu = true;
+                        mpduRanges = tempRanges;
+                        ampduRef = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(packet) & 0xFFFFFFFF);
+                        if (i == tempRanges.size() - 1) {
+                            isLastSubframe = true;
+                        }
+                        break;
+                    }
+                }
+            }
+            if (isAmpdu) break;
         }
+        if (isAmpdu) break;
     }
-    else if (isEht) {
-        setPresentBit(RADIOTAP_EHT);
-    }
+#endif
 
     // IEEE 802.11 packets recorded by PcapRecorder contain the MAC trailer.
     uint8_t flags = RADIOTAP_F_FCS;
     if (packet->hasBitError())
         flags |= RADIOTAP_F_BADFCS;
     bytes.push_back(flags);
+
+    // 2. RADIOTAP_RATE (2)
+    if (hasRate) {
+        setPresentBit(RADIOTAP_RATE);
+        bytes.push_back(radiotapRate);
+    }
 
 #ifdef INET_WITH_PHYSICALLAYERWIRELESSCOMMON
     const physicallayer::ISignalAnalogModel *analogModel = nullptr;
@@ -274,9 +362,47 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
     }
 
 #ifdef INET_WITH_IEEE80211
-    if (isHe) {
-        appendPadding(bytes, 2);
+    // 8. RADIOTAP_MCS (19)
+    if (isHt) {
+        setPresentBit(RADIOTAP_MCS);
+        bytes.push_back(mcsKnown);
+        bytes.push_back(mcsFlags);
+        bytes.push_back(mcsIndex);
+    }
 
+    // 9. RADIOTAP_AMPDU (20)
+    if (isAmpdu) {
+        setPresentBit(RADIOTAP_AMPDU);
+        appendPadding(bytes, 4);
+        appendUint32(bytes, ampduRef);
+        uint16_t ampduFlags = 0x0004 | (isLastSubframe ? 0x0008 : 0);
+        appendUint16(bytes, ampduFlags);
+        bytes.push_back(0); // delimiter CRC
+        bytes.push_back(0); // reserved
+    }
+
+    // 10. RADIOTAP_VHT (21)
+    if (isVht) {
+        setPresentBit(RADIOTAP_VHT);
+        appendPadding(bytes, 2);
+        appendUint16(bytes, vhtKnown);
+        bytes.push_back(vhtFlags);
+        bytes.push_back(vhtBandwidth);
+        for (int i = 0; i < 4; ++i)
+            bytes.push_back(vhtMcsNss[i]);
+        bytes.push_back(vhtCoding);
+        bytes.push_back(vhtGroupId);
+        appendUint16(bytes, vhtPartialAid);
+    }
+
+    // 11. RADIOTAP_HE (23) / 12. RADIOTAP_HE_MU (24)
+    if (isHe) {
+        setPresentBit(RADIOTAP_HE);
+        if (isHeMu) {
+            setPresentBit(RADIOTAP_HE_MU);
+        }
+        
+        appendPadding(bytes, 2);
         uint16_t data1 = 0;
         uint16_t data2 = 0;
         uint16_t data3 = 0;
@@ -387,7 +513,16 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
         for (int i = 0; i < 4; ++i) bytes.push_back(ruChannel2[i]);
     }
 
+    // 13. RADIOTAP_0_LENGTH_PSDU (26)
+    b recordedLength = packet->getDataLength() - frontOffset - backOffset;
+    if (recordedLength == b(0)) {
+        setPresentBit(RADIOTAP_0_LENGTH_PSDU);
+        bytes.push_back(0); // sounding PPDU / zero-length PSDU
+    }
+
+    // 14. RADIOTAP_EHT (34)
     if (isEht) {
+        setPresentBit(RADIOTAP_EHT);
         appendPadding(bytes, 4);
         appendUint32(bytes, 0); // EHT known: 0
     }
@@ -754,7 +889,7 @@ Packet *PcapRecorder::tryConvertToLinkType(const Packet *packet, b frontOffset, 
     if (enableConvertingPackets) {
         if (*protocol == Protocol::ieee80211Mac && pcapLinkType == LINKTYPE_IEEE802_11_RADIOTAP) {
             auto convertedPacket = new Packet(packet->getName());
-            convertedPacket->insertAtBack(makeShared<BytesChunk>(makeRadiotapHeader(packet, recordingDirection, physicalLayerTransmission, physicalLayerReception)));
+            convertedPacket->insertAtBack(makeShared<BytesChunk>(makeRadiotapHeader(packet, frontOffset, backOffset, recordingDirection, physicalLayerTransmission, physicalLayerReception)));
             b dataLength = packet->getDataLength() - frontOffset - backOffset;
             if (dataLength != b(0))
                 convertedPacket->insertAtBack(packet->peekDataAt(frontOffset, dataLength));
