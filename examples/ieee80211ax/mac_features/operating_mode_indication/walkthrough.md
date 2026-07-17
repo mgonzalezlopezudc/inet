@@ -143,10 +143,10 @@ Total over-the-air packets captured (Global BSS/AP): **2502**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1476 | 58.99% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.0 dBm | - | 97.63% | 52.35% |
-| Control: Ack | 1020 | 40.77% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.35% | 1.26% |
-| Control: Trigger | 3 | 0.12% | 40.0 B | 0.0 B | 33.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
-| Control: Block Ack (BA) | 3 | 0.12% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 1476 | 58.99% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.0 dBm | - | 97.63% | 52.35% |
+| Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 1020 | 40.77% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.35% | 1.26% |
+| Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 3 | 0.12% | 40.0 B | 0.0 B | 33.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 3 | 0.12% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.

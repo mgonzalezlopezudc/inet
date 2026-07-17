@@ -186,66 +186,66 @@ Total over-the-air packets captured (Global BSS/AP): **2377**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1303 | 54.82% | 266.9 B | 1.7 B | 270.0 us | 0.9 us | 5010 MHz | -69.0 dBm | - | 70.49% | 0.35% |
-| Management: Beacon | 1000 | 42.07% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 28.85% | 0.14% |
-| Control: Block Ack Request (BAR) | 34 | 1.43% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.19% | 0.00% |
-| Control: Ack | 20 | 0.84% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.10% | 0.00% |
-| Management: Authentication | 8 | 0.34% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.10% | 0.00% |
-| Management: Action | 4 | 0.17% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.06% | 0.00% |
-| Management: Probe Request | 2 | 0.08% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.04% | 0.00% |
-| Management: Probe Response | 2 | 0.08% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.06% | 0.00% |
-| Management: Association Request | 2 | 0.08% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.05% | 0.00% |
-| Management: Association Response | 2 | 0.08% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.05% | 0.00% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 1303 | 54.82% | 266.9 B | 1.7 B | 141.5 us | 0.1 us | 5010 MHz | -69.0 dBm | - | 55.60% | 0.18% |
+| Management: Beacon [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 1000 | 42.07% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 43.42% | 0.14% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 34 | 1.43% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.29% | 0.00% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 20 | 0.84% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.15% | 0.00% |
+| Management: Authentication [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.34% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.16% | 0.00% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 4 | 0.17% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.08% | 0.00% |
+| Management: Probe Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.08% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.07% | 0.00% |
+| Management: Probe Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.08% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.09% | 0.00% |
+| Management: Association Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.08% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.07% | 0.00% |
+| Management: Association Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.08% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.08% | 0.00% |
 
 ### Configuration: `Broadcast`
 Total over-the-air packets captured (Global BSS/AP): **1174**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Management: Beacon | 1000 | 85.18% | 111.0 B | 0.0 B | 168.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 85.30% | 0.17% |
-| Data: QoS Data | 93 | 7.92% | 269.7 B | 1.1 B | 271.5 us | 0.6 us | 5010 MHz | -69.0 dBm | - | 12.82% | 0.03% |
-| Control: Ack | 24 | 2.04% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.30% | 0.00% |
-| Control: Block Ack Request (BAR) | 17 | 1.45% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.24% | 0.00% |
-| Control: Block Ack (BA) | 16 | 1.36% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.25% | 0.00% |
-| Management: Authentication | 8 | 0.68% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.27% | 0.00% |
-| Management: Action | 8 | 0.68% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.31% | 0.00% |
-| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.11% | 0.00% |
-| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.15% | 0.00% |
-| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.12% | 0.00% |
-| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.13% | 0.00% |
+| Management: Beacon [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 1000 | 85.18% | 111.0 B | 0.0 B | 168.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 90.87% | 0.17% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 93 | 7.92% | 269.7 B | 1.1 B | 141.7 us | 0.1 us | 5010 MHz | -69.0 dBm | - | 7.13% | 0.01% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 24 | 2.04% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.32% | 0.00% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 17 | 1.45% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.26% | 0.00% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 16 | 1.36% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.27% | 0.00% |
+| Management: Authentication [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.68% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.28% | 0.00% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.68% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.33% | 0.00% |
+| Management: Probe Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.12% | 0.00% |
+| Management: Probe Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
+| Management: Association Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.13% | 0.00% |
+| Management: Association Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.14% | 0.00% |
 
 ### Configuration: `IndividualAnnounced`
 Total over-the-air packets captured (Global BSS/AP): **4572**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Control: PS-Poll | 1992 | 43.57% | 20.0 B | 0.0 B | 26.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 8.66% | 0.05% |
-| Data: QoS Data | 1532 | 33.51% | 266.9 B | 1.7 B | 270.0 us | 0.9 us | 5010 MHz | -69.0 dBm | - | 67.42% | 0.41% |
-| Management: Beacon | 1000 | 21.87% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 23.47% | 0.14% |
-| Control: Ack | 24 | 0.52% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.10% | 0.00% |
-| Management: Authentication | 8 | 0.17% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.09% | 0.00% |
-| Management: Action | 8 | 0.17% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.10% | 0.00% |
-| Management: Probe Request | 2 | 0.04% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.04% | 0.00% |
-| Management: Probe Response | 2 | 0.04% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.05% | 0.00% |
-| Management: Association Request | 2 | 0.04% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.04% | 0.00% |
-| Management: Association Response | 2 | 0.04% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.04% | 0.00% |
+| Control: PS-Poll [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1992 | 43.57% | 20.0 B | 0.0 B | 26.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 12.75% | 0.05% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 1532 | 33.51% | 266.9 B | 1.7 B | 141.5 us | 0.1 us | 5010 MHz | -69.0 dBm | - | 52.03% | 0.22% |
+| Management: Beacon [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 1000 | 21.87% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 34.56% | 0.14% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 24 | 0.52% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.14% | 0.00% |
+| Management: Authentication [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.17% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.13% | 0.00% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.17% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.15% | 0.00% |
+| Management: Probe Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.04% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.05% | 0.00% |
+| Management: Probe Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.04% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.07% | 0.00% |
+| Management: Association Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.04% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.06% | 0.00% |
+| Management: Association Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.04% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.06% | 0.00% |
 
 ### Configuration: `IndividualUnannounced`
 Total over-the-air packets captured (Global BSS/AP): **1156**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Management: Beacon | 1000 | 86.51% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 85.06% | 0.14% |
-| Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 271.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 12.84% | 0.02% |
-| Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
-| Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.23% | 0.00% |
-| Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.25% | 0.00% |
-| Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.31% | 0.00% |
-| Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.36% | 0.00% |
-| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.13% | 0.00% |
-| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.17% | 0.00% |
-| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.14% | 0.00% |
-| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.15% | 0.00% |
+| Management: Beacon [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 1000 | 86.51% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 90.63% | 0.14% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 80 | 6.92% | 270.0 B | 0.0 B | 141.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 7.14% | 0.01% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 24 | 2.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.37% | 0.00% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 1.21% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.25% | 0.00% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 1.21% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.27% | 0.00% |
+| Management: Authentication [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.33% | 0.00% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.39% | 0.00% |
+| Management: Probe Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 68.0 B | 0.0 B | 110.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.14% | 0.00% |
+| Management: Probe Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 93.0 B | 0.0 B | 144.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.18% | 0.00% |
+| Management: Association Request [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.15% | 0.00% |
+| Management: Association Response [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.17% | 81.0 B | 0.0 B | 128.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
 
 ### Analysis of Packet Distribution
 In the Target Wake Time (TWT) simulations, **PS-Poll** frames (Control Subtype 10) are highly prevalent in configurations with TWT enabled. These frames are used by the power-saving stations in TWT Announced mode to poll the AP for buffered downlink frames during negotiated TWT service periods. Control frames such as **Block Ack (BA)** and **Block Ack Request (BAR)** confirm successful delivery during the active wake windows, while the background **Beacon** frames maintain BSS synchronization.

@@ -122,33 +122,35 @@ Total over-the-air packets captured (Global BSS/AP): **1045**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 401 | 38.37% | 798.7 B | 377.4 B | 560.9 us | 206.4 us | 5010 MHz | - | 20.0 dBm | 92.15% | 22.49% |
-| Control: Block Ack Request (BAR) | 312 | 29.86% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 3.58% | 0.87% |
-| Control: Block Ack (BA) | 312 | 29.86% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 3.92% | 0.96% |
-| Control: Ack | 12 | 1.15% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.12% | 0.03% |
-| Management: Action | 8 | 0.77% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.23% | 0.06% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 401 | 38.37% | 798.7 B | 377.4 B | 560.9 us | 206.4 us | 5010 MHz | - | 20.0 dBm | 92.15% | 22.49% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 312 | 29.86% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 3.58% | 0.87% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 312 | 29.86% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 3.92% | 0.96% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.77% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.23% | 0.06% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.77% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.08% | 0.02% |
+| Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 4 | 0.38% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -64.5 dBm | - | 0.04% | 0.01% |
 
 ### Configuration: `UlMuMultiTidBlockAck`
 Total over-the-air packets captured (Global BSS/AP): **3093**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Null (HE-MU OFDMA) | 1029 | 33.27% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 21.44% | 7.34% |
-| Data: QoS Data | 698 | 22.57% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.9 dBm | - | 72.36% | 24.75% |
-| Control: Ack | 680 | 21.99% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.45% | 0.84% |
-| Control: Trigger | 343 | 11.09% | 46.2 B | 2.5 B | 35.4 us | 0.8 us | 5010 MHz | - | 10.0 dBm | 1.78% | 0.61% |
-| Control: Block Ack (BA) | 343 | 11.09% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.97% | 0.67% |
+| Data: QoS Null [HE-TB, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 1029 | 33.27% | 34.0 B | 0.0 B | 161.2 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 23.58% | 8.29% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 698 | 22.57% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.9 dBm | - | 70.39% | 24.75% |
+| Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 680 | 21.99% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.38% | 0.84% |
+| Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 343 | 11.09% | 46.2 B | 2.5 B | 35.4 us | 0.8 us | 5010 MHz | - | 10.0 dBm | 1.73% | 0.61% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 343 | 11.09% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.92% | 0.67% |
 
 ### Configuration: `UlSuMultiTidBlockAck`
 Total over-the-air packets captured (Global BSS/AP): **921**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 510 | 55.37% | 803.3 B | 377.1 B | 563.4 us | 206.3 us | 5010 MHz | -60.0 dBm | - | 96.46% | 14.37% |
-| Control: Ack | 343 | 37.24% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 2.84% | 0.42% |
-| Control: Block Ack Request (BAR) | 33 | 3.58% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.31% | 0.05% |
-| Control: Block Ack (BA) | 33 | 3.58% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.34% | 0.05% |
-| Management: Action | 2 | 0.22% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.05% | 0.01% |
+| Data: QoS Data [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 510 | 55.37% | 803.3 B | 377.1 B | 563.4 us | 206.3 us | 5010 MHz | -60.0 dBm | - | 96.46% | 14.37% |
+| Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 341 | 37.02% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.82% | 0.42% |
+| Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 33 | 3.58% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.31% | 0.05% |
+| Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 33 | 3.58% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.34% | 0.05% |
+| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.22% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.05% | 0.01% |
+| Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.22% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.02% | 0.00% |
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
