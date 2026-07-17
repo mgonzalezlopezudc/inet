@@ -329,15 +329,15 @@ Total over-the-air packets captured (Global BSS/AP): **3826**
 | Data: Data | 7 | 0.18% | 53.7 B | 4.2 B | 153.4 us | 2.3 us | 5010 MHz | - | 20.0 dBm | 0.23% | 0.11% |
 
 ### Configuration: `UlMuMimo`
-Total over-the-air packets captured (Global BSS/AP): **4508**
+Total over-the-air packets captured (Global BSS/AP): **4320**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 2505 | 55.57% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.6 dBm | - | 96.62% | 88.84% |
-| Control: Ack | 1074 | 23.82% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.44% | 1.32% |
-| Control: Trigger | 460 | 10.20% | 45.9 B | 2.1 B | 35.3 us | 0.7 us | 5010 MHz | - | 10.0 dBm | 0.88% | 0.81% |
-| Control: Block Ack (BA) | 459 | 10.18% | 57.6 B | 2.3 B | 39.2 us | 0.8 us | 5010 MHz | - | 10.0 dBm | 0.98% | 0.90% |
-| Data: QoS Null | 10 | 0.22% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5010 MHz | -64.0 dBm | - | 0.08% | 0.07% |
+| Data: QoS Data | 2544 | 58.89% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 96.52% | 90.22% |
+| Control: Trigger | 792 | 18.33% | 46.0 B | 1.5 B | 35.3 us | 0.5 us | 5010 MHz | - | 10.0 dBm | 1.50% | 1.40% |
+| Control: Block Ack (BA) | 791 | 18.31% | 57.9 B | 1.2 B | 39.3 us | 0.4 us | 5010 MHz | - | 10.0 dBm | 1.66% | 1.55% |
+| Control: Ack | 183 | 4.24% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.24% | 0.23% |
+| Data: QoS Null | 10 | 0.23% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5003 MHz, 5004 MHz, 5006 MHz, 5010 MHz | -64.0 dBm | - | 0.08% | 0.07% |
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
