@@ -160,6 +160,8 @@ The decoded output timeline shows:
      not higher peak throughput.
 
 ## 802.11 Packet Type Statistics
+![802.11 Packet Type Statistics](packet_statistics.png)
+
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
 Two airtime occupancy percentages are provided:
@@ -169,28 +171,28 @@ Two airtime occupancy percentages are provided:
 ### Configuration: `ErBss`
 Total over-the-air packets captured (Global BSS/AP): **240**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 120 | 50.00% | 166.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 89.70% | 1.29% |
-| Control: Ack | 120 | 50.00% | 14.0 B | 0.0 B | 5010 MHz | -87.0 dBm | - | 10.30% | 0.15% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 120 | 50.00% | 166.0 B | 0.0 B | 214.8 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 89.70% | 1.29% |
+| Control: Ack | 120 | 50.00% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 10.30% | 0.15% |
 
 ### Configuration: `HeErSu`
 Total over-the-air packets captured (Global BSS/AP): **3417**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1704 | 49.87% | 366.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 92.82% | 27.62% |
-| Control: Ack | 1702 | 49.81% | 14.0 B | 0.0 B | 5010 MHz | -87.0 dBm | - | 7.05% | 2.10% |
-| Management: Action | 11 | 0.32% | 37.0 B | 0.0 B | 5010 MHz | -87.0 dBm | 10.0 dBm | 0.13% | 0.04% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1704 | 49.87% | 366.0 B | 0.0 B | 324.2 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 92.82% | 27.62% |
+| Control: Ack | 1702 | 49.81% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 7.05% | 2.10% |
+| Management: Action | 11 | 0.32% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -87.0 dBm | 10.0 dBm | 0.13% | 0.04% |
 
 ### Configuration: `HeSu`
 Total over-the-air packets captured (Global BSS/AP): **3414**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1700 | 49.79% | 366.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 92.78% | 27.56% |
-| Control: Ack | 1700 | 49.79% | 14.0 B | 0.0 B | 5010 MHz | -87.0 dBm | - | 7.06% | 2.10% |
-| Management: Action | 14 | 0.41% | 37.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 0.16% | 0.05% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1700 | 49.79% | 366.0 B | 0.0 B | 324.2 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 92.78% | 27.56% |
+| Control: Ack | 1700 | 49.79% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 7.06% | 2.10% |
+| Management: Action | 14 | 0.41% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.16% | 0.05% |
 
 ### Analysis of Packet Distribution
 Extended Range (ER) simulations demonstrate HE SU versus HE ER SU transmissions. Because the channel conditions are poor at cell boundaries, configurations utilizing HE ER SU (which uses a robust DCM coding and extended preambles) show successful delivery of **QoS Data** and **Block Ack (BA)** frames, whereas standard HE SU configurations suffer from packet loss, resulting in fewer successful data and acknowledgment frames.

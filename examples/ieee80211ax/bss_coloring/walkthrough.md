@@ -137,6 +137,8 @@ Query the vector metrics in scavetool to see how the client stations update thei
 2. In `TwoNav`, inter-BSS frame reservations update only the Basic NAV (monitored via `nav:vector`), while local intra-BSS reservations update the Intra-BSS NAV (monitored via `intraBssNavChanged:vector`). This separation allows the MAC layer to ignore Basic NAV updates during eligible spatial-reuse transmission opportunities. (Note: Since there are no client-to-client transmissions in this downlink-heavy scenario, the `intraBssNavChanged` signal remains un-triggered/idle).
 
 ## 802.11 Packet Type Statistics
+![802.11 Packet Type Statistics](packet_statistics.png)
+
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
 Two airtime occupancy percentages are provided:
@@ -146,68 +148,68 @@ Two airtime occupancy percentages are provided:
 ### Configuration: `BssColoringCollision`
 Total over-the-air packets captured (Global BSS/AP): **1282**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
-| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
-| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
-| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
-| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 707.2 us | 18.9 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
+| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 32.9 us | 9.2 us | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
+| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
+| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
 
 ### Configuration: `BssColoringDisabled`
 Total over-the-air packets captured (Global BSS/AP): **1282**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
-| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
-| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
-| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
-| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 707.2 us | 18.9 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
+| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 32.9 us | 9.2 us | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
+| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
+| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
 
 ### Configuration: `BssColoringEnabled`
 Total over-the-air packets captured (Global BSS/AP): **1282**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
-| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
-| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
-| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
-| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 707.2 us | 18.9 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
+| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 32.9 us | 9.2 us | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
+| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
+| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
 
 ### Configuration: `ObssPdAggressive`
 Total over-the-air packets captured (Global BSS/AP): **1282**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
-| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
-| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
-| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
-| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 707.2 us | 18.9 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
+| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 32.9 us | 9.2 us | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
+| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
+| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
 
 ### Configuration: `ObssPdConservative`
 Total over-the-air packets captured (Global BSS/AP): **1282**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
-| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
-| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
-| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
-| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1176 | 91.73% | 1066.1 B | 34.6 B | 707.2 us | 18.9 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 99.56% | 83.16% |
+| Control: Block Ack Request (BAR) | 36 | 2.81% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.12% | 0.10% |
+| Control: Block Ack (BA) | 36 | 2.81% | 38.7 B | 27.5 B | 32.9 us | 9.2 us | 5050 MHz | -72.5 dBm | - | 0.14% | 0.12% |
+| Control: Ack | 20 | 1.56% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -72.2 dBm | 13.0 dBm | 0.06% | 0.05% |
+| Management: Action | 14 | 1.09% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -74.0 dBm | 13.0 dBm | 0.12% | 0.10% |
 
 ### Configuration: `TwoNav`
 Total over-the-air packets captured (Global BSS/AP): **1246**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1113 | 89.33% | 1067.6 B | 26.2 B | 5050 MHz | -79.9 dBm | 13.0 dBm | 99.45% | 78.80% |
-| Control: Block Ack Request (BAR) | 46 | 3.69% | 24.0 B | 0.0 B | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.16% | 0.13% |
-| Control: Block Ack (BA) | 46 | 3.69% | 32.0 B | 0.0 B | 5050 MHz | -72.5 dBm | - | 0.18% | 0.14% |
-| Control: Ack | 26 | 2.09% | 14.0 B | 0.0 B | 5050 MHz | -73.1 dBm | 13.0 dBm | 0.08% | 0.06% |
-| Management: Action | 15 | 1.20% | 37.0 B | 0.0 B | 5050 MHz | -73.1 dBm | 13.0 dBm | 0.13% | 0.10% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1113 | 89.33% | 1067.6 B | 26.2 B | 708.0 us | 14.3 us | 5050 MHz | -79.9 dBm | 13.0 dBm | 99.45% | 78.80% |
+| Control: Block Ack Request (BAR) | 46 | 3.69% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | -80.0 dBm | 13.0 dBm | 0.16% | 0.13% |
+| Control: Block Ack (BA) | 46 | 3.69% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5050 MHz | -72.5 dBm | - | 0.18% | 0.14% |
+| Control: Ack | 26 | 2.09% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -73.1 dBm | 13.0 dBm | 0.08% | 0.06% |
+| Management: Action | 15 | 1.20% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -73.1 dBm | 13.0 dBm | 0.13% | 0.10% |
 
 ### Analysis of Packet Distribution
 BSS Coloring simulations show packet exchanges across multiple overlapping BSSs (OBSS). In addition to standard **QoS Data** and **Block Ack (BA)** frames, the statistics reflect management traffic like **Beacons** from multiple APs. When BSS coloring is disabled, collisions and backoffs occur, altering the proportion of retransmitted data frames. Enabling BSS coloring reduces mutual interference, allowing smoother channel access and higher successful data frame delivery rates.

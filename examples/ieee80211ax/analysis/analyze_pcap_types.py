@@ -24,6 +24,10 @@ import json
 import subprocess
 import math
 from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+import numpy as np
 
 # Resolve project repository root (3 levels up from this file)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -359,6 +363,10 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         variance = sum((x - mean_size) ** 2 for x in sizes) / count if count > 0 else 0
         std_size = math.sqrt(variance)
         
+        mean_airtime = sum(airtimes) / count if count > 0 else 0
+        var_airtime = sum((x - mean_airtime) ** 2 for x in airtimes) / count if count > 0 else 0
+        std_airtime = math.sqrt(var_airtime)
+        
         sum_airtime = sum(airtimes)
         airtime_pct = (sum_airtime / total_airtime) * 100 if total_airtime > 0 else 0.0
         airtime_sim_pct = (sum_airtime / total_sim_time) * 100 if total_sim_time > 0 else 0.0
@@ -385,6 +393,8 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
             "count": count,
             "mean": mean_size,
             "std": std_size,
+            "mean_duration": mean_airtime,
+            "std_duration": std_airtime,
             "airtime_pct": airtime_pct,
             "airtime_sim_pct": airtime_sim_pct,
             "freq": freq_str,
@@ -472,8 +482,8 @@ def make_table_md(stats, total):
     if total == 0:
         return "No packets captured.\n\n"
     md = []
-    md.append("| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
-    md.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+    md.append("| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
+    md.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
     
     sorted_stats = sorted(stats.items(), key=lambda x: x[1]["count"], reverse=True)
     for (fc_type, fc_subtype), stat in sorted_stats:
@@ -481,13 +491,102 @@ def make_table_md(stats, total):
         pct = (stat["count"] / total) * 100
         mean_sz = f"{stat['mean']:.1f} B"
         std_sz = f"{stat['std']:.1f} B"
+        mean_dur = f"{stat['mean_duration'] * 1e6:.1f} us"
+        std_dur = f"{stat['std_duration'] * 1e6:.1f} us"
         freq_str = stat.get("freq", "-")
         rx_sig_str = stat.get("rx_sig", "-")
         tx_pwr_str = stat.get("tx_pwr", "-")
         air_pct = f"{stat['airtime_pct']:.2f}%"
         air_sim_pct = f"{stat['airtime_sim_pct']:.2f}%"
-        md.append(f"| {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
+        md.append(f"| {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {mean_dur} | {std_dur} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
     return "".join(md)
+
+def generate_stacked_bar_plot(config_results, subdir, color_map):
+    # Filter configs that have global stats
+    valid_configs = []
+    for cfg_name in sorted(config_results.keys()):
+        res = config_results[cfg_name]
+        if "global" in res and res["global"]["total"] > 0:
+            valid_configs.append(cfg_name)
+            
+    if not valid_configs:
+        return
+        
+    # Get union of all packet type names
+    packet_types = set()
+    for cfg in valid_configs:
+        stats = config_results[cfg]["global"]["stats"]
+        for key in stats.keys():
+            name = get_packet_type_name(key[0], key[1])
+            packet_types.add(name)
+            
+    packet_types = sorted(list(packet_types))
+    
+    # Prepare data for plotting
+    num_configs = len(valid_configs)
+    count_data = {pt: np.zeros(num_configs) for pt in packet_types}
+    airtime_data = {pt: np.zeros(num_configs) for pt in packet_types}
+    
+    for idx, cfg in enumerate(valid_configs):
+        global_res = config_results[cfg]["global"]
+        total = global_res["total"]
+        stats = global_res["stats"]
+        
+        for key, stat in stats.items():
+            name = get_packet_type_name(key[0], key[1])
+            pct = (stat["count"] / total) * 100
+            count_data[name][idx] = pct
+            airtime_data[name][idx] = stat["airtime_pct"]
+            
+    # Set up matplotlib style for a clean, premium look
+    plt.rcParams['font.sans-serif'] = 'DejaVu Sans'
+    plt.rcParams['font.family'] = 'sans-serif'
+    
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    
+    x = np.arange(num_configs)
+    width = 0.45
+    
+    # Helper to format axes
+    def style_axis(ax, title):
+        ax.set_title(title, fontsize=14, pad=15, weight='bold', color='#2c3e50')
+        ax.set_ylabel("Percentage (%)", fontsize=12, labelpad=10, color='#2c3e50')
+        ax.set_xticks(x)
+        ax.set_xticklabels(valid_configs, rotation=20, ha="right", fontsize=10, color='#2c3e50')
+        ax.set_ylim(0, 105)
+        ax.grid(axis='y', linestyle='--', alpha=0.5, color='#bdc3c7')
+        ax.set_axisbelow(True)
+        # Remove top and right spines
+        for spine in ['top', 'right']:
+            ax.spines[spine].set_visible(False)
+        ax.spines['left'].set_color('#bdc3c7')
+        ax.spines['bottom'].set_color('#bdc3c7')
+        
+    # Plot Count Percentages
+    bottom_count = np.zeros(num_configs)
+    for pt in packet_types:
+        ax1.bar(x, count_data[pt], width, bottom=bottom_count, label=pt, color=color_map[pt], edgecolor='white', linewidth=0.5)
+        bottom_count += count_data[pt]
+    style_axis(ax1, "Packet Count Distribution (%)")
+    
+    # Plot Air Time Percentages
+    bottom_air = np.zeros(num_configs)
+    for pt in packet_types:
+        ax2.bar(x, airtime_data[pt], width, bottom=bottom_air, label=pt, color=color_map[pt], edgecolor='white', linewidth=0.5)
+        bottom_air += airtime_data[pt]
+    style_axis(ax2, "Airtime Distribution (%)")
+    
+    # Common Legend on the right side
+    handles, labels = ax1.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='center left', bbox_to_anchor=(0.82, 0.5), fontsize=10, frameon=True, facecolor='#f8f9fa', edgecolor='#e2e8f0')
+    
+    plt.tight_layout(rect=[0.02, 0.02, 0.81, 0.95])
+    
+    # Save path
+    plot_dir = REPOSITORY_ROOT / "examples" / "ieee80211ax" / subdir
+    plot_path = plot_dir / "packet_statistics.png"
+    plt.savefig(str(plot_path), dpi=150, bbox_inches='tight')
+    plt.close()
 
 def generate_markdown_tables(config_results, subdir):
     if not config_results:
@@ -495,6 +594,7 @@ def generate_markdown_tables(config_results, subdir):
     
     md = []
     md.append("## 802.11 Packet Type Statistics\n")
+    md.append("![802.11 Packet Type Statistics](packet_statistics.png)\n\n")
     md.append("This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. ")
     
     ap_used = all(res["global"]["used_ap_only"] for res in config_results.values() if "global" in res)
@@ -626,9 +726,28 @@ def main():
         res = analyze_subdirectory(subdir, considered)
         if res:
             all_results[subdir] = res
-            md_table = generate_markdown_tables(res, subdir)
-            if md_table:
-                update_walkthrough_file(subdir, md_table)
+
+    # Gather the union of all packet types across all results to use consistent colors
+    global_packet_types = set()
+    for subdir, subdir_res in all_results.items():
+        for config_name, res in subdir_res.items():
+            if "global" in res:
+                stats = res["global"]["stats"]
+                for key in stats.keys():
+                    name = get_packet_type_name(key[0], key[1])
+                    global_packet_types.add(name)
+                    
+    global_packet_types = sorted(list(global_packet_types))
+    
+    # Assign a fixed color to each global packet type from the tab20 palette
+    cmap = matplotlib.colormaps["tab20"]
+    global_color_map = {pt: cmap(i % cmap.N) for i, pt in enumerate(global_packet_types)}
+
+    for subdir, res in all_results.items():
+        generate_stacked_bar_plot(res, subdir, global_color_map)
+        md_table = generate_markdown_tables(res, subdir)
+        if md_table:
+            update_walkthrough_file(subdir, md_table)
 
     summary_json_path = REPOSITORY_ROOT / "examples" / "ieee80211ax" / "analysis" / "summary_results_pcap.json"
     with summary_json_path.open("w") as f:
