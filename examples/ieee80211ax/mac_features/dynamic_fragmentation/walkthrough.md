@@ -113,6 +113,8 @@ ability to choose boundaries per opportunity; showing adaptive sizing would
 require varying the available TXOP or RU budget during the run.
 
 ## 802.11 Packet Type Statistics
+![802.11 Packet Type Statistics](packet_statistics.png)
+
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
 Two airtime occupancy percentages are provided:
@@ -122,13 +124,13 @@ Two airtime occupancy percentages are provided:
 ### Configuration: `DynamicFragmentation`
 Total over-the-air packets captured (Global BSS/AP): **6764**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 6043 | 89.34% | 376.1 B | 176.8 B | 5010 MHz | -63.3 dBm | - | 98.44% | 99.63% |
-| Control: Block Ack Request (BAR) | 435 | 6.43% | 24.0 B | 0.0 B | 5010 MHz | -62.8 dBm | - | 0.60% | 0.61% |
-| Control: Block Ack (BA) | 261 | 3.86% | 152.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 0.91% | 0.92% |
-| Control: Ack | 18 | 0.27% | 14.0 B | 0.0 B | 5010 MHz | -63.7 dBm | 10.0 dBm | 0.02% | 0.02% |
-| Management: Action | 7 | 0.10% | 37.0 B | 0.0 B | 5010 MHz | -63.0 dBm | 10.0 dBm | 0.02% | 0.02% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 6043 | 89.34% | 376.1 B | 176.8 B | 329.7 us | 96.7 us | 5010 MHz | -63.3 dBm | - | 98.44% | 99.63% |
+| Control: Block Ack Request (BAR) | 435 | 6.43% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -62.8 dBm | - | 0.60% | 0.61% |
+| Control: Block Ack (BA) | 261 | 3.86% | 152.0 B | 0.0 B | 70.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.91% | 0.92% |
+| Control: Ack | 18 | 0.27% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -63.7 dBm | 10.0 dBm | 0.02% | 0.02% |
+| Management: Action | 7 | 0.10% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -63.0 dBm | 10.0 dBm | 0.02% | 0.02% |
 
 ### Analysis of Packet Distribution
 In dynamic fragmentation scenarios, large application layer packets are dynamically fragmented into smaller MAC-layer **QoS Data** frames depending on channel conditions. This results in a higher count of QoS Data frames for fragmented configurations compared to non-fragmented baselines. The corresponding **Block Ack (BA)** count also reflects the fragment-level acknowledgment bitmap.

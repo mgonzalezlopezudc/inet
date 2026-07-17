@@ -221,6 +221,8 @@ number of simultaneous random-access opportunities, isolating that parameter.
    - **`UoraMoreRandomAccessRus`**: Three RA-RUs produce `217.0 ± 60.3` attempts and `0.638 ± 0.030` success probability. The extra RUs increase opportunity, but these five runs do not establish a decisive success-probability gain.
 
 ## 802.11 Packet Type Statistics
+![802.11 Packet Type Statistics](packet_statistics.png)
+
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
 Two airtime occupancy percentages are provided:
@@ -230,34 +232,34 @@ Two airtime occupancy percentages are provided:
 ### Configuration: `OperatingModeIndication`
 Total over-the-air packets captured (Global BSS/AP): **2502**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1476 | 58.99% | 1070.0 B | 0.0 B | 5010 MHz | -63.0 dBm | - | 97.63% | 52.35% |
-| Control: Ack | 1020 | 40.77% | 14.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 2.35% | 1.26% |
-| Control: Trigger | 3 | 0.12% | 40.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
-| Control: Block Ack (BA) | 3 | 0.12% | 46.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 1476 | 58.99% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.0 dBm | - | 97.63% | 52.35% |
+| Control: Ack | 1020 | 40.77% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.35% | 1.26% |
+| Control: Trigger | 3 | 0.12% | 40.0 B | 0.0 B | 33.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
+| Control: Block Ack (BA) | 3 | 0.12% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
 
 ### Configuration: `UlMuMultiTidBlockAck`
 Total over-the-air packets captured (Global BSS/AP): **3093**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Null | 1029 | 33.27% | 34.0 B | 0.0 B | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 21.44% | 7.34% |
-| Data: QoS Data | 698 | 22.57% | 1070.0 B | 0.0 B | 5010 MHz | -63.9 dBm | - | 72.36% | 24.75% |
-| Control: Ack | 680 | 21.99% | 14.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 2.45% | 0.84% |
-| Control: Trigger | 343 | 11.09% | 46.2 B | 2.5 B | 5010 MHz | - | 10.0 dBm | 1.78% | 0.61% |
-| Control: Block Ack (BA) | 343 | 11.09% | 58.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 1.97% | 0.67% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Null | 1029 | 33.27% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 21.44% | 7.34% |
+| Data: QoS Data | 698 | 22.57% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.9 dBm | - | 72.36% | 24.75% |
+| Control: Ack | 680 | 21.99% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.45% | 0.84% |
+| Control: Trigger | 343 | 11.09% | 46.2 B | 2.5 B | 35.4 us | 0.8 us | 5010 MHz | - | 10.0 dBm | 1.78% | 0.61% |
+| Control: Block Ack (BA) | 343 | 11.09% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.97% | 0.67% |
 
 ### Configuration: `UlSuMultiTidBlockAck`
 Total over-the-air packets captured (Global BSS/AP): **921**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 510 | 55.37% | 803.3 B | 377.1 B | 5010 MHz | -60.0 dBm | - | 96.46% | 14.37% |
-| Control: Ack | 343 | 37.24% | 14.0 B | 0.0 B | 5010 MHz | -60.0 dBm | 10.0 dBm | 2.84% | 0.42% |
-| Control: Block Ack Request (BAR) | 33 | 3.58% | 24.0 B | 0.0 B | 5010 MHz | -60.0 dBm | - | 0.31% | 0.05% |
-| Control: Block Ack (BA) | 33 | 3.58% | 32.0 B | 0.0 B | 5010 MHz | - | 10.0 dBm | 0.34% | 0.05% |
-| Management: Action | 2 | 0.22% | 37.0 B | 0.0 B | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.05% | 0.01% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Data: QoS Data | 510 | 55.37% | 803.3 B | 377.1 B | 563.4 us | 206.3 us | 5010 MHz | -60.0 dBm | - | 96.46% | 14.37% |
+| Control: Ack | 343 | 37.24% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 2.84% | 0.42% |
+| Control: Block Ack Request (BAR) | 33 | 3.58% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.31% | 0.05% |
+| Control: Block Ack (BA) | 33 | 3.58% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.34% | 0.05% |
+| Management: Action | 2 | 0.22% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.05% | 0.01% |
 
 ### Analysis of Packet Distribution
 Uplink OFDMA simulations exhibit a substantial count of **Trigger** frames (Control Subtype 2). Trigger frames are initiated by the AP to allocate Resource Units (RUs) and synchronize uplink transmissions from multiple stations. The corresponding uplink traffic consists of **QoS Data** frames sent inside HE Trigger-Based (HE TB) PPDUs, acknowledged collectively or individually by **Block Ack (BA)** frames.
