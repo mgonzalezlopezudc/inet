@@ -125,9 +125,9 @@ Total over-the-air packets captured (Global BSS/AP): **2723**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1556 | 57.14% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.4 dBm | - | 96.25% | 55.18% |
-| Control: Ack | 972 | 35.70% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.09% | 1.20% |
-| Data: QoS Null | 114 | 4.19% | 34.0 B | 0.0 B | 142.6 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 1.42% | 0.81% |
+| Data: QoS Data | 1556 | 57.14% | 1070.0 B | 0.0 B | 709.3 us | 0.0 us | 5010 MHz | -63.4 dBm | - | 96.93% | 55.18% |
+| Control: Ack | 972 | 35.70% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.11% | 1.20% |
+| Control: HE TB feedback NDP | 114 | 4.19% | 0.0 B | 0.0 B | 72.0 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 0.72% | 0.41% |
 | Control: Trigger | 81 | 2.97% | 43.0 B | 0.0 B | 34.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.24% | 0.14% |
 
 ### Analysis of Packet Distribution

@@ -289,14 +289,25 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 if len(parts) < 4:
                     continue
                 
-                fc_version = parts[0].split(',')[0] if parts[0] else ""
-                fc_type = parts[1].split(',')[0] if parts[1] else ""
-                fc_subtype = parts[2].split(',')[0] if parts[2] else ""
-                size_str = parts[3].split(',')[0] if parts[3] else ""
-                radiotap_len_str = parts[4].split(',')[0] if len(parts) > 4 and parts[4] else ""
-                freq_str = parts[5].split(',')[0] if len(parts) > 5 and parts[5] else ""
-                antsig_str = parts[6].split(',')[0] if len(parts) > 6 and parts[6] else ""
-                txpower_str = parts[7].split(',')[0] if len(parts) > 7 and parts[7] else ""
+                is_wlan_present = parts[0] in ["0", "1", "2"]
+                if not is_wlan_present:
+                    fc_version = ""
+                    fc_type = ""
+                    fc_subtype = ""
+                    size_str = parts[0] if len(parts) > 0 else ""
+                    radiotap_len_str = parts[1] if len(parts) > 1 else ""
+                    freq_str = parts[2] if len(parts) > 2 else ""
+                    antsig_str = parts[3] if len(parts) > 3 else ""
+                    txpower_str = ""
+                else:
+                    fc_version = parts[0].split(',')[0] if parts[0] else ""
+                    fc_type = parts[1].split(',')[0] if parts[1] else ""
+                    fc_subtype = parts[2].split(',')[0] if parts[2] else ""
+                    size_str = parts[3].split(',')[0] if parts[3] else ""
+                    radiotap_len_str = parts[4].split(',')[0] if len(parts) > 4 and parts[4] else ""
+                    freq_str = parts[5].split(',')[0] if len(parts) > 5 and parts[5] else ""
+                    antsig_str = parts[6].split(',')[0] if len(parts) > 6 and parts[6] else ""
+                    txpower_str = parts[7].split(',')[0] if len(parts) > 7 and parts[7] else ""
                 
                 try:
                     size = int(size_str)
@@ -334,7 +345,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                         "txpowers": []
                     }
                     
-                airtime = estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version)
+                airtime = estimate_airtime(key[0], key[1], size, config_name, subdir, fc_version)
                 stats[key]["sizes"].append(size)
                 stats[key]["airtimes"].append(airtime)
                 

@@ -68,8 +68,11 @@ void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
     if (auto twoAddressHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header)) {
         macAddressInd->setSrcAddress(twoAddressHeader->getTransmitterAddress());
     }
-    frameIsAmpdu = dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
-    if (!frameIsAmpdu) {
+    // An HE TB NDP (preamble-only) carries no PSDU: the packet is empty.
+    // Skip A-MPDU detection and MAC header/trailer stamping for such frames.
+    bool isNdp = (packet->getDataLength() == B(0));
+    frameIsAmpdu = !isNdp && dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
+    if (!frameIsAmpdu && !isNdp) {
         const auto& updatedHeader = packet->removeAtFront<Ieee80211MacHeader>();
         if (auto twoAddressHeader = dynamicPtrCast<Ieee80211TwoAddressHeader>(updatedHeader)) {
             twoAddressHeader->setTransmitterAddress(mac->getAddress());
@@ -90,7 +93,8 @@ void Tx::transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& head
         packet->insertAtBack(updatedTrailer);
     }
     this->frame = packet->dup();
-    frameHeader = frameIsAmpdu ? header : nullptr;
+    // Store the passed-in header for A-MPDU and NDP frames (both have no peekable MAC header).
+    frameHeader = (frameIsAmpdu || isNdp) ? header : nullptr;
     ASSERT(!endIfsTimer->isScheduled() && !transmitting); // we are idle
     if (ifs == 0) {
         // do directly what handleMessage() would do
@@ -108,7 +112,7 @@ void Tx::radioTransmissionFinished()
         EV_DETAIL << "Tx: radioTransmissionFinished()\n";
         transmitting = false;
         ASSERT(txCallback != nullptr);
-        const auto& header = frameIsAmpdu ? frameHeader : frame->peekAtFront<Ieee80211MacHeader>();
+        const auto& header = (frameIsAmpdu || frame->getDataLength() == B(0)) ? frameHeader : frame->peekAtFront<Ieee80211MacHeader>();
         auto duration = header->getDurationField();
         auto tmpFrame = frame;
         auto tmpTxCallback = txCallback;
