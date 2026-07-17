@@ -320,26 +320,28 @@ Two airtime occupancy percentages are provided:
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
 
 ### Configuration: `BccBaseline`
-Total over-the-air packets captured (Global BSS/AP): **94**
+Total over-the-air packets captured (Global BSS/AP): **2262**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 64 | 68.09% | 1066.0 B | 0.0 B | 97.29% | 4.53% |
-| Control: Ack | 13 | 13.83% | 14.0 B | 0.0 B | 0.69% | 0.03% |
-| Management: Action | 11 | 11.70% | 37.0 B | 0.0 B | 1.64% | 0.08% |
-| Control: Block Ack Request (BAR) | 3 | 3.19% | 24.0 B | 0.0 B | 0.18% | 0.01% |
-| Control: Block Ack (BA) | 3 | 3.19% | 32.0 B | 0.0 B | 0.20% | 0.01% |
+| Control: Block Ack (BA) | 1119 | 49.47% | 32.0 B | 0.0 B | 3.53% | 3.43% |
+| Data: QoS Data | 704 | 31.12% | 2164.7 B | 1105.0 B | 94.80% | 92.09% |
+| Control: Trigger | 350 | 15.47% | 55.0 B | 0.0 B | 1.38% | 1.34% |
+| Control: Block Ack Request (BAR) | 69 | 3.05% | 24.0 B | 0.0 B | 0.20% | 0.19% |
+| Control: Ack | 12 | 0.53% | 14.0 B | 0.0 B | 0.03% | 0.03% |
+| Management: Action | 8 | 0.35% | 37.0 B | 0.0 B | 0.06% | 0.06% |
 
 ### Configuration: `PreamblePuncturing`
-Total over-the-air packets captured (Global BSS/AP): **94**
+Total over-the-air packets captured (Global BSS/AP): **2262**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 64 | 68.09% | 1066.0 B | 0.0 B | 97.29% | 4.53% |
-| Control: Ack | 13 | 13.83% | 14.0 B | 0.0 B | 0.69% | 0.03% |
-| Management: Action | 11 | 11.70% | 37.0 B | 0.0 B | 1.64% | 0.08% |
-| Control: Block Ack Request (BAR) | 3 | 3.19% | 24.0 B | 0.0 B | 0.18% | 0.01% |
-| Control: Block Ack (BA) | 3 | 3.19% | 32.0 B | 0.0 B | 0.20% | 0.01% |
+| Control: Block Ack (BA) | 1119 | 49.47% | 32.0 B | 0.0 B | 3.53% | 3.43% |
+| Data: QoS Data | 704 | 31.12% | 2164.7 B | 1105.0 B | 94.80% | 92.09% |
+| Control: Trigger | 350 | 15.47% | 55.0 B | 0.0 B | 1.38% | 1.34% |
+| Control: Block Ack Request (BAR) | 69 | 3.05% | 24.0 B | 0.0 B | 0.20% | 0.19% |
+| Control: Ack | 12 | 0.53% | 14.0 B | 0.0 B | 0.03% | 0.03% |
+| Management: Action | 8 | 0.35% | 37.0 B | 0.0 B | 0.06% | 0.06% |
 
 ### Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.

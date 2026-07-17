@@ -369,16 +369,16 @@ Total over-the-air packets captured (Global BSS/AP): **4715**
 | Management: Action | 6 | 0.13% | 37.0 B | 0.0 B | 0.10% | 0.04% |
 
 ### Configuration: `EqualSizedRUs_fBW`
-Total over-the-air packets captured (Global BSS/AP): **5034**
+Total over-the-air packets captured (Global BSS/AP): **3192**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Control: Block Ack (BA) | 2353 | 46.74% | 32.0 B | 0.0 B | 3.80% | 7.22% |
-| Data: QoS Data | 1454 | 28.88% | 2013.7 B | 2397.0 B | 93.92% | 178.19% |
-| Control: Trigger | 1156 | 22.96% | 46.0 B | 0.0 B | 2.15% | 4.08% |
-| Control: Block Ack Request (BAR) | 41 | 0.81% | 24.0 B | 0.0 B | 0.06% | 0.11% |
-| Control: Ack | 18 | 0.36% | 14.0 B | 0.0 B | 0.02% | 0.04% |
-| Management: Action | 12 | 0.24% | 37.0 B | 0.0 B | 0.04% | 0.08% |
+| Control: Block Ack (BA) | 1441 | 45.14% | 32.0 B | 0.0 B | 10.78% | 4.42% |
+| Data: QoS Data | 995 | 31.17% | 396.8 B | 165.8 B | 82.76% | 33.93% |
+| Control: Trigger | 700 | 21.93% | 46.0 B | 0.0 B | 6.03% | 2.47% |
+| Control: Block Ack Request (BAR) | 41 | 1.28% | 24.0 B | 0.0 B | 0.28% | 0.11% |
+| Control: Ack | 9 | 0.28% | 14.0 B | 0.0 B | 0.05% | 0.02% |
+| Management: Action | 6 | 0.19% | 37.0 B | 0.0 B | 0.10% | 0.04% |
 
 ### Configuration: `EqualSizedRUs_fBW_ACVO`
 Total over-the-air packets captured (Global BSS/AP): **2836**
@@ -393,15 +393,15 @@ Total over-the-air packets captured (Global BSS/AP): **2836**
 | Management: Action | 6 | 0.21% | 37.0 B | 0.0 B | 0.09% | 0.04% |
 
 ### Configuration: `EqualSizedRUs_fHoL`
-Total over-the-air packets captured (Global BSS/AP): **3856**
+Total over-the-air packets captured (Global BSS/AP): **2533**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Control: Block Ack (BA) | 2291 | 59.41% | 32.0 B | 0.0 B | 4.40% | 7.03% |
-| Data: QoS Data | 771 | 19.99% | 3323.4 B | 3577.9 B | 93.69% | 149.72% |
-| Control: Trigger | 764 | 19.81% | 55.0 B | 0.3 B | 1.83% | 2.93% |
-| Control: Ack | 18 | 0.47% | 14.0 B | 0.0 B | 0.03% | 0.04% |
-| Management: Action | 12 | 0.31% | 37.0 B | 0.0 B | 0.05% | 0.08% |
+| Control: Block Ack (BA) | 1508 | 59.53% | 32.0 B | 0.0 B | 13.48% | 4.62% |
+| Data: QoS Data | 507 | 20.02% | 771.9 B | 256.4 B | 80.72% | 27.69% |
+| Control: Trigger | 503 | 19.86% | 55.0 B | 0.4 B | 5.62% | 1.93% |
+| Control: Ack | 9 | 0.36% | 14.0 B | 0.0 B | 0.06% | 0.02% |
+| Management: Action | 6 | 0.24% | 37.0 B | 0.0 B | 0.12% | 0.04% |
 
 ### Configuration: `EqualSizedRUs_fHoL_ACVO`
 Total over-the-air packets captured (Global BSS/AP): **2720**
@@ -458,29 +458,17 @@ Total packets captured for flow: **322**
 | Data: QoS Data | 1 | 0.31% | 166.0 B | 0.0 B | 2.12% | 0.02% |
 | Control: Ack | 1 | 0.31% | 14.0 B | 0.0 B | 0.24% | 0.00% |
 
-### Configuration: `MultiTidBlockAck`
-Total over-the-air packets captured (Global BSS/AP): **322**
-
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 230 | 71.43% | 822.5 B | 368.1 B | 97.80% | 13.20% |
-| Control: Block Ack Request (BAR) | 36 | 11.18% | 24.0 B | 0.0 B | 0.75% | 0.10% |
-| Control: Block Ack (BA) | 36 | 11.18% | 32.0 B | 0.0 B | 0.82% | 0.11% |
-| Control: Ack | 12 | 3.73% | 14.0 B | 0.0 B | 0.22% | 0.03% |
-| Management: Action | 8 | 2.48% | 37.0 B | 0.0 B | 0.41% | 0.06% |
-
 ### Configuration: `SuEdcaBaseline`
-Total over-the-air packets captured (Global BSS/AP): **2043**
+Total over-the-air packets captured (Global BSS/AP): **1593**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data | 1317 | 64.46% | 169.5 B | 23.9 B | 21.67% | 28.54% |
-| Control: Block Ack Request (BAR) | 264 | 12.92% | 24.0 B | 0.0 B | 0.56% | 0.74% |
-| Control: Block Ack (BA) | 264 | 12.92% | 32.0 B | 0.0 B | 0.61% | 0.81% |
-| Management: Association Request | 157 | 7.68% | 4734.5 B | 1876.7 B | 75.46% | 99.42% |
-| Control: Ack | 18 | 0.88% | 14.0 B | 0.0 B | 0.03% | 0.04% |
-| Management: Action | 12 | 0.59% | 37.0 B | 0.0 B | 0.06% | 0.08% |
-| A-MPDU Delimiter / Aggregation Overhead | 11 | 0.54% | 5680.2 B | 85.9 B | 1.60% | 2.10% |
+| Data: QoS Data | 1314 | 82.49% | 169.5 B | 24.0 B | 93.71% | 28.48% |
+| Control: Block Ack Request (BAR) | 120 | 7.53% | 24.0 B | 0.0 B | 1.11% | 0.34% |
+| Control: Block Ack (BA) | 120 | 7.53% | 32.0 B | 0.0 B | 1.21% | 0.37% |
+| Management: Association Request | 24 | 1.51% | 342.0 B | 0.0 B | 3.76% | 1.14% |
+| Control: Ack | 9 | 0.56% | 14.0 B | 0.0 B | 0.07% | 0.02% |
+| Management: Action | 6 | 0.38% | 37.0 B | 0.0 B | 0.14% | 0.04% |
 
 ### Configuration: `SuEdcaBaseline80MHz`
 Total over-the-air packets captured (Global BSS/AP): **2380**

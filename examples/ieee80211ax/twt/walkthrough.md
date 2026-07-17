@@ -232,19 +232,21 @@ Total over-the-air packets captured (Global BSS/AP): **3110**
 | Data: QoS Data | 2 | 0.06% | 270.0 B | 0.0 B | 0.16% | 0.00% |
 
 ### Configuration: `IndividualUnannounced`
-Total over-the-air packets captured (Global BSS/AP): **2686**
+Total over-the-air packets captured (Global BSS/AP): **1156**
 
 | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
 |---|---:|---:|---:|---:|---:|---:|
-| Management: Beacon | 1000 | 37.23% | 93.0 B | 0.0 B | 36.28% | 0.14% |
-| Data: QoS Data | 700 | 26.06% | 266.0 B | 0.0 B | 47.52% | 0.19% |
-| Management: Action | 561 | 20.89% | 38.0 B | 3.1 B | 9.98% | 0.04% |
-| Control: Ack | 225 | 8.38% | 14.0 B | 0.0 B | 1.40% | 0.01% |
-| Management: Authentication | 100 | 3.72% | 34.0 B | 0.0 B | 1.65% | 0.01% |
-| Management: Probe Request | 25 | 0.93% | 68.0 B | 0.0 B | 0.70% | 0.00% |
-| Management: Probe Response | 25 | 0.93% | 93.0 B | 0.0 B | 0.91% | 0.00% |
-| Management: Association Request | 25 | 0.93% | 76.0 B | 0.0 B | 0.76% | 0.00% |
-| Management: Association Response | 25 | 0.93% | 81.0 B | 0.0 B | 0.81% | 0.00% |
+| Management: Beacon | 1000 | 86.51% | 93.0 B | 0.0 B | 85.06% | 0.14% |
+| Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 12.84% | 0.02% |
+| Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 0.35% | 0.00% |
+| Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 0.23% | 0.00% |
+| Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 0.25% | 0.00% |
+| Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 0.31% | 0.00% |
+| Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 0.36% | 0.00% |
+| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 0.13% | 0.00% |
+| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 0.17% | 0.00% |
+| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 0.14% | 0.00% |
+| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 0.15% | 0.00% |
 
 ### Analysis of Packet Distribution
 In the Target Wake Time (TWT) simulations, **QoS Null** frames are highly prevalent in configurations with TWT enabled. These frames are used by the power-saving stations to signal state changes (e.g., indicating awake or sleep states to the AP) at the boundary of negotiated TWT service periods. Control frames such as **Block Ack (BA)** and **Block Ack Request (BAR)** confirm successful delivery during the active wake windows, while the background **Beacon** frames maintain BSS synchronization.

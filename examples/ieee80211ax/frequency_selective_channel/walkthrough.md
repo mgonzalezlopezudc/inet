@@ -355,11 +355,22 @@ leakage, oscillator error, or a waveform-level multipath channel. Those are
 model boundaries, not 802.11 guarantees.
 
 ## 802.11 Packet Type Statistics
-This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were aggregated across all active wireless interfaces (`wlan[0]`) in the network.
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
 Two airtime occupancy percentages are provided:
 - **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
 - **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+
+### Configuration: `FlatChannelOFDMA`
+Total over-the-air packets captured (Global BSS/AP): **7272**
+
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|
+| Control: Block Ack (BA) | 4822 | 66.31% | 32.0 B | 0.0 B | 8.44% | 12.32% |
+| Data: QoS Data | 1224 | 16.83% | 2094.1 B | 305.3 B | 88.67% | 129.49% |
+| Control: Trigger | 1206 | 16.58% | 64.0 B | 0.5 B | 2.84% | 4.15% |
+| Control: Ack | 12 | 0.17% | 14.0 B | 0.0 B | 0.02% | 0.02% |
+| Management: Action | 8 | 0.11% | 37.0 B | 0.0 B | 0.03% | 0.05% |
 
 ### Configuration: `TgaxModelBOFDMA`
 Total over-the-air packets captured (Global BSS/AP): **5232**

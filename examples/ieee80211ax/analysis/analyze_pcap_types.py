@@ -235,10 +235,12 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         if not os.path.exists(pf):
             continue
         try:
-            cmd = ["tshark", "-n", "-r", pf, "-T", "fields", "-e", "wlan.fc.version", "-e", "wlan.fc.type", "-e", "wlan.fc.subtype", "-e", "frame.len"]
+            cmd = ["tshark", "-n", "-r", pf, "-T", "fields", "-e", "wlan.fc.version", "-e", "wlan.fc.type", "-e", "wlan.fc.subtype", "-e", "frame.len", "-e", "radiotap.length"]
             if display_filter:
                 cmd.extend(["-Y", display_filter])
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
+            if proc.returncode != 0:
+                print(f"Warning: tshark returned exit code {proc.returncode} for {pf}, but proceeding to parse output")
             for line in proc.stdout.splitlines():
                 line = line.strip()
                 if not line:
@@ -253,11 +255,19 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 fc_type = parts[1].split(',')[0] if parts[1] else ""
                 fc_subtype = parts[2].split(',')[0] if parts[2] else ""
                 size_str = parts[3].split(',')[0] if parts[3] else ""
+                radiotap_len_str = parts[4].split(',')[0] if len(parts) > 4 and parts[4] else ""
                 
                 try:
                     size = int(size_str)
                 except ValueError:
                     size = 0
+                
+                if radiotap_len_str:
+                    try:
+                        size -= int(radiotap_len_str)
+                    except ValueError:
+                        pass
+                size = max(0, size)
                 
                 try:
                     v = int(fc_version, 0) if fc_version else 0
