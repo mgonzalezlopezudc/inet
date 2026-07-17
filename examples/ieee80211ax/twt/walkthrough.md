@@ -182,71 +182,71 @@ Two airtime occupancy percentages are provided:
 ### Configuration: `Baseline`
 Total over-the-air packets captured (Global BSS/AP): **1140**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|
-| Management: Beacon | 1000 | 87.72% | 93.0 B | 0.0 B | 53.66% | 0.14% |
-| A-MPDU Delimiter / Aggregation Overhead | 58 | 5.09% | 6091.1 B | 2682.9 B | 44.32% | 0.12% |
-| Control: Block Ack Request (BAR) | 34 | 2.98% | 24.0 B | 0.0 B | 0.35% | 0.00% |
-| Control: Ack | 20 | 1.75% | 14.0 B | 0.0 B | 0.18% | 0.00% |
-| Management: Authentication | 8 | 0.70% | 34.0 B | 0.0 B | 0.19% | 0.00% |
-| Data: QoS Data | 8 | 0.70% | 270.0 B | 0.0 B | 0.81% | 0.00% |
-| Management: Action | 4 | 0.35% | 37.0 B | 0.0 B | 0.10% | 0.00% |
-| Management: Probe Request | 2 | 0.18% | 68.0 B | 0.0 B | 0.08% | 0.00% |
-| Management: Probe Response | 2 | 0.18% | 93.0 B | 0.0 B | 0.11% | 0.00% |
-| Management: Association Request | 2 | 0.18% | 76.0 B | 0.0 B | 0.09% | 0.00% |
-| Management: Association Response | 2 | 0.18% | 81.0 B | 0.0 B | 0.10% | 0.00% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Management: Beacon | 1000 | 87.72% | 93.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 53.66% | 0.14% |
+| A-MPDU Delimiter / Aggregation Overhead | 58 | 5.09% | 6091.1 B | 2682.9 B | 5010 MHz | -69.0 dBm | - | 44.32% | 0.12% |
+| Control: Block Ack Request (BAR) | 34 | 2.98% | 24.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.35% | 0.00% |
+| Control: Ack | 20 | 1.75% | 14.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.18% | 0.00% |
+| Management: Authentication | 8 | 0.70% | 34.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.19% | 0.00% |
+| Data: QoS Data | 8 | 0.70% | 270.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.81% | 0.00% |
+| Management: Action | 4 | 0.35% | 37.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.10% | 0.00% |
+| Management: Probe Request | 2 | 0.18% | 68.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.08% | 0.00% |
+| Management: Probe Response | 2 | 0.18% | 93.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.11% | 0.00% |
+| Management: Association Request | 2 | 0.18% | 76.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.09% | 0.00% |
+| Management: Association Response | 2 | 0.18% | 81.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.10% | 0.00% |
 
 ### Configuration: `Broadcast`
 Total over-the-air packets captured (Global BSS/AP): **1158**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|
-| Management: Beacon | 1000 | 86.36% | 111.0 B | 0.0 B | 87.14% | 0.17% |
-| Data: QoS Data | 69 | 5.96% | 270.0 B | 0.0 B | 9.72% | 0.02% |
-| Control: Ack | 24 | 2.07% | 14.0 B | 0.0 B | 0.31% | 0.00% |
-| Control: Block Ack Request (BAR) | 17 | 1.47% | 24.0 B | 0.0 B | 0.25% | 0.00% |
-| Control: Block Ack (BA) | 16 | 1.38% | 32.0 B | 0.0 B | 0.25% | 0.00% |
-| Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 0.27% | 0.00% |
-| Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 0.32% | 0.00% |
-| A-MPDU Delimiter / Aggregation Overhead | 8 | 0.69% | 822.0 B | 478.0 B | 1.22% | 0.00% |
-| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 0.11% | 0.00% |
-| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 0.15% | 0.00% |
-| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 0.13% | 0.00% |
-| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 0.13% | 0.00% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Management: Beacon | 1000 | 86.36% | 111.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 87.14% | 0.17% |
+| Data: QoS Data | 69 | 5.96% | 270.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 9.72% | 0.02% |
+| Control: Ack | 24 | 2.07% | 14.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.31% | 0.00% |
+| Control: Block Ack Request (BAR) | 17 | 1.47% | 24.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.25% | 0.00% |
+| Control: Block Ack (BA) | 16 | 1.38% | 32.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.25% | 0.00% |
+| Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.27% | 0.00% |
+| Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.32% | 0.00% |
+| A-MPDU Delimiter / Aggregation Overhead | 8 | 0.69% | 822.0 B | 478.0 B | 5010 MHz | -69.0 dBm | - | 1.22% | 0.00% |
+| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.11% | 0.00% |
+| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.15% | 0.00% |
+| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.13% | 0.00% |
+| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.13% | 0.00% |
 
 ### Configuration: `IndividualAnnounced`
 Total over-the-air packets captured (Global BSS/AP): **3110**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|
-| Control: PS-Poll | 1992 | 64.05% | 20.0 B | 0.0 B | 15.58% | 0.05% |
-| Management: Beacon | 1000 | 32.15% | 93.0 B | 0.0 B | 42.24% | 0.14% |
-| A-MPDU Delimiter / Aggregation Overhead | 68 | 2.19% | 6138.0 B | 2668.5 B | 41.21% | 0.14% |
-| Control: Ack | 24 | 0.77% | 14.0 B | 0.0 B | 0.17% | 0.00% |
-| Management: Authentication | 8 | 0.26% | 34.0 B | 0.0 B | 0.15% | 0.00% |
-| Management: Action | 8 | 0.26% | 42.5 B | 5.5 B | 0.18% | 0.00% |
-| Management: Probe Request | 2 | 0.06% | 68.0 B | 0.0 B | 0.06% | 0.00% |
-| Management: Probe Response | 2 | 0.06% | 93.0 B | 0.0 B | 0.08% | 0.00% |
-| Management: Association Request | 2 | 0.06% | 76.0 B | 0.0 B | 0.07% | 0.00% |
-| Management: Association Response | 2 | 0.06% | 81.0 B | 0.0 B | 0.08% | 0.00% |
-| Data: QoS Data | 2 | 0.06% | 270.0 B | 0.0 B | 0.16% | 0.00% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Control: PS-Poll | 1992 | 64.05% | 20.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 15.58% | 0.05% |
+| Management: Beacon | 1000 | 32.15% | 93.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 42.24% | 0.14% |
+| A-MPDU Delimiter / Aggregation Overhead | 68 | 2.19% | 6138.0 B | 2668.5 B | 5010 MHz | -69.0 dBm | - | 41.21% | 0.14% |
+| Control: Ack | 24 | 0.77% | 14.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.17% | 0.00% |
+| Management: Authentication | 8 | 0.26% | 34.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.15% | 0.00% |
+| Management: Action | 8 | 0.26% | 42.5 B | 5.5 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.18% | 0.00% |
+| Management: Probe Request | 2 | 0.06% | 68.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.06% | 0.00% |
+| Management: Probe Response | 2 | 0.06% | 93.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.08% | 0.00% |
+| Management: Association Request | 2 | 0.06% | 76.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.07% | 0.00% |
+| Management: Association Response | 2 | 0.06% | 81.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.08% | 0.00% |
+| Data: QoS Data | 2 | 0.06% | 270.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.16% | 0.00% |
 
 ### Configuration: `IndividualUnannounced`
 Total over-the-air packets captured (Global BSS/AP): **1156**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|
-| Management: Beacon | 1000 | 86.51% | 93.0 B | 0.0 B | 85.06% | 0.14% |
-| Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 12.84% | 0.02% |
-| Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 0.35% | 0.00% |
-| Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 0.23% | 0.00% |
-| Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 0.25% | 0.00% |
-| Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 0.31% | 0.00% |
-| Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 0.36% | 0.00% |
-| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 0.13% | 0.00% |
-| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 0.17% | 0.00% |
-| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 0.14% | 0.00% |
-| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 0.15% | 0.00% |
+| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Management: Beacon | 1000 | 86.51% | 93.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 85.06% | 0.14% |
+| Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 12.84% | 0.02% |
+| Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
+| Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.23% | 0.00% |
+| Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.25% | 0.00% |
+| Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.31% | 0.00% |
+| Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.36% | 0.00% |
+| Management: Probe Request | 2 | 0.17% | 68.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.13% | 0.00% |
+| Management: Probe Response | 2 | 0.17% | 93.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.17% | 0.00% |
+| Management: Association Request | 2 | 0.17% | 76.0 B | 0.0 B | 5010 MHz | -69.0 dBm | - | 0.14% | 0.00% |
+| Management: Association Response | 2 | 0.17% | 81.0 B | 0.0 B | 5010 MHz | - | 13.0 dBm | 0.15% | 0.00% |
 
 ### Analysis of Packet Distribution
 In the Target Wake Time (TWT) simulations, **QoS Null** frames are highly prevalent in configurations with TWT enabled. These frames are used by the power-saving stations to signal state changes (e.g., indicating awake or sleep states to the AP) at the boundary of negotiated TWT service periods. Control frames such as **Block Ack (BA)** and **Block Ack Request (BAR)** confirm successful delivery during the active wake windows, while the background **Beacon** frames maintain BSS synchronization.

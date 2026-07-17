@@ -163,16 +163,36 @@ def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=
         return 20e-6 + (size * 8) / 6e6
 
 def find_ini_file_for_config(subdir, config_name):
+    def has_config(ini_path, cfg_name, visited=None):
+        if visited is None:
+            visited = set()
+        ini_path = Path(ini_path).resolve()
+        if ini_path in visited:
+            return False
+        visited.add(ini_path)
+        if not ini_path.exists():
+            return False
+        try:
+            with open(ini_path, "r") as f:
+                content = f.read()
+                if f"[Config {cfg_name}]" in content:
+                    return True
+                for line in content.splitlines():
+                    line = line.strip()
+                    if line.startswith("include "):
+                        inc_file = line[len("include "):].strip()
+                        inc_path = (ini_path.parent / inc_file).resolve()
+                        if has_config(inc_path, cfg_name, visited):
+                            return True
+        except Exception:
+            pass
+        return False
+
     dir_path = REPOSITORY_ROOT / "examples" / "ieee80211ax" / subdir
     ini_files = glob.glob(str(dir_path / "*.ini"))
     for ini in ini_files:
-        try:
-            with open(ini, "r") as f:
-                content = f.read()
-                if f"[Config {config_name}]" in content:
-                    return Path(ini)
-        except Exception:
-            pass
+        if has_config(ini, config_name):
+            return Path(ini)
     if ini_files:
         return Path(ini_files[0])
     return dir_path / "omnetpp.ini"
@@ -235,7 +255,17 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         if not os.path.exists(pf):
             continue
         try:
-            cmd = ["tshark", "-n", "-r", pf, "-T", "fields", "-e", "wlan.fc.version", "-e", "wlan.fc.type", "-e", "wlan.fc.subtype", "-e", "frame.len", "-e", "radiotap.length"]
+            cmd = [
+                "tshark", "-n", "-r", pf, "-T", "fields",
+                "-e", "wlan.fc.version",
+                "-e", "wlan.fc.type",
+                "-e", "wlan.fc.subtype",
+                "-e", "frame.len",
+                "-e", "radiotap.length",
+                "-e", "radiotap.channel.freq",
+                "-e", "radiotap.dbm_antsignal",
+                "-e", "radiotap.txpower"
+            ]
             if display_filter:
                 cmd.extend(["-Y", display_filter])
             proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=False)
@@ -256,6 +286,9 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 fc_subtype = parts[2].split(',')[0] if parts[2] else ""
                 size_str = parts[3].split(',')[0] if parts[3] else ""
                 radiotap_len_str = parts[4].split(',')[0] if len(parts) > 4 and parts[4] else ""
+                freq_str = parts[5].split(',')[0] if len(parts) > 5 and parts[5] else ""
+                antsig_str = parts[6].split(',')[0] if len(parts) > 6 and parts[6] else ""
+                txpower_str = parts[7].split(',')[0] if len(parts) > 7 and parts[7] else ""
                 
                 try:
                     size = int(size_str)
@@ -282,12 +315,32 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 if key not in stats:
                     stats[key] = {
                         "sizes": [],
-                        "airtimes": []
+                        "airtimes": [],
+                        "frequencies": [],
+                        "signals": [],
+                        "txpowers": []
                     }
                     
                 airtime = estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version)
                 stats[key]["sizes"].append(size)
                 stats[key]["airtimes"].append(airtime)
+                
+                if freq_str:
+                    try:
+                        stats[key]["frequencies"].append(int(freq_str))
+                    except ValueError:
+                        pass
+                if antsig_str:
+                    try:
+                        stats[key]["signals"].append(int(antsig_str))
+                    except ValueError:
+                        pass
+                if txpower_str:
+                    try:
+                        stats[key]["txpowers"].append(int(txpower_str))
+                    except ValueError:
+                        pass
+                
                 total_airtime += airtime
                 total += 1
         except Exception as e:
@@ -297,6 +350,10 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
     for key, item in stats.items():
         sizes = item["sizes"]
         airtimes = item["airtimes"]
+        freqs = item.get("frequencies", [])
+        signals = item.get("signals", [])
+        txpowers = item.get("txpowers", [])
+        
         count = len(sizes)
         mean_size = sum(sizes) / count if count > 0 else 0
         variance = sum((x - mean_size) ** 2 for x in sizes) / count if count > 0 else 0
@@ -304,14 +361,35 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         
         sum_airtime = sum(airtimes)
         airtime_pct = (sum_airtime / total_airtime) * 100 if total_airtime > 0 else 0.0
-        
         airtime_sim_pct = (sum_airtime / total_sim_time) * 100 if total_sim_time > 0 else 0.0
+        
+        if freqs:
+            unique_freqs = sorted(list(set(freqs)))
+            freq_str = ", ".join(f"{f} MHz" for f in unique_freqs)
+        else:
+            freq_str = "-"
+            
+        if signals:
+            mean_sig = sum(signals) / len(signals)
+            sig_str = f"{mean_sig:.1f} dBm"
+        else:
+            sig_str = "-"
+            
+        if txpowers:
+            mean_tx = sum(txpowers) / len(txpowers)
+            tx_str = f"{mean_tx:.1f} dBm"
+        else:
+            tx_str = "-"
+            
         aggregated[key] = {
             "count": count,
             "mean": mean_size,
             "std": std_size,
             "airtime_pct": airtime_pct,
-            "airtime_sim_pct": airtime_sim_pct
+            "airtime_sim_pct": airtime_sim_pct,
+            "freq": freq_str,
+            "rx_sig": sig_str,
+            "tx_pwr": tx_str
         }
     return aggregated, total
 
@@ -394,8 +472,8 @@ def make_table_md(stats, total):
     if total == 0:
         return "No packets captured.\n\n"
     md = []
-    md.append("| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Air Time % | Air Time (Sim Time) % |\n")
-    md.append("|---|---:|---:|---:|---:|---:|---:|\n")
+    md.append("| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
+    md.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
     
     sorted_stats = sorted(stats.items(), key=lambda x: x[1]["count"], reverse=True)
     for (fc_type, fc_subtype), stat in sorted_stats:
@@ -403,9 +481,12 @@ def make_table_md(stats, total):
         pct = (stat["count"] / total) * 100
         mean_sz = f"{stat['mean']:.1f} B"
         std_sz = f"{stat['std']:.1f} B"
+        freq_str = stat.get("freq", "-")
+        rx_sig_str = stat.get("rx_sig", "-")
+        tx_pwr_str = stat.get("tx_pwr", "-")
         air_pct = f"{stat['airtime_pct']:.2f}%"
         air_sim_pct = f"{stat['airtime_sim_pct']:.2f}%"
-        md.append(f"| {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {air_pct} | {air_sim_pct} |\n")
+        md.append(f"| {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
     return "".join(md)
 
 def generate_markdown_tables(config_results, subdir):
