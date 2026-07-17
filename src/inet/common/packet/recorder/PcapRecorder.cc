@@ -149,12 +149,14 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
     bool isHeMu = false;
     Ptr<const physicallayer::Ieee80211HeMuReq> heMuReq;
     Ptr<const physicallayer::Ieee80211HeMuRxTag> heMuRx;
+    Ptr<const physicallayer::Ieee80211HeMuCommonReq> heMuCommonReq;
     const physicallayer::Ieee80211HeMode *heMode = nullptr;
 
 #ifdef INET_WITH_IEEE80211
     heMuReq = packet->findTag<physicallayer::Ieee80211HeMuReq>();
     heMuRx = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
-    if (heMuReq != nullptr || heMuRx != nullptr) {
+    heMuCommonReq = packet->findTag<physicallayer::Ieee80211HeMuCommonReq>();
+    if (heMuReq != nullptr || heMuRx != nullptr || heMuCommonReq != nullptr) {
         isHe = true;
         isHeMu = true;
     }
@@ -304,6 +306,20 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, Direction directio
                 uint8_t cbw = (bw < 30e6 ? 0 : bw < 60e6 ? 1 : bw < 100e6 ? 2 : 3);
                 data4 |= cbw & 0x7;
             }
+        }
+        else if (heMuCommonReq != nullptr) {
+            // HE MU downlink format is 2
+            data1 |= 2 & 0x3;
+            // Known flags: PPDU Format, UL/DL, GI, Coding
+            data1 |= (1U << 0) | (1U << 4) | (1U << 7);
+            // Downlink
+            data2 |= (0 & 0x1) << 1;
+            // Guard Interval: 0=0.8us, 1=1.6us, 2=3.2us
+            data3 |= (heMuCommonReq->getGuardInterval() & 0x7);
+            // Coding (in data5)
+            data5 |= (heMuCommonReq->getCoding() & 0x1) << 8;
+            // Punctured subchannel mask
+            data4 |= (heMuCommonReq->getPuncturedSubchannelMask() & 0xF) << 3;
         }
 
         appendUint16(bytes, data1);

@@ -92,11 +92,12 @@ subtypes_data = {
     12: "QoS Null",
 }
 
-def get_packet_type_name(fc_type, fc_subtype, fc_version=None):
+def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False):
+    suffix = " (HE-MU OFDMA)" if is_he_mu else ""
     if fc_type == "Aggregation Overhead":
-        return "A-MPDU Delimiter / Aggregation Overhead"
+        return "A-MPDU Delimiter / Aggregation Overhead" + suffix
     if fc_type == "HE TB feedback NDP":
-        return "Control: HE TB feedback NDP"
+        return "Control: HE TB feedback NDP" + suffix
 
     # Handle multiple values (e.g. from reassembled frames)
     version_str = fc_version.split(',')[0] if fc_version else ""
@@ -109,22 +110,22 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None):
         v = 0
 
     if v > 0:
-        return "A-MPDU Delimiter / Aggregation Overhead"
+        return "A-MPDU Delimiter / Aggregation Overhead" + suffix
 
     try:
         t = int(type_str, 0)
         st = int(subtype_str, 0)
     except (ValueError, TypeError):
-        return "Other/Malformed"
+        return "Other/Malformed" + suffix
         
     if t == 0:
-        return f"Management: {subtypes_mgmt.get(st, f'Subtype {st}')}"
+        return f"Management: {subtypes_mgmt.get(st, f'Subtype {st}')}" + suffix
     elif t == 1:
-        return f"Control: {subtypes_ctrl.get(st, f'Subtype {st}')}"
+        return f"Control: {subtypes_ctrl.get(st, f'Subtype {st}')}" + suffix
     elif t == 2:
-        return f"Data: {subtypes_data.get(st, f'Subtype {st}')}"
+        return f"Data: {subtypes_data.get(st, f'Subtype {st}')}" + suffix
     else:
-        return f"Unknown (Type {t}, Subtype {st})"
+        return f"Unknown (Type {t}, Subtype {st})" + suffix
 
 def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=None):
     if fc_type == "Aggregation Overhead":
@@ -272,7 +273,8 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 "-e", "radiotap.length",
                 "-e", "radiotap.channel.freq",
                 "-e", "radiotap.dbm_antsignal",
-                "-e", "radiotap.txpower"
+                "-e", "radiotap.txpower",
+                "-e", "radiotap.present.he_mu"
             ]
             if display_filter:
                 cmd.extend(["-Y", display_filter])
@@ -299,6 +301,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     freq_str = parts[2] if len(parts) > 2 else ""
                     antsig_str = parts[3] if len(parts) > 3 else ""
                     txpower_str = ""
+                    is_he_mu_str = ""
                 else:
                     fc_version = parts[0].split(',')[0] if parts[0] else ""
                     fc_type = parts[1].split(',')[0] if parts[1] else ""
@@ -308,6 +311,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     freq_str = parts[5].split(',')[0] if len(parts) > 5 and parts[5] else ""
                     antsig_str = parts[6].split(',')[0] if len(parts) > 6 and parts[6] else ""
                     txpower_str = parts[7].split(',')[0] if len(parts) > 7 and parts[7] else ""
+                    is_he_mu_str = parts[8].split(',')[0] if len(parts) > 8 and parts[8] else ""
                 
                 try:
                     size = int(size_str)
@@ -326,15 +330,17 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                 except (ValueError, TypeError):
                     v = 0
                 
+                is_he_mu = (is_he_mu_str.strip() == "True")
+                
                 if (not fc_type or fc_type == "") and (not fc_subtype or fc_subtype == ""):
                     if config_name in ["NdpFeedbackReport", "FeedbackUnderInterference"]:
-                        key = ("HE TB feedback NDP", "")
+                        key = ("HE TB feedback NDP", "", is_he_mu)
                     else:
-                        key = ("Aggregation Overhead", "")
+                        key = ("Aggregation Overhead", "", is_he_mu)
                 elif v > 0:
-                    key = ("Aggregation Overhead", "")
+                    key = ("Aggregation Overhead", "", is_he_mu)
                 else:
-                    key = (fc_type, fc_subtype)
+                    key = (fc_type, fc_subtype, is_he_mu)
                 
                 if key not in stats:
                     stats[key] = {
@@ -551,8 +557,11 @@ def make_table_md(stats, total):
     md.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
     
     sorted_stats = sorted(stats.items(), key=lambda x: x[1]["count"], reverse=True)
-    for (fc_type, fc_subtype), stat in sorted_stats:
-        name = get_packet_type_name(fc_type, fc_subtype)
+    for key, stat in sorted_stats:
+        fc_type = key[0]
+        fc_subtype = key[1]
+        is_he_mu = key[2] if len(key) > 2 else False
+        name = get_packet_type_name(fc_type, fc_subtype, is_he_mu=is_he_mu)
         pct = (stat["count"] / total) * 100
         mean_sz = f"{stat['mean']:.1f} B"
         std_sz = f"{stat['std']:.1f} B"
@@ -582,7 +591,7 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
     for cfg in valid_configs:
         stats = config_results[cfg]["global"]["stats"]
         for key in stats.keys():
-            name = get_packet_type_name(key[0], key[1])
+            name = get_packet_type_name(key[0], key[1], is_he_mu=key[2] if len(key) > 2 else False)
             packet_types.add(name)
             
     packet_types = sorted(list(packet_types))
@@ -598,7 +607,7 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
         stats = global_res["stats"]
         
         for key, stat in stats.items():
-            name = get_packet_type_name(key[0], key[1])
+            name = get_packet_type_name(key[0], key[1], is_he_mu=key[2] if len(key) > 2 else False)
             pct = (stat["count"] / total) * 100
             count_data[name][idx] = pct
             airtime_data[name][idx] = stat["airtime_pct"]
@@ -816,7 +825,7 @@ def main():
             if "global" in res:
                 stats = res["global"]["stats"]
                 for key in stats.keys():
-                    name = get_packet_type_name(key[0], key[1])
+                    name = get_packet_type_name(key[0], key[1], is_he_mu=key[2] if len(key) > 2 else False)
                     global_packet_types.add(name)
                     
     global_packet_types = sorted(list(global_packet_types))
@@ -831,7 +840,7 @@ def main():
         if md_table:
             update_walkthrough_file(subdir, md_table)
 
-    summary_json_path = REPOSITORY_ROOT / "examples" / "ieee80211ax" / "analysis" / "summary_results_pcap.json"
+    summary_json_path = REPOSITORY_ROOT / "examples" / "ieee80211ax/analysis/summary_results_pcap.json"
     with summary_json_path.open("w") as f:
         serialized = {}
         for subdir, subdir_res in all_results.items():
@@ -843,14 +852,14 @@ def main():
                     serialized[subdir][config_name]["global"] = {
                         "total": g["total"],
                         "used_ap_only": g["used_ap_only"],
-                        "stats": {f"{k[0]},{k[1]}": v for k, v in g["stats"].items()}
+                        "stats": {f"{k[0]},{k[1]},{k[2] if len(k) > 2 else False}": v for k, v in g["stats"].items()}
                     }
                 if "per_flow" in res:
                     serialized[subdir][config_name]["per_flow"] = {}
                     for h_name, h_val in res["per_flow"].items():
                         serialized[subdir][config_name]["per_flow"][h_name] = {
                             "total": h_val["total"],
-                            "stats": {f"{k[0]},{k[1]}": v for k, v in h_val["stats"].items()}
+                            "stats": {f"{k[0]},{k[1]},{k[2] if len(k) > 2 else False}": v for k, v in h_val["stats"].items()}
                         }
         json.dump(serialized, f, indent=2)
     print(f"Finished analysis. Output written to: {summary_json_path.relative_to(REPOSITORY_ROOT)}")
