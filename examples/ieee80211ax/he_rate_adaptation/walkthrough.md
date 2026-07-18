@@ -150,9 +150,11 @@ The decoded output timeline shows:
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
+> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a repository-specific packing for HE radiotap metadata. TShark can consequently decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from them—are diagnostic only and are not standards-conformance evidence.
+
 Two airtime occupancy percentages are provided:
-- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
-- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
 ### Configuration: `FixedMcs`
 Total over-the-air packets captured (Global BSS/AP): **3863**
@@ -212,7 +214,4 @@ Total over-the-air packets captured (Global BSS/AP): **3184**
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ef0b1a" /></svg> | Management: Action [HE-ER-SU, HE-MCS 9, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
 
 ### Analysis of Packet Distribution
-Rate adaptation simulations (such as HE Minstrel) show how the MAC dynamically adjusts modulation and coding schemes (MCS). The distribution of **QoS Data** frames indicates the volume of traffic successfully transmitted, while the presence of **Block Ack (BA)** confirms reception. Retransmissions and rate sweeps can be inferred from the ratio of control frames to data frames.
-
-### Model Limitations
-- **Minstrel Rate Selection**: The current INET implementation of the HE Minstrel rate-control algorithm utilizes a simplified model that does not dynamically adjust parameters (such as sounding intervals or probe rates) based on localized channel fading or multi-user scheduler context.
+IEEE 802.11 constrains negotiated HE modes but does not mandate a Minstrel algorithm. These packet counts therefore cannot establish adaptation, and a control/data ratio is not reliable evidence of retransmission or probing. Use the aligned selected-MCS/NSS, EWMA probability, transmission-outcome, and retry vectors documented above. INET's HE Minstrel remains a simplified implementation without scheduler-context or localized-fading adaptation.

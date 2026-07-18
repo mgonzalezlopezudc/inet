@@ -311,9 +311,11 @@ load can all reduce or eliminate this advantage in another workload.
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
+> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a repository-specific packing for HE radiotap metadata. TShark can consequently decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from them—are diagnostic only and are not standards-conformance evidence.
+
 Two airtime occupancy percentages are provided:
-- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
-- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
 ### Configuration: `DlMuMimo`
 Total over-the-air packets captured (Global BSS/AP): **3826**
@@ -347,4 +349,4 @@ Total over-the-air packets captured (Global BSS/AP): **4320**
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2789f1" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 183 | 4.24% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.14% | 0.23% |
 
 ### Analysis of Packet Distribution
-Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
+Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2.5 identifies each HE-MU user and its spatial streams; the direct evidence is multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above, because the current radiotap suffix cannot reliably identify the PPDU format.

@@ -758,7 +758,6 @@ def analyze_subdirectory(subdir, considered):
         
         # If asymmetric case in dl_ofdma, we also extract host specific traffic using display filters on the AP capture
         if subdir == "dl_ofdma" and config_name in ["BacklogBased", "HoLMinDelay"]:
-            config_results[config_name]["per_flow"] = {}
             hosts_info = {
                 "host[0]": "wlan.addr == 0a:aa:00:00:00:01",
                 "host[1]": "wlan.addr == 0a:aa:00:00:00:02",
@@ -774,7 +773,7 @@ def analyze_subdirectory(subdir, considered):
                         for line in f:
                             if "packetReceivedFromPeerUnicast" in line:
                                 parts = line.split()
-                                if len(parts) >= 5 and parts[0] == "scalar":
+                                if len(parts) >= 4 and parts[0] == "scalar":
                                     module = parts[1]
                                     name = parts[2]
                                     val = float(parts[3])
@@ -788,6 +787,18 @@ def analyze_subdirectory(subdir, considered):
                                                 sca_data[h_idx]["sum"] = val
                 except Exception as e:
                     print(f"Error parsing sca file {sca_file}: {e}")
+
+            missing_host_counts = [h_idx for h_idx in [0, 1, 2]
+                                   if sca_data.get(h_idx, {}).get("count", 0) <= 0]
+            if missing_host_counts:
+                print(
+                    f"[{subdir}] Skipping unsupported per-flow tables for {config_name}: "
+                    "HE MU payloads use a broadcast destination in this capture and "
+                    f"recipient scalar counts are missing for hosts {missing_host_counts}"
+                )
+                continue
+
+            config_results[config_name]["per_flow"] = {}
 
             for host_name, disp_filter in hosts_info.items():
                 print(f"[{subdir}] Analyzing config: {config_name} ({host_name}) from AP capture using filter: {disp_filter}")
@@ -1055,10 +1066,19 @@ def generate_markdown_tables(config_results, subdir):
         md.append("The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.\n\n")
     else:
         md.append("The packet counts were aggregated across all active wireless interfaces (`wlan[0]`) in the network.\n\n")
+
+    md.append(
+        "> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a "
+        "repository-specific packing for HE radiotap metadata. TShark can consequently "
+        "decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. "
+        "Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, "
+        "bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from "
+        "them—are diagnostic only and are not standards-conformance evidence.\n\n"
+    )
         
     md.append("Two airtime occupancy percentages are provided:\n")
-    md.append("- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.\n")
-    md.append("- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).\n\n")
+    md.append("- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.\n")
+    md.append("- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.\n\n")
         
     for config_name, res in sorted(config_results.items()):
         global_res = res.get("global")
@@ -1090,73 +1110,103 @@ def generate_markdown_tables(config_results, subdir):
     analysis_text = ""
     if "twt" in subdir:
         analysis_text = (
-            "In the Target Wake Time (TWT) simulations, **PS-Poll** frames (Control Subtype 10) are highly prevalent in configurations with TWT enabled. "
-            "These frames are used by the power-saving stations in TWT Announced mode to poll the AP for buffered downlink frames during negotiated TWT service periods. "
-            "Control frames such as **Block Ack (BA)** and **Block Ack Request (BAR)** confirm successful delivery during the active wake windows, "
-            "while the background **Beacon** frames maintain BSS synchronization."
+            "Only `IndividualAnnounced` contains the large **PS-Poll** population. This is consistent with the announced-TWT procedure: "
+            "the requester signals that it is awake with PS-Poll or an APSD trigger before the responder sends a non-Trigger frame "
+            "(IEEE Std 802.11-2024, Table 9-347 and Clause 10.46). Unannounced TWT does not require that presence signal. "
+            "The QoS Data totals are transmitted MPDU observations, not delivered application-packet counts; aggregation and repeated sequence numbers "
+            "can make them much larger than the workload. Validate TWT delivery with sink scalars and energy with the recorded radio-power vectors."
         )
     elif "ul_ofdma" in subdir:
         analysis_text = (
-            "Uplink OFDMA simulations exhibit a substantial count of **Trigger** frames (Control Subtype 2). "
-            "Trigger frames are initiated by the AP to allocate Resource Units (RUs) and synchronize uplink transmissions from multiple stations. "
-            "The corresponding uplink traffic consists of **QoS Data** frames sent inside HE Trigger-Based (HE TB) PPDUs, "
-            "acknowledged collectively or individually by **Block Ack (BA)** frames."
+            "The UL-MU configuration contains repeated **Trigger** frames followed by the solicited station transmissions and AP **Block Ack** responses, "
+            "which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). "
+            "The operating-mode and UL-SU configurations are not expected to have the same Trigger population. Frame-subtype counts alone do not prove "
+            "the RU assignments, HE TB format, Multi-STA Block Ack contents, or OM Control value; inspect the corresponding fields or simulator telemetry."
         )
     elif "dl_ofdma" in subdir:
         analysis_text = (
-            "Downlink OFDMA simulations are dominated by **QoS Data** and **Block Ack (BA)** frames. "
-            "For the asymmetric flow cases (`BacklogBased` and `HoLMinDelay`), comparing individual flows reveals clear scheduling priorities. "
-            "The heavy flow (`host[0]`) dominates airtime and packet counts due to its high load, but suffers from low delivery satisfaction (about 5%). "
-            "In contrast, under `BacklogBased`, the light flow (`host[2]`) occupies small airtime but achieves 82% satisfaction. "
-            "The per-flow statistics clearly isolate the packet sizes: "
-            "the average size of data packets successfully received by `host[0]` is ~1070 B, "
-            "while for `host[1]` it is ~470 B, and for `host[2]` it is ~170 B, reflecting their different application payload limits. "
-            "The airtime percentages also show that the heavy flow consumes the vast majority of wireless resources, "
-            "which helps visualize the cross-flow resource allocations in OFDMA scheduling."
+            "The scheduled downlink configurations show the expected repeating structure of downlink **QoS Data**, a **Trigger** used for the MU-BAR exchange, "
+            "and multiple **Block Ack** responses. This matches the HE DL-MU acknowledgment sequence described by IEEE Std 802.11-2024 Clauses 26.5.1 and 26.5.2.3.3. "
+            "Because the current radiotap metadata cannot reliably distinguish HE MU from HE TB, the frame sequence and scheduler telemetry—not the displayed PPDU suffix—are the usable evidence. "
+            "**Per-flow limitation:** scheduled HE-MU payloads in these PCAPs use a broadcast destination address, so `wlan.addr` filters cannot attribute them to a user. "
+            "The script now omits the asymmetric per-flow tables when matching recipient scalar counts are unavailable. Scheduler priorities and satisfaction must be "
+            "measured from per-user scheduler/application results; IEEE 802.11 does not mandate the implementation's backlog or head-of-line scheduling policy."
         )
     elif "bss_coloring" in subdir:
         analysis_text = (
-            "BSS Coloring simulations show packet exchanges across multiple overlapping BSSs (OBSS). "
-            "In addition to standard **QoS Data** and **Block Ack (BA)** frames, the statistics reflect management traffic "
-            "like **Beacons** from multiple APs. When BSS coloring is disabled, collisions and backoffs occur, altering the proportion "
-            "of retransmitted data frames. Enabling BSS coloring reduces mutual interference, allowing smoother channel access and "
-            "higher successful data frame delivery rates.\n\n"
-            "### Model Limitations\n"
-            "- **Spatial Reuse**: The current INET implementation of Spatial Reuse only supports static OBSS/PD threshold classification based on BSS color. "
-            "It does not support dynamic OBSS/PD parameter adaptation or transmit power control (TPC) adjustments for concurrent transmissions."
+            "**Unexpected/no separation:** `BssColoringDisabled`, `BssColoringEnabled`, `ObssPdConservative`, `ObssPdAggressive`, and `BssColoringCollision` "
+            "have identical frame counts and distributions in this run. IEEE Std 802.11-2024 Clause 26.10 permits eligible inter-BSS reuse after OBSS/PD "
+            "classification; it does not guarantee a throughput improvement, and a more permissive threshold can increase interference. The identical result "
+            "therefore does not violate the standard, but it means this bounded scalar-medium workload provides no evidence that coloring or the threshold sweep "
+            "changed protocol behavior. The current model also omits dynamic OBSS/PD adaptation and the associated transmit-power-control adjustment."
         )
     elif "dynamic_fragmentation" in subdir:
         analysis_text = (
-            "In dynamic fragmentation scenarios, large application layer packets are dynamically fragmented into smaller MAC-layer **QoS Data** frames "
-            "depending on channel conditions. This results in a higher count of QoS Data frames for fragmented configurations compared to "
-            "non-fragmented baselines. The corresponding **Block Ack (BA)** count also reflects the fragment-level acknowledgment bitmap."
+            "IEEE Std 802.11-2024 Clause 26.3 gates dynamic fragmentation on negotiated peer capability; it does not require fragment size to adapt to channel conditions. "
+            "In this implementation the dynamic and static policies use the same 500-byte sizing policy after the capability gate, so their detailed result-analysis "
+            "traces are expected to overlap. This packet table contains only `DynamicFragmentation`; it cannot establish a higher fragment count without the static "
+            "and unfragmented controls, nor can Block Ack subtype counts alone establish the fragment bitmap."
         )
     elif "he_er_su" in subdir:
         analysis_text = (
-            "Extended Range (ER) simulations demonstrate HE SU versus HE ER SU transmissions. "
-            "Because the channel conditions are poor at cell boundaries, configurations utilizing HE ER SU (which uses a robust DCM coding and "
-            "extended preambles) show successful delivery of **QoS Data** and **Block Ack (BA)** frames, whereas standard HE SU configurations "
-            "suffer from packet loss, resulting in fewer successful data and acknowledgment frames."
+            "**No range separation in this run:** `HeSu` and `HeErSu` have nearly identical QoS Data/Ack counts, so these packet statistics do not show HE-SU "
+            "failing while HE-ER-SU succeeds. That is compatible with the standard: HE ER SU supplies a more robust format, but does not guarantee a gain on every "
+            "channel. IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 (242-tone) or MCS 0 (106-tone); "
+            "DCM is optional. A coverage claim needs a controlled PER/delivery sweep, and the current malformed radiotap format field cannot prove ER-SU selection."
         )
     elif "he_rate_adaptation" in subdir:
         analysis_text = (
-            "Rate adaptation simulations (such as HE Minstrel) show how the MAC dynamically adjusts modulation and coding schemes (MCS). "
-            "The distribution of **QoS Data** frames indicates the volume of traffic successfully transmitted, while the presence of "
-            "**Block Ack (BA)** confirms reception. Retransmissions and rate sweeps can be inferred from the ratio of control frames to data frames.\n\n"
-            "### Model Limitations\n"
-            "- **Minstrel Rate Selection**: The current INET implementation of the HE Minstrel rate-control algorithm utilizes a simplified model that "
-            "does not dynamically adjust parameters (such as sounding intervals or probe rates) based on localized channel fading or multi-user scheduler context."
+            "IEEE 802.11 constrains negotiated HE modes but does not mandate a Minstrel algorithm. These packet counts therefore cannot establish adaptation, "
+            "and a control/data ratio is not reliable evidence of retransmission or probing. Use the aligned selected-MCS/NSS, EWMA probability, transmission-outcome, "
+            "and retry vectors documented above. INET's HE Minstrel remains a simplified implementation without scheduler-context or localized-fading adaptation."
         )
     elif "he_channel_widths" in subdir:
         analysis_text = (
-            "Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, "
-            "while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. "
-            "Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization "
-            "and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency "
-            "of the chosen configurations.\n\n"
-            "### Model Limitations\n"
-            "- **Preamble Puncturing and Interference**: While preamble puncturing is modeled by selecting non-punctured subchannels for transmissions, "
-            "the channel model and radio medium do not dynamically apply localized interference/noise on a per-subchannel basis. Interference is modeled over the entire bandwidth."
+            "IEEE Std 802.11-2024 Table 27-1 defines 20, 40, 80, and 160 MHz HE channel-width encodings, but the standard does not require packet count or throughput "
+            "to scale linearly with width. The run-0 frame totals here are non-monotonic because aggregation, RU scheduling, and fixed overhead change the number of "
+            "transmitted frames. The five-run sink goodput and delay analysis above is the appropriate capacity comparison; the radiotap bandwidth suffix is not."
+        )
+    elif "ndp_feedback" in subdir:
+        analysis_text = (
+            "The capture contains both **Trigger** frames and zero-length HE TB feedback NDP observations, consistent with the NDP Feedback Report Poll exchange "
+            "defined by IEEE Std 802.11-2024 Clause 26.5.7 and Annex G.5. One NFRP Trigger can allocate multiple feedback resources, so the counts need not be one-to-one. "
+            "The generic Control-subtype label does not by itself prove Trigger Type 7; verify the Trigger field or simulator NFRP telemetry when conformance detail matters."
+        )
+    elif "multi_tid_block_ack" in subdir:
+        analysis_text = (
+            "BAR and Block Ack subtype counts show acknowledgment exchanges, but they do not identify the BA Control variant or its per-AID/TID entries. "
+            "IEEE Std 802.11-2024 Clauses 9.3.1.8.6 and 10.25.5 require those contents to distinguish Multi-STA and Multi-TID operation. Treat this table as an exchange count; "
+            "use decoded BA fields or simulator telemetry to prove that multiple TIDs were acknowledged."
+        )
+    elif "operating_mode_indication" in subdir:
+        analysis_text = (
+            "The data and acknowledgment counts show traffic before and after the configured operating-mode change, but frame subtype statistics cannot expose the "
+            "Operating Mode Indication element or OM Control subfield. Standard behavior must be checked from those fields and the receiver's applied channel-width/NSS state, "
+            "not inferred from the packet total."
+        )
+    elif "mu_mimo" in subdir:
+        analysis_text = (
+            "Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2.5 identifies each HE-MU user and its spatial streams; the direct evidence is "
+            "multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above, "
+            "because the current radiotap suffix cannot reliably identify the PPDU format."
+        )
+    elif "he_bsr" in subdir:
+        analysis_text = (
+            "The scheduled conditions contain the expected Trigger/response activity, but a BSR is an A-Control scheduling input rather than a frame subtype. "
+            "IEEE Std 802.11-2024 Clause 26.5.5 requires the report contents and capability conditions; use the AP-reported and scheduled-backlog telemetry documented above. "
+            "QoS Data counts are not evidence that a BSR was fresh or that the reported bytes were delivered."
+        )
+    elif "he_features" in subdir:
+        analysis_text = (
+            "`BccBaseline` and `PreamblePuncturing` have identical frame counts in this run. That is not a standards violation and does not mean the PHY configuration was identical: "
+            "preamble puncturing changes the usable subchannels/RU placement, while a fully served offered load can leave packet totals unchanged. Validate the mask and puncture-aware "
+            "RU allocation with the vectors documented above; the current PCAP metadata cannot prove them."
+        )
+    elif "frequency_selective_channel" in subdir:
+        analysis_text = (
+            "The different frame mixtures show that the two configured access paths executed different exchanges, but aggregate subtype counts cannot validate a frequency-selective "
+            "channel or per-RU isolation. IEEE HE DL-MU behavior must be established with RU allocation and per-RU reception/SNIR outcomes together with sink delivery; the channel model "
+            "is an implementation choice rather than an IEEE-mandated propagation model."
         )
     else:
         analysis_text = (
