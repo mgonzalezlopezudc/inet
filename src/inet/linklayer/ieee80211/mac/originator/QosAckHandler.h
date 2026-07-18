@@ -72,6 +72,7 @@ class INET_API QosAckHandler : public SimpleModule, public IAckHandler
 
     virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
+    virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
     virtual std::set<int> getOccupiedBlockAckSequenceNumbers(
             const MacAddress& receiverAddress, Tid tid) const override;
 

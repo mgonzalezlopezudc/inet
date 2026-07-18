@@ -75,7 +75,7 @@ bool hasEligibleExistingFrame(InProgressFrames *inProgress, IAckHandler *ackHand
 {
     for (int i = 0; i < inProgress->getLength(); ++i) {
         auto header = inProgress->getFrames(i)->peekAtFront<Ieee80211DataOrMgmtHeader>();
-        if (ackHandler->isEligibleToTransmit(header))
+        if (ackHandler->isRetransmission(header))
             return true;
     }
     return false;
