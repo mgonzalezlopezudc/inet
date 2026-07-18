@@ -1,6 +1,7 @@
 %description:
 Test occupied HE Block Ack sequence-number accounting, including duplicate
-fragments, flow isolation, a full window, and sequence-number wrap.
+fragments, flow isolation, a full window, sequence-number wrap, and retry-bit
+materialization after failed and partially acknowledged BlockAck exchanges.
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
@@ -87,6 +88,53 @@ ASSERT(fullWrappedWindow.count(1) == 1);
 for (const auto& header : wrappedHeaders)
     ackHandler->dropFrame(header);
 ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).empty());
+
+auto retryHeader = makeHeader(sta1, tid, 200);
+auto retryPacket = new Packet("block-ack-retry", retryHeader);
+ackHandler->frameGotInProgress(retryHeader);
+ackHandler->processTransmittedDataOrMgmtFrame(retryHeader);
+auto blockAckReq = makeShared<Ieee80211CompressedBlockAckReq>();
+blockAckReq->setReceiverAddress(sta1);
+blockAckReq->setTidInfo(tid);
+blockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(200));
+ackHandler->processTransmittedBlockAckReq(blockAckReq);
+ackHandler->processFailedBlockAckReq(blockAckReq);
+ASSERT(ackHandler->isRetransmission(retryHeader));
+ASSERT(ackHandler->setRetryBitIfNeeded(retryPacket));
+ASSERT(retryPacket->peekAtFront<Ieee80211DataHeader>()->getRetry());
+ackHandler->dropFrame(retryHeader);
+delete retryPacket;
+
+auto ackedHeader = makeHeader(sta1, tid, 300);
+auto unackedHeader = makeHeader(sta1, tid, 301);
+auto ackedPacket = new Packet("block-ack-acked", ackedHeader);
+auto unackedPacket = new Packet("block-ack-unacked", unackedHeader);
+ackHandler->frameGotInProgress(ackedHeader);
+ackHandler->frameGotInProgress(unackedHeader);
+ackHandler->processTransmittedDataOrMgmtFrame(ackedHeader);
+ackHandler->processTransmittedDataOrMgmtFrame(unackedHeader);
+auto partialBlockAckReq = makeShared<Ieee80211CompressedBlockAckReq>();
+partialBlockAckReq->setReceiverAddress(sta1);
+partialBlockAckReq->setTidInfo(tid);
+partialBlockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(300));
+ackHandler->processTransmittedBlockAckReq(partialBlockAckReq);
+auto partialBlockAck = makeShared<Ieee80211CompressedBlockAck>();
+partialBlockAck->setTransmitterAddress(sta1);
+partialBlockAck->setTidInfo(tid);
+partialBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(300));
+BitVector bitmap(0, 64);
+bitmap.setBit(0, true);
+partialBlockAck->setBlockAckBitmap(bitmap);
+auto ackedFrames = ackHandler->processReceivedBlockAck(partialBlockAck);
+ASSERT(ackedFrames.size() == 1);
+ASSERT(!ackHandler->setRetryBitIfNeeded(ackedPacket));
+ASSERT(ackHandler->setRetryBitIfNeeded(unackedPacket));
+ASSERT(!ackedPacket->peekAtFront<Ieee80211DataHeader>()->getRetry());
+ASSERT(unackedPacket->peekAtFront<Ieee80211DataHeader>()->getRetry());
+ackHandler->dropFrame(ackedPacket->peekAtFront<Ieee80211DataHeader>());
+ackHandler->dropFrame(unackedPacket->peekAtFront<Ieee80211DataHeader>());
+delete ackedPacket;
+delete unackedPacket;
 
 EV << "Empty, partial, full, isolated, fragmented, and wrapped Block Ack occupancy passed.\n";
 EV << ".\n";

@@ -962,6 +962,13 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
     if (channelOwner) {
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         auto txop = channelOwner->getTxopProcedure();
+        if (dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
+            // A missing BlockAck or an unacked BlockAck bitmap entry makes the
+            // MPDU eligible again in QosAckHandler. Materialize that retry
+            // state in the transmitted MAC header before building an A-MPDU.
+            channelOwner->getAckHandler()->setRetryBitIfNeeded(packet);
+            header = packet->peekAtFront<Ieee80211MacHeader>();
+        }
         if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             OriginatorBlockAckAgreement *agreement = nullptr;
             if (originatorBlockAckAgreementHandler)
@@ -1003,6 +1010,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                 auto frames = channelOwner->getInProgressFrames()->getEligibleFramesLike(packet, 64, maxAggregateLength);
                 std::vector<Packet *> ampduFrames;
                 for (auto frame : frames) {
+                    channelOwner->getAckHandler()->setRetryBitIfNeeded(frame);
                     auto frameHeader = frame->peekAtFront<Ieee80211DataHeader>();
                     OriginatorBlockAckAgreement *agreement = nullptr;
                     if (originatorBlockAckAgreementHandler)

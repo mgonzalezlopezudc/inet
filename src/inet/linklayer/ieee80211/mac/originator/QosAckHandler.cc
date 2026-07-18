@@ -312,6 +312,17 @@ bool QosAckHandler::isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>&
            status == QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED;
 }
 
+bool QosAckHandler::setRetryBitIfNeeded(Packet *packet)
+{
+    auto header = packet->peekAtFront<Ieee80211DataOrMgmtHeader>();
+    if (!isRetransmission(header))
+        return false;
+    auto mutableHeader = packet->removeAtFront<Ieee80211DataOrMgmtHeader>();
+    mutableHeader->setRetry(true);
+    packet->insertAtFront(mutableHeader);
+    return true;
+}
+
 std::set<int> QosAckHandler::getOccupiedBlockAckSequenceNumbers(
         const MacAddress& receiverAddress, Tid tid) const
 {
