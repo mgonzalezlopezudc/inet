@@ -823,12 +823,26 @@ def make_table_md(stats, total):
     if total == 0:
         return "No packets captured.\n\n"
     md = []
-    md.append("| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
-    md.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
+    md.append("| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |\n")
+    md.append("|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n")
     
-    sorted_stats = sorted(stats.items(), key=lambda x: x[1]["count"], reverse=True)
+    sorted_stats = sorted(stats.items(), key=lambda x: get_sort_key(unpack_key_to_name(x[0])))
+    
+    prev_category = None
     for key, stat in sorted_stats:
         name = unpack_key_to_name(key)
+        
+        # Determine category to insert horizontal line separator
+        category = name.split(":")[0] if ":" in name else "Other"
+        if prev_category is not None and category != prev_category:
+            # Insert a separator row with horizontal lines in each cell
+            md.append("| " + " | ".join(["<hr>"] * 13) + " |\n")
+            
+        prev_category = category
+        
+        color = get_packet_color(name)
+        color_svg = f'<svg width="16" height="16"><rect width="16" height="16" rx="3" fill="{color}" /></svg>'
+        
         pct = (stat["count"] / total) * 100
         mean_sz = f"{stat['mean']:.1f} B"
         std_sz = f"{stat['std']:.1f} B"
@@ -839,7 +853,7 @@ def make_table_md(stats, total):
         tx_pwr_str = stat.get("tx_pwr", "-")
         air_pct = f"{stat['airtime_pct']:.2f}%"
         air_sim_pct = f"{stat['airtime_sim_pct']:.2f}%"
-        md.append(f"| {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {mean_dur} | {std_dur} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
+        md.append(f"| {color_svg} | {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {mean_dur} | {std_dur} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
     return "".join(md)
 
 ORDERED_BASE_TYPES = [
