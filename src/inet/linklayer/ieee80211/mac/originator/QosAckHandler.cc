@@ -298,6 +298,20 @@ bool QosAckHandler::isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader
         return false;
 }
 
+bool QosAckHandler::isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header)
+{
+    QosAckHandler::Status status;
+    if (header->getType() == ST_DATA_WITH_QOS) {
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
+        status = getQoSDataAckStatus(dataHeader);
+    }
+    else
+        status = getMgmtOrNonQoSAckStatus(header);
+    return status == QosAckHandler::Status::NORMAL_ACK_NOT_ARRIVED ||
+           status == QosAckHandler::Status::BLOCK_ACK_NOT_ARRIVED ||
+           status == QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED;
+}
+
 std::set<int> QosAckHandler::getOccupiedBlockAckSequenceNumbers(
         const MacAddress& receiverAddress, Tid tid) const
 {

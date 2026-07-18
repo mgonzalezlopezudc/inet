@@ -76,6 +76,12 @@ bool AckHandler::isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& 
     return false;
 }
 
+bool AckHandler::isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header)
+{
+    auto status = getAckStatus(header);
+    return status == AckHandler::Status::ACK_NOT_ARRIVED;
+}
+
 void AckHandler::processFailedFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {
     if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(dataOrMgmtHeader)) {

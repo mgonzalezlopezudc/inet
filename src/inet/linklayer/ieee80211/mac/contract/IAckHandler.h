@@ -22,6 +22,7 @@ class INET_API IAckHandler
 
     virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) = 0;
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) = 0;
+    virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) = 0;
     virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) = 0;
     virtual std::set<int> getOccupiedBlockAckSequenceNumbers(
             const MacAddress& receiverAddress, Tid tid) const { return {}; }

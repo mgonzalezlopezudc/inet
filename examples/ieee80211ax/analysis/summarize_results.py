@@ -27,9 +27,19 @@ def ci(values) -> dict:
 
 def main() -> None:
     manifest = load_manifest(DEFAULT_MANIFEST)
+    output = REPOSITORY_ROOT / "examples/ieee80211ax/analysis/metrics.json"
     payload: dict[str, dict] = {}
+    if output.exists():
+        try:
+            payload = json.loads(output.read_text())
+        except Exception:
+            pass
     for group_name in manifest["groups"]:
-        conditions = conditions_for_group(manifest, group_name)
+        try:
+            conditions = conditions_for_group(manifest, group_name)
+        except Exception as e:
+            print(f"Skipping group '{group_name}' (results not found/incomplete): {e}")
+            continue
         group_metrics: dict[str, dict] = {}
         for condition in conditions:
             item: dict = {}

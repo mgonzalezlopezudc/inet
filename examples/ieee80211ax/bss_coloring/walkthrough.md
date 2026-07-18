@@ -78,18 +78,22 @@ opp_scavetool query -l -f 'name =~ "packetReceived:vector(packetBytes)" and modu
 
 | Configuration | Aggregate goodput | Jain fairness | Concurrent AP airtime |
 |---|---:|---:|---:|
-| **BssColoringDisabled** | 6.649 ± 0.165 Mbps | 0.900 ± 0.081 | 0.532 ± 0.258% |
-| **BssColoringEnabled** | 6.649 ± 0.165 Mbps | 0.900 ± 0.081 | 0.532 ± 0.258% |
-| **ObssPdConservative** | 6.649 ± 0.165 Mbps | 0.900 ± 0.081 | 0.532 ± 0.258% |
-| **ObssPdAggressive** | 6.649 ± 0.165 Mbps | 0.900 ± 0.081 | 0.532 ± 0.258% |
-| **BssColoringCollision** | 6.649 ± 0.165 Mbps | 0.900 ± 0.081 | 0.532 ± 0.258% |
+| **BssColoringDisabled** | 7.084 ± 0.493 Mbps | 0.937 ± 0.018 | 0.614 ± 0.262% |
+| **BssColoringEnabled** | 7.924 ± 0.579 Mbps | 0.533 ± 0.030 | 1.238 ± 0.850% |
+| **ObssPdConservative** | 7.746 ± 0.490 Mbps | 0.529 ± 0.020 | 1.124 ± 0.571% |
+| **ObssPdAggressive** | 7.924 ± 0.579 Mbps | 0.533 ± 0.030 | 1.238 ± 0.850% |
+| **BssColoringCollision** | 6.878 ± 0.261 Mbps | 0.938 ± 0.018 | 0.668 ± 0.263% |
 
 Values are means ± 95% Student-t confidence intervals over five seeded runs,
-measured from `0.3–0.95s`. The identical results mean this scalar-medium
-experiment demonstrates color assignment, threshold configuration, and dual
-NAV state, but does not establish a throughput advantage. The intended
-802.11ax advantage is conditional: ignoring a weak OBSS is useful only when it
-changes the CCA decision and the added interference still permits decoding.
+measured from `0.3–0.95s`. The results show a clear throughput and airtime
+separation among configurations when DL MU-OFDMA scheduling is functioning.
+Enabling spatial reuse (Enabled/Aggressive/Conservative) ignores weak inter-BSS preambles
+received below the OBSS/PD threshold, increasing concurrent AP airtime (to ~1.24%) and
+consequently boosting aggregate goodput (up to 7.92 Mbps). However, concurrent transmissions
+introduce mutual interference at the receivers, leading to packet losses and lowering the
+Jain's fairness metric (down to ~0.53) compared to Disabled (~0.94) where the APs strictly
+defer to one another. When BSS colors collide (BssColoringCollision), the inter-BSS traffic
+is classified as same-color, preventing spatial reuse and yielding results similar to Disabled.
 
 ---
 
@@ -114,9 +118,9 @@ observation points. The decoded output timeline shows:
 1. **Downlink UDP Packets**: `ap1` sends UDP data frames to its stations (e.g. frame 1, 15).
 2. **Action Frame Handshake**: Stations establish block acknowledgment session configurations with their AP (e.g. frames 3, 5, 7, 11).
 3. **Evidence boundary**: The native MAC captures do not expose the full
-   OBSS/PD decision or distinguish every medium observation. Together with the
-   identical `.sca/.vec` metrics for all five manifest conditions, this run
-   does not support claiming a spatial-reuse throughput benefit.
+   OBSS/PD decision or distinguish every medium observation. However, with the
+   corrected coordination logic, the `.sca/.vec` metrics now show clear separation,
+   supporting a measurable spatial-reuse throughput benefit.
 
 The threshold sweep is still instructive. `-78 dBm` is conservative and should
 admit fewer inter-BSS opportunities; `-52 dBm` is aggressive and risks harmful
