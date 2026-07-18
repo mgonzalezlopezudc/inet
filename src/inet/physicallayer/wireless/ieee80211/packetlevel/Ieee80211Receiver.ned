@@ -41,4 +41,20 @@ module Ieee80211Receiver extends NarrowbandReceiverBase
         // TODO remove when opMode is removed from the error model
         *.opMode = this.opMode;
         @class(Ieee80211Receiver);
+        @signal[heSpatialReuseBssType](type=long);
+        @signal[heSpatialReuseReceivedBssColor](type=long);
+        @signal[heSpatialReuseLocalBssColor](type=long);
+        @signal[heSpatialReuseEligible](type=long);
+        @signal[heSpatialReuseIgnoredPpdu](type=long);
+        @signal[heSpatialReuseObssPdThreshold](type=double; unit=dBm);
+        @signal[heSpatialReuseTransmitPowerLimit](type=double; unit=dBm);
+        @signal[heSpatialReuseReason](type=long);
+        @statistic[heSpatialReuseBssType](record=vector,count; interpolationmode=none);
+        @statistic[heSpatialReuseReceivedBssColor](record=vector; interpolationmode=none);
+        @statistic[heSpatialReuseLocalBssColor](record=vector; interpolationmode=none);
+        @statistic[heSpatialReuseEligible](record=vector,count; interpolationmode=none);
+        @statistic[heSpatialReuseIgnoredPpdu](record=vector,count; interpolationmode=none);
+        @statistic[heSpatialReuseObssPdThreshold](unit=dBm; record=vector; interpolationmode=none);
+        @statistic[heSpatialReuseTransmitPowerLimit](unit=dBm; record=vector; interpolationmode=none);
+        @statistic[heSpatialReuseReason](record=vector,count; interpolationmode=none);
 }

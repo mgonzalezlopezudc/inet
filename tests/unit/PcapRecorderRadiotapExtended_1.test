@@ -1,5 +1,5 @@
 %description:
-Test that PcapRecorder dynamically sizes the Radiotap present bitmap and populates the Rate, MCS, A-MPDU, VHT, and 0-length-PSDU fields.
+Test that PcapRecorder dynamically sizes the Radiotap present bitmap and populates the Rate, MCS, A-MPDU, VHT, HE, and 0-length-PSDU fields.
 
 %includes:
 #include <vector>
@@ -7,8 +7,10 @@ Test that PcapRecorder dynamically sizes the Radiotap present bitmap and populat
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/common/packet/recorder/PcapRecorder.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
 
@@ -91,6 +93,11 @@ static void appendMpdu(Packet& aggregate, const std::vector<uint8_t>& bytes, boo
     auto paddingLength = (4 - (4 + bytes.size()) % 4) % 4;
     if (appendPadding && paddingLength != 0)
         aggregate.insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
+}
+
+static uint16_t readUint16(const std::vector<uint8_t>& bytes, size_t offset)
+{
+    return bytes.at(offset) | bytes.at(offset + 1) << 8;
 }
 
 Define_Module(TestablePcapRecorder);
@@ -234,6 +241,119 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     ASSERT(record[4] == 0x02 && record[5] == 0 && record[6] == 0 && record[7] == 0x04);
     ASSERT(record[8] == 0x10);
     ASSERT(record[9] == 0);
+}
+
+// Test 6: HE SU Packet. The six HE words start at byte 10 after Flags and Rate.
+{
+    writer->records.clear();
+    Packet packet("he-su-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto modeReq = packet.addTag<Ieee80211ModeReq>();
+    auto heMode = Ieee80211HeCompliantModes::getCompliantMode(
+            &Ieee80211HemcsTable::heMcs2BW40MHzNss2, Ieee80211HeMode::BAND_5GHZ,
+            Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+            Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM, true);
+    modeReq->setMode(heMode);
+
+    recorder->writeIeee80211(&packet);
+
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(7, record);
+    ASSERT(record[2] == 18 && record[3] == 0);
+    ASSERT(record[4] == 0x06 && record[5] == 0 && record[6] == 0x80 && record[7] == 0);
+    ASSERT(readUint16(record, 10) == 0x40A0); // SU; MCS, coding, and bandwidth known
+    ASSERT(readUint16(record, 12) == 0x0002); // GI known
+    ASSERT(readUint16(record, 14) == 0x2200); // MCS 2, LDPC
+    ASSERT(readUint16(record, 16) == 0x0000);
+    ASSERT(readUint16(record, 18) == 0x0011); // 40 MHz, 1.6 us GI
+    ASSERT(readUint16(record, 20) == 0x0002); // two space-time streams
+}
+
+// Test 7: HE ER SU Packet. PPDU format is a value, not a "known" bit.
+{
+    writer->records.clear();
+    Packet packet("he-er-su-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto modeReq = packet.addTag<Ieee80211ModeReq>();
+    auto heMode = Ieee80211HeCompliantModes::getCompliantMode(
+            &Ieee80211HemcsTable::heMcs0BW20MHzNss1, Ieee80211HeMode::BAND_5GHZ,
+            Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU,
+            Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+    modeReq->setMode(heMode);
+
+    recorder->writeIeee80211(&packet);
+
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(8, record);
+    ASSERT(record[2] == 18 && record[3] == 0);
+    ASSERT(readUint16(record, 10) == 0x40A1); // HE_EXT_SU
+    ASSERT(readUint16(record, 12) == 0x0002);
+    ASSERT(readUint16(record, 14) == 0x0000); // MCS 0, BCC
+    ASSERT(readUint16(record, 18) == 0x0027); // 242-tone RU, 3.2 us GI
+    ASSERT(readUint16(record, 20) == 0x0001);
+}
+
+// Test 8: HE DL MU Packet. The regular HE field describes the captured user;
+// no HE-MU field is emitted because the request does not contain HE-SIG-B RU
+// allocation codes.
+{
+    writer->records.clear();
+    Packet packet("he-dl-mu-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto request = packet.addTag<Ieee80211HeMuReq>();
+    request->setPpduFormat(HE_MU_DOWNLINK);
+    request->setRuToneSize(106);
+    request->setStaId(37);
+    request->setMcs(5);
+    request->setNumberOfSpatialStreams(2);
+    request->setDcm(true);
+    request->setGuardInterval(HE_GI_0_8_US);
+    request->setCoding(HE_CODING_LDPC);
+    request->setSpatialReuse(3);
+
+    recorder->writeIeee80211(&packet);
+
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(9, record);
+    ASSERT(record[2] == 22 && record[3] == 0);
+    ASSERT(record[4] == 0x02 && record[5] == 0 && record[6] == 0x80 && record[7] == 0);
+    ASSERT(readUint16(record, 10) == 0x4CF2); // HE_MU and captured-user fields known
+    ASSERT(readUint16(record, 12) == 0x0002);
+    ASSERT(readUint16(record, 14) == 0x3500); // DL, MCS 5, DCM, LDPC
+    ASSERT(readUint16(record, 16) == 0x0253); // STA-ID 37, spatial reuse 3
+    ASSERT(readUint16(record, 18) == 0x0006); // 106-tone RU, 0.8 us GI
+    ASSERT(readUint16(record, 20) == 0x0002);
+}
+
+// Test 9: HE trigger-based uplink Packet.
+{
+    writer->records.clear();
+    Packet packet("he-tb-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto request = packet.addTag<Ieee80211HeMuReq>();
+    request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    request->setRuToneSize(52);
+    request->setMcs(1);
+    request->setNumberOfSpatialStreams(1);
+    request->setGuardInterval(HE_GI_1_6_US);
+    request->setCoding(HE_CODING_BCC);
+    request->setSpatialReuse(7);
+
+    recorder->writeIeee80211(&packet);
+
+    ASSERT(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(10, record);
+    ASSERT(record[2] == 22 && record[3] == 0);
+    ASSERT(readUint16(record, 10) == 0x44F3); // HE_TRIG; no MU STA-ID bit
+    ASSERT(readUint16(record, 12) == 0x0002);
+    ASSERT(readUint16(record, 14) == 0x0180); // UL, MCS 1, BCC
+    ASSERT(readUint16(record, 16) == 0x0007);
+    ASSERT(readUint16(record, 18) == 0x0015); // 52-tone RU, 1.6 us GI
+    ASSERT(readUint16(record, 20) == 0x0001);
 }
 
 EV << "Radiotap extended fields and present bitmaps tested successfully.\n";

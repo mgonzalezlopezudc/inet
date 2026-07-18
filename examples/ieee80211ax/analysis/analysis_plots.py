@@ -349,6 +349,60 @@ def plot_rate(conditions: list[Condition], output: Path) -> None:
     )
 
 
+def _per_run_event_count(condition: Condition, name: str, module: str, required: bool = True) -> pd.DataFrame:
+    frame = condition.vectors(name, module=module, required=required)
+    records = []
+    run_ids = [pair.run_number for pair in condition.result_files]
+    for run_number in run_ids:
+        rows = frame[pd.to_numeric(frame.runnumber, errors="raise").astype(int) == run_number] if not frame.empty else frame
+        count = sum(
+            len(crop_vector(row.vectime, row.vecvalue, condition.measurement)[1])
+            for _, row in rows.iterrows()
+        )
+        records.append({"runID": run_number, "count": count})
+    return pd.DataFrame.from_records(records)
+
+
+def plot_er(conditions: list[Condition], output: Path) -> None:
+    if len(conditions) != 2:
+        raise RuntimeError("HE ER SU boundary comparison requires HE-SU and HE-ER-SU conditions")
+    delivered = [
+        _per_run_event_count(condition, "packetReceived:vector(packetBytes)", "**.app[*]")
+        for condition in conditions
+    ]
+    drops = [
+        _per_run_event_count(condition, "packetDropIncorrectlyReceived:vector(packetBytes)", "**.mac", required=False)
+        for condition in conditions
+    ]
+    goodputs = [per_run_goodput(condition) for condition in conditions]
+    if any(np.any(frame["count"] <= 0) for frame in delivered):
+        raise RuntimeError("HE ER SU boundary campaign did not preserve application delivery")
+
+    labels = [condition.label for condition in conditions]
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.8))
+    bar_with_ci(axes[0], labels, delivered, "count")
+    bar_with_ci(axes[1], labels, drops, "count")
+    bar_with_ci(axes[2], labels, goodputs, "goodput_bps", scale=1e-6)
+    axes[0].set_ylabel("Delivered application packets")
+    axes[1].set_ylabel("Incorrectly received MAC observations")
+    axes[2].set_ylabel("Application goodput [Mbit/s]")
+    fig.suptitle("HE-SU versus HE-ER-SU at the controlled cell boundary")
+    save(fig, output)
+    write_provenance(
+        output,
+        conditions=conditions,
+        result_filters=[
+            {"type": "vector", "module": "**.app[*]", "name": "packetReceived:vector(packetBytes)", "unit": "B"},
+            {"type": "vector", "module": "**.mac", "name": "packetDropIncorrectlyReceived:vector(packetBytes)", "unit": "B", "optional_when_zero": True},
+        ],
+        aggregation={
+            "observation": "per-run 0.3-2.0 s measurement window",
+            "uncertainty": "95% Student-t CI over five seeds",
+            "interpretation": "diagnostic delivery comparison; the standard does not guarantee a gain for this channel/error model",
+        },
+    )
+
+
 def _ap_overlap(condition: Condition) -> pd.DataFrame:
     frame = condition.vectors("transmissionState:vector", module="**.ap*.wlan[0].radio")
     records = []
@@ -380,7 +434,65 @@ def _per_run_fairness(condition: Condition, normalized: bool = False) -> pd.Data
     return pd.DataFrame.from_records(records)
 
 
+def _measurement_vector_values(condition: Condition, name: str) -> np.ndarray:
+    frame = condition.vectors(name, module="**.receiver")
+    values = [
+        crop_vector(row.vectime, row.vecvalue, condition.measurement)[1]
+        for _, row in frame.iterrows()
+    ]
+    return np.concatenate(values) if values else np.array([], dtype=float)
+
+
+def _validate_bss_spatial_reuse(condition: Condition) -> None:
+    expectation = condition.condition_metadata["spatial_reuse_evidence"]
+    reasons = _measurement_vector_values(condition, "heSpatialReuseReason:vector").astype(int)
+    eligible = _measurement_vector_values(condition, "heSpatialReuseEligible:vector").astype(int)
+    bss_types = _measurement_vector_values(condition, "heSpatialReuseBssType:vector").astype(int)
+    if len(reasons) == 0 or len(eligible) == 0:
+        raise RuntimeError(f"{condition.config}: missing HE spatial-reuse decision telemetry")
+
+    if expectation == "disabled":
+        if np.any(eligible != 0):
+            raise RuntimeError(f"{condition.config}: disabled spatial reuse produced eligible PPDUs")
+        return
+
+    if expectation == "collision":
+        if np.any(eligible != 0) or np.any(np.isin(reasons, [11, 12])):
+            raise RuntimeError(f"{condition.config}: same-color PPDUs were treated as inter-BSS OBSS/PD candidates")
+        if not np.any(reasons == 4):
+            raise RuntimeError(f"{condition.config}: no same-color intra-BSS decision was observed")
+        return
+
+    # Reason 11/12 means an eligible inter-BSS PPDU was respectively below or
+    # at/above OBSS/PD. BSS type 2/3 is non-SRG/SRG inter-BSS.
+    if not np.any(np.isin(reasons, [11, 12])) or not np.any(eligible == 1):
+        raise RuntimeError(f"{condition.config}: no eligible inter-BSS OBSS/PD decision was observed")
+    if not np.any(np.isin(bss_types, [2, 3])):
+        raise RuntimeError(f"{condition.config}: no inter-BSS color classification was observed")
+
+    thresholds = _measurement_vector_values(condition, "heSpatialReuseObssPdThreshold:vector")
+    power_limits = _measurement_vector_values(condition, "heSpatialReuseTransmitPowerLimit:vector")
+    thresholds = thresholds[np.isfinite(thresholds)]
+    power_limits = power_limits[np.isfinite(power_limits)]
+    if len(thresholds) == 0 or len(power_limits) == 0:
+        raise RuntimeError(f"{condition.config}: OBSS/PD threshold or coupled TX-power telemetry is missing")
+    expected_threshold = float(condition.condition_metadata["obss_pd_dbm"])
+    expected_power_limit = 21.0 - max(0.0, expected_threshold - (-82.0))
+    # The native result API normalizes logarithmic dBm samples to linear mW
+    # while retaining the source unit metadata.
+    expected_threshold_mw = 10 ** (expected_threshold / 10.0)
+    expected_power_limit_mw = 10 ** (expected_power_limit / 10.0)
+    if not np.allclose(thresholds, expected_threshold_mw, rtol=1e-9, atol=0):
+        raise RuntimeError(f"{condition.config}: recorded OBSS/PD threshold differs from configuration")
+    if not np.allclose(power_limits, expected_power_limit_mw, rtol=1e-9, atol=0):
+        raise RuntimeError(
+            f"{condition.config}: TX-power limit violates the 21 dBm/-82 dBm OBSS/PD coupling"
+        )
+
+
 def plot_bss(conditions: list[Condition], output: Path) -> None:
+    for condition in conditions:
+        _validate_bss_spatial_reuse(condition)
     goodputs = [per_run_goodput(condition) for condition in conditions]
     fairness = [_per_run_fairness(condition) for condition in conditions]
     overlap = [_ap_overlap(condition) for condition in conditions]
@@ -401,8 +513,17 @@ def plot_bss(conditions: list[Condition], output: Path) -> None:
         result_filters=[
             {"type": "vector", "module": "**.app[*]", "name": "packetReceived:vector(packetBytes)", "unit": "B"},
             {"type": "vector", "module": "**.ap*.wlan[0].radio", "name": "transmissionState:vector", "transmitting_code": TRANSMISSION_STATE_TRANSMITTING},
+            {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseReason:vector", "reason_codes": {"11": "below OBSS/PD", "12": "at/above OBSS/PD"}},
+            {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseBssType:vector", "inter_bss_codes": [2, 3]},
+            {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseEligible:vector"},
+            {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseObssPdThreshold:vector", "unit": "dBm"},
+            {"type": "vector", "module": "**.receiver", "name": "heSpatialReuseTransmitPowerLimit:vector", "unit": "dBm"},
         ],
-        aggregation={"observation": "per-run measurement-window aggregate", "uncertainty": "95% Student-t CI"},
+        aggregation={
+            "observation": "per-run measurement-window aggregate",
+            "uncertainty": "95% Student-t CI",
+            "validation": "requires inter-BSS OBSS/PD decisions and validates the 21 dBm/-82 dBm threshold-to-power relation",
+        },
     )
 
 
@@ -447,6 +568,26 @@ def plot_width(conditions: list[Condition], output: Path) -> None:
 
 
 def plot_dl(conditions: list[Condition], output: Path) -> None:
+    for condition in conditions:
+        if condition.condition_metadata.get("workload") and condition.label != "EDCA":
+            staids = condition.vectors("heStaId:vector", module="**.ap.wlan[0].radio")
+            # The native result API normalizes byte-valued samples to its base
+            # bit unit even though the vector file and signal are declared B.
+            scheduled = condition.vectors("heScheduledPsduBytes:vector", module="**.ap.wlan[0].radio", expected_unit="b")
+            durations = condition.vectors("heUserPpduDuration:vector", module="**.ap.wlan[0].radio", expected_unit="s")
+            for run_id in sorted(set(staids.runID)):
+                sta_rows = staids[staids.runID == run_id]
+                byte_rows = scheduled[scheduled.runID == run_id]
+                duration_rows = durations[durations.runID == run_id]
+                if not (len(sta_rows) == len(byte_rows) == len(duration_rows) == 1):
+                    raise RuntimeError(f"{condition.config}/{run_id}: per-user scheduling vectors must have one AP-radio row")
+                sta_row, byte_row, duration_row = sta_rows.iloc[0], byte_rows.iloc[0], duration_rows.iloc[0]
+                if not (np.array_equal(sta_row.vectime, byte_row.vectime) and
+                        np.array_equal(sta_row.vectime, duration_row.vectime)):
+                    raise RuntimeError(f"{condition.config}/{run_id}: per-user scheduling telemetry is not aligned")
+                if np.any(np.asarray(byte_row.vecvalue) < 0) or np.any(np.asarray(duration_row.vecvalue) <= 0):
+                    raise RuntimeError(f"{condition.config}/{run_id}: invalid scheduled bytes or airtime")
+
     workloads = ["symmetric", "asymmetric"]
     fig, axes = plt.subplots(2, 3, figsize=(15, 9))
     for row_index, workload in enumerate(workloads):
@@ -470,8 +611,11 @@ def plot_dl(conditions: list[Condition], output: Path) -> None:
         result_filters=[
             {"type": "vector", "module": "**.app[*]", "name": "packetReceived:vector(packetBytes)", "unit": "B"},
             {"type": "vector", "module": "**.app[*]", "name": "endToEndDelay:vector", "unit": "s"},
+            {"type": "vector", "module": "**.ap.wlan[0].radio", "name": "heStaId:vector"},
+            {"type": "vector", "module": "**.ap.wlan[0].radio", "name": "heScheduledPsduBytes:vector", "unit": "B"},
+            {"type": "vector", "module": "**.ap.wlan[0].radio", "name": "heUserPpduDuration:vector", "unit": "s"},
         ],
-        aggregation={"observation": "one per run", "delay": "pooled packet p95 within run", "uncertainty": "95% Student-t CI"},
+        aggregation={"observation": "one per run", "per_user": "STA-ID aligned scheduled PSDU bytes and PPDU duration", "delay": "pooled packet p95 within run", "uncertainty": "95% Student-t CI"},
     )
 
 
@@ -617,6 +761,7 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "uora": plot_uora,
     "twt": plot_twt,
     "rate": plot_rate,
+    "er": plot_er,
     "puncturing": plot_puncturing,
     "mimo": plot_mimo,
     "bss": plot_bss,

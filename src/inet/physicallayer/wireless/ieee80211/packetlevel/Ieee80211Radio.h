@@ -32,6 +32,8 @@ class INET_API Ieee80211Radio : public FlatRadioBase
     static simsignal_t heStaIdSignal;
     static simsignal_t heSpatialStreamsSignal;
     static simsignal_t heStreamStartIndexSignal;
+    static simsignal_t heScheduledPsduBytesSignal;
+    static simsignal_t heUserPpduDurationSignal;
     static simsignal_t hePuncturedSubchannelMaskSignal;
     static simsignal_t acknowledgmentFrameTypeSignal;
     static simsignal_t acknowledgmentAirtimeSignal;

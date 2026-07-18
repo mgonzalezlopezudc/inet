@@ -17,7 +17,7 @@ from analysis_core import DEFAULT_MANIFEST, REPOSITORY_ROOT, load_manifest
 
 
 VECTOR_STATISTICS = (
-    "packetReceived", "endToEndDelay", "packetSentToPeer",
+    "packetReceived", "endToEndDelay", "packetSentToPeer", "packetDropIncorrectlyReceived",
     "acknowledgmentFrameType", "acknowledgmentAirtime",
     "radioMode", "powerConsumption", "transmissionState",
     "heRateSelectedMcs", "heRateSelectedNss",
@@ -25,6 +25,11 @@ VECTOR_STATISTICS = (
     "heUlBufferStatusReportedBytes", "heUlBufferStatusScheduledBytes",
     "heRuToneOffset", "heRuToneSize", "heStaId",
     "hePuncturedSubchannelMask", "heSpatialStreams", "heStreamStartIndex",
+    "heScheduledPsduBytes", "heUserPpduDuration",
+    "heSpatialReuseBssType", "heSpatialReuseReceivedBssColor", "heSpatialReuseLocalBssColor",
+    "heSpatialReuseEligible", "heSpatialReuseIgnoredPpdu", "heSpatialReuseObssPdThreshold",
+    "heSpatialReuseTransmitPowerLimit",
+    "heSpatialReuseReason",
 )
 
 

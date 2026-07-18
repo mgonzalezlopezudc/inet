@@ -354,41 +354,53 @@ also assumes ideal non-overlapping RU isolation and does not model adjacent-RU
 leakage, oscillator error, or a waveform-level multipath channel. Those are
 model boundaries, not 802.11 guarantees.
 
+<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ## 802.11 Packet Type Statistics
 ![802.11 Packet Type Statistics](packet_statistics.png)
 
-This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a repository-specific packing for HE radiotap metadata. TShark can consequently decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from them—are diagnostic only and are not standards-conformance evidence.
+Capture session `20260718T132413Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
-Two airtime occupancy percentages are provided:
+Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
+### Evidence checks
+
+| Status | Requirement | Observed evidence |
+|---|---|---|
+| **PASS** | FlatChannelOFDMA produced protocol-visible wireless observations | 7272 AP/global transmission observations |
+| **PASS** | TgaxModelBOFDMA produced protocol-visible wireless observations | 4093 AP/global transmission observations |
+| **INCONCLUSIVE** | Per-RU SNIR/reception outcome and sink delivery | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
+
 ### Configuration: `FlatChannelOFDMA`
-Total over-the-air packets captured (Global BSS/AP): **7272**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7272**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#35b521" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 1224 | 16.83% | 2094.1 B | 305.3 B | 397.5 us | 39.9 us | 5200 MHz | - | 20.0 dBm | 71.02% | 40.55% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24db3c" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, LDPC] | 1207 | 16.60% | 2121.3 B | 203.5 B | 2356.7 us | 222.6 us | 5200 MHz | - | 20.0 dBm | 87.98% | 237.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c62f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 17 | 0.23% | 166.0 B | 0.0 B | 57.7 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.03% | 0.08% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f47106" /></svg> | Control: Trigger [HE-ER-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 1206 | 16.58% | 64.0 B | 0.5 B | 41.3 us | 0.2 us | 5200 MHz | - | 20.0 dBm | 7.27% | 4.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0e49c8" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 4822 | 66.31% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5170 MHz, 5180 MHz, 5189 MHz, 5211 MHz, 5220 MHz, 5230 MHz | -59.0 dBm | - | 21.58% | 12.32% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3ba8e8" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 4 | 0.06% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5200 MHz | -59.0 dBm | - | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#43adea" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 8 | 0.11% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.03% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d3700d" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 1206 | 16.58% | 64.0 B | 0.5 B | 37.0 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 1.38% | 3.72% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0e3caf" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] | 4820 | 66.28% | 32.0 B | 0.0 B | 71.0 us | 0.0 us | 5170 MHz, 5189 MHz, 5211 MHz, 5230 MHz | -59.0 dBm | - | 10.59% | 28.52% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1553b7" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 3.2 us, LDPC] | 2 | 0.03% | 32.0 B | 0.0 B | 53.5 us | 0.0 us | 5180 MHz, 5220 MHz | -59.0 dBm | - | 0.00% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3a81df" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] | 4 | 0.06% | 14.0 B | 0.0 B | 37.8 us | 0.0 us | 5200 MHz | -59.0 dBm | - | 0.00% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5cb1e6" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, LDPC] | 8 | 0.11% | 14.0 B | 0.0 B | 36.2 us | 0.0 us | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.01% | 0.02% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e7132f" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 8 | 0.11% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.08% | 0.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c81927" /></svg> | Management: Action [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 8 | 0.11% | 37.0 B | 0.0 B | 36.6 us | 0.0 us | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.01% | 0.02% |
 
 ### Configuration: `TgaxModelBOFDMA`
-Total over-the-air packets captured (Global BSS/AP): **5232**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4093**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#35b521" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 1575 | 30.10% | 166.0 B | 0.0 B | 145.7 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 55.60% | 19.12% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c62f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 1070 | 26.14% | 166.0 B | 0.0 B | 57.7 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 35.55% | 5.14% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3ba8e8" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 1575 | 30.10% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5200 MHz | -72.2 dBm | - | 9.41% | 3.24% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3a81df" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] | 1070 | 26.14% | 14.0 B | 0.0 B | 37.8 us | 0.0 us | 5200 MHz | -72.2 dBm | - | 23.31% | 3.37% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e7132f" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 2082 | 39.79% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 34.98% | 12.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c81927" /></svg> | Management: Action [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 1953 | 47.72% | 37.0 B | 0.0 B | 36.6 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 41.14% | 5.95% |
 
 ### Analysis of Packet Distribution
 The different frame mixtures show that the two configured access paths executed different exchanges, but aggregate subtype counts cannot validate a frequency-selective channel or per-RU isolation. IEEE HE DL-MU behavior must be established with RU allocation and per-RU reception/SNIR outcomes together with sink delivery; the channel model is an implementation choice rather than an IEEE-mandated propagation model.
+<!-- END GENERATED: ieee80211ax-pcap-statistics -->
