@@ -171,31 +171,36 @@ Two airtime occupancy percentages are provided:
 ### Configuration: `ErBss`
 Total over-the-air packets captured (Global BSS/AP): **240**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 120 | 50.00% | 166.0 B | 0.0 B | 305.6 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 92.53% | 1.83% |
-| Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 120 | 50.00% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 7.47% | 0.15% |
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21d439" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 120 | 50.00% | 166.0 B | 0.0 B | 305.6 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 92.53% | 1.83% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#528cef" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 120 | 50.00% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 7.47% | 0.15% |
 
 ### Configuration: `HeErSu`
 Total over-the-air packets captured (Global BSS/AP): **3417**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1704 | 49.87% | 366.0 B | 0.0 B | 524.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 95.43% | 44.68% |
-| Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1701 | 49.78% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 4.48% | 2.10% |
-| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 9 | 0.26% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.07% | 0.03% |
-| Management: Action [HE-ER-SU, HE-MCS 2, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.00% |
-| Control: Ack [HE-ER-SU, HE-MCS 2, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.00% | 0.00% |
-| Management: Action [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.00% |
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21d439" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1704 | 49.87% | 366.0 B | 0.0 B | 524.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 95.43% | 44.68% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#528cef" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1701 | 49.78% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 4.48% | 2.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#61b0e5" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 2, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.00% | 0.00% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f13a1e" /></svg> | Management: Action [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e90b07" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 9 | 0.26% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.07% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e42f41" /></svg> | Management: Action [HE-ER-SU, HE-MCS 2, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.00% |
 
 ### Configuration: `HeSu`
 Total over-the-air packets captured (Global BSS/AP): **3414**
 
-| Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1700 | 49.79% | 366.0 B | 0.0 B | 524.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 95.41% | 44.57% |
-| Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1700 | 49.79% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 4.49% | 2.10% |
-| Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 0.41% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.10% | 0.05% |
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21d439" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1700 | 49.79% | 366.0 B | 0.0 B | 524.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 95.41% | 44.57% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#528cef" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1700 | 49.79% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 4.49% | 2.10% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e90b07" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 0.41% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.10% | 0.05% |
 
 ### Analysis of Packet Distribution
 Extended Range (ER) simulations demonstrate HE SU versus HE ER SU transmissions. Because the channel conditions are poor at cell boundaries, configurations utilizing HE ER SU (which uses a robust DCM coding and extended preambles) show successful delivery of **QoS Data** and **Block Ack (BA)** frames, whereas standard HE SU configurations suffer from packet loss, resulting in fewer successful data and acknowledgment frames.
