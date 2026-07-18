@@ -145,9 +145,11 @@ Query the vector metrics in scavetool to see how the client stations update thei
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
+> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a repository-specific packing for HE radiotap metadata. TShark can consequently decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from them—are diagnostic only and are not standards-conformance evidence.
+
 Two airtime occupancy percentages are provided:
-- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
-- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
 ### Configuration: `BssColoringCollision`
 Total over-the-air packets captured (Global BSS/AP): **1282**
@@ -228,7 +230,4 @@ Total over-the-air packets captured (Global BSS/AP): **1246**
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f13a1e" /></svg> | Management: Action [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 15 | 1.20% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -73.1 dBm | 13.0 dBm | 0.07% | 0.10% |
 
 ### Analysis of Packet Distribution
-BSS Coloring simulations show packet exchanges across multiple overlapping BSSs (OBSS). In addition to standard **QoS Data** and **Block Ack (BA)** frames, the statistics reflect management traffic like **Beacons** from multiple APs. When BSS coloring is disabled, collisions and backoffs occur, altering the proportion of retransmitted data frames. Enabling BSS coloring reduces mutual interference, allowing smoother channel access and higher successful data frame delivery rates.
-
-### Model Limitations
-- **Spatial Reuse**: The current INET implementation of Spatial Reuse only supports static OBSS/PD threshold classification based on BSS color. It does not support dynamic OBSS/PD parameter adaptation or transmit power control (TPC) adjustments for concurrent transmissions.
+**Unexpected/no separation:** `BssColoringDisabled`, `BssColoringEnabled`, `ObssPdConservative`, `ObssPdAggressive`, and `BssColoringCollision` have identical frame counts and distributions in this run. IEEE Std 802.11-2024 Clause 26.10 permits eligible inter-BSS reuse after OBSS/PD classification; it does not guarantee a throughput improvement, and a more permissive threshold can increase interference. The identical result therefore does not violate the standard, but it means this bounded scalar-medium workload provides no evidence that coloring or the threshold sweep changed protocol behavior. The current model also omits dynamic OBSS/PD adaptation and the associated transmit-power-control adjustment.

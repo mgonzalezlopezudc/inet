@@ -164,9 +164,11 @@ The decoded output timeline shows:
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
 
+> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a repository-specific packing for HE radiotap metadata. TShark can consequently decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from them—are diagnostic only and are not standards-conformance evidence.
+
 Two airtime occupancy percentages are provided:
-- **Air Time %**: The percentage of the total transmission airtime of all packets occupied by this frame type.
-- **Air Time (Sim Time) %**: The percentage of the total simulation time occupied by the transmission of this frame type (defined as the sum of physical airtimes of this frame type w.r.t. the total simulation time limit).
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
 ### Configuration: `ErBss`
 Total over-the-air packets captured (Global BSS/AP): **240**
@@ -203,4 +205,4 @@ Total over-the-air packets captured (Global BSS/AP): **3414**
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e90b07" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 0.41% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.10% | 0.05% |
 
 ### Analysis of Packet Distribution
-Extended Range (ER) simulations demonstrate HE SU versus HE ER SU transmissions. Because the channel conditions are poor at cell boundaries, configurations utilizing HE ER SU (which uses a robust DCM coding and extended preambles) show successful delivery of **QoS Data** and **Block Ack (BA)** frames, whereas standard HE SU configurations suffer from packet loss, resulting in fewer successful data and acknowledgment frames.
+**No range separation in this run:** `HeSu` and `HeErSu` have nearly identical QoS Data/Ack counts, so these packet statistics do not show HE-SU failing while HE-ER-SU succeeds. That is compatible with the standard: HE ER SU supplies a more robust format, but does not guarantee a gain on every channel. IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 (242-tone) or MCS 0 (106-tone); DCM is optional. A coverage claim needs a controlled PER/delivery sweep, and the current malformed radiotap format field cannot prove ER-SU selection.
