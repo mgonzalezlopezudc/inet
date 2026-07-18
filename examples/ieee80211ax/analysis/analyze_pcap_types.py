@@ -28,6 +28,8 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import numpy as np
+import zlib
+import colorsys
 
 # Resolve project repository root (3 levels up from this file)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -840,6 +842,103 @@ def make_table_md(stats, total):
         md.append(f"| {name} | {stat['count']} | {pct:.2f}% | {mean_sz} | {std_sz} | {mean_dur} | {std_dur} | {freq_str} | {rx_sig_str} | {tx_pwr_str} | {air_pct} | {air_sim_pct} |\n")
     return "".join(md)
 
+ORDERED_BASE_TYPES = [
+    # Data
+    "Data: Data",
+    "Data: QoS Data",
+    "Data: QoS Null",
+    # Control
+    "Control: Trigger",
+    "Control: PS-Poll",
+    "Control: HE TB feedback NDP",
+    "Control: Block Ack Request",
+    "Control: Block Ack",
+    "Control: Ack",
+    # Management
+    "Management: Beacon",
+    "Management: Probe Request",
+    "Management: Probe Response",
+    "Management: Association Request",
+    "Management: Association Response",
+    "Management: Authentication",
+    "Management: Action",
+]
+
+def get_base_type(pt):
+    return pt.split(" [")[0].split(" (")[0]
+
+def get_sort_key(pt):
+    base = get_base_type(pt)
+    if base in ORDERED_BASE_TYPES:
+        return (ORDERED_BASE_TYPES.index(base), pt)
+    else:
+        return (len(ORDERED_BASE_TYPES), pt)
+
+def get_packet_color(pt):
+    base = get_base_type(pt)
+    
+    # Define base HSL values for each category
+    # Hue: 0-360, Saturation: 0-100 (%), Lightness: 0-100 (%)
+    if base == "Data: Data":  # Regular data (Light Green)
+        h, s, l = 120, 65, 75
+    elif base == "Data: QoS Data":  # QoS (Green)
+        h, s, l = 120, 70, 45
+    elif base == "Data: QoS Null":  # QoS Null (Dark Green)
+        h, s, l = 120, 75, 22
+    elif base == "Control: Ack":  # Ack (Blue)
+        h, s, l = 210, 80, 60
+    elif base == "Control: Block Ack Request":  # BAR (Brown)
+        h, s, l = 25, 55, 42
+    elif base == "Control: Block Ack":  # BA (Dark Blue)
+        h, s, l = 225, 85, 35
+    elif base == "Control: Trigger":  # Trigger (Orange)
+        h, s, l = 35, 95, 50
+    elif base == "Control: HE TB feedback NDP":  # Gold/Yellow
+        h, s, l = 50, 95, 48
+    elif base == "Control: PS-Poll":  # Light Blue/Steel Blue
+        h, s, l = 195, 75, 65
+    elif base == "Management: Action":  # Action (Red)
+        h, s, l = 0, 85, 50
+    elif base == "Management: Beacon":  # Beacon (Crimson/Dark Red)
+        h, s, l = 350, 90, 32
+    elif base == "Management: Authentication":  # Pink
+        h, s, l = 330, 85, 65
+    elif base == "Management: Association Request":  # Rose
+        h, s, l = 310, 80, 55
+    elif base == "Management: Association Response":  # Light Purple/Violet
+        h, s, l = 290, 75, 60
+    elif base == "Management: Probe Request":  # Salmon/Coral
+        h, s, l = 15, 85, 65
+    elif base == "Management: Probe Response":  # Light Salmon
+        h, s, l = 15, 85, 75
+    else:
+        # Unknown: use a default hashed color
+        val = zlib.adler32(pt.encode('utf-8'))
+        h = val % 360
+        s = 60
+        l = 50
+        r, g, b = colorsys.hls_to_rgb(h / 360.0, l / 100.0, s / 100.0)
+        return matplotlib.colors.to_hex((r, g, b))
+
+    # Perturb HSL based on the suffix (to distinguish subtypes visually)
+    suffix = pt[len(base):]
+    if suffix:
+        val = zlib.adler32(suffix.encode('utf-8'))
+        # Perturb Hue by +/- 8 degrees
+        h_offset = (val % 17) - 8
+        h = (h + h_offset) % 360
+        
+        # Perturb Saturation by +/- 10%, keeping within [10, 100]
+        s_offset = ((val >> 4) % 21) - 10
+        s = max(10, min(100, s + s_offset))
+        
+        # Perturb Lightness by +/- 8%, keeping within [10, 90]
+        l_offset = ((val >> 8) % 17) - 8
+        l = max(10, min(90, l + l_offset))
+        
+    r, g, b = colorsys.hls_to_rgb(h / 360.0, l / 100.0, s / 100.0)
+    return matplotlib.colors.to_hex((r, g, b))
+
 def generate_stacked_bar_plot(config_results, subdir, color_map):
     # Filter configs that have global stats
     valid_configs = []
@@ -859,7 +958,7 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
             name = unpack_key_to_name(key)
             packet_types.add(name)
             
-    packet_types = sorted(list(packet_types))
+    packet_types = sorted(list(packet_types), key=get_sort_key)
     
     # Prepare data for plotting
     num_configs = len(valid_configs)
@@ -881,20 +980,21 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
     plt.rcParams['font.sans-serif'] = 'DejaVu Sans'
     plt.rcParams['font.family'] = 'sans-serif'
     
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 8.2))
     
-    x = np.arange(num_configs)
-    width = 0.45
+    y = np.arange(num_configs)
+    height = 0.45
     
     # Helper to format axes
     def style_axis(ax, title):
         ax.set_title(title, fontsize=14, pad=15, weight='bold', color='#2c3e50')
-        ax.set_ylabel("Percentage (%)", fontsize=12, labelpad=10, color='#2c3e50')
-        ax.set_xticks(x)
-        ax.set_xticklabels(valid_configs, rotation=20, ha="right", fontsize=10, color='#2c3e50')
-        ax.set_ylim(0, 105)
-        ax.grid(axis='y', linestyle='--', alpha=0.5, color='#bdc3c7')
+        ax.set_xlabel("Percentage (%)", fontsize=12, labelpad=10, color='#2c3e50')
+        ax.set_yticks(y)
+        ax.set_yticklabels(valid_configs, fontsize=10, color='#2c3e50')
+        ax.set_xlim(0, 105)
+        ax.grid(axis='x', linestyle='--', alpha=0.5, color='#bdc3c7')
         ax.set_axisbelow(True)
+        ax.invert_yaxis()  # Keep configuration list top-to-bottom
         # Remove top and right spines
         for spine in ['top', 'right']:
             ax.spines[spine].set_visible(False)
@@ -904,22 +1004,22 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
     # Plot Count Percentages
     bottom_count = np.zeros(num_configs)
     for pt in packet_types:
-        ax1.bar(x, count_data[pt], width, bottom=bottom_count, label=pt, color=color_map[pt], edgecolor='white', linewidth=0.5)
+        ax1.barh(y, count_data[pt], height, left=bottom_count, label=pt, color=color_map[pt], edgecolor='white', linewidth=0.5)
         bottom_count += count_data[pt]
     style_axis(ax1, "Packet Count Distribution (%)")
     
     # Plot Air Time Percentages
     bottom_air = np.zeros(num_configs)
     for pt in packet_types:
-        ax2.bar(x, airtime_data[pt], width, bottom=bottom_air, label=pt, color=color_map[pt], edgecolor='white', linewidth=0.5)
+        ax2.barh(y, airtime_data[pt], height, left=bottom_air, label=pt, color=color_map[pt], edgecolor='white', linewidth=0.5)
         bottom_air += airtime_data[pt]
     style_axis(ax2, "Airtime Distribution (%)")
     
-    # Common Legend on the right side
+    # Common Legend below the plots
     handles, labels = ax1.get_legend_handles_labels()
-    fig.legend(handles, labels, loc='center left', bbox_to_anchor=(0.82, 0.5), fontsize=10, frameon=True, facecolor='#f8f9fa', edgecolor='#e2e8f0')
+    fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.23), ncol=2, fontsize=9.5, frameon=True, facecolor='#f8f9fa', edgecolor='#e2e8f0')
     
-    plt.tight_layout(rect=[0.02, 0.02, 0.81, 0.95])
+    plt.tight_layout(rect=[0.02, 0.27, 0.98, 0.95])
     
     # Save path
     plot_dir = REPOSITORY_ROOT / "examples" / "ieee80211ax" / subdir
@@ -1095,9 +1195,8 @@ def main():
                     
     global_packet_types = sorted(list(global_packet_types))
     
-    # Assign a fixed color to each global packet type from the tab20 palette
-    cmap = matplotlib.colormaps["tab20"]
-    global_color_map = {pt: cmap(i % cmap.N) for i, pt in enumerate(global_packet_types)}
+    # Assign a permanent color to each global packet type using HSL-based mapping
+    global_color_map = {pt: get_packet_color(pt) for pt in global_packet_types}
 
     for subdir, res in all_results.items():
         generate_stacked_bar_plot(res, subdir, global_color_map)
