@@ -53,6 +53,8 @@ module Ieee80211Radio extends FlatRadioBase
         @signal[heStaId](type=long);
         @signal[heSpatialStreams](type=long);
         @signal[heStreamStartIndex](type=long);
+        @signal[heScheduledPsduBytes](type=long);
+        @signal[heUserPpduDuration](type=simtime_t);
         @signal[hePuncturedSubchannelMask](type=long);
         @signal[acknowledgmentFrameType](type=long);
         @signal[acknowledgmentAirtime](type=simtime_t);
@@ -63,6 +65,8 @@ module Ieee80211Radio extends FlatRadioBase
         @statistic[heStaId](title="HE user STA ID"; record=vector; interpolationmode=none);
         @statistic[heSpatialStreams](title="HE user spatial streams"; record=vector; interpolationmode=none);
         @statistic[heStreamStartIndex](title="HE user stream start index"; record=vector; interpolationmode=none);
+        @statistic[heScheduledPsduBytes](title="HE scheduled PSDU bytes by user"; unit=B; record=vector,sum; interpolationmode=none);
+        @statistic[heUserPpduDuration](title="HE PPDU duration by user"; unit=s; record=vector,sum; interpolationmode=none);
         @statistic[hePuncturedSubchannelMask](title="HE punctured subchannel mask"; record=vector; interpolationmode=sample-hold);
         @statistic[acknowledgmentFrameType](title="802.11 acknowledgment frame type"; record=vector; interpolationmode=none);
         @statistic[acknowledgmentAirtime](title="802.11 acknowledgment frame airtime"; unit=s; record=vector; interpolationmode=none);

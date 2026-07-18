@@ -35,7 +35,25 @@ def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
         manifest = json.load(stream)
     if manifest.get("schema_version") != 1:
         raise RuntimeError(f"Unsupported analysis manifest schema in {path}")
+    validate_evidence_contracts(manifest)
     return manifest
+
+
+def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
+    groups = set(manifest.get("groups", {}))
+    contracts = manifest.get("evidence_contracts")
+    if not isinstance(contracts, dict) or set(contracts) != groups:
+        raise RuntimeError("Evidence contracts must exist for every analysis group and no others")
+    for group_name, requirements in contracts.items():
+        if not isinstance(requirements, list) or not requirements:
+            raise RuntimeError(f"{group_name}: evidence contract must contain requirements")
+        for requirement in requirements:
+            if requirement.get("kind") not in {"normative", "model", "metric"}:
+                raise RuntimeError(f"{group_name}: invalid evidence-contract kind")
+            if not requirement.get("requirement"):
+                raise RuntimeError(f"{group_name}: missing evidence-contract requirement")
+            if not isinstance(requirement.get("results"), list) or not requirement["results"]:
+                raise RuntimeError(f"{group_name}: evidence-contract result list is empty")
 
 
 def sha256(path: Path) -> str:

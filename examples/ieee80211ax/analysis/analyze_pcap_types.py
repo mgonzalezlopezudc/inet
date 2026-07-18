@@ -23,7 +23,11 @@ import glob
 import json
 import subprocess
 import math
+import argparse
+import hashlib
+import shlex
 from pathlib import Path
+from datetime import datetime, timezone
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
@@ -33,6 +37,10 @@ import colorsys
 
 # Resolve project repository root (3 levels up from this file)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+MANIFEST_PATH = Path(__file__).resolve().parent / "pcap_statistics_manifest.json"
+GENERATED_BEGIN = "<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->"
+GENERATED_END = "<!-- END GENERATED: ieee80211ax-pcap-statistics -->"
+MANIFEST_SCHEMA_VERSION = 1
 
 # Subdirectories and the specific configurations to analyze / run if PCAPs are missing
 subdirs_configs = {
@@ -55,7 +63,7 @@ subdirs_configs = {
     "he_rate_adaptation": ["HeMinstrel", "FixedMcs", "HeMinstrelMobile"],
     "he_bsr": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting"],
     "ul_ofdma": ["OperatingModeIndication", "UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
-    "he_er_su": ["ErBss", "HeSu", "HeErSu"]
+    "he_er_su": ["ErBss", "HeSu", "HeErSu", "CellBoundaryHeSu", "CellBoundaryHeErSu"]
 }
 
 subtypes_mgmt = {
@@ -161,64 +169,39 @@ def get_packet_type_name(fc_type, fc_subtype, fc_version=None, is_he_mu=False, s
     else:
         return f"Unknown (Type {t}, Subtype {st})" + suffix
 
-def decode_he(raw_d1, raw_d3, raw_d4, raw_d5):
+def parse_tshark_int(value):
+    if not value:
+        return None
     try:
-        d1 = int(raw_d1, 16) if raw_d1 else 0
-        d3 = int(raw_d3, 16) if raw_d3 else 0
-        d4 = int(raw_d4, 16) if raw_d4 else 0
-        d5 = int(raw_d5, 16) if raw_d5 else 0
-    except ValueError:
-        return "HE-SU", "HE-MCS 0", "20 MHz", "0.8 us", "1", "BCC"
+        return int(value, 0)
+    except (TypeError, ValueError):
+        return None
 
-    # PPDU Format
-    fmt = d1 & 0x3
-    if fmt == 0:
-        standard = "HE-SU"
-    elif fmt == 1:
-        standard = "HE-ER-SU"
-    elif fmt == 2:
-        standard = "HE-MU"
-    elif fmt == 3:
-        standard = "HE-TB"
-    else:
-        standard = "HE"
 
-    # MCS
-    mcs_val = d5 & 0xF
-    mcs = f"HE-MCS {mcs_val}"
+def decode_he_fields(format_value, mcs_value, coding_value, bw_ru_value, gi_value, nsts_value):
+    """Decode fields that TShark has already validated against the radiotap HE ABI."""
+    fmt = parse_tshark_int(format_value)
+    standard = {0: "HE-SU", 1: "HE-ER-SU", 2: "HE-MU", 3: "HE-TB"}.get(fmt, "HE")
 
-    # NSS
-    nss_val = ((d5 >> 4) & 0x7) + 1
-    nss = f"{nss_val}"
+    mcs_number = parse_tshark_int(mcs_value)
+    mcs = f"HE-MCS {mcs_number}" if mcs_number is not None else "HE"
 
-    # Coding
-    coding_val = (d5 >> 8) & 0x1
-    coding = "LDPC" if coding_val == 1 else "BCC"
+    coding_number = parse_tshark_int(coding_value)
+    coding = "LDPC" if coding_number == 1 else "BCC" if coding_number == 0 else ""
 
-    # GI
-    gi_val = d3 & 0x7
-    if gi_val == 0:
-        gi = "0.8 us"
-    elif gi_val == 1:
-        gi = "1.6 us"
-    elif gi_val == 2:
-        gi = "3.2 us"
-    else:
-        gi = "0.8 us"
+    gi_number = parse_tshark_int(gi_value)
+    gi = {0: "0.8 us", 1: "1.6 us", 2: "3.2 us"}.get(gi_number, "")
 
-    # BW
-    bw_val = d4 & 0x7
-    if bw_val == 0:
-        bw = "20 MHz"
-    elif bw_val == 1:
-        bw = "40 MHz"
-    elif bw_val == 2:
-        bw = "80 MHz"
-    elif bw_val == 3:
-        bw = "160 MHz"
-    else:
-        bw = "20 MHz"
+    bw_ru_number = parse_tshark_int(bw_ru_value)
+    bw = {
+        0: "20 MHz", 1: "40 MHz", 2: "80 MHz", 3: "160 MHz",
+        4: "26-tone RU", 5: "52-tone RU", 6: "106-tone RU",
+        7: "242-tone RU", 8: "484-tone RU", 9: "996-tone RU",
+        10: "2x996-tone RU",
+    }.get(bw_ru_number, "")
 
+    nsts_number = parse_tshark_int(nsts_value)
+    nss = str(nsts_number) if nsts_number is not None and nsts_number > 0 else ""
     return standard, mcs, bw, gi, nss, coding
 
 def calculate_phy_rate(standard, mcs_str, bw_str, gi_str, nss_str):
@@ -265,8 +248,14 @@ def calculate_phy_rate(standard, mcs_str, bw_str, gi_str, nss_str):
             return (nsd * nss * mcs_bits) / duration
 
         elif "HE" in standard or standard == "EHT":
+            ru_nsd_map = {
+                "26-tone": 24, "52-tone": 48, "106-tone": 102,
+                "242-tone": 234, "484-tone": 468, "996-tone": 980,
+                "2x996-tone": 1960,
+            }
             nsd_map = {20: 234, 40: 468, 80: 980, 160: 1960}
-            nsd = nsd_map.get(bw_mhz, 234)
+            nsd = next((value for label, value in ru_nsd_map.items() if label in bw_str),
+                       nsd_map.get(bw_mhz, 234))
             if "1.6" in gi_str:
                 duration = 14.4e-6
             elif "3.2" in gi_str:
@@ -288,7 +277,9 @@ def calculate_phy_rate(standard, mcs_str, bw_str, gi_str, nss_str):
     else:
         return 14.625e6
 
-def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=None, standard="Legacy", data_rate=14.625e6, is_sounding=False):
+def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=None,
+                     standard="Legacy", data_rate=14.625e6, is_sounding=False,
+                     include_preamble=True):
     if fc_type == "Aggregation Overhead":
         return 20e-6 + (size * 8) / 24e6
     if fc_type == "HE TB feedback NDP" or is_sounding:
@@ -304,9 +295,14 @@ def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=
     except (ValueError, TypeError):
         return 20e-6 + (size * 8) / 6e6
 
-    # Preamble duration based on standard
-    if "HE" in standard or standard == "EHT":
-        preamble = 124e-6
+    # The packet-level HE mode uses a 36 us HE-SU preamble and duplicates the
+    # 8 us HE-SIG-A field for a 44 us HE-ER-SU preamble. HE MU/TB fields can
+    # add format/user-dependent signaling that radiotap does not fully expose,
+    # so their value remains an estimate based on the common 36 us portion.
+    if standard == "HE-ER-SU":
+        preamble = 44e-6
+    elif "HE" in standard or standard == "EHT":
+        preamble = 36e-6
     elif standard == "VHT":
         preamble = 40e-6
     elif standard == "HT":
@@ -314,7 +310,9 @@ def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=
     else:
         preamble = 20e-6
 
-    if t == 0:  # Management
+    if "HE" in standard or standard == "EHT":
+        return (preamble if include_preamble else 0.0) + (size * 8) / data_rate
+    elif t == 0:  # Management
         return 20e-6 + (size * 8) / 6e6
     elif t == 1:  # Control
         return 20e-6 + (size * 8) / 24e6
@@ -387,25 +385,184 @@ def get_sim_time_limit(subdir, config_name):
         
     return 2.0
 
-def run_simulation(config_name, subdir):
-    print(f"Generating PCAPs for {subdir} - {config_name}...")
+def sha256_file(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def command_output(command):
+    return subprocess.run(command, cwd=str(REPOSITORY_ROOT), check=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
+
+
+def capture_source_state():
+    revision = command_output(["git", "rev-parse", "HEAD"])
+    diff_command = [
+        "git", "diff", "--binary", "--", "src", "examples/ieee80211ax",
+        ":(exclude)examples/ieee80211ax/**/walkthrough.md",
+        ":(exclude)examples/ieee80211ax/**/*.png",
+        ":(exclude)examples/ieee80211ax/analysis/summary_results_pcap.json",
+        ":(exclude)examples/ieee80211ax/analysis/pcap_statistics_manifest.json",
+    ]
+    diff = subprocess.run(diff_command, cwd=str(REPOSITORY_ROOT), check=True,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE).stdout
+    return revision, hashlib.sha256(diff).hexdigest()
+
+
+def tshark_version():
+    return command_output(["tshark", "--version"]).splitlines()[0]
+
+
+def inet_library_path():
+    candidates = [
+        REPOSITORY_ROOT / "out" / "clang-release" / "src" / "libINET.so",
+        REPOSITORY_ROOT / "src" / "libINET.so",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    raise RuntimeError("Release INET library is missing; build it before generating captures")
+
+
+def parse_scalar_attributes(path):
+    attributes = {}
+    with Path(path).open("r") as stream:
+        for line in stream:
+            if line.startswith("attr "):
+                _, name, value = line.rstrip().split(" ", 2)
+                attributes[name] = value
+            elif line.startswith("scalar ") or line.startswith("statistic "):
+                break
+    return attributes
+
+
+def run_simulation(config_name, subdir, run_number, session_id):
+    print(f"Generating fresh PCAPng input for {subdir} - {config_name}, run {run_number}...")
     ini_file = find_ini_file_for_config(subdir, config_name)
-    res_dir = REPOSITORY_ROOT / "examples" / "ieee80211ax" / subdir / "results"
+    res_dir = (REPOSITORY_ROOT / "examples" / "ieee80211ax" / subdir / "results" /
+               "packet-statistics" / session_id / config_name)
     res_dir.mkdir(parents=True, exist_ok=True)
-    
+
     cmd = [
-        "bin/inet", "-u", "Cmdenv", "-f", str(ini_file), "-c", config_name, "-r", "0",
+        "bin/inet", "-u", "Cmdenv", "-f", str(ini_file), "-c", config_name, "-r", str(run_number),
         "--**.wlan[*].recordPcap=true",
         "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
         "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"", "--**.fcsMode=\"computed\"",
         f"--result-dir={res_dir}"
     ]
-    try:
-        subprocess.run(cmd, cwd=str(REPOSITORY_ROOT), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print(f"Generated PCAPs successfully for {config_name}")
-    except Exception as e:
-        print(f"Simulation failed for {config_name}: {e}")
+    proc = subprocess.run(cmd, cwd=str(REPOSITORY_ROOT), check=False,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    (res_dir / "cmdenv.stdout").write_text(proc.stdout)
+    (res_dir / "cmdenv.stderr").write_text(proc.stderr)
+    if proc.returncode != 0:
+        raise RuntimeError(f"Simulation failed for {subdir}/{config_name} with exit status {proc.returncode}; "
+                           f"see {res_dir.relative_to(REPOSITORY_ROOT)}/cmdenv.stderr")
+
+    pcap_files = sorted(path for path in res_dir.iterdir()
+                        if path.is_file() and path.suffix in (".pcap", ".pcapng") and ".wlan" in path.name)
+    scalar_files = sorted(res_dir.glob("*.sca"))
+    if not pcap_files or len(scalar_files) != 1:
+        raise RuntimeError(f"Expected wireless captures and one scalar file in {res_dir}")
+    scalar_attributes = parse_scalar_attributes(scalar_files[0])
+    return {
+        "subdir": subdir,
+        "config": config_name,
+        "run_number": run_number,
+        "seed_set": int(scalar_attributes.get("seedset", -1)),
+        "simulation_time_limit_s": get_sim_time_limit(subdir, config_name),
+        "ini_file": str(ini_file.relative_to(REPOSITORY_ROOT)),
+        "ini_sha256": sha256_file(ini_file),
+        "command": cmd,
+        "command_shell": shlex.join(cmd),
+        "exit_status": proc.returncode,
+        "result_directory": str(res_dir.relative_to(REPOSITORY_ROOT)),
+        "scalar_file": str(scalar_files[0].relative_to(REPOSITORY_ROOT)),
+        "captures": [
+            {
+                "path": str(path.relative_to(REPOSITORY_ROOT)),
+                "sha256": sha256_file(path),
+                "size_bytes": path.stat().st_size,
+                "format": "pcapng",
+            }
+            for path in pcap_files
+        ],
+    }
+
+
+def build_capture_manifest(selected_subdirs, run_number):
+    revision, source_diff_sha256 = capture_source_state()
+    session_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    manifest = {
+        "schema_version": MANIFEST_SCHEMA_VERSION,
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "session_id": session_id,
+        "repository_revision": revision,
+        "capture_source_diff_sha256": source_diff_sha256,
+        "analysis_script_sha256": sha256_file(__file__),
+        "inet_library": str(inet_library_path().relative_to(REPOSITORY_ROOT)),
+        "inet_library_sha256": sha256_file(inet_library_path()),
+        "tshark_version": tshark_version(),
+        "entries": [],
+    }
+    for subdir in selected_subdirs:
+        for config_name in subdirs_configs[subdir]:
+            manifest["entries"].append(run_simulation(config_name, subdir, run_number, session_id))
+    MANIFEST_PATH.write_text(json.dumps(manifest, indent=2) + "\n")
+    return manifest
+
+
+def load_and_validate_manifest(selected_subdirs, run_number):
+    if not MANIFEST_PATH.exists():
+        raise RuntimeError(f"Reuse requested but {MANIFEST_PATH.relative_to(REPOSITORY_ROOT)} does not exist")
+    manifest = json.loads(MANIFEST_PATH.read_text())
+    errors = []
+    if manifest.get("schema_version") != MANIFEST_SCHEMA_VERSION:
+        errors.append("manifest schema version differs")
+    revision, source_diff_sha256 = capture_source_state()
+    current_values = {
+        "repository_revision": revision,
+        "capture_source_diff_sha256": source_diff_sha256,
+        "analysis_script_sha256": sha256_file(__file__),
+        "inet_library_sha256": sha256_file(inet_library_path()),
+        "tshark_version": tshark_version(),
+    }
+    for field, current in current_values.items():
+        if manifest.get(field) != current:
+            errors.append(f"{field} is stale")
+
+    entries = {(entry.get("subdir"), entry.get("config"), entry.get("run_number")): entry
+               for entry in manifest.get("entries", [])}
+    for subdir in selected_subdirs:
+        for config_name in subdirs_configs[subdir]:
+            entry = entries.get((subdir, config_name, run_number))
+            if entry is None:
+                errors.append(f"missing entry for {subdir}/{config_name} run {run_number}")
+                continue
+            ini_file = REPOSITORY_ROOT / entry["ini_file"]
+            if not ini_file.exists() or sha256_file(ini_file) != entry.get("ini_sha256"):
+                errors.append(f"INI input changed for {subdir}/{config_name}")
+            for capture in entry.get("captures", []):
+                path = REPOSITORY_ROOT / capture["path"]
+                if not path.exists() or sha256_file(path) != capture.get("sha256"):
+                    errors.append(f"capture missing or changed: {capture['path']}")
+    if errors:
+        raise RuntimeError("Cannot reuse stale packet-statistics inputs:\n- " + "\n- ".join(errors))
+    return manifest
+
+
+def capture_map_from_manifest(manifest, selected_subdirs, run_number):
+    capture_map = {subdir: {} for subdir in selected_subdirs}
+    for entry in manifest["entries"]:
+        subdir = entry["subdir"]
+        if subdir in capture_map and entry["run_number"] == run_number:
+            capture_map[subdir][entry["config"]] = [REPOSITORY_ROOT / item["path"]
+                                                       for item in entry["captures"]]
+    return capture_map
 
 def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
     total_sim_time = get_sim_time_limit(subdir, config_name)
@@ -449,6 +606,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         "radiotap.he.data_3",                 # 32
         "radiotap.he.data_4",                 # 33
         "radiotap.he.data_5",                 # 34
+        "radiotap.he.data_5.data_bw_ru_allocation", # 35
     ]
 
     def get_field_val(parts, idx):
@@ -460,6 +618,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         if not os.path.exists(pf):
             continue
         try:
+            seen_ampdu_references = set()
             cmd = ["tshark", "-n", "-r", pf, "-T", "fields"]
             for f in fields:
                 cmd.extend(["-e", f])
@@ -492,6 +651,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     txpower_str = ""
                     present_word_str = ""
                     is_ampdu = False
+                    ampdu_reference = ""
                     is_sounding = False
                     standard = "Legacy"
                     mcs = "Legacy"
@@ -511,6 +671,7 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     
                     is_sounding = get_field_val(parts, 30) in ("True", "1")
                     is_ampdu = get_field_val(parts, 14) in ("True", "1")
+                    ampdu_reference = get_field_val(parts, 15)
                     
                     is_eht = False
                     if present_word_str:
@@ -529,13 +690,10 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                         nss = "1"
                         coding = ""
                     elif get_field_val(parts, 23) in ("True", "1"):
-                        raw_d1 = get_field_val(parts, 25)
-                        raw_d3 = get_field_val(parts, 32)
-                        raw_d4 = get_field_val(parts, 33)
-                        raw_d5 = get_field_val(parts, 34)
-                        standard, mcs, bw, gi, nss, coding = decode_he(raw_d1, raw_d3, raw_d4, raw_d5)
-                        if standard == "HE-SU" and get_field_val(parts, 24) in ("True", "1"):
-                            standard = "HE-MU"
+                        standard, mcs, bw, gi, nss, coding = decode_he_fields(
+                            get_field_val(parts, 25), get_field_val(parts, 26),
+                            get_field_val(parts, 27), get_field_val(parts, 35),
+                            get_field_val(parts, 28), get_field_val(parts, 29))
                     elif get_field_val(parts, 17) in ("True", "1"):
                         standard = "VHT"
                         vht_mcs_val = get_field_val(parts, 18)
@@ -621,7 +779,13 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
                     }
                     
                 data_rate = calculate_phy_rate(standard, mcs, bw, gi, nss)
-                airtime = estimate_airtime(key[0], key[1], size, config_name, subdir, fc_version, standard, data_rate, is_sounding)
+                include_preamble = not (
+                    is_ampdu and ampdu_reference and ampdu_reference in seen_ampdu_references)
+                airtime = estimate_airtime(
+                    key[0], key[1], size, config_name, subdir, fc_version,
+                    standard, data_rate, is_sounding, include_preamble)
+                if is_ampdu and ampdu_reference:
+                    seen_ampdu_references.add(ampdu_reference)
                 stats[key]["sizes"].append(size)
                 stats[key]["airtimes"].append(airtime)
                 
@@ -699,55 +863,56 @@ def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
         }
     return aggregated, total
 
-def analyze_subdirectory(subdir, considered):
+
+def get_mpdu_observation_stats(pcap_files):
+    observations = 0
+    identities = set()
+    retry_bit_observations = 0
+    ampdu_references = set()
+    fields = ["wlan.ta", "wlan.qos.tid", "wlan.seq", "wlan.frag",
+              "wlan.fc.retry", "radiotap.ampdu.reference"]
+    for path in pcap_files:
+        command = ["tshark", "-n", "-r", str(path), "-Y", "wlan.fc.type == 2", "-T", "fields"]
+        for field in fields:
+            command.extend(["-e", field])
+        proc = subprocess.run(command, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        for line in proc.stdout.splitlines():
+            values = line.split("\t")
+            values += [""] * (len(fields) - len(values))
+            ta, tid, sequence, fragment, retry, ampdu_reference = [value.split(",")[0] for value in values[:6]]
+            observations += 1
+            if ta and sequence:
+                identities.add((ta, tid, sequence, fragment))
+            if retry in ("1", "True"):
+                retry_bit_observations += 1
+            if ampdu_reference:
+                ampdu_references.add(ampdu_reference)
+    return {
+        "mpdu_transmission_observations": observations,
+        "unique_ta_tid_sequence_fragment": len(identities),
+        "repeated_identity_observations": max(0, observations - len(identities)),
+        "retry_bit_observations": retry_bit_observations,
+        "unique_ampdu_references": len(ampdu_references),
+    }
+
+def analyze_subdirectory(subdir, considered, config_pcaps):
     dir_path = REPOSITORY_ROOT / "examples" / "ieee80211ax" / subdir
     if not dir_path.exists():
         return None
-        
+
     print(f"[{subdir}] Analyzing configs: {considered}")
-    
-    # Check if PCAPs exist for considered configs. If not, generate them!
-    res_dir = dir_path / "results"
-    for cfg in considered:
-        wlan_pcaps = glob.glob(str(res_dir / f"{cfg}-*.pcap"))
-        wlan_pcaps = [p for p in wlan_pcaps if ".wlan" in os.path.basename(p)]
-        if not wlan_pcaps:
-            run_simulation(cfg, subdir)
-            
-    # Gather PCAPs again
-    pcap_files = []
-    for root, _, files in os.walk(str(dir_path)):
-        for f in files:
-            if f.endswith(".pcap") or f.endswith(".pcapng"):
-                pcap_files.append(os.path.join(root, f))
-                
-    config_pcaps = {}
-    for pf in pcap_files:
-        filename = os.path.basename(pf)
-        if ".wlan" not in filename:
-            continue
-        
-        match = re.match(r"^([^-]+)-#\d+", filename)
-        if match:
-            config_name = match.group(1)
-        else:
-            config_name = filename.split(".")[0]
-            
-        if config_name not in considered:
-            continue
-            
-        if config_name not in config_pcaps:
-            config_pcaps[config_name] = []
-        config_pcaps[config_name].append(pf)
-        
+
     config_results = {}
-    for config_name, pcaps in config_pcaps.items():
-        ap_pcaps = [p for p in pcaps if ".ap." in os.path.basename(p) or ".ap1." in os.path.basename(p) or ".ap2." in os.path.basename(p)]
+    for config_name in considered:
+        pcaps = config_pcaps.get(config_name, [])
+        if not pcaps:
+            raise RuntimeError(f"Validated manifest has no captures for {subdir}/{config_name}")
+        ap_pcaps = [p for p in pcaps if ".ap." in p.name or ".ap1." in p.name or ".ap2." in p.name]
         target_pcaps = ap_pcaps if ap_pcaps else pcaps
-        
-        print(f"[{subdir}] Analyzing config: {config_name} (Global) with pcaps: {[os.path.basename(p) for p in target_pcaps]}")
+
+        print(f"[{subdir}] Analyzing config: {config_name} (Global) with pcaps: {[p.name for p in target_pcaps]}")
         stats, total = get_config_pcap_stats(target_pcaps, config_name, subdir)
-        
+
         config_results[config_name] = {
             "global": {
                 "stats": stats,
@@ -755,79 +920,19 @@ def analyze_subdirectory(subdir, considered):
                 "used_ap_only": bool(ap_pcaps)
             }
         }
-        
-        # If asymmetric case in dl_ofdma, we also extract host specific traffic using display filters on the AP capture
+
+        if subdir == "twt":
+            config_results[config_name]["mpdu_observations"] = get_mpdu_observation_stats(target_pcaps)
+
         if subdir == "dl_ofdma" and config_name in ["BacklogBased", "HoLMinDelay"]:
-            hosts_info = {
-                "host[0]": "wlan.addr == 0a:aa:00:00:00:01",
-                "host[1]": "wlan.addr == 0a:aa:00:00:00:02",
-                "host[2]": "wlan.addr == 0a:aa:00:00:00:03"
+            config_results[config_name]["per_user_evidence"] = {
+                "status": "unavailable",
+                "reason": (
+                    "HE DL-MU payload records use a group destination address. Per-user scheduler/application "
+                    "telemetry is required; address-filtered PCAP tables are intentionally disabled."
+                ),
             }
-            
-            # Read sca values for all hosts
-            sca_file = dir_path / "results" / f"{config_name}-#0.sca"
-            sca_data = {}
-            if sca_file.exists():
-                try:
-                    with open(sca_file, "r") as f:
-                        for line in f:
-                            if "packetReceivedFromPeerUnicast" in line:
-                                parts = line.split()
-                                if len(parts) >= 4 and parts[0] == "scalar":
-                                    module = parts[1]
-                                    name = parts[2]
-                                    val = float(parts[3])
-                                    for h_idx in [0, 1, 2]:
-                                        if f"host[{h_idx}]" in module:
-                                            if h_idx not in sca_data:
-                                                sca_data[h_idx] = {}
-                                            if "count" in name:
-                                                sca_data[h_idx]["count"] = int(val)
-                                            elif "sum" in name:
-                                                sca_data[h_idx]["sum"] = val
-                except Exception as e:
-                    print(f"Error parsing sca file {sca_file}: {e}")
 
-            missing_host_counts = [h_idx for h_idx in [0, 1, 2]
-                                   if sca_data.get(h_idx, {}).get("count", 0) <= 0]
-            if missing_host_counts:
-                print(
-                    f"[{subdir}] Skipping unsupported per-flow tables for {config_name}: "
-                    "HE MU payloads use a broadcast destination in this capture and "
-                    f"recipient scalar counts are missing for hosts {missing_host_counts}"
-                )
-                continue
-
-            config_results[config_name]["per_flow"] = {}
-
-            for host_name, disp_filter in hosts_info.items():
-                print(f"[{subdir}] Analyzing config: {config_name} ({host_name}) from AP capture using filter: {disp_filter}")
-                h_stats, h_total = get_config_pcap_stats(target_pcaps, config_name, subdir, display_filter=disp_filter)
-                
-                # Correct the QoS Data count and sizes using sca data if available
-                host_idx = int(host_name[-2])
-                if host_idx in sca_data and "count" in sca_data[host_idx] and sca_data[host_idx]["count"] > 0:
-                    count = sca_data[host_idx]["count"]
-                    total_bytes = sca_data[host_idx].get("sum", 0)
-                    mean_size = total_bytes / count if count > 0 else 0
-                    
-                    qos_key = ("2", "8") # QoS Data
-                    # Subtract old QoS Data count from h_total
-                    if qos_key in h_stats:
-                        h_total -= len(h_stats[qos_key]["sizes"])
-                    else:
-                        h_stats[qos_key] = {"sizes": [], "airtimes": [], "frequencies": [], "signals": [], "txpowers": []}
-                    
-                    # Fill with new correct data
-                    h_stats[qos_key]["sizes"] = [mean_size] * count
-                    h_stats[qos_key]["airtimes"] = [estimate_airtime("2", "8", mean_size, config_name, subdir) for _ in range(count)]
-                    h_total += count
-
-                config_results[config_name]["per_flow"][host_name] = {
-                    "stats": h_stats,
-                    "total": h_total
-                }
-            
     return config_results
 
 def make_table_md(stats, total):
@@ -1052,7 +1157,114 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
     plt.savefig(str(plot_path), dpi=150, bbox_inches='tight')
     plt.close()
 
-def generate_markdown_tables(config_results, subdir):
+def count_frames(config_results, config_name, frame_type=None, frame_subtype=None, standard=None):
+    result = config_results.get(config_name, {}).get("global", {})
+    count = 0
+    for key, values in result.get("stats", {}).items():
+        if frame_type is not None and key[0] != frame_type:
+            continue
+        if frame_subtype is not None and key[1] != frame_subtype:
+            continue
+        if standard is not None and (len(key) < 3 or key[2] != standard):
+            continue
+        count += values["count"]
+    return count
+
+
+def evaluate_evidence(config_results, subdir):
+    checks = []
+    for config_name, result in sorted(config_results.items()):
+        total = result.get("global", {}).get("total", 0)
+        checks.append({
+            "id": f"capture-{config_name}",
+            "status": "PASS" if total > 0 else "FAIL",
+            "requirement": f"{config_name} produced protocol-visible wireless observations",
+            "evidence": f"{total} AP/global transmission observations",
+        })
+
+    if subdir == "he_er_su":
+        for config_name, expect_er in (("HeSu", False), ("HeErSu", True),
+                                       ("CellBoundaryHeSu", False), ("CellBoundaryHeErSu", True)):
+            qos_total = count_frames(config_results, config_name, "2", "8")
+            er_qos = count_frames(config_results, config_name, "2", "8", "HE-ER-SU")
+            passed = er_qos == qos_total if expect_er else er_qos == 0
+            checks.append({
+                "id": f"he-er-format-{config_name}",
+                "status": "PASS" if passed else "FAIL",
+                "requirement": ("QoS payload uses HE-ER-SU" if expect_er else "HE-SU baseline does not use HE-ER-SU"),
+                "evidence": f"{er_qos} of {qos_total} QoS Data observations decoded as HE-ER-SU",
+            })
+            if expect_er:
+                er_keys = [key for key in config_results[config_name]["global"]["stats"]
+                           if key[0] == "2" and key[1] == "8" and key[2] == "HE-ER-SU"]
+                legal = bool(er_keys) and all(
+                    key[3] in ("HE-MCS 0", "HE-MCS 1", "HE-MCS 2") and
+                    key[4] == "242-tone RU" and key[6] in ("", "1")
+                    for key in er_keys
+                )
+                tuples = sorted({f"{key[3]}/{key[4]}/NSTS {key[6] or 'unknown'}" for key in er_keys})
+                checks.append({
+                    "id": f"he-er-txvector-{config_name}",
+                    "status": "PASS" if legal else "FAIL",
+                    "requirement": "HE-ER-SU uses one spatial stream, a 242-tone RU, and MCS 0-2",
+                    "evidence": ", ".join(tuples) if tuples else "No HE-ER-SU QoS Data tuple was observed",
+                })
+
+    elif subdir == "bss_coloring":
+        compared = ["BssColoringDisabled", "BssColoringEnabled", "ObssPdConservative",
+                    "ObssPdAggressive", "BssColoringCollision"]
+        signatures = []
+        for config_name in compared:
+            stats = config_results.get(config_name, {}).get("global", {}).get("stats", {})
+            signatures.append(tuple(sorted((unpack_key_to_name(key), value["count"])
+                                           for key, value in stats.items())))
+        separated = len(set(signatures)) > 1
+        checks.append({
+            "id": "bss-coloring-observable-separation",
+            "status": "PASS" if separated else "INCONCLUSIVE",
+            "requirement": "The bounded scenario exposes a coloring/OBSS-PD decision difference",
+            "evidence": ("At least two frame-distribution signatures differ" if separated else
+                         "All five frame-distribution signatures are identical; decision telemetry is required"),
+        })
+
+    elif subdir == "dl_ofdma":
+        checks.append({
+            "id": "dl-ofdma-per-user-attribution",
+            "status": "INCONCLUSIVE",
+            "requirement": "Per-user scheduled and delivered bytes are keyed by STA/AID",
+            "evidence": "Address-filtered PCAP attribution is disabled; aligned heStaId/heScheduledPsduBytes/heUserPpduDuration and application vectors are authoritative",
+        })
+
+    elif subdir == "he_features":
+        checks.append({
+            "id": "puncturing-structure",
+            "status": "INCONCLUSIVE",
+            "requirement": "Puncturing mask transitions and RU allocations do not overlap punctured subchannels",
+            "evidence": "Subtype counts cannot establish the puncturing mask; result vectors remain authoritative",
+        })
+
+    direct_evidence_requirements = {
+        "mac_features/multi_tid_block_ack": ("multi-tid-ba-fields", "BA variant and per-AID/TID entries"),
+        "mac_features/operating_mode_indication": ("operating-mode-fields", "OM Control value and receiver-applied width/NSS"),
+        "multi_user/mu_mimo": ("mu-mimo-streams", "Multiple users with disjoint stream allocations in one PPDU"),
+        "multi_user/ndp_feedback": ("ndp-trigger-type", "Trigger Type 7 and matching NDP feedback allocation"),
+        "he_bsr": ("bsr-backlog", "Reported backlog and scheduler-consumed backlog"),
+        "mac_features/dynamic_fragmentation": ("fragmentation-fields", "Capability gate, fragment numbers, sizes, More Fragments and acknowledgment"),
+        "frequency_selective_channel": ("per-ru-channel-evidence", "Per-RU SNIR/reception outcome and sink delivery"),
+        "he_rate_adaptation": ("rate-control-evidence", "Selected MCS/NSS, EWMA outcome and retries"),
+    }
+    if subdir in direct_evidence_requirements:
+        check_id, requirement = direct_evidence_requirements[subdir]
+        checks.append({
+            "id": check_id,
+            "status": "INCONCLUSIVE",
+            "requirement": requirement,
+            "evidence": "The packet-type table is exchange evidence only; use the recorded feature vectors/results",
+        })
+    return checks
+
+
+def generate_markdown_tables(config_results, subdir, checks, manifest):
     if not config_results:
         return ""
     
@@ -1063,22 +1275,27 @@ def generate_markdown_tables(config_results, subdir):
     
     ap_used = all(res["global"]["used_ap_only"] for res in config_results.values() if "global" in res)
     if ap_used:
-        md.append("The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.\n\n")
+        md.append("The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.\n\n")
     else:
         md.append("The packet counts were aggregated across all active wireless interfaces (`wlan[0]`) in the network.\n\n")
 
     md.append(
-        "> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a "
-        "repository-specific packing for HE radiotap metadata. TShark can consequently "
-        "decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. "
-        "Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, "
-        "bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from "
-        "them—are diagnostic only and are not standards-conformance evidence.\n\n"
+        f"Capture session `{manifest['session_id']}` was generated from fresh PCAPng input with "
+        f"`{manifest['tshark_version']}`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS "
+        "are decoded directly from standards-compliant radiotap HE fields; values not marked known by "
+        "the recorder are omitted.\n\n"
     )
         
-    md.append("Two airtime occupancy percentages are provided:\n")
+    md.append("Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.\n")
     md.append("- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.\n")
     md.append("- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.\n\n")
+
+    md.append("### Evidence checks\n\n")
+    md.append("| Status | Requirement | Observed evidence |\n")
+    md.append("|---|---|---|\n")
+    for check in checks:
+        md.append(f"| **{check['status']}** | {check['requirement']} | {check['evidence']} |\n")
+    md.append("\n")
         
     for config_name, res in sorted(config_results.items()):
         global_res = res.get("global")
@@ -1086,9 +1303,21 @@ def generate_markdown_tables(config_results, subdir):
             continue
             
         md.append(f"### Configuration: `{config_name}`\n")
-        md.append(f"Total over-the-air packets captured (Global BSS/AP): **{global_res['total']}**\n\n")
+        md.append(f"Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **{global_res['total']}**\n\n")
         md.append(make_table_md(global_res["stats"], global_res["total"]))
         md.append("\n")
+
+        if "mpdu_observations" in res:
+            observation = res["mpdu_observations"]
+            md.append("#### MPDU observation semantics\n\n")
+            md.append("| Metric | Value |\n|---|---:|\n")
+            md.append(f"| Total data MPDU transmission observations | {observation['mpdu_transmission_observations']} |\n")
+            md.append(f"| Unique `(TA, TID, sequence, fragment)` identities | {observation['unique_ta_tid_sequence_fragment']} |\n")
+            md.append(f"| Repeated identity observations | {observation['repeated_identity_observations']} |\n")
+            md.append(f"| Observations with Retry bit set | {observation['retry_bit_observations']} |\n")
+            md.append(f"| Unique A-MPDU references | {observation['unique_ampdu_references']} |\n\n")
+            md.append("Repeated observations are retained in airtime totals because every transmission consumes channel time; "
+                      "the unique count is provided only for workload/reliability interpretation.\n\n")
         
         if "per_flow" in res:
             md.append(f"#### Per-Flow Traffic Statistics for `{config_name}`\n\n")
@@ -1127,18 +1356,23 @@ def generate_markdown_tables(config_results, subdir):
         analysis_text = (
             "The scheduled downlink configurations show the expected repeating structure of downlink **QoS Data**, a **Trigger** used for the MU-BAR exchange, "
             "and multiple **Block Ack** responses. This matches the HE DL-MU acknowledgment sequence described by IEEE Std 802.11-2024 Clauses 26.5.1 and 26.5.2.3.3. "
-            "Because the current radiotap metadata cannot reliably distinguish HE MU from HE TB, the frame sequence and scheduler telemetry—not the displayed PPDU suffix—are the usable evidence. "
+            "The corrected radiotap PPDU suffix distinguishes HE MU from HE TB, while scheduler telemetry remains authoritative for per-user allocation. "
             "**Per-flow limitation:** scheduled HE-MU payloads in these PCAPs use a broadcast destination address, so `wlan.addr` filters cannot attribute them to a user. "
             "The script now omits the asymmetric per-flow tables when matching recipient scalar counts are unavailable. Scheduler priorities and satisfaction must be "
             "measured from per-user scheduler/application results; IEEE 802.11 does not mandate the implementation's backlog or head-of-line scheduling policy."
         )
     elif "bss_coloring" in subdir:
+        bss_check = next(check for check in checks if check["id"] == "bss-coloring-observable-separation")
+        interpretation = (
+            "The differing distribution is only a screening signal; the separate five-seed result campaign validates direct OBSS classification, threshold, CCA, power-limit, and reuse-decision telemetry."
+            if bss_check["status"] == "PASS" else
+            "The identical result does not violate the standard, but this bounded scalar-medium workload provides no evidence that coloring or the threshold sweep changed protocol behavior."
+        )
         analysis_text = (
-            "**Unexpected/no separation:** `BssColoringDisabled`, `BssColoringEnabled`, `ObssPdConservative`, `ObssPdAggressive`, and `BssColoringCollision` "
-            "have identical frame counts and distributions in this run. IEEE Std 802.11-2024 Clause 26.10 permits eligible inter-BSS reuse after OBSS/PD "
-            "classification; it does not guarantee a throughput improvement, and a more permissive threshold can increase interference. The identical result "
-            "therefore does not violate the standard, but it means this bounded scalar-medium workload provides no evidence that coloring or the threshold sweep "
-            "changed protocol behavior. The current model also omits dynamic OBSS/PD adaptation and the associated transmit-power-control adjustment."
+            f"**{bss_check['status']}: BSS-coloring separation.** {bss_check['evidence']}. "
+            "IEEE Std 802.11-2024 Clause 26.10 permits eligible inter-BSS reuse after OBSS/PD "
+            "classification; it does not guarantee a throughput improvement, and a more permissive threshold can increase interference. "
+            f"{interpretation} The current model reports the standards-defined threshold/power coupling but does not dynamically adapt OBSS/PD or apply that limit to later transmissions."
         )
     elif "dynamic_fragmentation" in subdir:
         analysis_text = (
@@ -1148,11 +1382,13 @@ def generate_markdown_tables(config_results, subdir):
             "and unfragmented controls, nor can Block Ack subtype counts alone establish the fragment bitmap."
         )
     elif "he_er_su" in subdir:
+        er_check = next(check for check in checks if check["id"] == "he-er-format-HeErSu")
         analysis_text = (
-            "**No range separation in this run:** `HeSu` and `HeErSu` have nearly identical QoS Data/Ack counts, so these packet statistics do not show HE-SU "
-            "failing while HE-ER-SU succeeds. That is compatible with the standard: HE ER SU supplies a more robust format, but does not guarantee a gain on every "
-            "channel. IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 (242-tone) or MCS 0 (106-tone); "
-            "DCM is optional. A coverage claim needs a controlled PER/delivery sweep, and the current malformed radiotap format field cannot prove ER-SU selection."
+            f"**{er_check['status']}: HE-ER-SU payload selection.** {er_check['evidence']}. "
+            "IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 "
+            "(242-tone) or MCS 0 (106-tone); DCM is optional. The standard does not guarantee a range gain on every channel, "
+            "but a configuration claiming HE-ER-SU payload coverage must first select that PPDU format. The matched five-seed 340 m sweep in this walkthrough "
+            "shows equal delivery and equal incorrect-reception counts, exposing the packet-level model's lack of a separate HE-SIG-A repetition gain."
         )
     elif "he_rate_adaptation" in subdir:
         analysis_text = (
@@ -1187,8 +1423,8 @@ def generate_markdown_tables(config_results, subdir):
     elif "mu_mimo" in subdir:
         analysis_text = (
             "Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2.5 identifies each HE-MU user and its spatial streams; the direct evidence is "
-            "multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above, "
-            "because the current radiotap suffix cannot reliably identify the PPDU format."
+            "multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above; "
+            "the radiotap suffix establishes the PPDU format but not all users' stream allocations."
         )
     elif "he_bsr" in subdir:
         analysis_text = (
@@ -1200,7 +1436,7 @@ def generate_markdown_tables(config_results, subdir):
         analysis_text = (
             "`BccBaseline` and `PreamblePuncturing` have identical frame counts in this run. That is not a standards violation and does not mean the PHY configuration was identical: "
             "preamble puncturing changes the usable subchannels/RU placement, while a fully served offered load can leave packet totals unchanged. Validate the mask and puncture-aware "
-            "RU allocation with the vectors documented above; the current PCAP metadata cannot prove them."
+            "RU allocation with the vectors documented above; packet totals alone cannot prove them."
         )
     elif "frequency_selective_channel" in subdir:
         analysis_text = (
@@ -1220,32 +1456,67 @@ def generate_markdown_tables(config_results, subdir):
     md.append(analysis_text + "\n")
     return "".join(md)
 
+def replace_generated_section(content, md_content):
+    generated_content = f"{GENERATED_BEGIN}\n{md_content.rstrip()}\n{GENERATED_END}\n"
+    if GENERATED_BEGIN in content or GENERATED_END in content:
+        if content.count(GENERATED_BEGIN) != 1 or content.count(GENERATED_END) != 1:
+            raise ValueError("Malformed generated-section markers")
+        begin = content.index(GENERATED_BEGIN)
+        end = content.index(GENERATED_END, begin) + len(GENERATED_END)
+        return content[:begin] + generated_content.rstrip() + content[end:]
+    else:
+        section_header = "## 802.11 Packet Type Statistics"
+        if section_header in content:
+            # One-time migration of the legacy generated tail. Future updates are marker-bounded.
+            begin = content.index(section_header)
+            return content[:begin].rstrip() + "\n\n" + generated_content
+        else:
+            return content.rstrip() + "\n\n" + generated_content
+
+
 def update_walkthrough_file(subdir, md_content):
     walkthrough_path = REPOSITORY_ROOT / "examples" / "ieee80211ax" / subdir / "walkthrough.md"
     if not walkthrough_path.exists():
         print(f"Walkthrough file not found: {walkthrough_path}")
         return
-        
+
     with open(walkthrough_path, "r") as f:
         content = f.read()
-        
-    section_header = "## 802.11 Packet Type Statistics"
-    if section_header in content:
-        pattern = re.compile(rf"{section_header}.*", re.DOTALL)
-        new_content = pattern.sub(md_content, content)
-    else:
-        new_content = content.rstrip() + "\n\n" + md_content
+    try:
+        new_content = replace_generated_section(content, md_content)
+    except ValueError as error:
+        raise RuntimeError(f"{error} in {walkthrough_path}") from error
         
     with open(str(walkthrough_path), "w") as f:
         f.write(new_content)
     print(f"Updated: {walkthrough_path.relative_to(REPOSITORY_ROOT)}")
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Generate reproducible IEEE 802.11ax packet statistics")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--generate", action="store_true", help="run fresh Cmdenv simulations and write a manifest")
+    mode.add_argument("--reuse", action="store_true", help="reuse only inputs validated by the existing manifest")
+    parser.add_argument("--subdir", action="append", choices=sorted(subdirs_configs),
+                        help="analyze one group; repeat for multiple groups (default: all)")
+    parser.add_argument("--run", type=int, default=0, help="OMNeT++ run number (default: 0)")
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
+    selected_subdirs = args.subdir or list(subdirs_configs)
+    manifest = (build_capture_manifest(selected_subdirs, args.run) if args.generate else
+                load_and_validate_manifest(selected_subdirs, args.run))
+    capture_map = capture_map_from_manifest(manifest, selected_subdirs, args.run)
+
     all_results = {}
-    for subdir, considered in subdirs_configs.items():
-        res = analyze_subdirectory(subdir, considered)
+    all_checks = {}
+    for subdir in selected_subdirs:
+        considered = subdirs_configs[subdir]
+        res = analyze_subdirectory(subdir, considered, capture_map[subdir])
         if res:
             all_results[subdir] = res
+            all_checks[subdir] = evaluate_evidence(res, subdir)
 
     # Gather the union of all packet types across all results to use consistent colors
     global_packet_types = set()
@@ -1264,7 +1535,7 @@ def main():
 
     for subdir, res in all_results.items():
         generate_stacked_bar_plot(res, subdir, global_color_map)
-        md_table = generate_markdown_tables(res, subdir)
+        md_table = generate_markdown_tables(res, subdir, all_checks[subdir], manifest)
         if md_table:
             update_walkthrough_file(subdir, md_table)
 
@@ -1273,6 +1544,7 @@ def main():
         serialized = {}
         for subdir, subdir_res in all_results.items():
             serialized[subdir] = {}
+            serialized[subdir]["_evidence_checks"] = all_checks[subdir]
             for config_name, res in subdir_res.items():
                 serialized[subdir][config_name] = {}
                 if "global" in res:
@@ -1289,6 +1561,8 @@ def main():
                             "total": h_val["total"],
                             "stats": {",".join(str(x) for x in k): v for k, v in h_val["stats"].items()}
                         }
+                if "mpdu_observations" in res:
+                    serialized[subdir][config_name]["mpdu_observations"] = res["mpdu_observations"]
         json.dump(serialized, f, indent=2)
     print(f"Finished analysis. Output written to: {summary_json_path.relative_to(REPOSITORY_ROOT)}")
 

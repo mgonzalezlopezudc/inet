@@ -1,6 +1,48 @@
 {
   "schema_version": 1,
   "default_repetitions": 5,
+  "evidence_contracts": {
+    "fragmentation": [
+      {"kind": "normative", "requirement": "Peer capability gates dynamic fragmentation", "results": ["fragment capability state"]},
+      {"kind": "normative", "requirement": "Fragment numbers, More Fragments, sizes, and ACK/BA state are consistent", "results": ["fragment number", "fragment size", "More Fragments", "acknowledgmentFrameType"]}
+    ],
+    "uora": [
+      {"kind": "normative", "requirement": "Random-access attempts use advertised RA-RUs", "results": ["heUlRandomAccessAttempt", "heUlRandomAccessSuccess", "heRuToneOffset", "heStaId"]}
+    ],
+    "twt": [
+      {"kind": "normative", "requirement": "Announced TWT requester signals wake presence before responder traffic", "results": ["PS-Poll/APSD trigger sequence"]},
+      {"kind": "metric", "requirement": "Energy comparison preserves delivery", "results": ["powerConsumption", "packetReceived"]}
+    ],
+    "rate": [
+      {"kind": "model", "requirement": "Rate decisions are joined to outcomes and retries", "results": ["heRateSelectedMcs", "heRateSelectedNss", "heRateSuccessProbability", "heRateTxSuccess", "heRateRetryCount"]}
+    ],
+    "er": [
+      {"kind": "normative", "requirement": "The treatment selects a legal HE-ER-SU PPDU while the control remains HE-SU", "results": ["radiotap HE format", "HE MCS", "RU size"]},
+      {"kind": "metric", "requirement": "Cell-boundary delivery is measured over matched seeds without assuming a standards-mandated gain", "results": ["packetReceived", "packetDropIncorrectlyReceived"]}
+    ],
+    "puncturing": [
+      {"kind": "normative", "requirement": "RU allocations never overlap punctured subchannels", "results": ["hePuncturedSubchannelMask", "heRuToneOffset", "heRuToneSize", "heStaId"]},
+      {"kind": "metric", "requirement": "Interference comparison uses delivered application bytes", "results": ["packetReceived"]}
+    ],
+    "mimo": [
+      {"kind": "normative", "requirement": "A PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"]}
+    ],
+    "bss": [
+      {"kind": "normative", "requirement": "OBSS classification, OBSS/PD threshold, CCA, and power-limit decisions are observable", "results": ["OBSS classification", "OBSS/PD threshold", "reuse decision", "transmit power limit"]},
+      {"kind": "metric", "requirement": "Reuse comparison reports delivery, fairness, and concurrent airtime", "results": ["packetReceived", "transmissionState"]}
+    ],
+    "width": [
+      {"kind": "normative", "requirement": "TXVECTOR channel width matches the configured 20/40/80/160 MHz mode", "results": ["configured channel width", "HE bandwidth metadata"]},
+      {"kind": "metric", "requirement": "Capacity comparison uses goodput and delay", "results": ["packetReceived", "endToEndDelay"]}
+    ],
+    "dl": [
+      {"kind": "model", "requirement": "Per-user scheduling is keyed by STA ID without MAC-address filtering", "results": ["heStaId", "heScheduledPsduBytes", "heUserPpduDuration"]},
+      {"kind": "metric", "requirement": "Per-user delivery and delay come from application results", "results": ["packetReceived", "endToEndDelay"]}
+    ],
+    "bsr": [
+      {"kind": "normative", "requirement": "Reported backlog is joined to scheduler-consumed backlog", "results": ["heUlBufferStatusReportedBytes", "heUlBufferStatusScheduledBytes"]}
+    ]
+  },
   "groups": {
     "fragmentation": {
       "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
@@ -47,6 +89,17 @@
         {"label": "Mobile HE Minstrel", "config": "HeMinstrelMobile"}
       ]
     },
+    "er": {
+      "ini": "examples/ieee80211ax/he_er_su/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/he_er_su/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 2.0},
+      "output": "examples/ieee80211ax/analysis/figures/er/he-er-su-boundary.png",
+      "conditions": [
+        {"label": "HE-SU", "config": "CellBoundaryHeSu"},
+        {"label": "HE-ER-SU", "config": "CellBoundaryHeErSu"}
+      ]
+    },
     "puncturing": {
       "ini": "examples/ieee80211ax/he_features/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_features/results",
@@ -78,11 +131,11 @@
       "measurement": {"start": 0.3, "end": 0.95},
       "output": "examples/ieee80211ax/analysis/figures/bss/bss-coloring-comparison.png",
       "conditions": [
-        {"label": "Disabled", "config": "BssColoringDisabled"},
-        {"label": "Conservative", "config": "ObssPdConservative"},
-        {"label": "Enabled", "config": "BssColoringEnabled"},
-        {"label": "Aggressive", "config": "ObssPdAggressive"},
-        {"label": "Color collision", "config": "BssColoringCollision"}
+        {"label": "Disabled", "config": "BssColoringDisabled", "metadata": {"spatial_reuse_evidence": "disabled"}},
+        {"label": "Conservative", "config": "ObssPdConservative", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -78}},
+        {"label": "Enabled", "config": "BssColoringEnabled", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -62}},
+        {"label": "Aggressive", "config": "ObssPdAggressive", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -52}},
+        {"label": "Color collision", "config": "BssColoringCollision", "metadata": {"spatial_reuse_evidence": "collision"}}
       ]
     },
     "width": {

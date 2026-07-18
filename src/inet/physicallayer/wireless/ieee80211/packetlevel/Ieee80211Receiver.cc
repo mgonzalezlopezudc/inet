@@ -58,6 +58,15 @@ namespace inet {
 
 namespace physicallayer {
 
+simsignal_t Ieee80211Receiver::heSpatialReuseBssTypeSignal = cComponent::registerSignal("heSpatialReuseBssType");
+simsignal_t Ieee80211Receiver::heSpatialReuseReceivedBssColorSignal = cComponent::registerSignal("heSpatialReuseReceivedBssColor");
+simsignal_t Ieee80211Receiver::heSpatialReuseLocalBssColorSignal = cComponent::registerSignal("heSpatialReuseLocalBssColor");
+simsignal_t Ieee80211Receiver::heSpatialReuseEligibleSignal = cComponent::registerSignal("heSpatialReuseEligible");
+simsignal_t Ieee80211Receiver::heSpatialReuseIgnoredPpduSignal = cComponent::registerSignal("heSpatialReuseIgnoredPpdu");
+simsignal_t Ieee80211Receiver::heSpatialReuseObssPdThresholdSignal = cComponent::registerSignal("heSpatialReuseObssPdThreshold");
+simsignal_t Ieee80211Receiver::heSpatialReuseTransmitPowerLimitSignal = cComponent::registerSignal("heSpatialReuseTransmitPowerLimit");
+simsignal_t Ieee80211Receiver::heSpatialReuseReasonSignal = cComponent::registerSignal("heSpatialReuseReason");
+
 Define_Module(Ieee80211Receiver);
 
 static bool parseHeBssColor(const char *token, int& color)
@@ -346,7 +355,7 @@ void Ieee80211Receiver::initialize(int stage)
     }
 }
 
-void Ieee80211Receiver::recordHeSpatialReuseDecision(const HeSpatialReuseDecision& decision) const
+void Ieee80211Receiver::recordHeSpatialReuseDecision(const HeSpatialReuseDecision& decision, bool emitSignals) const
 {
     lastSpatialReuseBssType = (int)decision.bssType;
     lastSpatialReuseEligible = decision.eligible;
@@ -354,6 +363,19 @@ void Ieee80211Receiver::recordHeSpatialReuseDecision(const HeSpatialReuseDecisio
     lastSpatialReuseObssPdThreshold = decision.obssPdThreshold;
     lastSpatialReuseTransmitPowerLimit = decision.transmitPowerLimit;
     lastSpatialReuseReason = decision.reason == nullptr ? "" : decision.reason;
+    if (emitSignals) {
+        auto self = const_cast<Ieee80211Receiver *>(this);
+        self->emit(heSpatialReuseBssTypeSignal, (long)decision.bssType);
+        self->emit(heSpatialReuseReceivedBssColorSignal, (long)decision.receivedBssColor);
+        self->emit(heSpatialReuseLocalBssColorSignal, (long)decision.localBssColor);
+        self->emit(heSpatialReuseEligibleSignal, decision.eligible ? 1L : 0L);
+        self->emit(heSpatialReuseIgnoredPpduSignal, decision.ignorePpdu ? 1L : 0L);
+        self->emit(heSpatialReuseObssPdThresholdSignal,
+                std::isnan(decision.obssPdThreshold.get()) ? NaN : math::mW2dBmW(decision.obssPdThreshold.get<mW>()));
+        self->emit(heSpatialReuseTransmitPowerLimitSignal,
+                std::isnan(decision.transmitPowerLimit.get()) ? NaN : math::mW2dBmW(decision.transmitPowerLimit.get<mW>()));
+        self->emit(heSpatialReuseReasonSignal, (long)decision.reasonCode);
+    }
 }
 
 const char *Ieee80211Receiver::getLastSpatialReuseBssTypeName() const
@@ -466,10 +488,52 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
            currentHeader->getTriggerId() == heMuPhyHeader->getTriggerId();
 }
 
+namespace {
+
+class FilteredInterferenceView : public IInterference
+{
+  protected:
+    const INoise *backgroundNoise;
+    const std::vector<const IReception *> *interferingReceptions;
+
+  public:
+    FilteredInterferenceView(const INoise *backgroundNoise, const std::vector<const IReception *> *interferingReceptions) :
+        backgroundNoise(backgroundNoise), interferingReceptions(interferingReceptions) {}
+
+    virtual const INoise *getBackgroundNoise() const override { return backgroundNoise; }
+    virtual const std::vector<const IReception *> *getInterferingReceptions() const override { return interferingReceptions; }
+    virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override
+    {
+        return stream << "FilteredInterferenceView";
+    }
+};
+
+} // namespace
+
+const IListeningDecision *Ieee80211Receiver::computeListeningDecision(const IListening *listening, const IInterference *interference) const
+{
+    // Clause 26.11 permits an HE STA to reset PHY-CCA for an eligible
+    // inter-BSS PPDU below its OBSS/PD threshold. Candidate-reception
+    // filtering alone is insufficient: such a PPDU normally contributes to
+    // the radio's aggregate listening interference instead of becoming the
+    // selected reception. Remove only eligible ignored PPDUs from this CCA
+    // view; they remain in reception interference and can still corrupt a
+    // concurrent local transmission.
+    std::vector<const IReception *> ccaReceptions;
+    for (auto reception : *interference->getInterferingReceptions()) {
+        auto decision = computeHeSpatialReuseDecision(listening, reception);
+        recordHeSpatialReuseDecision(decision, true);
+        if (!decision.ignorePpdu)
+            ccaReceptions.push_back(reception);
+    }
+    FilteredInterferenceView ccaInterference(interference->getBackgroundNoise(), &ccaReceptions);
+    return FlatReceiverBase::computeListeningDecision(listening, &ccaInterference);
+}
+
 bool Ieee80211Receiver::shouldIgnoreReceptionDueToHeSpatialReuse(const IListening *listening, const IReception *reception, bool logDecision) const
 {
     auto spatialReuseDecision = computeHeSpatialReuseDecision(listening, reception);
-    recordHeSpatialReuseDecision(spatialReuseDecision);
+    recordHeSpatialReuseDecision(spatialReuseDecision, logDecision);
     if (!spatialReuseDecision.ignorePpdu)
         return false;
     if (logDecision) {
@@ -489,19 +553,25 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
         return decision;
     }
     if (heMuPhyHeader == nullptr) {
+        decision.reasonCode = HeSpatialReuseReason::NOT_HE_PPDU;
         decision.reason = "not an HE PPDU";
         return decision;
     }
     auto receivedBssColor = heMuPhyHeader->getBssColor();
+    decision.receivedBssColor = receivedBssColor;
     // Table 27-21/27-22 carries BSS Color in HE-SIG-A. Color 0 disables BSS
     // coloring, so OBSS/PD classification cannot be applied.
     if (receivedBssColor == 0) {
+        decision.reasonCode = HeSpatialReuseReason::RECEIVED_COLOR_DISABLED;
         decision.reason = "received BSS color disabled";
         return decision;
     }
     auto networkInterface = getContainingNicModule(this);
     auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
+    if (mib != nullptr)
+        decision.localBssColor = mib->heOperation.bssColor;
     if (mib == nullptr || mib->heOperation.bssColor == 0) {
+        decision.reasonCode = HeSpatialReuseReason::LOCAL_COLOR_DISABLED;
         decision.reason = "local BSS color disabled";
         return decision;
     }
@@ -509,6 +579,7 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
         // Clause 26.11 spatial reuse applies to inter-BSS PPDUs; same-color
         // PPDUs remain intra-BSS and are not ignored by OBSS/PD.
         decision.bssType = HeSpatialReuseBssType::INTRA_BSS;
+        decision.reasonCode = HeSpatialReuseReason::INTRA_BSS_PPDU;
         decision.reason = "intra-BSS PPDU";
         return decision;
     }
@@ -517,10 +588,12 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
     decision.bssType = isSrg ? HeSpatialReuseBssType::INTER_BSS_SRG : HeSpatialReuseBssType::INTER_BSS_NON_SRG;
     if (isSrg) {
         if (!enableSrgSpatialReuse) {
+            decision.reasonCode = HeSpatialReuseReason::SRG_DISABLED;
             decision.reason = "SRG OBSS/PD disabled";
             return decision;
         }
         if (heMuPhyHeader->getSrgObssPdDisallowed()) {
+            decision.reasonCode = HeSpatialReuseReason::SRG_DISALLOWED;
             decision.reason = "PPDU disallows SRG OBSS/PD";
             return decision;
         }
@@ -528,10 +601,12 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
     }
     else {
         if (!enableNonSrgSpatialReuse) {
+            decision.reasonCode = HeSpatialReuseReason::NON_SRG_DISABLED;
             decision.reason = "non-SRG OBSS/PD disabled";
             return decision;
         }
         if (heMuPhyHeader->getNonSrgObssPdDisallowed()) {
+            decision.reasonCode = HeSpatialReuseReason::NON_SRG_DISALLOWED;
             decision.reason = "PPDU disallows non-SRG OBSS/PD";
             return decision;
         }
@@ -542,10 +617,12 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
         // Table 27-24 defines HE TB Spatial Reuse values. This branch models
         // parameterized spatial reuse only when the PPDU permits it.
         if (!enableParameterizedSpatialReuse) {
+            decision.reasonCode = HeSpatialReuseReason::TB_EXCLUDED;
             decision.reason = "HE TB PPDU excluded from OBSS/PD";
             return decision;
         }
         if (heMuPhyHeader->getPsrDisallowed() || heMuPhyHeader->getSpatialReuse() == 0) {
+            decision.reasonCode = HeSpatialReuseReason::PSR_NOT_PERMITTED;
             decision.reason = "PSR not permitted by PPDU";
             return decision;
         }
@@ -559,6 +636,8 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
     decision.reason = decision.ignorePpdu ?
             (isSrg ? "inter-BSS SRG PPDU below OBSS/PD" : "inter-BSS non-SRG PPDU below OBSS/PD") :
             (isSrg ? "inter-BSS SRG PPDU at or above OBSS/PD" : "inter-BSS non-SRG PPDU at or above OBSS/PD");
+    decision.reasonCode = decision.ignorePpdu ? HeSpatialReuseReason::INTER_BSS_BELOW_OBSS_PD :
+            HeSpatialReuseReason::INTER_BSS_AT_OR_ABOVE_OBSS_PD;
     return decision;
 }
 

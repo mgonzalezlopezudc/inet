@@ -145,73 +145,90 @@ The decoded output timeline shows:
      benefit demonstrated here is selecting within the larger 802.11ax MCS,
      NSS, RU, and PPDU-format envelope.
 
+<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ## 802.11 Packet Type Statistics
 ![802.11 Packet Type Statistics](packet_statistics.png)
 
-This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from the Access Point's wireless interface (`ap.wlan[0]`), which captures all uplink, downlink, and management traffic in the BSS without duplication.
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-> **HE capture metadata caveat:** The current INET `PcapRecorder` uses a repository-specific packing for HE radiotap metadata. TShark can consequently decode SU transmissions as HE ER SU and downlink HE MU transmissions as HE TB. Frame type, subtype, count, and size remain useful, but the HE PPDU-format, MCS, bandwidth, GI, NSS, and coding suffixes—and the airtime estimates derived from them—are diagnostic only and are not standards-conformance evidence.
+Capture session `20260718T132413Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
-Two airtime occupancy percentages are provided:
+Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
+### Evidence checks
+
+| Status | Requirement | Observed evidence |
+|---|---|---|
+| **PASS** | FixedMcs produced protocol-visible wireless observations | 2012 AP/global transmission observations |
+| **PASS** | HeMinstrel produced protocol-visible wireless observations | 1990 AP/global transmission observations |
+| **PASS** | HeMinstrelMobile produced protocol-visible wireless observations | 3807 AP/global transmission observations |
+| **INCONCLUSIVE** | Selected MCS/NSS, EWMA outcome and retries | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
+
 ### Configuration: `FixedMcs`
-Total over-the-air packets captured (Global BSS/AP): **3863**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2012**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21d439" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1358 | 35.15% | 2042.6 B | 997.1 B | 2358.6 us | 1090.8 us | 5010 MHz | - | 13.0 dBm | 97.57% | 160.15% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24db3c" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, LDPC] | 11 | 0.55% | 2966.0 B | 0.0 B | 3280.9 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 2.26% | 1.80% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31b125" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC, A-MPDU] | 57 | 2.83% | 966.0 B | 0.0 B | 1064.4 us | 14.7 us | 5010 MHz | - | 13.0 dBm | 3.80% | 3.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28dc31" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1345 | 66.85% | 966.0 B | 0.0 B | 1092.8 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 92.12% | 73.49% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f09000" /></svg> | Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 731 | 18.92% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.79% | 1.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#be6237" /></svg> | Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 49 | 1.27% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.04% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#12268c" /></svg> | Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 45 | 1.16% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -76.2 dBm | - | 0.04% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0e49c8" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 1461 | 37.82% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5005 MHz, 5015 MHz | -73.0 dBm | - | 1.36% | 2.24% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#528cef" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 193 | 5.00% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -80.9 dBm | - | 0.15% | 0.24% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#308ef3" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.16% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.00% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d28a04" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 11 | 0.55% | 46.0 B | 0.0 B | 39.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.03% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c88037" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 99 | 4.92% | 24.0 B | 0.0 B | 37.6 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.23% | 0.19% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#11289c" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 94 | 4.67% | 32.0 B | 0.0 B | 38.1 us | 0.0 us | 5010 MHz | -74.9 dBm | - | 0.22% | 0.18% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0639bc" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, LDPC] | 21 | 1.04% | 32.0 B | 0.0 B | 116.3 us | 0.0 us | 5005 MHz, 5015 MHz | -73.8 dBm | - | 0.15% | 0.12% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2098f3" /></svg> | Control: Ack [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 348 | 17.30% | 14.0 B | 0.0 B | 51.3 us | 0.0 us | 5010 MHz | -80.9 dBm | - | 1.12% | 0.89% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3598e3" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 6 | 0.30% | 14.0 B | 0.0 B | 36.9 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.01% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e90b07" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 20 | 0.52% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.04% | 0.07% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 20 | 0.99% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.05% | 0.04% |
 
 ### Configuration: `HeMinstrel`
-Total over-the-air packets captured (Global BSS/AP): **3164**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1990**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21d439" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1380 | 43.62% | 1603.7 B | 932.1 B | 1878.5 us | 1019.7 us | 5010 MHz | - | 13.0 dBm | 97.89% | 129.61% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24db3c" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, LDPC] | 6 | 0.30% | 2966.0 B | 0.0 B | 3280.9 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 1.24% | 0.98% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31b125" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC, A-MPDU] | 70 | 3.52% | 966.0 B | 0.0 B | 1064.0 us | 14.4 us | 5010 MHz | - | 13.0 dBm | 4.70% | 3.72% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28dc31" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1338 | 67.24% | 966.0 B | 0.0 B | 1092.8 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 92.33% | 73.11% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f09000" /></svg> | Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 440 | 13.91% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.59% | 0.78% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#be6237" /></svg> | Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 103 | 3.26% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.11% | 0.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#12268c" /></svg> | Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 99 | 3.13% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -75.1 dBm | - | 0.11% | 0.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0e49c8" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 878 | 27.75% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5005 MHz, 5015 MHz | -73.0 dBm | - | 1.02% | 1.35% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#528cef" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 233 | 7.36% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -80.9 dBm | - | 0.22% | 0.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5b92f1" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 10, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -81.0 dBm | - | 0.00% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#308ef3" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.19% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#327bf1" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 5, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -81.0 dBm | - | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d28a04" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.30% | 46.0 B | 0.0 B | 39.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c88037" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 95 | 4.77% | 24.0 B | 0.0 B | 37.6 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.23% | 0.18% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#11289c" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 92 | 4.62% | 32.0 B | 0.0 B | 38.1 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.22% | 0.18% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0639bc" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, LDPC] | 11 | 0.55% | 32.0 B | 0.0 B | 116.3 us | 0.0 us | 5005 MHz, 5015 MHz | -73.6 dBm | - | 0.08% | 0.06% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2098f3" /></svg> | Control: Ack [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 341 | 17.14% | 14.0 B | 0.0 B | 51.3 us | 0.0 us | 5010 MHz | -80.9 dBm | - | 1.10% | 0.87% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5a9ae2" /></svg> | Control: Ack [HE-SU, HE-MCS 10, 20 MHz, GI 3.2 us, LDPC] | 1 | 0.05% | 14.0 B | 0.0 B | 37.0 us | 0.0 us | 5010 MHz | -81.0 dBm | - | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3598e3" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 6 | 0.30% | 14.0 B | 0.0 B | 36.9 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2a87e5" /></svg> | Control: Ack [HE-SU, HE-MCS 5, 20 MHz, GI 3.2 us, LDPC] | 1 | 0.05% | 14.0 B | 0.0 B | 37.9 us | 0.0 us | 5010 MHz | -81.0 dBm | - | 0.00% | 0.00% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f24126" /></svg> | Management: Action [HE-ER-SU, HE-MCS 10, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e90b07" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 21 | 0.66% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -79.9 dBm | 13.0 dBm | 0.05% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e6230a" /></svg> | Management: Action [HE-ER-SU, HE-MCS 5, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e7182d" /></svg> | Management: Action [HE-SU, HE-MCS 10, 20 MHz, GI 3.2 us, BCC] | 1 | 0.05% | 37.0 B | 0.0 B | 38.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 21 | 1.06% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | -79.9 dBm | 13.0 dBm | 0.05% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5170f" /></svg> | Management: Action [HE-SU, HE-MCS 5, 20 MHz, GI 3.2 us, BCC] | 1 | 0.05% | 37.0 B | 0.0 B | 41.1 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
 
 ### Configuration: `HeMinstrelMobile`
-Total over-the-air packets captured (Global BSS/AP): **3184**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3807**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21d439" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1376 | 43.22% | 1601.2 B | 931.1 B | 1875.7 us | 1018.6 us | 5010 MHz | - | 13.0 dBm | 97.86% | 129.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24db3c" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, LDPC] | 707 | 18.57% | 2966.0 B | 0.0 B | 3280.9 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 71.69% | 115.98% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31b125" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC, A-MPDU] | 57 | 1.50% | 966.0 B | 0.0 B | 1063.8 us | 14.2 us | 5010 MHz | - | 13.0 dBm | 1.87% | 3.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28dc31" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 593 | 15.58% | 966.0 B | 0.0 B | 1092.8 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 20.03% | 32.40% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f09000" /></svg> | Control: Trigger [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 437 | 13.72% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.59% | 0.77% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#be6237" /></svg> | Control: Block Ack Request (BAR) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 92 | 2.89% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.10% | 0.13% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#12268c" /></svg> | Control: Block Ack (BA) [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 85 | 2.67% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | -76.6 dBm | - | 0.10% | 0.13% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0e49c8" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 873 | 27.42% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5005 MHz, 5015 MHz | -73.0 dBm | - | 1.02% | 1.34% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#528cef" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 288 | 9.05% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -81.9 dBm | - | 0.27% | 0.36% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#308ef3" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 6 | 0.19% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#327bf1" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 5, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -82.0 dBm | - | 0.00% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3da2f0" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 9, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -81.0 dBm | - | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d28a04" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 707 | 18.57% | 46.0 B | 0.0 B | 39.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.85% | 1.38% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c88037" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 52 | 1.37% | 24.0 B | 0.0 B | 37.6 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.06% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#11289c" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 46 | 1.21% | 32.0 B | 0.0 B | 38.1 us | 0.0 us | 5010 MHz | -76.2 dBm | - | 0.05% | 0.09% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0639bc" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, LDPC] | 1413 | 37.12% | 32.0 B | 0.0 B | 116.3 us | 0.0 us | 5005 MHz, 5015 MHz | -73.0 dBm | - | 5.08% | 8.22% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2098f3" /></svg> | Control: Ack [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 197 | 5.17% | 14.0 B | 0.0 B | 51.3 us | 0.0 us | 5010 MHz | -81.9 dBm | - | 0.31% | 0.51% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3598e3" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 6 | 0.16% | 14.0 B | 0.0 B | 36.9 us | 0.0 us | 5010 MHz | -74.7 dBm | 13.0 dBm | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#67aae9" /></svg> | Control: Ack [HE-SU, HE-MCS 8, 20 MHz, GI 3.2 us, LDPC] | 1 | 0.03% | 14.0 B | 0.0 B | 37.3 us | 0.0 us | 5010 MHz | -82.0 dBm | - | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#41aaec" /></svg> | Control: Ack [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC] | 1 | 0.03% | 14.0 B | 0.0 B | 37.1 us | 0.0 us | 5010 MHz | -81.0 dBm | - | 0.00% | 0.00% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f24126" /></svg> | Management: Action [HE-ER-SU, HE-MCS 10, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e90b07" /></svg> | Management: Action [HE-ER-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 22 | 0.69% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -80.1 dBm | 13.0 dBm | 0.06% | 0.08% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e6230a" /></svg> | Management: Action [HE-ER-SU, HE-MCS 5, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ef0b1a" /></svg> | Management: Action [HE-ER-SU, HE-MCS 9, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e7182d" /></svg> | Management: Action [HE-SU, HE-MCS 10, 20 MHz, GI 3.2 us, BCC] | 2 | 0.05% | 37.0 B | 0.0 B | 38.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 23 | 0.60% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | -80.4 dBm | 13.0 dBm | 0.03% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d11016" /></svg> | Management: Action [HE-SU, HE-MCS 8, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 39.4 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f4371a" /></svg> | Management: Action [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 39.0 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.00% | 0.00% |
 
 ### Analysis of Packet Distribution
 IEEE 802.11 constrains negotiated HE modes but does not mandate a Minstrel algorithm. These packet counts therefore cannot establish adaptation, and a control/data ratio is not reliable evidence of retransmission or probing. Use the aligned selected-MCS/NSS, EWMA probability, transmission-outcome, and retry vectors documented above. INET's HE Minstrel remains a simplified implementation without scheduler-context or localized-fading adaptation.
+<!-- END GENERATED: ieee80211ax-pcap-statistics -->

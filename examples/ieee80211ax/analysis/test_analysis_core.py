@@ -15,6 +15,7 @@ from analysis_core import (
     summarize_ci95,
     time_weighted_integral,
     validate_disjoint_streams,
+    validate_evidence_contracts,
     validate_unpunctured_ru,
 )
 from run_campaign import available_cpu_count, collect_jobs, positive_int, run_jobs
@@ -50,6 +51,18 @@ class AnalysisCoreTest(unittest.TestCase):
         validate_unpunctured_ru(0, 100, [(100, 200)])
         with self.assertRaises(RuntimeError):
             validate_unpunctured_ru(50, 100, [(100, 200)])
+
+    def test_every_group_requires_an_evidence_contract(self):
+        manifest = {
+            "groups": {"sample": {}},
+            "evidence_contracts": {
+                "sample": [{"kind": "normative", "requirement": "observable invariant", "results": ["signal"]}]
+            },
+        }
+        validate_evidence_contracts(manifest)
+        manifest["evidence_contracts"] = {}
+        with self.assertRaises(RuntimeError):
+            validate_evidence_contracts(manifest)
 
 
 class CampaignRunnerTest(unittest.TestCase):

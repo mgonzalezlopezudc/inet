@@ -67,6 +67,8 @@ simsignal_t Ieee80211Radio::heRuToneOffsetSignal = cComponent::registerSignal("h
 simsignal_t Ieee80211Radio::heStaIdSignal = cComponent::registerSignal("heStaId");
 simsignal_t Ieee80211Radio::heSpatialStreamsSignal = cComponent::registerSignal("heSpatialStreams");
 simsignal_t Ieee80211Radio::heStreamStartIndexSignal = cComponent::registerSignal("heStreamStartIndex");
+simsignal_t Ieee80211Radio::heScheduledPsduBytesSignal = cComponent::registerSignal("heScheduledPsduBytes");
+simsignal_t Ieee80211Radio::heUserPpduDurationSignal = cComponent::registerSignal("heUserPpduDuration");
 simsignal_t Ieee80211Radio::hePuncturedSubchannelMaskSignal = cComponent::registerSignal("hePuncturedSubchannelMask");
 simsignal_t Ieee80211Radio::acknowledgmentFrameTypeSignal = cComponent::registerSignal("acknowledgmentFrameType");
 simsignal_t Ieee80211Radio::acknowledgmentAirtimeSignal = cComponent::registerSignal("acknowledgmentAirtime");
@@ -356,14 +358,6 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         auto commonRequest = packet->findTag<Ieee80211HeMuCommonReq>();
         self->emit(hePuncturedSubchannelMaskSignal, (long)(request != nullptr ? request->getPuncturedSubchannelMask() :
                 commonRequest != nullptr ? commonRequest->getPuncturedSubchannelMask() : 0));
-        for (const auto& user : heMuUsers) {
-            self->emit(heRuIndexSignal, (long)user.ruIndex);
-            self->emit(heRuToneSizeSignal, (long)user.ruToneSize);
-            self->emit(heRuToneOffsetSignal, (long)user.ruToneOffset);
-            self->emit(heStaIdSignal, (long)user.staId);
-            self->emit(heSpatialStreamsSignal, (long)user.numberOfSpatialStreams);
-            self->emit(heStreamStartIndexSignal, (long)user.streamStartIndex);
-        }
     }
     // An HE TB NDP (preamble-only) has no PSDU and therefore no MAC header chunk.
     // Guard the peek so it is not attempted on an empty packet.
@@ -445,6 +439,17 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             auto& user = heMuUsers[i];
             user.duration = commonDuration;
             heMuPhyHeader->appendUsers(user);
+            // These vectors are emitted in a fixed per-user order at the same
+            // simulation time, so STA ID, RU, stream, PSDU size, and airtime
+            // can be joined without relying on broadcast MAC addresses.
+            self->emit(heRuIndexSignal, (long)user.ruIndex);
+            self->emit(heRuToneSizeSignal, (long)user.ruToneSize);
+            self->emit(heRuToneOffsetSignal, (long)user.ruToneOffset);
+            self->emit(heStaIdSignal, (long)user.staId);
+            self->emit(heSpatialStreamsSignal, (long)user.numberOfSpatialStreams);
+            self->emit(heStreamStartIndexSignal, (long)user.streamStartIndex);
+            self->emit(heScheduledPsduBytesSignal, (long)user.psduLength.get<B>());
+            self->emit(heUserPpduDurationSignal, user.duration);
         }
         // Detect MU-MIMO
         std::map<int, std::vector<size_t>> ruUserIndices;

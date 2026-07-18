@@ -10,6 +10,7 @@ HE TB/PSR handling, and threshold-based ignoring.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
+#include "inet/physicallayer/wireless/common/signal/Interference.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -108,6 +109,12 @@ class DummyReceiverModule : public Ieee80211Receiver {
     }
     bool checkReceptionAttempted(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const {
         return computeIsReceptionAttempted(listening, reception, part, nullptr);
+    }
+    bool checkListeningPossible(const IListening *listening, const IInterference *interference) const {
+        auto decision = computeListeningDecision(listening, interference);
+        bool possible = decision->isListeningPossible();
+        delete decision;
+        return possible;
     }
     void setSpatialReuse(bool enable, W threshold) {
         enableSpatialReuse = enable;
@@ -285,6 +292,41 @@ runTestCase("SR_Enabled_TB_Excluded", true, 9, pBetween, true, HE_TRIGGER_BASED_
 runTestCase("SR_Enabled_TB_PSR", true, 9, pBetween, false, HE_TRIGGER_BASED_UPLINK, false, false, false, 1, true);
 runTestCase("SR_Enabled_TB_PSR_Disallowed", true, 9, pBetween, true, HE_TRIGGER_BASED_UPLINK, false, false, true, 1, true);
 
+// 10. OBSS/PD also filters aggregate CCA interference. Without this path the
+// frame can be rejected as a candidate reception while still keeping CCA busy.
+auto makeReception = [&](uint8_t color, W power) {
+    auto packet = makeHeMuPacketWithBssColor("cca-packet", color);
+    auto transmission = new MockIeee80211Transmission(radio, packet, mode, channel);
+    auto analogModel = new ScalarReceptionAnalogModel(
+        SIMTIME_ZERO, SIMTIME_ZERO, SimTime(1, SIMTIME_MS), Hz(5.18e9), Hz(20e6), power
+    );
+    return new Reception(radio, transmission, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
+            Coord(), Coord(), Quaternion(), Quaternion(), analogModel);
+};
+rxModule->setEnergyDetection(mW(math::dBmW2mW(-80)));
+rxModule->setSpatialReuse(true, mW(math::dBmW2mW(-62)));
+auto interBssReception = makeReception(9, pBetween);
+auto interBssReceptions = new std::vector<const IReception *> { interBssReception };
+auto interBssInterference = new Interference(nullptr, interBssReceptions);
+bool interBssCcaBusy = rxModule->checkListeningPossible(listening, interBssInterference);
+EV << "SR_Enabled_OBSS_CCA_Between -> busy: " << (interBssCcaBusy ? "YES" : "NO") << " (Expected: NO)\n";
+ASSERT(!interBssCcaBusy);
+delete interBssInterference;
+delete interBssReception->getTransmission()->getPacket();
+delete interBssReception->getTransmission();
+delete interBssReception;
+
+auto intraBssReception = makeReception(5, pBetween);
+auto intraBssReceptions = new std::vector<const IReception *> { intraBssReception };
+auto intraBssInterference = new Interference(nullptr, intraBssReceptions);
+bool intraBssCcaBusy = rxModule->checkListeningPossible(listening, intraBssInterference);
+EV << "SR_Enabled_Intra_CCA_Between -> busy: " << (intraBssCcaBusy ? "YES" : "NO") << " (Expected: YES)\n";
+ASSERT(intraBssCcaBusy);
+delete intraBssInterference;
+delete intraBssReception->getTransmission()->getPacket();
+delete intraBssReception->getTransmission();
+delete intraBssReception;
+
 delete listening;
 delete channel;
 EV << ".\n";
@@ -303,4 +345,6 @@ SR_Enabled_SRG_Disallowed -> possible: YES, attempted: YES (Expected: YES)
 SR_Enabled_TB_Excluded -> possible: YES, attempted: YES (Expected: YES)
 SR_Enabled_TB_PSR -> possible: NO, attempted: NO (Expected: NO)
 SR_Enabled_TB_PSR_Disallowed -> possible: YES, attempted: YES (Expected: YES)
+SR_Enabled_OBSS_CCA_Between -> busy: NO (Expected: NO)
+SR_Enabled_Intra_CCA_Between -> busy: YES (Expected: YES)
 .

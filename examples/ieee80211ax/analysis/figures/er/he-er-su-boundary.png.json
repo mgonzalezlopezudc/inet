@@ -1,0 +1,134 @@
+{
+  "aggregation": {
+    "interpretation": "diagnostic delivery comparison; the standard does not guarantee a gain for this channel/error model",
+    "observation": "per-run 0.3-2.0 s measurement window",
+    "uncertainty": "95% Student-t CI over five seeds"
+  },
+  "conditions": [
+    {
+      "configuration": "CellBoundaryHeSu",
+      "group": "er",
+      "ini": "examples/ieee80211ax/he_er_su/omnetpp.ini",
+      "label": "HE-SU",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.3
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#0.sca",
+          "sha256": "94758a12307ac4c7ad6e0ec63458f93bea46d692957903d755aef8bbcf36ca5e"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#0.vec",
+          "sha256": "74f8c0efa184ce6bc9706c4e1a32bbdcc744d8aae8363d565324f4a3cbf02a09"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#1.sca",
+          "sha256": "9a41e0ddf3deab1d2fab01ceda47ea412708352ec8c761a23c47be0b97230611"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#1.vec",
+          "sha256": "fba07f0c0b0bdb446f30dc2b094de8d07aec7990b0465a28295baeb782727ea0"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#2.sca",
+          "sha256": "7a4f4893441c64270c523a0567b26497e9f792bcc3721e85296cd2b084fef78a"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#2.vec",
+          "sha256": "5e55b19ec63409acbd808e911aa080b1a245c56f9b0bf7d1afc1a8a4b68918b3"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#3.sca",
+          "sha256": "a656f0f667c5532ead1c099e7848bc34686ef94126d8da54394fbf2b08f092ba"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#3.vec",
+          "sha256": "9ddc698ff53889b0fe86a77c2185de1c8b705df4e21fac5f46615f2ddf5d2846"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#4.sca",
+          "sha256": "b21c9fb9d777441e211037bf46862748ce21dac53401e69965ced80160368e0a"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeSu-#4.vec",
+          "sha256": "7a2f038d1197b50862492c5d613fd744c5cc80887708784856e7b9fa1fd6c802"
+        }
+      ]
+    },
+    {
+      "configuration": "CellBoundaryHeErSu",
+      "group": "er",
+      "ini": "examples/ieee80211ax/he_er_su/omnetpp.ini",
+      "label": "HE-ER-SU",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.3
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#0.sca",
+          "sha256": "abc7842f80590e98d8fb04fd5f23d3b3a3ed35a12995f79dc31ee197c81ac83b"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#0.vec",
+          "sha256": "d1e4d80566f099df1d587a7abb302ea2681aabdd1e6bb5e611829ad5305a6a86"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#1.sca",
+          "sha256": "a4f351136ae6b36991cb56f29aa41b855e2707c55c8ccf48dfd23f081aef953d"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#1.vec",
+          "sha256": "c05f89ba1cf3b701a941a44277cf979a52ec461e706801e472ccf118ae5783d2"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#2.sca",
+          "sha256": "214fc3ae6feeb3cdb33e49bcd9c0474fce4d17f3ed1297c1107b6a9b467d2d9e"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#2.vec",
+          "sha256": "8d24dbd700b85863a8a19278ee0bd8dbcf02ce5b760220b70d9c62b5e963e83d"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#3.sca",
+          "sha256": "da1f82a98e46612b37b57a2c2250d502e2c6fa07e55e745c00e8da2709fd27c6"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#3.vec",
+          "sha256": "d10a6e37da5a78bfada17d1d3c142fc90979a37150bce4915ee95bbb4d91f43c"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#4.sca",
+          "sha256": "a29280a70efbcff223070b210ac49039607425df14e3a2d4876c81275818eaee"
+        },
+        {
+          "path": "examples/ieee80211ax/he_er_su/results/CellBoundaryHeErSu-#4.vec",
+          "sha256": "928a23ea00f4f32811df7d47ed65f27eb23331f01d42ab5efb4f3d3810bddaa7"
+        }
+      ]
+    }
+  ],
+  "extra": {},
+  "figure": "examples/ieee80211ax/analysis/figures/er/he-er-su-boundary.png",
+  "git_revision": "99b34b14911dd0fab4c85adb695f49a9a97a26b9",
+  "result_filters": [
+    {
+      "module": "**.app[*]",
+      "name": "packetReceived:vector(packetBytes)",
+      "type": "vector",
+      "unit": "B"
+    },
+    {
+      "module": "**.mac",
+      "name": "packetDropIncorrectlyReceived:vector(packetBytes)",
+      "optional_when_zero": true,
+      "type": "vector",
+      "unit": "B"
+    }
+  ],
+  "schema_version": 1
+}

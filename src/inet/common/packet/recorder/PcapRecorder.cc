@@ -30,6 +30,7 @@
 #ifdef INET_WITH_IEEE80211
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
@@ -73,6 +74,61 @@ enum RadiotapChannelFlags {
     RADIOTAP_CHANNEL_2GHZ = 0x0080,
     RADIOTAP_CHANNEL_5GHZ = 0x0100,
 };
+
+#ifdef INET_WITH_IEEE80211
+
+// See https://www.radiotap.org/fields/HE.html. These are deliberately kept
+// local instead of depending on a platform-specific radiotap header.
+enum RadiotapHeData1 {
+    RADIOTAP_HE_FORMAT_SU = 0,
+    RADIOTAP_HE_FORMAT_EXT_SU = 1,
+    RADIOTAP_HE_FORMAT_MU = 2,
+    RADIOTAP_HE_FORMAT_TRIG = 3,
+    RADIOTAP_HE_UL_DL_KNOWN = 0x0010,
+    RADIOTAP_HE_DATA_MCS_KNOWN = 0x0020,
+    RADIOTAP_HE_DATA_DCM_KNOWN = 0x0040,
+    RADIOTAP_HE_CODING_KNOWN = 0x0080,
+    RADIOTAP_HE_SPATIAL_REUSE_KNOWN = 0x0400,
+    RADIOTAP_HE_MU_STA_ID_KNOWN = 0x0800,
+    RADIOTAP_HE_BW_RU_ALLOC_KNOWN = 0x4000,
+};
+
+enum RadiotapHeData2 {
+    RADIOTAP_HE_GI_KNOWN = 0x0002,
+};
+
+uint16_t getRadiotapHeFormat(physicallayer::Ieee80211HePpduFormat format)
+{
+    switch (format) {
+        case physicallayer::HE_MU_DOWNLINK: return RADIOTAP_HE_FORMAT_MU;
+        case physicallayer::HE_TRIGGER_BASED_UPLINK: return RADIOTAP_HE_FORMAT_TRIG;
+        case physicallayer::HE_SINGLE_USER: return RADIOTAP_HE_FORMAT_SU;
+        case physicallayer::HE_EXTENDED_RANGE_SU: return RADIOTAP_HE_FORMAT_EXT_SU;
+        default: throw cRuntimeError("Unknown HE PPDU format: %d", (int)format);
+    }
+}
+
+int getRadiotapHeBandwidth(Hz bandwidth)
+{
+    auto value = bandwidth.get();
+    return value < 30e6 ? 0 : value < 60e6 ? 1 : value < 120e6 ? 2 : 3;
+}
+
+int getRadiotapHeRuAllocation(int toneSize)
+{
+    switch (toneSize) {
+        case 26: return 4;
+        case 52: return 5;
+        case 106: return 6;
+        case 242: return 7;
+        case 484: return 8;
+        case 996: return 9;
+        case 1992: return 10;
+        default: return -1;
+    }
+}
+
+#endif
 
 void appendPadding(std::vector<uint8_t>& bytes, size_t alignment)
 {
@@ -170,7 +226,6 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
     std::vector<uint8_t> bytes(4, 0); // version, pad, length
 
     bool isHe = false;
-    bool isHeMu = false;
     bool isEht = false;
     bool isVht = false;
     bool isHt = false;
@@ -208,7 +263,6 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
     heMuCommonReq = packet->findTag<physicallayer::Ieee80211HeMuCommonReq>();
     if (heMuReq != nullptr || heMuRx != nullptr || heMuCommonReq != nullptr) {
         isHe = true;
-        isHeMu = true;
     }
     else {
         const physicallayer::IIeee80211Mode *mode = nullptr;
@@ -395,13 +449,10 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
         appendUint16(bytes, vhtPartialAid);
     }
 
-    // 11. RADIOTAP_HE (23) / 12. RADIOTAP_HE_MU (24)
+    // 11. RADIOTAP_HE (23)
     if (isHe) {
         setPresentBit(RADIOTAP_HE);
-        if (isHeMu) {
-            setPresentBit(RADIOTAP_HE_MU);
-        }
-        
+
         appendPadding(bytes, 2);
         uint16_t data1 = 0;
         uint16_t data2 = 0;
@@ -411,69 +462,97 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
         uint16_t data6 = 0;
 
         if (heMuReq != nullptr) {
-            // HE TB format is 3
-            data1 |= 3 & 0x3;
-            // Known flags: PPDU Format, UL/DL, Coding, MCS, GI, PE
-            data1 |= (1U << 0) | (1U << 4) | (1U << 5) | (1U << 7);
-            
-            // Uplink
-            data2 |= (1U << 1);
-            
-            // Guard Interval: 0=0.8us, 1=1.6us, 2=3.2us
-            data3 |= (heMuReq->getGuardInterval() & 0x7);
-            
-            // Set coding, MCS, NSS, DCM in data5
-            data5 |= (heMuReq->getMcs() & 0xF);
-            data5 |= ((heMuReq->getNumberOfSpatialStreams() - 1) & 0x7) << 4;
-            if (heMuReq->getDcm()) data5 |= (1U << 7);
-            data5 |= (heMuReq->getCoding() & 0x1) << 8; // Coding: 0=BCC, 1=LDPC
-            
-            // Punctured subchannel mask
-            data4 |= (heMuReq->getPuncturedSubchannelMask() & 0xF) << 3;
+            auto ppduFormat = static_cast<physicallayer::Ieee80211HePpduFormat>(heMuReq->getPpduFormat());
+            auto radiotapFormat = getRadiotapHeFormat(ppduFormat);
+            data1 |= radiotapFormat | RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_DATA_DCM_KNOWN |
+                    RADIOTAP_HE_CODING_KNOWN | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
+            if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
+                data1 |= RADIOTAP_HE_UL_DL_KNOWN;
+                if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
+                    data3 |= 0x0080;
+            }
+            if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
+                data1 |= RADIOTAP_HE_MU_STA_ID_KNOWN;
+                data4 |= (heMuReq->getStaId() & 0x7ff) << 4;
+            }
+            data2 |= RADIOTAP_HE_GI_KNOWN;
+            data3 |= (heMuReq->getMcs() & 0xf) << 8;
+            data3 |= (heMuReq->getDcm() ? 1U : 0U) << 12;
+            data3 |= (heMuReq->getCoding() & 0x1) << 13;
+            data4 |= heMuReq->getSpatialReuse() & 0xf;
+            auto ruAllocation = getRadiotapHeRuAllocation(heMuReq->getRuToneSize());
+            if (ruAllocation >= 0) {
+                data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
+                data5 |= ruAllocation;
+            }
+            data5 |= (heMuReq->getGuardInterval() & 0x3) << 4;
+            data6 |= std::clamp<int>(heMuReq->getNumberOfSpatialStreams(), 1, 15);
         }
         else if (heMuRx != nullptr) {
-            // Format from tag
-            uint8_t format = heMuRx->getPpduFormat(); // 0: DL MU, 1: UL TB
-            data1 |= (format == 0 ? 2 : 3) & 0x3;
-            data1 |= (1U << 0) | (1U << 4) | (1U << 7);
-            
-            data2 |= (format == 0 ? 0 : 1) << 1; // DL=0, UL=1
-            data3 |= (heMuRx->getGuardInterval() & 0x7);
-            
-            data4 |= (heMuRx->getPuncturedSubchannelMask() & 0xF) << 3;
+            auto ppduFormat = static_cast<physicallayer::Ieee80211HePpduFormat>(heMuRx->getPpduFormat());
+            data1 |= getRadiotapHeFormat(ppduFormat) | RADIOTAP_HE_CODING_KNOWN;
+            if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
+                data1 |= RADIOTAP_HE_UL_DL_KNOWN;
+                if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
+                    data3 |= 0x0080;
+            }
+            data2 |= RADIOTAP_HE_GI_KNOWN;
+            data3 |= (heMuRx->getCoding() & 0x1) << 13;
+            data5 |= (heMuRx->getGuardInterval() & 0x3) << 4;
+
+            const physicallayer::Ieee80211HeMuRxAllocationInfo *capturedAllocation = nullptr;
+            for (size_t i = 0; i < heMuRx->getAllocationsArraySize(); ++i) {
+                const auto& allocation = heMuRx->getAllocations(i);
+                if (allocation.ruIndex == heMuRx->getRuIndex()) {
+                    capturedAllocation = &allocation;
+                    break;
+                }
+            }
+            if (capturedAllocation == nullptr && heMuRx->getAllocationsArraySize() == 1)
+                capturedAllocation = &heMuRx->getAllocations(0);
+            if (capturedAllocation != nullptr) {
+                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_DATA_DCM_KNOWN;
+                data3 |= (capturedAllocation->mcs & 0xf) << 8;
+                data3 |= (capturedAllocation->dcm ? 1U : 0U) << 12;
+                data6 |= std::clamp<int>(capturedAllocation->numberOfSpatialStreams, 1, 15);
+                auto ruAllocation = getRadiotapHeRuAllocation(capturedAllocation->ruToneSize);
+                if (ruAllocation >= 0) {
+                    data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
+                    data5 |= ruAllocation;
+                }
+                if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
+                    data1 |= RADIOTAP_HE_MU_STA_ID_KNOWN;
+                    data4 |= (capturedAllocation->staId & 0x7ff) << 4;
+                }
+            }
         }
         else if (heMode != nullptr) {
-            // HE SU format = 0
-            data1 |= 0 & 0x3;
-            data1 |= (1U << 0) | (1U << 5) | (1U << 7);
-            
+            auto preambleFormat = heMode->getPreambleMode()->getPreambleFormat();
+            data1 |= preambleFormat == physicallayer::Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU ?
+                    RADIOTAP_HE_FORMAT_EXT_SU : RADIOTAP_HE_FORMAT_SU;
             auto dm = heMode->getDataMode();
             if (dm != nullptr) {
-                data5 |= (dm->getMcsIndex() & 0xF);
-                data5 |= ((dm->getNumberOfSpatialStreams() - 1) & 0x7) << 4;
-                
+                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_CODING_KNOWN |
+                        RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
+                data2 |= RADIOTAP_HE_GI_KNOWN;
+                data3 |= (dm->getMcsIndex() & 0xf) << 8;
+                data3 |= (dm->isLdpc() ? 1U : 0U) << 13;
                 auto gi = dm->getGuardIntervalType();
-                data3 |= (gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT ? 0 :
-                          gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM ? 1 : 2);
-                
-                double bw = dm->getBandwidth().get();
-                uint8_t cbw = (bw < 30e6 ? 0 : bw < 60e6 ? 1 : bw < 100e6 ? 2 : 3);
-                data4 |= cbw & 0x7;
+                auto radiotapGi = gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT ? 0 :
+                        gi == physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM ? 1 : 2;
+                // HE ER SU is modelled with the mandatory 242-tone allocation;
+                // ordinary HE SU uses the channel-width encoding.
+                data5 |= preambleFormat == physicallayer::Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU ?
+                        getRadiotapHeRuAllocation(242) : getRadiotapHeBandwidth(dm->getBandwidth());
+                data5 |= radiotapGi << 4;
+                data6 |= std::clamp<int>(dm->getNumberOfSpatialStreams(), 1, 15);
             }
         }
         else if (heMuCommonReq != nullptr) {
-            // HE MU downlink format is 2
-            data1 |= 2 & 0x3;
-            // Known flags: PPDU Format, UL/DL, GI, Coding
-            data1 |= (1U << 0) | (1U << 4) | (1U << 7);
-            // Downlink
-            data2 |= (0 & 0x1) << 1;
-            // Guard Interval: 0=0.8us, 1=1.6us, 2=3.2us
-            data3 |= (heMuCommonReq->getGuardInterval() & 0x7);
-            // Coding (in data5)
-            data5 |= (heMuCommonReq->getCoding() & 0x1) << 8;
-            // Punctured subchannel mask
-            data4 |= (heMuCommonReq->getPuncturedSubchannelMask() & 0xF) << 3;
+            data1 |= RADIOTAP_HE_FORMAT_MU | RADIOTAP_HE_UL_DL_KNOWN | RADIOTAP_HE_CODING_KNOWN;
+            data2 |= RADIOTAP_HE_GI_KNOWN;
+            data3 |= (heMuCommonReq->getCoding() & 0x1) << 13;
+            data5 |= (heMuCommonReq->getGuardInterval() & 0x3) << 4;
         }
 
         appendUint16(bytes, data1);
@@ -482,35 +561,6 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
         appendUint16(bytes, data4);
         appendUint16(bytes, data5);
         appendUint16(bytes, data6);
-    }
-
-    if (isHeMu) {
-        appendPadding(bytes, 2);
-        
-        uint16_t flags1 = 0;
-        uint16_t flags2 = 0;
-        uint8_t ruChannel1[4] = {0};
-        uint8_t ruChannel2[4] = {0};
-
-        if (heMuReq != nullptr) {
-            flags1 |= (1U << 5); // DL MU-MIMO configuration known
-            if (heMuReq->getRuIndex() >= 0 && heMuReq->getRuIndex() < 8) {
-                ruChannel1[heMuReq->getRuIndex() / 2] = heMuReq->getRuIndex();
-            }
-        }
-        else if (heMuRx != nullptr) {
-            for (size_t i = 0; i < heMuRx->getAllocationsArraySize(); ++i) {
-                const auto& alloc = heMuRx->getAllocations(i);
-                if (alloc.ruIndex >= 0 && alloc.ruIndex < 8) {
-                    ruChannel1[alloc.ruIndex / 2] = alloc.ruIndex;
-                }
-            }
-        }
-
-        appendUint16(bytes, flags1);
-        appendUint16(bytes, flags2);
-        for (int i = 0; i < 4; ++i) bytes.push_back(ruChannel1[i]);
-        for (int i = 0; i < 4; ++i) bytes.push_back(ruChannel2[i]);
     }
 
     // 13. RADIOTAP_0_LENGTH_PSDU (26)
