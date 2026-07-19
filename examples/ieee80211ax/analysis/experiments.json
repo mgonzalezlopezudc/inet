@@ -65,7 +65,7 @@
       "conditions": [
         {"label": "Light, 1 RA-RU", "config": "UoraLightContention"},
         {"label": "Heavy, 1 RA-RU", "config": "UoraHeavyContention"},
-        {"label": "Heavy, 3 RA-RUs", "config": "UoraMoreRandomAccessRus"}
+        {"label": "Heavy, 5 RA-RUs", "config": "UoraMoreRandomAccessRus"}
       ]
     },
     "twt": {
