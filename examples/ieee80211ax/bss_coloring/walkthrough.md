@@ -131,12 +131,12 @@ MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/analyze_pcap_
   --generate --subdir bss_coloring
 ```
 
-Capture session `20260719T103855Z` records `mac` at every `wlan[0]`; the tables
+Capture session `20260719T105417Z` records `mac` at every `wlan[0]`; the tables
 below use the two AP observation points. Use TShark to print the beginning of
 the enabled exchange at `ap1`:
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T103855Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' -c 20
+tshark -n -r 'examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T105417Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' -c 20
 ```
 
 The fresh run-0 PCAPng captures contain 1512 frames at `ap1` and 1496 frames at
@@ -169,8 +169,8 @@ The exact query used for this check is:
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector AND (name =~ "nav:vector" OR name =~ "intraBssNavChanged:vector")' \
-  examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T103855Z/TwoNav/TwoNav-#0.vec \
-  examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T103855Z/TwoNav/TwoNav-#0.sca
+  examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T105417Z/TwoNav/TwoNav-#0.vec \
+  examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T105417Z/TwoNav/TwoNav-#0.sca
 ```
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
@@ -179,7 +179,7 @@ opp_scavetool query -l \
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260719T103855Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260719T105417Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
