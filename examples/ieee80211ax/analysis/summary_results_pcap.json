@@ -5587,13 +5587,13 @@
         "id": "capture-CellBoundaryHeErSu",
         "status": "PASS",
         "requirement": "CellBoundaryHeErSu produced protocol-visible wireless observations",
-        "evidence": "3420 AP/global transmission observations"
+        "evidence": "5937 AP/global transmission observations"
       },
       {
         "id": "capture-CellBoundaryHeSu",
         "status": "PASS",
         "requirement": "CellBoundaryHeSu produced protocol-visible wireless observations",
-        "evidence": "3414 AP/global transmission observations"
+        "evidence": "5627 AP/global transmission observations"
       },
       {
         "id": "capture-ErBss",
@@ -5602,31 +5602,13 @@
         "evidence": "240 AP/global transmission observations"
       },
       {
-        "id": "capture-HeErSu",
-        "status": "PASS",
-        "requirement": "HeErSu produced protocol-visible wireless observations",
-        "evidence": "3420 AP/global transmission observations"
-      },
-      {
-        "id": "capture-HeSu",
-        "status": "PASS",
-        "requirement": "HeSu produced protocol-visible wireless observations",
-        "evidence": "3414 AP/global transmission observations"
-      },
-      {
-        "id": "he-er-format-HeSu",
-        "status": "PASS",
-        "requirement": "HE-SU baseline does not use HE-ER-SU",
-        "evidence": "0 of 1700 QoS Data observations decoded as HE-ER-SU"
-      },
-      {
-        "id": "he-er-format-HeErSu",
+        "id": "he-er-format-ErBss",
         "status": "PASS",
         "requirement": "QoS payload uses HE-ER-SU",
-        "evidence": "1702 of 1702 QoS Data observations decoded as HE-ER-SU"
+        "evidence": "120 of 120 QoS Data observations decoded as HE-ER-SU"
       },
       {
-        "id": "he-er-txvector-HeErSu",
+        "id": "he-er-txvector-ErBss",
         "status": "PASS",
         "requirement": "HE-ER-SU uses one spatial stream, a 242-tone RU, and MCS 0-2",
         "evidence": "HE-MCS 0/242-tone RU/NSTS 1, HE-MCS 1/242-tone RU/NSTS 1, HE-MCS 2/242-tone RU/NSTS 1"
@@ -5635,19 +5617,19 @@
         "id": "he-er-format-CellBoundaryHeSu",
         "status": "PASS",
         "requirement": "HE-SU baseline does not use HE-ER-SU",
-        "evidence": "0 of 1700 QoS Data observations decoded as HE-ER-SU"
+        "evidence": "0 of 3687 QoS Data observations decoded as HE-ER-SU"
       },
       {
         "id": "he-er-format-CellBoundaryHeErSu",
         "status": "PASS",
         "requirement": "QoS payload uses HE-ER-SU",
-        "evidence": "1702 of 1702 QoS Data observations decoded as HE-ER-SU"
+        "evidence": "3085 of 3085 QoS Data observations decoded as HE-ER-SU"
       },
       {
         "id": "he-er-txvector-CellBoundaryHeErSu",
         "status": "PASS",
         "requirement": "HE-ER-SU uses one spatial stream, a 242-tone RU, and MCS 0-2",
-        "evidence": "HE-MCS 0/242-tone RU/NSTS 1, HE-MCS 1/242-tone RU/NSTS 1, HE-MCS 2/242-tone RU/NSTS 1"
+        "evidence": "HE-MCS 0/242-tone RU/NSTS 1"
       }
     ],
     "ErBss": {
@@ -5730,322 +5712,66 @@
         }
       }
     },
-    "HeSu": {
-      "global": {
-        "total": 3414,
-        "used_ap_only": true,
-        "stats": {
-          "2,8,HE-SU,HE-MCS 0,20 MHz,3.2 us,1,BCC,False,False": {
-            "count": 1700,
-            "mean": 366.0,
-            "std": 0.0,
-            "mean_duration": 0.0004364102564102564,
-            "std_duration": 0.0,
-            "airtime_pct": 89.42045790662978,
-            "airtime_sim_pct": 37.09487179487179,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "1,13,HE-SU,HE-MCS 0,20 MHz,3.2 us,1,LDPC,False,False": {
-            "count": 1700,
-            "mean": 14.0,
-            "std": 0.0,
-            "mean_duration": 5.131623931623932e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 10.514697008840681,
-            "airtime_sim_pct": 4.361880341880342,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "0,13,HE-SU,HE-MCS 11,20 MHz,3.2 us,1,BCC,False,False": {
-            "count": 14,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 3.8428727663628604e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.0648450845285878,
-            "airtime_sim_pct": 0.026900109364540025,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          }
-        }
-      }
-    },
-    "HeErSu": {
-      "global": {
-        "total": 3420,
-        "used_ap_only": true,
-        "stats": {
-          "2,8,HE-ER-SU,HE-MCS 2,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 1592,
-            "mean": 366.0,
-            "std": 0.0,
-            "mean_duration": 0.0001774700854700855,
-            "std_duration": 2.710505431213761e-20,
-            "airtime_pct": 69.94747387624308,
-            "airtime_sim_pct": 14.126618803418806,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "1,13,HE-ER-SU,HE-MCS 2,242-tone RU,3.2 us,1,LDPC,False,False": {
-            "count": 1591,
-            "mean": 14.0,
-            "std": 0.0,
-            "mean_duration": 4.91054131054131e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 19.342088295292992,
-            "airtime_sim_pct": 3.9063356125356123,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "0,13,HE-ER-SU,HE-MCS 0,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 1,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 8.447863247863248e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.02091465417389837,
-            "airtime_sim_pct": 0.0042239316239316245,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "1,13,HE-ER-SU,HE-MCS 0,242-tone RU,3.2 us,1,LDPC,False,False": {
-            "count": 49,
-            "mean": 14.0,
-            "std": 0.0,
-            "mean_duration": 5.931623931623931e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.7195707505438971,
-            "airtime_sim_pct": 0.14532478632478632,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "0,13,HE-SU,HE-MCS 11,20 MHz,3.2 us,1,BCC,False,False": {
-            "count": 14,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 3.8428727663628604e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.13319497915445114,
-            "airtime_sim_pct": 0.026900109364540025,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "2,8,HE-ER-SU,HE-MCS 0,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 48,
-            "mean": 366.0,
-            "std": 0.0,
-            "mean_duration": 0.00044441025641025637,
-            "std_duration": 0.0,
-            "airtime_pct": 5.281157548001713,
-            "airtime_sim_pct": 1.0665846153846152,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "2,8,HE-ER-SU,HE-MCS 1,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 62,
-            "mean": 366.0,
-            "std": 0.0,
-            "mean_duration": 0.0002442051282051282,
-            "std_duration": 0.0,
-            "airtime_pct": 3.748437569962637,
-            "airtime_sim_pct": 0.7570358974358975,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "1,13,HE-ER-SU,HE-MCS 1,242-tone RU,3.2 us,1,LDPC,False,False": {
-            "count": 62,
-            "mean": 14.0,
-            "std": 0.0,
-            "mean_duration": 5.1658119658119654e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.7929286249773966,
-            "airtime_sim_pct": 0.16014017094017094,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "0,13,HE-ER-SU,HE-MCS 2,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 1,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 5.749287749287749e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.014233701646744538,
-            "airtime_sim_pct": 0.0028746438746438748,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          }
-        }
-      }
-    },
     "CellBoundaryHeSu": {
       "global": {
-        "total": 3414,
+        "total": 5627,
         "used_ap_only": true,
         "stats": {
           "2,8,HE-SU,HE-MCS 0,20 MHz,3.2 us,1,BCC,False,False": {
-            "count": 1700,
-            "mean": 366.0,
+            "count": 3687,
+            "mean": 166.0,
             "std": 0.0,
-            "mean_duration": 0.0004364102564102564,
+            "mean_duration": 0.0002176068376068376,
             "std_duration": 0.0,
-            "airtime_pct": 89.42045790662978,
-            "airtime_sim_pct": 37.09487179487179,
+            "airtime_pct": 88.96143416366135,
+            "airtime_sim_pct": 40.11582051282051,
             "freq": "5010 MHz",
             "rx_sig": "-",
             "tx_pwr": "10.0 dBm"
           },
           "1,13,HE-SU,HE-MCS 0,20 MHz,3.2 us,1,LDPC,False,False": {
-            "count": 1700,
+            "count": 1940,
             "mean": 14.0,
             "std": 0.0,
             "mean_duration": 5.131623931623932e-05,
             "std_duration": 0.0,
-            "airtime_pct": 10.514697008840681,
-            "airtime_sim_pct": 4.361880341880342,
+            "airtime_pct": 11.038565836337224,
+            "airtime_sim_pct": 4.977675213675214,
             "freq": "5010 MHz",
             "rx_sig": "-87.0 dBm",
             "tx_pwr": "-"
-          },
-          "0,13,HE-SU,HE-MCS 11,20 MHz,3.2 us,1,BCC,False,False": {
-            "count": 14,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 3.8428727663628604e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.0648450845285878,
-            "airtime_sim_pct": 0.026900109364540025,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
           }
         }
       }
     },
     "CellBoundaryHeErSu": {
       "global": {
-        "total": 3420,
+        "total": 5937,
         "used_ap_only": true,
         "stats": {
-          "2,8,HE-ER-SU,HE-MCS 2,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 1592,
-            "mean": 366.0,
+          "2,8,HE-ER-SU,HE-MCS 0,242-tone RU,3.2 us,1,BCC,False,False": {
+            "count": 3085,
+            "mean": 166.0,
             "std": 0.0,
-            "mean_duration": 0.0001774700854700855,
-            "std_duration": 2.710505431213761e-20,
-            "airtime_pct": 69.94747387624308,
-            "airtime_sim_pct": 14.126618803418806,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "1,13,HE-ER-SU,HE-MCS 2,242-tone RU,3.2 us,1,LDPC,False,False": {
-            "count": 1591,
-            "mean": 14.0,
-            "std": 0.0,
-            "mean_duration": 4.91054131054131e-05,
+            "mean_duration": 0.00022560683760683762,
             "std_duration": 0.0,
-            "airtime_pct": 19.342088295292992,
-            "airtime_sim_pct": 3.9063356125356123,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "0,13,HE-ER-SU,HE-MCS 0,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 1,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 8.447863247863248e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.02091465417389837,
-            "airtime_sim_pct": 0.0042239316239316245,
+            "airtime_pct": 80.44655969787236,
+            "airtime_sim_pct": 34.7998547008547,
             "freq": "5010 MHz",
             "rx_sig": "-",
             "tx_pwr": "10.0 dBm"
           },
           "1,13,HE-ER-SU,HE-MCS 0,242-tone RU,3.2 us,1,LDPC,False,False": {
-            "count": 49,
+            "count": 2852,
             "mean": 14.0,
             "std": 0.0,
             "mean_duration": 5.931623931623931e-05,
             "std_duration": 0.0,
-            "airtime_pct": 0.7195707505438971,
-            "airtime_sim_pct": 0.14532478632478632,
+            "airtime_pct": 19.55344030212357,
+            "airtime_sim_pct": 8.458495726495725,
             "freq": "5010 MHz",
             "rx_sig": "-87.0 dBm",
             "tx_pwr": "-"
-          },
-          "0,13,HE-SU,HE-MCS 11,20 MHz,3.2 us,1,BCC,False,False": {
-            "count": 14,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 3.8428727663628604e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.13319497915445114,
-            "airtime_sim_pct": 0.026900109364540025,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "2,8,HE-ER-SU,HE-MCS 0,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 48,
-            "mean": 366.0,
-            "std": 0.0,
-            "mean_duration": 0.00044441025641025637,
-            "std_duration": 0.0,
-            "airtime_pct": 5.281157548001713,
-            "airtime_sim_pct": 1.0665846153846152,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "2,8,HE-ER-SU,HE-MCS 1,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 62,
-            "mean": 366.0,
-            "std": 0.0,
-            "mean_duration": 0.0002442051282051282,
-            "std_duration": 0.0,
-            "airtime_pct": 3.748437569962637,
-            "airtime_sim_pct": 0.7570358974358975,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
-          },
-          "1,13,HE-ER-SU,HE-MCS 1,242-tone RU,3.2 us,1,LDPC,False,False": {
-            "count": 62,
-            "mean": 14.0,
-            "std": 0.0,
-            "mean_duration": 5.1658119658119654e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.7929286249773966,
-            "airtime_sim_pct": 0.16014017094017094,
-            "freq": "5010 MHz",
-            "rx_sig": "-87.0 dBm",
-            "tx_pwr": "-"
-          },
-          "0,13,HE-ER-SU,HE-MCS 2,242-tone RU,3.2 us,1,BCC,False,False": {
-            "count": 1,
-            "mean": 37.0,
-            "std": 0.0,
-            "mean_duration": 5.749287749287749e-05,
-            "std_duration": 0.0,
-            "airtime_pct": 0.014233701646744538,
-            "airtime_sim_pct": 0.0028746438746438748,
-            "freq": "5010 MHz",
-            "rx_sig": "-",
-            "tx_pwr": "10.0 dBm"
           }
         }
       }

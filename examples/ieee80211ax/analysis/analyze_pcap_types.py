@@ -63,7 +63,7 @@ subdirs_configs = {
     "he_rate_adaptation": ["HeMinstrel", "FixedMcs", "HeMinstrelMobile"],
     "he_bsr": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting"],
     "ul_ofdma": ["OperatingModeIndication", "UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
-    "he_er_su": ["ErBss", "HeSu", "HeErSu", "CellBoundaryHeSu", "CellBoundaryHeErSu"]
+    "he_er_su": ["ErBss", "CellBoundaryHeSu", "CellBoundaryHeErSu"]
 }
 
 subtypes_mgmt = {
@@ -1183,8 +1183,8 @@ def evaluate_evidence(config_results, subdir):
         })
 
     if subdir == "he_er_su":
-        for config_name, expect_er in (("HeSu", False), ("HeErSu", True),
-                                       ("CellBoundaryHeSu", False), ("CellBoundaryHeErSu", True)):
+        for config_name, expect_er in (("ErBss", True), ("CellBoundaryHeSu", False),
+                                       ("CellBoundaryHeErSu", True)):
             qos_total = count_frames(config_results, config_name, "2", "8")
             er_qos = count_frames(config_results, config_name, "2", "8", "HE-ER-SU")
             passed = er_qos == qos_total if expect_er else er_qos == 0
@@ -1382,7 +1382,7 @@ def generate_markdown_tables(config_results, subdir, checks, manifest):
             "and unfragmented controls, nor can Block Ack subtype counts alone establish the fragment bitmap."
         )
     elif "he_er_su" in subdir:
-        er_check = next(check for check in checks if check["id"] == "he-er-format-HeErSu")
+        er_check = next(check for check in checks if check["id"] == "he-er-format-CellBoundaryHeErSu")
         analysis_text = (
             f"**{er_check['status']}: HE-ER-SU payload selection.** {er_check['evidence']}. "
             "IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 "
