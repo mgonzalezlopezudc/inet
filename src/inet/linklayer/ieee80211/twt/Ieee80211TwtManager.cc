@@ -349,6 +349,11 @@ void Ieee80211TwtManager::notifyPeerAwake(const MacAddress& peer)
     if (!foundActive) {
         EV_INFO << "No active TWT service period found for peer " << peer << " at this time.\n";
     }
+    else {
+        // The service-period boundary could not release queued responder
+        // traffic before an announced peer signaled that it was awake.
+        mac->twtServicePeriodChanged();
+    }
 }
 
 void Ieee80211TwtManager::installBroadcastSchedule(const TwtBroadcastSchedule& schedule)
@@ -462,6 +467,7 @@ void Ieee80211TwtManager::updateServicePeriodState()
 
     expireBroadcastSchedules();
     bool awake = agreements.empty() && broadcastSchedules.empty();
+    std::vector<MacAddress> awakeAnnouncements;
 
     // IEEE 802.11ax-2024 Section 26.8.2.1:
     // - For an unannounced TWT agreement, the STA is assumed to be awake at the start of the SP.
@@ -474,9 +480,9 @@ void Ieee80211TwtManager::updateServicePeriodState()
                 agreement.peerAwakeAnnounced = true;
             }
             else if (mib->bssStationData.stationType == Ieee80211Mib::STATION && !agreement.peerAwakeAnnounced) {
-                // Announced TWT: non-AP station sends PS-Poll to AP to announce awake status
-                EV_INFO << "Announced TWT Service Period started. Station sending TWT PS-Poll to " << agreement.peerAddress << "\n";
-                mac->sendTwtPsPoll(agreement.peerAddress);
+                // Announced TWT: record the presence indication now, but send
+                // it only after the station radio has transitioned to awake.
+                awakeAnnouncements.push_back(agreement.peerAddress);
                 agreement.peerAwakeAnnounced = true;
             }
         }
@@ -509,10 +515,17 @@ void Ieee80211TwtManager::updateServicePeriodState()
         stationAwake = awake;
         mac->setTwtRadioAwake(awake);
     }
+    for (const auto& peer : awakeAnnouncements) {
+        EV_INFO << "Announced TWT Service Period started. Station sending TWT PS-Poll to " << peer << "\n";
+        mac->sendTwtPsPoll(peer);
+    }
     // Re-evaluate queued traffic at every service-period boundary. This is
     // required on the AP too: peer eligibility can change while the AP radio
-    // itself remains continuously awake.
-    mac->twtServicePeriodChanged();
+    // itself remains continuously awake. At an announced STA, wait until the
+    // presence indication transmission finishes so HCF cannot contend while
+    // the radio is busy sending the PS-Poll.
+    if (awakeAnnouncements.empty())
+        mac->twtServicePeriodChanged();
 }
 
 void Ieee80211TwtManager::rescheduleServicePeriodTimer()

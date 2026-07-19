@@ -9,6 +9,7 @@
 #define __INET_IEEE80211MAC_H
 
 #include <cstring>
+#include <deque>
 
 #include "inet/common/ModuleRefByPar.h"
 #include "inet/linklayer/base/MacProtocolBase.h"
@@ -67,6 +68,12 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     // The last change channel message received and not yet sent to the physical layer, or nullptr.
     cMessage *pendingRadioConfigMsg = nullptr;
 
+    // Announced TWT presence indications bypass the ordinary data queues, but
+    // they must still be serialized with radio-mode changes and queued HCF
+    // traffic. Multiple agreements may become active at the same instant.
+    std::deque<MacAddress> pendingTwtPsPollPeers;
+    bool twtPsPollTransmissionActive = false;
+
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
     virtual void initialize(int) override;
@@ -75,6 +82,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     virtual void receiveSignal(cComponent *source, simsignal_t signalID, intval_t value, cObject *details) override;
     using MacProtocolBase::receiveSignal;
     virtual void configureRadioMode(physicallayer::IRadio::RadioMode radioMode);
+    virtual void sendNextTwtPsPoll();
     virtual void configureNetworkInterface() override;
     virtual const MacAddress& isInterfaceRegistered();
 

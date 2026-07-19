@@ -1,0 +1,306 @@
+7d0e718d09 2026-07-19 fix(802.11ax): Improved the UL-OFDMA example and its evidence chain.
+7ad40beb26 2026-07-19 fix(802.11ax): Updated [walkthrough.md](examples/ieee80211ax/bss_coloring/walkthrough.md) with fresh PCAP session `20260719T105417Z`.
+2ffaa48f3d 2026-07-19 fix(802.11ax): Tuning. The new performance ordering is:
+563218a67e 2026-07-19 fix(802.11ax): Tuned the BSS-coloring example so spatial reuse is now obvious and repeatable.
+640add95af 2026-07-19 fix(802.11ax): Cleanup implemented and verified, except for the protected fingerprint CSV update.
+1ea0eea68c 2026-07-19 enhac(802.11ax): HE-ER-SU tuning.
+27f7017825 2026-07-19 fix/802.11ax): model the HE-SIG-A repetition gain in the packet-level error model.
+03ea65d6e3 2026-07-18 fix(802.11ax): Fixed the TWT/A‑MPDU retry bookkeeping.
+947a8193bb 2026-07-18 fix(802.11ax): IEEE 802.11ax statistics and validation plan.
+99b34b1491 2026-07-18 fix(802.11ax): statistics generator now produces deterministic, standards-aware walkthroughs for all 15 IEEE 802.11ax examples.
+c074920392 2026-07-18 fix(802.11ax): Important BUG FIX: HE DL MU Scheduling Fallback Fix
+3611e60dfb 2026-07-18 fix(802.11ax): packet statistics table improvements
+87fb770c3a 2026-07-18 fix(802.11ax): adjustments to the plots in example simulation walkthrough.md files
+3361a7c18e 2026-07-18 feat(802.11ax): Radiotap Header Fields Integration
+1f1f463d0c 2026-07-18 feat(02.11): Legacy Rate, HT MCS, A-MPDU, VHT, and 0-length PSDU in PcapRecorder
+93a40af293 2026-07-18 feat(802.11): Radiotap Header Extensibility & EHT Support in PcapRecorder
+a99f0b75a5 2026-07-18 fix(802.11ax): updated the PCAP analysis and recording pipeline to categorize and differentiate regular transmissions from HE-MU OFDMA transmissions at the PHY layer:
+352a342bf6 2026-07-18 feat(802.11ax):  Radiotap HE and HE-MU Field Serialization
+67e3c35658 2026-07-17 fix(802.11ax): C++ implementation, configuration overrides, scripting adjustments, and documentation corrections made to fix the standard compliance inconsistencies in the IEEE 802.11ax simulation examples.
+d958e4d2af 2026-07-17 fix(802.11ax): simulation and standard compliance fixes.
+b987e93344 2026-07-17 enhac(802.11): added plots to the waklthroughs
+ddedebd4e1 2026-07-17 fix(802.11ax): resolved the simulation crashes in the `Width40MHz` and `Width160MHz` configurations, executed the simulation campaign, and updated the walkthrough files with complete packet type statistics.
+a63721a8d8 2026-07-17 fic(802.11): PCAP Radiotap fix
+62f5e0ad5b 2026-07-17 # Walkthrough - Radiotap PCAP Statistics
+4d732a35c6 2026-07-17 fix(802.11ax): updated Walkthrough Files with Proper Radiotap PCAP Statistics
+95ada434f5 2026-07-17 feat(802.11): Radiotap encapsulation for IEEE 802.11 PCAP recording.
+f7b5fa0614 2026-07-17 feat(802.11ax): python scripts to compute packet statistics and corresponding tables in the walkthrough.md files
+abeb2b8a16 2026-07-17 fix(802.11ax): corrected omnetpp.ini to avoid Qtenv exception
+549ce39349 2026-07-17 feat(802.11ax): TGax channel models completed.
+481ed0ed8c 2026-07-16 feat(802.11ax): TGax MIMO channels models next wave.
+fcdbc97b68 2026-07-16 feat(802.11ax): TGax MIMO channel models next wave.
+82cce871f1 2026-07-16 feat(802.11ax(: TGax MIMO channel model next wave.
+ee4703b640 2026-07-16 feat(802.11ax): next TGax channel model implementation.
+5f71fce906 2026-07-16 feat(802.11ax): next TGax MIMO channel model implemented.
+f4de2ed2da 2026-07-16 feat(802.11ax): next MIMO TGax models implemented.
+b52cd51ce6 2026-07-16 feat(802.11ax) Implemented and verified the next TGax milestone.
+62b1cfd6f9 2026-07-16 feat(802.11ax): static TGax SISO.
+97213721db 2026-07-16 chore: removed RTK and Serena
+979e7e8a43 2026-07-16 feat(codex): Project-scoped seven-agent INET squad using the current [Codex custom-agent format](https://learn.chatgpt.com/docs/agent-configuration/subagents):
+dc281cb577 2026-07-16 feat(802.11ax): New dimensional-radio example with over 30 scenario variants:
+da872629b9 2026-07-16 feat(802.11ax): Dimensional radio-medium support for IEEE 802.11ax.
+7ac8fd4b29 2026-07-16 enhac(802.11ax): Updated [walkthrough.md](examples/ieee80211ax/dl_ofdma/walkthrough.md:54) to include both AC_VO configurations, measured results, and protocol verification.
+e7b3bcb5dc 2026-07-16 chore(802.11ax): re-run simulations and omnetpp.ini updated
+a78b9cea58 2026-07-16 fix(802.11ax): Implemented and documented all three changes in [omnetpp.ini](examples/ieee80211ax/dl_ofdma/omnetpp.ini) and [walkthrough.md](examples/ieee80211ax/dl_ofdma/walkthrough.md).
+ff6584537b 2026-07-15 fix(802.11ax): DL OFDMA example simulations: Updated the experiment to use a `1 ms` interval and rewrote the walkthrough.
+cc7edb7611 2026-07-15 fix(802.11ax): Reworked all 14 [IEEE 802.11ax walkthroughs](examples/ieee80211ax/README.md).
+49ff74b54d 2026-07-15 AGENTS.md: updated
+de2e830ecc 2026-07-15 fix(802.11ax): improved MU-MIMO example simulations
+def485322a 2026-07-15 fix(802.11ax): default inter-user CSI leakage downset to 0.01 (improves MU-MIMO example throughput).
+23d6bf27e4 2026-07-15 chore(802.11ax): updated simulation campaign results
+4d1e99f338 2026-07-15 enhac(802.11ax): upgraded the analysis campaign to parallel execution.
+af84139be2 2026-07-15 AGENTS.md: use relative file references in user-facing explanations
+d2c892101c 2026-07-15 fix(802.11ax): parameter tuning in 802.11ax example simultions.
+d66121f340 2026-07-15 fix(802.11ax): normalized warm-up period in example simulations.
+e8644a9931 2026-07-14 fix(802.11ax): Warmup Trigger Starvation Fixes.
+f6c86d533f 2026-07-14 chore(802.11ax): updated simultation campaign results and plots
+b901f85f9b 2026-07-14 fix(802.11ax): OFDMA Subchannel Modeling and Starvation.
+1f747105db 2026-07-14 fix(802.11ax): Verified and updated the results, packet counts, timestamps, and TShark/PCAP analysis metrics across all 14 IEEE 802.11ax (Wi-Fi 6) example simulations and their walkthrough files to reflect the recent upgrade of the server-AP Ethernet connections to 100 Gbps (`Eth100G`).
+edb4adf049 2026-07-14 fix(802.11ax): Upgrade Server-AP Ethernet to 100G in 802.11ax Examples.
+764b6791d5 2026-07-14 fix(802.11ax): DL & UL MU-MIMO.
+7ff2c30b87 2026-07-14 fix(802.11ax): updated plots
+a69cb3a3e2 2026-07-13 fix(802.11ax): DL OFDMA example simulations and related fixes.
+75ca43d5ee 2026-07-13 fix(802.11ax): example plots.
+45bfc81f91 2026-07-12 fix(802.11ax): example simulations fixes.
+89414293f7 2026-07-12 feat(802.11ax): new plots for the example simulations.
+c8570204a8 2026-07-12 feat: result plotting SKILL
+10bacd4e00 2026-07-12 enhac(802.11ax): Elevating IEEE 802.11ax Examples to "Excellent" Suitability
+7a7ff19e82 2026-07-12 fix(802.11ax): Example Packet Trace Verification
+13afade432 2026-07-12 enhac(802.11ax): Comprehensive review and updates of all 14 IEEE 802.11ax (Wi-Fi 6) simulation examples under [examples/ieee80211ax/](examples/ieee80211ax/).
+c56ed99cf7 2026-07-12 enhac(802.11ax): Move and Add HE Multi-TID Block Ack Simulation Configurations
+605a99fc78 2026-07-12 fix(802.11ax): Multi-TID Block Ack, Scheduler Filtering, and Dynamic Fragmentation
+4ddbbdeff6 2026-07-12 enhac(802.11ax): IEEE 802.11ax Examples Enhancement.
+111b3419b2 2026-07-12 doc(802.11ax): updated the 802.11ax example documentation across 13 files.
+7f242530ef 2026-07-12 refactor(802.11ax): reorganized example simulations.
+21f4847383 2026-07-11 feat(802.11ax): new features.
+7124e44874 2026-07-11 feat(802.11ax): new 802.11ax  features
+374529ac5b 2026-07-11 feat(802.11ax): new example simulations.
+89194f7bea 2026-07-11 fix(802.11ax): Reviewed the 802.11ax examples, implemented a new 80 MHz Downlink MU-MIMO simulation config, resolved standard compliance issues, and verified everything.
+c4e51cbdb6 2026-07-11 fix(802.11ax/be): HE MU RU payload header & EHT MU RU payload header serializers
+2e04eb5baf 2026-07-11 fix(802.11ax): several fixes & updates to 802.11 example simulations.
+efd3e747b9 2026-07-11 fix(802.11be): MLO NSTR enforcing
+47e58bccb9 2026-07-11 feat(802.11be): Round-robin DL packet scheduler for 802.11be MLO.
+4e96a2d7c2 2026-07-10 fix(802.11be): 802.11be MLO simulation configurations (Str and Nstr).
+9ef25cc6cf 2026-07-10 fix(802.11ax): corrected compressed BlockAckReq treatment
+715c1451e3 2026-07-10 misc(802.11ax): setting AC_VO in omnetpp.ini
+53c097e55e 2026-07-10 fix: eliminated spurious INET_ROOT setting in inet-simulation-run SKILL
+b9b13ead39 2026-07-10 fix(802.11ax): The DL OFDMA example now correctly demonstrates multi-user scheduling without starvation or wide-bandwidth crashes.
+b4387e872d 2026-07-10 fix: SKILLs cleanup.
+b5216407c6 2026-07-10 fix(802.11ax): Fixed both the DL MU timing bug and the example configuration.
+63d3aa1f42 2026-07-08 fix(802.11): Printer review/fix.
+9928ac5d84 2026-07-08 fix(802.11): Implemented the A-MPDU display handling.
+0db2da1c81 2026-07-08 fix: Updated [.agents/skills/inet-qtenv-lldb-mcp-debugging/SKILL.md](.agents/skills/inet-qtenv-lldb-mcp-debugging/SKILL.md:233) so the actual LLDB/Qtenv launch recipes now explicitly preserve:
+6f851def26 2026-07-08 feat: Qtenv LLDB MCP debugging SKILL
+558a320a68 2026-07-07 fix(802.11): Viewer-tolerant fixes for PHY & MAC dissectors.
+a43b3160fa 2026-07-06 fix(doc): fix in doxylink
+9becdde419 2026-07-05 feat(802.11ax): New 802.11ax HE showcases under `showcases/wireless`:
+1fb1f4384d 2026-07-05 refactor(802.11): 24-bit OFDM SIGNAL layout helpers
+fe17d46a45 2026-07-04 fix(802.11): removed bogus 2-byte transmitPowerDbm field form the packet header. Also, updated AGENTS.md with some rules.
+6033a0e9d8 2026-07-03 fix(802.11): introduced pre-HE management capability gates.
+743b5b3151 2026-07-03 fix(802.11): TWT opt-in change.
+f19c1bc687 2026-07-03 fix(802.11): Implemented and verified the layered/bitlevel OFDM fixes.
+13f893deeb 2026-07-03 chore: updates to .gitignore and some changes to a omnetpp.ini file
+99a24e216f 2026-07-03 feat: added the always-on learning policy to [AGENTS.md](AGENTS.md:15).
+bab68879c1 2026-07-03 feat: various INET skills for AI agents
+de8f9acfca 2026-07-02 fix: Updated the three OMNeT++ execution skills:
+440ebcc2ee 2026-07-02 fix(802.11):  ADDBA exchange and PCAP writing.
+e9620a2ca1 2026-07-02 feat: various skills for OMNeT++ INET dev & debugging
+89065f1286 2026-07-02 fix(802.11): various important fixes affecting 802.11 throughput.
+825c674440 2026-07-01 fix(802.11be): Implemented and smoke-tested the 802.11be examples.
+c6a91dc031 2026-07-01 chore: include tracked RFCs catalog in git
+a8672a5881 2026-07-01 feat(802.11be): preliminary example simulations
+469a0e5ffa 2026-07-01 feat: RFC ingestion pipeline
+f31bb6c9b4 2026-07-01 chore(802.11ax): renamed 802.11ax examples folder. and updated all the references to it.
+33cec169ee 2026-07-01 Implement 802.11be (EHT) MAC Layer (MLO/MU) features
+e3461d36a0 2026-07-01 feat(802.11be): Continued with a larger EHT slice.
+141203815a 2026-07-01 feat(802.11be): next integration slice of 802.11be implementation plan:
+a6d4075a1e 2026-07-01 feat(802.11be): Foundational EHT slice from the plan: `opMode="be"` now has packet-level SU EHT mode support with 20/40/80/160/320 MHz widths, EHT MCS 0-13, 4096-QAM, 5/6 GHz band tagging, and Yans/Nist error-model recognition.
+c9fcbdcca1 2026-07-01 doc(802.11be): initial implementation plan
+e65d48b4b3 2026-07-02 fix(802.11): TXOP get remaining time
+b17c4e004a 2026-07-02 fix(802.11): TXOP duration for ERP or later modes
+5b788d887d 2026-07-02 chore: serena project settings
+74ef0bbe87 2026-06-30 feat(802.11): standards preprocessing pipeline.
+df78bef338 2026-06-30 refactor(802.11ax): HE refactoring.
+5181a809dd 2026-06-30 feat(802.11ax): HE test additions.
+4f6bfe8fd7 2026-06-30 doc(802.11): implementation  review reports
+5a43aac13d 2026-06-30 refactor(802.11ax): missing change in previous commit
+9c8dc6ac6c 2026-06-30 refactor(802.11): Receive timeout behavior and response validation are now properties of `IReceiveStep`.
+c3d6306db3 2026-06-29 Refactor HE MU frame sequences into grammar-style steps
+3973483b4a 2026-06-29 doc(802.11): non-HE PHY standards review annotations.
+ab64c46c39 2026-06-29 doc(802.11ax): Reviewed the HE 802.11 PHY path against the standard and annotated the C++ logic with corrected standard references. Behavior not changed, only comments.
+b3cf43cdae 2026-06-29 doc(802.11): Standard-annotation pass for the non-HE 802.11 MAC paths.
+715a4325d3 2026-06-29 chore(802.11ax): HE HCF / frame-sequence review and annotation pass against `standards/80211ax-2024.txt`.
+5a5fe66587 2026-06-29 refactor(802.11ax): Refactored `HeHcf` into smaller compilation units:
+6c6c53381e 2026-06-27 fix(802.11ax): WATCH cleanup. Changed [Ieee80211Channel.msg (line 17)](src/inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.msg:17) so IIeee80211Band now declares its real C++ base: class IIeee80211Band extends cObject Regeneration now produces the right unwrap path in Ieee80211Channel_m.h: check_and_cast<...>(ptr.get<cObject>()) instead of trying to read the any_ptr as an exact IIeee80211Band *.
+9f4665a583 2026-06-27 fix(802.11ax): printing units in WATCH expressions
+a3b952d6cd 2026-06-27 fix(802.11ax): WATCH cleanup across the HE/802.11ax path.
+0f2043c68b 2026-06-27 feat(802.11ax): WATCH instrumentation across MAC and PHY.
+b8c0e65d40 2026-06-27 feat(802.11ax): Add WATCHs to 802.11ax Source Code
+b8ba05c536 2026-06-27 chore(802.11ax): removed useless WATCHs
+affb1235a3 2026-06-27 chore(802.11ax): minor doc fixes
+b463e8a067 2026-06-26 fix(802.11ax): 802.11ax Implicit BSR Support
+02345499fa 2026-06-26 fix(802.11ax): TWT
+818f3b3f6a 2026-06-26 doc(802.11ax):HE examples walkthrough creation
+98d3cc5fd9 2026-06-26 fix(802.11ax): Fixed two issues: [Hcf.cc (line 770)](src/inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.cc:770): management ACK rate-control retry count now passes mgmtHeader, not the null dataHeader. [HeDlMuTxOpFs.cc (line 564)](src/inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.cc:564): the duplicated MU-BAR BlockAck packet is now deleted after originatorProcessReceivedFrame(). Verification: rebuilt MODE=release and ran HeMinstrel; it reaches t=2s cleanly with no segfault and no HE-TB-BlockAck undisposed warnings
+b1d15d5391 2026-06-26 fix(802.11ax): Fixed the 802.11 MAC dissector so it now: - avoids LLC protocol detection when the payload is empty - treats leftover action/control-frame body bytes as opaque 802.11 MAC content instead of asserting - keeps Trigger and QoS Null packet lines printable in Qtenv
+5cf238b7b0 2026-06-26 fix(802.11ax): small fix in HE BSR example simulation
+020d470f82 2026-06-25 doc(802.11ax): added conservative, standard-referencing comments to the 802.11ax codebase, explicitly flagging non-compliant approximations where the implementation deviates from IEEE 802.11-2024.
+84c7d6fc18 2026-06-25 doc(802.11ax): standard compliance reports
+2b40e8f6b6 2026-06-25 Implement HE rate adaptation, ER SU, and BSR accounting
+03170cfab4 2026-06-25 Implement UORA (UL OFDMA Random Access) and OBO counter mechanism for 802.11ax STAs
+91a993e948 2026-06-25 feat(802.11ax): HE-SIG-B On-Wire Compliance + HeHcf Decomposition
+4f31c75d14 2026-06-25 fix(802.11): correct SIFS for HE in 2.4GHz, define constants for some magic numbers,  add checks to avoid invalid MCS/BW combos
+4784e4821d 2026-06-25 fix(802.11ax): More on-wire compliance.
+01596f9abd 2026-06-25 fix(802.11ax): On-wire compliance upgrade for HE UL Multi-STA BlockAck.
+e7f7ac10aa 2026-06-25 fix(802.11ax): Thorough first cleanup pass across the HE/OFDMA weak spots.
+3d295b12f3 2026-06-25 chore(802.11): removed old reports
+c8ecb3b43f 2026-06-25 feat(802.11ax): Spatial reuse upgrade.
+ae334d2b45 2026-06-25 fix(802.11): Replaced the misleading TODOs in [Ieee80211PhyHeader.msg](src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader.msg) with explicit comments:
+e579bba993 2026-06-25 feat(802.11): Implemented the 802.11 MAC/PHY on-wire bitfield compliance pass.
+9afd7e1d4e 2026-06-25 fix: various 802.11ax fixes.
+473345bb8e 2026-06-24 fix: HE Example Simulation & Compliance Fixes
+9a40164a5a 2026-06-24 feat(802.11ax): Standard-Compliant IEEE 802.11ax Serialization
+c7295f5de3 2026-06-24 fix: 802.11ax standard compliance and quality.
+57a22f54f7 2026-06-24 fix: ensure that all 23 unit tests for the IEEE 802.11 HE standard run and pass successfully.
+e1da941c7b 2026-06-24 chore: removed duplicate comments
+83e38b3d5a 2026-06-24 chore: simplified comments
+697efd5a01 2026-06-24 chore: added detailed, standards-grounded comments and references to the physical layer and MAC link layer implementation of IEEE 802.11ax.
+2371c2d0de 2026-06-24 chore: Added assertions, standard-grounded comments, and informational log messages to the IEEE 802.11 ax Target Wake Time (TWT) implementation in `Ieee80211TwtManager.cc`.
+edc25cef6b 2026-06-24 fix: STA queue disposal when de-associates
+9dd9025f18 2026-06-24 fix(ieee80211): resolve chunk conversion error in 802.11ax TWT simulation
+a5d060825d 2026-06-23 fix: TWT example simulation
+9d69bed05a 2026-06-23 802.11ax TWT support
+4f93afe28e 2026-06-23 chore: improved log messages of 802.11ax
+8e011d624e 2026-06-23 chore: imroved log messages for 802.11ax
+588adbcdcb 2026-06-23 chore: add ASSERTs and log messages to the 802.11ax implementation to ease debugging
+690aeb4373 2026-06-22 doc: several implementation plans
+d0733e9330 2026-06-22 802.11ax HE DL: add ASSERTs, debug logs and explanatory comments
+3953d1a422 2026-06-22 Add IEEE 802.11ax BSS Coloring support and example simulation
+1fec94f331 2026-06-22 feat: Add Multi-TID BlockAck config to dl_ofdma and ul_ofdma simulations
+46a0cbff4a 2026-06-22 feat(ieee80211): Implement OBSS Spatial Reuse, Multi-TID Block Ack, and test runner fixes
+aaf28a361b 2026-06-22 chore: AGENTs.md, plans, etc.
+52ad3441c5 2026-06-22 Fix HE (and HT/VHT) LDPC mode reception
+1db3bcda6c 2026-06-21 Add HE SU LDPC support
+86e20ca437 2026-06-20 fix: various
+ea72ddfe59 2026-06-20 chore: change simulation name
+54585e0e31 2026-06-20 doc: docs-constraints
+0b15dd4505 2026-06-20 Fix HE MU-MIMO sounding and scheduling
+5f5cc1cf1e 2026-06-20 Implement 802.11ax HE DL MU-MIMO and TDD Sounding
+862958e6d1 2026-06-19 feat: HE LDPC example simulation
+a30f3bf4ef 2026-06-19 Implement HE UL OFDMA LDPC reliability
+f63caba666 2026-06-19 Implement and validate packet-level LDPC coding for IEEE 802.11 HT and VHT
+970ac2448d 2026-06-19 doc: Plans
+63fb9c16b9 2026-06-19 Implement IEEE 802.11ac WiFi 5 (VHT) support: LDPC coding, TXOP/aggregation correctness, 80+80 MHz spacing, rate adaptation, capability negotiation, and MIMO abstraction (beamforming & MU-MIMO)
+95f2e1e137 2026-06-19 feat: example DL MU OFDMA simulations
+24f0175b67 2026-06-19 doc: compliance report of DL MU OFDMA simulation example
+69ef6acff4 2026-06-19 fix: several issues.
+0f2f87ea46 2026-06-19 Implement HE management elements for 802.11ax
+1d9d5e3b45 2026-06-19 Implemented the DL MU-OFDMA compliance work:     - Shared HE PPDU timing calculator and common symbol alignment.     - HE-SIG-B RU codec and validation.     - Negotiated HE capability enforcement.     - Standards-shaped A-MPDU delimiters and partial MPDU reception/BA.     - Default MU-BAR/HE-TB BlockAck exchange.     - Explicit BAR for every STA in compatibility mode.     - Runtime-safe SU fallback. Verification:     - Release build: passed.     - Focused HE suite: 18/18 passed.     - OFDMA validation scenario: passed for 2 seconds.     - Shared module suite: 14/16 passed; two unrelated bit/symbol-domain transcript tests expect debug output absent in release mode.
+2afb034202 2026-06-19 test(80211ax): implement phase 1 PHY correctness plan
+06abe73e74 2026-06-19 feat: Implemented Phase 1 and saved the plan at [plans/80211ax-phase1-phy-correctness.md](/home/user/omnetpp_ws/inet/plans/80211ax-phase1-phy-correctness.md). Key results: Authoritative RU/MCS/NSS/GI/DCM duration calculation. Added 1.6 µs GI and packet-level DCM behavior. Per-user NIST/Yans PHY error evaluation. Live radio configuration and stricter AID handling. Transactional MU failure handling with SU fallback. Occupied Block Ack window accounting. Eligibility-specific scheduler backlog. Added PHY-parameter and per-user PER tests. Validation: Build passed with -j$(nproc). 15 focused HE/DL tests passed. UL scheduler test passed.
+9648314c96 2026-06-18 doc: UL MU OFDMA synchronization of parallel frames
+dbcfa11ace 2026-06-18 fix: UL MU OFDMA example simulation crash
+1f1597e4f3 2026-06-18 fix(802.11ax): prevent UL OFDMA Qtenv startup crash
+7e9ece7994 2026-06-18 feat(802.11ax): implement UL MU-OFDMA
+1fb184ac05 2026-06-18 doc: add implementation reports
+b1c0693551 2026-06-18 802.11: group HE STA queue banks
+240a985840 2026-06-18 refactor(802.11ax): move STA queue banks into HeHcf
+4cd76ae178 2026-06-18 fix(802.11ax): integrate per-STA queues with HE HCF
+81a9ac9c14 2026-06-18 feat(802.11ax): migrate HE DL MU-OFDMA scheduling and queue architecture
+b577e53342 2026-06-17 feat: improve visualization of HE DL MU PPDUs in the simulation window
+c1e287c651 2026-06-17 refactor: better structure for the HE DL MU TXOP frame sequence
+77230324b9 2026-06-17 fix: maintain PacketProtocolTag where proper
+d3c344d9f0 2026-06-17 chore: various cleaning tasks
+1b0776b595 2026-06-17 Fix HE MU OFDMA packet handling crashes
+5995cd962c 2026-06-17 Remove HE-MU medium packet tags
+2b15e6fadb 2026-06-17 Migrate HE DL MU OFDMA to single PPDU
+ba1f31ed53 2026-06-17 test: add HE OFDMA unit coverage
+0849fe3212 2026-06-17 fix: gate HE MU block ack responses
+b2c927179a 2026-06-17 docs(phase-04): evolve PROJECT after completion
+af57cf1681 2026-06-17 docs(phase-04): complete phase execution
+4097d8128f 2026-06-17 docs(04): add clean code review report
+f15c2a530b 2026-06-17 fix(04): close validation review findings
+d331b7a175 2026-06-17 docs(04-02): complete TST-02 OFDMA validation plan
+6bca6a73b4 2026-06-17 docs(04-02): document TST-02 OFDMA validation gate
+0bde2e4e1a 2026-06-17 fix(04-02): harden TST-02 validation preflights
+4c91c7eaf6 2026-06-17 docs(04-02): add Phase 4 broad automated test gate
+e4b2cce218 2026-06-17 feat(04-02): create TST-02 OFDMA validation script
+5e35dc2cf5 2026-06-17 docs(04-01): complete TST-01 command contract plan
+f6b1c93af6 2026-06-17 docs(04-01): document TST-01 HE MU command contract
+d44c11022e 2026-06-17 fix(04-01): harden HE MU command contract guards
+89fadfd3ec 2026-06-17 feat(04-01): create TST-01 HE MU command contract
+a836c19644 2026-06-17 docs(03-01): complete execution summary for phase 3 plan 1
+29c0288f9a 2026-06-17 test(03-01): add RU noise-isolation regression for PHY-02
+d2cc05bf3e 2026-06-17 test(03-01): add RU attenuation regression for PHY-01
+96c6a3e805 2026-06-17 feat(03-01): harden RU band derivation and add per-RU power auditing in radiomedium
+bdc05611dd 2026-06-17 docs(03): capture phase plan
+6301a227a0 2026-06-17 docs(03): create phase plan
+ce0d333e3a 2026-06-17 docs(03): research phase domain
+109bc9cc70 2026-06-17 docs(state): record phase 3 context session
+dcb64dfbfb 2026-06-17 docs(03): capture phase context
+6db7c41a4b 2026-06-17 docs(phase-02): Complete phase execution summary - all timing conventions locked via 9 test assertions
+4a3d0f8777 2026-06-17 docs(02-02): Complete Wave 2 summary - timeout recovery behavior locked via test assertions
+84b55cdd13 2026-06-17 test(02-02): Add timeout/continuation assertions to prove recoverable receive-step behavior
+9db6d53853 2026-06-17 docs(02-01): Complete Wave 1 summary - duration formula locked via test assertions
+fb4332db81 2026-06-17 test(02-01): Add duration formula assertions to lock sequential Block Ack protection window
+2bac7bbdcf 2026-06-16 phase-01: implement MU fallback and ADDBA retry cooldown
+2f03383dbf 2026-06-16 docs(01-01): complete strict active BA admission plan
+add8d235c1 2026-06-16 feat(01-01): enforce active BA MU admission
+06af0781b6 2026-06-16 test(01-01): add failing ADDBA validation coverage
+e6c602ad36 2026-06-16 docs(01): finalize phase planning status
+50a696e873 2026-06-16 fix(01): add Hcf pattern classification
+c2f3a4f4a2 2026-06-16 fix(01): revise Block Ack pattern bindings
+324e8101a6 2026-06-16 fix(01): revise plans based on checker feedback
+1c9201f29d 2026-06-16 docs(01): create phase plan
+a7d1f383c2 2026-06-16 docs(01): map implementation patterns
+7380e98911 2026-06-16 docs(phase-1): add validation strategy
+f974aa633c 2026-06-16 docs(01): research phase domain
+dafa027ee9 2026-06-16 docs(state): record phase 1 context session
+d2720b61eb 2026-06-16 docs(01): capture phase context
+44e32f2267 2026-06-16 docs: create roadmap (4 phases)
+4ce840b328 2026-06-16 docs: define v1 requirements
+36631b2db1 2026-06-16 docs: add project research
+16212112d0 2026-06-16 chore: add project config
+8ad6c65db7 2026-06-16 docs: initialize project
+cdb6f865ea 2026-06-16 docs: update planning documents and key decisions for milestone completion
+35ff6f8d7c 2026-06-16 Fix sequential BlockAcks after a MU DL OFDMA frame to use BARs from the AP
+d7ae56d967 2026-06-16 Fix:  Include missing info in simulation for DL MU OFDMA packets
+785d7f8064 2026-06-16 chore: update TESTING.md and OFDMA example
+1c3d98eaa1 2026-06-16 Fix: ensure the ADDBA handshake has been performed before transmitting the first DL MU OFDMA frame
+52bd94c892 2026-06-15 Add proper protocol serializers for 802.11ax HE MU PHY header
+d7be933389 2026-06-15 Implement 802.11ax DL OFDMA Sequential Block ACK NAV protection and transmission coordination
+c790178adb 2026-06-15 Fix: Subtransmissions of a MU OFDMA frame do not cause interference among themselves
+77373e8f12 2026-06-15 Update milestone planning state to complete Phase 6 and final project execution
+654181a67f 2026-06-15 Phase 6: Complete Downlink OFDMA integration and verification, resolving sequence numbering, sequential ACKs, and bandwidth mode lookup leaks
+68fa04e8c5 2026-06-14 Update GSD PROJECT, REQUIREMENTS, ROADMAP and STATE for Phase 5 completion
+df62e4b797 2026-06-14 Implement 802.11ax DL OFDMA Phase 5: Sequential Block Acknowledgments
+771712fdfa 2026-06-14 Phase 4: Multi-User Reception at STAs and update planning files
+f2c9e18838 2026-06-14 docs: complete Phase 3 and update planning files
+7e5f192591 2026-06-14 Implement 802.11ax DL OFDMA scheduling support and tests
+b886bdfead 2026-06-14 Phase 2: PHY Resource Unit (RU) Sub-channel Representation
+00c5f8e900 2026-06-14 GSD quickfix: replace Ieee80211ax names by Ieee80211He to maintain consistency with current codebase
+a5364ad81a 2026-06-14 Updated .agent/rules/general.md
+2d488b1c86 2026-06-14 Phase 1: High Efficiency (HE) Mode Enablement for IEEE 802.11ax
+0ef48dff7f 2026-06-14 docs: create roadmap (6 phases)
+696036261a 2026-06-14 docs: define v1 requirements
+ee5b5588f2 2026-06-14 docs: complete research
+e9e90b72b1 2026-06-14 chore: add project config
+588a86febf 2026-06-14 docs: initialize project
+d610571901 2026-06-14 docs: map existing codebase
+55f96cd6ce 2026-05-31 Undo fix IPv6 Use correct destination address so packets with multicast destination are properly handled, because it is being taken care of in another branch
+2ab421942b 2026-06-22 WHATSNEW updated for inet-4.7
+1abbbcb645 2026-06-27 visualizer: don't push synthetic coordinates through the map projection
+a0c21d1c04 2026-06-27 visualizer: don't override the map affine on a runtime view-param change
+7e60545ef0 2026-06-27 visualizer: guard against null visualization in mobility deletion handler
+6bffb78244 2026-06-26 tests: unit and module tests for geodesy, projection and mobility
+8ff28b44df 2026-06-26 doc: users-guide chapters for satellite mobility and geographic visualization
+e77463ac70 2026-06-26 examples: satellite mobility example and equirectangular map assets
+97a91bc7dc 2026-06-26 mobility: display geographic position ({geo_position}) on mobile nodes
+0b8b9b4185 2026-06-26 visualizer: apply viewport clipping to path, link, tree, routing and channel visualizers
+012c07da9b 2026-06-26 visualizer: mobility 3D orientation cone, direction-projection modes and map clipping
+b8a91b84f4 2026-06-26 visualizer: IntegratedCanvasVisualizer and IntegratedMultiCanvasVisualizer
+29a7e96e10 2026-06-26 visualizer: geographic map, horizon and sky-view canvas visualizers
+89385e727a 2026-06-26 mobility: GNSS track playback mobility
+634a572702 2026-06-26 mobility: satellite (SGP4/TLE) mobility model
+3f20a98de6 2026-06-26 common: WGS84 geodesy, ECEF/anchored coordinate systems and equirectangular map projection
+414ab55003 2026-06-26 mobility: vendor Vallado SGP4 reference implementation
