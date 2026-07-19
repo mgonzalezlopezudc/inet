@@ -393,6 +393,16 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
         }
         rx->transmissionStateChanged(transmissionState);
 
+        if (transmissionFinished) {
+            bool completedTwtPsPoll = twtPsPollTransmissionActive;
+            if (completedTwtPsPoll)
+                twtPsPollTransmissionActive = false;
+            if (!pendingTwtPsPollPeers.empty())
+                sendNextTwtPsPoll();
+            else if (completedTwtPsPoll && twtManager != nullptr && twtManager->isStationAwake())
+                twtServicePeriodChanged();
+        }
+
         if (mldMac != nullptr) {
             mldMac->linkTransmissionStateChanged(this, transmissionState);
         }
@@ -463,6 +473,18 @@ bool Ieee80211Mac::isTwtPeerEligible(const MacAddress& peer) const
 void Ieee80211Mac::sendTwtPsPoll(const MacAddress& peer)
 {
     Enter_Method("sendTwtPsPoll");
+    pendingTwtPsPollPeers.push_back(peer);
+    sendNextTwtPsPoll();
+}
+
+void Ieee80211Mac::sendNextTwtPsPoll()
+{
+    Enter_Method("sendNextTwtPsPoll");
+    if (twtPsPollTransmissionActive || pendingTwtPsPollPeers.empty() || transmissionState == IRadio::TRANSMISSION_STATE_TRANSMITTING)
+        return;
+
+    auto peer = pendingTwtPsPollPeers.front();
+    pendingTwtPsPollPeers.pop_front();
     auto header = makeShared<Ieee80211PsPollFrame>();
     header->setAID(mib->bssStationData.associationId);
     header->setReceiverAddress(peer);
@@ -478,6 +500,7 @@ void Ieee80211Mac::sendTwtPsPoll(const MacAddress& peer)
             packet->addTagIfAbsent<Ieee80211ModeReq>()->setMode(mode);
     }
 
+    twtPsPollTransmissionActive = true;
     sendDownFrame(packet);
 }
 
