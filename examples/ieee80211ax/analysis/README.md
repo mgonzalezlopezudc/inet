@@ -21,7 +21,7 @@ the common warm-up definition.
 | [Rate adaptation](rate-adaptation.md) | Selected MCS/NSS, EWMA probability, and actual TX outcome | A changing MCS is adaptation evidence only when paired with transmission outcomes. |
 | [Preamble puncturing](puncturing.md) | Runtime mask 0 → 2 → 0 and aligned RU placement | Puncturing avoids a busy secondary 20 MHz channel but sacrifices usable spectrum. |
 | [MU-MIMO](mu-mimo.md) | Multiple users in a PPDU and disjoint spatial-stream ranges | Concurrent streams, not throughput alone, establish that MU-MIMO occurred. |
-| [BSS coloring](bss-coloring.md) | Correct color classification, OBSS/PD decisions, and concurrent AP airtime | The tuned workload raises aggregate goodput by about 29% and concurrent AP airtime from 0.44% to 15.42%; conservative and same-color controls reproduce the disabled trajectory. |
+| [BSS coloring](bss-coloring.md) | Correct color classification, OBSS/PD decisions, and concurrent AP airtime | A moving OBSS makes nearby thresholds yield a strict disabled < conservative < enabled < aggressive goodput ladder (6.83–7.61 Mbit/s), while the same-color control reproduces disabled. |
 | [Channel width](channel-width.md) | Saturated workload and per-run goodput/delay | Wider channels increase capacity here, but scaling is not expected to be perfectly linear. |
 | [DL schedulers](dl-schedulers.md) | Separate symmetric/asymmetric workloads | Scheduler conclusions depend on load shape; asymmetric fairness is normalized by offered load. |
 | [BSR](bsr.md) | AP-reported and AP-scheduled backlog timelines | BSR is scheduling state, not application goodput; freshness controls whether the AP view is usable. |
