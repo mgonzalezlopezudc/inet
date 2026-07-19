@@ -17,7 +17,8 @@ import inet.visualizer.contract.IIntegratedVisualizer;
 //
 // It consists of two overlapping BSSs:
 // - BSS 1: AP1 (200, 250) and associated STA1_1, STA1_2 (170, 240/260)
-// - BSS 2: AP2 (400, 250) and associated STA2_1, STA2_2 (430, 240/260)
+// - BSS 2: AP2 and its two stations move together along the x axis, preserving
+//   their 30 m cell geometry while the OBSS separation increases.
 //
 // Having 2 STAs per BSS ensures that the AP downlink scheduler triggers
 // HE MU-OFDMA transmissions (which carry BSS Color) instead of falling

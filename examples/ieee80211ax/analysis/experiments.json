@@ -132,9 +132,9 @@
       "output": "examples/ieee80211ax/analysis/figures/bss/bss-coloring-comparison.png",
       "conditions": [
         {"label": "Disabled", "config": "BssColoringDisabled", "metadata": {"spatial_reuse_evidence": "disabled"}},
-        {"label": "Conservative", "config": "ObssPdConservative", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -82}},
+        {"label": "Conservative", "config": "ObssPdConservative", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -81}},
         {"label": "Enabled", "config": "BssColoringEnabled", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -79}},
-        {"label": "Aggressive", "config": "ObssPdAggressive", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -62}},
+        {"label": "Aggressive", "config": "ObssPdAggressive", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -78}},
         {"label": "Color collision", "config": "BssColoringCollision", "metadata": {"spatial_reuse_evidence": "collision"}}
       ]
     },
