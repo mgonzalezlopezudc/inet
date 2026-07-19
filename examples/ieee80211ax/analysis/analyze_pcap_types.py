@@ -1388,7 +1388,7 @@ def generate_markdown_tables(config_results, subdir, checks, manifest):
             "IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 "
             "(242-tone) or MCS 0 (106-tone); DCM is optional. The standard does not guarantee a range gain on every channel, "
             "but a configuration claiming HE-ER-SU payload coverage must first select that PPDU format. The matched five-seed 340 m sweep in this walkthrough "
-            "shows equal delivery and equal incorrect-reception counts, exposing the packet-level model's lack of a separate HE-SIG-A repetition gain."
+            "uses equal MCS 0 data fields and reports application delivery together with incorrect-reception observations, isolating the modeled HE-SIG-A repetition gain."
         )
     elif "he_rate_adaptation" in subdir:
         analysis_text = (

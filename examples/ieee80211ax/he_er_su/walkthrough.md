@@ -34,7 +34,7 @@ The network [HeErSuNetwork.ned](HeErSuNetwork.ned) consists of:
 
 ## Configurations in `omnetpp.ini`
 
-The [omnetpp.ini](omnetpp.ini) file defines three scenarios:
+The [omnetpp.ini](omnetpp.ini) file defines the following scenarios:
 
 ### 1. `HeSu` (Baseline)
 - The AP transmits standard HE SU PPDUs.
@@ -58,6 +58,17 @@ The [omnetpp.ini](omnetpp.ini) file defines three scenarios:
 - Block Ack is disabled to keep the trace focused on ER-BSS management and
   single-MPDU behavior; this is a scope choice, not an ER-BSS requirement.
 
+### 4. `CellBoundaryHeSu` and `CellBoundaryHeErSu` (controlled comparison)
+
+- Move the client to 340 m and use a -89 dBm background-noise floor, -100 dBm
+  receiver sensitivity, and a 0 dB generic SNIR threshold. This keeps the
+  signal inside the receiver gates while leaving packet success to the IEEE
+  802.11 error model.
+- Use MCS 0 for both formats, 100-byte packets every 600 us, and single-MPDU
+  acknowledgments. Equal MCS removes rate selection as an explanation, while
+  short, unaggregated frames exercise HE-SIG-A often enough for its repetition
+  gain to affect application delivery.
+
 ---
 
 ## Running the Simulation
@@ -79,20 +90,24 @@ bin/inet -u Cmdenv -c HeErSu examples/ieee80211ax/he_er_su/omnetpp.ini
 
 # Run ER-BSS beaconing and association
 bin/inet -u Cmdenv -c ErBss examples/ieee80211ax/he_er_su/omnetpp.ini
+
+# Run the matched low-SNR comparison
+bin/inet -u Cmdenv -c CellBoundaryHeSu examples/ieee80211ax/he_er_su/omnetpp.ini
+bin/inet -u Cmdenv -c CellBoundaryHeErSu examples/ieee80211ax/he_er_su/omnetpp.ini
 ```
 
 ---
 
 ## Verifying Results
 
-After running the simulations, analyze the packets received at the UDP application layer on the `host[0]` client and MAC layer packet drops due to incorrect reception.
+After running the simulations, analyze the packets received at the UDP application layer on the `host[0]` client and wireless MAC packet drops due to incorrect reception.
 
 ```sh
 # Query packets received at the UDP sink on the host[0]
 opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.host[0].app*"' examples/ieee80211ax/he_er_su/results/*.sca
 
-# Query packet drops due to corruption/incorrect reception at the host[0] MAC layer
-opp_scavetool query -l -f 'name =~ "packetDropIncorrectlyReceived:count" and module =~ "*.host[0].wlan[0].mac"' examples/ieee80211ax/he_er_su/results/*.sca
+# Query packet drops due to corruption/incorrect reception at all wireless MACs
+opp_scavetool query -l -f 'name =~ "packetDropIncorrectlyReceived:count" and module =~ "*.wlan[0].mac"' examples/ieee80211ax/he_er_su/results/*.sca
 ```
 
 ### Controlled cell-boundary result
@@ -101,12 +116,16 @@ opp_scavetool query -l -f 'name =~ "packetDropIncorrectlyReceived:count" and mod
 
 At 340 m, the five matched seeds now produce different MAC-layer reliability results in this deterministic model, because the PHY error model applies the HE-SIG-A repetition gain for HE-ER-SU:
 
-| Configuration | Delivered packets per seed | Incorrectly received MAC observations per seed | Application goodput |
+| Configuration | Delivered packets per seed | Incorrectly received MAC observations per seed | Mean application goodput |
 |---|---:|---:|---:|
-| `CellBoundaryHeSu` | 1700 | 14 | 2.4 Mbit/s |
-| `CellBoundaryHeErSu` | 1700 | 0 | 2.4 Mbit/s |
+| `CellBoundaryHeSu` | 1157-1218 (mean 1196.2) | 2562-2626 (mean 2587.8) | 0.563 Mbit/s |
+| `CellBoundaryHeErSu` | 2832-2833 (mean 2832.8) | 233-286 (mean 258.8) | 1.333 Mbit/s |
 
-With the HE-SIG-A repetition gain now modeled in the PHY error model, the five matched seeds no longer produce identical reception results. HE ER-SU decodes the common signaling field more reliably, which removes the MAC-layer incorrect-reception observations at this boundary while HE-SU still incurs them.
+Across five matched seeds, HE-ER-SU delivers 2.37 times as many application
+packets and reduces incorrectly received MAC observations by 90%. It carries
+essentially the complete 1.333 Mbit/s offered stream, whereas HE-SU reaches
+only 0.563 Mbit/s on average. Because both configurations use the same MCS 0
+data field, this separation comes from the modeled HE-SIG-A repetition gain.
 
 ---
 
@@ -134,9 +153,14 @@ The decoded output timeline shows:
 ## Interpretation of Results
 
 1. **Successful Delivery**:
-   - Both scenarios deliver **1700 packets** to the `host[0]` client during the normalized `.3–2s` traffic interval.
-   - Under the clean, deterministic Free Space Path Loss model without dynamic shadowing or multipath fading, the signal at 340 meters remains sufficient for MCS 0–2 to decode the data field successfully in both cases.
-   - The matched 340 m sweep now differs in MAC-layer reliability: `CellBoundaryHeSu` records **14 incorrectly received MAC observations per seed**, while `CellBoundaryHeErSu` records **0**. The improvement comes from the modeled HE-SIG-A repetition gain; the data field itself is identical to HE-SU.
+   - The five HE-SU runs deliver **1157-1218 packets**, while HE-ER-SU
+     delivers **2832-2833 packets** during the normalized `.3-2s` traffic
+     interval.
+   - HE-ER-SU reduces the mean incorrectly received MAC observations across
+     the wireless endpoints from **2587.8** to **258.8** and raises mean application goodput from
+     **0.563 Mbit/s** to **1.333 Mbit/s**.
+   - The boundary pair fixes both data fields at MCS 0. The measured difference
+     therefore does not rely on HE Minstrel choosing a different MCS.
 
 2. **Under-the-Hood Preamble Difference**:
    - In `HeSu`, transmissions use standard HE SU PPDUs with a **36 µs** preamble.
@@ -144,13 +168,13 @@ The decoded output timeline shows:
    - The data field uses the same 242-tone RU and MCS 0–2 options as the corresponding HE-SU mode, so the range benefit observed here is purely the preamble/header robustness gain.
 
 3. **Why the parameters sit near the coverage boundary**:
-   - The matched boundary treatment uses `340 m`, `10 mW`, and robust MCS selection; the original `HeSu`/`HeErSu` pair remains at 320 m.
-   - These parameters put ordinary HE SU near the
-     configured receiver sensitivity. A short distance would hide the value of
-     repeated HE-SIG-A; a much longer distance would make both modes
-     fail regardless of format.
-   - The 300-byte, `1 ms` stream creates enough frames to expose a reception
-     reliability difference if the selected PHY/error model produces one, without turning this into a capacity benchmark.
+   - The matched boundary treatment uses `340 m`, `10 mW`, and a controlled
+     `-89 dBm` background-noise floor; the original `HeSu`/`HeErSu` format pair
+     remains at 320 m.
+   - The `-100 dBm` sensitivity and `0 dB` generic SNIR threshold prevent a
+     receiver-gate cliff from hiding the format-specific error-model behavior.
+   - The 100-byte, `600 us` single-MPDU stream makes header robustness visible
+     while keeping the offered load low enough for HE-ER-SU to deliver it.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ## 802.11 Packet Type Statistics
@@ -158,7 +182,7 @@ The decoded output timeline shows:
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260718T132413Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260719T084559Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -168,45 +192,35 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | CellBoundaryHeErSu produced protocol-visible wireless observations | 3420 AP/global transmission observations |
-| **PASS** | CellBoundaryHeSu produced protocol-visible wireless observations | 3414 AP/global transmission observations |
+| **PASS** | CellBoundaryHeErSu produced protocol-visible wireless observations | 5937 AP/global transmission observations |
+| **PASS** | CellBoundaryHeSu produced protocol-visible wireless observations | 5627 AP/global transmission observations |
 | **PASS** | ErBss produced protocol-visible wireless observations | 240 AP/global transmission observations |
 | **PASS** | HeErSu produced protocol-visible wireless observations | 3420 AP/global transmission observations |
 | **PASS** | HeSu produced protocol-visible wireless observations | 3414 AP/global transmission observations |
 | **PASS** | HE-SU baseline does not use HE-ER-SU | 0 of 1700 QoS Data observations decoded as HE-ER-SU |
 | **PASS** | QoS payload uses HE-ER-SU | 1702 of 1702 QoS Data observations decoded as HE-ER-SU |
 | **PASS** | HE-ER-SU uses one spatial stream, a 242-tone RU, and MCS 0-2 | HE-MCS 0/242-tone RU/NSTS 1, HE-MCS 1/242-tone RU/NSTS 1, HE-MCS 2/242-tone RU/NSTS 1 |
-| **PASS** | HE-SU baseline does not use HE-ER-SU | 0 of 1700 QoS Data observations decoded as HE-ER-SU |
-| **PASS** | QoS payload uses HE-ER-SU | 1702 of 1702 QoS Data observations decoded as HE-ER-SU |
-| **PASS** | HE-ER-SU uses one spatial stream, a 242-tone RU, and MCS 0-2 | HE-MCS 0/242-tone RU/NSTS 1, HE-MCS 1/242-tone RU/NSTS 1, HE-MCS 2/242-tone RU/NSTS 1 |
+| **PASS** | HE-SU baseline does not use HE-ER-SU | 0 of 3687 QoS Data observations decoded as HE-ER-SU |
+| **PASS** | QoS payload uses HE-ER-SU | 3085 of 3085 QoS Data observations decoded as HE-ER-SU |
+| **PASS** | HE-ER-SU uses one spatial stream, a 242-tone RU, and MCS 0-2 | HE-MCS 0/242-tone RU/NSTS 1 |
 
 ### Configuration: `CellBoundaryHeErSu`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3420**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5937**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2de133" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, BCC] | 48 | 1.40% | 366.0 B | 0.0 B | 444.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 5.28% | 1.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ed12e" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 1, 242-tone RU, GI 3.2 us, BCC] | 62 | 1.81% | 366.0 B | 0.0 B | 244.2 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.75% | 0.76% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#25d11f" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, BCC] | 1592 | 46.55% | 366.0 B | 0.0 B | 177.5 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 69.95% | 14.13% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2de133" /></svg> | Data: QoS Data [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, BCC] | 3085 | 51.96% | 166.0 B | 0.0 B | 225.6 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 80.45% | 34.80% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3c9add" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] | 49 | 1.43% | 14.0 B | 0.0 B | 59.3 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.72% | 0.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#269be8" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC] | 62 | 1.81% | 14.0 B | 0.0 B | 51.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.79% | 0.16% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#73bbe7" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC] | 1591 | 46.52% | 14.0 B | 0.0 B | 49.1 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 19.34% | 3.91% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f43a34" /></svg> | Management: Action [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 84.5 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.02% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2181f" /></svg> | Management: Action [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, BCC] | 1 | 0.03% | 37.0 B | 0.0 B | 57.5 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 0.41% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.13% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3c9add" /></svg> | Control: Ack [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] | 2852 | 48.04% | 14.0 B | 0.0 B | 59.3 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 19.55% | 8.46% |
 
 ### Configuration: `CellBoundaryHeSu`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3414**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5627**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28dc31" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 1700 | 49.79% | 366.0 B | 0.0 B | 436.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 89.42% | 37.09% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28dc31" /></svg> | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, BCC] | 3687 | 65.52% | 166.0 B | 0.0 B | 217.6 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 88.96% | 40.12% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2098f3" /></svg> | Control: Ack [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 1700 | 49.79% | 14.0 B | 0.0 B | 51.3 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 10.51% | 4.36% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 0.41% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.06% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2098f3" /></svg> | Control: Ack [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 1940 | 34.48% | 14.0 B | 0.0 B | 51.3 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 11.04% | 4.98% |
 
 ### Configuration: `ErBss`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **240**
@@ -250,5 +264,5 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3414*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 14 | 0.41% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.06% | 0.03% |
 
 ### Analysis of Packet Distribution
-**PASS: HE-ER-SU payload selection.** 1702 of 1702 QoS Data observations decoded as HE-ER-SU. IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 (242-tone) or MCS 0 (106-tone); DCM is optional. The matched five-seed 340 m sweep now shows equal delivery (1700 packets per seed) but different MAC-layer reliability: HE-SU records 14 incorrectly received MAC observations per seed, while HE-ER-SU records 0, reflecting the packet-level model's newly applied HE-SIG-A repetition gain.
+**PASS: HE-ER-SU payload selection.** 1702 of 1702 QoS Data observations decoded as HE-ER-SU. IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 (242-tone) or MCS 0 (106-tone); DCM is optional. The standard does not guarantee a range gain on every channel, but a configuration claiming HE-ER-SU payload coverage must first select that PPDU format. The matched five-seed 340 m sweep in this walkthrough uses equal MCS 0 data fields and reports application delivery together with incorrect-reception observations, isolating the modeled HE-SIG-A repetition gain.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->

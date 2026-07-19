@@ -199,6 +199,22 @@
       }
     }
   },
+  "er": {
+    "HE-ER-SU": {
+      "goodput_mbps": {
+        "ci95": 0.00026131248048926235,
+        "count": 5,
+        "mean": 1.3330823529411766
+      }
+    },
+    "HE-SU": {
+      "goodput_mbps": {
+        "ci95": 0.014463356625259376,
+        "count": 5,
+        "mean": 0.5629176470588235
+      }
+    }
+  },
   "fragmentation": {
     "Dynamic": {
       "ack_airtime_total_ms": {
