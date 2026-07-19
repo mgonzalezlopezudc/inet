@@ -18,7 +18,9 @@ REPOSITORY_ROOT = EXAMPLE_DIR.parents[2]
 INI = EXAMPLE_DIR / "omnetpp.ini"
 RESULTS_DIR = EXAMPLE_DIR / "results"
 CONFIGS = ("AxUl", "AcUl", "AxDl", "AcDl", "AxMixed", "AcMixed")
-RUNS_PER_CONFIG = 15
+STATION_COUNTS = (128, 256, 512)
+RUNS_PER_STATION_COUNT = 5
+RUNS_PER_CONFIG = len(STATION_COUNTS) * RUNS_PER_STATION_COUNT
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,23 @@ def positive_int(text: str) -> int:
     if value < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
     return value
+
+
+def station_counts(text: str) -> tuple[int, ...]:
+    try:
+        values = tuple(int(value.strip()) for value in text.split(","))
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "must be a comma-separated list containing 128, 256, or 512"
+        ) from None
+    invalid = [value for value in values if value not in STATION_COUNTS]
+    if not values or invalid:
+        raise argparse.ArgumentTypeError(
+            "must be a comma-separated list containing 128, 256, or 512"
+        )
+    if len(values) != len(set(values)):
+        raise argparse.ArgumentTypeError("station counts must not be repeated")
+    return values
 
 
 def execute(job: Job) -> tuple[Job, int, str]:
@@ -80,7 +99,18 @@ def main() -> None:
         "--run",
         action="append",
         type=int,
-        help="run only this run number, 0..14 (repeatable)",
+        help=f"run only this run number, 0..{RUNS_PER_CONFIG - 1} (repeatable)",
+    )
+    parser.add_argument(
+        "--station-counts", "--station-count", "--stations",
+        type=station_counts,
+        help="comma-separated station counts: 128, 256, and/or 512 (default: all)",
+    )
+    parser.add_argument(
+        "--runs-per-station-count", "--runs",
+        type=int,
+        choices=range(1, RUNS_PER_STATION_COUNT + 1),
+        help="number of runs per station count, 1..5 (default: 5)",
     )
     parser.add_argument(
         "-j", "--jobs",
@@ -92,10 +122,26 @@ def main() -> None:
     args = parser.parse_args()
 
     configs = tuple(args.config) if args.config else CONFIGS
-    runs = tuple(args.run) if args.run else tuple(range(RUNS_PER_CONFIG))
+    if args.run and (args.station_counts or args.runs_per_station_count):
+        parser.error(
+            "--run cannot be combined with --station-counts or "
+            "--runs-per-station-count"
+        )
+    if args.run:
+        runs = tuple(args.run)
+    else:
+        selected_station_counts = args.station_counts or STATION_COUNTS
+        run_count = args.runs_per_station_count or RUNS_PER_STATION_COUNT
+        runs = tuple(
+            STATION_COUNTS.index(station_count) * RUNS_PER_STATION_COUNT + repetition
+            for station_count in selected_station_counts
+            for repetition in range(run_count)
+        )
     invalid = [run for run in runs if run < 0 or run >= RUNS_PER_CONFIG]
     if invalid:
-        parser.error(f"run numbers must be in 0..14, got {invalid}")
+        parser.error(
+            f"run numbers must be in 0..{RUNS_PER_CONFIG - 1}, got {invalid}"
+        )
     jobs = [Job(config, run) for config in configs for run in runs]
 
     if args.dry_run:
