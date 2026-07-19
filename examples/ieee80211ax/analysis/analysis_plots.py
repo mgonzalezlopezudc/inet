@@ -180,7 +180,7 @@ def plot_fragmentation(conditions: list[Condition], output: Path) -> None:
 
 def plot_uora(conditions: list[Condition], output: Path) -> None:
     successes: list[pd.DataFrame] = []
-    failures: list[pd.DataFrame] = []
+    successful_transmissions: list[pd.DataFrame] = []
     fairness: list[pd.DataFrame] = []
     for condition in conditions:
         attempts = condition.scalars("heUlRandomAccessAttempt:count")
@@ -193,11 +193,10 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
         if (merged.attempts <= 0).any():
             raise RuntimeError(f"{condition.config}: UORA produced no attempts")
         merged["probability"] = merged.successes / merged.attempts
-        merged["unsuccessful"] = merged.attempts - merged.successes
         if (merged.successes <= 0).all():
             raise RuntimeError(f"{condition.config}: UORA produced no successful transmissions")
         successes.append(merged[["runID", "probability"]])
-        failures.append(merged[["runID", "unsuccessful"]])
+        successful_transmissions.append(merged[["runID", "successes"]])
         fairness_records = []
         for run_id, rows in success.groupby("runID"):
             fairness_records.append({"runID": run_id, "fairness": jain(rows.value)})
@@ -205,11 +204,11 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
     labels = [condition.label for condition in conditions]
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.8))
     bar_with_ci(axes[0], labels, successes, "probability")
-    bar_with_ci(axes[1], labels, failures, "unsuccessful")
+    bar_with_ci(axes[1], labels, successful_transmissions, "successes")
     bar_with_ci(axes[2], labels, fairness, "fairness")
     axes[0].set_ylabel("UORA success probability")
     axes[0].set_ylim(0, 1.05)
-    axes[1].set_ylabel("Unsuccessful attempts per run")
+    axes[1].set_ylabel("Successful UORA transmissions per run")
     axes[2].set_ylabel("Jain fairness of per-STA successes")
     axes[2].set_ylim(0, 1.05)
     fig.suptitle("UORA load and random-access RU comparison")

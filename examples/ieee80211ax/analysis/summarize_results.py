@@ -13,6 +13,7 @@ from analysis_core import (
     REPOSITORY_ROOT,
     conditions_for_group,
     crop_vector,
+    jain,
     load_manifest,
     per_run_delay_percentile,
     per_run_goodput,
@@ -62,10 +63,16 @@ def main() -> None:
             if group_name == "uora":
                 attempts = condition.scalars("heUlRandomAccessAttempt:count")
                 successes = condition.scalars("heUlRandomAccessSuccess:count")
-                attempts = attempts[attempts.module.str.contains(".host[", regex=False)].groupby("runnumber").value.sum()
-                successes = successes[successes.module.str.contains(".host[", regex=False)].groupby("runnumber").value.sum()
-                item["attempts"] = ci(attempts)
-                item["success_probability"] = ci(successes / attempts)
+                attempts = attempts[attempts.module.str.contains(".host[", regex=False)]
+                successes = successes[successes.module.str.contains(".host[", regex=False)]
+                attempt_totals = attempts.groupby("runnumber").value.sum()
+                success_totals = successes.groupby("runnumber").value.sum()
+                item["attempts"] = ci(attempt_totals)
+                item["successful_transmissions"] = ci(success_totals)
+                item["success_probability"] = ci(success_totals / attempt_totals)
+                item["success_fairness"] = ci([
+                    jain(rows.value) for _, rows in successes.groupby("runnumber")
+                ])
             if group_name == "fragmentation":
                 sizes = condition.vectors(
                     "packetSentToPeer:vector(packetBytes)",

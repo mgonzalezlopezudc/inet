@@ -62,7 +62,8 @@ subdirs_configs = {
     ],
     "he_rate_adaptation": ["HeMinstrel", "FixedMcs", "HeMinstrelMobile"],
     "he_bsr": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting"],
-    "ul_ofdma": ["OperatingModeIndication", "UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
+    "ul_ofdma": ["ScheduledOnly", "MixedUora", "EqualRus", "EdcaBaseline",
+                 "UoraLightContention", "UoraHeavyContention", "UoraMoreRandomAccessRus"],
     "he_er_su": ["ErBss", "CellBoundaryHeSu", "CellBoundaryHeErSu"]
 }
 
@@ -446,9 +447,13 @@ def run_simulation(config_name, subdir, run_number, session_id):
                "packet-statistics" / session_id / config_name)
     res_dir.mkdir(parents=True, exist_ok=True)
 
+    # UL-OFDMA packet statistics use the AP observation point exclusively.
+    # Avoid recording the same dense exchange at every one of the eight STAs.
+    pcap_recording = ("--**.ap.wlan[*].recordPcap=true" if subdir == "ul_ofdma"
+                      else "--**.wlan[*].recordPcap=true")
     cmd = [
         "bin/inet", "-u", "Cmdenv", "-f", str(ini_file), "-c", config_name, "-r", str(run_number),
-        "--**.wlan[*].recordPcap=true",
+        pcap_recording,
         "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
         "--**.wlan[*].pcapRecorder[*].verbose=false",
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
@@ -1347,10 +1352,11 @@ def generate_markdown_tables(config_results, subdir, checks, manifest):
         )
     elif "ul_ofdma" in subdir:
         analysis_text = (
-            "The UL-MU configuration contains repeated **Trigger** frames followed by the solicited station transmissions and AP **Block Ack** responses, "
-            "which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). "
-            "The operating-mode and UL-SU configurations are not expected to have the same Trigger population. Frame-subtype counts alone do not prove "
-            "the RU assignments, HE TB format, Multi-STA Block Ack contents, or OM Control value; inspect the corresponding fields or simulator telemetry."
+            "`EdcaBaseline` provides the non-triggered control. The scheduled and mixed-access configurations contain repeated **Trigger** frames, "
+            "solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure "
+            "(IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). The three UORA configurations expose load and RA-RU-count effects, "
+            "but frame-subtype counts alone cannot distinguish an AID-0 random-access attempt from scheduled access or prove a collision. "
+            "Use the per-STA `heUlRandomAccessAttempt` and `heUlRandomAccessSuccess` scalars for that decision evidence."
         )
     elif "dl_ofdma" in subdir:
         analysis_text = (

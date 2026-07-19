@@ -16,7 +16,7 @@ the common warm-up definition.
 | Analysis | Evidence required before accepting the plot | Interpretation |
 |---|---|---|
 | [Dynamic fragmentation](fragmentation.md) | MAC-frame bytes and measured ACK airtime | Fragmentation changes the transmitted-size distribution and acknowledgment work; dynamic and static policies can be identical when given the same threshold. |
-| [UORA](uora.md) | Nonzero attempts and successes for every condition | More RA-RUs should reduce contention pressure, but random outcomes require confidence intervals. |
+| [UORA](uora.md) | Nonzero per-STA attempts and successes for every condition | Five RA-RUs yield about 4.7× the successful UORA transmissions and higher success fairness than one RA-RU under the matched heavy load; random outcomes still require confidence intervals. |
 | [TWT](twt.md) | Integrated radio power and TWT delivery at least 95% of baseline | Energy savings are accepted only when they are not obtained by dropping the workload. |
 | [Rate adaptation](rate-adaptation.md) | Selected MCS/NSS, EWMA probability, and actual TX outcome | A changing MCS is adaptation evidence only when paired with transmission outcomes. |
 | [Preamble puncturing](puncturing.md) | Runtime mask 0 → 2 → 0 and aligned RU placement | Puncturing avoids a busy secondary 20 MHz channel but sacrifices usable spectrum. |
