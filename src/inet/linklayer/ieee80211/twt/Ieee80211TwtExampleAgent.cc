@@ -11,6 +11,11 @@ namespace ieee80211 {
 
 Define_Module(Ieee80211TwtExampleAgent);
 
+Ieee80211TwtExampleAgent::~Ieee80211TwtExampleAgent()
+{
+    cancelAndDelete(twtSetupRetryTimer);
+}
+
 void Ieee80211TwtExampleAgent::initialize(int stage)
 {
     Ieee80211AgentSta::initialize(stage);
@@ -21,17 +26,27 @@ void Ieee80211TwtExampleAgent::initialize(int stage)
         wakeInterval = par("wakeInterval");
         wakeDuration = par("wakeDuration");
         firstWakeOffset = par("firstWakeOffset");
+        twtSetupRetryInterval = par("twtSetupRetryInterval");
+        twtSetupMaxAttempts = par("twtSetupMaxAttempts");
+        if (twtSetupMaxAttempts == 0 || twtSetupMaxAttempts < -1)
+            throw cRuntimeError("Invalid TWT setup maximum attempt count");
         broadcastId = par("broadcastId");
+        twtSetupRetryTimer = new cMessage("twtSetupRetry");
     }
 }
 
-void Ieee80211TwtExampleAgent::processAssociateConfirm(Ieee80211Prim_AssociateConfirm *resp)
+void Ieee80211TwtExampleAgent::handleTimer(cMessage *msg)
 {
-    Ieee80211AgentSta::processAssociateConfirm(resp);
-    if (resp->getResultCode() != PRC_SUCCESS)
-        return;
+    if (msg == twtSetupRetryTimer)
+        sendTwtSetupRequest();
+    else
+        Ieee80211AgentSta::handleTimer(msg);
+}
+
+void Ieee80211TwtExampleAgent::sendTwtSetupRequest()
+{
     Ieee80211Prim_TwtSetupRequest request;
-    request.setPeerAddress(resp->getAddress());
+    request.setPeerAddress(twtPeerAddress);
     request.setBroadcast(requestBroadcast);
     request.setBroadcastId(broadcastId);
     request.setSetupCommand(0); // Request: AP selects the individual schedule.
@@ -42,12 +57,37 @@ void Ieee80211TwtExampleAgent::processAssociateConfirm(Ieee80211Prim_AssociateCo
     request.setWakeDuration(wakeDuration);
     request.setPersistence(8);
     requestTwtSetup(request);
+    twtSetupAttempts++;
+    if (canRetryTwtSetup())
+        rescheduleAfter(twtSetupRetryInterval, twtSetupRetryTimer);
+}
+
+bool Ieee80211TwtExampleAgent::canRetryTwtSetup() const
+{
+    return !twtAgreementActive && twtSetupRetryInterval >= SIMTIME_ZERO &&
+            (twtSetupMaxAttempts == -1 || twtSetupAttempts < twtSetupMaxAttempts);
+}
+
+void Ieee80211TwtExampleAgent::processAssociateConfirm(Ieee80211Prim_AssociateConfirm *resp)
+{
+    Ieee80211AgentSta::processAssociateConfirm(resp);
+    if (resp->getResultCode() != PRC_SUCCESS)
+        return;
+    cancelEvent(twtSetupRetryTimer);
+    twtAgreementActive = false;
+    twtSetupAttempts = 0;
+    twtPeerAddress = resp->getAddress();
+    sendTwtSetupRequest();
 }
 
 void Ieee80211TwtExampleAgent::processTwtSetupConfirm(Ieee80211Prim_TwtSetupConfirm *resp)
 {
     Ieee80211AgentSta::processTwtSetupConfirm(resp);
     twtAgreementActive = resp->getResultCode() == PRC_SUCCESS;
+    if (twtAgreementActive)
+        cancelEvent(twtSetupRetryTimer);
+    else if (!twtSetupRetryTimer->isScheduled() && canRetryTwtSetup())
+        rescheduleAfter(twtSetupRetryInterval, twtSetupRetryTimer);
 }
 
 void Ieee80211TwtExampleAgent::processTwtTeardownConfirm(Ieee80211Prim_TwtTeardownConfirm *resp)

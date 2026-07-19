@@ -229,7 +229,10 @@ void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
     pendingQueue->enqueuePacket(packet);
     if (!pendingQueue->isEmpty()) {
         auto edcaf = edca->getChannelOwner();
-        if (edcaf == nullptr || edcaf->getAccessCategory() != ac) {
+        // A different AC must not contend while a local EDCAF owns an active
+        // frame sequence. Queue it now; frameSequenceFinished() resumes all
+        // eligible ACs after releasing the current TXOP.
+        if (edcaf == nullptr && !frameSequenceHandler->isSequenceRunning()) {
             EV_DETAIL << "Requesting channel for access category " << printAccessCategory(ac) << endl;
             edca->requestChannelAccess(ac, this);
         }
@@ -297,6 +300,12 @@ void Hcf::channelGranted(IChannelAccess *channelAccess)
     Enter_Method("channelGranted");
     auto edcaf = check_and_cast<Edcaf *>(channelAccess);
     if (edcaf) {
+        if (frameSequenceHandler->isSequenceRunning()) {
+            EV_WARN << "Channel access granted while another EDCAF frame sequence is running. "
+                    << "Releasing channel; queued traffic will resume after the current TXOP.\n";
+            edcaf->releaseChannel(this);
+            return;
+        }
         if (tx->isBusy()) {
             EV_WARN << "Channel access granted to the " << printAccessCategory(edcaf->getAccessCategory())
                     << " queue while tx is busy (e.g. pending sequential Ack). Releasing channel.\n";
@@ -404,15 +413,13 @@ void Hcf::frameSequenceFinished()
     emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
-        bool startContention = hasFrameToTransmit(); // TODO outstanding frame
         // IEEE Std 802.11-2024, 10.23.2.8 and 10.23.2.9: when the TXOP ends,
         // the holder releases medium control; further traffic must contend
         // unless it is sent as another permitted sequence inside the same TXOP.
         edcaf->releaseChannel(this);
         mac->sendDownPendingRadioConfigMsg(); // TODO review
         edcaf->getTxopProcedure()->endTxop();
-        if (startContention)
-            edcaf->requestChannel(this);
+        resumeContention();
     }
     else if (hcca->isOwning()) {
         hcca->releaseChannel(this);
@@ -941,6 +948,10 @@ bool Hcf::hasFrameToTransmit()
 void Hcf::twtServicePeriodChanged()
 {
     Enter_Method("twtServicePeriodChanged");
+    // Service-period changes can coincide with a TXOP or a response wait.
+    // Queue eligibility changes are picked up when that frame sequence ends.
+    if (frameSequenceHandler->isSequenceRunning() || edca->getChannelOwner() != nullptr)
+        return;
     for (int ac = AC_BK; ac <= AC_VO; ac++) {
         auto accessCategory = static_cast<AccessCategory>(ac);
         auto edcaf = edca->getEdcaf(accessCategory);

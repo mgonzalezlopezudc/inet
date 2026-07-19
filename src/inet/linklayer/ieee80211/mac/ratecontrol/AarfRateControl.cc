@@ -22,18 +22,43 @@ void AarfRateControl::initialize(int stage)
         increaseThreshold = par("increaseThreshold");
         maxIncreaseThreshold = par("maxIncreaseThreshold");
         decreaseThreshold = par("decreaseThreshold");
+        maxNss = par("maxNss");
+        if (maxNss == 0 || maxNss < -1 || maxNss > 8)
+            throw cRuntimeError("Invalid AARF maxNss");
         interval = par("interval");
         WATCH(factor);
         WATCH(increaseThreshold);
         WATCH(maxIncreaseThreshold);
         WATCH(decreaseThreshold);
+        WATCH(maxNss);
         WATCH(interval);
         WATCH(timer);
         WATCH(probing);
         WATCH(numberOfConsSuccTransmissions);
     }
-    else if (stage == INITSTAGE_LINK_LAYER) {
-    }
+    else if (stage == INITSTAGE_LINK_LAYER && currentMode != nullptr && maxNss != -1 &&
+            currentMode->getDataMode()->getNumberOfSpatialStreams() > maxNss)
+        currentMode = decreaseRateIfPossible(currentMode);
+}
+
+const IIeee80211Mode *AarfRateControl::increaseRateIfPossible(const IIeee80211Mode *currentMode)
+{
+    auto bandwidth = currentMode->getDataMode()->getBandwidth();
+    auto candidate = modeSet->getFasterMode(currentMode);
+    while (candidate != nullptr && (candidate->getDataMode()->getBandwidth() != bandwidth ||
+            (maxNss != -1 && candidate->getDataMode()->getNumberOfSpatialStreams() > maxNss)))
+        candidate = modeSet->getFasterMode(candidate);
+    return candidate == nullptr ? currentMode : candidate;
+}
+
+const IIeee80211Mode *AarfRateControl::decreaseRateIfPossible(const IIeee80211Mode *currentMode)
+{
+    auto bandwidth = currentMode->getDataMode()->getBandwidth();
+    auto candidate = modeSet->getSlowerMode(currentMode);
+    while (candidate != nullptr && (candidate->getDataMode()->getBandwidth() != bandwidth ||
+            (maxNss != -1 && candidate->getDataMode()->getNumberOfSpatialStreams() > maxNss)))
+        candidate = modeSet->getSlowerMode(candidate);
+    return candidate == nullptr ? currentMode : candidate;
 }
 
 void AarfRateControl::handleMessage(cMessage *msg)
@@ -117,4 +142,3 @@ const IIeee80211Mode *AarfRateControl::getRate()
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-
