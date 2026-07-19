@@ -13,6 +13,7 @@
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalSnir.h"
 
 
@@ -62,7 +63,16 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
             snr /= std::pow(10.0, vhtTag->getMuMimoPenaltyDb() / 10.0);
     }
 
-    double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), snr);
+    double headerSnr = snr;
+    // IEEE 802.11-2024, 27.3.6.6: HE ER-SU repeats the HE-SIG-A field (two copies of each OFDM
+    // symbol). The receiver can combine the repeated copies, giving approximately 3 dB of additional
+    // robustness for the common signaling field. The data field is constructed identically to HE-SU,
+    // so this gain applies only to the header/preamble part of the packet-error calculation.
+    if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode)) {
+        if (heMode->getPreambleMode()->getPreambleFormat() == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU)
+            headerSnr *= std::pow(10.0, 3.0 / 10.0);
+    }
+    double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), headerSnr);
     double dataSuccessRate;
     if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
         const Ieee80211HeMuUserInfo *selectedUser = nullptr;
