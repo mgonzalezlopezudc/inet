@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-07-18T13:24:13.523259+00:00",
-  "session_id": "20260718T132413Z",
-  "repository_revision": "99b34b14911dd0fab4c85adb695f49a9a97a26b9",
-  "capture_source_diff_sha256": "8cf43c1f288ac20c58c240b15ad9372d2badf4e1a83a4eb449eccdae3fde07e5",
-  "analysis_script_sha256": "599792cb6de71b27d4436aae326fc78569e5fcdced18c7062d3e608b0c466409",
+  "generated_at_utc": "2026-07-19T09:54:39.604958+00:00",
+  "session_id": "20260719T095439Z",
+  "repository_revision": "640add95afdd97c7d6d1623ce7ee589519c56d6b",
+  "capture_source_diff_sha256": "e519f0d7acab31a4ecf88421d71ee38df1da79249c0bc7ebaedbbdf2f5960f90",
+  "analysis_script_sha256": "b96671d6720fd4c11ea089e920345f37ce315ed52f19a43c5e5bd73c7f809f59",
   "inet_library": "out/clang-release/src/libINET.so",
-  "inet_library_sha256": "88d307e8b2be2da9ea921f6251549bff11ca27f412d4d6a9398b6851d2e3bf16",
+  "inet_library_sha256": "39091ad2c9cbd71ad479b46c0d7cba8a50549aebc02d67c37b345a9a5ee74598",
   "tshark_version": "TShark (Wireshark) 4.6.4.",
   "entries": [
     {
@@ -493,7 +493,7 @@
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "ini_file": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
-      "ini_sha256": "a4f6351b89a00393916eda4bcdcc635df219341ece9d13149a53f87d60c79014",
+      "ini_sha256": "ade2a03cd8b21e36df7d4e0bfa9c298466b347f7fbf9d25ec856f4ea221aedee",
       "command": [
         "bin/inet",
         "-u",
@@ -510,47 +510,47 @@
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"",
         "--**.fcsMode=\"computed\"",
-        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled"
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled"
       ],
-      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c BssColoringDisabled -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled",
+      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c BssColoringDisabled -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled",
       "exit_status": 0,
-      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled",
-      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled/BssColoringDisabled-#0.sca",
+      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled",
+      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled/BssColoringDisabled-#0.sca",
       "captures": [
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap1.wlan[0].pcap",
-          "sha256": "d3ece8d4b632f9205c6921219a08d5271768c14a26985915f514b6f22e2f3dca",
-          "size_bytes": 960668,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "d841281277f189b779d7800c283cecf440d4eaf8c03827f5244dbe5902a3dc08",
+          "size_bytes": 932124,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap2.wlan[0].pcap",
-          "sha256": "8ecef4da63027d4c16900bee72989a380495f8f6709bb5351bea53b5d981917c",
-          "size_bytes": 960668,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "6ab9d0f0f7d0ae34a825f862a7eb44d1f75752a4744f8b300245cf21c43877a9",
+          "size_bytes": 930932,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
-          "sha256": "b7eb879dfa649326973c892e9d44b5e10ada8fef47431928f809332f69a2c2e3",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "c8cff9e7d03f0e7d2c51a98fd1ff7f5e476e6586c5b9e0cc61026895122274d6",
+          "size_bytes": 932128,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
-          "sha256": "dd562ee33f8f59459da250be8f047eab8205d264412f7b2b42769dd4f7c1a005",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "18064cb6fb1ffd70a5c0b73ea5aab11438c5d4ba6fa092092c8e102cf9fc193b",
+          "size_bytes": 932128,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
-          "sha256": "35a3a738a3dac97034e6156fdacac5f9f3320ddf8087ce96fbefcc3682531cc8",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "a7a3b878507bbc99a5804cde0e0d2d4ee9620ce803a2c1d7486691625d8869d0",
+          "size_bytes": 930936,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
-          "sha256": "002d55137ffea965775f784210e84d0f6562d25ea4efe5de286cef385ad49d57",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "a36a6f4bccc3218cdc9dd1004e8fa06980d635b1fbfe373b4eb57536ffffd121",
+          "size_bytes": 930936,
           "format": "pcapng"
         }
       ]
@@ -562,7 +562,7 @@
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "ini_file": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
-      "ini_sha256": "a4f6351b89a00393916eda4bcdcc635df219341ece9d13149a53f87d60c79014",
+      "ini_sha256": "ade2a03cd8b21e36df7d4e0bfa9c298466b347f7fbf9d25ec856f4ea221aedee",
       "command": [
         "bin/inet",
         "-u",
@@ -579,47 +579,47 @@
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"",
         "--**.fcsMode=\"computed\"",
-        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled"
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled"
       ],
-      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c BssColoringEnabled -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled",
+      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c BssColoringEnabled -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled",
       "exit_status": 0,
-      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled",
-      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled/BssColoringEnabled-#0.sca",
+      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled",
+      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled/BssColoringEnabled-#0.sca",
       "captures": [
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap",
-          "sha256": "f5ac2e902a784e8c2b072a039d6238dda3ce60c232c692213af4376761535380",
-          "size_bytes": 909192,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "c52856cc375f2021894d9352070ff452d1d0eea1f26fb70a8ac817485ad35080",
+          "size_bytes": 831744,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap2.wlan[0].pcap",
-          "sha256": "1c1977f9538c1fcad3b21cd76573ba1c760099353a4ad758e2a6e78785f6ed1b",
-          "size_bytes": 349584,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "96ce88c3c7a7409e22d667aae3fd35f4d819c461097271bce25c909d8766528c",
+          "size_bytes": 836428,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
-          "sha256": "859351b9b74c65b812fde2ec134adc4a2b87a417d70f6a6f919d2b84e82d556f",
-          "size_bytes": 909844,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "89aaef788c2a25157e8e41c1f06c977db703f4425b9dc3e7705ae0f0e298fbe4",
+          "size_bytes": 822124,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
-          "sha256": "09fb15bd1f23ebc4719e03df52637c2cea56a6f66b347b63989f2a862d30726c",
-          "size_bytes": 909844,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "64bca65febda86484f0abbee0e1926b83aad317e3ac8b458a2e5849748bb3426",
+          "size_bytes": 822124,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
-          "sha256": "c8c59d93b1f9038f1e05812400990b71dbd1ba36753a943b704bb3db88c1241b",
-          "size_bytes": 350020,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "a0fb9998c25a3fea02698de2dd340425a24f71a68338ae8e78312bc6ce7adb97",
+          "size_bytes": 825176,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
-          "sha256": "ad98cdfb0b60a150a041305a5fed44c9ab2238e9663dcdb213445cbe4a338f73",
-          "size_bytes": 350020,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "1edb7e14211493a5f2ea83bc58747641199c63f9ab71923b50333b0d82492268",
+          "size_bytes": 825176,
           "format": "pcapng"
         }
       ]
@@ -631,7 +631,7 @@
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "ini_file": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
-      "ini_sha256": "a4f6351b89a00393916eda4bcdcc635df219341ece9d13149a53f87d60c79014",
+      "ini_sha256": "ade2a03cd8b21e36df7d4e0bfa9c298466b347f7fbf9d25ec856f4ea221aedee",
       "command": [
         "bin/inet",
         "-u",
@@ -648,47 +648,47 @@
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"",
         "--**.fcsMode=\"computed\"",
-        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative"
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative"
       ],
-      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c ObssPdConservative -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative",
+      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c ObssPdConservative -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative",
       "exit_status": 0,
-      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative",
-      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative/ObssPdConservative-#0.sca",
+      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative",
+      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative/ObssPdConservative-#0.sca",
       "captures": [
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap1.wlan[0].pcap",
-          "sha256": "409fd9e802706456707ccc0954c47d20cbe367eea25c77f7d14d701b4d1f1e3c",
-          "size_bytes": 909192,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "620102a423a7f0e8b468b0575193ab48b4781f0dfa854976548110ef10eeeeac",
+          "size_bytes": 932124,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap2.wlan[0].pcap",
-          "sha256": "771928c4a99171b68363538f042e8000e7630398b865b64b13713e51fdd13a6d",
-          "size_bytes": 349584,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "89d81630b6b98d2304bcb0a1dabf1f5068da0228cae95e9fcd277741c349d6e9",
+          "size_bytes": 930932,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
-          "sha256": "9208cfce0270bd1ac021c37fe396e3da5a9bb9defce2b7a263882193124c8b97",
-          "size_bytes": 909844,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "ccdd21cca4404c2ced17b03823d2476b7502021dc087a9ed6eb88c9858fa3ecc",
+          "size_bytes": 932128,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
-          "sha256": "727be4b609715fc6c79a14d07741ced1aaa39156a37b0ab478f661ec116960f3",
-          "size_bytes": 909844,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "ff065933a4cff286a39f27d41691fa753d29026af6df162c9c8235bcab75732e",
+          "size_bytes": 932128,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
-          "sha256": "c46b7dc5495de8cc1854c4fabf8b92b65cd3b020b78b87d7c4c2b8632ab29c6c",
-          "size_bytes": 350020,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "2015f23f98ea6532e00a5d7a83a44c1ff1203915c7d8891acf7ae74b7b9314eb",
+          "size_bytes": 930936,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
-          "sha256": "ba8a7f0ff8837bedf7166d7e1f8b007a36dce7334bf4f2ac1f06cf9392d1a602",
-          "size_bytes": 350020,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "a7ffd3401d42d79a5af46c7a95c6c031ea6e5aca92c0342d1f965c13afdf1884",
+          "size_bytes": 930936,
           "format": "pcapng"
         }
       ]
@@ -700,7 +700,7 @@
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "ini_file": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
-      "ini_sha256": "a4f6351b89a00393916eda4bcdcc635df219341ece9d13149a53f87d60c79014",
+      "ini_sha256": "ade2a03cd8b21e36df7d4e0bfa9c298466b347f7fbf9d25ec856f4ea221aedee",
       "command": [
         "bin/inet",
         "-u",
@@ -717,47 +717,47 @@
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"",
         "--**.fcsMode=\"computed\"",
-        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive"
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive"
       ],
-      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c ObssPdAggressive -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive",
+      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c ObssPdAggressive -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive",
       "exit_status": 0,
-      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive",
-      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive/ObssPdAggressive-#0.sca",
+      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive",
+      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive/ObssPdAggressive-#0.sca",
       "captures": [
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap1.wlan[0].pcap",
-          "sha256": "3aecd4c671f593269305534c3fd63e1d8d4b0fc82dc88ceafbf9d65349ee722b",
-          "size_bytes": 909192,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "eb399d19e69289feda58d96baa16e5b5f01b193b2234135931618063256217b9",
+          "size_bytes": 831744,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap2.wlan[0].pcap",
-          "sha256": "6be3207bb8412799ac9c094c0f91a58cd7b46c963d2c884cd26f01bec881d318",
-          "size_bytes": 349584,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "7fe3fc502e6fdbb436691e950cd8b315f6c15c0c7c2e647c4f56edcef103f582",
+          "size_bytes": 836428,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
-          "sha256": "f501a1a24e14354d3ae77116775c9555b2522fff012a0c98fd988cf4a152278e",
-          "size_bytes": 909844,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "bcc395e8f63b70c19ee47c283941af58d1236094692d45a7df683fa4c776dc84",
+          "size_bytes": 822124,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
-          "sha256": "b0359f72cd44e4399033b0016fc330eca4e561c439cd4b753b7adaa3ac55868d",
-          "size_bytes": 909844,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "27b35cbe894d70ade750e3cf4e0b967109d745d0ed510ad6fc48e0970b029440",
+          "size_bytes": 822124,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
-          "sha256": "8dd9a1172f861bded6dc66be888087cdfce7f3b76ed9a988dec787a1ab455ca1",
-          "size_bytes": 350020,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "ec29b58959a6838d1f5bb55579e2b82a7dbd9297eb6f08b3194924d54e6e250b",
+          "size_bytes": 825176,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
-          "sha256": "8df641631a07ccef346cba5c1be935e880acc7474ebb29545c42b15fe0cd0ba4",
-          "size_bytes": 350020,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "9509296e790be68da9b3b92675f88f25edd4bd33b258ee9f8040980499a67661",
+          "size_bytes": 825176,
           "format": "pcapng"
         }
       ]
@@ -769,7 +769,7 @@
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "ini_file": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
-      "ini_sha256": "a4f6351b89a00393916eda4bcdcc635df219341ece9d13149a53f87d60c79014",
+      "ini_sha256": "ade2a03cd8b21e36df7d4e0bfa9c298466b347f7fbf9d25ec856f4ea221aedee",
       "command": [
         "bin/inet",
         "-u",
@@ -786,47 +786,47 @@
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"",
         "--**.fcsMode=\"computed\"",
-        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision"
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision"
       ],
-      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c BssColoringCollision -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision",
+      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c BssColoringCollision -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision",
       "exit_status": 0,
-      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision",
-      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision/BssColoringCollision-#0.sca",
+      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision",
+      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision/BssColoringCollision-#0.sca",
       "captures": [
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap1.wlan[0].pcap",
-          "sha256": "38add1615da30b29b0cf11b2fb4bfa6edecc6941c86645a52bd4ca8a726b707a",
-          "size_bytes": 960668,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "e495cfb0851d4e6c49beb4731b44c60b6a13eabde18559905746a73787cf03c9",
+          "size_bytes": 932124,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap2.wlan[0].pcap",
-          "sha256": "f177c9171c5a61a2db3134428ab7b1379e662a7c06da25448fdab5096722acba",
-          "size_bytes": 960668,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "c23c5e19d901da49f9fe5e34d5d0243b75ac6b33872e44c5faa5b647593f7680",
+          "size_bytes": 930932,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
-          "sha256": "77cf63384344a5bad26ca11e3b134a3219a3837b389975fbc86cbbf45191e713",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "59b39ffb702013e895db3b4ab5159414729e540950088ce52fe256fb40a8ca1b",
+          "size_bytes": 932128,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
-          "sha256": "5e2360d17f5ff4c1e13b44ce1e0a3ef37875f5552a328deef531c04d38f37777",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "194acffa4234a15084c2024f686442e8e4c44526a2c9526d23c372bafebee386",
+          "size_bytes": 932128,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
-          "sha256": "c9e2b72b54d9cdf040641f73d13ce91e09918740bfe0cd7188757d60e81864c9",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "1f6ca7740431b9a98220d0ea9e26fa19123a973051286383dadf9d3309c08093",
+          "size_bytes": 930936,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
-          "sha256": "75ce8246d939c6865fe54acc5d4621c24dfafaac5d5f5d3ef2c83af9260e754e",
-          "size_bytes": 960672,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "56e93c5ff5a540985bcc06e79782f37dd40e29d7505b6f188a1877fd87eb750a",
+          "size_bytes": 930936,
           "format": "pcapng"
         }
       ]
@@ -838,7 +838,7 @@
       "seed_set": 0,
       "simulation_time_limit_s": 1.0,
       "ini_file": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
-      "ini_sha256": "a4f6351b89a00393916eda4bcdcc635df219341ece9d13149a53f87d60c79014",
+      "ini_sha256": "ade2a03cd8b21e36df7d4e0bfa9c298466b347f7fbf9d25ec856f4ea221aedee",
       "command": [
         "bin/inet",
         "-u",
@@ -855,47 +855,47 @@
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"",
         "--**.fcsMode=\"computed\"",
-        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav"
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav"
       ],
-      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c TwoNav -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav",
+      "command_shell": "bin/inet -u Cmdenv -f /home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/omnetpp.ini -c TwoNav -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav",
       "exit_status": 0,
-      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav",
-      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav/TwoNav-#0.sca",
+      "result_directory": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav",
+      "scalar_file": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav/TwoNav-#0.sca",
       "captures": [
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav/TwoNav-#0BssColoringNetwork.ap1.wlan[0].pcap",
-          "sha256": "e496220d599e3fd15c67ec171f10ab5b9780046c4eea67a394491c7d7432e9df",
-          "size_bytes": 309236,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav/TwoNav-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "26cac3d3f2915244a715da6f02efba3873dcbf0cede996b59a777f4c59a4a5f3",
+          "size_bytes": 419548,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav/TwoNav-#0BssColoringNetwork.ap2.wlan[0].pcap",
-          "sha256": "1f05838f7c815b88dd8695a7713d95b905fa90b85b4241fc836bd042c66cb098",
-          "size_bytes": 964644,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav/TwoNav-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "dc4aabeedab103b1d439bce679b1a6ea239d7ce9ce67495fb0da07422cfcc20a",
+          "size_bytes": 831340,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav/TwoNav-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
-          "sha256": "5756697e8d1454eaf039a8ebfca904d1bd2bb9f6ab393e90124e0e3277b5df18",
-          "size_bytes": 304704,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav/TwoNav-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "506e081c28a9b84415d2ae30fe937ccce410867765ef7307f1be01751a2ca2a3",
+          "size_bytes": 410480,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav/TwoNav-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
-          "sha256": "ecc6d8b7b30bdc649e85fd72792f15a0f066d57df58035b385095379274e66f8",
-          "size_bytes": 309240,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav/TwoNav-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "93ec2a088e6820e71859e85377f974cb8cc0a96278c62e713b13f1ec79a96fab",
+          "size_bytes": 419552,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav/TwoNav-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
-          "sha256": "17edf5b828fb01dc51f752a5a0150bd30da38905c899e7e185d58640ec5f6113",
-          "size_bytes": 964648,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav/TwoNav-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "a6ff1587cdd5790917a2ef0b48345ab32fabdf41aadd46e6adfd4cf83cb7f4d8",
+          "size_bytes": 831344,
           "format": "pcapng"
         },
         {
-          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260718T132413Z/TwoNav/TwoNav-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
-          "sha256": "8555f05a84a74b9997c7936621653b0a775b8c387ee9cb8077ba981f9335f769",
-          "size_bytes": 964648,
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260719T095439Z/TwoNav/TwoNav-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "2f5a0a73a1e88b712a27b0bd101512ba716375a80c7ba4e0449f440487b15ac0",
+          "size_bytes": 831344,
           "format": "pcapng"
         }
       ]
