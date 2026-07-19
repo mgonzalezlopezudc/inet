@@ -20,6 +20,7 @@ simple AarfRateControl extends SimpleModule like IRateControl
     parameters:
         @class(AarfRateControl);
         double initialRate @unit(bps) = default(-1bps); // -1 means the fastest mandatory rate
+        int maxNss = default(-1); // Maximum number of spatial streams; -1 means unrestricted
         double interval @unit(s) = default(50ms); // The rate (unconditionally) increases after each time interval.
         int increaseThreshold = default(10); // Number of successful transmissions needed to increase the rate
         int decreaseThreshold = default(2); // Number of consecutive unsuccessful transmissions (in the sense that the ACK does not arrive within the timeout)
@@ -31,4 +32,3 @@ simple AarfRateControl extends SimpleModule like IRateControl
         @signal[datarateChanged];
         @statistic[datarateChanged](title="datarate"; record=vector; interpolationmode=sample-hold);
 }
-

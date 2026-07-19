@@ -20,6 +20,7 @@ are not waveform implementations or interoperability certification tests.
 | Extended range | [he_er_su](he_er_su/walkthrough.md) | HE SU and HE ER SU with DCM |
 | Spatial reuse | [bss_coloring](bss_coloring/walkthrough.md) | BSS coloring, OBSS/PD, and dual NAV |
 | Power saving | [twt](twt/walkthrough.md) | Individual and broadcast Target Wake Time agreements |
+| Dense IoT comparison | [dense_iot](dense_iot/README.md) | 128–512 STAs, UL/DL OFDMA with individual TWT versus 802.11ac |
 | Spatial multiplexing | [multi_user/mu_mimo](multi_user/mu_mimo/README.md) | Downlink and uplink MU-MIMO |
 | Feedback | [multi_user/ndp_feedback](multi_user/ndp_feedback/README.md) | NDP Feedback Report triggers and responses |
 | MAC feature | [mac_features/dynamic_fragmentation](mac_features/dynamic_fragmentation/README.md) | Negotiated HE dynamic fragmentation |
@@ -84,4 +85,3 @@ This script will:
 - Automatically execute the simulation for any configuration missing its packet capture (PCAP) results.
 - Apply MAC display filters in TShark to separate heavy, medium, and light destination traffic flows in asymmetric configurations.
 - Regenerate the packet statistics tables directly inside each example's `walkthrough.md`.
-

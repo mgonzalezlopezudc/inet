@@ -25,6 +25,7 @@ class INET_API AarfRateControl : public RateControlBase
     int increaseThreshold = -1;
     int maxIncreaseThreshold = -1;
     int decreaseThreshold = -1;
+    int maxNss = -1;
     double factor = -1;
 
     int numberOfConsSuccTransmissions = 0;
@@ -39,6 +40,9 @@ class INET_API AarfRateControl : public RateControlBase
     virtual void resetTimer();
     virtual void increaseRateIfTimerIsExpired();
 
+    const physicallayer::IIeee80211Mode *increaseRateIfPossible(const physicallayer::IIeee80211Mode *currentMode);
+    const physicallayer::IIeee80211Mode *decreaseRateIfPossible(const physicallayer::IIeee80211Mode *currentMode);
+
   public:
     virtual const physicallayer::IIeee80211Mode *getRate() override;
     virtual void frameTransmitted(Packet *frame, int retryCount, bool isSuccessful, bool isGivenUp) override;
@@ -49,4 +53,3 @@ class INET_API AarfRateControl : public RateControlBase
 } /* namespace inet */
 
 #endif
-
