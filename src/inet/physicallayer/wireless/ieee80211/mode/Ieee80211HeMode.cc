@@ -150,6 +150,13 @@ Ieee80211HeSignalMode::~Ieee80211HeSignalMode()
     delete code;
 }
 
+Ptr<Ieee80211PhyHeader> Ieee80211HeSignalMode::createHeader() const
+{
+    auto header = makeShared<Ieee80211HeMuPhyHeader>();
+    header->setPpduFormat(HE_SINGLE_USER);
+    return header;
+}
+
 bps Ieee80211HeSignalMode::computeGrossBitrate() const
 {
     unsigned int numberOfCodedBitsPerSymbol = modulation->getSubcarrierModulation()->getCodeWordSize() * getNumberOfDataSubcarriers();

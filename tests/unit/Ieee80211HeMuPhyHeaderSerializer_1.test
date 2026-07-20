@@ -3,6 +3,7 @@ Test serialization and deserialization of Ieee80211HeMuPhyHeader.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/common/packet/Packet.h"
@@ -79,6 +80,32 @@ for (unsigned int i = 0; i < recvHeader->getUsersArraySize(); ++i) {
 ASSERT(recvHeader->getUsers(0).ruToneSize == headerRus[0].toneSize);
 ASSERT(recvHeader->getUsers(1).ruToneSize == headerRus[1].toneSize);
 
+auto testSingleUserRoundTrip = [](Ieee80211HePpduFormat ppduFormat, b headerLength) {
+    auto header = makeShared<Ieee80211HeMuPhyHeader>();
+    header->setPpduFormat(ppduFormat);
+    header->setChunkLength(headerLength);
+    auto packet = new Packet("he-single-user-round-trip");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(5)));
+    packet->insertAtFront(header);
+    auto bytes = packet->peekDataAsBytes();
+    ASSERT(bytes->getChunkLength() == headerLength + B(5));
+
+    auto received = new Packet("he-single-user-received");
+    received->insertAtFront(bytes);
+    auto decoded = received->popAtFront<Ieee80211HeMuPhyHeader>();
+    ASSERT(decoded->getPpduFormat() == ppduFormat);
+    ASSERT(decoded->getUsersArraySize() == 0);
+    ASSERT(decoded->getChunkLength() == headerLength);
+    ASSERT(received->getDataLength() == B(5));
+
+    delete packet;
+    delete received;
+};
+
+testSingleUserRoundTrip(HE_SINGLE_USER, b(64));
+testSingleUserRoundTrip(HE_EXTENDED_RANGE_SU, b(128));
+EV << "HE SU and ER SU format and payload boundary round trips passed.\n";
+
 auto rus = getHeEqualRuLayout(Hz(5.18e9), Hz(80e6), 4);
 auto encoded = encodeHeSigBRuAllocation(rus, Hz(80e6));
 ASSERT(encoded);
@@ -127,6 +154,7 @@ Deserialized Header:
 users count = 2
   user[0]: staId=341, mcs=4, nss=1
   user[1]: staId=682, mcs=5, nss=2
+HE SU and ER SU format and payload boundary round trips passed.
 HE-SIG-B RU layout codec round-trip and overlap validation passed.
 A-MPDU delimiter EOF, length, CRC, and signature round-trip passed.
 .

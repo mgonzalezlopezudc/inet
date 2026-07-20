@@ -10,10 +10,10 @@
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211OfdmSignalField.h"
 
-// IEEE 802.11 PHY header serializer, including HE MU/HE TB headers.
+// IEEE 802.11 PHY header serializer, including HE headers.
 //
-// This file serializes/deserializes the HE-SIG-A and HE-SIG-B fields for HE MU
-// PPDUs and the HE-SIG-A field for HE TB PPDUs.  The bit layouts follow
+// This file serializes/deserializes the logical HE-SIG-A and HE-SIG-B fields
+// used by the packet-level model. The represented HE MU and HE TB bit layouts follow
 // IEEE 802.11-2024 Tables 27-21 (HE MU HE-SIG-A), 27-22 (HE TB HE-SIG-A) and
 // Clause 27.3.11.8 (HE-SIG-B).
 //
@@ -40,6 +40,15 @@ namespace {
 
 // IEEE Std 802.11-2024 Figure 17-5 and 17.3.4: SIGNAL bit 0 is RATE bit R1
 // and the LSB is transmitted first; the shared field helper packs that order.
+// IEEE Std 802.11-2024 Figure 27-72 distinguishes HE SU/TB/MU using L-SIG
+// LENGTH and HE-SIG-A constellation information. This serializer does not yet
+// represent those pre-HE signaling details, and it uses a simplified common
+// HE-SIG-A layout for every HE format. Preserve packet-level format identity in
+// the synthetic 12-bit pad that already completes this logical 64-bit block.
+// This is an INET compatibility marker, not an IEEE on-wire field.
+constexpr uint16_t HE_PACKET_LEVEL_FORMAT_PREFIX = 0xA5C;
+constexpr uint16_t HE_PACKET_LEVEL_FORMAT_MASK = 0xFFC;
+constexpr uint16_t HE_PACKET_LEVEL_FORMAT_VALUE_MASK = 0x003;
 void writeOfdmSignal(MemoryOutputStream& stream, uint8_t rate, bool reserved, uint16_t length, bool parity, uint8_t tail)
 {
     auto signal = packIeee80211OfdmSignalField(rate, reserved, length, parity, tail);
@@ -281,6 +290,8 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     // PPDU preamble encoder.
 
     const uint8_t ppduFormat = heMuPhyHeader->getPpduFormat();
+    if (ppduFormat > HE_EXTENDED_RANGE_SU)
+        throw cRuntimeError("Unknown HE PPDU format: %u", ppduFormat);
     const bool extendedRangeSu = ppduFormat == HE_EXTENDED_RANGE_SU;
 
     uint32_t maxToneIndex = 0;
@@ -309,7 +320,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         stream.writeNBitsOfUint64Be(heMuPhyHeader->getSpatialReuse() & 0xF, 4); // B11-B14: Spatial Reuse
         stream.writeNBitsOfUint64Be(bwField, 3); // B15-B17: Bandwidth
         stream.writeNBitsOfUint64Be(numUsersField, 4); // B18-B21: Number of HE-SIG-B Symbols or MU-MIMO Users
-        stream.writeBit(extendedRangeSu); // B22: HE-SIG-B Compression; also marks serialized ER SU
+        stream.writeBit(false); // B22: HE-SIG-B Compression
         stream.writeNBitsOfUint64Be(giLtf, 2); // B23-B24: GI+HE-LTF Size
         stream.writeBit(false); // B25: Doppler
 
@@ -323,7 +334,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         stream.writeBit(false); // B15: PE Disambiguity
         stream.writeNBitsOfUint64Be(0, 4); // B16-B19: CRC
         stream.writeNBitsOfUint64Be(0, 6); // B20-B25: Tail
-        stream.writeNBitsOfUint64Be(0, 12); // Pad HE-SIG-A to 8 bytes
+        stream.writeNBitsOfUint64Be(HE_PACKET_LEVEL_FORMAT_PREFIX | ppduFormat, 12);
     };
 
     writeHeSigA();
@@ -449,14 +460,13 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
 
     // --- 1. HE-SIG-A (8 bytes = 64 bits) ---
     auto uplink = stream.readBit();
-    heMuPhyHeader->setPpduFormat(uplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
     stream.readNBitsToUint64Be(3); // HE-SIG-B MCS
     stream.readBit(); // HE-SIG-B DCM
     heMuPhyHeader->setBssColor(stream.readNBitsToUint64Be(6));
     heMuPhyHeader->setSpatialReuse(stream.readNBitsToUint64Be(4)); // Spatial Reuse
     auto bwField = stream.readNBitsToUint64Be(3);
-    auto numUsersField = stream.readNBitsToUint64Be(4);
-    auto compression = stream.readBit();
+    stream.readNBitsToUint64Be(4); // Number of HE-SIG-B Symbols or MU-MIMO Users
+    stream.readBit(); // HE-SIG-B Compression
     auto giLtf = stream.readNBitsToUint64Be(2);
     uint8_t gi = 2;
     if (giLtf == 1) gi = 0;
@@ -475,14 +485,15 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     stream.readBit(); // PE Disambiguity
     stream.readNBitsToUint64Be(4); // CRC
     stream.readNBitsToUint64Be(6); // Tail
-    stream.readNBitsToUint64Be(12); // Padding
-
-    auto ppduFormat = heMuPhyHeader->getPpduFormat();
-    if (!uplink && compression && numUsersField == 0) {
-        ppduFormat = HE_EXTENDED_RANGE_SU;
-        heMuPhyHeader->setPpduFormat(ppduFormat);
+    auto formatMarker = stream.readNBitsToUint64Be(12);
+    if ((formatMarker & HE_PACKET_LEVEL_FORMAT_MASK) != HE_PACKET_LEVEL_FORMAT_PREFIX)
+        throw cRuntimeError("Invalid INET packet-level HE PPDU format marker");
+    auto ppduFormat = static_cast<Ieee80211HePpduFormat>(formatMarker & HE_PACKET_LEVEL_FORMAT_VALUE_MASK);
+    if (uplink != (ppduFormat == HE_TRIGGER_BASED_UPLINK))
+        throw cRuntimeError("Inconsistent packet-level HE PPDU format marker");
+    heMuPhyHeader->setPpduFormat(ppduFormat);
+    if (ppduFormat == HE_EXTENDED_RANGE_SU)
         stream.readNBitsToUint64Be(64); // duplicated HE-SIG-A
-    }
 
     // --- 2. HE-SIG-B (only if ppduFormat == 0) ---
     if (ppduFormat == HE_MU_DOWNLINK) {

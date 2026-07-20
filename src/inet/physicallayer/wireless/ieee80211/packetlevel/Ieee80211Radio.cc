@@ -135,6 +135,16 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
     return users;
 }
 
+static Ieee80211HeGuardInterval getHeGuardInterval(const Ieee80211HeMode *mode)
+{
+    switch (mode->getDataMode()->getGuardIntervalType()) {
+        case Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT: return HE_GI_0_8_US;
+        case Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM: return HE_GI_1_6_US;
+        case Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG: return HE_GI_3_2_US;
+        default: throw cRuntimeError("Unknown HE guard interval");
+    }
+}
+
 Ieee80211Radio::Ieee80211Radio() :
     FlatRadioBase()
 {
@@ -376,18 +386,39 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     }
     auto phyHeader = !heMuUsers.empty() ? staticPtrCast<Ieee80211PhyHeader>(makeShared<Ieee80211HeMuPhyHeader>()) : mode->getHeaderMode()->createHeader();
     if (auto heMuPhyHeader = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader)) {
+        auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode);
         auto networkInterface = getContainingNicModule(this);
         auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
         if (mib != nullptr)
             heMuPhyHeader->setBssColor(mib->heOperation.bssColor);
         auto request = packet->findTag<Ieee80211HeMuReq>();
-        heMuPhyHeader->setPpduFormat(request == nullptr ? HE_MU_DOWNLINK : request->getPpduFormat());
+        if (request != nullptr)
+            heMuPhyHeader->setPpduFormat(request->getPpduFormat());
+        else if (!heMuUsers.empty())
+            heMuPhyHeader->setPpduFormat(HE_MU_DOWNLINK);
+        else if (heMode != nullptr) {
+            switch (heMode->getPreambleMode()->getPreambleFormat()) {
+                case Ieee80211HePreambleMode::HE_PREAMBLE_SU:
+                    heMuPhyHeader->setPpduFormat(HE_SINGLE_USER);
+                    break;
+                case Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU:
+                    heMuPhyHeader->setPpduFormat(HE_EXTENDED_RANGE_SU);
+                    break;
+                case Ieee80211HePreambleMode::HE_PREAMBLE_MU:
+                    heMuPhyHeader->setPpduFormat(HE_MU_DOWNLINK);
+                    break;
+                default:
+                    throw cRuntimeError("Unknown HE preamble format");
+            }
+        }
         heMuPhyHeader->setTriggerId(request == nullptr ? 0 : request->getTriggerId());
         auto commonRequest = packet->findTag<Ieee80211HeMuCommonReq>();
         heMuPhyHeader->setGuardInterval(request != nullptr ? request->getGuardInterval() :
-                commonRequest != nullptr ? commonRequest->getGuardInterval() : HE_GI_3_2_US);
+                commonRequest != nullptr ? commonRequest->getGuardInterval() :
+                heMode != nullptr ? getHeGuardInterval(heMode) : HE_GI_3_2_US);
         heMuPhyHeader->setCoding(request != nullptr ? request->getCoding() :
-                commonRequest != nullptr ? commonRequest->getCoding() : HE_CODING_BCC);
+                commonRequest != nullptr ? commonRequest->getCoding() :
+                heMode != nullptr && heMode->getDataMode()->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC);
         heMuPhyHeader->setPacketExtensionDurationUs(request != nullptr ? request->getPacketExtensionDurationUs() :
                 commonRequest != nullptr ? commonRequest->getPacketExtensionDurationUs() : 0);
         heMuPhyHeader->setPuncturedSubchannelMask(request != nullptr ? request->getPuncturedSubchannelMask() :
@@ -400,6 +431,9 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 commonRequest != nullptr ? commonRequest->getSrgObssPdDisallowed() : false);
         heMuPhyHeader->setPsrDisallowed(request != nullptr ? request->getPsrDisallowed() :
                 commonRequest != nullptr ? commonRequest->getPsrDisallowed() : false);
+        auto ppduFormat = static_cast<Ieee80211HePpduFormat>(heMuPhyHeader->getPpduFormat());
+        bool modeDerivedSingleUser = heMuUsers.empty() &&
+                (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU);
         std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
         for (auto& user : heMuUsers) {
             Ieee80211HeRu ru;
@@ -421,11 +455,18 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             requestedUsers.push_back(requested);
         }
         auto guardInterval = static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval());
-        auto calculation = computeHePpduParameters(requestedUsers,
-                mode->getDataMode()->getBandwidth(),
-                static_cast<Ieee80211HePpduFormat>(heMuPhyHeader->getPpduFormat()),
-                guardInterval, getHeDefaultLtfType(guardInterval),
-                heMuPhyHeader->getPacketExtensionDurationUs());
+        Ieee80211HePhyValidationResult calculation;
+        if (modeDerivedSingleUser) {
+            calculation.valid = true;
+            calculation.parameters.duration = mode->getDuration(packet->getDataLength());
+            heMuPhyHeader->setTotalNsts(mode->getDataMode()->getNumberOfSpatialStreams());
+        }
+        else {
+            calculation = computeHePpduParameters(requestedUsers,
+                    mode->getDataMode()->getBandwidth(), ppduFormat,
+                    guardInterval, getHeDefaultLtfType(guardInterval),
+                    heMuPhyHeader->getPacketExtensionDurationUs());
+        }
         if (!calculation)
             throw cRuntimeError("Cannot construct HE MU PPDU: %s", calculation.error.c_str());
         simtime_t commonDuration = request != nullptr && request->getCommonDuration() > SIMTIME_ZERO ?
@@ -480,7 +521,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             heMuPhyHeader->setTotalNsts(maxTotalNsts);
         }
         heMuPhyHeader->setCommonDuration(commonDuration);
-        int64_t totalBits = 64; // HE-SIG-A
+        int64_t totalBits = ppduFormat == HE_EXTENDED_RANGE_SU ? 128 : 64; // HE-SIG-A
         if (heMuPhyHeader->getPpduFormat() == 0) {
             // HE-SIG-B
             uint32_t maxToneIndex = 0;

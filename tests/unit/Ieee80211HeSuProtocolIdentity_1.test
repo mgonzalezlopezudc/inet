@@ -1,0 +1,160 @@
+%description:
+Test ordinary IEEE 802.11ax HE SU and ER SU packet-level identity, signaling
+length, protocol registration, and analog duration partition.
+
+%includes:
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
+%file: TestNetwork.ned
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.mobility.static.StationaryMobility;
+
+module InspectableRadio extends Ieee80211ScalarRadio
+{
+    parameters:
+        @class(InspectableRadio);
+}
+
+module MockNic
+{
+    parameters:
+        @class(MockNicModule);
+    submodules:
+        radio: InspectableRadio;
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.nic.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.radio.opMode = "ax"
+**.radio.bandName = "5 GHz (20 MHz)"
+**.radio.channelNumber = 0
+**.radio.transmitter.bitrate = 7.3125Mbps
+**.radio.transmitter.power = 20mW
+**.radio.antenna.numAntennas = 1
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+class InspectableRadio : public Ieee80211Radio
+{
+  public:
+    void testEncapsulate(Packet *packet) const { encapsulate(packet); }
+};
+
+class MockNicModule : public NetworkInterface
+{
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(InspectableRadio);
+Define_Module(MockNicModule);
+
+static void testSingleUserMode(InspectableRadio *radio,
+        const Ieee80211Transmitter *transmitter, const Ieee80211HeMode *mode,
+        Ieee80211HePpduFormat expectedFormat, b expectedHeaderLength,
+        B payloadLength, simtime_t startTime)
+{
+    auto factoryHeader = mode->getHeaderMode()->createHeader();
+    ASSERT(dynamicPtrCast<Ieee80211HeMuPhyHeader>(factoryHeader) != nullptr);
+    ASSERT(dynamicPtrCast<Ieee80211HtPhyHeader>(factoryHeader) == nullptr);
+
+    auto packet = new Packet("he-single-user");
+    packet->insertAtBack(makeShared<ByteCountChunk>(payloadLength));
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    radio->testEncapsulate(packet);
+
+    ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ieee80211HePhy);
+    auto header = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
+    ASSERT(header->getPpduFormat() == expectedFormat);
+    ASSERT(header->getUsersArraySize() == 0);
+    ASSERT(header->getChunkLength() == expectedHeaderLength);
+    ASSERT(header->getLengthField() == payloadLength);
+
+    auto transmission = check_and_cast<const Ieee80211Transmission *>(
+            transmitter->createTransmission(radio, packet, startTime));
+    ASSERT(transmission->getDuration() == mode->getDuration(payloadLength));
+    ASSERT(transmission->getPreambleDuration() == mode->getPreambleMode()->getDuration());
+    ASSERT(transmission->getHeaderDuration() == SIMTIME_ZERO);
+    ASSERT(transmission->getDataDuration() == mode->getDataMode()->getDuration(payloadLength));
+    ASSERT(transmission->getDuration() ==
+            transmission->getPreambleDuration() + transmission->getDataDuration());
+
+    delete transmission;
+    delete packet;
+}
+
+%activity:
+cModuleType *nicType = cModuleType::find("MockNic");
+ASSERT(nicType != nullptr);
+cModule *nic = nicType->create("nic", getSystemModule());
+nic->buildInside();
+auto networkInterface = check_and_cast<MockNicModule *>(nic);
+networkInterface->setMacAddress(MacAddress("02:00:00:00:00:01"));
+nic->callInitialize();
+
+auto radio = check_and_cast<InspectableRadio *>(nic->getSubmodule("radio"));
+auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
+const auto *mcs = &Ieee80211HemcsTable::heMcs0BW20MHzNss1;
+auto heSuMode = Ieee80211HeCompliantModes::getCompliantMode(
+        mcs, Ieee80211HeMode::BAND_5GHZ,
+        Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+auto heErSuMode = Ieee80211HeCompliantModes::getCompliantMode(
+        mcs, Ieee80211HeMode::BAND_5GHZ,
+        Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+
+testSingleUserMode(radio, transmitter, heSuMode, HE_SINGLE_USER,
+        b(64), B(100), SimTime(1, SIMTIME_S));
+testSingleUserMode(radio, transmitter, heErSuMode, HE_EXTENDED_RANGE_SU,
+        b(128), B(100), SimTime(2, SIMTIME_S));
+ASSERT(heErSuMode->getPreambleMode()->getDuration() ==
+        heSuMode->getPreambleMode()->getDuration() + SimTime(8, SIMTIME_US));
+
+nic->deleteModule();
+EV << "HE SU and ER SU retain HE protocol identity and count signaling once.\n";
+EV << ".\n";
+
+%contains: stdout
+HE SU and ER SU retain HE protocol identity and count signaling once.
+.

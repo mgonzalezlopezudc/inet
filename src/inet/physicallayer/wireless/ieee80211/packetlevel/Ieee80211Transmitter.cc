@@ -304,6 +304,9 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
     Ieee80211HePpduParameters hePpduParameters;
     if (heMuHeader != nullptr) {
+        auto ppduFormat = static_cast<Ieee80211HePpduFormat>(heMuHeader->getPpduFormat());
+        bool modeDerivedSingleUser = heMuHeader->getUsersArraySize() == 0 &&
+                (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU);
         // Clause 27.3.2.2 fixes HE subcarrier spacing at 78.125 kHz. The PHY
         // header carries canonical RU tone size/offset values; these are
         // resolved into the calculator's RU model before duration validation.
@@ -325,10 +328,20 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             requestedUsers.push_back(requested);
         }
         auto guardInterval = static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval());
-        auto calculation = computeHePpduParameters(requestedUsers, transmissionBandwidth,
-                static_cast<Ieee80211HePpduFormat>(heMuHeader->getPpduFormat()),
-                guardInterval, getHeDefaultLtfType(guardInterval),
-                heMuHeader->getPacketExtensionDurationUs());
+        Ieee80211HePhyValidationResult calculation;
+        if (modeDerivedSingleUser) {
+            calculation.valid = true;
+            calculation.parameters.common.ppduFormat = ppduFormat;
+            calculation.parameters.common.channelBandwidth = transmissionBandwidth;
+            calculation.parameters.common.guardInterval = guardInterval;
+            calculation.parameters.common.commonPreambleDuration = preambleDuration;
+            calculation.parameters.duration = duration;
+        }
+        else {
+            calculation = computeHePpduParameters(requestedUsers, transmissionBandwidth,
+                    ppduFormat, guardInterval, getHeDefaultLtfType(guardInterval),
+                    heMuHeader->getPacketExtensionDurationUs());
+        }
         if (!calculation)
             throw cRuntimeError("Invalid planned HE MU PPDU: %s", calculation.error.c_str());
         hePpduParameters = calculation.parameters;
@@ -342,6 +355,9 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         for (auto& user : heUserPhyParameters)
             user.duration = duration;
         preambleDuration = hePpduParameters.common.commonPreambleDuration;
+        // The packet-level HE preamble duration already includes HE-SIG-A
+        // (and its ER-SU repetition), so a separate header interval would
+        // count HE signaling twice and shorten the analog DATA interval.
         headerDuration = SIMTIME_ZERO;
         if (heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK && heMuHeader->getUsersArraySize() == 1) {
             // HE TB responses occupy the RU assigned by the Trigger frame

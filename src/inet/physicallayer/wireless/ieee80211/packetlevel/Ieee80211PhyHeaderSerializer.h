@@ -121,8 +121,8 @@ class INET_API Ieee80211VhtPhyHeaderSerializer : public FieldsChunkSerializer
 };
 
 /**
- * Converts the INET packet-level representation of a HE MU PHY header,
- * including common PPDU settings and per-user RU allocations.
+ * Converts the INET packet-level representation of an HE PHY header,
+ * including the PPDU format, common settings, and per-user RU allocations.
  */
 class INET_API Ieee80211HeMuPhyHeaderSerializer : public FieldsChunkSerializer
 {

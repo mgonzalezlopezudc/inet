@@ -109,7 +109,7 @@ class INET_API Ieee80211HeSignalMode : public IIeee80211HeaderMode, public Ieee8
     virtual const Ieee80211OfdmModulation *getModulation() const override { return modulation; }
     virtual const Ieee80211VhtCode *getCode() const { return code; }
 
-    virtual Ptr<Ieee80211PhyHeader> createHeader() const override { return makeShared<Ieee80211HtPhyHeader>(); }
+    virtual Ptr<Ieee80211PhyHeader> createHeader() const override;
 };
 
 /**
