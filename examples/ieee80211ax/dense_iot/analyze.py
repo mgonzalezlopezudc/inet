@@ -31,7 +31,8 @@ CONFIG_METADATA = {
     "AxMixed": ("AX", "Mixed"),
     "AcMixed": ("AC", "Mixed"),
 }
-STATION_COUNTS = {128, 256, 512}
+STATION_COUNTS = {64, 128, 256, 512}
+RUNS_PER_STATION_COUNT = 5
 MEASUREMENT_START = 20.0
 MEASUREMENT_END = 120.0
 MEASUREMENT_DURATION = MEASUREMENT_END - MEASUREMENT_START
@@ -110,14 +111,27 @@ def validate_campaign(frame: pd.DataFrame) -> None:
         if set(subset.numStations) != STATION_COUNTS:
             raise RuntimeError(f"{config}: incomplete station-count set")
         counts = subset.groupby("numStations").runID.nunique()
-        if set(counts) != STATION_COUNTS or not np.all(counts.to_numpy() == 5):
-            raise RuntimeError(f"{config}: expected five runs per station count, found {counts.to_dict()}")
+        if set(counts.index) != STATION_COUNTS or not np.all(
+            counts.to_numpy() == RUNS_PER_STATION_COUNT
+        ):
+            raise RuntimeError(
+                f"{config}: expected {RUNS_PER_STATION_COUNT} runs per station "
+                f"count, found {counts.to_dict()}"
+            )
 
 
 def validate_ax_features(paths: list[str]) -> None:
+    expected_runs_per_config = len(STATION_COUNTS) * RUNS_PER_STATION_COUNT
     agreements = load_scalars(paths, "twtAgreementCount")
     agreements = agreements[agreements.configname.str.startswith("Ax")].copy()
     agreements["value"] = pd.to_numeric(agreements.value, errors="raise")
+    for config in ("AxUl", "AxDl", "AxMixed"):
+        rows = agreements[agreements.configname == config]
+        if rows.runID.nunique() != expected_runs_per_config:
+            raise RuntimeError(
+                f"{config}: expected TWT results from {expected_runs_per_config} runs, "
+                f"found {rows.runID.nunique()}"
+            )
     for key, rows in agreements.groupby(["runID", "configname", "numStations"]):
         expected = key[2]
         active = int((rows.value == 1).sum())
@@ -131,7 +145,10 @@ def validate_ax_features(paths: list[str]) -> None:
     trigger_rows["value"] = pd.to_numeric(trigger_rows.value, errors="raise")
     for config in ("AxUl", "AxMixed"):
         rows = trigger_rows[trigger_rows.configname == config]
-        if rows.runID.nunique() != 15 or (rows.value <= 0).any():
+        if (
+            rows.runID.nunique() != expected_runs_per_config
+            or (rows.value <= 0).any()
+        ):
             raise RuntimeError(f"{config}: every run must contain Basic Trigger frames")
 
     dl_mu = load_vectors(paths, "heStaId:vector", required=False)
@@ -139,7 +156,7 @@ def validate_ax_features(paths: list[str]) -> None:
         dl_mu.configname.isin(("AxDl", "AxMixed"))
         & dl_mu.module.str.endswith(".ap.wlan[0].radio")
     ]
-    if dl_mu.runID.nunique() != 30:
+    if dl_mu.runID.nunique() != 2 * expected_runs_per_config:
         raise RuntimeError(
             "Every AxDl/AxMixed run must contain at least one recorded DL MU transmission"
         )

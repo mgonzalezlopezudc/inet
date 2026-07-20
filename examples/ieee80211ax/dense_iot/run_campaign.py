@@ -18,7 +18,7 @@ REPOSITORY_ROOT = EXAMPLE_DIR.parents[2]
 INI = EXAMPLE_DIR / "omnetpp.ini"
 RESULTS_DIR = EXAMPLE_DIR / "results"
 CONFIGS = ("AxUl", "AcUl", "AxDl", "AcDl", "AxMixed", "AcMixed")
-STATION_COUNTS = (128, 256, 512)
+STATION_COUNTS = (128, 256, 512, 64)
 RUNS_PER_STATION_COUNT = 5
 RUNS_PER_CONFIG = len(STATION_COUNTS) * RUNS_PER_STATION_COUNT
 
@@ -57,12 +57,12 @@ def station_counts(text: str) -> tuple[int, ...]:
         values = tuple(int(value.strip()) for value in text.split(","))
     except ValueError:
         raise argparse.ArgumentTypeError(
-            "must be a comma-separated list containing 128, 256, or 512"
+            "must be a comma-separated list containing 64, 128, 256, or 512"
         ) from None
     invalid = [value for value in values if value not in STATION_COUNTS]
     if not values or invalid:
         raise argparse.ArgumentTypeError(
-            "must be a comma-separated list containing 128, 256, or 512"
+            "must be a comma-separated list containing 64, 128, 256, or 512"
         )
     if len(values) != len(set(values)):
         raise argparse.ArgumentTypeError("station counts must not be repeated")
@@ -104,7 +104,7 @@ def main() -> None:
     parser.add_argument(
         "--station-counts", "--station-count", "--stations",
         type=station_counts,
-        help="comma-separated station counts: 128, 256, and/or 512 (default: all)",
+        help="comma-separated station counts: 64, 128, 256, and/or 512 (default: all)",
     )
     parser.add_argument(
         "--runs-per-station-count", "--runs",
