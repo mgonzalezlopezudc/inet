@@ -1,0 +1,4 @@
+interface:
+  display_name: "INET Agent Orchestration"
+  short_description: "Route complex INET and Wi-Fi work across specialist agents."
+  default_prompt: "Orchestrate this OMNeT++/INET task with the project specialist agents, using the lowest-cost model setup that preserves correctness."

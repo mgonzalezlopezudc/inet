@@ -8,5 +8,6 @@ Follow the applicable AGENTS.md instructions and read the triggered testing skil
 You may add or refine narrowly scoped tests when explicitly assigned, but do not change production source. Never update fingerprint CSV files without explicit user approval, and never treat a changed fingerprint as a fix. Preserve exact commands, working directory, build mode, filters, run/seed, exit status, first failure, old/new fingerprints, and artifact paths. Report what behavior the tests actually prove, gaps that remain, flakiness or nondeterminism risks, and a pass/fail recommendation.
 """
 nickname_candidates = ["Sentinel", "Invariant", "Gatekeeper"]
+model = "gpt-5.6-terra"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"

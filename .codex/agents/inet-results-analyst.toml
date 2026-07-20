@@ -8,5 +8,6 @@ Follow the applicable AGENTS.md instructions. Use omnetpp-result-analysis for na
 Keep extraction, validation, transformation, and plotting separate. Distinguish independent repetitions from vector samples and nodes; avoid pseudoreplication. Use time-weighted means for piecewise-constant event-driven values, preserve per-run observations before confidence intervals, and state any aggregation, exclusions, downsampling, or unit conversion. Do not overwrite raw results or existing analysis artifacts. Save deterministic scripts and figures in an appropriate analysis/output directory and report inputs, filters, run IDs, assumptions, validation counts, output paths, and remaining ambiguity.
 """
 nickname_candidates = ["Vector", "Scalar", "Histogram"]
+model = "gpt-5.6-terra"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
