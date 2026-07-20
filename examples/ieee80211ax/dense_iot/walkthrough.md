@@ -2,9 +2,9 @@
 
 This example compares an IEEE 802.11ax (Wi-Fi 6) dense-IoT treatment with a
 matched IEEE 802.11ac (Wi-Fi 5) baseline. The first execution below is
-deliberately limited to 128 stations and one repetition per configuration. It
+deliberately limited to 64 stations and one repetition per configuration. It
 exercises all three workloads and both technologies without starting the full
-90-run campaign.
+120-run campaign.
 
 ## Background: Dense IoT in 802.11ax
 
@@ -42,7 +42,7 @@ infrastructure BSS:
 - **`radioMedium`** models the shared 5 GHz, 20 MHz wireless channel.
 
 ```text
-       sta[0]     sta[1]                 sta[127]
+       sta[0]     sta[1]                  sta[63]
           \          |                    /
            \         |   5 GHz BSS       /
             +--------+------ ap --------+
@@ -91,18 +91,18 @@ The `Ac*` configurations use one-stream AARF rate control and ordinary
 single-user HCF/EDCA access. TWT is absent, so stations remain available to the
 channel rather than following negotiated sleep schedules.
 
-## First Execution: 128 Stations and One Run
+## First Execution: 64 Stations and One Run
 
 From the INET project root, run:
 
 ```sh
 python3 examples/ieee80211ax/dense_iot/run_campaign.py \
-  --station-count 128 \
+  --station-count 64 \
   --runs-per-station-count 1 \
   -j12
 ```
 
-This Cmdenv execution selects run `0` for each of `AxUl`, `AcUl`, `AxDl`,
+This Cmdenv execution selects run `15` for each of `AxUl`, `AcUl`, `AxDl`,
 `AcDl`, `AxMixed`, and `AcMixed`, producing six simulations in total. The
 `-j12` option runs all six conditions in parallel. The runner prints the exact
 `bin/inet` command for each condition and writes its result files under
@@ -111,40 +111,39 @@ This Cmdenv execution selects run `0` for each of `AxUl`, `AcUl`, `AxDl`,
 The resulting filenames have this form:
 
 ```text
-AxUl-numStations=128-#0.sca
-AxUl-numStations=128-#0.vec
-AcUl-numStations=128-#0.sca
+AxUl-numStations=64-#0.sca
+AxUl-numStations=64-#0.vec
+AcUl-numStations=64-#0.sca
 ...
 ```
 
 To preview the six commands without running them, append `--dry-run`.
 
 To execute only one condition instead, select its configuration and its
-absolute run number directly. Run `0` is the 128-station, repetition-0 case:
+absolute run number directly. Because 64 was appended to preserve the existing
+run-number mapping, run `15` is the 64-station, repetition-0 case:
 
 ```sh
-python3 examples/ieee80211ax/dense_iot/run_campaign.py --config AxUl --run 0 -j12
+python3 examples/ieee80211ax/dense_iot/run_campaign.py --config AxUl --run 15 -j12
 ```
 
 ## Verifying the First Execution
 
-For the completed four-run analysis, confirm that these scalar result files
-exist:
+For the completed six-condition analysis, confirm that these scalar result
+files exist:
 
 ```sh
 find examples/ieee80211ax/dense_iot/results -maxdepth 1 \
-  -name '*-numStations=128-#0.sca' -print | sort
+  -name '*-numStations=64-#0.sca' -print | sort
 ```
 
-The list should contain `AxUl`, `AcUl`, `AxMixed`, and `AcMixed`. The
-`AxDl`/`AcDl` downlink-only jobs do not have completed scalar files in this
-result set. Inspect the application delivery counters and payload-byte sums for
-the four completed configurations:
+The list should contain `AxUl`, `AcUl`, `AxDl`, `AcDl`, `AxMixed`, and
+`AcMixed`. Inspect the application delivery counters and payload-byte sums:
 
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "packetReceived:count" or name =~ "packetReceived:sum(packetBytes)"' \
-  examples/ieee80211ax/dense_iot/results/*-numStations=128-#0.sca
+  examples/ieee80211ax/dense_iot/results/*-numStations=64-#0.sca
 ```
 
 Query the recorded end-to-end delay vectors separately:
@@ -152,7 +151,7 @@ Query the recorded end-to-end delay vectors separately:
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector AND name =~ "endToEndDelay:vector"' \
-  examples/ieee80211ax/dense_iot/results/*-numStations=128-#0.vec
+  examples/ieee80211ax/dense_iot/results/*-numStations=64-#0.vec
 ```
 
 For the AX treatment, verify that stations negotiated TWT agreements and that
@@ -161,16 +160,16 @@ the uplink workloads transmitted Basic Trigger frames:
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "twtAgreementCount" or name =~ "twtAwakeTime" or name =~ "twtSleepTime" or name =~ "heUlBasicTriggerSent:count"' \
-  examples/ieee80211ax/dense_iot/results/Ax*-numStations=128-#0.sca
+  examples/ieee80211ax/dense_iot/results/Ax*-numStations=64-#0.sca
 ```
 
-The completed `AxMixed` AP-radio vectors provide evidence of downlink HE
-multi-user resource allocation:
+The completed `AxDl` and `AxMixed` AP-radio vectors provide evidence of
+downlink HE multi-user resource allocation:
 
 ```sh
 opp_scavetool query -l \
   -f 'module =~ "**.ap.wlan[0].radio" AND (name =~ "heStaId:vector" or name =~ "heRuToneSize:vector")' \
-  examples/ieee80211ax/dense_iot/results/AxMixed-numStations=128-#0.vec
+  examples/ieee80211ax/dense_iot/results/Ax{Dl,Mixed}-numStations=64-#0.vec
 ```
 
 Finally, inspect the final station-energy values used by the comparison:
@@ -178,7 +177,7 @@ Finally, inspect the final station-energy values used by the comparison:
 ```sh
 opp_scavetool query -l \
   -f 'module =~ "**.sta[*].energyStorage" AND name =~ "residualEnergyCapacity:last"' \
-  examples/ieee80211ax/dense_iot/results/*-numStations=128-#0.sca
+  examples/ieee80211ax/dense_iot/results/*-numStations=64-#0.sca
 ```
 
 Each station begins with 1000 J. Its consumption is therefore `1000 J` minus
@@ -186,32 +185,35 @@ the final residual-energy scalar. Delivery must be checked alongside energy:
 lower consumption caused by undelivered traffic or missing associations is not
 an efficiency improvement.
 
-## Result Analysis: Four Completed Run-0 Conditions
+## Result Analysis: 64 Stations, Repetition 0
 
-The tables below use the four completed `numStations=128`, run-0 result pairs:
+The tables below use the completed `numStations=64`, run-15 result pairs:
 
 | Configuration | `.sca` / `.vec` run identifier |
 |---|---|
-| `AxUl` | `AxUl-0-20260719-19:34:58-127` |
-| `AcUl` | `AcUl-0-20260719-19:34:58-121` |
-| `AxMixed` | `AxMixed-0-20260719-19:34:58-126` |
-| `AcMixed` | `AcMixed-0-20260719-19:34:58-125` |
+| `AxUl` | `AxUl-15-20260720-13:38:40-135` |
+| `AcUl` | `AcUl-15-20260720-13:38:40-136` |
+| `AxDl` | `AxDl-15-20260720-13:53:41-32` |
+| `AcDl` | `AcDl-15-20260720-13:38:40-133` |
+| `AxMixed` | `AxMixed-15-20260720-13:38:40-137` |
+| `AcMixed` | `AcMixed-15-20260720-13:38:40-132` |
 
 The scalar filters are `packetReceived:count`,
 `packetReceived:sum(packetBytes)`, and `residualEnergyCapacity:last`. The
-vector filter is `endToEndDelay:vector`. Delay samples are pooled per
-configuration over the 20–120 s measurement interval; goodput is received
-payload bits divided by that 100 s interval. Mean station energy is
-`1000 J - residualEnergyCapacity:last`, averaged over the 128 STAs.
+vector filter is `endToEndDelay:vector`. Delay samples are cropped to
+`[20,120)` and pooled per configuration; goodput is received payload bits
+divided by that 100 s interval. Mean station energy subtracts the final
+`residualEnergyCapacity:last` from 1000 J, averages over the 64 STAs, and
+covers the full 0–120 s run.
 
 Over the 100 s measurement interval, the offered packet counts are:
 
 | Workload | Direction | Offered packets |
 |---|---:|---:|
-| Uplink | UL | 12,800 |
-| Downlink | DL | 12,800 |
-| Mixed | UL | 12,800 |
-| Mixed | DL | 1,280 |
+| Uplink | UL | 6,400 |
+| Downlink | DL | 6,400 |
+| Mixed | UL | 6,400 |
+| Mixed | DL | 640 |
 
 ### Application and energy summary
 
@@ -220,34 +222,43 @@ delay pools both directions within the run.
 
 | Configuration | Delivered / offered | Delivery ratio | Goodput | Mean delay | p95 delay | Mean station energy |
 |---|---:|---:|---:|---:|---:|---:|
-| `AxUl` | 12,196 / 12,800 | 95.281% | 97.568 kbps | 2.398783 s | 5.079606 s | 0.160515 J |
-| `AcUl` | 12,785 / 12,800 | 99.883% | 102.280 kbps | 0.165148 s | 1.000254 s | 0.251881 J |
-| `AxMixed` | 13,326 / 14,080 | 94.645% | 106.608 kbps | 2.389380 s | 5.032261 s | 0.160242 J |
-| `AcMixed` | 14,055 / 14,080 | 99.822% | 112.440 kbps | 0.134933 s | 0.000379 s | 0.252939 J |
+| `AxUl` | 6,072 / 6,400 | 94.8750% | 48.576 kbps | 2.175482 s | 4.093415 s | 0.153198 J |
+| `AcUl` | 6,391 / 6,400 | 99.8594% | 51.128 kbps | 0.082412 s | 0.000342 s | 0.246854 J |
+| `AxDl` | 2,601 / 6,400 | 40.6406% | 20.808 kbps | 2.086516 s | 13.190793 s | 0.135516 J |
+| `AcDl` | 6,341 / 6,400 | 99.0781% | 50.728 kbps | 0.000066 s | 0.000061 s | 0.245340 J |
+| `AxMixed` | 6,754 / 7,040 | 95.9375% | 54.032 kbps | 2.090061 s | 5.017219 s | 0.154087 J |
+| `AcMixed` | 7,036 / 7,040 | 99.9432% | 56.288 kbps | 0.022988 s | 0.000326 s | 0.247388 J |
 
 The direction-specific Mixed rows explain the aggregate delivery ratios:
 
-| Configuration | UL delivered / offered | DL delivered / offered | UL mean delay | DL mean delay |
+| Configuration | UL delivered / offered | DL delivered / offered | UL mean / p95 delay | DL mean / p95 delay |
 |---|---:|---:|---:|---:|
-| `AxMixed` | 12,184 / 12,800 | 1,142 / 1,280 | 2.607984 s | 0.057101 s |
-| `AcMixed` | 12,775 / 12,800 | 1,280 / 1,280 | 0.148447 s | 0.000063 s |
+| `AxMixed` | 6,116 / 6,400 | 638 / 640 | 2.295899 / 5.027717 s | 0.116860 / 0.129750 s |
+| `AcMixed` | 6,396 / 6,400 | 640 / 640 | 0.025281 / 0.000326 s | 0.000064 / 0.000061 s |
 
 ### TWT and OFDMA evidence
 
 The AX scalar results show one active individual TWT agreement for every STA.
-The awake and sleep values below are per-station means over the 128 stations;
+The awake and sleep values below are per-station means over the 64 stations;
 the configured 5 ms service duration is quantized in the TWT exchange, and
 management/setup activity contributes to the measured totals.
 
 | AX configuration | Active agreements | Mean awake time | Mean sleep time | Basic Triggers | BSRP Triggers | Scheduled users (sum) |
 |---|---:|---:|---:|---:|---:|---:|
-| `AxUl` | 128 / 128 | 13.866579 s | 106.133421 s | 8,626 | 172 | 42,578 |
-| `AxMixed` | 128 / 128 | 14.106729 s | 105.893271 s | 8,801 | 208 | 43,711 |
+| `AxUl` | 64 / 64 | 13.148720 s | 106.851280 s | 8,504 | 686 | 40,436 |
+| `AxDl` | 64 / 64 | 12.566553 s | 107.433447 s | 0 | 0 | 0 |
+| `AxMixed` | 64 / 64 | 12.908501 s | 107.091499 s | 8,669 | 564 | 40,940 |
 
-The `AxMixed` AP-radio vectors contain 31 `heStaId:vector` observations and 31
-matching `heRuToneSize:vector` observations. Every recorded RU is 52 tones in
-this run. `AxUl` has no downlink application load, so it has no corresponding
-downlink MU vector in the completed four-run set.
+The `AxDl` AP-radio vectors contain 50 paired `heStaId:vector` and
+`heRuToneSize:vector` samples across 24 allocation timestamps. Twenty-two
+allocations contain two users and two contain three; all recorded RUs have 52
+tones. The `AxMixed` vectors contain eight paired samples: six allocate 52-tone
+RUs to STAs 30 and 61, while the other two allocate a 26-tone RU to STA 24 and
+a 106-tone RU to STA 60. This is direct evidence of downlink HE multi-user
+allocation. `AxUl` has no downlink application load, so it has no corresponding
+downlink MU vector. The HE rate-control vectors span MCS 0 through 11 in
+`AxUl` and `AxMixed`; `AxDl` has no nonempty selected-MCS vector. The AC
+rate-change vectors contain 78 Mbit/s in the completed AC runs.
 
 ### Interpretation of this run
 
@@ -261,15 +272,18 @@ For AX, the TWT scalars establish agreement coverage and awake/sleep time; the
 Trigger counters and AP-radio HE resource-unit vectors establish that the
 configured OFDMA mechanisms were active.
 
-In this seed, AX consumed about 36% less mean station energy than its matched
-AC condition (`0.160515` versus `0.251881 J` for UL; `0.160242` versus
-`0.252939 J` for Mixed), while also delivering fewer packets and showing much
-higher delay. That is consistent with stations spending most of the run asleep,
-but it is not evidence that AX is generally slower or less reliable: the AX
-and AC values above are one repetition with randomized placement, association,
-traffic phase, and MAC contention. One repetition is suitable for checking that
-the scenario runs and produces the expected evidence, not for a statistical
-performance claim. Do not report confidence intervals from this table.
+In this seed, AX consumed less mean station energy than its matched AC
+condition: about 38% less for UL (`0.153198` versus `0.246854 J`), 45% less
+for DL (`0.135516` versus `0.245340 J`), and 38% less for Mixed (`0.154087`
+versus `0.247388 J`). AX also delivered fewer packets and showed much higher
+delay, most sharply in DL where it delivered only 40.64% of the offered load.
+That is consistent with stations spending most of the run asleep, but it is
+not evidence that AX is generally slower or less reliable: the AX and AC
+values above are one repetition with randomized placement, association,
+traffic phase, and MAC contention. One repetition is suitable for checking
+that the scenario runs and produces the expected evidence, not for a
+statistical performance claim. Do not report confidence intervals from this
+table.
 
 ## Running and Analyzing the Full Campaign
 
@@ -280,12 +294,12 @@ additional time and memory cost are acceptable:
 python3 examples/ieee80211ax/dense_iot/run_campaign.py -j12
 ```
 
-The full campaign contains six configurations, three station counts, and five
-repetitions: 90 simulations. The `-j12` option runs up to 12 simultaneously;
+The full campaign contains six configurations, four station counts, and five
+repetitions: 120 simulations. The `-j12` option runs up to 12 simultaneously;
 make sure the machine has enough memory before using that concurrency with the
 512-station cases.
 
-Once all 90 runs are present, generate the CSV summaries and dashboard:
+Once all 120 runs are present, generate the CSV summaries and dashboard:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
@@ -294,5 +308,5 @@ python3 examples/ieee80211ax/dense_iot/analyze.py
 
 The analysis script intentionally validates the complete campaign before
 computing cross-run means and 95% Student-t confidence intervals. It will reject
-the four-result first execution as incomplete; use the direct checks and tables
-above for this initial run.
+the six-condition, single-repetition first execution as incomplete; use the
+direct checks and tables above for this initial run.

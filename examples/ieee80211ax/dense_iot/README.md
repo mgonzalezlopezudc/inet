@@ -2,7 +2,7 @@
 
 This example compares a Wi-Fi 6 treatment with a matched Wi-Fi 5 baseline in
 one dense infrastructure BSS. A wired server communicates through one AP with
-128, 256, or 512 stationary IoT stations.
+64, 128, 256, or 512 stationary IoT stations.
 
 The three workloads are:
 
@@ -56,8 +56,8 @@ must not be treated as proof of a transmitted MCS.
 | `AxDl` / `AcDl` | AX / AC | downlink |
 | `AxMixed` / `AcMixed` | AX / AC | mixed uplink and downlink |
 
-Every configuration contains three station-count iterations and five
-independent repetitions, or 15 runs. The full comparison is therefore 90 runs.
+Every configuration contains four station-count iterations and five
+independent repetitions, or 20 runs. The full comparison is therefore 120 runs.
 Run it from the repository root with:
 
 ```sh
