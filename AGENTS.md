@@ -31,6 +31,7 @@ Keep orchestration shallow and evidence-driven:
 
 ### Links to files in user-facing explanations
 * Always use relative (to the project workspace) and not absolute links to files in your user-facing explanations. For example, use `[some-file](src/some-file)` instead of `[some-file]/(home/user/omnetpp_ws/inet/src/some-file)`.
+* This also applies to Antigravity generated artifacts such as implementation plans, tasks and walkthroughs.
 
 ### General rules
 
