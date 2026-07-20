@@ -1,0 +1,4 @@
+interface:
+  display_name: "INET Antigravity Agent Orchestration"
+  short_description: "Route complex INET and Wi-Fi work across specialist agents on Antigravity LLMs."
+  default_prompt: "Orchestrate this OMNeT++/INET task with the project specialist agents, using the lowest-cost Gemini/Antigravity model setup that preserves correctness."

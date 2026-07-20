@@ -16,6 +16,8 @@ Optimize routing for correctness first and token/credit consumption second:
 
 When running on Kimi Code CLI with Kimi models, use the `inet-kimi-agent-orchestration` skill instead: same specialist roles, evidence lanes, and gating with Kimi tier bindings — Sol-tier = K3 (`kimi-code/k3`) at `max` effort, Terra-tier = K3 at `high`, Luna-tier = K2.7 (`kimi-code/kimi-for-coding`) with thinking on. Kimi sub-agents (`coder`, `explore`, `plan`) inherit the session model and effort, so run the root session on K3 and treat the per-lane bindings as routing rules applied wherever model/effort selection is exposed; role personas live in the skill's `agents/` directory and are injected into each delegated prompt.
 
+When running on Antigravity LLM models, use the `inet-antigravity-agent-orchestration` skill instead: same specialist roles, evidence lanes, and gating with Antigravity tier bindings — Sol-tier = Gemini 3.5 Pro at `high` effort, Terra-tier = Gemini 3.5 Pro at `medium` effort or Gemini 3.5 Flash at `high` effort, Luna-tier = Gemini 3.5 Flash at `low` effort. Role personas live in the skill's `agents/` directory and are injected into each delegated prompt.
+
 Keep orchestration shallow and evidence-driven:
 
 * The root agent owns requirements, decomposition, agent selection, handoffs, conflict resolution, and the final answer. Delegate bounded outcomes, not vague topics.
@@ -78,6 +80,7 @@ Store project-wide agent behavior in `AGENTS.md`. Store task-specific reusable w
 * `inet-architectural-requirements`: Apply INET architectural requirements, naming conventions, exception ledgers, enforcement checks, and sealing policy before changing or reviewing `src/inet/`.
 * `inet-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across the project-scoped Sol, Terra, and Luna specialist agents.
 * `inet-kimi-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across Kimi K3/K2.7 specialist sub-agents on Kimi Code CLI.
+* `inet-antigravity-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across Antigravity Gemini 3.5 Pro and Gemini 3.5 Flash specialist agents.
 * `inet-simulation-run`: Run INET simulations with Cmdenv or Qtenv and diagnose startup or runtime failures.
 * `inet-cmdenv-log-analysis`: Find text and investigate module behavior in Cmdenv output.
 * `inet-pcap-tshark-analysis`: Record and analyze INET packet exchanges with PcapRecorder and TShark.
