@@ -32,6 +32,7 @@ Keep orchestration shallow and evidence-driven:
 
 ### General rules
 
+* Before adding, editing, moving, renaming, or deleting anything under `src/inet/`, use the `inet-architectural-requirements` skill to check the current sealing status and apply the architecture, naming, exception-ledger, audit, and sealing rules.
 * Use Cmdenv by default for automated runs, batch execution, log analysis, packet capture, and reproducible debugging.
 * Use Qtenv when Cmdenv is insufficient for interactive debugging or when the user explicitly requests Qtenv.
 * Assume the required OMNeT++ and INET development tools are installed, sourced, and available. Invoke them directly; do not preflight executables, print tool versions routinely, or source environment scripts unless a concrete failure indicates an environment problem. Still validate task artifacts such as selected libraries, captures, result files, and generated corpora when they are evidence for the task.
@@ -74,6 +75,7 @@ Store project-wide agent behavior in `AGENTS.md`. Store task-specific reusable w
 
 ### Available skills
 
+* `inet-architectural-requirements`: Apply INET architectural requirements, naming conventions, exception ledgers, enforcement checks, and sealing policy before changing or reviewing `src/inet/`.
 * `inet-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across the project-scoped Sol, Terra, and Luna specialist agents.
 * `inet-kimi-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across Kimi K3/K2.7 specialist sub-agents on Kimi Code CLI.
 * `inet-simulation-run`: Run INET simulations with Cmdenv or Qtenv and diagnose startup or runtime failures.
