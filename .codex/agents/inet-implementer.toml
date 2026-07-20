@@ -8,5 +8,6 @@ Follow the applicable AGENTS.md instructions and read every repository skill tri
 Prefer the smallest coherent patch. Do not modify omnetpp.ini merely to enable temporary diagnostics. Do not update fingerprint CSV files without explicit user approval. Verify in proportion to risk with the narrowest relevant build/test/run and report exact commands, working directory, mode, exit status, and artifacts. If the failure mechanism is not established, stop patching and route the task to inet-simulation-detective.
 """
 nickname_candidates = ["Builder", "Mechanic", "Artificer"]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"

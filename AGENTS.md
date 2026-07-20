@@ -2,6 +2,29 @@
 
 Use repository skills for detailed simulation, test, result-analysis, and standards workflows.
 
+### Agent routing and orchestration
+
+Use the `inet-agent-orchestration` skill for nontrivial INET work that benefits from specialist agents. Delegate proactively when a task has two or more independent evidence lanes, crosses IEEE 802.11 normative behavior and INET implementation, investigates unexplained runtime behavior, changes production C++/NED/MSG code, requires nontrivial statistical analysis, or needs independent regression/review evidence. Keep simple lookups, one-command checks, and obvious one-file edits in the root thread when delegation would cost more than the work.
+
+Optimize routing for correctness first and token/credit consumption second:
+
+* Use GPT-5.6 Sol for correctness-critical judgment: ambiguous Wi-Fi MAC/PHY behavior, standards-to-model comparison, difficult runtime causality, production implementation, and final review.
+* Use GPT-5.6 Terra for bounded engineering work: repository/configuration tracing, deterministic regression work, and result analysis with established methods.
+* Use GPT-5.6 Luna only for clear, repeatable work with an explicit output contract: artifact inventory, targeted extraction, filtering, and structured summarization. Do not ask Luna to establish causality, interpret ambiguous standards language, design a fix, or approve a change.
+* Use the lowest reasoning effort adequate for the assignment, but never use an effort higher than `high`. Use `high` for correctness-critical work, `medium` for bounded analysis, and `low` only for mechanical transformations with independently checkable output.
+* If a configured model is unavailable, preserve or increase capability: route Luna work to Terra and Terra work to Sol at no more than `high`. Do not silently downgrade Sol work; report the limitation and either keep the work in the capable root thread or use Terra at `high` with independent verification.
+
+Keep orchestration shallow and evidence-driven:
+
+* The root agent owns requirements, decomposition, agent selection, handoffs, conflict resolution, and the final answer. Delegate bounded outcomes, not vague topics.
+* Start independent read-only lanes in parallel when they can materially reduce latency or protect the root context. Do not assign two agents the same question merely to seek consensus.
+* Use at most one production-code writer at a time. Other agents may inspect, reproduce, test, or review concurrently only when their work does not race with the writer or rely on an unstable worktree.
+* Preserve `max_depth = 1`: specialist agents must return to the root instead of recursively delegating.
+* Give every agent the exact question, scope, exclusions, relevant paths/configuration/run, permitted writes, required evidence, and definition of done. Require concise conclusions with file references and artifact paths rather than raw logs.
+* Reuse an existing specialist for follow-up work when it already has the relevant context. Stop opening lanes once the decisive evidence is established.
+* Resolve disagreements by evidence strength: reproducible runtime/debugger evidence, packet/event/result evidence, effective configuration, source behavior, and then hypothesis. IEEE text governs normative claims; checked-out INET source and observed runs govern implemented behavior.
+* Before implementation, establish the failure mechanism and smallest change surface. After implementation, use an independent regression or review lane for nontrivial Wi-Fi changes.
+
 ### Links to files in user-facing explanations
 * Always use relative (to the project workspace) and not absolute links to files in your user-facing explanations. For example, use `[some-file](src/some-file)` instead of `[some-file]/(home/user/omnetpp_ws/inet/src/some-file)`.
 
@@ -49,6 +72,7 @@ Store project-wide agent behavior in `AGENTS.md`. Store task-specific reusable w
 
 ### Available skills
 
+* `inet-agent-orchestration`: Route nontrivial INET and IEEE 802.11 work across the project-scoped Sol, Terra, and Luna specialist agents.
 * `inet-simulation-run`: Run INET simulations with Cmdenv or Qtenv and diagnose startup or runtime failures.
 * `inet-cmdenv-log-analysis`: Find text and investigate module behavior in Cmdenv output.
 * `inet-pcap-tshark-analysis`: Record and analyze INET packet exchanges with PcapRecorder and TShark.

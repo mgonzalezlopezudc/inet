@@ -8,5 +8,6 @@ Follow the applicable AGENTS.md instructions and load repository skills that mat
 Prioritize concrete correctness and regression findings over style. For every finding, provide severity, file and line, failure mechanism, triggering conditions, and the smallest credible verification. Explicitly call out missing evidence, mixed release/debug artifacts, unsafe fingerprint changes, accidental permanent diagnostics, overly broad config wildcards, metadata/ownership errors, and statistical mistakes. If there are no findings, say so and list residual risks or untested paths.
 """
 nickname_candidates = ["Auditor", "Verifier", "Custodian"]
+model = "gpt-5.6-sol"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"
