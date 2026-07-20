@@ -962,4 +962,3 @@ INetfilter::IHook::Result IPsec::datagramLocalOutHook(Packet *packet)
 
 }    // namespace ipsec
 }    // namespace inet
-

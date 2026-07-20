@@ -74,6 +74,7 @@ class MockAckHandler : public IAckHandler
     int inProgressCount = 0;
     virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
+    virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
     virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { inProgressCount++; }
 };
 
@@ -86,10 +87,13 @@ class MockScheduler : public IIeee80211HeDlScheduler
 
     virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidateStations, Hz centerFrequency, Hz bandwidth) override {
         std::vector<RuAllocation> allocs;
+        auto rus = physicallayer::getHeEqualRuLayout(centerFrequency, bandwidth,
+                physicallayer::getHeMaxRuCount(bandwidth));
+        ASSERT(scheduledStations.size() <= rus.size());
         for (size_t i = 0; i < scheduledStations.size(); i++) {
             RuAllocation alloc;
             alloc.staAddress = scheduledStations[i];
-            alloc.ru.index = i;
+            alloc.ru = rus[i];
             allocs.push_back(alloc);
         }
         return allocs;
@@ -444,6 +448,8 @@ SIFS=, BlockAck=, BAR=
 All three admitted packets moved to in-progress with Block Ack policy.
 Step 1 prepared: Transmit explicit BAR to STA1.
 Expected timeout for step 1: 0.000237
+
+%contains: stdout
 Step 2 prepared: Transmit BAR frame.
 BAR packet duration field: 0.000556
 Expected BAR packet duration field: 0.000556
@@ -455,6 +461,8 @@ HE DL MU TxOp FS: sequential BlockAck timeout for STA 66-77-88-99-AA-BB, trigger
 Callback: ProcessFailedFrame data-sta2
 Timeout marked current receive step as rejected. Failures after: 1
 Step 4 continued with BAR to STA3 after STA2 timeout.
+
+%contains: stdout
 Sequence ended cleanly after STA3 BlockAck.
 Failed calls count: 1
 

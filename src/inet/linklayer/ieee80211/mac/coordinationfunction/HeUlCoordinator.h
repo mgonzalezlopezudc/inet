@@ -36,7 +36,7 @@ class INET_API HeUlCoordinator : public SimpleModule
         std::array<int64_t, 4> backlogBytes = {};
         std::array<uint8_t, 4> tid = {};
         simtime_t updateTime = SIMTIME_ZERO;
-        bool retryPending = false;
+        std::array<bool, 4> retryPending = {};
         simtime_t lastService = SIMTIME_ZERO;
         std::array<int64_t, 4> scheduledBytes = {};
     };
@@ -97,7 +97,11 @@ inline std::ostream& operator<<(std::ostream& os, const HeUlCoordinator::BufferS
 {
     os << "backlog=[" << status.backlogBytes[0] << "," << status.backlogBytes[1] << "," 
        << status.backlogBytes[2] << "," << status.backlogBytes[3] << "]"
-       << " update=" << status.updateTime << " retry=" << (status.retryPending ? "yes" : "no");
+       << " update=" << status.updateTime << " retry=["
+       << (status.retryPending[0] ? "yes" : "no") << ","
+       << (status.retryPending[1] ? "yes" : "no") << ","
+       << (status.retryPending[2] ? "yes" : "no") << ","
+       << (status.retryPending[3] ? "yes" : "no") << "]";
     return os;
 }
 

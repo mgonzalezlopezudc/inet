@@ -732,10 +732,16 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 }
                 else if (dataHeader->getBufferStatusPresent()) {
                     ieee80211::Ieee80211HeBufferStatus status;
-                    status.tid = dataHeader->getBufferStatusTid();
-                    status.accessCategory = dataHeader->getBufferStatusAc();
-                    status.queueSize = dataHeader->getBufferStatusQueueSize();
-                    stream.writeUint32Le(ieee80211::packHeBufferStatusHtControl(status));
+                    if (!ieee80211::encodeHeSingleAcBufferStatus(dataHeader->getBufferStatusTid(),
+                            static_cast<ieee80211::AccessCategory>(dataHeader->getBufferStatusAc()),
+                            dataHeader->getBufferStatusQueueSize(), status))
+                        throw cRuntimeError("Invalid or unrepresentable single-AC HE BSR: TID=%u AC=%u queueSize=%u",
+                                dataHeader->getBufferStatusTid(), dataHeader->getBufferStatusAc(),
+                                dataHeader->getBufferStatusQueueSize());
+                    uint32_t htControl;
+                    if (!ieee80211::packHeBufferStatusHtControl(status, htControl))
+                        throw cRuntimeError("Invalid HE BSR Control fields");
+                    stream.writeUint32Le(htControl);
                 }
             }
             ASSERT(stream.getLength() - startPos == dataHeader->getChunkLength());
@@ -1387,9 +1393,17 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     }
                     else if (ieee80211::unpackHeBufferStatusHtControl(htControl, status)) {
                         dataHeader->setBufferStatusPresent(true);
-                        dataHeader->setBufferStatusTid(status.tid);
-                        dataHeader->setBufferStatusAc(status.accessCategory);
-                        dataHeader->setBufferStatusQueueSize(status.queueSize);
+                        // A BSR identifies ACs and a represented TID count, not
+                        // an exact TID. Keep bufferStatusAc authoritative and
+                        // populate the legacy TID field deterministically.
+                        dataHeader->setBufferStatusAc(ieee80211::mapHeBufferStatusAciToAccessCategory(status.aciHigh));
+                        dataHeader->setBufferStatusTid(ieee80211::getHeBufferStatusRepresentativeTid(status.aciHigh));
+                        uint32_t queueSize;
+                        auto queueSizeKind = ieee80211::decodeHeBufferStatusQueueSize(
+                                status.queueSizeAll, status.scalingFactor, queueSize);
+                        if (queueSizeKind == ieee80211::Ieee80211HeQueueSizeKind::OVERFLOW)
+                            queueSize++; // Store the strict lower bound in the legacy byte-count field.
+                        dataHeader->setBufferStatusQueueSize(queueSize);
                     }
                     else {
                         dataHeader->markIncorrect();

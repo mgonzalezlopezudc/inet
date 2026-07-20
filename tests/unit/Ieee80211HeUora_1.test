@@ -83,19 +83,19 @@ int initialObo = coord->getObo();
 ASSERT(initialObo >= 0 && initialObo <= coord->getOcwMin());
 ASSERT(coord->getOcw() == coord->getOcwMin());
 
-// 2. Verify decrement of OBO
-coord->setObo(10);
-int ruIndex = coord->selectRandomAccessRu(4); // OBO (10) >= 4 RA-RUs -> defer, OBO -> 6
+// 2. Verify decrement of OBO while keeping the injected value within OCW.
+coord->setObo(7);
+int ruIndex = coord->selectRandomAccessRu(3); // OBO (7) >= 3 RA-RUs -> defer, OBO -> 4
 ASSERT(ruIndex == -1);
-ASSERT(coord->getObo() == 6);
+ASSERT(coord->getObo() == 4);
 
-ruIndex = coord->selectRandomAccessRu(4); // OBO (6) >= 4 RA-RUs -> defer, OBO -> 2
+ruIndex = coord->selectRandomAccessRu(3); // OBO (4) >= 3 RA-RUs -> defer, OBO -> 1
 ASSERT(ruIndex == -1);
-ASSERT(coord->getObo() == 2);
+ASSERT(coord->getObo() == 1);
 
 // 3. Verify random RA-RU selection and transmission when OBO reaches 0
-ruIndex = coord->selectRandomAccessRu(4); // OBO (2) < 4 RA-RUs -> transmit, OBO -> 0
-ASSERT(ruIndex >= 0 && ruIndex < 4);
+ruIndex = coord->selectRandomAccessRu(3); // OBO (1) < 3 RA-RUs -> transmit, OBO -> 0
+ASSERT(ruIndex >= 0 && ruIndex < 3);
 ASSERT(coord->getObo() == 0);
 
 // 4. Verify UORA failure doubles OCW and chooses a new OBO
@@ -121,12 +121,12 @@ ASSERT(oboAfterSuccess >= 0 && oboAfterSuccess <= 7);
 
 // 6. Verify AC-specific overloads keep independent OCW/OBO state.
 coord->setOcw(7, AC_VO);
-coord->setObo(9, AC_VO);
+coord->setObo(7, AC_VO);
 coord->setOcw(7, AC_BE);
 coord->setObo(1, AC_BE);
 ruIndex = coord->selectRandomAccessRu(AC_VO, 4);
 ASSERT(ruIndex == -1);
-ASSERT(coord->getObo(AC_VO) == 5);
+ASSERT(coord->getObo(AC_VO) == 3);
 ASSERT(coord->getObo(AC_BE) == 1);
 
 coord->reportRandomAccessResult(AC_VO, false);

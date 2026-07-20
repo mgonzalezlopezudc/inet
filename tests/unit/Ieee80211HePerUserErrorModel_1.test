@@ -68,6 +68,10 @@ auto nist = check_and_cast<TestNistErrorModel *>(getParentModule()->getSubmodule
 auto yans = check_and_cast<TestYansErrorModel *>(getParentModule()->getSubmodule("yans"));
 auto smallRu = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 26, 0);
 auto largeRu = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
+// An odd payload length exercises per-stream rounding, and this SNIR keeps
+// the robust/DCM probabilities away from floating-point saturation.
+constexpr unsigned int testBitLength = 8023;
+constexpr double testSnir = 5;
 
 auto evaluatePayload = [] (auto *model, const Ieee80211HeUserPhyParameters& parameters,
         unsigned int bitLength, double scalarSnir) {
@@ -77,35 +81,39 @@ auto evaluatePayload = [] (auto *model, const Ieee80211HeUserPhyParameters& para
 for (auto *model : {static_cast<TestNistErrorModel *>(nist)}) {
     auto robust = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_3_2_US);
     auto fast = computeHeUserPhyParameters(B(1000), largeRu, 5, 1, false, HE_GI_3_2_US);
-    double robustSuccess = evaluatePayload(model, robust, 8022, 10);
-    double fastSuccess = evaluatePayload(model, fast, 8022, 10);
+    double robustSuccess = evaluatePayload(model, robust, testBitLength, testSnir);
+    double fastSuccess = evaluatePayload(model, fast, testBitLength, testSnir);
     ASSERT(robustSuccess > fastSuccess);
 
     auto dcm = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, true, HE_GI_3_2_US);
-    double dcmSuccess = evaluatePayload(model, dcm, 8022, 10);
+    double dcmSuccess = evaluatePayload(model, dcm, testBitLength, testSnir);
     ASSERT(dcmSuccess > robustSuccess);
 
     auto twoStreams = computeHeUserPhyParameters(B(1000), largeRu, 0, 2, false, HE_GI_3_2_US);
-    double twoStreamSuccess = evaluatePayload(model, twoStreams, 8022, 10);
+    double twoStreamSuccess = evaluatePayload(model, twoStreams, testBitLength, testSnir);
     ASSERT(twoStreamSuccess != robustSuccess);
 
     auto shortGi = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_0_8_US);
-    ASSERT(evaluatePayload(model, shortGi, 8022, 10) == robustSuccess);
+    ASSERT(evaluatePayload(model, shortGi, testBitLength, testSnir) == robustSuccess);
 }
 
 {
     auto robust = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_3_2_US);
     auto fast = computeHeUserPhyParameters(B(1000), largeRu, 5, 1, false, HE_GI_3_2_US);
-    ASSERT(evaluatePayload(yans, robust, 8022, 10) > evaluatePayload(yans, fast, 8022, 10));
+    ASSERT(evaluatePayload(yans, robust, testBitLength, testSnir) >
+            evaluatePayload(yans, fast, testBitLength, testSnir));
 
     auto dcm = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, true, HE_GI_3_2_US);
-    ASSERT(evaluatePayload(yans, dcm, 8022, 10) > evaluatePayload(yans, robust, 8022, 10));
+    ASSERT(evaluatePayload(yans, dcm, testBitLength, testSnir) >
+            evaluatePayload(yans, robust, testBitLength, testSnir));
 
     auto shortGi = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_0_8_US);
-    ASSERT(evaluatePayload(yans, shortGi, 8022, 10) != evaluatePayload(yans, robust, 8022, 10));
+    ASSERT(evaluatePayload(yans, shortGi, testBitLength, testSnir) !=
+            evaluatePayload(yans, robust, testBitLength, testSnir));
 
     auto small = computeHeUserPhyParameters(B(1000), smallRu, 0, 1, false, HE_GI_3_2_US);
-    ASSERT(evaluatePayload(yans, small, 8022, 10) != evaluatePayload(yans, robust, 8022, 10));
+    ASSERT(evaluatePayload(yans, small, testBitLength, testSnir) !=
+            evaluatePayload(yans, robust, testBitLength, testSnir));
 }
 
 EV << "NIST and Yans use per-user HE MCS, NSS, GI, RU, and DCM payload parameters.\n";

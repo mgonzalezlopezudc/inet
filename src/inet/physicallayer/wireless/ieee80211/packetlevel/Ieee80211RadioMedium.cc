@@ -110,7 +110,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         // transmitter model. Reconstruct the full-channel center from the RU
         // offset, then return the user RU for reception/interference filtering.
         const auto& user = heMuPhyHeader->getUsers(0);
-        auto channelBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
+        auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
         int channelTones = getHeChannelToneCount(channelBandwidth);
         auto relativeRu = makeHeRu(Hz(0), channelTones,
                 user.ruIndex, user.ruToneSize, user.ruToneOffset);
@@ -125,7 +125,7 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
         if (receiverStaId.has_value() && user.staId == *receiverStaId) {
             // DL HE MU receiver filtering follows the STA-ID and RU location
             // carried in the HE-SIG-B User field (Clause 27.3.11.8.4).
-            auto channelBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
+            auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
             if (user.ruToneSize == 0) {
                 auto legacyRus = calculateHeRus(narrowbandTransmissionAnalogModel->getCenterFrequency(),
                         channelBandwidth, heMuPhyHeader->getUsersArraySize());
@@ -154,7 +154,7 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
     auto arrival = getArrival(receiver, transmission);
     IReceptionAnalogModel *ruAnalogModel = nullptr;
     if (auto scalarMediumAnalogModel = dynamic_cast<const ScalarMediumAnalogModel *>(analogModel)) {
-        auto totalBandwidth = ieee80211Transmission->getChannel()->getBand()->getSpacing();
+        auto totalBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
         auto aggregatePower = scalarMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
         auto packet = transmission->getPacket();
         auto heMuHeader = packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>() ?

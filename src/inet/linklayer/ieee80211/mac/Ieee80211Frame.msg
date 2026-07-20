@@ -324,6 +324,7 @@ class Ieee80211ActionFrame extends Ieee80211MgmtHeader
 // IEEE 802.11 Unprotected S1G Action category and its TWT action values.
 class Ieee80211TwtSetupFrame extends Ieee80211ActionFrame
 {
+    // 24-byte management header + 3-byte action header + 17-byte TWT element.
     chunkLength = B(44);
     category = 22;
     s1gAction = 6;

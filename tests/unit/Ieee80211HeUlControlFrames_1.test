@@ -36,12 +36,15 @@ using namespace inet::ieee80211;
     randomAccess.ruToneSize = 26;
     randomAccess.ruToneOffset = 108;
     trigger->setUsers(1, randomAccess);
-    trigger->setChunkLength(B(42));
+    // The Trigger serializer emits the 16-byte MAC/common header plus two
+    // 6-byte Basic Trigger User Info records.
+    trigger->setChunkLength(B(36));
     auto packet = new Packet("trigger", trigger);
     auto bytes = packet->peekDataAsBytes();
     auto received = new Packet("trigger-rx", bytes);
     auto decoded = received->popAtFront<Ieee80211TriggerFrame>();
-    ASSERT(decoded->getTriggerId() == 42);
+    // triggerId is local correlation metadata, not an on-wire Trigger field.
+    ASSERT(decoded->getTriggerId() == 0);
     ASSERT(decoded->getGuardInterval() == 0);
     ASSERT(decoded->getCoding() == 1);
     ASSERT(decoded->getUsersArraySize() == 2);
@@ -53,6 +56,43 @@ using namespace inet::ieee80211;
 }
 
 {
+    struct BsrWireCase {
+        uint8_t tid;
+        AccessCategory accessCategory;
+        uint32_t packed;
+    };
+    const BsrWireCase cases[] = {
+        {0, AC_BE, 0x0000004F},
+        {1, AC_BK, 0x0000108F}
+    };
+    for (const auto& testCase : cases) {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_QOS_NULL);
+        header->setOrder(true);
+        header->setBufferStatusPresent(true);
+        header->setBufferStatusTid(testCase.tid);
+        header->setBufferStatusAc(testCase.accessCategory);
+        header->setBufferStatusQueueSize(0);
+        header->setChunkLength(B(30));
+        auto packet = new Packet("zero-queue-bsr", header);
+        auto bytes = packet->peekDataAsBytes();
+        ASSERT(bytes->getByte(26) == (testCase.packed & 0xFF));
+        ASSERT(bytes->getByte(27) == ((testCase.packed >> 8) & 0xFF));
+        ASSERT(bytes->getByte(28) == ((testCase.packed >> 16) & 0xFF));
+        ASSERT(bytes->getByte(29) == ((testCase.packed >> 24) & 0xFF));
+        auto received = new Packet("zero-queue-bsr-rx", bytes);
+        auto decoded = received->popAtFront<Ieee80211DataHeader>();
+        ASSERT(decoded->getBufferStatusPresent());
+        ASSERT(decoded->getBufferStatusTid() == testCase.tid);
+        ASSERT(decoded->getBufferStatusAc() == testCase.accessCategory);
+        ASSERT(decoded->getBufferStatusQueueSize() == 0);
+        delete packet;
+        delete received;
+    }
+    EV << "BE/BK BSR ACI wire mappings passed.\n";
+}
+
+{
     auto header = makeShared<Ieee80211DataHeader>();
     header->setType(ST_QOS_NULL);
     header->setReceiverAddress(MacAddress("10:00:00:00:00:00"));
@@ -61,7 +101,7 @@ using namespace inet::ieee80211;
     header->setTid(6);
     header->setOrder(true);
     header->setBufferStatusPresent(true);
-    header->setBufferStatusTid(6);
+    header->setBufferStatusTid(7);
     header->setBufferStatusAc(AC_VO);
     header->setBufferStatusQueueSize(12345);
     header->setChunkLength(B(30));
@@ -70,9 +110,12 @@ using namespace inet::ieee80211;
     auto received = new Packet("bsr-rx", bytes);
     auto decoded = received->popAtFront<Ieee80211DataHeader>();
     ASSERT(decoded->getBufferStatusPresent());
+    // BSR carries AC/represented-count information, not an exact TID. The
+    // legacy field is populated with the deterministic AC_VO representative.
     ASSERT(decoded->getBufferStatusTid() == 6);
     ASSERT(decoded->getBufferStatusAc() == AC_VO);
-    ASSERT(decoded->getBufferStatusQueueSize() == 12345);
+    // BSR queue sizes are rounded up to the 256-byte scaling unit on wire.
+    ASSERT(decoded->getBufferStatusQueueSize() == 12544);
     delete packet;
     delete received;
     EV << "QoS Null BSR round trip passed.\n";
@@ -121,6 +164,7 @@ EV << ".\n";
 
 %contains: stdout
 Trigger frame round trip passed.
+BE/BK BSR ACI wire mappings passed.
 QoS Null BSR round trip passed.
 Multi-STA Block Ack round trip passed.
 .

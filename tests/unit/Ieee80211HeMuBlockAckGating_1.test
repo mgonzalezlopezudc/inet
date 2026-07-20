@@ -191,7 +191,8 @@ class TestHcf : public Hcf
 
 Define_Module(TestHcf);
 
-static Packet *makeHeMuDataPacket(const char *name, const MacAddress& receiver, const MacAddress& transmitter, Tid tid, int myAllocationIndex)
+static Packet *makeHeMuDataPacket(const char *name, const MacAddress& receiver, const MacAddress& transmitter,
+        Tid tid, int myAllocationIndex, int sequenceNumber = -1)
 {
     auto packet = new Packet(name);
     auto header = makeShared<Ieee80211DataHeader>();
@@ -200,8 +201,10 @@ static Packet *makeHeMuDataPacket(const char *name, const MacAddress& receiver, 
     header->setTransmitterAddress(transmitter);
     header->setAckPolicy(BLOCK_ACK);
     header->setTid(tid);
-    header->setSequenceNumber(SequenceNumberCyclic(myAllocationIndex));
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber == -1 ? myAllocationIndex : sequenceNumber));
     header->setDurationField(SimTime(1, SIMTIME_MS));
+    // QoS data serialization emits the 24-byte base header plus QoS Control.
+    header->setChunkLength(B(26));
     packet->insertAtFront(header);
 
     auto tag = packet->addTag<physicallayer::Ieee80211HeMuRxTag>();
@@ -230,18 +233,35 @@ static Packet *makePartialAmpdu(const MacAddress& receiver, const MacAddress& tr
 {
     auto ampdu = new Packet("partial-he-mu-ampdu");
     auto indication = ampdu->addTag<physicallayer::Ieee80211MpduReceiveInd>();
+    auto heMuTag = ampdu->addTag<physicallayer::Ieee80211HeMuRxTag>();
+    for (int i = 0; i < 2; ++i) {
+        physicallayer::Ieee80211HeMuRxAllocationInfo allocation;
+        allocation.ruIndex = i;
+        allocation.staId = physicallayer::computeHeMuStaId(i == 0 ? receiver : MacAddress("AA:BB:CC:DD:EE:FF"));
+        heMuTag->appendAllocations(allocation);
+    }
+    heMuTag->setRuIndex(0);
     for (int i = 0; i < 2; ++i) {
         auto mpdu = makeHeMuDataPacket(i == 0 ? "successful-mpdu" : "failed-mpdu",
-                receiver, transmitter, tid, i + 2);
+                receiver, transmitter, tid, 0, i + 2);
+        auto mpduData = mpdu->peekData();
+        ASSERT(mpduData->getChunkLength() == B(26));
         auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
-        delimiter->setLength(mpdu->getByteLength());
+        delimiter->setEof(false);
+        delimiter->setReserved(0);
+        delimiter->setChunkLength(B(4));
+        delimiter->setLength(mpduData->getChunkLength().get<B>());
         ampdu->insertAtBack(delimiter);
-        ampdu->insertAtBack(mpdu->peekData());
+        ampdu->insertAtBack(mpduData);
+        // Nonfinal A-MPDU subframes are padded to a four-octet boundary.
+        int paddingLength = (4 - (B(4) + mpduData->getChunkLength()).get<B>() % 4) % 4;
+        if (i + 1 != 2 && paddingLength != 0)
+            ampdu->insertAtBack(makeShared<ByteCountChunk>(B(paddingLength)));
         physicallayer::Ieee80211MpduReceiveResult result;
         result.sequenceNumber = i + 2;
         result.fragmentNumber = 0;
         result.tid = tid;
-        result.length = B(mpdu->getByteLength());
+        result.length = mpduData->getChunkLength();
         result.status = i == 0 ? physicallayer::MPDU_SUCCESS : physicallayer::MPDU_FCS_ERROR;
         indication->appendResults(result);
         delete mpdu;
@@ -286,6 +306,7 @@ laterHeader->setType(ST_DATA_WITH_QOS);
 laterHeader->setTransmitterAddress(ap);
 laterHeader->setReceiverAddress(sta);
 laterHeader->setTid(tid);
+laterHeader->setAckPolicy(BLOCK_ACK);
 laterHeader->setSequenceNumber(SequenceNumberCyclic(70));
 agreementHandler->qosFrameReceived(laterHeader, nullptr);
 Ieee80211HeTriggerUserInfo muBarUser;

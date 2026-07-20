@@ -79,6 +79,7 @@ class MockAckHandler : public IAckHandler
     int occupiedSlots = 0;
     virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
+    virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
     virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { inProgressCount++; }
     virtual std::set<int> getOccupiedBlockAckSequenceNumbers(
             const MacAddress& receiverAddress, Tid tid) const override {
@@ -100,11 +101,11 @@ class MockScheduler : public IIeee80211HeDlScheduler
 
     virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidateStations, Hz centerFrequency, Hz bandwidth) override {
         std::vector<RuAllocation> allocs;
+        auto rus = physicallayer::getHeEqualRuLayout(centerFrequency, bandwidth, 9);
         for (size_t i = 0; i < scheduledStations.size(); i++) {
             RuAllocation alloc;
             alloc.staAddress = scheduledStations[i];
-            alloc.ru.index = i;
-            alloc.ru.toneSize = 26;
+            alloc.ru = rus.at(i);
             alloc.mcs = 0;
             alloc.estimatedDuration = estimatedDuration;
             allocs.push_back(alloc);

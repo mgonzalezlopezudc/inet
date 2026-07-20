@@ -75,7 +75,7 @@ class RecordingHeUlScheduler : public cSimpleModule, public IIeee80211HeUlSchedu
             schedule.allocations.push_back(allocation);
         }
         if (!schedule.allocations.empty())
-            schedule.commonDuration = SimTime(1, SIMTIME_MS);
+            schedule.commonDuration = context.requestedDuration;
         return schedule;
     }
 };
@@ -126,6 +126,15 @@ ASSERT(freshSchedule.commonDuration == SimTime(1500, SIMTIME_US));
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 1200);
 EV << "Fresh reports reached the UL scheduler and produced allocations.\n";
 
+coordinator->updateBufferStatus(aid2, AC_BE, 0, 0, false);
+ASSERT(coordinator->getBufferStatus().at(aid2).retryPending[AC_VI]);
+ASSERT(!coordinator->getBufferStatus().at(aid2).retryPending[AC_BE]);
+ASSERT(coordinator->getPreferredAccessCategory() == AC_VI);
+coordinator->updateBufferStatus(aid2, AC_VI, 5, 0, false);
+ASSERT(!coordinator->getBufferStatus().at(aid2).retryPending[AC_VI]);
+ASSERT(coordinator->getPreferredAccessCategory() == AC_BE);
+EV << "Per-AC retry state survived an unrelated report and cleared independently.\n";
+
 wait(0.011);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
 auto staleSchedule = coordinator->createSchedule(mib, Hz(5.18e9), Hz(20e6),
@@ -156,6 +165,9 @@ Fresh backlogged and retry reports selected a Basic Trigger.
 
 %contains: stdout
 Fresh reports reached the UL scheduler and produced allocations.
+
+%contains: stdout
+Per-AC retry state survived an unrelated report and cleared independently.
 
 %contains: stdout
 Stale reports were excluded and selected BSRP polling.

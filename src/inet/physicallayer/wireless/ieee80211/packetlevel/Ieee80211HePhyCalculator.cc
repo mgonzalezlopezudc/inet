@@ -6,10 +6,9 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
-#include <map>
+#include <algorithm>
 #include <set>
 #include <stdexcept>
-#include <algorithm>
 
 // HE PHY parameter and duration calculator.
 //
@@ -30,6 +29,45 @@
 
 namespace inet {
 namespace physicallayer {
+
+namespace {
+
+constexpr int HE_SIG_B_DATA_BITS_PER_SYMBOL = 26;
+constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
+constexpr int HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK = 10;
+
+int getHeSigBUserBlockCount(int numberOfUsers)
+{
+    return (numberOfUsers + 1) / 2;
+}
+
+bool samePhysicalHeRu(const Ieee80211HeRu& left, const Ieee80211HeRu& right)
+{
+    bool sameCenterFrequency = left.centerFrequency == right.centerFrequency ||
+            (std::isnan(left.centerFrequency.get()) && std::isnan(right.centerFrequency.get()));
+    return sameCenterFrequency && left.toneSize == right.toneSize &&
+            left.toneOffset == right.toneOffset;
+}
+
+bool isHeLtfGiCombinationAllowed(Ieee80211HePpduFormat ppduFormat,
+        Ieee80211HeLtfType ltfType, Ieee80211HeGuardInterval guardInterval,
+        bool isFeedbackNdp, bool isFullBandwidthUlMuMimo)
+{
+    if (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU)
+        return (ltfType == HE_LTF_1X && guardInterval == HE_GI_0_8_US) ||
+                (ltfType == HE_LTF_2X && (guardInterval == HE_GI_0_8_US || guardInterval == HE_GI_1_6_US)) ||
+                (ltfType == HE_LTF_4X && (guardInterval == HE_GI_0_8_US || guardInterval == HE_GI_3_2_US));
+    if (ppduFormat == HE_MU_DOWNLINK)
+        return (ltfType == HE_LTF_2X && (guardInterval == HE_GI_0_8_US || guardInterval == HE_GI_1_6_US)) ||
+                (ltfType == HE_LTF_4X && (guardInterval == HE_GI_0_8_US || guardInterval == HE_GI_3_2_US));
+    if (isFeedbackNdp)
+        return ltfType == HE_LTF_4X && guardInterval == HE_GI_3_2_US;
+    return (ltfType == HE_LTF_2X && guardInterval == HE_GI_1_6_US) ||
+            (ltfType == HE_LTF_4X && guardInterval == HE_GI_3_2_US) ||
+            (isFullBandwidthUlMuMimo && ltfType == HE_LTF_1X && guardInterval == HE_GI_1_6_US);
+}
+
+} // namespace
 
 int getHeRuDataSubcarrierCount(int toneSize)
 {
@@ -61,26 +99,18 @@ int getHeRuPilotSubcarrierCount(int toneSize)
 
 int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
 {
-    // IEEE 802.11-2024 Clause 27.3.11.8.5 ("Encoding and modulation"):
-    // HE-SIG-B is encoded with BPSK and code rate 1/2. Each content channel
-    // uses 52 OFDM subcarriers for data: 52 coded bits × 1/2 = 26 information
-    // bits per symbol.
-    constexpr int HE_SIG_B_DATA_BITS_PER_SYMBOL = 26;
-    // IEEE 802.11-2024 Tables 27-29 and 27-30 define 21-bit HE-SIG-B User
-    // fields for non-MU-MIMO and MU-MIMO allocations.
-    constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
-    // Each content channel also carries a 10-bit tail/pad in both the Common
-    // field and the User field (6 tail bits + 4 pad bits, Clause 27.3.11.8.5).
-    constexpr int HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL = 10;
-
+    // This constrained estimate assumes uncompressed HE-SIG-B MCS 0 without
+    // DCM. Each content channel therefore carries 26 information bits per
+    // symbol. Tables 27-28 through 27-30 define 21-bit User fields and a 4-bit
+    // CRC plus 6-bit tail for every block of one or two User fields.
     int widthMhz = std::lround(channelBandwidth.get() / 1e6);
     int contentChannels = getHeSigBContentChannelCount(channelBandwidth);
     int twentyMhzChannels = widthMhz / 20;
     int commonBitsPerContentChannel = 8 * ((twentyMhzChannels + contentChannels - 1) / contentChannels)
-            + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL;
+            + HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
     int usersPerContentChannel = (numberOfUsers + contentChannels - 1) / contentChannels;
     int userBitsPerContentChannel = usersPerContentChannel * HE_SIG_B_USER_FIELD_BITS_PER_USER
-            + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL;
+            + getHeSigBUserBlockCount(usersPerContentChannel) * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
     return std::max(1, (commonBitsPerContentChannel + userBitsPerContentChannel
             + HE_SIG_B_DATA_BITS_PER_SYMBOL - 1) / HE_SIG_B_DATA_BITS_PER_SYMBOL);
 }
@@ -95,12 +125,77 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         bool enforceDurationLimit)
 {
     Ieee80211HePhyValidationResult result;
+    if (ppduFormat != HE_MU_DOWNLINK && ppduFormat != HE_TRIGGER_BASED_UPLINK &&
+            ppduFormat != HE_SINGLE_USER && ppduFormat != HE_EXTENDED_RANGE_SU) {
+        result.error = "invalid HE PPDU format";
+        return result;
+    }
+    if (channelBandwidth != MHz(20) && channelBandwidth != MHz(40) &&
+            channelBandwidth != MHz(80) && channelBandwidth != MHz(160)) {
+        result.error = "unsupported HE channel bandwidth";
+        return result;
+    }
+    if (guardInterval != HE_GI_0_8_US && guardInterval != HE_GI_1_6_US &&
+            guardInterval != HE_GI_3_2_US) {
+        result.error = "invalid HE guard interval";
+        return result;
+    }
+    if (ltfType != HE_LTF_1X && ltfType != HE_LTF_2X && ltfType != HE_LTF_4X) {
+        result.error = "invalid HE-LTF type";
+        return result;
+    }
+    try {
+        getHeLtfSymbolDuration(ltfType, guardInterval);
+    }
+    catch (const omnetpp::cRuntimeError& error) {
+        result.error = error.what();
+        return result;
+    }
+    if (packetExtensionDurationUs != 0 && packetExtensionDurationUs != 4 &&
+            packetExtensionDurationUs != 8 && packetExtensionDurationUs != 12 && packetExtensionDurationUs != 16) {
+        result.error = "invalid HE packet extension duration";
+        return result;
+    }
     if (requestedUsers.empty()) {
         result.error = "HE PPDU has no users";
         return result;
     }
 
-    // Group users by RU index to detect and validate MU-MIMO.
+    // Validate all externally supplied scalar values before calling the
+    // throwing calculation helpers below. This API is also used as a public
+    // feasibility check by schedulers, so malformed input must be reported in
+    // the result in both release and debug builds.
+    for (const auto& requested : requestedUsers) {
+        if (requested.mcs < 0 || requested.mcs > 11) {
+            result.error = "invalid HE MCS";
+            return result;
+        }
+        if (requested.ru.toneSize != 26 && requested.ru.toneSize != 52 &&
+                requested.ru.toneSize != 106 && requested.ru.toneSize != 242 &&
+                requested.ru.toneSize != 484 && requested.ru.toneSize != 996 &&
+                requested.ru.toneSize != 1992) {
+            result.error = "unsupported HE RU tone size";
+            return result;
+        }
+        if (requested.numberOfSpatialStreams < 1 || requested.numberOfSpatialStreams > 8) {
+            result.error = "invalid HE number of spatial streams";
+            return result;
+        }
+        if (requested.streamStartIndex < 0 ||
+                requested.streamStartIndex > 8 - requested.numberOfSpatialStreams) {
+            result.error = "HE RU spatial stream range exceeds 8 streams";
+            return result;
+        }
+        if (requested.coding != HE_CODING_BCC && requested.coding != HE_CODING_LDPC) {
+            result.error = "invalid HE coding type";
+            return result;
+        }
+    }
+
+    // Group users by physical RU identity to detect and validate MU-MIMO.
+    // The model-local RU index is deliberately excluded: equivalent physical
+    // RUs from different allocation catalogs may have different indices, and
+    // the same numeric index may identify RUs in different channel segments.
     // IEEE 802.11-2024 Clause 27.3.11.8 links HE-SIG-B User fields to an RU
     // allocation; Clause 27.3.12.5 constrains per-user and per-RU FEC choices.
     // Validates standard spatial stream limits:
@@ -108,27 +203,34 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     // - Maximum spatial streams per user is 4.
     // - Total spatial streams (N_STS) in a group cannot exceed 8.
     // - User spatial streams must be contiguous (no gaps or overlapping indices).
-    std::map<int, std::vector<Ieee80211HeUserPhyParameters>> ruGroups;
+    std::vector<std::pair<Ieee80211HeRu, std::vector<Ieee80211HeUserPhyParameters>>> ruGroups;
     for (const auto& requested : requestedUsers) {
-        ruGroups[requested.ru.index].push_back(requested);
+        auto group = std::find_if(ruGroups.begin(), ruGroups.end(),
+                [&] (const auto& candidate) { return samePhysicalHeRu(candidate.first, requested.ru); });
+        if (group == ruGroups.end())
+            ruGroups.push_back({requested.ru, {requested}});
+        else
+            group->second.push_back(requested);
     }
+    int maximumSpaceTimeStreamsPerRu = 0;
     for (const auto& pair : ruGroups) {
         const auto& group = pair.second;
+        int groupTotalNsts = 0;
+        for (const auto& user : group)
+            groupTotalNsts += user.numberOfSpatialStreams;
+        if (groupTotalNsts > 8) {
+            result.error = "HE MU-MIMO group total spatial streams exceeds 8";
+            return result;
+        }
+        maximumSpaceTimeStreamsPerRu = std::max(maximumSpaceTimeStreamsPerRu, groupTotalNsts);
         if (group.size() > 1) {
             if (group.size() > 8) {
                 result.error = "HE MU-MIMO group has too many users (max 8)";
                 return result;
             }
-            uint16_t toneSize = group[0].ru.toneSize;
-            uint16_t toneOffset = group[0].ru.toneOffset;
             std::set<uint16_t> staIds;
             std::vector<std::pair<int, int>> streams; // {startIndex, nss}
-            int groupTotalNsts = 0;
             for (const auto& user : group) {
-                if (user.ru.toneSize != toneSize || user.ru.toneOffset != toneOffset) {
-                    result.error = "HE MU-MIMO users on the same RU must have matching tone size and offset";
-                    return result;
-                }
                 if (staIds.count(user.staId) > 0) {
                     result.error = "HE MU-MIMO group contains duplicate STA IDs";
                     return result;
@@ -139,11 +241,6 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                     return result;
                 }
                 streams.push_back({user.streamStartIndex, user.numberOfSpatialStreams});
-                groupTotalNsts += user.numberOfSpatialStreams;
-            }
-            if (groupTotalNsts > 8) {
-                result.error = "HE MU-MIMO group total spatial streams exceeds 8";
-                return result;
             }
             std::sort(streams.begin(), streams.end());
             int expectedStart = 0;
@@ -157,18 +254,19 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         }
     }
 
-    if (packetExtensionDurationUs != 0 && packetExtensionDurationUs != 4 &&
-            packetExtensionDurationUs != 8 && packetExtensionDurationUs != 12 && packetExtensionDurationUs != 16) {
-        result.error = "invalid HE packet extension duration";
-        return result;
-    }
-    try {
-        getHeSigBContentChannelCount(channelBandwidth);
-        getHeGuardIntervalDuration(guardInterval);
-        getHeLtfSymbolDuration(ltfType);
-    }
-    catch (const omnetpp::cRuntimeError& error) {
-        result.error = error.what();
+
+    bool isFeedbackNdp = ppduFormat == HE_TRIGGER_BASED_UPLINK &&
+            std::all_of(requestedUsers.begin(), requestedUsers.end(),
+                    [] (const auto& requested) { return requested.psduLength == B(0); });
+    bool isFullBandwidthUlMuMimo = ppduFormat == HE_TRIGGER_BASED_UPLINK &&
+            ruGroups.size() == 1 && ruGroups.front().second.size() >= 2 &&
+            ruGroups.front().first.toneSize == getHeChannelToneCount(channelBandwidth);
+    // IEEE 802.11-2024 Table 27-32 marks several otherwise meaningful
+    // HE-LTF/GI duration pairs N/A for particular PPDU formats. CM3 permits
+    // 1x HE-LTF with 1.6 us GI only for full-bandwidth UL MU-MIMO.
+    if (!isHeLtfGiCombinationAllowed(ppduFormat, ltfType, guardInterval,
+            isFeedbackNdp, isFullBandwidthUlMuMimo)) {
+        result.error = "HE-LTF/GI combination is not supported for the HE PPDU format";
         return result;
     }
 
@@ -184,41 +282,38 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     parameters.common.sigA.uplink = ppduFormat == HE_TRIGGER_BASED_UPLINK;
     parameters.common.sigB.numberOfSymbols = ppduFormat == HE_MU_DOWNLINK ?
             getHeSigBSymbolCount(channelBandwidth, requestedUsers.size()) : 0;
-    // See getHeSigBSymbolCount() for the origin of these constants.
-    constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
-    constexpr int HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL = 10;
-    parameters.common.sigB.commonFieldBits = ppduFormat == HE_MU_DOWNLINK ?
-            8 * std::lround(channelBandwidth.get() / 20e6) + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL : 0;
-    parameters.common.sigB.userFieldBits = ppduFormat == HE_MU_DOWNLINK ?
-            HE_SIG_B_USER_FIELD_BITS_PER_USER * (int)requestedUsers.size() + HE_SIG_B_TAIL_BITS_PER_CONTENT_CHANNEL : 0;
-    parameters.common.heSigBDuration =
-            parameters.common.sigB.numberOfSymbols * SimTime(4, SIMTIME_US);
-
-    int totalSpaceTimeStreams = 0;
-    for (const auto& requested : requestedUsers)
-        totalSpaceTimeStreams += requested.numberOfSpatialStreams;
-    if (totalSpaceTimeStreams < 1 || totalSpaceTimeStreams > 8) {
-        result.error = "HE PPDU has an unsupported total number of space-time streams";
-        return result;
-    }
-    bool isFeedbackNdp = false;
-    for (const auto& requested : requestedUsers) {
-        if (requested.psduLength == B(0) && ppduFormat == HE_TRIGGER_BASED_UPLINK) {
-            isFeedbackNdp = true;
-            break;
+    if (ppduFormat == HE_MU_DOWNLINK) {
+        int contentChannels = getHeSigBContentChannelCount(channelBandwidth);
+        int numberOfUsers = requestedUsers.size();
+        parameters.common.sigB.commonFieldBits = 8 * std::lround(channelBandwidth.get() / 20e6) +
+                contentChannels * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+        parameters.common.sigB.userFieldBits =
+                HE_SIG_B_USER_FIELD_BITS_PER_USER * numberOfUsers;
+        int usersPerContentChannel = numberOfUsers / contentChannels;
+        int channelsWithExtraUser = numberOfUsers % contentChannels;
+        for (int channel = 0; channel < contentChannels; channel++) {
+            int channelUsers = usersPerContentChannel + (channel < channelsWithExtraUser ? 1 : 0);
+            parameters.common.sigB.userFieldBits +=
+                    getHeSigBUserBlockCount(channelUsers) * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
         }
     }
+    parameters.common.heSigBDuration =
+            parameters.common.sigB.numberOfSymbols * SimTime(4, SIMTIME_US);
 
     if (isFeedbackNdp) {
         parameters.common.numberOfHeLtfSymbols = 2;
         parameters.common.heStfDuration = SimTime(8, SIMTIME_US);
     } else {
-        parameters.common.numberOfHeLtfSymbols = getHeNumberOfLtfSymbols(totalSpaceTimeStreams);
+        // Deterministic calculator policy: select the minimum legal HE-LTF
+        // count for the maximum initial N_STS on any physical RU. This avoids
+        // summing concurrent OFDMA RUs; it is not a standard requirement that
+        // a transmitter always choose exactly this HE-LTF count.
+        parameters.common.numberOfHeLtfSymbols = getHeNumberOfLtfSymbols(maximumSpaceTimeStreamsPerRu);
         parameters.common.heStfDuration = ppduFormat == HE_TRIGGER_BASED_UPLINK ?
                 SimTime(8, SIMTIME_US) : SimTime(4, SIMTIME_US);
     }
     parameters.common.heLtfDuration =
-            parameters.common.numberOfHeLtfSymbols * getHeLtfSymbolDuration(ltfType);
+            parameters.common.numberOfHeLtfSymbols * getHeLtfSymbolDuration(ltfType, guardInterval);
     parameters.common.commonPreambleDuration =
             parameters.common.legacyPreambleDuration +
             parameters.common.rlSigDuration +
@@ -230,18 +325,6 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     auto symbolDuration = SimTime(12800, SIMTIME_NS) + getHeGuardIntervalDuration(guardInterval);
     for (const auto& requested : requestedUsers) {
         auto user = requested;
-        if (user.ru.toneSize <= 0) {
-            result.error = "invalid HE RU tone size";
-            return result;
-        }
-        if (user.numberOfSpatialStreams < 1 || user.numberOfSpatialStreams > 8) {
-            result.error = "invalid HE number of spatial streams";
-            return result;
-        }
-        if (user.coding != HE_CODING_BCC && user.coding != HE_CODING_LDPC) {
-            result.error = "invalid HE coding type";
-            return result;
-        }
         // IEEE Std 802.11-2024 Clause 27.3.12.5 ("Coding"):
         // "LDPC is the only FEC coding scheme in the HE PPDU Data field for a 484-, 996-, and 2x996-tone RU."
         // "LDPC is the only FEC coding scheme in the HE PPDU Data field for HE-MCSs 10 and 11."

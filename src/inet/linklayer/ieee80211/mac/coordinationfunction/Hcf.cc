@@ -443,7 +443,7 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
         while (packet->getDataLength() > b(0) &&
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr) {
             auto delimiter = packet->popAtFront<Ieee80211MpduSubframeHeader>(
-                    B(-1), parsingFlags);
+                    b(-1), parsingFlags);
             auto status = delimiter->isIncorrect() ? MPDU_DELIMITER_ERROR : MPDU_SUCCESS;
             if (receiveInd != nullptr && resultIndex < receiveInd->getResultsArraySize())
                 status = receiveInd->getResults(resultIndex).status;

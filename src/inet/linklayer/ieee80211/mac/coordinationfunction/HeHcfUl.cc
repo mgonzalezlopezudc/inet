@@ -201,11 +201,12 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                     [] (const auto& allocation) { return allocation.randomAccess || !allocation.muMimo; }), ulSchedule.allocations.end());
         }
     }
+    // Until Trigger carries an authoritative HE-LTF type, retain active
+    // medium/long GI choices whose deterministic 2x/4x defaults are legal for
+    // HE TB data, and normalize only the N/A short-GI choice to medium GI.
     if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0))) {
         switch (heMode->getDataMode()->getGuardIntervalType()) {
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
-                ulSchedule.guardInterval = physicallayer::HE_GI_0_8_US;
-                break;
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
                 ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
                 break;
@@ -214,6 +215,9 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 break;
         }
     }
+    // Table 27-32 permits only 4x HE-LTF with 3.2 us GI for feedback NDP.
+    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+        ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
     bool ldpcSupportedByAll = mac->getMib()->localHeCapabilities.ldpc;
     for (const auto& allocation : ulSchedule.allocations) {
         if (allocation.randomAccess)

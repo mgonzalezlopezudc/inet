@@ -324,9 +324,10 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             requested.staId = user.staId;
             requestedUsers.push_back(requested);
         }
+        auto guardInterval = static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval());
         auto calculation = computeHePpduParameters(requestedUsers, transmissionBandwidth,
                 static_cast<Ieee80211HePpduFormat>(heMuHeader->getPpduFormat()),
-                static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()), HE_LTF_4X,
+                guardInterval, getHeDefaultLtfType(guardInterval),
                 heMuHeader->getPacketExtensionDurationUs());
         if (!calculation)
             throw cRuntimeError("Invalid planned HE MU PPDU: %s", calculation.error.c_str());

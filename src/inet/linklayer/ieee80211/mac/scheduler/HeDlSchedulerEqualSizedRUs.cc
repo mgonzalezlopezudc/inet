@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
@@ -20,6 +21,26 @@ namespace ieee80211 {
 using namespace inet::physicallayer;
 
 Define_Module(HeDlSchedulerEqualSizedRUs);
+
+namespace {
+
+bool isCompatibleEqualRuAllocation(const IIeee80211HeDlScheduler::ScheduleContext& context,
+        const IIeee80211HeDlScheduler::CandidateInfo& candidate, const Ieee80211HeRu& ru)
+{
+    if (context.coding == HE_CODING_BCC && ru.toneSize >= 484)
+        return false;
+    const auto *negotiated = candidate.negotiatedHeCapabilities;
+    if (negotiated == nullptr)
+        return true;
+    const auto& capabilities = negotiated->intersection;
+    return negotiated->valid && capabilities.dlOfdma &&
+            capabilities.supportedChannelWidths.count(context.channelBandwidth) != 0 &&
+            capabilities.supportedRuToneSizes.count(ru.toneSize) != 0 &&
+            capabilities.txMcsNss.maxMcsPerNss[0] >= 0 &&
+            (context.coding != HE_CODING_LDPC || capabilities.ldpc);
+}
+
+} // namespace
 
 void HeDlSchedulerEqualSizedRUs::initialize(int stage)
 {
@@ -294,19 +315,34 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             }
         }
     }
-    if (context.coding == HE_CODING_BCC) {
-        for (int count : validCounts) {
-            auto layout = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, count);
-            if (!layout.empty() && layout.front().toneSize < 484 && count >= ruCount) {
-                ruCount = count;
+    std::vector<Ieee80211HeRu> rus;
+    int numSelected = 0;
+    for (int count : validCounts) {
+        if (count < ruCount)
+            continue;
+        auto layout = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, count);
+        if ((int)layout.size() != count)
+            continue;
+        int selected = std::min(candidates, count);
+        bool compatible = true;
+        for (int i = 0; i < selected; ++i)
+            if (!isCompatibleEqualRuAllocation(context, selectedCandidates[i], layout[i])) {
+                compatible = false;
                 break;
             }
+        if (compatible) {
+            ruCount = count;
+            numSelected = selected;
+            rus = std::move(layout);
+            break;
         }
     }
-    int numSelected = std::min(candidates, ruCount);
+    if (rus.empty()) {
+        recordSchedule(context, selectedCandidates, {}, false,
+                "no equal-sized RU layout satisfies negotiated HE capabilities");
+        return {};
+    }
     ASSERT(numSelected > 0);
-    auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, ruCount);
-    ASSERT((int)rus.size() == ruCount);
 
     EV_DEBUG << "DL EqualSizedRUs scheduler: falling back to " << ruCount
             << " equal-sized RUs, scheduling " << numSelected << " STAs\n";

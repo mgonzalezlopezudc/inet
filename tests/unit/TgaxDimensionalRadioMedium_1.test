@@ -397,16 +397,15 @@ auto deterministicChannelModel = check_and_cast<DeterministicTgaxChannelModel *>
 deterministicChannelModel->enableSpatialChannel(centerFrequency);
 auto matrixTransmission = createTransmission("analytic-SIMO-MRC-PPDU");
 medium->testAddTransmission(txRadio, matrixTransmission);
-auto matrixAggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(matrixTransmission->getAnalogModel());
 auto matrixReception = medium->testComputeReception(rxRadio, matrixTransmission);
 auto matrixReceptionAnalogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(matrixReception->getAnalogModel());
 auto matrixSampleTime = matrixReception->getStartTime() + SimTime(500, SIMTIME_US);
 auto matrixSamplePoint = Point<simsec, Hz>(simsec(matrixSampleTime), rus[0].centerFrequency);
-auto matrixBaselinePsd = matrixAggregateAnalogModel->getPower()->getValue(matrixSamplePoint) * ordinaryAttenuationFactor;
 auto matrixReceivedPsd = matrixReceptionAnalogModel->getPower()->getValue(matrixSamplePoint);
 auto matrixInterferencePsd = matrixReceptionAnalogModel->getInterferencePower()->getValue(matrixSamplePoint);
 auto matrixSignal = matrixReceptionAnalogModel->getChannelMatrixSignal();
 ASSERT(matrixSignal != nullptr);
+auto matrixBaselinePsd = matrixSignal->getInputPower()->getValue(matrixSamplePoint);
 ASSERT(matrixSignal->getNumReceiveAntennas() == 2);
 ASSERT(matrixSignal->getTransmitWeights() == std::vector<std::complex<double>>({{1, 0}}));
 ASSERT(matrixSignal->computeEffectiveChannel(simsec(matrixSampleTime), rus[0].centerFrequency) ==
@@ -523,7 +522,6 @@ medium->testRemoveTransmission(matrixTransmission);
 
 auto singleRxMatrixTransmission = createTransmission("analytic-single-Rx-matrix-PPDU");
 medium->testAddTransmission(txRadio, singleRxMatrixTransmission);
-auto singleRxAggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(singleRxMatrixTransmission->getAnalogModel());
 auto singleRxMatrixReception = medium->testComputeReception(rxSingleRadio, singleRxMatrixTransmission);
 auto singleRxReceptionAnalogModel = check_and_cast<const DimensionalReceptionAnalogModel *>(singleRxMatrixReception->getAnalogModel());
 ASSERT(singleRxReceptionAnalogModel->getChannelMatrixSignal() != nullptr);
@@ -531,7 +529,7 @@ ASSERT(singleRxReceptionAnalogModel->getChannelMatrixSignal()->computeEffectiveC
         simsec(singleRxMatrixReception->getStartTime()), centerFrequency) ==
         std::vector<std::complex<double>>({{2, 0}}));
 auto singleRxSamplePoint = Point<simsec, Hz>(simsec(singleRxMatrixReception->getStartTime() + SimTime(500, SIMTIME_US)), centerFrequency);
-auto singleRxBaselinePsd = singleRxAggregateAnalogModel->getPower()->getValue(singleRxSamplePoint) * ordinaryAttenuationFactor;
+auto singleRxBaselinePsd = singleRxReceptionAnalogModel->getChannelMatrixSignal()->getInputPower()->getValue(singleRxSamplePoint);
 ASSERT(std::abs(singleRxReceptionAnalogModel->getPower()->getValue(singleRxSamplePoint).get<WpHz>() /
         singleRxBaselinePsd.get<WpHz>() - 4) < 1e-12);
 ASSERT(std::abs(singleRxReceptionAnalogModel->getInterferencePower()->getValue(singleRxSamplePoint).get<WpHz>() /

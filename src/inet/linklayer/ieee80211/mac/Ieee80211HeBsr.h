@@ -7,105 +7,210 @@
 #ifndef __INET_IEEE80211HEBSR_H
 #define __INET_IEEE80211HEBSR_H
 
-#include <algorithm>
 #include <cstdint>
+#include <limits>
+
+#include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 
 namespace inet {
 namespace ieee80211 {
 
+/** IEEE 802.11-2024 Figure 9-30 BSR Control Information fields. */
 struct Ieee80211HeBufferStatus {
-    uint8_t tid = 0;
-    uint8_t accessCategory = 0;
-    uint32_t queueSize = 0;
+    uint8_t aciBitmap = 0;
+    uint8_t deltaTid = 0;
+    uint8_t aciHigh = 0;
+    uint8_t scalingFactor = 0;
+    uint8_t queueSizeHigh = 0;
+    uint8_t queueSizeAll = 0;
 };
 
-constexpr uint8_t IEEE80211_HE_BSR_CONTROL_ID = 3;
-constexpr uint32_t IEEE80211_HE_BSR_MAX_QUEUE_SIZE = 0x3FFFFF;
+enum class Ieee80211HeQueueSizeKind {
+    QUANTIZED,
+    OVERFLOW,
+    UNKNOWN
+};
 
-inline uint32_t packHeBufferStatusHtControl(const Ieee80211HeBufferStatus& status)
+constexpr uint8_t IEEE80211_HE_VARIANT = 3;
+constexpr uint8_t IEEE80211_HE_BSR_CONTROL_ID = 3;
+constexpr uint8_t IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE = 254;
+constexpr uint8_t IEEE80211_HE_BSR_UNKNOWN_QUEUE_CODE = 255;
+constexpr uint32_t IEEE80211_HE_BSR_UNKNOWN_QUEUE_SIZE = std::numeric_limits<uint32_t>::max();
+
+inline uint32_t getHeBufferStatusScaleUnit(uint8_t scalingFactor)
 {
-    // B0-B1: Variant = 11 (HE variant)
-    // B2-B5: Control ID = 3 (BSR)
-    // A-Control is: Control ID (3) | (BSR Info << 4)
-    // BSR Info is: ACI Bitmap (4 bits) | (Delta TID (2 bits) << 4) | (ACI High (2 bits) << 6) | (Scaling Factor (2 bits) << 8) | (Queue Size High (8 bits) << 10) | (Queue Size All (8 bits) << 18)
-    
-    uint8_t aciBitmap = 1 << status.accessCategory;
-    uint8_t deltaTid = 0;
-    uint8_t aciHigh = status.accessCategory;
-    
-    // Calculate Scaling Factor and scaled queue size
-    uint8_t sf = 0;
-    uint32_t scaledSize = 0;
-    uint32_t size = status.queueSize;
-    if (size == 0) {
-        sf = 0;
-        scaledSize = 0;
-    } else if (size <= 256 * 254) {
-        sf = 0;
-        scaledSize = (size + 255) / 256;
-    } else if (size <= 1024 * 254) {
-        sf = 1;
-        scaledSize = (size + 1023) / 1024;
-    } else if (size <= 8192 * 254) {
-        sf = 2;
-        scaledSize = (size + 8191) / 8192;
-    } else {
-        sf = 3;
-        scaledSize = (size + 65535) / 65536;
-        if (scaledSize > 254)
-            scaledSize = 254;
-    }
-    
-    uint32_t bsrInfo = (aciBitmap & 0xF) |
-                       ((deltaTid & 0x3) << 4) |
-                       ((aciHigh & 0x3) << 6) |
-                       ((sf & 0x3) << 8) |
-                       ((scaledSize & 0xFF) << 10) |
-                       ((scaledSize & 0xFF) << 18);
-                       
-    uint32_t aControl = IEEE80211_HE_BSR_CONTROL_ID | (bsrInfo << 4);
-    
-    // HE variant HT Control is: 3 | (aControl << 2)
-    return 3 | (aControl << 2);
+    // IEEE 802.11-2024 Table 9-33.
+    static constexpr uint32_t units[] = {16, 256, 2048, 32768};
+    return scalingFactor < 4 ? units[scalingFactor] : 0;
+}
+
+inline bool isValidHeBufferStatus(const Ieee80211HeBufferStatus& status)
+{
+    if (status.aciBitmap > 0xF || status.deltaTid > 3 || status.aciHigh > 3 || status.scalingFactor > 3)
+        return false;
+    uint8_t numberOfSetAcis = 0;
+    for (uint8_t bitmap = status.aciBitmap; bitmap != 0; bitmap >>= 1)
+        numberOfSetAcis += bitmap & 1;
+    // IEEE 802.11-2024 Table 9-32. Delta TID expresses a represented TID
+    // count; it does not identify any particular TID.
+    return numberOfSetAcis == 0 ? status.deltaTid == 3 : status.deltaTid <= (numberOfSetAcis < 3 ? numberOfSetAcis : 3);
+}
+
+inline bool packHeBufferStatusHtControl(const Ieee80211HeBufferStatus& status, uint32_t& htControl)
+{
+    if (!isValidHeBufferStatus(status))
+        return false;
+    htControl = IEEE80211_HE_VARIANT |
+            (static_cast<uint32_t>(IEEE80211_HE_BSR_CONTROL_ID) << 2) |
+            (static_cast<uint32_t>(status.aciBitmap) << 6) |
+            (static_cast<uint32_t>(status.deltaTid) << 10) |
+            (static_cast<uint32_t>(status.aciHigh) << 12) |
+            (static_cast<uint32_t>(status.scalingFactor) << 14) |
+            (static_cast<uint32_t>(status.queueSizeHigh) << 16) |
+            (static_cast<uint32_t>(status.queueSizeAll) << 24);
+    return true;
 }
 
 inline bool unpackHeBufferStatusHtControl(uint32_t htControl, Ieee80211HeBufferStatus& status)
 {
-    // Variant must be 11 (HE variant)
-    if ((htControl & 3) != 3)
+    if ((htControl & 0x3) != IEEE80211_HE_VARIANT ||
+            ((htControl >> 2) & 0xF) != IEEE80211_HE_BSR_CONTROL_ID)
         return false;
-    
-    uint32_t aControl = htControl >> 2;
-    if ((aControl & 0xF) != IEEE80211_HE_BSR_CONTROL_ID)
+    status.aciBitmap = (htControl >> 6) & 0xF;
+    status.deltaTid = (htControl >> 10) & 0x3;
+    status.aciHigh = (htControl >> 12) & 0x3;
+    status.scalingFactor = (htControl >> 14) & 0x3;
+    status.queueSizeHigh = (htControl >> 16) & 0xFF;
+    status.queueSizeAll = (htControl >> 24) & 0xFF;
+    return isValidHeBufferStatus(status);
+}
+
+inline Ieee80211HeQueueSizeKind decodeHeBufferStatusQueueSize(uint8_t queueCode,
+        uint8_t scalingFactor, uint32_t& queueSize)
+{
+    auto unit = getHeBufferStatusScaleUnit(scalingFactor);
+    if (queueCode < IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE) {
+        queueSize = queueCode * unit;
+        return Ieee80211HeQueueSizeKind::QUANTIZED;
+    }
+    if (queueCode == IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE) {
+        // This is a strict lower bound, not a quantized upper bound.
+        queueSize = queueCode * unit;
+        return Ieee80211HeQueueSizeKind::OVERFLOW;
+    }
+    queueSize = IEEE80211_HE_BSR_UNKNOWN_QUEUE_SIZE;
+    return Ieee80211HeQueueSizeKind::UNKNOWN;
+}
+
+inline bool encodeHeBufferStatusQueueSize(uint32_t queueSize, uint8_t scalingFactor, uint8_t& queueCode)
+{
+    if (queueSize == IEEE80211_HE_BSR_UNKNOWN_QUEUE_SIZE) {
+        queueCode = IEEE80211_HE_BSR_UNKNOWN_QUEUE_CODE;
+        return true;
+    }
+    auto unit = getHeBufferStatusScaleUnit(scalingFactor);
+    auto roundedCode = (static_cast<uint64_t>(queueSize) + unit - 1) / unit;
+    if (roundedCode <= 253) {
+        queueCode = roundedCode;
+        return true;
+    }
+    // Code 254 specifically means greater than 254 * SF. Values in the gap
+    // (253 * SF, 254 * SF] require a larger scaling factor.
+    if (queueSize > static_cast<uint64_t>(254) * unit) {
+        queueCode = IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE;
+        return true;
+    }
+    return false;
+}
+
+inline bool encodeHeBufferStatusQueueSizes(uint32_t queueSizeHigh, uint32_t queueSizeAll,
+        Ieee80211HeBufferStatus& status)
+{
+    for (uint8_t scalingFactor = 0; scalingFactor < 4; ++scalingFactor) {
+        uint8_t queueSizeHighCode;
+        uint8_t queueSizeAllCode;
+        if (encodeHeBufferStatusQueueSize(queueSizeHigh, scalingFactor, queueSizeHighCode) &&
+                encodeHeBufferStatusQueueSize(queueSizeAll, scalingFactor, queueSizeAllCode) &&
+                queueSizeHighCode != IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE &&
+                queueSizeAllCode != IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE) {
+            status.scalingFactor = scalingFactor;
+            status.queueSizeHigh = queueSizeHighCode;
+            status.queueSizeAll = queueSizeAllCode;
+            return true;
+        }
+    }
+    // If no finite upper bound exists, choose the largest scale that can
+    // represent both values. This gives the tightest available strict lower
+    // bound for any field that uses overflow code 254.
+    for (int scalingFactor = 3; scalingFactor >= 0; --scalingFactor) {
+        uint8_t queueSizeHighCode;
+        uint8_t queueSizeAllCode;
+        if (encodeHeBufferStatusQueueSize(queueSizeHigh, scalingFactor, queueSizeHighCode) &&
+                encodeHeBufferStatusQueueSize(queueSizeAll, scalingFactor, queueSizeAllCode)) {
+            status.scalingFactor = scalingFactor;
+            status.queueSizeHigh = queueSizeHighCode;
+            status.queueSizeAll = queueSizeAllCode;
+            return true;
+        }
+    }
+    return false;
+}
+
+inline uint8_t mapHeBufferStatusTidToAci(uint8_t tid)
+{
+    switch (tid) {
+        case 0: case 3: return 0;
+        case 1: case 2: return 1;
+        case 4: case 5: return 2;
+        case 6: case 7: return 3;
+        default: return 0xFF;
+    }
+}
+
+inline uint8_t mapHeBufferStatusAccessCategoryToAci(AccessCategory accessCategory)
+{
+    switch (accessCategory) {
+        case AC_BE: return 0;
+        case AC_BK: return 1;
+        case AC_VI: return 2;
+        case AC_VO: return 3;
+        default: return 0xFF;
+    }
+}
+
+inline AccessCategory mapHeBufferStatusAciToAccessCategory(uint8_t aci)
+{
+    switch (aci) {
+        case 0: return AC_BE;
+        case 1: return AC_BK;
+        case 2: return AC_VI;
+        case 3: return AC_VO;
+        default: return AC_NUMCATEGORIES;
+    }
+}
+
+inline uint8_t getHeBufferStatusRepresentativeTid(uint8_t aci)
+{
+    // The BSR wire field carries no exact TID. These stable representatives
+    // only support the legacy Ieee80211DataHeader::bufferStatusTid API.
+    static constexpr uint8_t representativeTids[] = {0, 1, 4, 6};
+    return aci < 4 ? representativeTids[aci] : 0xFF;
+}
+
+inline bool encodeHeSingleAcBufferStatus(uint8_t tid, AccessCategory accessCategory, uint32_t queueSize,
+        Ieee80211HeBufferStatus& status)
+{
+    auto derivedAci = mapHeBufferStatusTidToAci(tid);
+    auto accessCategoryAci = mapHeBufferStatusAccessCategoryToAci(accessCategory);
+    if (derivedAci == 0xFF || accessCategoryAci == 0xFF || accessCategoryAci != derivedAci)
         return false;
-        
-    uint32_t bsrInfo = aControl >> 4;
-    uint8_t deltaTid = (bsrInfo >> 4) & 0x3;
-    uint8_t aciHigh = (bsrInfo >> 6) & 0x3;
-    uint8_t sf = (bsrInfo >> 8) & 0x3;
-    uint8_t scaledSizeAll = (bsrInfo >> 18) & 0xFF;
-    
-    status.accessCategory = aciHigh;
-    
-    // Map aciHigh and deltaTid back to tid
-    if (aciHigh == 3) status.tid = (deltaTid == 1) ? 7 : 6;
-    else if (aciHigh == 2) status.tid = (deltaTid == 1) ? 5 : 4;
-    else if (aciHigh == 0) status.tid = (deltaTid == 3) ? 3 : 0;
-    else if (aciHigh == 1) status.tid = (deltaTid == 1) ? 2 : 1;
-    else status.tid = aciHigh * 2;
-    
-    // Convert scaledSizeAll back to queueSize in bytes
-    uint32_t unit = 256;
-    if (sf == 1) unit = 1024;
-    else if (sf == 2) unit = 8192;
-    else if (sf == 3) unit = 65536;
-    status.queueSize = scaledSizeAll * unit;
-    
-    return true;
+    status.aciBitmap = 1 << derivedAci;
+    status.deltaTid = 0;
+    status.aciHigh = derivedAci;
+    return encodeHeBufferStatusQueueSizes(queueSize, queueSize, status);
 }
 
 } // namespace ieee80211
 } // namespace inet
 
 #endif
-

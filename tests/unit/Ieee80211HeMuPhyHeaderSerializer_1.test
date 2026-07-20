@@ -39,7 +39,9 @@ user2.mcs = 5;
 user2.numberOfSpatialStreams = 2;
 origHeader->appendUsers(user2);
 
-origHeader->setChunkLength(b(120));
+// The compact fixture encoding is 8 bytes of common fields plus two 3-byte
+// user records, for an intentional emitted length of 112 bits.
+origHeader->setChunkLength(b(112));
 
 EV << "Original Header:\n";
 EV << "users count = " << origHeader->getUsersArraySize() << "\n";
@@ -55,6 +57,7 @@ pk->insertAtFront(origHeader);
 
 // Serialize packet to raw bytes
 auto bytes = pk->peekDataAsBytes();
+ASSERT(bytes->getChunkLength() == B(14));
 EV << "Serialized to " << bytes->getChunkLength().get<B>() << " bytes\n";
 
 // Put bytes back in a new packet
@@ -119,7 +122,7 @@ Original Header:
 users count = 2
   user[0]: staId=341, mcs=4, nss=1
   user[1]: staId=682, mcs=5, nss=2
-Serialized to 15 bytes
+Serialized to 14 bytes
 Deserialized Header:
 users count = 2
   user[0]: staId=341, mcs=4, nss=1

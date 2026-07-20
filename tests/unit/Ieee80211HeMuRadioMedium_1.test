@@ -11,6 +11,7 @@ while computing assigned receiver reception on the selected RU.
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IScalarSignalAnalogModel.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -155,6 +156,7 @@ MacAddress sta2("66:77:88:99:AA:BB");
 MacAddress sta3("02:00:00:00:00:03");
 
 auto container = new Packet("HE-MU-PPDU");
+container->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
 auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& sta) {
     Ieee80211HeMuUserInfo user;
@@ -219,13 +221,15 @@ medium->testAddTransmission(txRadio, transmission);
 ASSERT(medium->getCommunicationCache()->getNumTransmissions() == 1);
 
 auto aggregateAnalog = check_and_cast<const IScalarSignalAnalogModel *>(transmission->getAnalogModel());
-ASSERT(aggregateAnalog->getCenterFrequency() == centerFreq);
-ASSERT(aggregateAnalog->getBandwidth() == bandwidth);
+auto aggregateNarrowbandAnalog = check_and_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
+ASSERT(aggregateNarrowbandAnalog->getCenterFrequency() == centerFreq);
+ASSERT(aggregateNarrowbandAnalog->getBandwidth() == bandwidth);
 
 auto reception = medium->testComputeReception(rxRadio, transmission);
 auto ruReceptionAnalog = check_and_cast<const IScalarSignalAnalogModel *>(reception->getAnalogModel());
-ASSERT(ruReceptionAnalog->getCenterFrequency() == rus[0].centerFrequency);
-ASSERT(ruReceptionAnalog->getBandwidth() == rus[0].bandwidth);
+auto ruReceptionNarrowbandAnalog = check_and_cast<const INarrowbandSignalAnalogModel *>(reception->getAnalogModel());
+ASSERT(ruReceptionNarrowbandAnalog->getCenterFrequency() == rus[0].centerFrequency);
+ASSERT(ruReceptionNarrowbandAnalog->getBandwidth() == rus[0].bandwidth);
 ASSERT(ruReceptionAnalog->getPower() < aggregateAnalog->getPower());
 
 delete reception;

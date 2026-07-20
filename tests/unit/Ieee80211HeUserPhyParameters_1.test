@@ -106,6 +106,66 @@ ASSERT(mediumGi.numberOfSymbols == longGi.numberOfSymbols);
 ASSERT(shortGi.duration < mediumGi.duration);
 ASSERT(mediumGi.duration < longGi.duration);
 
+// Table 27-13 HE-LTF durations include both the LTF DFT period and GI.
+ASSERT(getHeLtfSymbolDuration(HE_LTF_1X, HE_GI_0_8_US) == SimTime(4, SIMTIME_US));
+ASSERT(getHeLtfSymbolDuration(HE_LTF_1X, HE_GI_1_6_US) == SimTime(4800, SIMTIME_NS));
+ASSERT(getHeLtfSymbolDuration(HE_LTF_2X, HE_GI_0_8_US) == SimTime(7200, SIMTIME_NS));
+ASSERT(getHeLtfSymbolDuration(HE_LTF_2X, HE_GI_1_6_US) == SimTime(8, SIMTIME_US));
+ASSERT(getHeLtfSymbolDuration(HE_LTF_4X, HE_GI_0_8_US) == SimTime(13600, SIMTIME_NS));
+ASSERT(getHeLtfSymbolDuration(HE_LTF_4X, HE_GI_3_2_US) == SimTime(16, SIMTIME_US));
+expectRuntimeError([&] { getHeLtfSymbolDuration(HE_LTF_1X, HE_GI_3_2_US); });
+expectRuntimeError([&] { getHeLtfSymbolDuration(HE_LTF_2X, HE_GI_3_2_US); });
+expectRuntimeError([&] { getHeLtfSymbolDuration(HE_LTF_4X, HE_GI_1_6_US); });
+
+// IEEE 802.11-2024 Table 27-32 format-specific HE-LTF/GI combinations.
+// The duration helper above deliberately keeps all six meaningful duration
+// pairs; the PPDU calculator additionally rejects format-specific N/A cells.
+struct HeLtfGiPair {
+    Ieee80211HeLtfType ltfType;
+    Ieee80211HeGuardInterval guardInterval;
+};
+const HeLtfGiPair heLtfGiPairs[] = {
+    {HE_LTF_1X, HE_GI_0_8_US}, {HE_LTF_1X, HE_GI_1_6_US},
+    {HE_LTF_2X, HE_GI_0_8_US}, {HE_LTF_2X, HE_GI_1_6_US},
+    {HE_LTF_4X, HE_GI_0_8_US}, {HE_LTF_4X, HE_GI_3_2_US}
+};
+auto tableRu = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
+Ieee80211HeUserPhyParameters tableUser;
+tableUser.ru = tableRu;
+tableUser.psduLength = B(100);
+auto checkHeLtfGiRow = [&] (Ieee80211HePpduFormat format,
+        const std::vector<Ieee80211HeUserPhyParameters>& users,
+        const bool expected[6]) {
+    for (size_t i = 0; i < 6; ++i) {
+        auto result = computeHePpduParameters(users, MHz(20), format,
+                heLtfGiPairs[i].guardInterval, heLtfGiPairs[i].ltfType);
+        ASSERT(static_cast<bool>(result) == expected[i]);
+        if (!expected[i])
+            ASSERT(!result.error.empty());
+    }
+};
+const bool suCombinations[] = {true, false, true, true, true, true};
+const bool muCombinations[] = {false, false, true, true, true, true};
+const bool tbDataCombinations[] = {false, false, false, true, false, true};
+const bool tbFeedbackNdpCombinations[] = {false, false, false, false, false, true};
+const bool fullBandwidthUlMuMimoCombinations[] = {false, true, false, true, false, true};
+checkHeLtfGiRow(HE_SINGLE_USER, {tableUser}, suCombinations);
+checkHeLtfGiRow(HE_EXTENDED_RANGE_SU, {tableUser}, suCombinations);
+checkHeLtfGiRow(HE_MU_DOWNLINK, {tableUser}, muCombinations);
+checkHeLtfGiRow(HE_TRIGGER_BASED_UPLINK, {tableUser}, tbDataCombinations);
+auto feedbackNdpUser = tableUser;
+feedbackNdpUser.psduLength = B(0);
+checkHeLtfGiRow(HE_TRIGGER_BASED_UPLINK, {feedbackNdpUser}, tbFeedbackNdpCombinations);
+auto fullChannelRu = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 242, 0);
+auto fullBandwidthUser0 = tableUser;
+fullBandwidthUser0.ru = fullChannelRu;
+fullBandwidthUser0.staId = 1;
+auto fullBandwidthUser1 = fullBandwidthUser0;
+fullBandwidthUser1.staId = 2;
+fullBandwidthUser1.streamStartIndex = 1;
+checkHeLtfGiRow(HE_TRIGGER_BASED_UPLINK,
+        {fullBandwidthUser0, fullBandwidthUser1}, fullBandwidthUlMuMimoCombinations);
+
 auto oneStream = computeHeUserPhyParameters(B(1500), ru, 4, 1, false, HE_GI_3_2_US);
 auto twoStreams = computeHeUserPhyParameters(B(1500), ru, 4, 2, false, HE_GI_3_2_US);
 auto eightStreams = computeHeUserPhyParameters(B(1500), ru, 4, 8, false, HE_GI_3_2_US, HE_CODING_LDPC);
@@ -136,7 +196,8 @@ auto roundedBoundary = computeHeUserPhyParameters(B(11), ru, 0);
 ASSERT(exactBoundary.dataBitsPerSymbol == 51);
 ASSERT(exactBoundary.numberOfSymbols == 2);
 ASSERT(roundedBoundary.numberOfSymbols == 3);
-ASSERT(computeHeUserPhyParameters(B(0), ru, 0).numberOfSymbols == 1);
+// A zero-length PSDU is an NDP helper case and contains no HE data symbols.
+ASSERT(computeHeUserPhyParameters(B(0), ru, 0).numberOfSymbols == 0);
 
 ASSERT(estimateHeMuUserDuration(B(1500), ru.toneSize, 4, 2, true, HE_GI_1_6_US) ==
         computeHeUserPhyParameters(B(1500), ru, 4, 2, true, HE_GI_1_6_US).duration);
@@ -158,6 +219,117 @@ ASSERT(commonPpdu.parameters.users[0].dataDuration ==
 ASSERT(commonPpdu.parameters.users[0].duration == commonPpdu.parameters.duration);
 ASSERT(getHeSigBSymbolCount(Hz(80e6), 8) >
         getHeSigBSymbolCount(Hz(80e6), 2));
+
+// Concurrent OFDMA RUs do not add their spatial-stream counts when deriving
+// the common HE-LTF count. A 20 MHz layout with nine one-stream 26-tone RUs
+// requires one HE-LTF symbol, not nine streams' worth of HE-LTF symbols.
+std::vector<Ieee80211HeUserPhyParameters> nineRuUsers;
+auto nineRuLayout = getHeEqualRuLayout(Hz(5.18e9), Hz(20e6), 9);
+for (size_t i = 0; i < nineRuLayout.size(); ++i) {
+    Ieee80211HeUserPhyParameters user;
+    user.ru = nineRuLayout[i];
+    user.mcs = 0;
+    user.staId = i + 1;
+    user.psduLength = B(100);
+    nineRuUsers.push_back(user);
+}
+auto nineRuPpdu = computeHePpduParameters(nineRuUsers, Hz(20e6));
+ASSERT(nineRuPpdu);
+ASSERT(nineRuPpdu.parameters.common.numberOfHeLtfSymbols == 1);
+ASSERT(nineRuPpdu.parameters.common.sigB.commonFieldBits == 18);
+ASSERT(nineRuPpdu.parameters.common.sigB.userFieldBits == 239);
+ASSERT(nineRuPpdu.parameters.common.sigB.numberOfSymbols == 10);
+
+// Eight streams on one RU remain valid and require eight HE-LTF symbols;
+// extending the same RU group to nine streams must be rejected structurally.
+Ieee80211HeUserPhyParameters fourStreamUser = shortUser;
+fourStreamUser.numberOfSpatialStreams = 4;
+fourStreamUser.streamStartIndex = 0;
+fourStreamUser.staId = 10;
+Ieee80211HeUserPhyParameters secondFourStreamUser = fourStreamUser;
+secondFourStreamUser.streamStartIndex = 4;
+secondFourStreamUser.staId = 11;
+auto eightStreamRuPpdu = computeHePpduParameters({fourStreamUser, secondFourStreamUser}, Hz(20e6));
+ASSERT(eightStreamRuPpdu);
+ASSERT(eightStreamRuPpdu.parameters.common.numberOfHeLtfSymbols == 8);
+Ieee80211HeUserPhyParameters ninthStreamUser = fourStreamUser;
+ninthStreamUser.numberOfSpatialStreams = 1;
+ninthStreamUser.streamStartIndex = 8;
+ninthStreamUser.staId = 12;
+ASSERT(!computeHePpduParameters({fourStreamUser, secondFourStreamUser, ninthStreamUser}, Hz(20e6)));
+
+// Model-local RU indices are not physical identity. Identical indices on two
+// channel segments remain separate OFDMA groups, while copies of one physical
+// RU with different indices form one MU-MIMO group and are stream-validated.
+auto segmentRu0 = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 77, 26, 0);
+auto segmentRu1 = makeHeRu(Hz(5.26e9), getHeChannelToneCount(MHz(20)), 77, 26, 0);
+Ieee80211HeUserPhyParameters segmentUser0;
+segmentUser0.ru = segmentRu0;
+segmentUser0.staId = 20;
+segmentUser0.psduLength = B(100);
+Ieee80211HeUserPhyParameters segmentUser1 = segmentUser0;
+segmentUser1.ru = segmentRu1;
+segmentUser1.staId = 21;
+auto distinctPhysicalRus = computeHePpduParameters({segmentUser0, segmentUser1}, MHz(160));
+ASSERT(distinctPhysicalRus);
+ASSERT(distinctPhysicalRus.parameters.common.numberOfHeLtfSymbols == 1);
+
+Ieee80211HeUserPhyParameters indexedCopy0 = segmentUser0;
+indexedCopy0.ru.index = 100;
+Ieee80211HeUserPhyParameters indexedCopy1 = indexedCopy0;
+indexedCopy1.ru.index = 101;
+indexedCopy1.staId = 22;
+indexedCopy1.streamStartIndex = 1;
+auto samePhysicalRu = computeHePpduParameters({indexedCopy0, indexedCopy1}, MHz(20));
+ASSERT(samePhysicalRu);
+ASSERT(samePhysicalRu.parameters.common.numberOfHeLtfSymbols == 2);
+indexedCopy1.streamStartIndex = 0;
+ASSERT(!computeHePpduParameters({indexedCopy0, indexedCopy1}, MHz(20)));
+
+// Public PPDU validation is non-throwing for malformed enum, MCS, bandwidth,
+// packet-extension, and positive-but-unsupported RU inputs. Each call returns
+// a structured invalid result with a diagnostic instead.
+Ieee80211HeUserPhyParameters malformedUser = shortUser;
+malformedUser.mcs = 12;
+auto invalidMcsPpdu = computeHePpduParameters({malformedUser}, Hz(20e6));
+ASSERT(!invalidMcsPpdu);
+ASSERT(!invalidMcsPpdu.error.empty());
+malformedUser = shortUser;
+malformedUser.ru.toneSize = 27;
+auto invalidRuPpdu = computeHePpduParameters({malformedUser}, Hz(20e6));
+ASSERT(!invalidRuPpdu);
+ASSERT(!invalidRuPpdu.error.empty());
+auto invalidFormatPpdu = computeHePpduParameters({shortUser}, Hz(20e6),
+        (Ieee80211HePpduFormat)99);
+ASSERT(!invalidFormatPpdu);
+ASSERT(!invalidFormatPpdu.error.empty());
+auto invalidGiPpdu = computeHePpduParameters({shortUser}, Hz(20e6), HE_MU_DOWNLINK,
+        (Ieee80211HeGuardInterval)99);
+ASSERT(!invalidGiPpdu);
+ASSERT(!invalidGiPpdu.error.empty());
+auto invalidLtfPpdu = computeHePpduParameters({shortUser}, Hz(20e6), HE_MU_DOWNLINK,
+        HE_GI_3_2_US, (Ieee80211HeLtfType)3);
+ASSERT(!invalidLtfPpdu);
+ASSERT(!invalidLtfPpdu.error.empty());
+for (const auto& invalidPair : std::vector<std::pair<Ieee80211HeLtfType, Ieee80211HeGuardInterval>>{
+        {HE_LTF_1X, HE_GI_3_2_US}, {HE_LTF_2X, HE_GI_3_2_US}, {HE_LTF_4X, HE_GI_1_6_US}}) {
+    auto invalidLtfGiPpdu = computeHePpduParameters({shortUser}, Hz(20e6), HE_MU_DOWNLINK,
+            invalidPair.second, invalidPair.first);
+    ASSERT(!invalidLtfGiPpdu);
+    ASSERT(!invalidLtfGiPpdu.error.empty());
+}
+auto invalidBandwidthPpdu = computeHePpduParameters({shortUser}, Hz(21e6));
+ASSERT(!invalidBandwidthPpdu);
+ASSERT(!invalidBandwidthPpdu.error.empty());
+auto invalidPacketExtensionPpdu = computeHePpduParameters({shortUser}, Hz(20e6),
+        HE_MU_DOWNLINK, HE_GI_3_2_US, HE_LTF_4X, 1);
+ASSERT(!invalidPacketExtensionPpdu);
+ASSERT(!invalidPacketExtensionPpdu.error.empty());
+malformedUser = shortUser;
+malformedUser.coding = (Ieee80211HeCoding)99;
+auto invalidCodingPpdu = computeHePpduParameters({malformedUser}, Hz(20e6));
+ASSERT(!invalidCodingPpdu);
+ASSERT(!invalidCodingPpdu.error.empty());
 
 Ieee80211HeUserPhyParameters encoderUser;
 encoderUser.ru = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(160)), 0, 1992, 0);

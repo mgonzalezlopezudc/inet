@@ -420,10 +420,11 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             requested.staId = user.staId;
             requestedUsers.push_back(requested);
         }
+        auto guardInterval = static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval());
         auto calculation = computeHePpduParameters(requestedUsers,
                 mode->getDataMode()->getBandwidth(),
                 static_cast<Ieee80211HePpduFormat>(heMuPhyHeader->getPpduFormat()),
-                static_cast<Ieee80211HeGuardInterval>(heMuPhyHeader->getGuardInterval()), HE_LTF_4X,
+                guardInterval, getHeDefaultLtfType(guardInterval),
                 heMuPhyHeader->getPacketExtensionDurationUs());
         if (!calculation)
             throw cRuntimeError("Cannot construct HE MU PPDU: %s", calculation.error.c_str());

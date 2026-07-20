@@ -159,6 +159,28 @@ ASSERT(!asHeMode(bcc.mode)->getDataMode()->isLdpc());
 EV << "LDPC and BCC coding constraints selected matching HE modes.\n";
 
 constraints = {};
+constraints.ldpc = true;
+constraints.extendedRangeSu = true;
+constraints.maxMcs = 2;
+auto ldpcErSu = normal->selectHeMode(MacAddress("02:00:00:00:00:0B"),
+        Hz(20e6), 242, HE_EXTENDED_RANGE_SU, 1, constraints);
+ASSERT(ldpcErSu.mode != nullptr);
+ASSERT(asHeMode(ldpcErSu.mode)->getDataMode()->isLdpc());
+ASSERT(asHeMode(ldpcErSu.mode)->getPreambleMode()->getPreambleFormat() ==
+        Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU);
+ASSERT(asHeMode(ldpcErSu.mode)->getDataMode()->getGuardIntervalType() ==
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
+
+constraints = {};
+constraints.ldpc = true;
+auto narrowRuLdpc = normal->selectHeMode(MacAddress("02:00:00:00:00:0C"),
+        Hz(20e6), 52, HE_MU_DOWNLINK, 1, constraints);
+ASSERT(narrowRuLdpc.mode != nullptr);
+ASSERT(asHeMode(narrowRuLdpc.mode)->getDataMode()->isLdpc());
+ASSERT(narrowRuLdpc.mcs <= 9);
+EV << "LDPC synthesis preserved ER-SU and narrow-RU constraints.\n";
+
+constraints = {};
 constraints.dcm = true;
 auto dcm = normal->selectHeMode(MacAddress("02:00:00:00:00:08"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 2, constraints);
@@ -180,12 +202,33 @@ EV << ".\n";
 
 %contains: stdout
 Candidate MCS min/max filtering selected MCS 4.
+
+%contains: stdout
 EWMA TX-result update demoted repeatedly failing MCS 1.
+
+%contains: stdout
 SNIR seeding restored the higher MCS after high-SNIR observations.
+
+%contains: stdout
 Lookaround probing path marked the selection as a probe.
+
+%contains: stdout
 Small-RU filtering excluded MCS 10/11.
+
+%contains: stdout
 ER SU constrained MCS and NSS and selected an ER SU preamble.
+
+%contains: stdout
 LDPC and BCC coding constraints selected matching HE modes.
+
+%contains: stdout
+LDPC synthesis preserved ER-SU and narrow-RU constraints.
+
+%contains: stdout
 DCM constraint capped the selected MCS.
+
+%contains: stdout
 Requested NSS caps limited and enabled spatial-stream selection.
+
+%contains: stdout
 .

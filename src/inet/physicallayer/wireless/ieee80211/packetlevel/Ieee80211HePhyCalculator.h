@@ -281,14 +281,55 @@ inline int getHeNumberOfLtfSymbols(int spaceTimeStreams)
     return 8;
 }
 
-inline simtime_t getHeLtfSymbolDuration(Ieee80211HeLtfType ltfType)
+/**
+ * Returns the deterministic HE-LTF type used when no authoritative LTF type
+ * is available from signaling metadata. This preserves the existing 4x policy
+ * for 0.8 us and 3.2 us GI while selecting the legal 2x type for 1.6 us GI.
+ */
+inline Ieee80211HeLtfType getHeDefaultLtfType(Ieee80211HeGuardInterval guardInterval)
+{
+    switch (guardInterval) {
+        case HE_GI_0_8_US: return HE_LTF_4X;
+        case HE_GI_1_6_US: return HE_LTF_2X;
+        case HE_GI_3_2_US: return HE_LTF_4X;
+        default: throw cRuntimeError("Invalid HE guard interval: %d", (int)guardInterval);
+    }
+}
+
+/**
+ * Returns the duration of one HE-LTF symbol, including its guard interval.
+ * IEEE 802.11-2024 Table 27-13 and the GI/LTF encodings admit only the six
+ * combinations handled below.
+ */
+inline simtime_t getHeLtfSymbolDuration(Ieee80211HeLtfType ltfType,
+        Ieee80211HeGuardInterval guardInterval)
 {
     switch (ltfType) {
-        case HE_LTF_1X: return SimTime(4, SIMTIME_US);
-        case HE_LTF_2X: return SimTime(8, SIMTIME_US);
-        case HE_LTF_4X: return SimTime(16, SIMTIME_US);
+        case HE_LTF_1X:
+            if (guardInterval == HE_GI_0_8_US)
+                return SimTime(4, SIMTIME_US);
+            if (guardInterval == HE_GI_1_6_US)
+                return SimTime(4800, SIMTIME_NS);
+            break;
+        case HE_LTF_2X:
+            if (guardInterval == HE_GI_0_8_US)
+                return SimTime(7200, SIMTIME_NS);
+            if (guardInterval == HE_GI_1_6_US)
+                return SimTime(8, SIMTIME_US);
+            break;
+        case HE_LTF_4X:
+            if (guardInterval == HE_GI_0_8_US)
+                return SimTime(13600, SIMTIME_NS);
+            if (guardInterval == HE_GI_3_2_US)
+                return SimTime(16, SIMTIME_US);
+            break;
         default: throw cRuntimeError("Invalid HE-LTF type: %d", (int)ltfType);
     }
+    if (guardInterval != HE_GI_0_8_US && guardInterval != HE_GI_1_6_US &&
+            guardInterval != HE_GI_3_2_US)
+        throw cRuntimeError("Invalid HE guard interval: %d", (int)guardInterval);
+    throw cRuntimeError("Unsupported HE-LTF/GI combination: %dx LTF with GI %d",
+            (int)ltfType, (int)guardInterval);
 }
 
 inline int getHeSigBContentChannelCount(Hz channelBandwidth)
@@ -301,6 +342,12 @@ inline int getHeSigBContentChannelCount(Hz channelBandwidth)
     throw cRuntimeError("Unsupported HE channel bandwidth: %g MHz", channelBandwidth.get() / 1e6);
 }
 
+/**
+ * Estimates uncompressed HE-SIG-B MCS 0 symbols by evenly distributing users
+ * over the content channels. It accounts for the CRC and tail of every User
+ * Block, but is intentionally not a general normative HE-SIG-B API: MCS, DCM,
+ * compression, and the actual RU-to-content-channel distribution are absent.
+ */
 int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers);
 
 /**
@@ -337,7 +384,7 @@ inline Ieee80211HeUserPhyParameters computeHeUserPhyParameters(
             ru.toneSize >= 996 ? Hz(80e6) :
             ru.toneSize >= 484 ? Hz(40e6) : Hz(20e6);
     auto result = computeHePpduParameters({request}, bandwidth,
-            HE_MU_DOWNLINK, guardInterval, HE_LTF_4X, 0, false);
+            HE_MU_DOWNLINK, guardInterval, getHeDefaultLtfType(guardInterval), 0, false);
     if (!result)
         throw cRuntimeError("%s", result.error.c_str());
     return result.parameters.users.front();

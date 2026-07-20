@@ -73,7 +73,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
         if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) == nullptr)
             return nullptr;
         auto header = dynamicPtrCast<const Ieee80211DataHeader>(
-                packet->peekDataAt(B(4), B(-1), parsingFlags));
+                packet->peekDataAt(B(4), b(-1), parsingFlags));
         return header == nullptr ? nullptr : header.get();
     }
 
@@ -314,7 +314,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
         unsigned int resultIndex = 0;
         while (parser->getDataLength() > b(0) &&
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(parser->peekAtFront()) != nullptr) {
-            auto delimiter = parser->popAtFront<Ieee80211MpduSubframeHeader>(B(-1), parsingFlags);
+            auto delimiter = parser->popAtFront<Ieee80211MpduSubframeHeader>(b(-1), parsingFlags);
             auto status = delimiter->isIncorrect() ? physicallayer::MPDU_DELIMITER_ERROR : physicallayer::MPDU_SUCCESS;
             if (receiveInd != nullptr && resultIndex < receiveInd->getResultsArraySize())
                 status = receiveInd->getResults(resultIndex).status;

@@ -75,6 +75,9 @@ const Ieee80211HeMode *HeMinstrelRateControl::findHeMode(int mcs, int nss, Hz ba
 {
     if (modeSet == nullptr)
         return nullptr;
+    auto desiredPreamble = extendedRangeSu ? Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU :
+            Ieee80211HePreambleMode::HE_PREAMBLE_SU;
+    const Ieee80211HeMode *erSuFallbackSource = nullptr;
     for (int i = 0; i < modeSet->getNumModes(); i++) {
         auto mode = dynamic_cast<const Ieee80211HeMode *>(modeSet->getMode(i));
         if (mode == nullptr)
@@ -84,18 +87,25 @@ const Ieee80211HeMode *HeMinstrelRateControl::findHeMode(int mcs, int nss, Hz ba
         if (heMcs->getMcsIndex() == (unsigned int)mcs &&
                 heMcs->getNumNss() == (unsigned int)nss &&
                 (std::isnan(bandwidth.get()) || dataMode->getBandwidth() == bandwidth) &&
-                dataMode->isLdpc() == ldpc) {
+                !dataMode->isLdpc()) {
             auto preambleFormat = mode->getPreambleMode()->getPreambleFormat();
-            if (preambleFormat == (extendedRangeSu ? Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU :
-                    Ieee80211HePreambleMode::HE_PREAMBLE_SU))
-                return mode;
-            if (extendedRangeSu && preambleFormat == Ieee80211HePreambleMode::HE_PREAMBLE_SU)
+            if (preambleFormat == desiredPreamble) {
+                if (!ldpc)
+                    return mode;
                 return Ieee80211HeCompliantModes::getCompliantMode(heMcs,
-                        mode->getCenterFrequencyMode(),
-                        Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU,
-                        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, ldpc);
+                        mode->getCenterFrequencyMode(), desiredPreamble,
+                        dataMode->getGuardIntervalType(), true);
+            }
+            if (extendedRangeSu && preambleFormat == Ieee80211HePreambleMode::HE_PREAMBLE_SU)
+                erSuFallbackSource = mode;
         }
     }
+    if (erSuFallbackSource != nullptr)
+        return Ieee80211HeCompliantModes::getCompliantMode(
+                erSuFallbackSource->getDataMode()->getModulationAndCodingScheme(),
+                erSuFallbackSource->getCenterFrequencyMode(),
+                Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU,
+                Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, ldpc);
     return nullptr;
 }
 

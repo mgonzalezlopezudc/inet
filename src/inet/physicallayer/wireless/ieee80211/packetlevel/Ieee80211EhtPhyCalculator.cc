@@ -80,7 +80,7 @@ Ieee80211EhtPhyValidationResult computeEhtPpduParameters(
         maxSpaceTimeStreams = std::max(maxSpaceTimeStreams, u.numberOfSpatialStreams);
 
     result.parameters.common.numberOfEhtLtfSymbols = getEhtNumberOfLtfSymbols(maxSpaceTimeStreams);
-    result.parameters.common.ehtLtfDuration = getHeLtfSymbolDuration(ltfType) * result.parameters.common.numberOfEhtLtfSymbols;
+    result.parameters.common.ehtLtfDuration = getHeLtfSymbolDuration(ltfType, guardInterval) * result.parameters.common.numberOfEhtLtfSymbols;
     result.parameters.common.commonPreambleDuration = result.parameters.common.legacyPreambleDuration
             + result.parameters.common.rlSigDuration
             + result.parameters.common.uSigDuration

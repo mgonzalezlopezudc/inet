@@ -125,7 +125,7 @@ void HeUlCoordinator::updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_
     auto& status = bufferStatusByAid[aid];
     status.backlogBytes[ac] = std::max<int64_t>(0, backlogBytes);
     status.tid[ac] = tid;
-    status.retryPending = retryPending;
+    status.retryPending[ac] = retryPending;
     status.updateTime = simTime();
     emit(bufferStatusUpdatedSignal, (long)aid);
     emit(bufferStatusReportedBytesSignal, (long)status.backlogBytes[ac]);
@@ -150,7 +150,8 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ie
         if (status == bufferStatusByAid.end() || simTime() - status->second.updateTime > reportMaxAge)
             continue;
         context.freshReports++;
-        if (status->second.retryPending)
+        if (std::any_of(status->second.retryPending.begin(), status->second.retryPending.end(),
+                [] (bool retryPending) { return retryPending; }))
             context.retryStations++;
         for (auto bytes : status->second.backlogBytes)
             if (bytes > 0) {
@@ -170,14 +171,11 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ie
 
 AccessCategory HeUlCoordinator::getPreferredAccessCategory() const
 {
-    AccessCategory selected = AC_BE;
-    for (const auto& entry : bufferStatusByAid)
-        for (int ac = AC_VO; ac >= AC_BK; ac--)
-            if (entry.second.backlogBytes[ac] > 0) {
-                selected = static_cast<AccessCategory>(std::max((int)selected, ac));
-                break;
-            }
-    return selected;
+    for (int ac = AC_VO; ac >= AC_BK; ac--)
+        for (const auto& entry : bufferStatusByAid)
+            if (entry.second.backlogBytes[ac] > 0 || entry.second.retryPending[ac])
+                return static_cast<AccessCategory>(ac);
+    return AC_BE;
 }
 
 IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee80211Mib *mib,
@@ -216,7 +214,8 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
         candidate.staAddress = station.first;
         candidate.associationId = aid;
         candidate.backlogBytes = status->second.backlogBytes;
-        candidate.retryPending = status->second.retryPending;
+        candidate.retryPending = std::any_of(status->second.retryPending.begin(), status->second.retryPending.end(),
+                [] (bool retryPending) { return retryPending; });
         candidate.reportAge = simTime() - status->second.updateTime;
         candidate.hasFreshReport = true;
         candidate.lastService = status->second.lastService;

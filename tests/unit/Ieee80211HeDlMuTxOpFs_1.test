@@ -107,6 +107,7 @@ class MockDlMuAckHandler : public IAckHandler
 
     virtual bool isEligibleToTransmit(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return true; }
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
+    virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override { return false; }
     virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { inProgressCount++; }
     virtual std::set<int> getOccupiedBlockAckSequenceNumbers(const MacAddress& receiverAddress, Tid tid) const override
     {
@@ -167,13 +168,12 @@ class MockDlMuOriginatorBlockAckAgreementHandler : public IOriginatorBlockAckAgr
 
 static Ieee80211HeRu makeRu(int index, int toneSize = 26)
 {
-    Ieee80211HeRu ru;
-    ru.index = index;
-    ru.toneSize = toneSize;
-    ru.dataSubcarriers = getHeRuDataSubcarrierCount(toneSize);
-    ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(toneSize);
-    ru.bandwidth = Hz(toneSize * 78125.0);
-    return ru;
+    int matchingIndex = 0;
+    for (const auto& ru : getHeRuAllocationCatalog(Hz(5.18e9), Hz(20e6))) {
+        if (ru.toneSize == toneSize && matchingIndex++ == index)
+            return ru;
+    }
+    throw cRuntimeError("No canonical %d-tone RU at layout index %d", toneSize, index);
 }
 
 static IIeee80211HeDlScheduler::RuAllocation makeAllocation(const MacAddress& sta, int index, int toneSize = 26)
@@ -235,10 +235,11 @@ static Packet *makeDataPacket(const char *name, const MacAddress& receiver, Tid 
     return packet;
 }
 
-static HeDlMuPackingPlanner::SelectedAllocation makePlannerSelection(const MacAddress& sta, int ruIndex, Packet *packet, uint16_t aid, bool multiTid = false)
+static HeDlMuPackingPlanner::SelectedAllocation makePlannerSelection(const MacAddress& sta, int ruIndex,
+        Packet *packet, uint16_t aid, bool multiTid = false, int toneSize = 106)
 {
     HeDlMuPackingPlanner::SelectedAllocation selected;
-    selected.allocation = makeAllocation(sta, ruIndex, 242);
+    selected.allocation = makeAllocation(sta, ruIndex, toneSize);
     selected.packet = packet;
     selected.dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
     selected.associationId = aid;
@@ -373,10 +374,11 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     }
     HeDlMuPackingPlanner planner;
     auto parameters = makePlannerParameters({
-            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 41),
-            makePlannerSelection(sta2, 1, pendingQueue->getPacket(1), 42),
-            makePlannerSelection(sta3, 2, pendingQueue->getPacket(2), 43)});
-    parameters.ppduDurationLimit = SimTime(900, SIMTIME_US);
+            makePlannerSelection(sta1, 0, pendingQueue->getPacket(0), 41, false, 52),
+            makePlannerSelection(sta2, 1, pendingQueue->getPacket(1), 42, false, 52),
+            makePlannerSelection(sta3, 2, pendingQueue->getPacket(2), 43, false, 52)});
+    parameters.packingDurationLimit = SimTime(5, SIMTIME_MS);
+    parameters.ppduDurationLimit = SimTime(1500, SIMTIME_US);
     auto plan = planner.plan(parameters);
     requireTrue(plan.valid, "planner should trim to a valid PPDU/TXOP duration");
     int packedPackets = 0;
@@ -409,7 +411,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
         pendingQueue->enqueuePacket(makeDataPacket(("pack-sta1-" + std::to_string(i)).c_str(), sta1, tid, i, 200));
     for (int i = 0; i < 2; i++)
         pendingQueue->enqueuePacket(makeDataPacket(("pack-sta2-" + std::to_string(i)).c_str(), sta2, tid, i, 200));
-    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242)});
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
     MockDlMuAckHandler ackHandler;
     MockDlMuInProgressFrames inProgress;
     MockDlMuOriginatorBlockAckAgreementHandler baHandler;
@@ -435,7 +437,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     clearQueue(pendingQueue);
     pendingQueue->enqueuePacket(makeDataPacket("window-sta1", sta1, tid, 10, 200));
     pendingQueue->enqueuePacket(makeDataPacket("window-sta2", sta2, tid, 10, 200));
-    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242)});
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
     MockDlMuAckHandler ackHandler;
     for (int i = 0; i < 4; i++)
         ackHandler.occupied[{sta2, tid}].insert(i);
@@ -458,7 +460,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
 {
     clearQueue(pendingQueue);
     pendingQueue->enqueuePacket(makeDataPacket("fallback-sta1", sta1, tid, 20, 200));
-    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242)});
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
     MockDlMuAckHandler ackHandler;
     MockDlMuInProgressFrames inProgress;
     MockDlMuOriginatorBlockAckAgreementHandler baHandler;
@@ -482,7 +484,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
         pendingQueue->enqueuePacket(makeDataPacket(("trim-sta2-" + std::to_string(i)).c_str(), sta2, tid, i, 200));
         pendingQueue->enqueuePacket(makeDataPacket(("trim-sta3-" + std::to_string(i)).c_str(), sta3, tid, i, 200));
     }
-    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 242), makeAllocation(sta2, 1, 242), makeAllocation(sta3, 2, 242)});
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 52), makeAllocation(sta2, 1, 52), makeAllocation(sta3, 2, 52)});
     MockDlMuAckHandler ackHandler;
     MockDlMuInProgressFrames inProgress;
     MockDlMuOriginatorBlockAckAgreementHandler baHandler;
@@ -491,8 +493,8 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     baHandler.addAgreement(sta3, tid);
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
-    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2, sta3}, SimTime(1800, SIMTIME_US)),
-            modeSet, pendingQueue, &ackHandler, callback, 8, 6500631, SimTime(900, SIMTIME_US));
+    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2, sta3}, SimTime(2400, SIMTIME_US)),
+            modeSet, pendingQueue, &ackHandler, callback, 8, 6500631, SimTime(1500, SIMTIME_US));
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "TXOP trimming should still build a transmit step");
@@ -535,7 +537,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     clearQueue(pendingQueue);
     pendingQueue->enqueuePacket(makeDataPacket("mixed-voice-txop-sta1", sta1, tid, 0, 100));
     pendingQueue->enqueuePacket(makeDataPacket("mixed-voice-txop-sta2", sta2, tid, 0, 100));
-    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 52)});
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 2, 52)});
     MockDlMuAckHandler ackHandler;
     MockDlMuInProgressFrames inProgress;
     MockDlMuOriginatorBlockAckAgreementHandler baHandler;

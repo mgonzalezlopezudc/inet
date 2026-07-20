@@ -44,11 +44,11 @@ setup->setPersistence(7);
 
 auto actionPacket = new Packet("twt-setup", setup);
 auto actionBytes = actionPacket->peekDataAsBytes();
-ASSERT(actionBytes->getChunkLength() == B(42));
+ASSERT(actionBytes->getChunkLength() == B(44));
 std::vector<uint8_t> twtSetupBody;
-for (int i = 24; i < 42; ++i)
+for (int i = 24; i < 44; ++i)
     twtSetupBody.push_back(actionBytes->getByte(i));
-ASSERT(bytesToHex(twtSetupBody) == "160613550387d6120000000000046a180807");
+ASSERT(bytesToHex(twtSetupBody) == "160613d80f20951187d6120000000000086a1807");
 auto actionReceived = new Packet("twt-setup-rx", actionBytes);
 auto decodedSetup = actionReceived->popAtFront<Ieee80211TwtSetupFrame>();
 ASSERT(decodedSetup->getDialogToken() == 19);
@@ -108,7 +108,7 @@ ASSERT(decodedSchedule.triggerEnabled);
 ASSERT(decodedSchedule.persistence == 3);
 ASSERT(decodedSchedule.targetWakeTime == SimTime(1, SIMTIME_S));
 ASSERT(decodedSchedule.wakeInterval == SimTime(32, SIMTIME_MS));
-ASSERT(decodedSchedule.wakeDuration == SimTime(2, SIMTIME_MS));
+ASSERT(decodedSchedule.wakeDuration == SimTime(2048, SIMTIME_US));
 
 delete actionPacket;
 delete actionReceived;

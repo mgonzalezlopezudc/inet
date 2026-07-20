@@ -127,6 +127,8 @@ auto holScheduler = check_and_cast<HeDlSchedulerHoLMinDelay *>(
     auto medium = makeCandidate(3, 500, 1);
     auto small = makeCandidate(4, 80, 1);
     auto context = makeContext(Hz(80e6), {large, mtu, medium, small});
+    // A 484-tone RU requires LDPC; BCC is intentionally capped at 242 tones.
+    context.coding = HE_CODING_LDPC;
     auto allocations = backlogScheduler->schedule(context);
     ASSERT(findAllocation(allocations, large.staAddress).ru.toneSize == 484);
     ASSERT(findAllocation(allocations, mtu.staAddress).ru.toneSize == 106);
@@ -140,6 +142,7 @@ auto holScheduler = check_and_cast<HeDlSchedulerHoLMinDelay *>(
     auto anchor = makeCandidate(1, 9000, 80, true);
     auto peer = makeCandidate(2, 1, 6000);
     auto context = makeContext(Hz(80e6), {anchor, peer});
+    context.coding = HE_CODING_LDPC;
     auto allocations = holScheduler->schedule(context);
     ASSERT(findAllocation(allocations, anchor.staAddress).ru.toneSize == 26);
     ASSERT(findAllocation(allocations, peer.staAddress).ru.toneSize == 484);
@@ -233,10 +236,24 @@ EV << ".\n";
 
 %contains: stdout
 Backlog fitting selected the central 26-tone RU without arbitrary placement.
+
+%contains: stdout
 Backlog threshold boundaries mapped to 26/52/106/484-tone RUs.
+
+%contains: stdout
 HeDlSchedulerHoLMinDelay::schedule: scheduling 2 STAs by head-of-line delay
+
+%contains: stdout
 HoL scheduler sized RUs from the HoL MPDU instead of total backlog.
+
+%contains: stdout
 Backlog path-loss grouping included 10 dB and excluded values above it.
+
+%contains: stdout
 Duration alignment accepted only a standards-valid variance reduction.
+
+%contains: stdout
 Live center frequency, power, noise figure, and GI drove authoritative scheduler estimates.
+
+%contains: stdout
 .

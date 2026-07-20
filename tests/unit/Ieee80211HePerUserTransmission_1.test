@@ -6,7 +6,7 @@ through PHY encapsulation and transmission creation.
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IScalarSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
@@ -153,7 +153,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     requested1.mcs = 7;
     requested1.psduLength = B(300);
     auto expected = computeHePpduParameters({requested0, requested1}, Hz(20e6),
-            HE_MU_DOWNLINK, HE_GI_1_6_US);
+            HE_MU_DOWNLINK, HE_GI_1_6_US, getHeDefaultLtfType(HE_GI_1_6_US));
     ASSERT(expected);
     ASSERT(user0.duration == expected.parameters.duration);
     ASSERT(user1.duration == expected.parameters.duration);
@@ -191,7 +191,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     request->setMcs(3);
     request->setNumberOfSpatialStreams(2);
     request->setDcm(true);
-    request->setGuardInterval(HE_GI_0_8_US);
+    request->setGuardInterval(HE_GI_1_6_US);
     request->setCoding(HE_CODING_BCC);
 
     radio->testEncapsulate(packet);
@@ -200,21 +200,30 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     ASSERT(phyHeader->getTriggerId() == 42);
     ASSERT(phyHeader->getUsersArraySize() == 1);
     const auto& user = phyHeader->getUsers(0);
-    auto expected = computeHeUserPhyParameters(user.psduLength, rus[2], 3, 2, true, HE_GI_0_8_US);
-    ASSERT(user.duration == expected.duration);
-    ASSERT(phyHeader->getCommonDuration() == expected.duration);
+    Ieee80211HeUserPhyParameters requested;
+    requested.ru = rus[2];
+    requested.mcs = 3;
+    requested.numberOfSpatialStreams = 2;
+    requested.dcm = true;
+    requested.coding = HE_CODING_BCC;
+    requested.psduLength = user.psduLength;
+    auto expected = computeHePpduParameters({requested}, Hz(20e6),
+            HE_TRIGGER_BASED_UPLINK, HE_GI_1_6_US, getHeDefaultLtfType(HE_GI_1_6_US));
+    ASSERT(expected);
+    ASSERT(user.duration == expected.parameters.duration);
+    ASSERT(phyHeader->getCommonDuration() == expected.parameters.duration);
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, SimTime(2, SIMTIME_S)));
-    ASSERT(transmission->getDuration() == expected.duration);
+    ASSERT(transmission->getDuration() == expected.parameters.duration);
     ASSERT(transmission->getHeUserPhyParameters().size() == 1);
     const auto& resolved = transmission->getHeUserPhyParameters().front();
     ASSERT(resolved.mcs == 3);
     ASSERT(resolved.numberOfSpatialStreams == 2);
     ASSERT(resolved.dcm);
-    ASSERT(resolved.guardInterval == HE_GI_0_8_US);
-    ASSERT(resolved.duration == expected.duration);
-    auto analog = check_and_cast<const IScalarSignalAnalogModel *>(transmission->getAnalogModel());
+    ASSERT(resolved.guardInterval == HE_GI_1_6_US);
+    ASSERT(resolved.duration == expected.parameters.duration);
+    auto analog = check_and_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
     ASSERT(analog->getCenterFrequency() == rus[2].centerFrequency);
     ASSERT(analog->getBandwidth() == rus[2].bandwidth);
 

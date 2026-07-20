@@ -18,6 +18,9 @@ using namespace inet::physicallayer;
 auto ru = makeHeRu(Hz(5.18e9), 996, 1, 242, 0);
 auto bcc = computeHeUserPhyParameters(B(1500), ru, 5, 1, false, HE_GI_1_6_US, HE_CODING_BCC);
 auto ldpc = computeHeUserPhyParameters(B(1500), ru, 5, 1, false, HE_GI_1_6_US, HE_CODING_LDPC);
+ASSERT(getHeDefaultLtfType(HE_GI_0_8_US) == HE_LTF_4X);
+ASSERT(getHeDefaultLtfType(HE_GI_1_6_US) == HE_LTF_2X);
+ASSERT(getHeDefaultLtfType(HE_GI_3_2_US) == HE_LTF_4X);
 ASSERT(bcc.tailBits > 0);
 ASSERT(ldpc.tailBits == 0);
 ASSERT(ldpc.ldpcCodewordLength > 0);
@@ -29,9 +32,9 @@ request.ru = ru;
 request.mcs = 5;
 request.psduLength = B(1500);
 auto noPe = computeHePpduParameters({request}, Hz(80e6), HE_MU_DOWNLINK, HE_GI_1_6_US,
-        HE_LTF_4X, 0);
+        getHeDefaultLtfType(HE_GI_1_6_US), 0);
 auto pe = computeHePpduParameters({request}, Hz(80e6), HE_MU_DOWNLINK, HE_GI_1_6_US,
-        HE_LTF_4X, 8);
+        getHeDefaultLtfType(HE_GI_1_6_US), 8);
 ASSERT(noPe && pe);
 ASSERT(pe.parameters.duration - noPe.parameters.duration == SimTime(8, SIMTIME_US));
 EV << "HE packet extension timing passed.\n";

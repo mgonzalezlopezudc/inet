@@ -260,7 +260,7 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     ASSERT(writer->records.size() == 1);
     const auto& record = writer->records[0];
     printRecord(7, record);
-    ASSERT(record[2] == 18 && record[3] == 0);
+    ASSERT(record[2] == 22 && record[3] == 0);
     ASSERT(record[4] == 0x06 && record[5] == 0 && record[6] == 0x80 && record[7] == 0);
     ASSERT(readUint16(record, 10) == 0x40A0); // SU; MCS, coding, and bandwidth known
     ASSERT(readUint16(record, 12) == 0x0002); // GI known
@@ -287,7 +287,7 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     ASSERT(writer->records.size() == 1);
     const auto& record = writer->records[0];
     printRecord(8, record);
-    ASSERT(record[2] == 18 && record[3] == 0);
+    ASSERT(record[2] == 22 && record[3] == 0);
     ASSERT(readUint16(record, 10) == 0x40A1); // HE_EXT_SU
     ASSERT(readUint16(record, 12) == 0x0002);
     ASSERT(readUint16(record, 14) == 0x0000); // MCS 0, BCC

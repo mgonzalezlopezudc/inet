@@ -133,10 +133,24 @@ void VectorCommunicationCache::removeTransmission(const ITransmission *transmiss
 {
     ASSERT(baseTransmissionId != -1);
     int transmissionIndex = transmission->getId() - baseTransmissionId;
-    if (0 <= transmissionIndex && transmissionIndex < (int)transmissionCache.size())
-        transmissionCache[transmissionIndex] = VectorTransmissionCacheEntry();
-    else
+    if (transmissionIndex < 0 || transmissionIndex >= (int)transmissionCache.size() ||
+            transmissionCache[transmissionIndex].transmission != transmission)
         throw cRuntimeError("Cannot find transmission");
+    auto& transmissionCacheEntry = transmissionCache[transmissionIndex];
+    auto receptionCacheEntries = transmissionCacheEntry.receptionCacheEntries;
+    if (receptionCacheEntries != nullptr) {
+        auto radioIt = radioCache.cbegin();
+        auto receptionIt = receptionCacheEntries->cbegin();
+        while (radioIt != radioCache.cend() && receptionIt != receptionCacheEntries->cend()) {
+            if (receptionIt->interval != nullptr)
+                radioIt->receptionIntervals->deleteNode(receptionIt->interval);
+            radioIt++;
+            receptionIt++;
+        }
+        delete receptionCacheEntries;
+        transmissionCacheEntry.receptionCacheEntries = nullptr;
+    }
+    transmissionCacheEntry = VectorTransmissionCacheEntry();
 }
 
 const ITransmission *VectorCommunicationCache::getTransmission(int id) const
@@ -194,4 +208,3 @@ void VectorCommunicationCache::removeNonInterferingTransmissions(std::function<v
 
 } // namespace physicallayer
 } // namespace inet
-

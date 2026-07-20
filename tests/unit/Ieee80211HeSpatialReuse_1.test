@@ -333,18 +333,48 @@ EV << ".\n";
 
 %contains: stdout
 SR_Disabled_Intra_Between -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Disabled_OBSS_Between -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_Intra_Between -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_OBSS_Between -> possible: NO, attempted: NO (Expected: NO)
+
+%contains: stdout
 SR_Enabled_OBSS_Above -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_OBSS_BelowSens -> possible: NO, attempted: NO (Expected: NO)
+
+%contains: stdout
 SR_Enabled_SRG_AboveSrg -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_SRG_BelowSrg -> possible: NO, attempted: NO (Expected: NO)
+
+%contains: stdout
 SR_Enabled_NonSrg_Disallowed -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_SRG_Disallowed -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_TB_Excluded -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_TB_PSR -> possible: NO, attempted: NO (Expected: NO)
+
+%contains: stdout
 SR_Enabled_TB_PSR_Disallowed -> possible: YES, attempted: YES (Expected: YES)
+
+%contains: stdout
 SR_Enabled_OBSS_CCA_Between -> busy: NO (Expected: NO)
+
+%contains: stdout
 SR_Enabled_Intra_CCA_Between -> busy: YES (Expected: YES)
+
+%contains: stdout
 .

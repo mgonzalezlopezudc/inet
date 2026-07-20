@@ -173,6 +173,7 @@ auto schedulerFholCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
     peer.supportedChannelWidths = {Hz(20e6)};
     peer.rxMcsNss.maxMcsPerNss[0] = 3;
     peer.supportedRuToneSizes = {26};
+    peer.ldpc = false;
     Ieee80211HeOperation operation;
     operation.operatingChannelWidth = Hz(20e6);
     std::vector<Ieee80211NegotiatedHeCapabilities> negotiated(2,
@@ -187,7 +188,22 @@ auto schedulerFholCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
         ASSERT(allocation.ru.toneSize == 26);
         ASSERT(allocation.mcs <= 3);
     }
+
+    negotiated[0].intersection.supportedChannelWidths.clear();
+    ASSERT(schedulerFhol->schedule(context).empty());
+    negotiated[0].intersection.supportedChannelWidths = {Hz(20e6)};
+
+    context.coding = HE_CODING_LDPC;
+    ASSERT(schedulerFhol->schedule(context).empty());
+    context.coding = HE_CODING_BCC;
+
+    negotiated[0].intersection.txMcsNss.maxMcsPerNss[0] = -1;
+    ASSERT(schedulerFhol->schedule(context).empty());
+    negotiated[0].intersection.txMcsNss.maxMcsPerNss[0] = 3;
+
     negotiated[1].intersection.dlOfdma = false;
+    ASSERT(schedulerFhol->schedule(context).empty());
+    negotiated[1].intersection.dlOfdma = true;
     negotiated[1].valid = false;
     ASSERT(schedulerFhol->schedule(context).empty());
     EV << "Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.\n";
@@ -197,8 +213,18 @@ EV << ".\n";
 
 %contains: stdout
 20 MHz fBW and fHoL tables matched the standard RU counts.
+
+%contains: stdout
 40, 80, and 160 MHz ceiling/floor layout selection passed.
+
+%contains: stdout
 Candidate cap preserved the mandatory anchor deterministically.
+
+%contains: stdout
 fBW prioritized backlog, fHoL prioritized delay, and packing duration used eligible backlog.
+
+%contains: stdout
 Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.
+
+%contains: stdout
 .
