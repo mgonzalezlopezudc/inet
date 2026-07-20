@@ -34,14 +34,14 @@ If a model is unavailable, move upward in capability: Luna to Terra, then Terra 
 
 | Agent | Model | Assign |
 | --- | --- | --- |
-| `inet-navigator` | Terra, `medium` | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing |
+| `inet-navigator` | Terra, `medium` | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing, and architecture-aware pre-change mapping |
 | `inet-evidence-miner` | Luna, `medium` | Bounded artifact discovery and exact extraction from source, logs, PCAPs, event logs, scalars, and vectors; facts only |
 | `inet-wifi-specialist` | Sol, `high` | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
 | `inet-simulation-detective` | Sol, `high` | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
 | `inet-implementer` | Sol, `high` | Focused production C++/NED/MSG patch after mechanism and change surface are established |
 | `inet-regression-guard` | Terra, `high` | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
 | `inet-results-analyst` | Terra, `high` | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
-| `inet-reviewer` | Sol, `high` | Independent post-implementation correctness, model-fidelity, configuration, compatibility, and test review |
+| `inet-reviewer` | Sol, `high` | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
 
 Use the relevant repository workflow skills inside each lane. An agent role does not replace `inet-simulation-run`, `inet-80211-packet-debugging`, `ieee80211-standards`, testing, build, or result-analysis skills.
 
@@ -51,7 +51,7 @@ Delegate proactively when two or more lanes below are independent. Start no more
 
 ### Static architecture or configuration
 
-Assign `inet-navigator`. Add `inet-wifi-specialist` only when the answer depends on 802.11 semantics. Add `inet-evidence-miner` only for a large, explicitly bounded inventory. Keep the work read-only.
+Assign `inet-navigator` for ownership, dependency, composition, and effective-configuration tracing, including the pre-change seal and R-*/AR-* map. Assign `inet-reviewer` when the deliverable is a formal diff-compliance verdict, naming audit, full-scope architecture audit, or sealing audit; require the exact semantic-checklist output and ledger disposition. Add `inet-wifi-specialist` only when the answer depends on 802.11 semantics. Add `inet-evidence-miner` only for a large, explicitly bounded inventory. Keep the work read-only.
 
 ### Wi-Fi standards or model gap
 
@@ -59,11 +59,11 @@ Assign `inet-wifi-specialist` to establish the normative rule and implemented be
 
 ### Runtime failure or packet/timing mystery
 
-Assign `inet-simulation-detective` as lead. Add `inet-wifi-specialist` for MAC/PHY interpretation, `inet-navigator` for effective configuration or ownership, and `inet-evidence-miner` for a precisely specified extraction from existing artifacts. Begin with one configuration and one run/seed. Escalate through logs, PCAP, results, event log, and LLDB only as evidence requires.
+Assign `inet-simulation-detective` as lead. It may create only named diagnostic artifacts and never edits production source; route an established source fix to `inet-implementer`. Add `inet-wifi-specialist` for MAC/PHY interpretation, `inet-navigator` for effective configuration or ownership, and `inet-evidence-miner` for a precisely specified extraction from existing artifacts. Begin with one configuration and one run/seed. Escalate through logs, PCAP, results, event log, and LLDB only as evidence requires.
 
 ### Production change
 
-Establish mechanism and change surface first with the appropriate read-only or runtime lanes. Then assign exactly one `inet-implementer` with file ownership and permitted test scope. After the patch stabilizes, assign `inet-regression-guard` and `inet-reviewer` independently when the change is nontrivial or affects 802.11 behavior. Do not have reviewer and implementer edit concurrently.
+Establish mechanism and change surface first with the appropriate read-only or runtime lanes. Before implementation under src/inet, enumerate the target paths, resolve their current seal status, map the applicable R-* and AR-* identifiers, and obtain explicit current-conversation user permission for every sealed file. Then assign exactly one `inet-implementer` with file ownership and permitted test scope. After the patch stabilizes, assign `inet-regression-guard` when the risk warrants independent regression evidence, and assign `inet-reviewer` for every architecture-sensitive src/inet change as well as every nontrivial or 802.11 behavior change. Do not have reviewer and implementer edit concurrently.
 
 ### Results or plots
 
@@ -98,9 +98,11 @@ Use the applicable IEEE revision as authority for normative behavior and checked
 
 Gate each transition:
 
-- Diagnose to implement: require a demonstrated failure mechanism and bounded change surface.
+- Diagnose to implement: require a demonstrated failure mechanism, bounded change surface, target-path seal decision, applicable R-*/AR-* map, and explicit permission for every sealed target.
 - Implement to verify: require a stable diff and exact claimed behavior.
 - Verify to conclude: require tests that exercise the claim, not merely a passing unrelated suite.
+- Architecture-sensitive change to conclude: require the applicable check-architecture.sh result reconciled with the ledgers and the complete semantic-checklist verdict.
+- Audit to seal: require a complete compliant-scope audit, resolution or explicit sanction of every finding, and explicit user approval before recording the seal.
 - Fingerprint update: require explicit user approval after explaining the trajectory change.
 
 Stop spawning or running lanes once decisive evidence answers the task. The root agent must report unresolved disagreement or missing evidence instead of averaging incompatible conclusions.
