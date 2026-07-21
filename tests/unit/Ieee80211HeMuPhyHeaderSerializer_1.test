@@ -23,7 +23,7 @@ origHeader->setBssColor(17);
 origHeader->setSpatialReuse(9);
 
 Ieee80211HeMuUserInfo user1;
-user1.ruIndex = headerRus[0].index;
+user1.ruIndex = 1001; // catalog-local indexes are not physical RU identity
 user1.ruToneSize = headerRus[0].toneSize;
 user1.ruToneOffset = headerRus[0].toneOffset;
 user1.staId = 0x155;
@@ -32,7 +32,7 @@ user1.numberOfSpatialStreams = 1;
 origHeader->appendUsers(user1);
 
 Ieee80211HeMuUserInfo user2;
-user2.ruIndex = headerRus[1].index;
+user2.ruIndex = 2002;
 user2.ruToneSize = headerRus[1].toneSize;
 user2.ruToneOffset = headerRus[1].toneOffset;
 user2.staId = 0x2aa;
@@ -79,6 +79,101 @@ for (unsigned int i = 0; i < recvHeader->getUsersArraySize(); ++i) {
 }
 ASSERT(recvHeader->getUsers(0).ruToneSize == headerRus[0].toneSize);
 ASSERT(recvHeader->getUsers(1).ruToneSize == headerRus[1].toneSize);
+ASSERT(recvHeader->getUsers(0).ruIndex == headerRus[0].index);
+ASSERT(recvHeader->getUsers(1).ruIndex == headerRus[1].index);
+EV << "Noncanonical RU indexes decoded to canonical catalog indexes.\n";
+
+auto muMimoHeader = makeShared<Ieee80211HeMuPhyHeader>();
+auto fullBandwidthRu = getHeEqualRuLayout(Hz(0), Hz(20e6), 1).front();
+for (int i = 0; i < 2; ++i) {
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = 3000 + i;
+    user.ruToneSize = fullBandwidthRu.toneSize;
+    user.ruToneOffset = fullBandwidthRu.toneOffset;
+    user.staId = 0x300 + i;
+    muMimoHeader->appendUsers(user);
+}
+muMimoHeader->setChunkLength(B(14));
+Packet muMimoPacket("mu-mimo-header");
+muMimoPacket.insertAtFront(muMimoHeader);
+auto muMimoBytes = muMimoPacket.peekDataAsBytes();
+Packet decodedMuMimoPacket("decoded-mu-mimo-header");
+decodedMuMimoPacket.insertAtFront(muMimoBytes);
+auto decodedMuMimoHeader = decodedMuMimoPacket.popAtFront<Ieee80211HeMuPhyHeader>();
+ASSERT(decodedMuMimoHeader->getUsersArraySize() == 2);
+ASSERT(decodedMuMimoHeader->getUsers(0).ruIndex == fullBandwidthRu.index);
+ASSERT(decodedMuMimoHeader->getUsers(1).ruIndex == fullBandwidthRu.index);
+ASSERT(decodedMuMimoHeader->getUsers(0).staId == 0x300);
+ASSERT(decodedMuMimoHeader->getUsers(1).staId == 0x301);
+EV << "MU-MIMO users sharing one physical RU round trip with canonical indexes.\n";
+
+auto testFullBandwidth80RoundTrip = [](int userCount) {
+    auto fullBandwidthRu = getHeEqualRuLayout(Hz(0), Hz(80e6), 1).front();
+    auto header = makeShared<Ieee80211HeMuPhyHeader>();
+    for (int i = 0; i < userCount; ++i) {
+        Ieee80211HeMuUserInfo user;
+        user.ruIndex = 5000 + i;
+        user.ruToneSize = fullBandwidthRu.toneSize;
+        user.ruToneOffset = fullBandwidthRu.toneOffset;
+        user.staId = 0x410 + i;
+        header->appendUsers(user);
+    }
+    auto serializedLength = b(64 + 4 * 8 + 2 + userCount * 20);
+    header->setChunkLength(serializedLength);
+    Packet packet("80mhz-full-bandwidth-header");
+    packet.insertAtFront(header);
+    auto bits = packet.peekDataAsBits();
+    ASSERT(bits->getChunkLength() == serializedLength);
+    Packet decodedPacket("decoded-80mhz-full-bandwidth-header");
+    decodedPacket.insertAtFront(bits);
+    auto decodedHeader = decodedPacket.popAtFront<Ieee80211HeMuPhyHeader>();
+    ASSERT(decodedHeader->getUsersArraySize() == (unsigned int)userCount);
+    for (int i = 0; i < userCount; ++i) {
+        ASSERT(decodedHeader->getUsers(i).staId == 0x410 + i);
+        ASSERT(decodedHeader->getUsers(i).ruToneSize == fullBandwidthRu.toneSize);
+        ASSERT(decodedHeader->getUsers(i).ruToneOffset == fullBandwidthRu.toneOffset);
+        ASSERT(decodedHeader->getUsers(i).ruIndex == fullBandwidthRu.index);
+    }
+};
+
+testFullBandwidth80RoundTrip(1);
+testFullBandwidth80RoundTrip(2);
+EV << "80 MHz 996-tone single-user and shared-RU MU-MIMO headers round trip exactly once per content channel.\n";
+
+const char *compressedHeSigBError = "2x996-tone RU requires compressed HE-SIG-B and is unsupported by this uncompressed Common-field encoder";
+auto fullBandwidth160Ru = getHeEqualRuLayout(Hz(0), Hz(160e6), 1).front();
+ASSERT(fullBandwidth160Ru.toneSize == 1992);
+fullBandwidth160Ru.index = 6000;
+auto rejectedCodec = encodeHeSigBCommonField({fullBandwidth160Ru}, Hz(160e6));
+ASSERT(!rejectedCodec);
+ASSERT(rejectedCodec.error == compressedHeSigBError);
+
+auto testFullBandwidth160Rejection = [compressedHeSigBError, fullBandwidth160Ru](int userCount) {
+    auto header = makeShared<Ieee80211HeMuPhyHeader>();
+    for (int i = 0; i < userCount; ++i) {
+        Ieee80211HeMuUserInfo user;
+        user.ruIndex = 7000 + i;
+        user.ruToneSize = fullBandwidth160Ru.toneSize;
+        user.ruToneOffset = fullBandwidth160Ru.toneOffset;
+        user.staId = 0x510 + i;
+        header->appendUsers(user);
+    }
+    header->setChunkLength(b(64 + 8 * 8 + 2 + userCount * 20));
+    Packet packet("160mhz-full-bandwidth-header");
+    packet.insertAtFront(header);
+    bool serializationRejected = false;
+    try {
+        packet.peekDataAsBits();
+    }
+    catch (const cRuntimeError& error) {
+        serializationRejected = std::string(error.what()).find(compressedHeSigBError) != std::string::npos;
+    }
+    ASSERT(serializationRejected);
+};
+
+testFullBandwidth160Rejection(1);
+testFullBandwidth160Rejection(2);
+EV << "160 MHz 2x996-tone single-user and shared-RU headers reject uncompressed HE-SIG-B without decoded downgrade.\n";
 
 auto testSingleUserRoundTrip = [](Ieee80211HePpduFormat ppduFormat, b headerLength) {
     auto header = makeShared<Ieee80211HeMuPhyHeader>();
@@ -107,8 +202,12 @@ testSingleUserRoundTrip(HE_EXTENDED_RANGE_SU, b(128));
 EV << "HE SU and ER SU format and payload boundary round trips passed.\n";
 
 auto rus = getHeEqualRuLayout(Hz(5.18e9), Hz(80e6), 4);
+for (size_t i = 0; i < rus.size(); ++i)
+    rus[i].index = 4000 + i;
 auto encoded = encodeHeSigBRuAllocation(rus, Hz(80e6));
 ASSERT(encoded);
+for (size_t i = 0; i < rus.size(); ++i)
+    ASSERT(encoded.allocation.rus[i].index != rus[i].index);
 auto decoded = decodeHeSigBRuAllocation(encoded.allocation.allocationCodes,
         Hz(5.18e9), Hz(80e6));
 ASSERT(decoded);
@@ -117,10 +216,21 @@ for (size_t i = 0; i < rus.size(); ++i) {
     ASSERT(decoded.allocation.rus[i].toneSize == rus[i].toneSize);
     ASSERT(decoded.allocation.rus[i].toneOffset == rus[i].toneOffset);
 }
+auto duplicateUsers = rus;
+duplicateUsers.push_back(rus.front());
+ASSERT(encodeHeSigBRuAllocation(duplicateUsers, Hz(80e6)));
 auto overlapping = rus;
-overlapping.push_back(rus.front());
+auto catalog = getHeRuAllocationCatalog(Hz(5.18e9), Hz(80e6));
+auto overlappingRu = std::find_if(catalog.begin(), catalog.end(), [](const Ieee80211HeRu& ru) {
+    return ru.toneSize == 484 && ru.toneOffset == 0;
+});
+ASSERT(overlappingRu != catalog.end());
+overlapping.push_back(*overlappingRu);
 ASSERT(!encodeHeSigBRuAllocation(overlapping, Hz(80e6)));
-EV << "HE-SIG-B RU layout codec round-trip and overlap validation passed.\n";
+auto unknownGeometry = rus;
+unknownGeometry.front().toneOffset++;
+ASSERT(!encodeHeSigBRuAllocation(unknownGeometry, Hz(80e6)));
+EV << "HE-SIG-B geometry canonicalization, duplicate-user, and overlap validation passed.\n";
 
 auto delimiter = makeShared<ieee80211::Ieee80211MpduSubframeHeader>();
 delimiter->setEof(true);
@@ -154,7 +264,11 @@ Deserialized Header:
 users count = 2
   user[0]: staId=341, mcs=4, nss=1
   user[1]: staId=682, mcs=5, nss=2
+Noncanonical RU indexes decoded to canonical catalog indexes.
+MU-MIMO users sharing one physical RU round trip with canonical indexes.
+80 MHz 996-tone single-user and shared-RU MU-MIMO headers round trip exactly once per content channel.
+160 MHz 2x996-tone single-user and shared-RU headers reject uncompressed HE-SIG-B without decoded downgrade.
 HE SU and ER SU format and payload boundary round trips passed.
-HE-SIG-B RU layout codec round-trip and overlap validation passed.
+HE-SIG-B geometry canonicalization, duplicate-user, and overlap validation passed.
 A-MPDU delimiter EOF, length, CRC, and signature round-trip passed.
 .

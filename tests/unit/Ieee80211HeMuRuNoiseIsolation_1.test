@@ -173,24 +173,18 @@ auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
     user.ruToneSize = ru.toneSize;
     user.ruToneOffset = ru.toneOffset;
     user.staId = computeHeMuStaId(staAddress);
+    user.psduLength = B(100);
     phyHeader->appendUsers(user);
 };
-auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& staAddress) {
-    auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
-    payloadHeader->setRuIndex(ru.index);
-    payloadHeader->setRuToneSize(ru.toneSize);
-    payloadHeader->setRuToneOffset(ru.toneOffset);
-    payloadHeader->setStaId(computeHeMuStaId(staAddress));
-    payloadHeader->setMpduLength(B(100));
-    containerPkt->insertAtBack(payloadHeader);
+auto appendPayload = [&] () {
     containerPkt->insertAtBack(makeShared<ByteCountChunk>(B(100)));
 };
 appendUser(rus[0], MacAddress("00:11:22:33:44:55"));
 appendUser(rus[1], MacAddress("66:77:88:99:AA:BB"));
 phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 73));
 containerPkt->insertAtBack(phyHeader);
-appendPayload(rus[0], MacAddress("00:11:22:33:44:55"));
-appendPayload(rus[1], MacAddress("66:77:88:99:AA:BB"));
+appendPayload();
+appendPayload();
 containerPkt->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
 // Create mock transmission

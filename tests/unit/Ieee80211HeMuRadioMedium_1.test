@@ -158,40 +158,33 @@ MacAddress sta3("02:00:00:00:00:03");
 auto container = new Packet("HE-MU-PPDU");
 container->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& sta) {
+auto appendUser = [&] (const Ieee80211HeRu& ru, const MacAddress& sta, B psduLength) {
     Ieee80211HeMuUserInfo user;
     user.ruIndex = ru.index;
     user.ruToneSize = ru.toneSize;
     user.ruToneOffset = ru.toneOffset;
     user.staId = computeHeMuStaId(sta);
+    user.psduLength = psduLength;
     phyHeader->appendUsers(user);
 };
-appendUser(rus[0], sta1);
-appendUser(rus[1], sta2);
-appendUser(rus[2], sta3);
+std::vector<Packet *> mpdus;
+auto appendUserPacket = [&] (const Ieee80211HeRu& ru, const MacAddress& sta, const char *name) {
+    auto mpdu = makeDataPacket(name, sta);
+    appendUser(ru, sta, B(4 + mpdu->getByteLength()));
+    mpdus.push_back(mpdu);
+};
+appendUserPacket(rus[0], sta1, "ru0-data");
+appendUserPacket(rus[1], sta2, "ru1-data");
+appendUserPacket(rus[2], sta3, "ru2-data");
 phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 73));
 container->insertAtBack(phyHeader);
-auto containerHdr = makeShared<Ieee80211DataHeader>();
-containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-containerHdr->setType(ST_DATA_WITH_QOS);
-containerHdr->setChunkLength(b(288));
-container->insertAtBack(containerHdr);
-auto appendPayload = [&] (const Ieee80211HeRu& ru, const MacAddress& sta, const char *name) {
-    auto mpdu = makeDataPacket(name, sta);
-    auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
-    payloadHeader->setRuIndex(ru.index);
-    payloadHeader->setRuToneSize(ru.toneSize);
-    payloadHeader->setRuToneOffset(ru.toneOffset);
-    payloadHeader->setStaId(computeHeMuStaId(sta));
-    payloadHeader->setMpduLength(B(mpdu->getByteLength()));
-    container->insertAtBack(payloadHeader);
-    container->insertAtBack(mpdu->peekData());
+for (auto mpdu : mpdus) {
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(mpdu->getByteLength());
+    container->insertAtBack(delimiter);
+    container->insertAtBack(mpdu->peekAll());
     delete mpdu;
-};
-appendPayload(rus[0], sta1, "ru0-data");
-appendPayload(rus[1], sta2, "ru1-data");
-appendPayload(rus[2], sta3, "ru2-data");
-container->insertAtBack(makeShared<Ieee80211MacTrailer>());
+}
 
 auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
 auto analogModel = flatTransmitter->getAnalogModel()->createAnalogModel(

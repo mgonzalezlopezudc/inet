@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <limits>
 #include <sstream>
 
 // IEEE 802.11ax HE receiver.
@@ -208,81 +209,134 @@ static bool applyHeMuMpduReceiveOutcomes(Packet *packet,
     return true;
 }
 
-static Packet *extractHeMuMpdu(const Packet *transmittedPacket, uint16_t staId)
+static bool matchesHeMuUser(const Ieee80211HeUserPhyParameters& modelUser,
+        const Ieee80211HeMuUserInfo& decodedUser)
+{
+    return modelUser.staId == decodedUser.staId &&
+            modelUser.ru.toneSize == decodedUser.ruToneSize &&
+            modelUser.ru.toneOffset == decodedUser.ruToneOffset &&
+            modelUser.mcs == decodedUser.mcs &&
+            modelUser.numberOfSpatialStreams == decodedUser.numberOfSpatialStreams &&
+            modelUser.dcm == decodedUser.dcm;
+}
+
+static bool validateHeMuModelBoundary(const Ieee80211Transmission *transmission,
+        const Ptr<const Ieee80211HeMuPhyHeader>& decodedHeader, b dataFieldLength)
+{
+    const auto& users = transmission->getHeUserPhyParameters();
+    const auto& ppdu = transmission->getHePpduParameters();
+    if (decodedHeader->getUsersArraySize() != users.size())
+        return false;
+
+    // HE-SIG-B serialization may arrange users by content channel. Match each
+    // decoded user exactly once instead of making serialized order authoritative
+    // for the transmitter's stable PSDU concatenation order.
+    std::vector<bool> matched(users.size(), false);
+    for (unsigned int i = 0; i < decodedHeader->getUsersArraySize(); ++i) {
+        const auto& decodedUser = decodedHeader->getUsers(i);
+        int match = -1;
+        for (size_t j = 0; j < users.size(); ++j) {
+            if (!matched[j] && matchesHeMuUser(users[j], decodedUser)) {
+                if (match != -1)
+                    return false;
+                match = j;
+            }
+        }
+        if (match == -1)
+            return false;
+        matched[match] = true;
+    }
+
+    B totalLength(0);
+    for (const auto& user : users) {
+        auto psduLength = user.psduLength.get();
+        if (psduLength < 0 || totalLength.get() > std::numeric_limits<int64_t>::max() - psduLength)
+            return false;
+        totalLength += user.psduLength;
+        if (ppdu.common.ndp && user.psduLength != B(0))
+            return false;
+    }
+    return ppdu.common.ndp ? dataFieldLength == b(0) : dataFieldLength == b(totalLength);
+}
+
+static Packet *extractHeMuMpdu(const Ieee80211Transmission *transmission,
+        const Ptr<const Ieee80211HeMuPhyHeader>& decodedHeader, uint16_t staId)
 {
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
             Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
             Chunk::PF_ALLOW_REINTERPRETATION;
+    auto transmittedPacket = transmission->getPacket();
     auto packetCopy = transmittedPacket->dup();
     packetCopy->popAtFront<Ieee80211HeMuPhyHeader>(b(-1), parsingFlags);
-    if (dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(
-            packetCopy->peekAtFront(b(-1), parsingFlags)) != nullptr)
-        packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>(b(-1), parsingFlags);
-    while (packetCopy->getDataLength() > b(0) &&
-            dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(
-                    packetCopy->peekAtFront(b(-1), parsingFlags)) != nullptr) {
-        auto payloadHeader = packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>(b(-1), parsingFlags);
-        if (payloadHeader->getMpduLength() == B(0)) {
-            // An NDP carries no MAC payload. Deliver it as a legacy-preamble
-            // indication when it is addressed to this STA; otherwise continue
-            // parsing the remaining zero-length user descriptors.
-            if (payloadHeader->getStaId() == staId) {
-                delete packetCopy;
-                return nullptr;
-            }
-            continue;
-        }
-        if (payloadHeader->getStaId() == staId) {
-            auto mpdu = new Packet(transmittedPacket->getName());
-            mpdu->insertAtBack(packetCopy->popAtFront(payloadHeader->getMpduLength(), parsingFlags));
-            auto indication = mpdu->addTagIfAbsent<Ieee80211MpduReceiveInd>();
-            auto parser = mpdu->dup();
-            B offset(0);
-            while (parser->getDataLength() > b(0) &&
-                    dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(
-                            parser->peekAtFront(b(-1), parsingFlags)) != nullptr) {
-                auto delimiter = parser->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(
-                        b(-1), parsingFlags);
-                Ieee80211MpduReceiveResult receiveResult;
-                receiveResult.offset = offset;
-                receiveResult.length = B(delimiter->getLength());
-                receiveResult.status = delimiter->isIncorrect() ?
-                        MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
-                if (parser->getDataLength() >= receiveResult.length) {
-                    auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(
-                            parser->peekAtFront(b(-1), parsingFlags));
-                    if (macHeader != nullptr) {
-                        receiveResult.sequenceNumber = macHeader->getSequenceNumber().get();
-                        receiveResult.fragmentNumber = macHeader->getFragmentNumber();
-                        receiveResult.tid = macHeader->getTid();
-                    }
-                    parser->popAtFront(receiveResult.length, parsingFlags);
-                }
-                else {
-                    receiveResult.status = MPDU_PAYLOAD_ERROR;
-                    parser->popAtFront(parser->getDataLength(), parsingFlags);
-                }
-                indication->appendResults(receiveResult);
-                offset += B(4) + receiveResult.length;
-                int padding = (4 - (B(4) + receiveResult.length).get<B>() % 4) % 4;
-                if (padding > 0 && parser->getDataLength() >= B(padding)) {
-                    parser->popAtFront(B(padding), parsingFlags);
-                    offset += B(padding);
-                }
-            }
-            delete parser;
-            delete packetCopy;
-            return mpdu;
-        }
-        packetCopy->popAtFront(payloadHeader->getMpduLength(), parsingFlags);
+    if (!validateHeMuModelBoundary(transmission, decodedHeader, packetCopy->getDataLength())) {
+        // A model/wire disagreement is not a partially decodable PSDU. Reject
+        // extraction so the caller exposes only the legacy-visible preamble.
+        delete packetCopy;
+        return nullptr;
     }
+    const auto& users = transmission->getHeUserPhyParameters();
+    B offset(0);
+    B selectedLength(-1);
+    for (const auto& user : users) {
+        if (user.staId == staId) {
+            selectedLength = user.psduLength;
+            break;
+        }
+        offset += user.psduLength;
+    }
+    if (selectedLength == B(-1) || transmission->getHePpduParameters().common.ndp) {
+        delete packetCopy;
+        return nullptr;
+    }
+    if (offset > B(0))
+        packetCopy->popAtFront(offset, parsingFlags);
+    auto mpdu = new Packet(transmittedPacket->getName());
+    if (selectedLength > B(0))
+        mpdu->insertAtBack(packetCopy->popAtFront(selectedLength, parsingFlags));
+    auto indication = mpdu->addTagIfAbsent<Ieee80211MpduReceiveInd>();
+    auto parser = mpdu->dup();
+    B mpduOffset(0);
+    while (parser->getDataLength() > b(0) &&
+            dynamicPtrCast<const ieee80211::Ieee80211MpduSubframeHeader>(
+                    parser->peekAtFront(b(-1), parsingFlags)) != nullptr) {
+        auto delimiter = parser->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(
+                b(-1), parsingFlags);
+        Ieee80211MpduReceiveResult receiveResult;
+        receiveResult.offset = mpduOffset;
+        receiveResult.length = B(delimiter->getLength());
+        receiveResult.status = delimiter->isIncorrect() ?
+                MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
+        if (parser->getDataLength() >= receiveResult.length) {
+            auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(
+                    parser->peekAtFront(b(-1), parsingFlags));
+            if (macHeader != nullptr) {
+                receiveResult.sequenceNumber = macHeader->getSequenceNumber().get();
+                receiveResult.fragmentNumber = macHeader->getFragmentNumber();
+                receiveResult.tid = macHeader->getTid();
+            }
+            parser->popAtFront(receiveResult.length, parsingFlags);
+        }
+        else {
+            receiveResult.status = MPDU_PAYLOAD_ERROR;
+            parser->popAtFront(parser->getDataLength(), parsingFlags);
+        }
+        indication->appendResults(receiveResult);
+        mpduOffset += B(4) + receiveResult.length;
+        int padding = (4 - (B(4) + receiveResult.length).get<B>() % 4) % 4;
+        if (padding > 0 && parser->getDataLength() >= B(padding)) {
+            parser->popAtFront(B(padding), parsingFlags);
+            mpduOffset += B(padding);
+        }
+    }
+    delete parser;
     delete packetCopy;
-    return nullptr;
+    return mpdu;
 }
 
-static Packet *buildHeMuPhyPacket(const Packet *transmittedPacket, const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, uint16_t staId)
+static Packet *buildHeMuPhyPacket(const Ieee80211Transmission *transmission,
+        const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, uint16_t staId)
 {
-    auto packet = extractHeMuMpdu(transmittedPacket, staId);
+    auto packet = extractHeMuMpdu(transmission, phyHeader, staId);
     if (packet == nullptr)
         return nullptr;
     auto phyHeaderCopy = copyHeMuPhyHeader(phyHeader);
@@ -673,7 +727,7 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         lastHeRuAssigned = myStaId.has_value() && containsHeMuUser(heMuPhyHeader, *myStaId);
         auto packet = myStaId.has_value() && containsHeMuUser(heMuPhyHeader, *myStaId) &&
                 modeSet->containsMode(transmission->getMode())
-                ? buildHeMuPhyPacket(transmittedPacket, heMuPhyHeader, *myStaId)
+                ? buildHeMuPhyPacket(transmission, heMuPhyHeader, *myStaId)
                 : buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
         if (packet == nullptr)
             packet = buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);

@@ -7,6 +7,8 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderSerializer.h"
 
+#include <set>
+
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211OfdmSignalField.h"
 
@@ -81,7 +83,6 @@ Register_Serializer(Ieee80211ErpOfdmPhyHeader, Ieee80211ErpOfdmPhyHeaderSerializ
 Register_Serializer(Ieee80211HtPhyHeader, Ieee80211HtPhyHeaderSerializer);
 Register_Serializer(Ieee80211VhtPhyHeader, Ieee80211VhtPhyHeaderSerializer);
 Register_Serializer(Ieee80211HeMuPhyHeader, Ieee80211HeMuPhyHeaderSerializer);
-Register_Serializer(Ieee80211HeMuRuPayloadHeader, Ieee80211HeMuRuPayloadHeaderSerializer);
 Register_Serializer(Ieee80211EhtRuPayloadHeader, Ieee80211EhtRuPayloadHeaderSerializer);
 
 /**
@@ -348,7 +349,6 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         for (unsigned int i = 0; i < numUsers; ++i) {
             const auto& user = heMuPhyHeader->getUsers(i);
             Ieee80211HeRu ru;
-            ru.index = user.ruIndex;
             ru.toneSize = user.ruToneSize;
             ru.toneOffset = user.ruToneOffset;
             rus.push_back(ru);
@@ -370,10 +370,10 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         std::vector<Ieee80211HeMuUserInfo> cc1Users;
         std::vector<Ieee80211HeMuUserInfo> cc2Users;
 
-        std::map<int, std::vector<Ieee80211HeMuUserInfo>> usersByRuIndex;
+        std::map<std::pair<int, int>, std::vector<Ieee80211HeMuUserInfo>> usersByRuGeometry;
         for (unsigned int i = 0; i < numUsers; ++i) {
             const auto& user = heMuPhyHeader->getUsers(i);
-            usersByRuIndex[user.ruIndex].push_back(user);
+            usersByRuGeometry[{user.ruToneSize, user.ruToneOffset}].push_back(user);
         }
 
         auto subchannelRUs = getHeRuAllocationCatalog(Hz(0), channelBw);
@@ -384,6 +384,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         });
 
         int K = subchannelRUs.size();
+        std::set<std::pair<int, int>> serializedWideRuGeometries[2];
         for (int s = 0; s < K; ++s) {
             int c = s % 2;
             auto& ccUsers = (c == 0) ? cc1Users : cc2Users;
@@ -392,9 +393,11 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
             for (const auto& ru : codecResult.commonField.rus) {
                 if (ru.toneSize > 242) {
                     if (ru.toneOffset <= subchannelRUs[s].toneOffset &&
-                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242) {
+                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242 &&
+                        std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
+                            return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
+                        }) == localRUs.end())
                         localRUs.push_back(ru);
-                    }
                 } else if (ru.toneOffset >= subchannelRUs[s].toneOffset &&
                            ru.toneOffset + ru.toneSize <= subchannelRUs[s].toneOffset + 242) {
                     if (std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
@@ -409,8 +412,11 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
             });
 
             for (const auto& ru : localRUs) {
-                const auto& ruUsers = usersByRuIndex[ru.index];
+                const auto& ruUsers = usersByRuGeometry[{ru.toneSize, ru.toneOffset}];
                 if (ru.toneSize > 242) {
+                    auto geometry = std::make_pair(ru.toneSize, ru.toneOffset);
+                    if (!serializedWideRuGeometries[c].insert(geometry).second)
+                        continue;
                     int total = ruUsers.size();
                     int n1 = (total + 1) / 2;
                     if (c == 0) {
@@ -426,13 +432,12 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
             }
         }
 
-        for (const auto& ru : codecResult.commonField.rus) {
-            if (ru.toneSize == 26) {
-                if (ru.toneOffset == 485) {
-                    for (const auto& u : usersByRuIndex[ru.index]) cc1Users.push_back(u);
-                } else if (ru.toneOffset == 1481) {
-                    for (const auto& u : usersByRuIndex[ru.index]) cc2Users.push_back(u);
-                }
+        for (const auto& entry : usersByRuGeometry) {
+            if (entry.first.first == 26 && entry.first.second == 485) {
+                for (const auto& user : entry.second) cc1Users.push_back(user);
+            }
+            else if (entry.first.first == 26 && entry.first.second == 1481) {
+                for (const auto& user : entry.second) cc2Users.push_back(user);
             }
         }
 
@@ -527,7 +532,8 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
             return a.toneOffset < b.toneOffset;
         });
 
-        std::map<int, int> wideRuTotalUsers;
+        std::map<std::pair<int, int>, int> wideRuTotalUsers;
+        std::set<std::pair<int, int>> countedWideRuGeometries[2];
         for (int s = 0; s < (int)subchannelRUs.size(); ++s) {
             int c = s % 2;
             int f = s / 2;
@@ -543,12 +549,15 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
                                r.toneOffset + r.toneSize >= subchannelRUs[s].toneOffset + 242;
                     });
                     if (it != decoded.commonField.rus.end()) {
-                        wideRuTotalUsers[it->index] += decodedUserCounts[i];
+                        auto geometry = std::make_pair(it->toneSize, it->toneOffset);
+                        if (countedWideRuGeometries[c].insert(geometry).second)
+                            wideRuTotalUsers[geometry] += decodedUserCounts[i];
                     }
                 }
             }
         }
 
+        std::set<std::pair<int, int>> allocatedWideRuGeometries[2];
         for (int s = 0; s < (int)subchannelRUs.size(); ++s) {
             int c = s % 2;
             auto& ccAllocations = (c == 0) ? cc1Allocations : cc2Allocations;
@@ -557,9 +566,11 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
             for (const auto& ru : decoded.commonField.rus) {
                 if (ru.toneSize > 242) {
                     if (ru.toneOffset <= subchannelRUs[s].toneOffset &&
-                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242) {
+                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242 &&
+                        std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
+                            return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
+                        }) == localRUs.end())
                         localRUs.push_back(ru);
-                    }
                 } else if (ru.toneOffset >= subchannelRUs[s].toneOffset &&
                            ru.toneOffset + ru.toneSize <= subchannelRUs[s].toneOffset + 242) {
                     if (std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
@@ -575,7 +586,10 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
 
             for (const auto& ru : localRUs) {
                 if (ru.toneSize > 242) {
-                    int total = wideRuTotalUsers[ru.index];
+                    auto geometry = std::make_pair(ru.toneSize, ru.toneOffset);
+                    if (!allocatedWideRuGeometries[c].insert(geometry).second)
+                        continue;
+                    int total = wideRuTotalUsers[geometry];
                     int n1 = (total + 1) / 2;
                     int n2 = total / 2;
                     int count = (c == 0) ? n1 : n2;
@@ -654,58 +668,9 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
 }
 
 /**
- * HE MU RU Payload Header
- *
- * Wire layout (12 bytes, matching chunkLength = B(12) in the .msg):
- *
- *   Offset  Size  Field
- *   ------  ----  -----
- *   0       4     ruIndex        (int32, little-endian)
- *   4       2     ruToneSize     (uint16, little-endian)
- *   6       2     ruToneOffset   (uint16, little-endian)
- *   8       2     staId          (uint16, little-endian)
- *   10      1     mcs[3:0] | (nss-1)[6:4]  (packed byte)
- *   11      1     bit0=dcm, bit1=muMimo    (flags byte)
- *
- * Fields mpduLength, spatialConfiguration, totalNsts, streamStartIndex and
- * leakageSum are internal PPDU-building state and are intentionally NOT
- * serialized; they live outside the canonical 12-byte representation.
- */
-void Ieee80211HeMuRuPayloadHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
-{
-    auto h = dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(chunk);
-    stream.writeUint32Le((uint32_t)h->getRuIndex());
-    stream.writeUint16Le(h->getRuToneSize());
-    stream.writeUint16Le(h->getRuToneOffset());
-    stream.writeUint16Le(h->getStaId());
-    uint8_t mcsnss = (h->getMcs() & 0x0F) | (((h->getNumberOfSpatialStreams() - 1) & 0x07) << 4);
-    stream.writeByte(mcsnss);
-    uint8_t flags = (h->getDcm() ? 0x01 : 0x00) | (h->getMuMimo() ? 0x02 : 0x00);
-    stream.writeByte(flags);
-}
-
-const Ptr<Chunk> Ieee80211HeMuRuPayloadHeaderSerializer::deserialize(MemoryInputStream& stream) const
-{
-    auto h = makeShared<Ieee80211HeMuRuPayloadHeader>();
-    h->setRuIndex((int32_t)stream.readUint32Le());
-    h->setRuToneSize(stream.readUint16Le());
-    h->setRuToneOffset(stream.readUint16Le());
-    h->setStaId(stream.readUint16Le());
-    uint8_t mcsnss = stream.readByte();
-    h->setMcs(mcsnss & 0x0F);
-    h->setNumberOfSpatialStreams(((mcsnss >> 4) & 0x07) + 1);
-    uint8_t flags = stream.readByte();
-    h->setDcm(flags & 0x01);
-    h->setMuMimo(flags & 0x02);
-    return h;
-}
-
-/**
  * EHT MU RU Payload Header
  *
- * Identical 12-byte layout to Ieee80211HeMuRuPayloadHeaderSerializer,
- * mapping mruIndex -> ruIndex, mruToneSize -> ruToneSize,
- * mruToneOffset -> ruToneOffset field accessors.
+ * Fixed 12-byte layout for the EHT packet-level model.
  */
 void Ieee80211EhtRuPayloadHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {

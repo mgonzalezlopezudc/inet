@@ -207,32 +207,11 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
     uint8_t puncturedSubchannelMask = 0; // 20 MHz subchannels, LSB is primary
     uint32_t triggerId = 0;
     simtime_t commonDuration;
+    bool ndp = false; // runtime-only: an NDP has no Data field
     Ieee80211HeMuUserInfo users[];
     bool muMimo = false;
     uint8_t spatialConfiguration = 0;
     uint8_t totalNsts = 0;
-}
-
-//
-// Delimits the MPDU payload assigned to one RU inside the simulated HE MU
-// container packet. It is consumed by the packet-level transmitter/receiver.
-//
-class Ieee80211HeMuRuPayloadHeader extends FieldsChunk
-{
-    chunkLength = B(12);
-    int ruIndex;
-    uint16_t ruToneSize;
-    uint16_t ruToneOffset;
-    uint16_t staId;
-    uint8_t mcs = 0;
-    uint8_t numberOfSpatialStreams = 1;
-    bool dcm = false;
-    B mpduLength;
-    bool muMimo = false;
-    uint8_t spatialConfiguration = 0;
-    uint8_t totalNsts = 0;
-    int streamStartIndex = 0;
-    double leakageSum = 0;
 }
 
 //

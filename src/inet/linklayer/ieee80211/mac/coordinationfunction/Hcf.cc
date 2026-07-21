@@ -36,12 +36,7 @@ Define_Module(Hcf);
 
 static bool isHeMuContainerPacket(Packet *packet)
 {
-    if (packet == nullptr || !packet->hasAtFront<Ieee80211MacHeader>())
-        return false;
-    auto header = packet->peekAtFront<Ieee80211MacHeader>();
-    auto payloadOffset = header->getChunkLength();
-    return packet->getDataLength() > payloadOffset &&
-           dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(packet->peekDataAt(payloadOffset)) != nullptr;
+    return packet != nullptr && packet->hasTag<Ieee80211HeMuTxTag>();
 }
 
 static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode)
@@ -680,6 +675,8 @@ void Hcf::originatorProcessTransmittedFrame(Packet *packet)
     if (edcaf) {
         edcaf->emit(packetSentToPeerSignal, packet);
         AccessCategory ac = edcaf->getAccessCategory();
+        if (isHeMuContainerPacket(packet))
+            return;
         auto ampduIt = pendingAmpduSubframes.find(packet);
         if (ampduIt != pendingAmpduSubframes.end()) {
             for (auto subframe : ampduIt->second) {
@@ -827,7 +824,15 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
     Enter_Method("originatorProcessReceivedFrame");
     EV_INFO << "Processing received frame " << receivedPacket->getName() << " as originator in frame sequence.\n";
     emit(packetReceivedFromPeerSignal, receivedPacket);
-    auto lastTransmittedHeader = lastTransmittedPacket->peekAtFront<Ieee80211MacHeader>();
+    Ptr<const Ieee80211MacHeader> lastTransmittedHeader;
+    if (auto txTag = lastTransmittedPacket->findTag<Ieee80211HeMuTxTag>()) {
+        auto metadataHeader = makeShared<Ieee80211DataHeader>();
+        metadataHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+        metadataHeader->setDurationField(txTag->getDurationField());
+        lastTransmittedHeader = metadataHeader;
+    }
+    else
+        lastTransmittedHeader = lastTransmittedPacket->peekAtFront<Ieee80211MacHeader>();
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
         AccessCategory ac = edcaf->getAccessCategory();
@@ -971,16 +976,26 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
     Enter_Method("transmitFrame");
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner) {
-        auto header = packet->peekAtFront<Ieee80211MacHeader>();
+        Ptr<const Ieee80211MacHeader> header;
+        if (auto txTag = packet->findTag<Ieee80211HeMuTxTag>()) {
+            auto metadataHeader = makeShared<Ieee80211DataHeader>();
+            metadataHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+            metadataHeader->setType(ST_DATA_WITH_QOS);
+            metadataHeader->setDurationField(txTag->getDurationField());
+            header = metadataHeader;
+        }
+        else
+            header = packet->peekAtFront<Ieee80211MacHeader>();
         auto txop = channelOwner->getTxopProcedure();
-        if (dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
+        if (!isHeMuContainerPacket(packet) && dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(header)) {
             // A missing BlockAck or an unacked BlockAck bitmap entry makes the
             // MPDU eligible again in QosAckHandler. Materialize that retry
             // state in the transmitted MAC header before building an A-MPDU.
             channelOwner->getAckHandler()->setRetryBitIfNeeded(packet);
             header = packet->peekAtFront<Ieee80211MacHeader>();
         }
-        if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        if (!isHeMuContainerPacket(packet))
+          if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             OriginatorBlockAckAgreement *agreement = nullptr;
             if (originatorBlockAckAgreementHandler)
                 agreement = originatorBlockAckAgreementHandler->getAgreement(dataFrame->getReceiverAddress(), dataFrame->getTid());
@@ -992,11 +1007,12 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             dataHeader->setAckPolicy(ackPolicy);
             packet->insertAtFront(dataHeader);
             header = packet->peekAtFront<Ieee80211MacHeader>();
-        }
+          }
 
         Packet *packetToTransmit = packet;
         bool deletePacketToTransmit = false;
-        if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        if (!isHeMuContainerPacket(packet))
+          if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK && !rtsPolicy->isRtsNeeded(packet, header)) {
                 int maxAmpduLengthExponent = 7;
                 auto mib = mac->getMib();
@@ -1041,7 +1057,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                     pendingAmpduSubframes[packet] = ampduFrames;
                 }
             }
-        }
+          }
 
         auto mode = rateSelection->computeMode(packetToTransmit, header, txop);
         setFrameMode(packetToTransmit, header, mode);

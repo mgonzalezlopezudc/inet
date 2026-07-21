@@ -40,6 +40,7 @@ std::cout << "Packet printer accepted OFDM PHY header.\n";
 
 Packet hePacket("he-mu");
 auto heHeader = makeShared<Ieee80211HeMuPhyHeader>();
+heHeader->setChunkLength(B(14));
 heHeader->setLengthField(macPacket.getDataLength());
 heHeader->setPpduFormat(0);
 heHeader->setBssColor(1);
@@ -63,19 +64,8 @@ ASSERT(text.find("STA7") != std::string::npos);
 std::cout << text;
 std::cout << "Packet printer accepted HE MU PHY header.\n";
 
-Ieee80211PhyProtocolPrinter phyProtocolPrinter;
-ProtocolPrinter::Context phyContext;
-auto hePayloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
-hePayloadHeader->setRuIndex(4);
-hePayloadHeader->setStaId(7);
-hePayloadHeader->setMcs(3);
-hePayloadHeader->setNumberOfSpatialStreams(2);
-hePayloadHeader->setMpduLength(B(14));
-phyProtocolPrinter.print(hePayloadHeader, &Protocol::ieee80211HePhy, nullptr, phyContext);
-ASSERT(phyContext.typeColumn.str().find("HE RU payload") != std::string::npos);
-ASSERT(phyContext.infoColumn.str().find("STA7") != std::string::npos);
-
 ProtocolPrinter::Context ehtContext;
+Ieee80211PhyProtocolPrinter phyProtocolPrinter;
 auto ehtHeader = makeShared<Ieee80211EhtPhyHeader>();
 ehtHeader->setLengthField(B(14));
 ehtHeader->setPpduFormat(0);

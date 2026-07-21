@@ -104,34 +104,26 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         users.push_back(user);
         return users;
     }
-    if (dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(packet->peekAtFront()) == nullptr)
-        return users;
-    auto packetCopy = packet->dup();
-    packetCopy->popAtFront<ieee80211::Ieee80211MacHeader>();
-    while (packetCopy->getDataLength() > b(0)) {
-        auto payloadHeader = dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(packetCopy->peekAtFront());
-        if (payloadHeader == nullptr)
-            break;
-        // DL HE MU aggregate payloads are represented as per-RU payload
-        // descriptors; each descriptor becomes one HE-SIG-B User field for
-        // receiver-side RU filtering (Clause 27.3.11.8.4).
-        packetCopy->popAtFront<Ieee80211HeMuRuPayloadHeader>();
+    if (auto txTag = packet->findTag<Ieee80211HeMuTxTag>()) {
+        // The tag is TXVECTOR-like local metadata. The packet data itself is
+        // only the ordered concatenation of the standard per-user PSDUs.
+        for (unsigned int i = 0; i < txTag->getAllocationsArraySize(); ++i) {
+            const auto& allocation = txTag->getAllocations(i);
         Ieee80211HeMuUserInfo user;
-        user.ruIndex = payloadHeader->getRuIndex();
-        user.ruToneSize = payloadHeader->getRuToneSize();
-        user.ruToneOffset = payloadHeader->getRuToneOffset();
-        user.staId = payloadHeader->getStaId();
-        user.mcs = payloadHeader->getMcs();
-        user.numberOfSpatialStreams = payloadHeader->getNumberOfSpatialStreams();
-        user.dcm = payloadHeader->getDcm();
-        user.psduLength = payloadHeader->getMpduLength();
-        user.streamStartIndex = payloadHeader->getStreamStartIndex();
+            user.ruIndex = allocation.ruIndex;
+            user.ruToneSize = allocation.ruToneSize;
+            user.ruToneOffset = allocation.ruToneOffset;
+            user.staId = allocation.staId;
+            user.mcs = allocation.mcs;
+            user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
+            user.dcm = allocation.dcm;
+            user.psduLength = allocation.psduLength;
+            user.streamStartIndex = allocation.streamStartIndex;
+            user.leakageSum = allocation.leakageSum;
         user.duration = estimateHeMuUserDuration(user.psduLength, user.ruToneSize, user.mcs);
         users.push_back(user);
-        if (payloadHeader->getMpduLength() > B(0))
-            packetCopy->popAtFront(payloadHeader->getMpduLength());
+        }
     }
-    delete packetCopy;
     return users;
 }
 
@@ -392,6 +384,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         if (mib != nullptr)
             heMuPhyHeader->setBssColor(mib->heOperation.bssColor);
         auto request = packet->findTag<Ieee80211HeMuReq>();
+        auto txTag = packet->findTag<Ieee80211HeMuTxTag>();
+        heMuPhyHeader->setNdp(txTag != nullptr && txTag->getNdp());
         if (request != nullptr)
             heMuPhyHeader->setPpduFormat(request->getPpduFormat());
         else if (!heMuUsers.empty())
@@ -516,6 +510,17 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             isMuMimo = true;
             heMuPhyHeader->setMuMimo(true);
             maxTotalNsts = request->getTotalNsts();
+        }
+        if (txTag != nullptr) {
+            for (unsigned int i = 0; i < txTag->getAllocationsArraySize(); ++i) {
+                const auto& allocation = txTag->getAllocations(i);
+                if (allocation.muMimo) {
+                    isMuMimo = true;
+                    heMuPhyHeader->setMuMimo(true);
+                    maxTotalNsts = std::max(maxTotalNsts, (int)allocation.totalNsts);
+                    heMuPhyHeader->setSpatialConfiguration(allocation.spatialConfiguration);
+                }
+            }
         }
         if (isMuMimo) {
             heMuPhyHeader->setTotalNsts(maxTotalNsts);

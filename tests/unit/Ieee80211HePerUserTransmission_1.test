@@ -95,16 +95,16 @@ Define_Module(MockNicModule);
 static void appendDlUser(Packet *packet, const Ieee80211HeRu& ru, uint16_t staId,
         int mcs, int nss, bool dcm, int payloadBytes)
 {
-    auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
-    payloadHeader->setRuIndex(ru.index);
-    payloadHeader->setRuToneSize(ru.toneSize);
-    payloadHeader->setRuToneOffset(ru.toneOffset);
-    payloadHeader->setStaId(staId);
-    payloadHeader->setMcs(mcs);
-    payloadHeader->setNumberOfSpatialStreams(nss);
-    payloadHeader->setDcm(dcm);
-    payloadHeader->setMpduLength(B(payloadBytes));
-    packet->insertAtBack(payloadHeader);
+    Ieee80211HeMuTxAllocationInfo allocation;
+    allocation.ruIndex = ru.index;
+    allocation.ruToneSize = ru.toneSize;
+    allocation.ruToneOffset = ru.toneOffset;
+    allocation.staId = staId;
+    allocation.mcs = mcs;
+    allocation.numberOfSpatialStreams = nss;
+    allocation.dcm = dcm;
+    allocation.psduLength = B(payloadBytes);
+    packet->addTagIfAbsent<Ieee80211HeMuTxTag>()->appendAllocations(allocation);
     packet->insertAtBack(makeShared<ByteCountChunk>(B(payloadBytes)));
 }
 
@@ -127,11 +127,6 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
 // common PPDU and actual transmission end at the longest user's duration.
 {
     auto packet = new Packet("dl-he-mu");
-    auto macHeader = makeShared<Ieee80211DataHeader>();
-    macHeader->setType(ST_DATA_WITH_QOS);
-    macHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-    macHeader->setChunkLength(b(288));
-    packet->insertAtBack(macHeader);
     appendDlUser(packet, rus[0], 1, 0, 1, false, 600);
     appendDlUser(packet, rus[1], 2, 7, 1, false, 300);
     auto common = packet->addTag<Ieee80211HeMuCommonReq>();

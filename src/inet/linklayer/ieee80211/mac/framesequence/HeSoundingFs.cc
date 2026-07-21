@@ -168,12 +168,9 @@ Packet *HeSoundingFs::buildNdpaFrame(FrameSequenceContext *context)
 Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
 {
     ASSERT(context != nullptr);
-    auto ndpHdr = makeShared<Ieee80211DataHeader>();
-    ndpHdr->setType(ST_DATA);
-    ndpHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-    ndpHdr->setTransmitterAddress(apAddress);
-
-    auto ndpPacket = new Packet("HE-NDP", ndpHdr);
+    auto ndpPacket = new Packet("HE-NDP");
+    auto txTag = ndpPacket->addTagIfAbsent<physicallayer::Ieee80211HeMuTxTag>();
+    txTag->setNdp(true);
 
     uint16_t ruToneSize = 242;
     if (bandwidth >= Hz(160e6)) ruToneSize = 1992;
@@ -187,23 +184,21 @@ Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
 
     int streamStartIndex = 0;
     for (size_t i = 0; i < targets.size(); ++i) {
-        auto payloadHeader = makeShared<physicallayer::Ieee80211HeMuRuPayloadHeader>();
-        payloadHeader->setRuIndex(0);
-        payloadHeader->setRuToneSize(ruToneSize);
-        payloadHeader->setRuToneOffset(0);
-        payloadHeader->setStaId(targets[i].aid);
-        payloadHeader->setMcs(0);
-        payloadHeader->setNumberOfSpatialStreams(targets[i].maxNss);
-        payloadHeader->setDcm(false);
-        payloadHeader->setMpduLength(B(0));
-        payloadHeader->setStreamStartIndex(streamStartIndex);
-        payloadHeader->setMuMimo(true);
-        payloadHeader->setTotalNsts(totalNsts);
-        ndpPacket->insertAtBack(payloadHeader);
+        physicallayer::Ieee80211HeMuTxAllocationInfo allocation;
+        allocation.ruIndex = 0;
+        allocation.ruToneSize = ruToneSize;
+        allocation.ruToneOffset = 0;
+        allocation.staId = targets[i].aid;
+        allocation.mcs = 0;
+        allocation.numberOfSpatialStreams = targets[i].maxNss;
+        allocation.dcm = false;
+        allocation.psduLength = B(0);
+        allocation.streamStartIndex = streamStartIndex;
+        allocation.muMimo = true;
+        allocation.totalNsts = totalNsts;
+        txTag->appendAllocations(allocation);
         streamStartIndex += targets[i].maxNss;
     }
-
-    ndpPacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
 
     auto commonRequest = ndpPacket->addTagIfAbsent<physicallayer::Ieee80211HeMuCommonReq>();
     commonRequest->setGuardInterval(physicallayer::HE_GI_3_2_US);

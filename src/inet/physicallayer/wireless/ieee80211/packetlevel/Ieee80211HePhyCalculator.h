@@ -97,6 +97,7 @@ struct Ieee80211HeSigBFields
 struct Ieee80211HeCommonPhyParameters
 {
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
+    bool ndp = false; // model-only: an NDP has no Data field
     Hz channelBandwidth = Hz(NaN);
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US;
     Ieee80211HeLtfType ltfType = HE_LTF_4X;

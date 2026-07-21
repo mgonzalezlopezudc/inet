@@ -190,7 +190,28 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
 {
     Ieee80211HeSigBCommonFieldResult result;
     (void)puncturedSubchannels;
-    if (!validateHeRuLayout(rus, channelBandwidth)) {
+    auto catalog = getHeRuAllocationCatalog(Hz(0), channelBandwidth);
+    std::vector<Ieee80211HeRu> canonicalRUs;
+    std::vector<Ieee80211HeRu> uniqueRUs;
+    std::map<std::pair<int, int>, int> userCountsByGeometry;
+    for (const auto& ru : rus) {
+        auto it = std::find_if(catalog.begin(), catalog.end(), [&](const Ieee80211HeRu& candidate) {
+            return candidate.toneSize == ru.toneSize && candidate.toneOffset == ru.toneOffset;
+        });
+        if (it == catalog.end()) {
+            result.error = "unknown HE RU tone geometry for the channel bandwidth";
+            return result;
+        }
+        if (it->toneSize == 1992) {
+            result.error = "2x996-tone RU requires compressed HE-SIG-B and is unsupported by this uncompressed Common-field encoder";
+            return result;
+        }
+        auto key = std::make_pair(it->toneSize, it->toneOffset);
+        canonicalRUs.push_back(*it);
+        if (userCountsByGeometry[key]++ == 0)
+            uniqueRUs.push_back(*it);
+    }
+    if (!validateHeRuLayout(uniqueRUs, channelBandwidth)) {
         result.error = "overlapping, out-of-band, or reserved HE RU allocation";
         return result;
     }
@@ -206,12 +227,7 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
     int numContentChannels = (channelBandwidth > Hz(20e6)) ? 2 : 1;
     result.commonField.contentChannels.resize(numContentChannels);
 
-    std::map<int, int> userCountsByRuIndex;
-    for (const auto& ru : rus)
-        if (ru.index >= 0)
-            userCountsByRuIndex[ru.index]++;
-
-    for (const auto& ru : rus) {
+    for (const auto& ru : uniqueRUs) {
         if (ru.toneSize == 26) {
             if (ru.toneOffset == 485) {
                 result.commonField.contentChannels[0].hasCenterRu = true;
@@ -232,7 +248,7 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
         bool isWide = false;
         Ieee80211HeRu wideRU;
 
-        for (const auto& ru : rus) {
+        for (const auto& ru : uniqueRUs) {
             if (ru.toneSize > 242) {
                 if (ru.toneOffset <= subchannelRUs[s].toneOffset &&
                     ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242) {
@@ -247,7 +263,7 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
         }
 
         if (isWide) {
-            int totalUsers = userCountsByRuIndex[wideRU.index];
+            int totalUsers = userCountsByGeometry[{wideRU.toneSize, wideRU.toneOffset}];
             int n_c = 0;
             if (totalUsers > 0) {
                 int n_cc1 = (totalUsers + 1) / 2;
@@ -277,13 +293,9 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
                 });
             for (const auto& key : partitionKeys) {
                 int userCount = 0;
-                for (const auto& ru : rus) {
-                    if (ru.toneSize == key.first &&
-                        (ru.toneOffset - subchannelRUs[s].toneOffset) == key.second) {
-                        userCount = userCountsByRuIndex[ru.index];
-                        break;
-                    }
-                }
+                auto geometry = std::make_pair(key.first,
+                        key.second + subchannelRUs[s].toneOffset);
+                userCount = userCountsByGeometry[geometry];
                 partitionUsers.push_back(userCount);
             }
 
@@ -322,7 +334,7 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
         }
     }
 
-    result.commonField.rus = rus;
+    result.commonField.rus = canonicalRUs;
     result.valid = true;
     return result;
 }

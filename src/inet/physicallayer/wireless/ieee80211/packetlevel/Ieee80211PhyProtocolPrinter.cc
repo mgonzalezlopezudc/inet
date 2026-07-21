@@ -171,15 +171,6 @@ void Ieee80211PhyProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pro
         printUserSummary(stream, *heMuHeader);
         context.infoColumn << stream.str();
     }
-    else if (auto hePayloadHeader = dynamicPtrCast<const Ieee80211HeMuRuPayloadHeader>(chunk)) {
-        context.typeColumn << "HE RU payload";
-        context.infoColumn << "RU" << hePayloadHeader->getRuIndex()
-                           << "->STA" << hePayloadHeader->getStaId()
-                           << " length=" << hePayloadHeader->getMpduLength()
-                           << " MCS" << static_cast<int>(hePayloadHeader->getMcs())
-                           << " NSS" << static_cast<int>(hePayloadHeader->getNumberOfSpatialStreams())
-                           << " DCM" << (hePayloadHeader->getDcm() ? 1 : 0);
-    }
     else if (auto ehtHeader = dynamicPtrCast<const Ieee80211EhtPhyHeader>(chunk)) {
         context.typeColumn << ehtPpduFormatName(ehtHeader->getPpduFormat()) << " PHY";
         std::ostringstream stream;

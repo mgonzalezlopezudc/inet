@@ -344,6 +344,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         }
         if (!calculation)
             throw cRuntimeError("Invalid planned HE MU PPDU: %s", calculation.error.c_str());
+        calculation.parameters.common.ndp = heMuHeader->getNdp();
         hePpduParameters = calculation.parameters;
         if (heMuHeader->getPpduFormat() == HE_MU_DOWNLINK &&
                 heMuHeader->getCommonDuration() > SIMTIME_ZERO &&

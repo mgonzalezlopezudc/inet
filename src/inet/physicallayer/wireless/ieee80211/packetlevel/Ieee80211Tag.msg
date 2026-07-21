@@ -27,6 +27,28 @@ struct Ieee80211HeMuRxAllocationInfo
     simtime_t duration;
 }
 
+//
+// Transmitter-local description of one PSDU in a downlink HE MU PPDU. The
+// radio copies these ordered allocations into the PHY header; this metadata is
+// not part of the PSDU and is not delivered through the radio medium.
+//
+struct Ieee80211HeMuTxAllocationInfo
+{
+    int ruIndex;
+    uint16_t staId;
+    uint16_t ruToneSize;
+    uint16_t ruToneOffset;
+    uint8_t mcs = 0;
+    uint8_t numberOfSpatialStreams = 1;
+    bool dcm = false;
+    B psduLength;
+    bool muMimo = false;
+    uint8_t spatialConfiguration = 0;
+    uint8_t totalNsts = 0;
+    int streamStartIndex = 0;
+    double leakageSum = 0;
+}
+
 enum Ieee80211MpduReceiveStatus
 {
     MPDU_SUCCESS = 0;
@@ -81,6 +103,19 @@ class Ieee80211HeMuReq extends TagBase
     B psduLength = B(-1);
     simtime_t commonDuration;
     W transmitPower = W(NaN);
+}
+
+//
+// Transmitter-local metadata for a downlink HE MU PPDU. The packet data is
+// the concatenation of the per-user PSDUs in allocations[] order. An NDP has
+// explicit ndp state and zero packet data; a zero-length non-NDP allocation is
+// not interpreted as an NDP.
+//
+class Ieee80211HeMuTxTag extends TagBase
+{
+    bool ndp = false;
+    simtime_t durationField;
+    Ieee80211HeMuTxAllocationInfo allocations[];
 }
 
 //

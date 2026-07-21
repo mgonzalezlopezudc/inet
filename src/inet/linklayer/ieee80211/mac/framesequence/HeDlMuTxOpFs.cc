@@ -21,9 +21,9 @@
 //   - 9.3.1.7/9.3.1.8/9.3.1.22: BAR, BlockAck, and Trigger frame formats.
 //
 // Implementation notes:
-//   - The HE MU PPDU is represented as a single container Packet with a
-//     broadcast QoS data header so that it can reuse the existing MAC/PHY
-//     transmit path.  The container header is not a user payload.
+//   - The HE MU PPDU is represented as a single container Packet whose data is
+//     the ordered concatenation of the per-user PSDUs. Transmitter-local tags
+//     carry the TXVECTOR allocation metadata.
 //   - Two acknowledgment modes are supported:
 //       * MU-BAR trigger: the AP sends a Trigger frame that solicits a
 //         Multi-STA BlockAck in an HE TB PPDU (Clause 26.5.2).
@@ -652,18 +652,13 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // Assemble the HE MU PPDU container packet.
     auto container = new Packet("HE-MU-PPDU");
 
-    // Standard-like QoS data header for the model container.  The real HE MU
-    // PPDU has per-user PSDUs selected by TXVECTOR STA_ID/RU allocation
-    // (26.5.1.2); this broadcast header is not a user payload.
+    // Header metadata is passed to the MAC transmit interface but is not
+    // inserted into the packet: an HE MU PPDU has independent per-user PSDUs,
+    // not a broadcast wrapper MPDU.
     auto containerHdr = makeShared<Ieee80211DataHeader>();
     containerHdr->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     containerHdr->setType(ST_DATA_WITH_QOS);
     containerHdr->setChunkLength(b(208)); // minimal 802.11 QoS data header size
-    if (auto heHcf = dynamic_cast<HeHcf *>(callback)) {
-        auto originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(heHcf->getOriginatorMacDataService());
-        ASSERT(originatorQosDataService != nullptr);
-        originatorQosDataService->assignSequenceNumber(containerHdr);
-    }
 
     // Calculate the NAV-protecting Duration field.  9.2.5 and 26.4.3 require
     // BAR/MU-BAR originators to account for the expected BlockAck response; the
@@ -823,11 +818,9 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 modeSet->getSifsTime() + responseDuration;
     }
 
-    // Set the container Duration field before queue mutation so receivers that
-    // can decode only the MAC header still see NAV protection for the pending
-    // acknowledgement phase.
+    // Keep the NAV duration in transmitter-local metadata; each real MPDU also
+    // receives the same duration below.
     containerHdr->setDurationField(totalDuration);
-    container->insertAtBack(containerHdr);
 
     simtime_t packingDurationLimit = maxHeMuPpduDuration;
     simtime_t ppduDurationLimit = maxHeMuPpduDuration;
@@ -915,9 +908,10 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         totalDuration = modeSet->getSifsTime() + triggerDuration +
                 modeSet->getSifsTime() + responseDuration;
     }
-    auto finalContainerHdr = container->removeAtFront<Ieee80211DataHeader>();
-    finalContainerHdr->setDurationField(totalDuration);
-    container->insertAtFront(finalContainerHdr);
+    containerHdr->setDurationField(totalDuration);
+    auto txTag = container->addTagIfAbsent<Ieee80211HeMuTxTag>();
+    txTag->setNdp(false);
+    txTag->setDurationField(totalDuration);
 
     // Build the final MU container packet and assign duration/sequence numbers.
     // Each selected STA becomes one per-user PSDU section.  Multiple users on
@@ -961,20 +955,20 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             context->getInProgressFrames()->addInProgressFrame(staPacket);
         }
 
-        auto payloadHeader = makeShared<Ieee80211HeMuRuPayloadHeader>();
-        payloadHeader->setRuIndex(alloc.ru.index);
-        payloadHeader->setRuToneSize(alloc.ru.toneSize);
-        payloadHeader->setRuToneOffset(alloc.ru.toneOffset);
-        payloadHeader->setStaId(selectedAllocation.associationId);
-        payloadHeader->setMcs(alloc.mcs);
-        payloadHeader->setNumberOfSpatialStreams(alloc.numberOfSpatialStreams);
-        payloadHeader->setDcm(alloc.dcm);
-        payloadHeader->setMpduLength(selectedAllocation.psduLength);
-        payloadHeader->setStreamStartIndex(selectedAllocation.streamStartIndex);
-        payloadHeader->setMuMimo(selectedAllocation.muMimo);
-        if (selectedAllocation.muMimo)
-            payloadHeader->setTotalNsts(selectedAllocation.totalNsts);
-        container->insertAtBack(payloadHeader);
+        Ieee80211HeMuTxAllocationInfo txAllocation;
+        txAllocation.ruIndex = alloc.ru.index;
+        txAllocation.ruToneSize = alloc.ru.toneSize;
+        txAllocation.ruToneOffset = alloc.ru.toneOffset;
+        txAllocation.staId = selectedAllocation.associationId;
+        txAllocation.mcs = alloc.mcs;
+        txAllocation.numberOfSpatialStreams = alloc.numberOfSpatialStreams;
+        txAllocation.dcm = alloc.dcm;
+        txAllocation.psduLength = selectedAllocation.psduLength;
+        txAllocation.streamStartIndex = selectedAllocation.streamStartIndex;
+        txAllocation.muMimo = selectedAllocation.muMimo;
+        txAllocation.totalNsts = selectedAllocation.muMimo ? selectedAllocation.totalNsts : 0;
+        txTag->appendAllocations(txAllocation);
+        auto psduStartOffset = container->getDataLength();
         for (size_t i = 0; i < staPackets.size(); ++i) {
             // 9.7.1 A-MPDU subframes use MPDU delimiters and 4-octet padding;
             // 26.6.2 applies that HE padding model to HE MU PPDUs.
@@ -986,6 +980,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
             if (i + 1 != staPackets.size() && padding != 0)
                 container->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
         }
+        ASSERT(container->getDataLength() - psduStartOffset == selectedAllocation.psduLength);
 
         ActiveAllocation activeAlloc;
         activeAlloc.staAddress = alloc.staAddress;
@@ -1008,7 +1003,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                  << " packets=" << staPackets.size() << "\n";
     }
 
-    container->insertAtBack(makeShared<Ieee80211MacTrailer>());
     // The common request tag carries the HE MU PPDU common TXVECTOR fields
     // that are not literal MAC header fields: GI, coding, PE duration, and
     // preamble puncturing state (26.11 and 27.3.11.13).
