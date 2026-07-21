@@ -125,6 +125,33 @@ void finishSigA(std::vector<bool>& bits)
         bits[42 + i] = crc[i];
 }
 
+void finishHeSigBBlock(std::vector<bool>& bits, size_t protectedBitCount)
+{
+    std::vector<bool> protectedBits(bits.begin(), bits.begin() + protectedBitCount);
+    auto crc = computeHeCrc4(protectedBits);
+    for (size_t i = 0; i < crc.size(); ++i)
+        bits[protectedBitCount + i] = crc[i];
+}
+
+template<typename Result>
+bool validateHeSigBBlock(Result& result, const std::vector<bool>& bits, size_t protectedBitCount)
+{
+    if (bits.size() != protectedBitCount + 10)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                "HE-SIG-B block has an invalid logical bit count");
+    for (size_t i = protectedBitCount + 4; i < bits.size(); ++i)
+        if (bits[i])
+            return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TAIL,
+                    "HE-SIG-B block tail must be zero");
+    std::vector<bool> protectedBits(bits.begin(), bits.begin() + protectedBitCount);
+    auto crc = computeHeCrc4(protectedBits);
+    for (size_t i = 0; i < crc.size(); ++i)
+        if (bits[protectedBitCount + i] != crc[i])
+            return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_CRC,
+                    "HE-SIG-B block CRC-4 mismatch");
+    return true;
+}
+
 template<typename Fields, typename Result>
 bool validateSuSigA(Result& result, const Fields& value, bool extendedRange)
 {
@@ -297,19 +324,19 @@ bool validateTbSpatialReuse(Result& result, const Ieee80211HeTbSigA& value)
 
 } // namespace
 
-Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint32_t txTimeUs, uint32_t signalExtensionUs)
+Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint64_t txTimeNs, uint32_t signalExtensionNs)
 {
     Ieee80211HeLSigResult result;
     if (format == Ieee80211HeSigFormat::TB) {
         setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FORMAT, "HE TB L-SIG requires caller-supplied L_LENGTH");
         return result;
     }
-    if (signalExtensionUs != 0 && signalExtensionUs != 6) {
-        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION, "HE L-SIG signal extension must be 0 or 6 us");
+    if (signalExtensionNs != 0 && signalExtensionNs != 6000) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION, "HE L-SIG signal extension must be 0 or 6000 ns");
         return result;
     }
-    if (txTimeUs < signalExtensionUs + 20 || (txTimeUs - signalExtensionUs - 20) % 4 != 0) {
-        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TXTIME, "HE L-SIG TXTIME does not yield an exact integer Equation 27-11 result");
+    if (txTimeNs < signalExtensionNs + 20000) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TXTIME, "HE L-SIG TXTIME is shorter than the signal extension and 20000 ns preamble term");
         return result;
     }
     uint32_t m;
@@ -321,12 +348,13 @@ Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint32_t txTimeUs
         setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FORMAT, "unknown HE PPDU format for L-SIG");
         return result;
     }
-    uint64_t symbols = (txTimeUs - signalExtensionUs - 20) / 4;
-    if (symbols * 3 < 3 + m) {
+    const uint64_t durationNs = txTimeNs - signalExtensionNs - 20000;
+    const uint64_t durationUnits = durationNs / 4000 + (durationNs % 4000 != 0);
+    if (durationUnits * 3 < 3 + m) {
         setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TXTIME, "HE L-SIG TXTIME is too short");
         return result;
     }
-    uint64_t length = symbols * 3 - 3 - m;
+    const uint64_t length = durationUnits * 3 - 3 - m;
     if (!validateLSigLength(result, length, format))
         return result;
     result.value.length = length;
@@ -591,6 +619,240 @@ Ieee80211HeTbSigAResult decodeHeTbSigA(const std::vector<bool>& bits)
     }
     if (!validateTbSpatialReuse(result, result.value))
         return result;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBBitsResult encodeHeSigBCommonBlock(const Ieee80211HeSigBCommonBlock& value)
+{
+    Ieee80211HeSigBBitsResult result;
+    size_t allocationCount = value.ruAllocationSubfields.size();
+    if (allocationCount != 1 && allocationCount != 2 && allocationCount != 4) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                "HE-SIG-B Common block requires one, two, or four RU allocation subfields");
+        return result;
+    }
+    if (value.hasCenter26ToneRu && !value.center26ToneRuBitPresent) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE-SIG-B center 26-tone RU cannot be set when its optional bit is absent");
+        return result;
+    }
+    for (uint8_t code : value.ruAllocationSubfields) {
+        std::vector<std::pair<int, int>> rus;
+        std::vector<int> userCounts;
+        if (!decodeTable27_27(code, rus, userCounts)) {
+            setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE,
+                    "HE-SIG-B Common block contains a reserved RU allocation value");
+            return result;
+        }
+    }
+
+    size_t protectedBitCount = allocationCount * 8 + (value.center26ToneRuBitPresent ? 1 : 0);
+    result.bits.assign(protectedBitCount + 10, false);
+    for (size_t i = 0; i < allocationCount; ++i)
+        writeInteger(result.bits, i * 8, 8, value.ruAllocationSubfields[i]);
+    if (value.center26ToneRuBitPresent)
+        result.bits[allocationCount * 8] = value.hasCenter26ToneRu;
+    finishHeSigBBlock(result.bits, protectedBitCount);
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBCommonBlockResult decodeHeSigBCommonBlock(const std::vector<bool>& bits)
+{
+    Ieee80211HeSigBCommonBlockResult result;
+    size_t allocationCount;
+    bool centerBitPresent;
+    switch (bits.size()) {
+        case 18: allocationCount = 1; centerBitPresent = false; break;
+        case 19: allocationCount = 1; centerBitPresent = true; break;
+        case 26: allocationCount = 2; centerBitPresent = false; break;
+        case 27: allocationCount = 2; centerBitPresent = true; break;
+        case 42: allocationCount = 4; centerBitPresent = false; break;
+        case 43: allocationCount = 4; centerBitPresent = true; break;
+        default:
+            setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                    "HE-SIG-B Common block has an invalid logical bit count");
+            return result;
+    }
+    size_t protectedBitCount = allocationCount * 8 + (centerBitPresent ? 1 : 0);
+    if (!validateHeSigBBlock(result, bits, protectedBitCount))
+        return result;
+
+    result.value.center26ToneRuBitPresent = centerBitPresent;
+    result.value.hasCenter26ToneRu = centerBitPresent && bits[allocationCount * 8];
+    for (size_t i = 0; i < allocationCount; ++i) {
+        uint8_t code = readInteger(bits, i * 8, 8);
+        std::vector<std::pair<int, int>> rus;
+        std::vector<int> userCounts;
+        if (!decodeTable27_27(code, rus, userCounts)) {
+            setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE,
+                    "HE-SIG-B Common block contains a reserved RU allocation value");
+            return result;
+        }
+        result.value.ruAllocationSubfields.push_back(code);
+    }
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBBitsResult encodeHeSigBNonMuMimoUser(const Ieee80211HeSigBNonMuMimoUser& value)
+{
+    Ieee80211HeSigBBitsResult result;
+    if (value.staId > 2047 || value.numberOfSpaceTimeStreams < 1 ||
+            value.numberOfSpaceTimeStreams > 8 || value.mcs > 15) {
+        setError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                "HE-SIG-B non-MU-MIMO User field exceeds an encoded or defined range");
+        return result;
+    }
+    if (value.staId != 2046 && value.mcs > 11) {
+        setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE,
+                "HE-SIG-B non-MU-MIMO HE-MCS value is reserved");
+        return result;
+    }
+    if (value.staId != 2046 && value.dcm && value.mcs != 0 && value.mcs != 1 && value.mcs != 3 && value.mcs != 4) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE-SIG-B non-MU-MIMO DCM is not applicable to this MCS");
+        return result;
+    }
+    if (value.staId != 2046 && value.dcm && value.numberOfSpaceTimeStreams > 2) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE-SIG-B non-MU-MIMO DCM supports at most two space-time streams");
+        return result;
+    }
+    result.bits.assign(21, false);
+    writeInteger(result.bits, 0, 11, value.staId);
+    writeInteger(result.bits, 11, 3, value.numberOfSpaceTimeStreams - 1);
+    result.bits[14] = value.beamformed;
+    writeInteger(result.bits, 15, 4, value.mcs);
+    result.bits[19] = value.dcm;
+    result.bits[20] = value.ldpcCoding;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBNonMuMimoUserResult decodeHeSigBNonMuMimoUser(const std::vector<bool>& bits)
+{
+    Ieee80211HeSigBNonMuMimoUserResult result;
+    if (bits.size() != 21) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                "HE-SIG-B non-MU-MIMO User field must contain exactly 21 logical bits");
+        return result;
+    }
+    result.value.staId = readInteger(bits, 0, 11);
+    result.value.numberOfSpaceTimeStreams = readInteger(bits, 11, 3) + 1;
+    result.value.beamformed = bits[14];
+    result.value.mcs = readInteger(bits, 15, 4);
+    result.value.dcm = bits[19];
+    result.value.ldpcCoding = bits[20];
+    auto validated = encodeHeSigBNonMuMimoUser(result.value);
+    if (!validated) {
+        copyError(result, validated);
+        return result;
+    }
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBBitsResult encodeHeSigBMuMimoUser(const Ieee80211HeSigBMuMimoUser& value)
+{
+    Ieee80211HeSigBBitsResult result;
+    if (value.staId > 2047 || value.spatialConfiguration > 15 || value.mcs > 15) {
+        setError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                "HE-SIG-B MU-MIMO User field exceeds an encoded or defined range");
+        return result;
+    }
+    if (value.staId != 2046 && value.mcs > 11) {
+        setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE,
+                "HE-SIG-B MU-MIMO HE-MCS value is reserved");
+        return result;
+    }
+    if (value.staId != 2046 && value.reserved) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD,
+                "HE-SIG-B MU-MIMO User field reserved bit must be zero");
+        return result;
+    }
+    result.bits.assign(21, false);
+    writeInteger(result.bits, 0, 11, value.staId);
+    writeInteger(result.bits, 11, 4, value.spatialConfiguration);
+    writeInteger(result.bits, 15, 4, value.mcs);
+    result.bits[19] = value.reserved;
+    result.bits[20] = value.ldpcCoding;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBMuMimoUserResult decodeHeSigBMuMimoUser(const std::vector<bool>& bits)
+{
+    Ieee80211HeSigBMuMimoUserResult result;
+    if (bits.size() != 21) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                "HE-SIG-B MU-MIMO User field must contain exactly 21 logical bits");
+        return result;
+    }
+    uint16_t staId = readInteger(bits, 0, 11);
+    if (staId != 2046 && bits[19]) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD,
+                "HE-SIG-B MU-MIMO User field reserved bit must be zero");
+        return result;
+    }
+    result.value.staId = staId;
+    result.value.spatialConfiguration = readInteger(bits, 11, 4);
+    result.value.mcs = readInteger(bits, 15, 4);
+    result.value.reserved = bits[19];
+    result.value.ldpcCoding = bits[20];
+    auto validated = encodeHeSigBMuMimoUser(result.value);
+    if (!validated) {
+        copyError(result, validated);
+        return result;
+    }
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBBitsResult encodeHeSigBUserBlock(const std::vector<std::vector<bool>>& userFields)
+{
+    Ieee80211HeSigBBitsResult result;
+    if (userFields.size() != 1 && userFields.size() != 2) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                "HE-SIG-B User Block requires one or two User fields");
+        return result;
+    }
+    for (const auto& userField : userFields)
+        if (userField.size() != 21) {
+            setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                    "each HE-SIG-B User field must contain exactly 21 logical bits");
+            return result;
+        }
+    size_t protectedBitCount = userFields.size() * 21;
+    result.bits.assign(protectedBitCount + 10, false);
+    size_t offset = 0;
+    for (const auto& userField : userFields)
+        for (bool bit : userField)
+            result.bits[offset++] = bit;
+    finishHeSigBBlock(result.bits, protectedBitCount);
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigBUserBlockResult decodeHeSigBUserBlock(const std::vector<bool>& bits)
+{
+    Ieee80211HeSigBUserBlockResult result;
+    size_t userCount;
+    if (bits.size() == 31)
+        userCount = 1;
+    else if (bits.size() == 52)
+        userCount = 2;
+    else {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                "HE-SIG-B User Block must contain 31 or 52 logical bits");
+        return result;
+    }
+    size_t protectedBitCount = userCount * 21;
+    if (!validateHeSigBBlock(result, bits, protectedBitCount))
+        return result;
+    for (size_t i = 0; i < userCount; ++i)
+        result.userFields.emplace_back(bits.begin() + i * 21, bits.begin() + (i + 1) * 21);
     setValid(result);
     return result;
 }

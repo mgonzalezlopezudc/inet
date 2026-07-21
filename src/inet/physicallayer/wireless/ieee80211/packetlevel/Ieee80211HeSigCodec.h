@@ -85,8 +85,12 @@ struct Ieee80211HeRlSigResult : Ieee80211HeSigCodecStatus
     Ieee80211HeLSig value;
 };
 
-INET_API Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint32_t txTimeUs,
-        uint32_t signalExtensionUs = 0);
+/**
+ * Builds the L-SIG value using the ceiling operation in IEEE 802.11-2024 Equation 27-11.
+ * Durations are exact integer nanoseconds; the signal extension must be 0 ns or 6000 ns.
+ */
+INET_API Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint64_t txTimeNs,
+        uint32_t signalExtensionNs = 0);
 INET_API Ieee80211HeLSigResult buildHeTbLSig(uint16_t lLength);
 INET_API Ieee80211HeLSigBitsResult encodeHeLSig(const Ieee80211HeLSig& value, Ieee80211HeSigFormat format);
 INET_API Ieee80211HeLSigResult decodeHeLSig(const std::vector<bool>& bits, Ieee80211HeSigFormat format);
@@ -219,6 +223,73 @@ INET_API Ieee80211HeSigABitsResult encodeHeMuSigA(const Ieee80211HeMuSigA& value
 INET_API Ieee80211HeMuSigAResult decodeHeMuSigA(const std::vector<bool>& bits);
 INET_API Ieee80211HeSigABitsResult encodeHeTbSigA(const Ieee80211HeTbSigA& value);
 INET_API Ieee80211HeTbSigAResult decodeHeTbSigA(const std::vector<bool>& bits);
+
+/** One HE-SIG-B Common-field block carried on a single content channel. */
+struct Ieee80211HeSigBCommonBlock
+{
+    std::vector<uint8_t> ruAllocationSubfields; // 1, 2, or 4 Table 27-27 values
+    bool center26ToneRuBitPresent = false;
+    bool hasCenter26ToneRu = false;
+};
+
+struct Ieee80211HeSigBCommonBlockResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeSigBCommonBlock value;
+};
+
+struct Ieee80211HeSigBBitsResult : Ieee80211HeSigCodecStatus
+{
+    std::vector<bool> bits;
+};
+
+/** Table 27-29 User field for an RU that is not allocated for MU-MIMO. */
+struct Ieee80211HeSigBNonMuMimoUser
+{
+    uint16_t staId = 0;
+    uint8_t numberOfSpaceTimeStreams = 1;
+    bool beamformed = false;
+    uint8_t mcs = 0;
+    bool dcm = false;
+    bool ldpcCoding = false;
+};
+
+/** Table 27-30 User field for an RU allocated for MU-MIMO. */
+struct Ieee80211HeSigBMuMimoUser
+{
+    uint16_t staId = 0;
+    uint8_t spatialConfiguration = 0;
+    uint8_t mcs = 0;
+    bool reserved = false; // arbitrary only for the special STA-ID 2046
+    bool ldpcCoding = false;
+};
+
+struct Ieee80211HeSigBNonMuMimoUserResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeSigBNonMuMimoUser value;
+};
+
+struct Ieee80211HeSigBMuMimoUserResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeSigBMuMimoUser value;
+};
+
+struct Ieee80211HeSigBUserBlockResult : Ieee80211HeSigCodecStatus
+{
+    std::vector<std::vector<bool>> userFields; // one or two 21-bit User fields
+};
+
+/**
+ * Logical HE-SIG-B codecs for IEEE 802.11-2024 Tables 27-25 and 27-28--27-30.
+ * The returned vectors contain uncoded bits in transmitted B0-first order.
+ */
+INET_API Ieee80211HeSigBBitsResult encodeHeSigBCommonBlock(const Ieee80211HeSigBCommonBlock& value);
+INET_API Ieee80211HeSigBCommonBlockResult decodeHeSigBCommonBlock(const std::vector<bool>& bits);
+INET_API Ieee80211HeSigBBitsResult encodeHeSigBNonMuMimoUser(const Ieee80211HeSigBNonMuMimoUser& value);
+INET_API Ieee80211HeSigBNonMuMimoUserResult decodeHeSigBNonMuMimoUser(const std::vector<bool>& bits);
+INET_API Ieee80211HeSigBBitsResult encodeHeSigBMuMimoUser(const Ieee80211HeSigBMuMimoUser& value);
+INET_API Ieee80211HeSigBMuMimoUserResult decodeHeSigBMuMimoUser(const std::vector<bool>& bits);
+INET_API Ieee80211HeSigBBitsResult encodeHeSigBUserBlock(const std::vector<std::vector<bool>>& userFields);
+INET_API Ieee80211HeSigBUserBlockResult decodeHeSigBUserBlock(const std::vector<bool>& bits);
 
 /** One content channel's allocation subfields. */
 struct Ieee80211HeSigBContentChannel {

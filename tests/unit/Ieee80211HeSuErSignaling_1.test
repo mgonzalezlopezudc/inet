@@ -1,0 +1,281 @@
+%description:
+Validate semantic HE SU and HE ER SU signaling construction before serialization.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include <array>
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+static Ieee80211HeSuErSigASemantics makeCommonSemantics()
+{
+    Ieee80211HeSuErSigASemantics semantics;
+    semantics.txTimeNs = 56800;
+    semantics.operatingBand = Ieee80211HeOperatingBand::BAND_5_GHZ;
+    semantics.noSignalExtension = false;
+    semantics.beamChange = false;
+    semantics.uplink = false;
+    semantics.mcs = 0;
+    semantics.dcmApplied = false;
+    semantics.bssColor = 37;
+    semantics.spatialReuse = 13;
+    semantics.guardInterval = HE_GI_3_2_US;
+    semantics.ltfType = HE_LTF_4X;
+    semantics.numberOfSpaceTimeStreams = 1;
+    semantics.stbcApplied = false;
+    semantics.midamblePeriodicity.reset();
+    semantics.txopDuration = Ieee80211HeTxopDuration{true, 0};
+    semantics.fec = Ieee80211HeFecOutcome{HE_CODING_BCC, std::nullopt};
+    semantics.beamformed = false;
+    semantics.preFecPaddingFactor = 4;
+    semantics.packetExtensionNs = 0;
+    return semantics;
+}
+
+static Ieee80211HeSuSignalingRequest makeSuRequest()
+{
+    Ieee80211HeSuSignalingRequest request;
+    request.common = makeCommonSemantics();
+    request.bandwidth = Ieee80211HeSuBandwidth::MHZ_20;
+    return request;
+}
+
+%activity:
+// IEEE 802.11-2024 Tables 27-19 and 27-20 plus Equations 27-11 and 27-118.
+auto suRequest = makeSuRequest();
+auto su = buildIeee80211HeSuSignaling(suRequest);
+ASSERT(su && su.value.lSig.length == 25 && su.value.signalExtensionNs == 0);
+ASSERT(su.value.sigA.bandwidth == 0 && su.value.sigA.giLtfSize == 3);
+ASSERT(!su.value.sigA.dcm && !su.value.sigA.stbc);
+ASSERT(su.value.sigA.preFecPaddingFactor == 0 && su.value.sigA.txop == 127);
+ASSERT(encodeHeSuSigA(su.value.sigA));
+
+Ieee80211HeErSuSignalingRequest erRequest;
+erRequest.common = makeCommonSemantics();
+erRequest.common.txTimeNs = 64800;
+erRequest.common.guardInterval = HE_GI_1_6_US;
+erRequest.common.ltfType = HE_LTF_2X;
+erRequest.common.fec = Ieee80211HeFecOutcome{HE_CODING_LDPC, false};
+erRequest.common.preFecPaddingFactor = 3;
+erRequest.ruMode = Ieee80211HeErSuRuMode::PRIMARY_UPPER_106_TONE;
+auto er = buildIeee80211HeErSuSignaling(erRequest);
+ASSERT(er && er.value.lSig.length == 32 && er.value.signalExtensionNs == 0);
+ASSERT(er.value.sigA.bandwidth == 1 && er.value.sigA.giLtfSize == 2);
+ASSERT(er.value.sigA.ldpcCoding && !er.value.sigA.ldpcExtraSymbolSegment);
+ASSERT(er.value.sigA.preFecPaddingFactor == 3);
+ASSERT(encodeHeErSuSigA(er.value.sigA));
+
+auto er242Request = erRequest;
+er242Request.ruMode = Ieee80211HeErSuRuMode::PRIMARY_242_TONE;
+er242Request.common.mcs = 2;
+auto er242 = buildIeee80211HeErSuSignaling(er242Request);
+ASSERT(er242 && er242.value.sigA.bandwidth == 0 && er242.value.sigA.mcs == 2);
+er242Request.common.mcs = 3;
+ASSERT(buildIeee80211HeErSuSignaling(er242Request).errorCode == Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE);
+
+// SU bandwidth remains semantically distinct even where the wire encoding aliases values.
+const std::array<Ieee80211HeSuBandwidth, 5> suBandwidths = {{
+    Ieee80211HeSuBandwidth::MHZ_20, Ieee80211HeSuBandwidth::MHZ_40,
+    Ieee80211HeSuBandwidth::MHZ_80, Ieee80211HeSuBandwidth::MHZ_160,
+    Ieee80211HeSuBandwidth::MHZ_80P80
+}};
+const std::array<uint8_t, 5> rawBandwidths = {{0, 1, 2, 3, 3}};
+for (size_t i = 0; i < suBandwidths.size(); ++i) {
+    auto request = makeSuRequest();
+    request.bandwidth = suBandwidths[i];
+    request.common.fec = Ieee80211HeFecOutcome{HE_CODING_LDPC, false};
+    auto result = buildIeee80211HeSuSignaling(request);
+    ASSERT(result && result.value.sigA.bandwidth == rawBandwidths[i]);
+}
+
+// The four ordinary GI/LTF codes and the special 4x/0.8 encoding.
+struct GiLtfFixture {
+    Ieee80211HeGuardInterval gi;
+    Ieee80211HeLtfType ltf;
+    uint8_t raw;
+    bool rawDcm;
+    bool rawStbc;
+};
+const GiLtfFixture giLtfFixtures[] = {
+    {HE_GI_0_8_US, HE_LTF_1X, 0, false, false},
+    {HE_GI_0_8_US, HE_LTF_2X, 1, false, false},
+    {HE_GI_1_6_US, HE_LTF_2X, 2, false, false},
+    {HE_GI_3_2_US, HE_LTF_4X, 3, false, false},
+    {HE_GI_0_8_US, HE_LTF_4X, 3, true, true},
+};
+for (const auto& fixture : giLtfFixtures) {
+    auto request = makeSuRequest();
+    request.common.guardInterval = fixture.gi;
+    request.common.ltfType = fixture.ltf;
+    auto result = buildIeee80211HeSuSignaling(request);
+    ASSERT(result && result.value.sigA.giLtfSize == fixture.raw);
+    ASSERT(result.value.sigA.dcm == fixture.rawDcm && result.value.sigA.stbc == fixture.rawStbc);
+}
+auto invalidSpecialGiLtf = makeSuRequest();
+invalidSpecialGiLtf.common.guardInterval = HE_GI_0_8_US;
+invalidSpecialGiLtf.common.ltfType = HE_LTF_4X;
+invalidSpecialGiLtf.common.dcmApplied = true;
+ASSERT(buildIeee80211HeSuSignaling(invalidSpecialGiLtf).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+invalidSpecialGiLtf.common.dcmApplied = false;
+invalidSpecialGiLtf.common.stbcApplied = true;
+invalidSpecialGiLtf.common.numberOfSpaceTimeStreams = 2;
+ASSERT(buildIeee80211HeSuSignaling(invalidSpecialGiLtf).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+auto invalidGiLtf = makeSuRequest();
+invalidGiLtf.common.guardInterval = HE_GI_1_6_US;
+invalidGiLtf.common.ltfType = HE_LTF_1X;
+ASSERT(buildIeee80211HeSuSignaling(invalidGiLtf).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+
+auto appliedDcm = makeSuRequest();
+appliedDcm.common.guardInterval = HE_GI_0_8_US;
+appliedDcm.common.ltfType = HE_LTF_2X;
+appliedDcm.common.dcmApplied = true;
+ASSERT(buildIeee80211HeSuSignaling(appliedDcm).value.sigA.dcm);
+auto appliedStbc = makeSuRequest();
+appliedStbc.common.guardInterval = HE_GI_0_8_US;
+appliedStbc.common.ltfType = HE_LTF_2X;
+appliedStbc.common.stbcApplied = true;
+appliedStbc.common.numberOfSpaceTimeStreams = 2;
+ASSERT(buildIeee80211HeSuSignaling(appliedStbc).value.sigA.stbc);
+appliedStbc.common.dcmApplied = true;
+ASSERT(buildIeee80211HeSuSignaling(appliedStbc).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+auto invalidDcm = appliedDcm;
+invalidDcm.common.mcs = 2;
+ASSERT(buildIeee80211HeSuSignaling(invalidDcm).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+invalidDcm.common.mcs = 0;
+invalidDcm.common.numberOfSpaceTimeStreams = 3;
+ASSERT(buildIeee80211HeSuSignaling(invalidDcm).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+auto invalidStbc = appliedStbc;
+invalidStbc.common.dcmApplied = false;
+invalidStbc.common.numberOfSpaceTimeStreams = 1;
+ASSERT(buildIeee80211HeSuSignaling(invalidStbc).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+
+// Semantic pre-FEC factors are not the raw two-bit integer for factor four.
+for (int factor = 1; factor <= 4; ++factor) {
+    auto request = makeSuRequest();
+    request.common.preFecPaddingFactor = factor;
+    auto result = buildIeee80211HeSuSignaling(request);
+    ASSERT(result && result.value.sigA.preFecPaddingFactor == factor % 4);
+}
+
+// TXOP quantization boundaries from Table 27-19 and Clause 26.11.5.
+struct TxopFixture { uint16_t durationUs; uint8_t raw; };
+const TxopFixture txopFixtures[] = {
+    {0, 0}, {7, 0}, {8, 2}, {504, 126}, {511, 126},
+    {512, 1}, {639, 1}, {640, 3}, {8448, 125}
+};
+for (const auto& fixture : txopFixtures) {
+    auto request = makeSuRequest();
+    request.common.txopDuration = Ieee80211HeTxopDuration{false, fixture.durationUs};
+    auto result = buildIeee80211HeSuSignaling(request);
+    ASSERT(result && result.value.sigA.txop == fixture.raw);
+}
+auto invalidTxop = makeSuRequest();
+invalidTxop.common.txopDuration = Ieee80211HeTxopDuration{false, 8449};
+ASSERT(buildIeee80211HeSuSignaling(invalidTxop).errorCode == Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE);
+invalidTxop.common.txopDuration = Ieee80211HeTxopDuration{true, 8};
+ASSERT(buildIeee80211HeSuSignaling(invalidTxop).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+
+// BCC has no LDPC-extra semantic value; LDPC requires a calculated value.
+auto fecRequest = makeSuRequest();
+auto bcc = buildIeee80211HeSuSignaling(fecRequest);
+ASSERT(bcc);
+auto encodedBcc = encodeHeSuSigA(bcc.value.sigA);
+ASSERT(encodedBcc && encodedBcc.bits[34]); // BCC HE-SIG-A2 B8 is reserved and fixed to 1.
+fecRequest.common.fec = Ieee80211HeFecOutcome{HE_CODING_BCC, false};
+ASSERT(buildIeee80211HeSuSignaling(fecRequest).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+fecRequest.common.fec = Ieee80211HeFecOutcome{HE_CODING_LDPC, std::nullopt};
+ASSERT(buildIeee80211HeSuSignaling(fecRequest).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+for (bool extra : {false, true}) {
+    fecRequest.common.fec = Ieee80211HeFecOutcome{HE_CODING_LDPC, extra};
+    auto result = buildIeee80211HeSuSignaling(fecRequest);
+    ASSERT(result && result.value.sigA.ldpcCoding && result.value.sigA.ldpcExtraSymbolSegment == extra);
+}
+
+// A signaled Doppler selection carries the corresponding periodicity code.
+auto midamble = makeSuRequest();
+midamble.common.midamblePeriodicity = Ieee80211HeMidamblePeriodicity::SYMBOLS_10;
+ASSERT(buildIeee80211HeSuSignaling(midamble).value.sigA.midamblePeriodicity == 10);
+midamble.common.midamblePeriodicity = Ieee80211HeMidamblePeriodicity::SYMBOLS_20;
+auto midamble20 = buildIeee80211HeSuSignaling(midamble);
+ASSERT(midamble20 && midamble20.value.sigA.doppler && midamble20.value.sigA.midamblePeriodicity == 20);
+
+// Equation 27-118 uses the same exact TXTIME and resolved extension as L-SIG.
+auto pe = makeSuRequest();
+pe.common.guardInterval = HE_GI_0_8_US;
+pe.common.ltfType = HE_LTF_2X;
+pe.common.packetExtensionNs = 8000;
+auto peFalse = buildIeee80211HeSuSignaling(pe);
+ASSERT(peFalse && !peFalse.value.sigA.peDisambiguity);
+pe.common.packetExtensionNs = 12000;
+ASSERT(buildIeee80211HeSuSignaling(pe).value.sigA.peDisambiguity);
+auto exactSlack = pe;
+exactSlack.common.txTimeNs = 56000;
+exactSlack.common.packetExtensionNs = 12000;
+auto exactSlackFalse = buildIeee80211HeSuSignaling(exactSlack);
+ASSERT(exactSlackFalse && !exactSlackFalse.value.sigA.peDisambiguity);
+exactSlack.common.packetExtensionNs = 16000;
+auto exactSlackTrue = buildIeee80211HeSuSignaling(exactSlack);
+ASSERT(exactSlackTrue && exactSlackTrue.value.sigA.peDisambiguity);
+exactSlack.common.txTimeNs = 62000;
+exactSlack.common.operatingBand = Ieee80211HeOperatingBand::BAND_2_4_GHZ;
+exactSlack.common.noSignalExtension = false;
+exactSlack.common.packetExtensionNs = 12000;
+auto extendedExactSlack = buildIeee80211HeSuSignaling(exactSlack);
+ASSERT(extendedExactSlack && extendedExactSlack.value.signalExtensionNs == 6000 &&
+        !extendedExactSlack.value.sigA.peDisambiguity);
+
+// Signal extension is resolved from the operating band and NO_SIG_EXTN policy.
+auto signalExtension = makeSuRequest();
+signalExtension.common.txTimeNs = 62800;
+signalExtension.common.operatingBand = Ieee80211HeOperatingBand::BAND_2_4_GHZ;
+signalExtension.common.noSignalExtension = false;
+auto extended = buildIeee80211HeSuSignaling(signalExtension);
+ASSERT(extended && extended.value.signalExtensionNs == 6000 && extended.value.lSig.length == 25);
+signalExtension.common.txTimeNs = 56800;
+signalExtension.common.noSignalExtension = true;
+auto suppressedExtension = buildIeee80211HeSuSignaling(signalExtension);
+ASSERT(suppressedExtension && suppressedExtension.value.signalExtensionNs == 0);
+signalExtension.common.operatingBand = Ieee80211HeOperatingBand::BAND_6_GHZ;
+signalExtension.common.noSignalExtension = false;
+auto sixGhzExtension = buildIeee80211HeSuSignaling(signalExtension);
+ASSERT(sixGhzExtension && sixGhzExtension.value.signalExtensionNs == 0);
+
+// Invalid and absent semantics fail deterministically before serialization.
+auto invalid = makeSuRequest();
+invalid.bandwidth = Ieee80211HeSuBandwidth::UNKNOWN;
+ASSERT(buildIeee80211HeSuSignaling(invalid).errorCode == Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE);
+invalid = makeSuRequest();
+invalid.common.beamChange.reset();
+ASSERT(buildIeee80211HeSuSignaling(invalid).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+invalid = makeSuRequest();
+invalid.common.preFecPaddingFactor = 0;
+ASSERT(buildIeee80211HeSuSignaling(invalid).errorCode == Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE);
+invalid = makeSuRequest();
+invalid.common.packetExtensionNs = 2000;
+ASSERT(buildIeee80211HeSuSignaling(invalid).errorCode == Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE);
+invalid = makeSuRequest();
+invalid.common.operatingBand = Ieee80211HeOperatingBand::UNKNOWN;
+ASSERT(buildIeee80211HeSuSignaling(invalid).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION);
+invalid = makeSuRequest();
+invalid.common.noSignalExtension.reset();
+ASSERT(buildIeee80211HeSuSignaling(invalid).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION);
+invalid = makeSuRequest();
+invalid.common.txTimeNs = 19000;
+ASSERT(buildIeee80211HeSuSignaling(invalid).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_TXTIME);
+
+auto invalidEr = erRequest;
+invalidEr.ruMode = Ieee80211HeErSuRuMode::UNKNOWN;
+ASSERT(buildIeee80211HeErSuSignaling(invalidEr).errorCode == Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE);
+invalidEr = erRequest;
+invalidEr.common.mcs = 1;
+ASSERT(buildIeee80211HeErSuSignaling(invalidEr).errorCode == Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE);
+invalidEr = erRequest;
+invalidEr.common.numberOfSpaceTimeStreams = 2;
+ASSERT(buildIeee80211HeErSuSignaling(invalidEr).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+
+EV << ".\n";
+
+%contains: stdout
+.

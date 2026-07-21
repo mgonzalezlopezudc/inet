@@ -188,6 +188,37 @@ struct Ieee80211HeMuUserInfo
 }
 
 //
+// Validated logical L-SIG and HE-SIG-A values retained by concrete HE SU and
+// HE ER SU headers. These are wire facts, not transmitter policy inputs. The
+// serializer emits the exact 100 logical L-SIG/RL-SIG/HE-SIG-A bits only when
+// signalingValid is true; false distinguishes the transitional untagged mode
+// path that retains the legacy packet-level encoding.
+//
+struct Ieee80211HeSuErSignalingFields
+{
+    bool signalingValid = false;
+    uint16_t lSigLength = 0;
+    bool beamChange = false;
+    bool uplink = false;
+    uint8_t mcs = 0;
+    bool dcm = false;
+    uint8_t bssColor = 0;
+    uint8_t spatialReuse = 0;
+    uint8_t bandwidth = 0;
+    uint8_t giLtfSize = 0;
+    uint8_t numberOfSpaceTimeStreams = 1;
+    uint8_t midamblePeriodicity = 0;
+    uint8_t txop = 127;
+    bool ldpcCoding = false;
+    bool ldpcExtraSymbolSegment = false;
+    bool stbc = false;
+    bool beamformed = false;
+    uint8_t preFecPaddingFactor = 0;
+    bool peDisambiguity = false;
+    bool doppler = false;
+}
+
+//
 // Packet-level common header of an HE PPDU. The serializer emits the HE
 // signaling fields only; runtime-only model
 // state such as trigger correlation and resolved per-user durations stays in
@@ -215,10 +246,12 @@ class Ieee80211HePhyHeader extends Ieee80211PhyHeader
 
 class Ieee80211HeSuPhyHeader extends Ieee80211HePhyHeader
 {
+    Ieee80211HeSuErSignalingFields signaling;
 }
 
 class Ieee80211HeErSuPhyHeader extends Ieee80211HePhyHeader
 {
+    Ieee80211HeSuErSignalingFields signaling;
 }
 
 class Ieee80211HeMuPhyHeader extends Ieee80211HePhyHeader

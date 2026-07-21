@@ -47,6 +47,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
@@ -150,6 +151,167 @@ static Ieee80211HePpduFormat getHePpduFormat(const Ieee80211HeMode *mode)
         default:
             throw cRuntimeError("Unknown HE preamble format");
     }
+}
+
+static Ieee80211HeOperatingBand getHeOperatingBand(const Ieee80211HeMode *mode)
+{
+    switch (mode->getCenterFrequencyMode()) {
+        case Ieee80211HeMode::BAND_2_4GHZ: return Ieee80211HeOperatingBand::BAND_2_4_GHZ;
+        case Ieee80211HeMode::BAND_5GHZ: return Ieee80211HeOperatingBand::BAND_5_GHZ;
+        default: throw cRuntimeError("Unknown HE operating band");
+    }
+}
+
+static Ieee80211HeSuBandwidth getHeSuBandwidth(uint8_t value)
+{
+    switch (value) {
+        case 0: return Ieee80211HeSuBandwidth::MHZ_20;
+        case 1: return Ieee80211HeSuBandwidth::MHZ_40;
+        case 2: return Ieee80211HeSuBandwidth::MHZ_80;
+        case 3: return Ieee80211HeSuBandwidth::MHZ_160;
+        case 4: return Ieee80211HeSuBandwidth::MHZ_80P80;
+        default: return Ieee80211HeSuBandwidth::UNKNOWN;
+    }
+}
+
+static Hz getHeSuBandwidthValue(Ieee80211HeSuBandwidth bandwidth)
+{
+    switch (bandwidth) {
+        case Ieee80211HeSuBandwidth::MHZ_20: return MHz(20);
+        case Ieee80211HeSuBandwidth::MHZ_40: return MHz(40);
+        case Ieee80211HeSuBandwidth::MHZ_80: return MHz(80);
+        case Ieee80211HeSuBandwidth::MHZ_160: return MHz(160);
+        default: return Hz(NaN);
+    }
+}
+
+static Ieee80211HeErSuRuMode getHeErSuRuMode(uint8_t value)
+{
+    switch (value) {
+        case 0: return Ieee80211HeErSuRuMode::PRIMARY_242_TONE;
+        case 1: return Ieee80211HeErSuRuMode::PRIMARY_UPPER_106_TONE;
+        default: return Ieee80211HeErSuRuMode::UNKNOWN;
+    }
+}
+
+template<typename Fields>
+static Ieee80211HeSuErSignalingFields makeHeSuErSignalingFields(const Ieee80211HeLSig& lSig,
+        const Fields& sigA)
+{
+    Ieee80211HeSuErSignalingFields fields;
+    fields.signalingValid = true;
+    fields.lSigLength = lSig.length;
+    fields.beamChange = sigA.beamChange;
+    fields.uplink = sigA.uplink;
+    fields.mcs = sigA.mcs;
+    fields.dcm = sigA.dcm;
+    fields.bssColor = sigA.bssColor;
+    fields.spatialReuse = sigA.spatialReuse;
+    fields.bandwidth = sigA.bandwidth;
+    fields.giLtfSize = sigA.giLtfSize;
+    fields.numberOfSpaceTimeStreams = sigA.numberOfSpaceTimeStreams;
+    fields.midamblePeriodicity = sigA.midamblePeriodicity;
+    fields.txop = sigA.txop;
+    fields.ldpcCoding = sigA.ldpcCoding;
+    fields.ldpcExtraSymbolSegment = sigA.ldpcExtraSymbolSegment;
+    fields.stbc = sigA.stbc;
+    fields.beamformed = sigA.beamformed;
+    fields.preFecPaddingFactor = sigA.preFecPaddingFactor;
+    fields.peDisambiguity = sigA.peDisambiguity;
+    fields.doppler = sigA.doppler;
+    return fields;
+}
+
+static void populateHeSuErSignaling(const Ptr<Ieee80211HePhyHeader>& phyHeader,
+        const Ieee80211HeMode *mode, const Ptr<const Ieee80211HeSuErTxVectorReq>& request,
+        B packetLength)
+{
+    if (!request->getComplete())
+        throw cRuntimeError("Incomplete HE SU/ER TXVECTOR request");
+    auto ppduFormat = getIeee80211HePpduFormat(*phyHeader);
+    if (request->getPpduFormat() != ppduFormat || request->getPsduLength() != packetLength ||
+            request->getMcs() != mode->getDataMode()->getMcsIndex() ||
+            request->getNumberOfSpaceTimeStreams() != mode->getDataMode()->getNumberOfSpatialStreams() ||
+            request->getGuardInterval() != getHeGuardInterval(mode) ||
+            request->getCoding() != (mode->getDataMode()->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC))
+        throw cRuntimeError("HE SU/ER TXVECTOR does not match the selected mode or PSDU");
+    if (request->getTxTime() <= SIMTIME_ZERO || request->getTxTime() < mode->getPreambleMode()->getDuration())
+        throw cRuntimeError("HE SU/ER TXVECTOR has an invalid total TXTIME");
+    if (request->getBssColor() != phyHeader->getBssColor())
+        throw cRuntimeError("HE SU/ER TXVECTOR BSS color does not match the active BSS");
+    if (request->getNominalPacketPaddingDurationUs() != 0 &&
+            request->getNominalPacketPaddingDurationUs() != 8 &&
+            request->getNominalPacketPaddingDurationUs() != 16)
+        throw cRuntimeError("HE SU/ER TXVECTOR has an invalid nominal packet padding duration");
+    if (request->getPacketExtensionDurationUs() < request->getNominalPacketPaddingDurationUs())
+        throw cRuntimeError("HE SU/ER packet extension is shorter than nominal packet padding");
+    if (request->getDcm() || request->getStbc())
+        throw cRuntimeError("Ordinary HE SU/ER mode objects do not model DCM or STBC data processing");
+
+    Ieee80211HeSuErSigASemantics semantics;
+    semantics.txTimeNs = request->getTxTime().inUnit(SIMTIME_NS);
+    if (SimTime(semantics.txTimeNs, SIMTIME_NS) != request->getTxTime())
+        throw cRuntimeError("HE SU/ER TXTIME is not representable as exact integer nanoseconds");
+    semantics.operatingBand = getHeOperatingBand(mode);
+    semantics.noSignalExtension = request->getNoSignalExtension();
+    semantics.beamChange = request->getBeamChange();
+    semantics.uplink = request->getUplink();
+    semantics.mcs = request->getMcs();
+    semantics.dcmApplied = request->getDcm();
+    semantics.bssColor = request->getBssColor();
+    semantics.spatialReuse = request->getSpatialReuse();
+    semantics.guardInterval = static_cast<Ieee80211HeGuardInterval>(request->getGuardInterval());
+    semantics.ltfType = static_cast<Ieee80211HeLtfType>(request->getLtfType());
+    semantics.numberOfSpaceTimeStreams = request->getNumberOfSpaceTimeStreams();
+    semantics.stbcApplied = request->getStbc();
+    if (request->getDoppler()) {
+        if (request->getMidamblePeriodicity() == 10)
+            semantics.midamblePeriodicity = Ieee80211HeMidamblePeriodicity::SYMBOLS_10;
+        else if (request->getMidamblePeriodicity() == 20)
+            semantics.midamblePeriodicity = Ieee80211HeMidamblePeriodicity::SYMBOLS_20;
+        else
+            throw cRuntimeError("HE SU/ER Doppler signaling requires a 10- or 20-symbol periodicity");
+    }
+    else if (request->getMidamblePeriodicity() != 0)
+        throw cRuntimeError("HE SU/ER midamble periodicity is present without Doppler signaling");
+    semantics.txopDuration = Ieee80211HeTxopDuration{request->getTxopUnspecified(), request->getTxopDurationUs()};
+    Ieee80211HeFecOutcome fec;
+    fec.coding = static_cast<Ieee80211HeCoding>(request->getCoding());
+    if (request->getHasLdpcExtraSymbolSegment())
+        fec.ldpcExtraSymbolSegment = request->getLdpcExtraSymbolSegment();
+    semantics.fec = fec;
+    semantics.beamformed = request->getBeamformed();
+    semantics.preFecPaddingFactor = request->getPreFecPaddingFactor();
+    semantics.packetExtensionNs = request->getPacketExtensionDurationUs() * 1000;
+
+    if (ppduFormat == HE_SINGLE_USER) {
+        auto bandwidth = getHeSuBandwidth(request->getSuBandwidth());
+        if (bandwidth == Ieee80211HeSuBandwidth::UNKNOWN ||
+                getHeSuBandwidthValue(bandwidth) != mode->getDataMode()->getBandwidth())
+            throw cRuntimeError("HE SU TXVECTOR bandwidth does not match the selected mode");
+        Ieee80211HeSuSignalingRequest signalingRequest;
+        signalingRequest.common = semantics;
+        signalingRequest.bandwidth = bandwidth;
+        auto result = buildIeee80211HeSuSignaling(signalingRequest);
+        if (!result)
+            throw cRuntimeError("Invalid HE SU TXVECTOR signaling: %s", result.error.c_str());
+        auto header = dynamicPtrCast<Ieee80211HeSuPhyHeader>(phyHeader);
+        header->setSignaling(makeHeSuErSignalingFields(result.value.lSig, result.value.sigA));
+    }
+    else if (ppduFormat == HE_EXTENDED_RANGE_SU) {
+        if (mode->getDataMode()->getBandwidth() != MHz(20))
+            throw cRuntimeError("HE ER SU TXVECTOR requires a 20 MHz selected mode");
+        Ieee80211HeErSuSignalingRequest signalingRequest;
+        signalingRequest.common = semantics;
+        signalingRequest.ruMode = getHeErSuRuMode(request->getErSuRuMode());
+        auto result = buildIeee80211HeErSuSignaling(signalingRequest);
+        if (!result)
+            throw cRuntimeError("Invalid HE ER SU TXVECTOR signaling: %s", result.error.c_str());
+        auto header = dynamicPtrCast<Ieee80211HeErSuPhyHeader>(phyHeader);
+        header->setSignaling(makeHeSuErSignalingFields(result.value.lSig, result.value.sigA));
+    }
+    else
+        throw cRuntimeError("HE SU/ER TXVECTOR is attached to a non-SU PPDU");
 }
 
 Ieee80211Radio::Ieee80211Radio() :
@@ -401,6 +563,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
     else
         phyHeader = mode->getHeaderMode()->createHeader();
     if (auto hePhyHeader = dynamicPtrCast<Ieee80211HePhyHeader>(phyHeader)) {
+        auto suErRequest = packet->findTag<Ieee80211HeSuErTxVectorReq>();
         auto networkInterface = getContainingNicModule(this);
         auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
         if (mib != nullptr)
@@ -415,11 +578,13 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         hePhyHeader->setCoding(request != nullptr ? request->getCoding() :
                 commonRequest != nullptr ? commonRequest->getCoding() :
                 heMode != nullptr && heMode->getDataMode()->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC);
-        hePhyHeader->setPacketExtensionDurationUs(request != nullptr ? request->getPacketExtensionDurationUs() :
+        hePhyHeader->setPacketExtensionDurationUs(suErRequest != nullptr ? suErRequest->getPacketExtensionDurationUs() :
+                request != nullptr ? request->getPacketExtensionDurationUs() :
                 commonRequest != nullptr ? commonRequest->getPacketExtensionDurationUs() : 0);
         hePhyHeader->setPuncturedSubchannelMask(request != nullptr ? request->getPuncturedSubchannelMask() :
                 commonRequest != nullptr ? commonRequest->getPuncturedSubchannelMask() : 0);
-        hePhyHeader->setSpatialReuse(request != nullptr ? request->getSpatialReuse() :
+        hePhyHeader->setSpatialReuse(suErRequest != nullptr ? suErRequest->getSpatialReuse() :
+                request != nullptr ? request->getSpatialReuse() :
                 commonRequest != nullptr ? commonRequest->getSpatialReuse() : 0);
         hePhyHeader->setNonSrgObssPdDisallowed(request != nullptr ? request->getNonSrgObssPdDisallowed() :
                 commonRequest != nullptr ? commonRequest->getNonSrgObssPdDisallowed() : false);
@@ -473,6 +638,13 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             throw cRuntimeError("Planned HE MU PPDU duration does not match the resolved PHY parameters");
         if (request != nullptr && request->getPpduFormat() == HE_TRIGGER_BASED_UPLINK)
             commonDuration = std::max(commonDuration, calculation.parameters.duration);
+        if (suErRequest != nullptr) {
+            if (!modeDerivedSingleUser || heMode == nullptr)
+                throw cRuntimeError("HE SU/ER TXVECTOR is attached to a non-SU transmission");
+            populateHeSuErSignaling(hePhyHeader, heMode, suErRequest,
+                    B((packet->getDataLength().get<b>() + 7) / 8));
+            commonDuration = suErRequest->getTxTime();
+        }
         for (size_t i = 0; i < heMuUsers.size(); ++i) {
             auto& user = heMuUsers[i];
             user.duration = commonDuration;
@@ -528,7 +700,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             hePhyHeader->setTotalNsts(maxTotalNsts);
         }
         hePhyHeader->setCommonDuration(commonDuration);
-        int64_t totalBits = ppduFormat == HE_EXTENDED_RANGE_SU ? 128 : 64; // HE-SIG-A
+        int64_t totalBits = suErRequest != nullptr ? 100 :
+                ppduFormat == HE_EXTENDED_RANGE_SU ? 128 : 64;
         if (dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader) != nullptr) {
             // HE-SIG-B
             uint32_t maxToneIndex = 0;

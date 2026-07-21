@@ -1,0 +1,128 @@
+%description:
+Validate IEEE 802.11-2024 logical HE-SIG-B Common and User Block codecs.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
+#include <cstdint>
+#include <initializer_list>
+#include <vector>
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+static std::vector<bool> bitsFromBytes(std::initializer_list<uint8_t> bytes, size_t bitCount)
+{
+    std::vector<bool> bits;
+    for (auto byte : bytes)
+        for (int i = 0; i < 8; ++i)
+            bits.push_back((byte >> i) & 1);
+    bits.resize(bitCount);
+    return bits;
+}
+
+%activity:
+// Tables 27-25 and 27-27: two B0-first RU allocation subfields, center-26 bit,
+// CRC bits 0110, and six zero tail bits. This fixture was calculated independently.
+Ieee80211HeSigBCommonBlock common;
+common.ruAllocationSubfields = {15, 192};
+common.center26ToneRuBitPresent = true;
+common.hasCenter26ToneRu = true;
+auto commonBits = encodeHeSigBCommonBlock(common);
+ASSERT(commonBits && commonBits.bits == bitsFromBytes({0x0f, 0xc0, 0x0d, 0x00}, 27));
+auto decodedCommon = decodeHeSigBCommonBlock(commonBits.bits);
+ASSERT(decodedCommon && decodedCommon.value.ruAllocationSubfields == common.ruAllocationSubfields);
+ASSERT(decodedCommon.value.center26ToneRuBitPresent && decodedCommon.value.hasCenter26ToneRu);
+
+// Table 27-29: STA-ID 0x345, NSTS=2, beamformed, MCS 4, DCM, LDPC.
+Ieee80211HeSigBNonMuMimoUser nonMu;
+nonMu.staId = 0x345;
+nonMu.numberOfSpaceTimeStreams = 2;
+nonMu.beamformed = true;
+nonMu.mcs = 4;
+nonMu.dcm = true;
+nonMu.ldpcCoding = true;
+auto nonMuBits = encodeHeSigBNonMuMimoUser(nonMu);
+ASSERT(nonMuBits && nonMuBits.bits == bitsFromBytes({0x45, 0x4b, 0x1a}, 21));
+auto decodedNonMu = decodeHeSigBNonMuMimoUser(nonMuBits.bits);
+ASSERT(decodedNonMu && decodedNonMu.value.staId == nonMu.staId);
+ASSERT(decodedNonMu.value.numberOfSpaceTimeStreams == 2 && decodedNonMu.value.beamformed);
+ASSERT(decodedNonMu.value.mcs == 4 && decodedNonMu.value.dcm && decodedNonMu.value.ldpcCoding);
+
+// Table 27-30: STA-ID 0x155, spatial configuration 10, MCS 7, BCC.
+Ieee80211HeSigBMuMimoUser mu;
+mu.staId = 0x155;
+mu.spatialConfiguration = 10;
+mu.mcs = 7;
+mu.ldpcCoding = false;
+auto muBits = encodeHeSigBMuMimoUser(mu);
+ASSERT(muBits && muBits.bits == bitsFromBytes({0x55, 0xd1, 0x03}, 21));
+auto decodedMu = decodeHeSigBMuMimoUser(muBits.bits);
+ASSERT(decodedMu && decodedMu.value.staId == mu.staId);
+ASSERT(decodedMu.value.spatialConfiguration == 10 && decodedMu.value.mcs == 7);
+ASSERT(!decodedMu.value.reserved && !decodedMu.value.ldpcCoding);
+
+// Table 27-28: one User field has CRC 0010; two User fields have CRC 1000.
+auto oneUserBlock = encodeHeSigBUserBlock({nonMuBits.bits});
+ASSERT(oneUserBlock && oneUserBlock.bits == bitsFromBytes({0x45, 0x4b, 0x9a, 0x00}, 31));
+auto decodedOneUserBlock = decodeHeSigBUserBlock(oneUserBlock.bits);
+ASSERT(decodedOneUserBlock && decodedOneUserBlock.userFields.size() == 1);
+ASSERT(decodedOneUserBlock.userFields[0] == nonMuBits.bits);
+
+auto twoUserBlock = encodeHeSigBUserBlock({nonMuBits.bits, muBits.bits});
+ASSERT(twoUserBlock && twoUserBlock.bits == bitsFromBytes({0x45, 0x4b, 0xba, 0x2a, 0x7a, 0x04, 0x00}, 52));
+auto decodedTwoUserBlock = decodeHeSigBUserBlock(twoUserBlock.bits);
+ASSERT(decodedTwoUserBlock && decodedTwoUserBlock.userFields.size() == 2);
+ASSERT(decodedTwoUserBlock.userFields[0] == nonMuBits.bits && decodedTwoUserBlock.userFields[1] == muBits.bits);
+
+auto malformedCommon = commonBits.bits;
+malformedCommon[17] = !malformedCommon[17];
+ASSERT(decodeHeSigBCommonBlock(malformedCommon).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_CRC);
+malformedCommon = commonBits.bits;
+malformedCommon[26] = true;
+ASSERT(decodeHeSigBCommonBlock(malformedCommon).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_TAIL);
+
+auto malformedUserBlock = twoUserBlock.bits;
+malformedUserBlock[42] = !malformedUserBlock[42];
+ASSERT(decodeHeSigBUserBlock(malformedUserBlock).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_CRC);
+malformedUserBlock = twoUserBlock.bits;
+malformedUserBlock[51] = true;
+ASSERT(decodeHeSigBUserBlock(malformedUserBlock).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_TAIL);
+
+Ieee80211HeSigBCommonBlock reservedCommon;
+reservedCommon.ruAllocationSubfields = {220};
+ASSERT(encodeHeSigBCommonBlock(reservedCommon).errorCode == Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE);
+ASSERT(!decodeHeSigBCommonBlock(std::vector<bool>(20)));
+
+auto malformedMu = muBits.bits;
+malformedMu[19] = true;
+ASSERT(decodeHeSigBMuMimoUser(malformedMu).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD);
+nonMu.mcs = 2;
+ASSERT(encodeHeSigBNonMuMimoUser(nonMu).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+nonMu.mcs = 4;
+nonMu.numberOfSpaceTimeStreams = 3;
+ASSERT(encodeHeSigBNonMuMimoUser(nonMu).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+mu.mcs = 12;
+ASSERT(!encodeHeSigBMuMimoUser(mu));
+
+// Tables 27-29 and 27-30 explicitly make these fields arbitrary for STA-ID 2046.
+nonMu.staId = 2046;
+nonMu.numberOfSpaceTimeStreams = 8;
+nonMu.mcs = 15;
+nonMu.dcm = true;
+auto arbitraryNonMu = encodeHeSigBNonMuMimoUser(nonMu);
+ASSERT(arbitraryNonMu && decodeHeSigBNonMuMimoUser(arbitraryNonMu.bits));
+mu.staId = 2046;
+mu.mcs = 15;
+mu.reserved = true;
+auto arbitraryMu = encodeHeSigBMuMimoUser(mu);
+ASSERT(arbitraryMu);
+auto decodedArbitraryMu = decodeHeSigBMuMimoUser(arbitraryMu.bits);
+ASSERT(decodedArbitraryMu && decodedArbitraryMu.value.reserved && decodedArbitraryMu.value.mcs == 15);
+ASSERT(!encodeHeSigBUserBlock({}));
+ASSERT(!encodeHeSigBUserBlock({std::vector<bool>(20)}));
+
+EV << ".\n";
+
+%contains: stdout
+.

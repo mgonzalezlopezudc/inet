@@ -9,12 +9,15 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <vector>
 
 #include "inet/common/Units.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 
 namespace inet {
 namespace physicallayer {
@@ -63,6 +66,121 @@ enum Ieee80211HeLtfType {
     HE_LTF_2X = 2,                  // 6.4 µs DFT period
     HE_LTF_4X = 4                   // 12.8 µs DFT period
 };
+
+/** Semantically distinct HE SU bandwidth selections (Table 27-19). */
+enum class Ieee80211HeSuBandwidth {
+    UNKNOWN,
+    MHZ_20,
+    MHZ_40,
+    MHZ_80,
+    MHZ_160,
+    MHZ_80P80,
+};
+
+/** HE ER SU RU selections carried by the format-specific bandwidth field. */
+enum class Ieee80211HeErSuRuMode {
+    UNKNOWN,
+    PRIMARY_242_TONE,
+    PRIMARY_UPPER_106_TONE,
+};
+
+/** Operating band used to resolve the timing-only signal extension. */
+enum class Ieee80211HeOperatingBand {
+    UNKNOWN,
+    BAND_2_4_GHZ,
+    BAND_5_GHZ,
+    BAND_6_GHZ,
+};
+
+enum class Ieee80211HeMidamblePeriodicity {
+    SYMBOLS_10,
+    SYMBOLS_20,
+};
+
+/** TXOP duration is either explicitly unspecified or an exact duration to quantize. */
+struct Ieee80211HeTxopDuration
+{
+    bool unspecified = true;
+    uint16_t durationUs = 0;
+};
+
+/**
+ * Semantic FEC outcome. BCC must not carry an extra-segment value; LDPC must
+ * carry the calculated value, including an explicitly calculated false.
+ */
+struct Ieee80211HeFecOutcome
+{
+    Ieee80211HeCoding coding = HE_CODING_BCC;
+    std::optional<bool> ldpcExtraSymbolSegment;
+};
+
+/**
+ * Common semantic inputs for HE SU and HE ER SU logical signaling.
+ * Policy and outcome optionals are explicit inputs: absence is rejected so a
+ * serializer cannot silently invent values, except where documented otherwise.
+ */
+struct Ieee80211HeSuErSigASemantics
+{
+    uint64_t txTimeNs = 0; // complete PPDU TXTIME, including signal extension
+    Ieee80211HeOperatingBand operatingBand = Ieee80211HeOperatingBand::UNKNOWN;
+    std::optional<bool> noSignalExtension;
+    std::optional<bool> beamChange;
+    std::optional<bool> uplink;
+    int mcs = -1;
+    std::optional<bool> dcmApplied;
+    int bssColor = -1;
+    int spatialReuse = -1;
+    std::optional<Ieee80211HeGuardInterval> guardInterval;
+    std::optional<Ieee80211HeLtfType> ltfType;
+    int numberOfSpaceTimeStreams = 0;
+    std::optional<bool> stbcApplied;
+    std::optional<Ieee80211HeMidamblePeriodicity> midamblePeriodicity; // absent means Doppler is not signaled
+    std::optional<Ieee80211HeTxopDuration> txopDuration;
+    std::optional<Ieee80211HeFecOutcome> fec;
+    std::optional<bool> beamformed;
+    int preFecPaddingFactor = 0; // semantic final factor a, in the range 1..4
+    uint32_t packetExtensionNs = UINT32_MAX; // actual T_PE: 0, 4000, 8000, 12000, or 16000 ns
+};
+
+struct Ieee80211HeSuSignalingRequest
+{
+    Ieee80211HeSuErSigASemantics common;
+    Ieee80211HeSuBandwidth bandwidth = Ieee80211HeSuBandwidth::UNKNOWN;
+};
+
+struct Ieee80211HeErSuSignalingRequest
+{
+    Ieee80211HeSuErSigASemantics common;
+    Ieee80211HeErSuRuMode ruMode = Ieee80211HeErSuRuMode::UNKNOWN;
+};
+
+struct Ieee80211HeSuSignaling
+{
+    Ieee80211HeLSig lSig;
+    Ieee80211HeSuSigA sigA;
+    uint32_t signalExtensionNs = 0;
+};
+
+struct Ieee80211HeErSuSignaling
+{
+    Ieee80211HeLSig lSig;
+    Ieee80211HeErSuSigA sigA;
+    uint32_t signalExtensionNs = 0;
+};
+
+struct Ieee80211HeSuSignalingResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeSuSignaling value;
+};
+
+struct Ieee80211HeErSuSignalingResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeErSuSignaling value;
+};
+
+/** Builds validated logical signaling without changing or recalculating PPDU airtime. */
+INET_API Ieee80211HeSuSignalingResult buildIeee80211HeSuSignaling(const Ieee80211HeSuSignalingRequest& request);
+INET_API Ieee80211HeErSuSignalingResult buildIeee80211HeErSuSignaling(const Ieee80211HeErSuSignalingRequest& request);
 
 /**
  * HE-SIG-A fields shared by every user in the PPDU.

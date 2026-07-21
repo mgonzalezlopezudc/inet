@@ -159,12 +159,46 @@ Define_Module(TrackingErrorModel);
 Define_Module(InspectableRadioMedium);
 Define_Module(MockNicModule);
 
+static Ptr<Ieee80211HeSuErTxVectorReq> addCompleteTxVector(Packet *packet,
+        Ieee80211HePpduFormat ppduFormat, B psduLength, simtime_t txTime)
+{
+    auto txVector = packet->addTag<Ieee80211HeSuErTxVectorReq>();
+    txVector->setComplete(true);
+    txVector->setPpduFormat(ppduFormat);
+    txVector->setPsduLength(psduLength);
+    txVector->setSuBandwidth(0);
+    txVector->setErSuRuMode(0);
+    txVector->setMcs(0);
+    txVector->setNumberOfSpaceTimeStreams(1);
+    txVector->setGuardInterval(HE_GI_3_2_US);
+    txVector->setCoding(HE_CODING_BCC);
+    txVector->setTxTime(txTime);
+    txVector->setUplink(false);
+    txVector->setNoSignalExtension(false);
+    txVector->setLtfType(HE_LTF_4X);
+    txVector->setDcm(false);
+    txVector->setStbc(false);
+    txVector->setTxopUnspecified(true);
+    txVector->setHasLdpcExtraSymbolSegment(false);
+    txVector->setPreFecPaddingFactor(1);
+    txVector->setPacketExtensionDurationUs(0);
+    txVector->setDoppler(false);
+    txVector->setMidamblePeriodicity(0);
+    txVector->setBeamChange(false);
+    txVector->setBeamformed(false);
+    txVector->setBssColor(0);
+    txVector->setSpatialReuse(0);
+    txVector->setNominalPacketPaddingDurationUs(0);
+    return txVector;
+}
+
 static void testSingleUserMode(InspectableRadio *radio,
         const IRadio *receiverRadio, const InspectableReceiver *receiver,
         InspectableRadioMedium *medium,
         const Ieee80211Transmitter *transmitter, const Ieee80211HeMode *mode,
         Ieee80211HePpduFormat expectedFormat, b expectedHeaderLength,
-        B payloadLength, simtime_t startTime)
+        B payloadLength, simtime_t txTime, uint16_t expectedLSigLength,
+        simtime_t startTime)
 {
     auto factoryHeader = mode->getHeaderMode()->createHeader();
     ASSERT(dynamicPtrCast<Ieee80211HeSuPhyHeader>(factoryHeader) != nullptr);
@@ -173,6 +207,7 @@ static void testSingleUserMode(InspectableRadio *radio,
     auto packet = new Packet("he-single-user");
     packet->insertAtBack(makeShared<ByteCountChunk>(payloadLength));
     packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    addCompleteTxVector(packet, expectedFormat, payloadLength, txTime);
     radio->testEncapsulate(packet);
 
     ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ieee80211HePhy);
@@ -184,13 +219,26 @@ static void testSingleUserMode(InspectableRadio *radio,
     ASSERT(header->getUsersArraySize() == 0);
     ASSERT(header->getChunkLength() == expectedHeaderLength);
     ASSERT(header->getLengthField() == payloadLength);
+    ASSERT(header->getCommonDuration() == txTime);
+    const Ieee80211HeSuErSignalingFields *signaling;
+    if (expectedFormat == HE_EXTENDED_RANGE_SU)
+        signaling = &dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(header)->getSignaling();
+    else
+        signaling = &dynamicPtrCast<const Ieee80211HeSuPhyHeader>(header)->getSignaling();
+    ASSERT(signaling->signalingValid && signaling->lSigLength == expectedLSigLength);
+    ASSERT(!signaling->beamChange && !signaling->uplink && signaling->mcs == 0 && !signaling->dcm);
+    ASSERT(signaling->bssColor == 0 && signaling->spatialReuse == 0 && signaling->bandwidth == 0);
+    ASSERT(signaling->giLtfSize == 3 && signaling->numberOfSpaceTimeStreams == 1);
+    ASSERT(signaling->midamblePeriodicity == 0 && signaling->txop == 127);
+    ASSERT(!signaling->ldpcCoding && !signaling->ldpcExtraSymbolSegment && !signaling->stbc);
+    ASSERT(!signaling->beamformed && signaling->preFecPaddingFactor == 1);
+    ASSERT(!signaling->peDisambiguity && !signaling->doppler);
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, startTime));
-    ASSERT(transmission->getDuration() == mode->getDuration(payloadLength));
+    ASSERT(transmission->getDuration() == txTime);
     ASSERT(transmission->getPreambleDuration() == mode->getPreambleMode()->getDuration());
     ASSERT(transmission->getHeaderDuration() == SIMTIME_ZERO);
-    ASSERT(transmission->getDataDuration() == mode->getDataMode()->getDuration(payloadLength));
     ASSERT(transmission->getDuration() ==
             transmission->getPreambleDuration() + transmission->getDataDuration());
 
@@ -209,6 +257,71 @@ static void testSingleUserMode(InspectableRadio *radio,
     ASSERT(errorModel->perUserDataEvaluationCount == previousPerUserCount);
     medium->testRemoveTransmission(transmission);
 
+    delete packet;
+}
+
+static void testUntaggedCompatibility(InspectableRadio *radio,
+        const Ieee80211HeMode *mode, B payloadLength)
+{
+    auto packet = new Packet("untagged-he-single-user");
+    packet->insertAtBack(makeShared<ByteCountChunk>(payloadLength));
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    radio->testEncapsulate(packet);
+    auto header = packet->peekAtFront<Ieee80211HeSuPhyHeader>();
+    ASSERT(!header->getSignaling().signalingValid);
+    ASSERT(header->getCommonDuration() == mode->getDuration(payloadLength));
+    ASSERT(header->getChunkLength() == b(64));
+    delete packet;
+}
+
+enum class InvalidTxVectorCase {
+    INCOMPLETE,
+    MCS_MISMATCH,
+    PSDU_LENGTH_MISMATCH,
+    BSS_COLOR_MISMATCH,
+    SHORT_PACKET_EXTENSION,
+    INVALID_LTF_TYPE,
+    BCC_WITH_LDPC_EXTRA
+};
+
+static void testRejectedTxVector(InspectableRadio *radio,
+        const Ieee80211HeMode *mode, InvalidTxVectorCase invalidCase)
+{
+    auto packet = new Packet("invalid-he-txvector");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    auto txVector = addCompleteTxVector(packet, HE_SINGLE_USER, B(100), SimTime(180, SIMTIME_US));
+    switch (invalidCase) {
+        case InvalidTxVectorCase::INCOMPLETE:
+            txVector->setComplete(false);
+            break;
+        case InvalidTxVectorCase::MCS_MISMATCH:
+            txVector->setMcs(1);
+            break;
+        case InvalidTxVectorCase::PSDU_LENGTH_MISMATCH:
+            txVector->setPsduLength(B(99));
+            break;
+        case InvalidTxVectorCase::BSS_COLOR_MISMATCH:
+            txVector->setBssColor(1);
+            break;
+        case InvalidTxVectorCase::SHORT_PACKET_EXTENSION:
+            txVector->setNominalPacketPaddingDurationUs(8);
+            break;
+        case InvalidTxVectorCase::INVALID_LTF_TYPE:
+            txVector->setLtfType(3);
+            break;
+        case InvalidTxVectorCase::BCC_WITH_LDPC_EXTRA:
+            txVector->setHasLdpcExtraSymbolSegment(true);
+            break;
+    }
+    bool rejected = false;
+    try {
+        radio->testEncapsulate(packet);
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    ASSERT(rejected);
     delete packet;
 }
 
@@ -243,9 +356,17 @@ auto heErSuMode = Ieee80211HeCompliantModes::getCompliantMode(
         Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
 
 testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heSuMode, HE_SINGLE_USER,
-        b(64), B(100), SimTime(1, SIMTIME_S));
+        b(100), B(100), SimTime(180, SIMTIME_US), 115, SimTime(1, SIMTIME_S));
 testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heErSuMode, HE_EXTENDED_RANGE_SU,
-        b(128), B(100), SimTime(2, SIMTIME_S));
+        b(100), B(100), SimTime(188, SIMTIME_US), 122, SimTime(2, SIMTIME_S));
+testUntaggedCompatibility(radio, heSuMode, B(100));
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::INCOMPLETE);
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::MCS_MISMATCH);
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::PSDU_LENGTH_MISMATCH);
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::BSS_COLOR_MISMATCH);
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::SHORT_PACKET_EXTENSION);
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::INVALID_LTF_TYPE);
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::BCC_WITH_LDPC_EXTRA);
 ASSERT(heErSuMode->getPreambleMode()->getDuration() ==
         heSuMode->getPreambleMode()->getDuration() + SimTime(8, SIMTIME_US));
 

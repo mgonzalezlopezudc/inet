@@ -352,7 +352,18 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
                 heMuHeader->getCommonDuration() > SIMTIME_ZERO &&
                 heMuHeader->getCommonDuration() != calculation.parameters.duration)
             throw cRuntimeError("Serialized HE MU duration does not match the resolved PHY parameters");
-        duration = std::max(heMuHeader->getCommonDuration(), calculation.parameters.duration);
+        bool validatedSuErSignaling = false;
+        if (auto suHeader = dynamicPtrCast<const Ieee80211HeSuPhyHeader>(phyHeader))
+            validatedSuErSignaling = suHeader->getSignaling().signalingValid;
+        else if (auto erSuHeader = dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(phyHeader))
+            validatedSuErSignaling = erSuHeader->getSignaling().signalingValid;
+        if (validatedSuErSignaling) {
+            if (heMuHeader->getCommonDuration() <= SIMTIME_ZERO)
+                throw cRuntimeError("Validated HE SU/ER signaling has no authoritative TXTIME");
+            duration = heMuHeader->getCommonDuration();
+        }
+        else
+            duration = std::max(heMuHeader->getCommonDuration(), calculation.parameters.duration);
         hePpduParameters.duration = duration;
         heUserPhyParameters = hePpduParameters.users;
         for (auto& user : heUserPhyParameters)

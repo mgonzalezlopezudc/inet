@@ -136,6 +136,47 @@ class Ieee80211HeMuCommonReq extends TagBase
 }
 
 //
+// Complete transmitter-side policy and calculated outcomes that are missing
+// from the ordinary HE SU/ER mode objects. complete=true attests that the
+// producer calculated the DATA-field outcomes and total TXTIME according to
+// the selected PHY parameters. The radio cross-checks the mode-derived fields,
+// validates the logical signaling contract, and stores only the resulting wire
+// facts in the concrete PHY header. An incomplete tag is rejected; absence
+// retains the transitional legacy path.
+//
+class Ieee80211HeSuErTxVectorReq extends TagBase
+{
+    bool complete = false;
+    uint8_t ppduFormat = 255; // 2: HE SU, 3: HE ER SU
+    B psduLength = B(-1);
+    uint8_t suBandwidth = 255; // 0:20, 1:40, 2:80, 3:160, 4:80+80 MHz
+    uint8_t erSuRuMode = 255; // 0: primary 242-tone, 1: primary upper 106-tone
+    uint8_t mcs = 255;
+    uint8_t numberOfSpaceTimeStreams = 0;
+    uint8_t guardInterval = 255;
+    uint8_t coding = 255;
+    simtime_t txTime; // complete standards-derived PPDU TXTIME
+    bool uplink = false;
+    bool noSignalExtension = false;
+    uint8_t ltfType = 0; // 1, 2, or 4
+    bool dcm = false;
+    bool stbc = false;
+    bool txopUnspecified = true;
+    uint16_t txopDurationUs = 0;
+    bool hasLdpcExtraSymbolSegment = false;
+    bool ldpcExtraSymbolSegment = false;
+    uint8_t preFecPaddingFactor = 0; // semantic final factor a, 1..4
+    uint8_t packetExtensionDurationUs = 0;
+    bool doppler = false;
+    uint8_t midamblePeriodicity = 0; // 0 without Doppler, otherwise 10 or 20
+    bool beamChange = false;
+    bool beamformed = false;
+    uint8_t bssColor = 0;
+    uint8_t spatialReuse = 0;
+    uint8_t nominalPacketPaddingDurationUs = 255; // 0, 8, or 16
+}
+
+//
 // Reception indication containing the HE MU allocations decoded for the
 // receiver. The packet-level error model uses this to select the relevant RU.
 //

@@ -14,8 +14,10 @@
 
 // IEEE 802.11 PHY header serializer, including HE headers.
 //
-// This file serializes/deserializes the logical HE-SIG-A and HE-SIG-B fields
-// used by the packet-level model. The represented HE MU and HE TB bit layouts follow
+// This file serializes/deserializes the logical L-SIG, RL-SIG, HE-SIG-A, and
+// HE-SIG-B fields used by the packet-level model. Validated HE SU and HE ER SU
+// headers use their exact 100 logical signaling bits. The represented legacy
+// HE MU and HE TB bit layouts follow
 // IEEE 802.11-2024 Tables 27-21 (HE MU HE-SIG-A), 27-22 (HE TB HE-SIG-A) and
 // Clause 27.3.11.8 (HE-SIG-B).
 //
@@ -76,6 +78,157 @@ class Ieee80211HeTbPhyHeaderSerializer : public Ieee80211HePhyHeaderSerializer
 constexpr uint16_t HE_PACKET_LEVEL_FORMAT_PREFIX = 0xA5C;
 constexpr uint16_t HE_PACKET_LEVEL_FORMAT_MASK = 0xFFC;
 constexpr uint16_t HE_PACKET_LEVEL_FORMAT_VALUE_MASK = 0x003;
+
+std::vector<bool> readLogicalBits(MemoryInputStream& stream, size_t count)
+{
+    std::vector<bool> bits;
+    bits.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+        bits.push_back(stream.readBit());
+    return bits;
+}
+
+template<typename SigA>
+SigA makeHeSuErSigA(const Ieee80211HeSuErSignalingFields& fields)
+{
+    SigA sigA;
+    sigA.beamChange = fields.beamChange;
+    sigA.uplink = fields.uplink;
+    sigA.mcs = fields.mcs;
+    sigA.dcm = fields.dcm;
+    sigA.bssColor = fields.bssColor;
+    sigA.spatialReuse = fields.spatialReuse;
+    sigA.bandwidth = fields.bandwidth;
+    sigA.giLtfSize = fields.giLtfSize;
+    sigA.numberOfSpaceTimeStreams = fields.numberOfSpaceTimeStreams;
+    sigA.midamblePeriodicity = fields.midamblePeriodicity;
+    sigA.txop = fields.txop;
+    sigA.ldpcCoding = fields.ldpcCoding;
+    sigA.ldpcExtraSymbolSegment = fields.ldpcExtraSymbolSegment;
+    sigA.stbc = fields.stbc;
+    sigA.beamformed = fields.beamformed;
+    sigA.preFecPaddingFactor = fields.preFecPaddingFactor;
+    sigA.peDisambiguity = fields.peDisambiguity;
+    sigA.doppler = fields.doppler;
+    return sigA;
+}
+
+template<typename SigA>
+Ieee80211HeSuErSignalingFields makeHeSuErSignalingFields(uint16_t lSigLength, const SigA& sigA)
+{
+    Ieee80211HeSuErSignalingFields fields;
+    fields.signalingValid = true;
+    fields.lSigLength = lSigLength;
+    fields.beamChange = sigA.beamChange;
+    fields.uplink = sigA.uplink;
+    fields.mcs = sigA.mcs;
+    fields.dcm = sigA.dcm;
+    fields.bssColor = sigA.bssColor;
+    fields.spatialReuse = sigA.spatialReuse;
+    fields.bandwidth = sigA.bandwidth;
+    fields.giLtfSize = sigA.giLtfSize;
+    fields.numberOfSpaceTimeStreams = sigA.numberOfSpaceTimeStreams;
+    fields.midamblePeriodicity = sigA.midamblePeriodicity;
+    fields.txop = sigA.txop;
+    fields.ldpcCoding = sigA.ldpcCoding;
+    fields.ldpcExtraSymbolSegment = sigA.ldpcExtraSymbolSegment;
+    fields.stbc = sigA.stbc;
+    fields.beamformed = sigA.beamformed;
+    fields.preFecPaddingFactor = sigA.preFecPaddingFactor;
+    fields.peDisambiguity = sigA.peDisambiguity;
+    fields.doppler = sigA.doppler;
+    return fields;
+}
+
+bool serializeExactHeSuEr(MemoryOutputStream& stream, const Ptr<const Ieee80211HePhyHeader>& header,
+        Ieee80211HePpduFormat ppduFormat)
+{
+    const Ieee80211HeSuErSignalingFields *fields = nullptr;
+    Ieee80211HeSigFormat sigFormat;
+    Ieee80211HeSigABitsResult sigA;
+    if (ppduFormat == HE_SINGLE_USER) {
+        fields = &dynamicPtrCast<const Ieee80211HeSuPhyHeader>(header)->getSignaling();
+        if (!fields->signalingValid)
+            return false;
+        sigFormat = Ieee80211HeSigFormat::SU;
+        sigA = encodeHeSuSigA(makeHeSuErSigA<Ieee80211HeSuSigA>(*fields));
+    }
+    else if (ppduFormat == HE_EXTENDED_RANGE_SU) {
+        fields = &dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(header)->getSignaling();
+        if (!fields->signalingValid)
+            return false;
+        sigFormat = Ieee80211HeSigFormat::ER_SU;
+        sigA = encodeHeErSuSigA(makeHeSuErSigA<Ieee80211HeErSuSigA>(*fields));
+    }
+    else
+        return false;
+    Ieee80211HeLSig lSig;
+    lSig.length = fields->lSigLength;
+    auto lSigBits = encodeHeLSig(lSig, sigFormat);
+    auto rlSigBits = encodeHeRlSig(lSig, sigFormat);
+    if (!lSigBits)
+        throw cRuntimeError("Cannot serialize HE SU/ER L-SIG: %s", lSigBits.error.c_str());
+    if (!rlSigBits)
+        throw cRuntimeError("Cannot serialize HE SU/ER RL-SIG: %s", rlSigBits.error.c_str());
+    if (!sigA)
+        throw cRuntimeError("Cannot serialize HE SU/ER HE-SIG-A: %s", sigA.error.c_str());
+    stream.writeBits(lSigBits.bits);
+    stream.writeBits(rlSigBits.bits);
+    stream.writeBits(sigA.bits);
+    return true;
+}
+
+Ptr<Ieee80211HePhyHeader> deserializeExactHeSuEr(MemoryInputStream& stream,
+        const std::optional<Ieee80211HePpduFormat>& expectedPpduFormat)
+{
+    auto startPosition = stream.getPosition();
+    if (stream.getRemainingLength() < b(100))
+        return nullptr;
+    auto lSigBits = readLogicalBits(stream, 24);
+    auto suLSig = decodeHeLSig(lSigBits, Ieee80211HeSigFormat::SU);
+    auto erSuLSig = decodeHeLSig(lSigBits, Ieee80211HeSigFormat::ER_SU);
+    if (!suLSig && !erSuLSig) {
+        stream.seek(startPosition);
+        return nullptr;
+    }
+    auto sigFormat = suLSig ? Ieee80211HeSigFormat::SU : Ieee80211HeSigFormat::ER_SU;
+    auto ppduFormat = suLSig ? HE_SINGLE_USER : HE_EXTENDED_RANGE_SU;
+    auto lSigLength = suLSig ? suLSig.value.length : erSuLSig.value.length;
+    auto rlSigBits = readLogicalBits(stream, 24);
+    auto sigABits = readLogicalBits(stream, 52);
+    if (!sigABits[0]) {
+        stream.seek(startPosition);
+        return nullptr;
+    }
+    auto rlSig = decodeHeRlSigRepeat(lSigBits, rlSigBits, sigFormat);
+    if (!rlSig)
+        throw cRuntimeError("Cannot deserialize HE SU/ER RL-SIG: %s", rlSig.error.c_str());
+    if (expectedPpduFormat.has_value() && ppduFormat != *expectedPpduFormat)
+        throw cRuntimeError("Logical HE SU/ER signaling does not match requested header type");
+
+    auto header = createIeee80211HePhyHeader(ppduFormat);
+    Ieee80211HeSuErSignalingFields fields;
+    if (ppduFormat == HE_SINGLE_USER) {
+        auto sigA = decodeHeSuSigA(sigABits);
+        if (!sigA)
+            throw cRuntimeError("Cannot deserialize HE SU HE-SIG-A: %s", sigA.error.c_str());
+        fields = makeHeSuErSignalingFields(lSigLength, sigA.value);
+        dynamicPtrCast<Ieee80211HeSuPhyHeader>(header)->setSignaling(fields);
+    }
+    else {
+        auto sigA = decodeHeErSuSigA(sigABits);
+        if (!sigA)
+            throw cRuntimeError("Cannot deserialize HE ER SU HE-SIG-A: %s", sigA.error.c_str());
+        fields = makeHeSuErSignalingFields(lSigLength, sigA.value);
+        dynamicPtrCast<Ieee80211HeErSuPhyHeader>(header)->setSignaling(fields);
+    }
+    header->setBssColor(fields.bssColor);
+    header->setSpatialReuse(fields.spatialReuse);
+    header->setGuardInterval(fields.giLtfSize == 3 ? 2 : fields.giLtfSize == 2 ? 1 : 0);
+    header->setCoding(fields.ldpcCoding ? HE_CODING_LDPC : HE_CODING_BCC);
+    return header;
+}
+
 void writeOfdmSignal(MemoryOutputStream& stream, uint8_t rate, bool reserved, uint16_t length, bool parity, uint8_t tail)
 {
     auto signal = packIeee80211OfdmSignalField(rate, reserved, length, parity, tail);
@@ -322,6 +475,9 @@ void Ieee80211HePhyHeaderSerializer::serialize(MemoryOutputStream& stream, const
     const uint8_t ppduFormat = getIeee80211HePpduFormat(*hePhyHeader);
     const bool extendedRangeSu = ppduFormat == HE_EXTENDED_RANGE_SU;
 
+    if (serializeExactHeSuEr(stream, hePhyHeader, static_cast<Ieee80211HePpduFormat>(ppduFormat)))
+        return;
+
     uint32_t maxToneIndex = 0;
     for (unsigned int i = 0; i < numUsers; ++i) {
         const auto& u = hePhyHeader->getUsers(i);
@@ -488,6 +644,9 @@ void Ieee80211HePhyHeaderSerializer::serialize(MemoryOutputStream& stream, const
 
 const Ptr<Chunk> Ieee80211HePhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
+    if (auto heSuErHeader = deserializeExactHeSuEr(stream, expectedPpduFormat))
+        return heSuErHeader;
+
     // --- 1. HE-SIG-A (8 bytes = 64 bits) ---
     auto uplink = stream.readBit();
     stream.readNBitsToUint64Be(3); // HE-SIG-B MCS

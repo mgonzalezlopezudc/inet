@@ -32,7 +32,7 @@ static void updateSigACrc(std::vector<bool>& bits)
 
 %activity:
 // IEEE 802.11-2024 27.3.11.5, Eq. 27-11, and Table 17-6.
-auto suLSig = buildHeLSig(Ieee80211HeSigFormat::SU, 104, 0);
+auto suLSig = buildHeLSig(Ieee80211HeSigFormat::SU, 104000, 0);
 ASSERT(suLSig && suLSig.value.length == 58);
 auto suLSigBits = encodeHeLSig(suLSig.value, Ieee80211HeSigFormat::SU);
 ASSERT(suLSigBits && suLSigBits.bits == bitsFromBytes({0x4b, 0x07, 0x02}, 24));
@@ -40,23 +40,30 @@ auto tbLSig = buildHeTbLSig(58);
 ASSERT(tbLSig);
 ASSERT(encodeHeLSig(tbLSig.value, Ieee80211HeSigFormat::TB).bits == suLSigBits.bits);
 
-auto erLSig = buildHeLSig(Ieee80211HeSigFormat::ER_SU, 104, 0);
-auto muLSig = buildHeLSig(Ieee80211HeSigFormat::MU, 104, 0);
+auto erLSig = buildHeLSig(Ieee80211HeSigFormat::ER_SU, 104000, 0);
+auto muLSig = buildHeLSig(Ieee80211HeSigFormat::MU, 104000, 0);
 ASSERT(erLSig && muLSig && erLSig.value.length == 59 && muLSig.value.length == 59);
 auto erLSigBits = encodeHeLSig(erLSig.value, Ieee80211HeSigFormat::ER_SU);
 ASSERT(erLSigBits && erLSigBits.bits == bitsFromBytes({0x6b, 0x07, 0x00}, 24));
 ASSERT(encodeHeLSig(muLSig.value, Ieee80211HeSigFormat::MU).bits == erLSigBits.bits);
-ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 110, 6).value.length == 58);
-ASSERT(buildHeLSig(Ieee80211HeSigFormat::MU, 110, 6).value.length == 59);
-ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 106, 6).value.length == 55);
-ASSERT(!buildHeLSig(Ieee80211HeSigFormat::SU, 104, 2));
-ASSERT(!buildHeLSig(Ieee80211HeSigFormat::TB, 104, 0));
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 110000, 6000).value.length == 58);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::MU, 110000, 6000).value.length == 59);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 106000, 6000).value.length == 55);
+
+// Independent Equation 27-11 ceiling fixtures, including the 6 us extension at 2.4 GHz.
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 56800).value.length == 25);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::ER_SU, 64800).value.length == 32);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 62800, 6000).value.length == 25);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::ER_SU, 70800, 6000).value.length == 32);
+auto invalidSignalExtension = buildHeLSig(Ieee80211HeSigFormat::SU, 104000, 2000);
+ASSERT(!invalidSignalExtension && invalidSignalExtension.errorCode == Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION);
+ASSERT(!buildHeLSig(Ieee80211HeSigFormat::TB, 104000, 0));
 ASSERT(!buildHeTbLSig(59));
 
 ASSERT(decodeHeLSig(suLSigBits.bits, Ieee80211HeSigFormat::SU).value.length == 58);
 ASSERT(decodeHeRlSigRepeat(suLSigBits.bits, encodeHeRlSig(suLSig.value, Ieee80211HeSigFormat::SU).bits,
         Ieee80211HeSigFormat::SU));
-auto differentLSig = encodeHeLSig(buildHeLSig(Ieee80211HeSigFormat::SU, 108, 0).value,
+auto differentLSig = encodeHeLSig(buildHeLSig(Ieee80211HeSigFormat::SU, 108000, 0).value,
         Ieee80211HeSigFormat::SU);
 auto rlMismatch = decodeHeRlSigRepeat(suLSigBits.bits, differentLSig.bits, Ieee80211HeSigFormat::SU);
 ASSERT(!rlMismatch && rlMismatch.errorCode == Ieee80211HeSigCodecErrorCode::RL_SIG_MISMATCH);

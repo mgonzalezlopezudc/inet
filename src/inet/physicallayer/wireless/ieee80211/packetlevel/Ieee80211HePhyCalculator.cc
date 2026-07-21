@@ -36,6 +36,203 @@ constexpr int HE_SIG_B_DATA_BITS_PER_SYMBOL = 26;
 constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
 constexpr int HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK = 10;
 
+template<typename Result>
+bool setHeSignalingError(Result& result, Ieee80211HeSigCodecErrorCode errorCode, const char *error)
+{
+    result.valid = false;
+    result.errorCode = errorCode;
+    result.error = error;
+    return false;
+}
+
+template<typename Result, typename Source>
+bool copyHeSignalingError(Result& result, const Source& source)
+{
+    result.valid = false;
+    result.errorCode = source.errorCode;
+    result.error = source.error;
+    return false;
+}
+
+template<typename Result>
+bool resolveHeSignalExtension(const Ieee80211HeSuErSigASemantics& semantics,
+        Result& result, uint32_t& signalExtensionNs)
+{
+    if (!semantics.noSignalExtension)
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION,
+                "HE SU signaling requires an explicit NO_SIG_EXTN policy");
+    switch (semantics.operatingBand) {
+        case Ieee80211HeOperatingBand::BAND_2_4_GHZ:
+            signalExtensionNs = *semantics.noSignalExtension ? 0 : 6000;
+            return true;
+        case Ieee80211HeOperatingBand::BAND_5_GHZ:
+        case Ieee80211HeOperatingBand::BAND_6_GHZ:
+            signalExtensionNs = 0;
+            return true;
+        default:
+            return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION,
+                    "HE SU signaling has an unknown operating band");
+    }
+}
+
+template<typename Result>
+bool encodeHeTxopDuration(const Ieee80211HeTxopDuration& duration, Result& result, uint8_t& raw)
+{
+    if (duration.unspecified) {
+        if (duration.durationUs != 0)
+            return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                    "unspecified HE TXOP duration must not carry a numeric duration");
+        raw = 127;
+        return true;
+    }
+    if (duration.durationUs > 8448)
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                "HE TXOP duration exceeds 8448 us");
+    raw = duration.durationUs < 512 ?
+            (duration.durationUs / 8) << 1 :
+            1 | ((duration.durationUs - 512) / 128) << 1;
+    return true;
+}
+
+template<typename Result, typename Fields>
+bool encodeHeGiLtfSelection(const Ieee80211HeSuErSigASemantics& semantics,
+        Result& result, Fields& fields)
+{
+    if (!semantics.guardInterval || !semantics.ltfType ||
+            !semantics.dcmApplied || !semantics.stbcApplied)
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE SU signaling requires explicit GI, LTF, DCM, and STBC semantics");
+    const bool dcmApplied = *semantics.dcmApplied;
+    const bool stbcApplied = *semantics.stbcApplied;
+    if (dcmApplied && stbcApplied)
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE SU signaling cannot apply DCM and STBC together");
+
+    const auto guardInterval = *semantics.guardInterval;
+    const auto ltfType = *semantics.ltfType;
+    if (ltfType == HE_LTF_4X && guardInterval == HE_GI_0_8_US) {
+        if (dcmApplied || stbcApplied)
+            return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                    "4x HE-LTF with 0.8 us GI uses the special no-DCM/no-STBC encoding");
+        fields.dcm = true;
+        fields.stbc = true;
+        fields.giLtfSize = 3;
+        return true;
+    }
+
+    if (ltfType == HE_LTF_1X && guardInterval == HE_GI_0_8_US)
+        fields.giLtfSize = 0;
+    else if (ltfType == HE_LTF_2X && guardInterval == HE_GI_0_8_US)
+        fields.giLtfSize = 1;
+    else if (ltfType == HE_LTF_2X && guardInterval == HE_GI_1_6_US)
+        fields.giLtfSize = 2;
+    else if (ltfType == HE_LTF_4X && guardInterval == HE_GI_3_2_US)
+        fields.giLtfSize = 3;
+    else
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE SU signaling GI and HE-LTF selection is not representable");
+    fields.dcm = dcmApplied;
+    fields.stbc = stbcApplied;
+    return true;
+}
+
+template<typename Result, typename Fields>
+bool buildHeSuErCommonSignaling(const Ieee80211HeSuErSigASemantics& semantics,
+        Ieee80211HeSigFormat format, Result& result, Fields& fields)
+{
+    if (!semantics.beamChange || !semantics.uplink || !semantics.beamformed ||
+            !semantics.txopDuration || !semantics.fec)
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE SU signaling is missing an explicit policy or FEC outcome");
+    if (semantics.mcs < 0 || semantics.mcs > 11 || semantics.bssColor < 0 || semantics.bssColor > 63 ||
+            semantics.spatialReuse < 0 || semantics.spatialReuse > 15 ||
+            semantics.numberOfSpaceTimeStreams < 1 || semantics.numberOfSpaceTimeStreams > 8 ||
+            semantics.preFecPaddingFactor < 1 || semantics.preFecPaddingFactor > 4)
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                "HE SU signaling semantic field is out of range");
+    if (semantics.packetExtensionNs != 0 && semantics.packetExtensionNs != 4000 &&
+            semantics.packetExtensionNs != 8000 && semantics.packetExtensionNs != 12000 &&
+            semantics.packetExtensionNs != 16000)
+        return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                "HE packet extension must be 0, 4000, 8000, 12000, or 16000 ns");
+
+    uint32_t signalExtensionNs;
+    if (!resolveHeSignalExtension(semantics, result, signalExtensionNs))
+        return false;
+    auto lSig = buildHeLSig(format, semantics.txTimeNs, signalExtensionNs);
+    if (!lSig)
+        return copyHeSignalingError(result, lSig);
+    result.value.lSig = lSig.value;
+    result.value.signalExtensionNs = signalExtensionNs;
+
+    fields.beamChange = *semantics.beamChange;
+    fields.uplink = *semantics.uplink;
+    fields.mcs = semantics.mcs;
+    fields.bssColor = semantics.bssColor;
+    fields.spatialReuse = semantics.spatialReuse;
+    fields.numberOfSpaceTimeStreams = semantics.numberOfSpaceTimeStreams;
+    fields.beamformed = *semantics.beamformed;
+    fields.preFecPaddingFactor = semantics.preFecPaddingFactor % 4;
+    if (!encodeHeGiLtfSelection(semantics, result, fields))
+        return false;
+    if (!encodeHeTxopDuration(*semantics.txopDuration, result, fields.txop))
+        return false;
+
+    if (semantics.midamblePeriodicity) {
+        fields.doppler = true;
+        switch (*semantics.midamblePeriodicity) {
+            case Ieee80211HeMidamblePeriodicity::SYMBOLS_10:
+                fields.midamblePeriodicity = 10;
+                break;
+            case Ieee80211HeMidamblePeriodicity::SYMBOLS_20:
+                fields.midamblePeriodicity = 20;
+                break;
+            default:
+                return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                        "HE midamble periodicity is invalid");
+        }
+    }
+    else {
+        fields.doppler = false;
+        fields.midamblePeriodicity = 0;
+    }
+
+    switch (semantics.fec->coding) {
+        case HE_CODING_BCC:
+            if (semantics.fec->ldpcExtraSymbolSegment)
+                return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                        "BCC signaling must not carry an LDPC extra-symbol outcome");
+            fields.ldpcCoding = false;
+            fields.ldpcExtraSymbolSegment = false;
+            break;
+        case HE_CODING_LDPC:
+            if (!semantics.fec->ldpcExtraSymbolSegment)
+                return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                        "LDPC signaling requires a calculated extra-symbol outcome");
+            fields.ldpcCoding = true;
+            fields.ldpcExtraSymbolSegment = *semantics.fec->ldpcExtraSymbolSegment;
+            break;
+        default:
+            return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                    "HE signaling has an invalid FEC coding value");
+    }
+
+    const uint64_t elapsedNs = semantics.txTimeNs - signalExtensionNs - 20000;
+    const uint64_t roundedNs = (elapsedNs / 4000 + (elapsedNs % 4000 != 0)) * 4000;
+    const uint64_t roundingSlackNs = roundedNs - elapsedNs;
+    uint32_t symbolDurationNs;
+    switch (*semantics.guardInterval) {
+        case HE_GI_0_8_US: symbolDurationNs = 13600; break;
+        case HE_GI_1_6_US: symbolDurationNs = 14400; break;
+        case HE_GI_3_2_US: symbolDurationNs = 16000; break;
+        default:
+            return setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                    "HE signaling has an invalid guard interval");
+    }
+    fields.peDisambiguity = semantics.packetExtensionNs + roundingSlackNs >= symbolDurationNs;
+    return true;
+}
+
 int getHeSigBUserBlockCount(int numberOfUsers)
 {
     return (numberOfUsers + 1) / 2;
@@ -68,6 +265,61 @@ bool isHeLtfGiCombinationAllowed(Ieee80211HePpduFormat ppduFormat,
 }
 
 } // namespace
+
+Ieee80211HeSuSignalingResult buildIeee80211HeSuSignaling(const Ieee80211HeSuSignalingRequest& request)
+{
+    Ieee80211HeSuSignalingResult result;
+    auto& fields = result.value.sigA;
+    switch (request.bandwidth) {
+        case Ieee80211HeSuBandwidth::MHZ_20: fields.bandwidth = 0; break;
+        case Ieee80211HeSuBandwidth::MHZ_40: fields.bandwidth = 1; break;
+        case Ieee80211HeSuBandwidth::MHZ_80: fields.bandwidth = 2; break;
+        case Ieee80211HeSuBandwidth::MHZ_160:
+        case Ieee80211HeSuBandwidth::MHZ_80P80:
+            fields.bandwidth = 3;
+            break;
+        default:
+            setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                    "HE SU signaling has an invalid bandwidth selection");
+            return result;
+    }
+    if (!buildHeSuErCommonSignaling(request.common, Ieee80211HeSigFormat::SU, result, fields))
+        return result;
+    auto encoded = encodeHeSuSigA(fields);
+    if (!encoded) {
+        copyHeSignalingError(result, encoded);
+        return result;
+    }
+    result.valid = true;
+    result.errorCode = Ieee80211HeSigCodecErrorCode::NONE;
+    result.error.clear();
+    return result;
+}
+
+Ieee80211HeErSuSignalingResult buildIeee80211HeErSuSignaling(const Ieee80211HeErSuSignalingRequest& request)
+{
+    Ieee80211HeErSuSignalingResult result;
+    auto& fields = result.value.sigA;
+    switch (request.ruMode) {
+        case Ieee80211HeErSuRuMode::PRIMARY_242_TONE: fields.bandwidth = 0; break;
+        case Ieee80211HeErSuRuMode::PRIMARY_UPPER_106_TONE: fields.bandwidth = 1; break;
+        default:
+            setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                    "HE ER SU signaling has an invalid RU mode");
+            return result;
+    }
+    if (!buildHeSuErCommonSignaling(request.common, Ieee80211HeSigFormat::ER_SU, result, fields))
+        return result;
+    auto encoded = encodeHeErSuSigA(fields);
+    if (!encoded) {
+        copyHeSignalingError(result, encoded);
+        return result;
+    }
+    result.valid = true;
+    result.errorCode = Ieee80211HeSigCodecErrorCode::NONE;
+    result.error.clear();
+    return result;
+}
 
 int getHeRuDataSubcarrierCount(int toneSize)
 {
