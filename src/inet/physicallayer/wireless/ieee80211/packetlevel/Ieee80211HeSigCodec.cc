@@ -12,6 +12,589 @@
 namespace inet {
 namespace physicallayer {
 
+namespace {
+
+template<typename Result>
+bool setError(Result& result, Ieee80211HeSigCodecErrorCode errorCode, const char *error)
+{
+    result.valid = false;
+    result.errorCode = errorCode;
+    result.error = error;
+    return false;
+}
+
+template<typename Result>
+void setValid(Result& result)
+{
+    result.valid = true;
+    result.errorCode = Ieee80211HeSigCodecErrorCode::NONE;
+    result.error.clear();
+}
+
+template<typename Target, typename Source>
+void copyError(Target& target, const Source& source)
+{
+    target.valid = false;
+    target.errorCode = source.errorCode;
+    target.error = source.error;
+}
+
+uint32_t readInteger(const std::vector<bool>& bits, size_t offset, size_t width)
+{
+    uint32_t value = 0;
+    for (size_t i = 0; i < width; ++i)
+        if (bits[offset + i])
+            value |= uint32_t(1) << i;
+    return value;
+}
+
+void writeInteger(std::vector<bool>& bits, size_t offset, size_t width, uint32_t value)
+{
+    for (size_t i = 0; i < width; ++i)
+        bits[offset + i] = (value >> i) & 1;
+}
+
+bool hasEvenParity(const std::vector<bool>& bits, size_t count, bool parity)
+{
+    bool expectedParity = false;
+    for (size_t i = 0; i < count; ++i)
+        expectedParity = expectedParity != bits[i];
+    return expectedParity == parity;
+}
+
+bool isValidSpatialReuse(uint8_t value)
+{
+    return value == 0 || (value >= 13 && value <= 15);
+}
+
+Ieee80211HeSigALayout makeSigALayout(Ieee80211HeSigFormat format)
+{
+    Ieee80211HeSigALayout layout;
+    layout.format = format;
+    if (format == Ieee80211HeSigFormat::ER_SU) {
+        layout.ofdmSymbolCount = 4;
+        layout.repetitionCount = 2;
+    }
+    return layout;
+}
+
+template<typename Result>
+bool validateLSigLength(Result& result, uint64_t length, Ieee80211HeSigFormat format)
+{
+    if (length > 4095)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_LENGTH, "L-SIG LENGTH exceeds 12 bits");
+    unsigned int requiredRemainder;
+    switch (format) {
+        case Ieee80211HeSigFormat::SU:
+        case Ieee80211HeSigFormat::TB:
+            requiredRemainder = 1;
+            break;
+        case Ieee80211HeSigFormat::ER_SU:
+        case Ieee80211HeSigFormat::MU:
+            requiredRemainder = 2;
+            break;
+        default:
+            return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FORMAT, "unknown HE PPDU format for L-SIG");
+    }
+    if (length % 3 != requiredRemainder)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_LENGTH, "L-SIG LENGTH has the wrong modulo-3 value for the HE PPDU format");
+    return true;
+}
+
+template<typename Result>
+bool validateSigABits(Result& result, const std::vector<bool>& bits)
+{
+    if (bits.size() != 52)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT, "HE-SIG-A must contain exactly 52 logical bits");
+    for (size_t i = 46; i < 52; ++i)
+        if (bits[i])
+            return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TAIL, "HE-SIG-A tail must be zero");
+    std::vector<bool> protectedBits(bits.begin(), bits.begin() + 42);
+    auto crc = computeHeCrc4(protectedBits);
+    for (size_t i = 0; i < crc.size(); ++i)
+        if (bits[42 + i] != crc[i])
+            return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_CRC, "HE-SIG-A CRC-4 mismatch");
+    return true;
+}
+
+void finishSigA(std::vector<bool>& bits)
+{
+    std::vector<bool> protectedBits(bits.begin(), bits.begin() + 42);
+    auto crc = computeHeCrc4(protectedBits);
+    for (size_t i = 0; i < crc.size(); ++i)
+        bits[42 + i] = crc[i];
+}
+
+template<typename Fields, typename Result>
+bool validateSuSigA(Result& result, const Fields& value, bool extendedRange)
+{
+    if (value.bssColor > 63 || value.txop > 127 || value.preFecPaddingFactor > 3 || value.giLtfSize > 3)
+        return setError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE, "HE SU SIG-A field exceeds its encoded width");
+    if (!isValidSpatialReuse(value.spatialReuse))
+        return setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE, "HE SU SIG-A spatial reuse value is reserved");
+    if ((!extendedRange && (value.mcs > 11 || value.bandwidth > 3)) ||
+            (extendedRange && (value.bandwidth > 1 || (value.bandwidth == 0 && value.mcs > 2) || (value.bandwidth == 1 && value.mcs != 0))))
+        return setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE, "HE SU SIG-A MCS or bandwidth value is reserved for the format");
+    if (value.numberOfSpaceTimeStreams == 0 || value.numberOfSpaceTimeStreams > (extendedRange ? 2 : (value.doppler ? 4 : 8)))
+        return setError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE, "HE SU SIG-A space-time stream count is invalid");
+    if ((value.doppler && value.midamblePeriodicity != 10 && value.midamblePeriodicity != 20) ||
+            (!value.doppler && value.midamblePeriodicity != 0))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE SU SIG-A midamble periodicity is inconsistent with Doppler");
+    if (!value.ldpcCoding && value.ldpcExtraSymbolSegment)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE SU SIG-A LDPC extra symbol segment is not a semantic field with BCC coding");
+    if (!extendedRange && !value.ldpcCoding &&
+            (value.bandwidth > 0 || value.mcs >= 10 || value.numberOfSpaceTimeStreams > 4))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE SU SIG-A BCC requires 20 MHz, MCS below 10, and at most four space-time streams");
+    if (value.dcm && value.stbc && value.giLtfSize != 3)
+        return setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE, "HE SU SIG-A DCM/STBC/GI-LTF combination is reserved");
+    bool dcmApplied = value.dcm && !(value.stbc && value.giLtfSize == 3);
+    bool stbcApplied = value.stbc && !(value.dcm && value.giLtfSize == 3);
+    if (dcmApplied && value.mcs != 0 && value.mcs != 1 && value.mcs != 3 && value.mcs != 4)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE SU SIG-A DCM is not applicable to this MCS");
+    if (dcmApplied && value.numberOfSpaceTimeStreams > 2)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE SU SIG-A DCM supports at most two space-time streams");
+    if (stbcApplied && value.numberOfSpaceTimeStreams != 2)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE SU SIG-A applied STBC requires two space-time streams");
+    if (extendedRange && value.numberOfSpaceTimeStreams != (stbcApplied ? 2 : 1))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE ER SU SIG-A stream count is inconsistent with applied STBC");
+    return true;
+}
+
+template<typename Fields>
+Ieee80211HeSigABitsResult encodeSuSigA(const Fields& value, Ieee80211HeSigFormat format)
+{
+    Ieee80211HeSigABitsResult result;
+    result.layout = makeSigALayout(format);
+    if (!validateSuSigA(result, value, format == Ieee80211HeSigFormat::ER_SU))
+        return result;
+    result.bits.assign(52, false);
+    result.bits[0] = true;
+    result.bits[1] = value.beamChange;
+    result.bits[2] = value.uplink;
+    writeInteger(result.bits, 3, 4, value.mcs);
+    result.bits[7] = value.dcm;
+    writeInteger(result.bits, 8, 6, value.bssColor);
+    result.bits[14] = true;
+    writeInteger(result.bits, 15, 4, value.spatialReuse);
+    writeInteger(result.bits, 19, 2, value.bandwidth);
+    writeInteger(result.bits, 21, 2, value.giLtfSize);
+    uint8_t nsts = value.numberOfSpaceTimeStreams - 1;
+    if (value.doppler && value.midamblePeriodicity == 20)
+        nsts |= 4;
+    writeInteger(result.bits, 23, 3, nsts);
+    writeInteger(result.bits, 26, 7, value.txop);
+    result.bits[33] = value.ldpcCoding;
+    result.bits[34] = value.ldpcCoding ? value.ldpcExtraSymbolSegment : true;
+    result.bits[35] = value.stbc;
+    result.bits[36] = value.beamformed;
+    writeInteger(result.bits, 37, 2, value.preFecPaddingFactor);
+    result.bits[39] = value.peDisambiguity;
+    result.bits[40] = true;
+    result.bits[41] = value.doppler;
+    finishSigA(result.bits);
+    setValid(result);
+    return result;
+}
+
+template<typename Fields, typename Result>
+Result decodeSuSigA(const std::vector<bool>& bits, Ieee80211HeSigFormat format)
+{
+    Result result;
+    result.layout = makeSigALayout(format);
+    if (!validateSigABits(result, bits))
+        return result;
+    if (!bits[0]) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FORMAT, "HE SU or ER SU SIG-A format bit must be 1");
+        return result;
+    }
+    if (!bits[14] || !bits[40] || (!bits[33] && !bits[34])) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD, "HE SU SIG-A reserved bit is not set to 1");
+        return result;
+    }
+    auto& value = result.value;
+    value.beamChange = bits[1];
+    value.uplink = bits[2];
+    value.mcs = readInteger(bits, 3, 4);
+    value.dcm = bits[7];
+    value.bssColor = readInteger(bits, 8, 6);
+    value.spatialReuse = readInteger(bits, 15, 4);
+    value.bandwidth = readInteger(bits, 19, 2);
+    value.giLtfSize = readInteger(bits, 21, 2);
+    value.txop = readInteger(bits, 26, 7);
+    value.ldpcCoding = bits[33];
+    value.ldpcExtraSymbolSegment = value.ldpcCoding && bits[34];
+    value.stbc = bits[35];
+    value.beamformed = bits[36];
+    value.preFecPaddingFactor = readInteger(bits, 37, 2);
+    value.peDisambiguity = bits[39];
+    value.doppler = bits[41];
+    uint8_t nsts = readInteger(bits, 23, 3);
+    if (value.doppler) {
+        value.numberOfSpaceTimeStreams = (nsts & 3) + 1;
+        value.midamblePeriodicity = (nsts & 4) ? 20 : 10;
+    }
+    else
+        value.numberOfSpaceTimeStreams = nsts + 1;
+    if (!validateSuSigA(result, value, format == Ieee80211HeSigFormat::ER_SU))
+        return result;
+    setValid(result);
+    return result;
+}
+
+int encodeHeLtfCount(uint8_t count)
+{
+    switch (count) {
+        case 1: return 0;
+        case 2: return 1;
+        case 4: return 2;
+        case 6: return 3;
+        case 8: return 4;
+        default: return -1;
+    }
+}
+
+template<typename Result>
+bool validateMuSigA(Result& result, const Ieee80211HeMuSigA& value)
+{
+    if (value.heSigBMcs > 5 || value.bssColor > 63 || value.bandwidth > 7 || value.txop > 127 || value.preFecPaddingFactor > 3 || value.giLtfSize > 3)
+        return setError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE, "HE MU SIG-A field exceeds its encoded width");
+    if (!isValidSpatialReuse(value.spatialReuse))
+        return setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE, "HE MU SIG-A spatial reuse value is reserved");
+    if (value.heSigBDcm && value.heSigBMcs != 0 && value.heSigBMcs != 1 && value.heSigBMcs != 3 && value.heSigBMcs != 4)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE-SIG-B DCM is not applicable to this MCS");
+    if (value.heSigBCompression && value.bandwidth > 3)
+        return setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE, "punctured HE MU bandwidth codes are reserved with HE-SIG-B compression");
+    if ((!value.heSigBCompression && (value.numberOfHeSigBSymbols < 1 || value.numberOfHeSigBSymbols > 16 || value.numberOfMuMimoUsers != 0)) ||
+            (value.heSigBCompression && (value.numberOfMuMimoUsers < 1 || value.numberOfMuMimoUsers > 8 || value.numberOfHeSigBSymbols != 0 || value.numberOfHeSigBSymbolsIsSaturated)))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE MU SIG-A compression count semantics are inconsistent");
+    if (!value.heSigBCompression && value.numberOfHeSigBSymbolsIsSaturated != (value.numberOfHeSigBSymbols == 16))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE MU SIG-A saturated symbol-count flag must represent the 16-or-more code");
+    if (value.heSigBCompression && value.numberOfMuMimoUsers > 1 && value.stbc)
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "compressed HE MU SIG-A does not support STBC for the full-band multi-user RU");
+    int ltfCode = encodeHeLtfCount(value.numberOfHeLtfSymbols);
+    if (ltfCode < 0 || (!value.doppler && ltfCode > 4) || (value.doppler && ltfCode > 2))
+        return setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE, "HE MU SIG-A HE-LTF count is reserved");
+    if ((value.doppler && value.midamblePeriodicity != 10 && value.midamblePeriodicity != 20) ||
+            (!value.doppler && value.midamblePeriodicity != 0))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION, "HE MU SIG-A midamble periodicity is inconsistent with Doppler");
+    return true;
+}
+
+template<typename Result>
+bool validateTbSpatialReuse(Result& result, const Ieee80211HeTbSigA& value)
+{
+    if (value.bandwidth == 0 && (value.spatialReuse[1] != value.spatialReuse[0] ||
+            value.spatialReuse[2] != value.spatialReuse[0] || value.spatialReuse[3] != value.spatialReuse[0]))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "20 MHz HE TB SIG-A requires all spatial reuse values to be equal");
+    if (value.bandwidth == 1 && (value.spatialReuse[2] != value.spatialReuse[0] ||
+            value.spatialReuse[3] != value.spatialReuse[1]))
+        return setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "40 MHz HE TB SIG-A requires spatial reuse values 3/4 to repeat values 1/2");
+    return true;
+}
+
+} // namespace
+
+Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint32_t txTimeUs, uint32_t signalExtensionUs)
+{
+    Ieee80211HeLSigResult result;
+    if (format == Ieee80211HeSigFormat::TB) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FORMAT, "HE TB L-SIG requires caller-supplied L_LENGTH");
+        return result;
+    }
+    if (signalExtensionUs != 0 && signalExtensionUs != 6) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION, "HE L-SIG signal extension must be 0 or 6 us");
+        return result;
+    }
+    if (txTimeUs < signalExtensionUs + 20 || (txTimeUs - signalExtensionUs - 20) % 4 != 0) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TXTIME, "HE L-SIG TXTIME does not yield an exact integer Equation 27-11 result");
+        return result;
+    }
+    uint32_t m;
+    if (format == Ieee80211HeSigFormat::SU)
+        m = 2;
+    else if (format == Ieee80211HeSigFormat::ER_SU || format == Ieee80211HeSigFormat::MU)
+        m = 1;
+    else {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FORMAT, "unknown HE PPDU format for L-SIG");
+        return result;
+    }
+    uint64_t symbols = (txTimeUs - signalExtensionUs - 20) / 4;
+    if (symbols * 3 < 3 + m) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TXTIME, "HE L-SIG TXTIME is too short");
+        return result;
+    }
+    uint64_t length = symbols * 3 - 3 - m;
+    if (!validateLSigLength(result, length, format))
+        return result;
+    result.value.length = length;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeLSigResult buildHeTbLSig(uint16_t lLength)
+{
+    Ieee80211HeLSigResult result;
+    if (!validateLSigLength(result, lLength, Ieee80211HeSigFormat::TB))
+        return result;
+    result.value.length = lLength;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeLSigBitsResult encodeHeLSig(const Ieee80211HeLSig& value, Ieee80211HeSigFormat format)
+{
+    Ieee80211HeLSigBitsResult result;
+    if (!validateLSigLength(result, value.length, format))
+        return result;
+    result.bits.assign(24, false);
+    writeInteger(result.bits, 0, 4, 0xB); // Table 17-6 transmit-order bits 1101
+    writeInteger(result.bits, 5, 12, value.length);
+    bool parity = false;
+    for (size_t i = 0; i < 17; ++i)
+        parity = parity != result.bits[i];
+    result.bits[17] = parity;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeLSigResult decodeHeLSig(const std::vector<bool>& bits, Ieee80211HeSigFormat format)
+{
+    Ieee80211HeLSigResult result;
+    if (bits.size() != 24) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT, "L-SIG must contain exactly 24 logical bits");
+        return result;
+    }
+    if (readInteger(bits, 0, 4) != 0xB) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RATE, "L-SIG RATE must be transmit-order bits 1101 (6 Mb/s)");
+        return result;
+    }
+    if (bits[4]) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD, "L-SIG reserved bit must be 0");
+        return result;
+    }
+    if (!hasEvenParity(bits, 17, bits[17])) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_PARITY, "L-SIG parity check failed");
+        return result;
+    }
+    for (size_t i = 18; i < 24; ++i)
+        if (bits[i]) {
+            setError(result, Ieee80211HeSigCodecErrorCode::INVALID_TAIL, "L-SIG tail must be zero");
+            return result;
+        }
+    result.value.length = readInteger(bits, 5, 12);
+    if (!validateLSigLength(result, result.value.length, format))
+        return result;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeLSigBitsResult encodeHeRlSig(const Ieee80211HeLSig& value, Ieee80211HeSigFormat format)
+{
+    return encodeHeLSig(value, format);
+}
+
+Ieee80211HeRlSigResult decodeHeRlSigRepeat(const std::vector<bool>& lSigBits, const std::vector<bool>& rlSigBits, Ieee80211HeSigFormat format)
+{
+    Ieee80211HeRlSigResult result;
+    auto lSig = decodeHeLSig(lSigBits, format);
+    if (!lSig) {
+        copyError(result, lSig);
+        return result;
+    }
+    auto rlSig = decodeHeLSig(rlSigBits, format);
+    if (!rlSig) {
+        copyError(result, rlSig);
+        return result;
+    }
+    if (lSigBits != rlSigBits) {
+        setError(result, Ieee80211HeSigCodecErrorCode::RL_SIG_MISMATCH, "RL-SIG is not an exact repeat of L-SIG");
+        return result;
+    }
+    result.value = lSig.value;
+    setValid(result);
+    return result;
+}
+
+std::array<bool, 4> computeHeCrc4(const std::vector<bool>& protectedBits)
+{
+    uint8_t remainder = 0xFF;
+    for (bool bit : protectedBits) {
+        bool feedback = ((remainder >> 7) & 1) != bit;
+        remainder <<= 1;
+        if (feedback)
+            remainder ^= 0x07;
+    }
+    remainder ^= 0xFF;
+    return {{bool(remainder & 0x80), bool(remainder & 0x40), bool(remainder & 0x20), bool(remainder & 0x10)}};
+}
+
+Ieee80211HeSigABitsResult encodeHeSuSigA(const Ieee80211HeSuSigA& value)
+{
+    return encodeSuSigA(value, Ieee80211HeSigFormat::SU);
+}
+
+Ieee80211HeSuSigAResult decodeHeSuSigA(const std::vector<bool>& bits)
+{
+    return decodeSuSigA<Ieee80211HeSuSigA, Ieee80211HeSuSigAResult>(bits, Ieee80211HeSigFormat::SU);
+}
+
+Ieee80211HeSigABitsResult encodeHeErSuSigA(const Ieee80211HeErSuSigA& value)
+{
+    return encodeSuSigA(value, Ieee80211HeSigFormat::ER_SU);
+}
+
+Ieee80211HeErSuSigAResult decodeHeErSuSigA(const std::vector<bool>& bits)
+{
+    return decodeSuSigA<Ieee80211HeErSuSigA, Ieee80211HeErSuSigAResult>(bits, Ieee80211HeSigFormat::ER_SU);
+}
+
+Ieee80211HeSigABitsResult encodeHeMuSigA(const Ieee80211HeMuSigA& value)
+{
+    Ieee80211HeSigABitsResult result;
+    result.layout = makeSigALayout(Ieee80211HeSigFormat::MU);
+    if (!validateMuSigA(result, value))
+        return result;
+    result.bits.assign(52, false);
+    result.bits[0] = value.uplink;
+    writeInteger(result.bits, 1, 3, value.heSigBMcs);
+    result.bits[4] = value.heSigBDcm;
+    writeInteger(result.bits, 5, 6, value.bssColor);
+    writeInteger(result.bits, 11, 4, value.spatialReuse);
+    writeInteger(result.bits, 15, 3, value.bandwidth);
+    uint8_t count = value.heSigBCompression ? value.numberOfMuMimoUsers : value.numberOfHeSigBSymbols;
+    writeInteger(result.bits, 18, 4, count - 1);
+    result.bits[22] = value.heSigBCompression;
+    writeInteger(result.bits, 23, 2, value.giLtfSize);
+    result.bits[25] = value.doppler;
+    writeInteger(result.bits, 26, 7, value.txop);
+    result.bits[33] = true;
+    uint8_t ltfCode = encodeHeLtfCount(value.numberOfHeLtfSymbols);
+    if (value.doppler && value.midamblePeriodicity == 20)
+        ltfCode |= 4;
+    writeInteger(result.bits, 34, 3, ltfCode);
+    result.bits[37] = value.ldpcExtraSymbolSegment;
+    result.bits[38] = value.stbc;
+    writeInteger(result.bits, 39, 2, value.preFecPaddingFactor);
+    result.bits[41] = value.peDisambiguity;
+    finishSigA(result.bits);
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeMuSigAResult decodeHeMuSigA(const std::vector<bool>& bits)
+{
+    Ieee80211HeMuSigAResult result;
+    result.layout = makeSigALayout(Ieee80211HeSigFormat::MU);
+    if (!validateSigABits(result, bits))
+        return result;
+    if (!bits[33]) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD, "HE MU SIG-A reserved bit must be 1");
+        return result;
+    }
+    auto& value = result.value;
+    value.uplink = bits[0];
+    value.heSigBMcs = readInteger(bits, 1, 3);
+    value.heSigBDcm = bits[4];
+    value.bssColor = readInteger(bits, 5, 6);
+    value.spatialReuse = readInteger(bits, 11, 4);
+    value.bandwidth = readInteger(bits, 15, 3);
+    uint8_t encodedCount = readInteger(bits, 18, 4);
+    value.heSigBCompression = bits[22];
+    uint8_t count = encodedCount + 1;
+    if (value.heSigBCompression) {
+        value.numberOfHeSigBSymbols = 0;
+        value.numberOfMuMimoUsers = count;
+    }
+    else {
+        value.numberOfHeSigBSymbols = count;
+        value.numberOfHeSigBSymbolsIsSaturated = encodedCount == 15;
+        value.numberOfMuMimoUsers = 0;
+    }
+    value.giLtfSize = readInteger(bits, 23, 2);
+    value.doppler = bits[25];
+    value.txop = readInteger(bits, 26, 7);
+    uint8_t ltfCode = readInteger(bits, 34, 3);
+    if (value.doppler) {
+        value.midamblePeriodicity = (ltfCode & 4) ? 20 : 10;
+        ltfCode &= 3;
+    }
+    static const uint8_t ltfCounts[] = {1, 2, 4, 6, 8};
+    if (ltfCode >= sizeof(ltfCounts)) {
+        setError(result, Ieee80211HeSigCodecErrorCode::RESERVED_FIELD_VALUE, "HE MU SIG-A HE-LTF count code is reserved");
+        return result;
+    }
+    value.numberOfHeLtfSymbols = ltfCounts[ltfCode];
+    value.ldpcExtraSymbolSegment = bits[37];
+    value.stbc = bits[38];
+    value.preFecPaddingFactor = readInteger(bits, 39, 2);
+    value.peDisambiguity = bits[41];
+    if (!validateMuSigA(result, value))
+        return result;
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeSigABitsResult encodeHeTbSigA(const Ieee80211HeTbSigA& value)
+{
+    Ieee80211HeSigABitsResult result;
+    result.layout = makeSigALayout(Ieee80211HeSigFormat::TB);
+    if (value.bssColor > 63 || value.bandwidth > 3 || value.txop > 127 ||
+            std::any_of(value.spatialReuse.begin(), value.spatialReuse.end(), [](uint8_t reuse) { return reuse > 15; })) {
+        setError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE, "HE TB SIG-A field exceeds its encoded width");
+        return result;
+    }
+    if (value.triggerReserved != 511) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD, "HE TB SIG-A Trigger reserved value must be all ones");
+        return result;
+    }
+    if (!validateTbSpatialReuse(result, value))
+        return result;
+    result.bits.assign(52, false);
+    writeInteger(result.bits, 1, 6, value.bssColor);
+    for (size_t i = 0; i < value.spatialReuse.size(); ++i)
+        writeInteger(result.bits, 7 + i * 4, 4, value.spatialReuse[i]);
+    result.bits[23] = true;
+    writeInteger(result.bits, 24, 2, value.bandwidth);
+    writeInteger(result.bits, 26, 7, value.txop);
+    writeInteger(result.bits, 33, 9, value.triggerReserved);
+    finishSigA(result.bits);
+    setValid(result);
+    return result;
+}
+
+Ieee80211HeTbSigAResult decodeHeTbSigA(const std::vector<bool>& bits)
+{
+    Ieee80211HeTbSigAResult result;
+    result.layout = makeSigALayout(Ieee80211HeSigFormat::TB);
+    if (!validateSigABits(result, bits))
+        return result;
+    if (bits[0]) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FORMAT, "HE TB SIG-A format bit must be 0");
+        return result;
+    }
+    if (!bits[23]) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD, "HE TB SIG-A reserved bit must be 1");
+        return result;
+    }
+    result.value.bssColor = readInteger(bits, 1, 6);
+    for (size_t i = 0; i < result.value.spatialReuse.size(); ++i)
+        result.value.spatialReuse[i] = readInteger(bits, 7 + i * 4, 4);
+    result.value.bandwidth = readInteger(bits, 24, 2);
+    result.value.txop = readInteger(bits, 26, 7);
+    result.value.triggerReserved = readInteger(bits, 33, 9);
+    if (result.value.triggerReserved != 511) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD, "HE TB SIG-A Trigger reserved value must be all ones");
+        return result;
+    }
+    if (!validateTbSpatialReuse(result, result.value))
+        return result;
+    setValid(result);
+    return result;
+}
+
 bool decodeTable27_27(uint8_t code, std::vector<std::pair<int, int>>& RUs, std::vector<int>& userCounts)
 {
     RUs.clear();

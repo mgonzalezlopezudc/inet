@@ -7,22 +7,218 @@
 #ifndef __INET_IEEE80211HESIGCODEC_H
 #define __INET_IEEE80211HESIGCODEC_H
 
+#include <array>
 #include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
 
-// HE-SIG-B Common field codec.
+// IEEE 802.11 HE logical signaling codecs.
 //
-// Encodes and decodes the RU allocation subfields of the HE-SIG-B Common field
-// as defined in IEEE 802.11-2024 Clause 27.3.11.8 and Table 27-27.  The
-// codec maps between a concrete Ieee80211HeRu layout and the compact 8-bit
-// allocation codes carried in HE-SIG-B content channels.
+// The L-SIG, RL-SIG, and HE-SIG-A codecs below operate on uncoded logical bits.
+// Bit 0 is the first transmitted logical bit (B0); multi-bit integer fields
+// place their least-significant encoded bit at the lower vector index.
+// They deliberately do not model BCC encoding, interleaving, modulation, or
+// packet/chunk boundaries. The existing HE-SIG-B helpers map between concrete
+// Ieee80211HeRu layouts and the compact allocation codes carried in HE-SIG-B.
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
 namespace inet {
 namespace physicallayer {
+
+enum class Ieee80211HeSigFormat {
+    SU,
+    ER_SU,
+    MU,
+    TB,
+};
+
+enum class Ieee80211HeSigCodecErrorCode {
+    NONE,
+    INVALID_FORMAT,
+    INVALID_BIT_COUNT,
+    INVALID_TXTIME,
+    INVALID_SIGNAL_EXTENSION,
+    INVALID_LENGTH,
+    INVALID_RATE,
+    INVALID_RESERVED_FIELD,
+    INVALID_PARITY,
+    INVALID_TAIL,
+    RL_SIG_MISMATCH,
+    INVALID_CRC,
+    FIELD_OUT_OF_RANGE,
+    RESERVED_FIELD_VALUE,
+    INVALID_FIELD_COMBINATION,
+};
+
+struct Ieee80211HeSigCodecStatus
+{
+    bool valid = false;
+    Ieee80211HeSigCodecErrorCode errorCode = Ieee80211HeSigCodecErrorCode::NONE;
+    std::string error;
+
+    explicit operator bool() const { return valid; }
+};
+
+/** Validated logical L-SIG value. RATE, reserved, parity, and tail are derived. */
+struct Ieee80211HeLSig
+{
+    uint16_t length = 0;
+
+    bool operator==(const Ieee80211HeLSig& other) const { return length == other.length; }
+    bool operator!=(const Ieee80211HeLSig& other) const { return !(*this == other); }
+};
+
+struct Ieee80211HeLSigResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeLSig value;
+};
+
+struct Ieee80211HeLSigBitsResult : Ieee80211HeSigCodecStatus
+{
+    std::vector<bool> bits;
+};
+
+struct Ieee80211HeRlSigResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeLSig value;
+};
+
+INET_API Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint32_t txTimeUs,
+        uint32_t signalExtensionUs = 0);
+INET_API Ieee80211HeLSigResult buildHeTbLSig(uint16_t lLength);
+INET_API Ieee80211HeLSigBitsResult encodeHeLSig(const Ieee80211HeLSig& value, Ieee80211HeSigFormat format);
+INET_API Ieee80211HeLSigResult decodeHeLSig(const std::vector<bool>& bits, Ieee80211HeSigFormat format);
+INET_API Ieee80211HeLSigBitsResult encodeHeRlSig(const Ieee80211HeLSig& value, Ieee80211HeSigFormat format);
+INET_API Ieee80211HeRlSigResult decodeHeRlSigRepeat(const std::vector<bool>& lSigBits,
+        const std::vector<bool>& rlSigBits, Ieee80211HeSigFormat format);
+
+/** IEEE 802.11-2024 27.3.11.7.3 CRC-4 bits, in transmitted c7..c4 order. */
+INET_API std::array<bool, 4> computeHeCrc4(const std::vector<bool>& protectedBits);
+
+struct Ieee80211HeSigALayout
+{
+    Ieee80211HeSigFormat format = Ieee80211HeSigFormat::SU;
+    uint8_t logicalBitCount = 52;
+    uint8_t ofdmSymbolCount = 2;
+    uint8_t repetitionCount = 1;
+};
+
+struct Ieee80211HeSigABitsResult : Ieee80211HeSigCodecStatus
+{
+    std::vector<bool> bits;
+    Ieee80211HeSigALayout layout;
+};
+
+struct Ieee80211HeSuSigA
+{
+    bool beamChange = false;
+    bool uplink = false;
+    uint8_t mcs = 0;
+    bool dcm = false;
+    uint8_t bssColor = 0;
+    uint8_t spatialReuse = 0;
+    uint8_t bandwidth = 0;
+    uint8_t giLtfSize = 0;
+    uint8_t numberOfSpaceTimeStreams = 1;
+    uint8_t midamblePeriodicity = 0;
+    uint8_t txop = 127;
+    bool ldpcCoding = false;
+    bool ldpcExtraSymbolSegment = false;
+    bool stbc = false;
+    bool beamformed = false;
+    uint8_t preFecPaddingFactor = 0;
+    bool peDisambiguity = false;
+    bool doppler = false;
+};
+
+struct Ieee80211HeErSuSigA
+{
+    bool beamChange = false;
+    bool uplink = false;
+    uint8_t mcs = 0;
+    bool dcm = false;
+    uint8_t bssColor = 0;
+    uint8_t spatialReuse = 0;
+    uint8_t bandwidth = 0;
+    uint8_t giLtfSize = 0;
+    uint8_t numberOfSpaceTimeStreams = 1;
+    uint8_t midamblePeriodicity = 0;
+    uint8_t txop = 127;
+    bool ldpcCoding = false;
+    bool ldpcExtraSymbolSegment = false;
+    bool stbc = false;
+    bool beamformed = false;
+    uint8_t preFecPaddingFactor = 0;
+    bool peDisambiguity = false;
+    bool doppler = false;
+};
+
+struct Ieee80211HeMuSigA
+{
+    bool uplink = false;
+    uint8_t heSigBMcs = 0;
+    bool heSigBDcm = false;
+    uint8_t bssColor = 0;
+    uint8_t spatialReuse = 0;
+    uint8_t bandwidth = 0;
+    bool heSigBCompression = false;
+    uint8_t numberOfHeSigBSymbols = 1;
+    bool numberOfHeSigBSymbolsIsSaturated = false; // true means 16 or more symbols
+    uint8_t numberOfMuMimoUsers = 0;
+    uint8_t giLtfSize = 0;
+    bool doppler = false;
+    uint8_t txop = 127;
+    uint8_t numberOfHeLtfSymbols = 1;
+    uint8_t midamblePeriodicity = 0;
+    bool ldpcExtraSymbolSegment = false;
+    bool stbc = false;
+    uint8_t preFecPaddingFactor = 0;
+    bool peDisambiguity = false;
+};
+
+struct Ieee80211HeTbSigA
+{
+    uint8_t bssColor = 0;
+    std::array<uint8_t, 4> spatialReuse = {{0, 0, 0, 0}};
+    uint8_t bandwidth = 0;
+    uint8_t txop = 127;
+    uint16_t triggerReserved = 511;
+};
+
+struct Ieee80211HeSuSigAResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeSuSigA value;
+    Ieee80211HeSigALayout layout;
+};
+
+struct Ieee80211HeErSuSigAResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeErSuSigA value;
+    Ieee80211HeSigALayout layout;
+};
+
+struct Ieee80211HeMuSigAResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeMuSigA value;
+    Ieee80211HeSigALayout layout;
+};
+
+struct Ieee80211HeTbSigAResult : Ieee80211HeSigCodecStatus
+{
+    Ieee80211HeTbSigA value;
+    Ieee80211HeSigALayout layout;
+};
+
+INET_API Ieee80211HeSigABitsResult encodeHeSuSigA(const Ieee80211HeSuSigA& value);
+INET_API Ieee80211HeSuSigAResult decodeHeSuSigA(const std::vector<bool>& bits);
+INET_API Ieee80211HeSigABitsResult encodeHeErSuSigA(const Ieee80211HeErSuSigA& value);
+INET_API Ieee80211HeErSuSigAResult decodeHeErSuSigA(const std::vector<bool>& bits);
+INET_API Ieee80211HeSigABitsResult encodeHeMuSigA(const Ieee80211HeMuSigA& value);
+INET_API Ieee80211HeMuSigAResult decodeHeMuSigA(const std::vector<bool>& bits);
+INET_API Ieee80211HeSigABitsResult encodeHeTbSigA(const Ieee80211HeTbSigA& value);
+INET_API Ieee80211HeTbSigAResult decodeHeTbSigA(const std::vector<bool>& bits);
 
 /** One content channel's allocation subfields. */
 struct Ieee80211HeSigBContentChannel {

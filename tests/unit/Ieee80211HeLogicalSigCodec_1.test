@@ -1,0 +1,268 @@
+%description:
+Validate IEEE 802.11-2024 logical L-SIG, RL-SIG, CRC-4, and HE-SIG-A codecs.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
+#include <cstdint>
+#include <initializer_list>
+#include <string>
+#include <vector>
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+static std::vector<bool> bitsFromBytes(std::initializer_list<uint8_t> bytes, size_t bitCount)
+{
+    std::vector<bool> bits;
+    for (auto byte : bytes)
+        for (int i = 0; i < 8; ++i)
+            bits.push_back((byte >> i) & 1);
+    bits.resize(bitCount);
+    return bits;
+}
+
+static void updateSigACrc(std::vector<bool>& bits)
+{
+    std::vector<bool> protectedBits(bits.begin(), bits.begin() + 42);
+    auto crc = computeHeCrc4(protectedBits);
+    for (size_t i = 0; i < crc.size(); ++i)
+        bits[42 + i] = crc[i];
+}
+
+%activity:
+// IEEE 802.11-2024 27.3.11.5, Eq. 27-11, and Table 17-6.
+auto suLSig = buildHeLSig(Ieee80211HeSigFormat::SU, 104, 0);
+ASSERT(suLSig && suLSig.value.length == 58);
+auto suLSigBits = encodeHeLSig(suLSig.value, Ieee80211HeSigFormat::SU);
+ASSERT(suLSigBits && suLSigBits.bits == bitsFromBytes({0x4b, 0x07, 0x02}, 24));
+auto tbLSig = buildHeTbLSig(58);
+ASSERT(tbLSig);
+ASSERT(encodeHeLSig(tbLSig.value, Ieee80211HeSigFormat::TB).bits == suLSigBits.bits);
+
+auto erLSig = buildHeLSig(Ieee80211HeSigFormat::ER_SU, 104, 0);
+auto muLSig = buildHeLSig(Ieee80211HeSigFormat::MU, 104, 0);
+ASSERT(erLSig && muLSig && erLSig.value.length == 59 && muLSig.value.length == 59);
+auto erLSigBits = encodeHeLSig(erLSig.value, Ieee80211HeSigFormat::ER_SU);
+ASSERT(erLSigBits && erLSigBits.bits == bitsFromBytes({0x6b, 0x07, 0x00}, 24));
+ASSERT(encodeHeLSig(muLSig.value, Ieee80211HeSigFormat::MU).bits == erLSigBits.bits);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 110, 6).value.length == 58);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::MU, 110, 6).value.length == 59);
+ASSERT(buildHeLSig(Ieee80211HeSigFormat::SU, 106, 6).value.length == 55);
+ASSERT(!buildHeLSig(Ieee80211HeSigFormat::SU, 104, 2));
+ASSERT(!buildHeLSig(Ieee80211HeSigFormat::TB, 104, 0));
+ASSERT(!buildHeTbLSig(59));
+
+ASSERT(decodeHeLSig(suLSigBits.bits, Ieee80211HeSigFormat::SU).value.length == 58);
+ASSERT(decodeHeRlSigRepeat(suLSigBits.bits, encodeHeRlSig(suLSig.value, Ieee80211HeSigFormat::SU).bits,
+        Ieee80211HeSigFormat::SU));
+auto differentLSig = encodeHeLSig(buildHeLSig(Ieee80211HeSigFormat::SU, 108, 0).value,
+        Ieee80211HeSigFormat::SU);
+auto rlMismatch = decodeHeRlSigRepeat(suLSigBits.bits, differentLSig.bits, Ieee80211HeSigFormat::SU);
+ASSERT(!rlMismatch && rlMismatch.errorCode == Ieee80211HeSigCodecErrorCode::RL_SIG_MISMATCH);
+ASSERT(!decodeHeLSig(std::vector<bool>(23), Ieee80211HeSigFormat::SU));
+auto malformedLSig = suLSigBits.bits;
+malformedLSig[0] = !malformedLSig[0];
+ASSERT(decodeHeLSig(malformedLSig, Ieee80211HeSigFormat::SU).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_RATE);
+malformedLSig = suLSigBits.bits;
+malformedLSig[4] = true;
+ASSERT(decodeHeLSig(malformedLSig, Ieee80211HeSigFormat::SU).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD);
+malformedLSig = suLSigBits.bits;
+malformedLSig[17] = !malformedLSig[17];
+ASSERT(decodeHeLSig(malformedLSig, Ieee80211HeSigFormat::SU).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_PARITY);
+malformedLSig = suLSigBits.bits;
+malformedLSig[18] = true;
+ASSERT(decodeHeLSig(malformedLSig, Ieee80211HeSigFormat::SU).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_TAIL);
+
+// Published Figure 27-24 audit example: full CRC-8 remainder 0x72, transmit c7..c4.
+std::vector<bool> crcInput;
+for (char bit : std::string("110111000000001000000110000000000010011010"))
+    crcInput.push_back(bit == '1');
+auto crc = computeHeCrc4(crcInput);
+ASSERT(crc == (std::array<bool, 4>{{false, true, true, true}}));
+
+Ieee80211HeSuSigA su;
+su.beamChange = true; su.mcs = 5; su.bssColor = 37; su.spatialReuse = 13;
+su.bandwidth = 2; su.giLtfSize = 2; su.numberOfSpaceTimeStreams = 6;
+su.txop = 38; su.ldpcCoding = true; su.ldpcExtraSymbolSegment = true;
+su.beamformed = true; su.preFecPaddingFactor = 2; su.peDisambiguity = true;
+auto suBits = encodeHeSuSigA(su);
+ASSERT(suBits && suBits.bits == bitsFromBytes({0x2b, 0xe5, 0xd6, 0x9a, 0xd6, 0x2d, 0x00}, 52));
+ASSERT(suBits.layout.format == Ieee80211HeSigFormat::SU && suBits.layout.ofdmSymbolCount == 2 && suBits.layout.repetitionCount == 1);
+auto decodedSu = decodeHeSuSigA(bitsFromBytes({0x2b, 0xe5, 0xd6, 0x9a, 0xd6, 0x2d, 0x00}, 52));
+ASSERT(decodedSu && decodedSu.value.mcs == 5 && decodedSu.value.bssColor == 37);
+ASSERT(decodedSu.value.numberOfSpaceTimeStreams == 6 && decodedSu.value.txop == 38);
+
+Ieee80211HeErSuSigA er;
+er.uplink = true; er.mcs = 2; er.bssColor = 22; er.spatialReuse = 14;
+er.giLtfSize = 3; er.numberOfSpaceTimeStreams = 2; er.txop = 52; er.ldpcCoding = true; er.stbc = true;
+er.preFecPaddingFactor = 3;
+auto erBits = encodeHeErSuSigA(er);
+ASSERT(erBits && erBits.bits == bitsFromBytes({0x15, 0x56, 0xe7, 0xd0, 0x6a, 0x31, 0x00}, 52));
+ASSERT(erBits.layout.format == Ieee80211HeSigFormat::ER_SU && erBits.layout.ofdmSymbolCount == 4 && erBits.layout.repetitionCount == 2);
+auto decodedEr = decodeHeErSuSigA(bitsFromBytes({0x15, 0x56, 0xe7, 0xd0, 0x6a, 0x31, 0x00}, 52));
+ASSERT(decodedEr && decodedEr.value.uplink && decodedEr.value.mcs == 2 && decodedEr.value.stbc);
+
+Ieee80211HeMuSigA mu;
+mu.bssColor = 43; mu.spatialReuse = 15; mu.numberOfHeSigBSymbols = 10;
+mu.giLtfSize = 3; mu.txop = 20; mu.ldpcExtraSymbolSegment = true;
+mu.preFecPaddingFactor = 1; mu.peDisambiguity = true;
+auto muBits = encodeHeMuSigA(mu);
+ASSERT(muBits && muBits.bits == bitsFromBytes({0x60, 0x7d, 0xa4, 0x51, 0xa2, 0x1e, 0x00}, 52));
+auto decodedMu = decodeHeMuSigA(bitsFromBytes({0x60, 0x7d, 0xa4, 0x51, 0xa2, 0x1e, 0x00}, 52));
+ASSERT(decodedMu && !decodedMu.value.heSigBCompression && decodedMu.value.numberOfHeSigBSymbols == 10);
+ASSERT(decodedMu.value.numberOfMuMimoUsers == 0 && decodedMu.value.numberOfHeLtfSymbols == 1);
+
+Ieee80211HeMuSigA compressedMu;
+compressedMu.heSigBMcs = 1; compressedMu.heSigBDcm = true; compressedMu.bssColor = 18;
+compressedMu.spatialReuse = 13; compressedMu.bandwidth = 3; compressedMu.heSigBCompression = true;
+compressedMu.numberOfHeSigBSymbols = 0; compressedMu.numberOfMuMimoUsers = 3;
+compressedMu.giLtfSize = 2; compressedMu.doppler = true; compressedMu.txop = 22;
+compressedMu.numberOfHeLtfSymbols = 4; compressedMu.midamblePeriodicity = 20;
+compressedMu.preFecPaddingFactor = 2;
+auto compressedMuBits = encodeHeMuSigA(compressedMu);
+ASSERT(compressedMuBits && compressedMuBits.bits == bitsFromBytes({0x52, 0xea, 0x49, 0x5b, 0x1a, 0x21, 0x00}, 52));
+auto decodedCompressedMu = decodeHeMuSigA(bitsFromBytes({0x52, 0xea, 0x49, 0x5b, 0x1a, 0x21, 0x00}, 52));
+ASSERT(decodedCompressedMu && decodedCompressedMu.value.heSigBCompression);
+ASSERT(decodedCompressedMu.value.numberOfMuMimoUsers == 3 && decodedCompressedMu.value.numberOfHeLtfSymbols == 4);
+ASSERT(decodedCompressedMu.value.midamblePeriodicity == 20);
+
+Ieee80211HeTbSigA tb;
+tb.bssColor = 45; tb.spatialReuse = {{1, 6, 11, 15}}; tb.bandwidth = 3;
+tb.txop = 24; tb.triggerReserved = 511;
+auto tbBits = encodeHeTbSigA(tb);
+ASSERT(tbBits && tbBits.bits == bitsFromBytes({0xda, 0xb0, 0xfd, 0x63, 0xfe, 0x1f, 0x00}, 52));
+auto decodedTb = decodeHeTbSigA(bitsFromBytes({0xda, 0xb0, 0xfd, 0x63, 0xfe, 0x1f, 0x00}, 52));
+ASSERT(decodedTb && decodedTb.value.bssColor == 45 && decodedTb.value.bandwidth == 3);
+ASSERT(decodedTb.value.spatialReuse == (std::array<uint8_t, 4>{{1, 6, 11, 15}}));
+ASSERT(decodedTb.value.triggerReserved == 511);
+Ieee80211HeTbSigA tb20 = tb;
+tb20.bandwidth = 0;
+tb20.spatialReuse = {{7, 7, 7, 7}};
+auto tb20Bits = encodeHeTbSigA(tb20);
+ASSERT(tb20Bits && decodeHeTbSigA(tb20Bits.bits));
+Ieee80211HeTbSigA tb40 = tb;
+tb40.bandwidth = 1;
+tb40.spatialReuse = {{3, 9, 3, 9}};
+auto tb40Bits = encodeHeTbSigA(tb40);
+ASSERT(tb40Bits && decodeHeTbSigA(tb40Bits.bits));
+
+Ieee80211HeSuSigA invalidSu = su;
+invalidSu.mcs = 12;
+ASSERT(!encodeHeSuSigA(invalidSu));
+invalidSu = su;
+invalidSu.spatialReuse = 16;
+ASSERT(!encodeHeSuSigA(invalidSu));
+Ieee80211HeSuSigA invalidSuStbc = su;
+invalidSuStbc.stbc = true;
+ASSERT(!encodeHeSuSigA(invalidSuStbc));
+Ieee80211HeSuSigA validSuStbc = su;
+validSuStbc.stbc = true;
+validSuStbc.numberOfSpaceTimeStreams = 2;
+ASSERT(encodeHeSuSigA(validSuStbc));
+Ieee80211HeSuSigA validSpecialDcmStbc = su;
+validSpecialDcmStbc.mcs = 11;
+validSpecialDcmStbc.dcm = true;
+validSpecialDcmStbc.stbc = true;
+validSpecialDcmStbc.giLtfSize = 3;
+ASSERT(encodeHeSuSigA(validSpecialDcmStbc));
+Ieee80211HeSuSigA invalidBccExtra = su;
+invalidBccExtra.ldpcCoding = false;
+invalidBccExtra.ldpcExtraSymbolSegment = true;
+ASSERT(!encodeHeSuSigA(invalidBccExtra));
+Ieee80211HeSuSigA bccBoundary = su;
+bccBoundary.bandwidth = 0;
+bccBoundary.mcs = 9;
+bccBoundary.numberOfSpaceTimeStreams = 4;
+bccBoundary.ldpcCoding = false;
+bccBoundary.ldpcExtraSymbolSegment = false;
+ASSERT(encodeHeSuSigA(bccBoundary));
+Ieee80211HeSuSigA invalidBcc = bccBoundary;
+invalidBcc.bandwidth = 1;
+ASSERT(!encodeHeSuSigA(invalidBcc));
+invalidBcc = bccBoundary;
+invalidBcc.mcs = 10;
+ASSERT(!encodeHeSuSigA(invalidBcc));
+invalidBcc = bccBoundary;
+invalidBcc.numberOfSpaceTimeStreams = 5;
+ASSERT(!encodeHeSuSigA(invalidBcc));
+Ieee80211HeErSuSigA invalidEr = er;
+invalidEr.bandwidth = 2;
+ASSERT(!encodeHeErSuSigA(invalidEr));
+invalidEr = er;
+invalidEr.spatialReuse = 16;
+ASSERT(!encodeHeErSuSigA(invalidEr));
+Ieee80211HeErSuSigA invalidErStreams = er;
+invalidErStreams.stbc = false;
+ASSERT(!encodeHeErSuSigA(invalidErStreams));
+Ieee80211HeMuSigA invalidMu = compressedMu;
+invalidMu.bandwidth = 4;
+ASSERT(!encodeHeMuSigA(invalidMu));
+invalidMu = compressedMu;
+invalidMu.spatialReuse = 16;
+ASSERT(!encodeHeMuSigA(invalidMu));
+invalidMu = compressedMu;
+invalidMu.numberOfMuMimoUsers = 1;
+ASSERT(encodeHeMuSigA(invalidMu));
+invalidMu = compressedMu;
+invalidMu.numberOfMuMimoUsers = 9;
+ASSERT(!encodeHeMuSigA(invalidMu));
+invalidMu = compressedMu;
+invalidMu.stbc = true;
+ASSERT(!encodeHeMuSigA(invalidMu));
+Ieee80211HeMuSigA boundaryMu = compressedMu;
+boundaryMu.numberOfMuMimoUsers = 1;
+ASSERT(encodeHeMuSigA(boundaryMu));
+boundaryMu.stbc = true;
+ASSERT(encodeHeMuSigA(boundaryMu));
+boundaryMu.stbc = false;
+boundaryMu.numberOfMuMimoUsers = 8;
+ASSERT(encodeHeMuSigA(boundaryMu));
+Ieee80211HeMuSigA uncompressedBoundaryMu = mu;
+uncompressedBoundaryMu.numberOfHeSigBSymbols = 15;
+ASSERT(encodeHeMuSigA(uncompressedBoundaryMu));
+uncompressedBoundaryMu.numberOfHeSigBSymbols = 16;
+ASSERT(!encodeHeMuSigA(uncompressedBoundaryMu));
+uncompressedBoundaryMu.numberOfHeSigBSymbolsIsSaturated = true;
+auto saturatedMuBits = encodeHeMuSigA(uncompressedBoundaryMu);
+ASSERT(saturatedMuBits);
+auto decodedSaturatedMu = decodeHeMuSigA(saturatedMuBits.bits);
+ASSERT(decodedSaturatedMu && decodedSaturatedMu.value.numberOfHeSigBSymbols == 16);
+ASSERT(decodedSaturatedMu.value.numberOfHeSigBSymbolsIsSaturated);
+Ieee80211HeTbSigA invalidTb = tb;
+invalidTb.triggerReserved = 510;
+ASSERT(!encodeHeTbSigA(invalidTb));
+invalidTb = tb20;
+invalidTb.spatialReuse[3] = 6;
+ASSERT(!encodeHeTbSigA(invalidTb));
+invalidTb = tb40;
+invalidTb.spatialReuse[2] = 4;
+ASSERT(!encodeHeTbSigA(invalidTb));
+ASSERT(!decodeHeSuSigA(std::vector<bool>(51)));
+auto badCrc = suBits.bits;
+badCrc[42] = !badCrc[42];
+ASSERT(decodeHeSuSigA(badCrc).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_CRC);
+auto badTail = suBits.bits;
+badTail[46] = true;
+ASSERT(decodeHeSuSigA(badTail).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_TAIL);
+auto badReserved = suBits.bits;
+badReserved[14] = false;
+updateSigACrc(badReserved);
+ASSERT(decodeHeSuSigA(badReserved).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD);
+ASSERT(decodeHeTbSigA(suBits.bits).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FORMAT);
+auto badTriggerReserved = tbBits.bits;
+badTriggerReserved[33] = false;
+updateSigACrc(badTriggerReserved);
+ASSERT(decodeHeTbSigA(badTriggerReserved).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_RESERVED_FIELD);
+auto badTb20Reuse = tb20Bits.bits;
+badTb20Reuse[19] = !badTb20Reuse[19];
+updateSigACrc(badTb20Reuse);
+ASSERT(decodeHeTbSigA(badTb20Reuse).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+auto badTb40Reuse = tb40Bits.bits;
+badTb40Reuse[15] = !badTb40Reuse[15];
+updateSigACrc(badTb40Reuse);
+ASSERT(decodeHeTbSigA(badTb40Reuse).errorCode == Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION);
+EV << ".\n";
+
+%contains: stdout
+.
