@@ -7,6 +7,7 @@ and opt-in RBIR sampling of a narrow HE trigger-based uplink RU.
 #include <algorithm>
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
@@ -293,8 +294,7 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
         sourceRadio = txRadio;
     const auto& assignedRu = rus.at(ruPosition);
     auto packet = new Packet(packetName);
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-    phyHeader->setPpduFormat(triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
+    auto phyHeader = createIeee80211HePhyHeader(triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK);
     phyHeader->setMuMimo(muMimo);
     phyHeader->setTriggerId(triggerId);
     phyHeader->setTotalNsts(muMimo ? 2 : 0);

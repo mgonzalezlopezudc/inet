@@ -7,6 +7,8 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
+
 #include <cmath>
 #include <sstream>
 
@@ -276,7 +278,7 @@ std::ostream& Ieee80211Transmitter::printToStream(std::ostream& stream, int leve
 const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *transmitter, const Packet *packet, simtime_t startTime) const
 {
     auto phyHeader = Ieee80211Radio::peekIeee80211PhyHeaderAtFront(packet);
-    auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader);
+    auto heMuHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(phyHeader);
     const IIeee80211Mode *transmissionMode = computeTransmissionMode(packet);
     const Ieee80211Channel *transmissionChannel = computeTransmissionChannel(packet);
     W transmissionPower = computeTransmissionPower(packet);
@@ -304,7 +306,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
     Ieee80211HePpduParameters hePpduParameters;
     if (heMuHeader != nullptr) {
-        auto ppduFormat = static_cast<Ieee80211HePpduFormat>(heMuHeader->getPpduFormat());
+        auto ppduFormat = getIeee80211HePpduFormat(*heMuHeader);
         bool modeDerivedSingleUser = heMuHeader->getUsersArraySize() == 0 &&
                 (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU);
         // Clause 27.3.2.2 fixes HE subcarrier spacing at 78.125 kHz. The PHY
@@ -346,7 +348,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             throw cRuntimeError("Invalid planned HE MU PPDU: %s", calculation.error.c_str());
         calculation.parameters.common.ndp = heMuHeader->getNdp();
         hePpduParameters = calculation.parameters;
-        if (heMuHeader->getPpduFormat() == HE_MU_DOWNLINK &&
+        if (dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader) != nullptr &&
                 heMuHeader->getCommonDuration() > SIMTIME_ZERO &&
                 heMuHeader->getCommonDuration() != calculation.parameters.duration)
             throw cRuntimeError("Serialized HE MU duration does not match the resolved PHY parameters");
@@ -360,7 +362,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         // (and its ER-SU repetition), so a separate header interval would
         // count HE signaling twice and shorten the analog DATA interval.
         headerDuration = SIMTIME_ZERO;
-        if (heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK && heMuHeader->getUsersArraySize() == 1) {
+        if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr && heMuHeader->getUsersArraySize() == 1) {
             // HE TB responses occupy the RU assigned by the Trigger frame
             // User Info field (Clause 9.3.1.22 and Clause 27.3.4). The
             // packet-level analog model narrows the transmit center
@@ -385,7 +387,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     auto analogModel = getAnalogModel()->createAnalogModel(preambleDuration, headerDuration, dataDuration, transmissionCenterFrequency, transmissionBandwidth, transmissionPower);
     lastHePpdu = heMuHeader != nullptr;
     if (lastHePpdu) {
-        lastHePpduFormat = heMuHeader->getPpduFormat();
+        lastHePpduFormat = getIeee80211HePpduFormat(*heMuHeader);
         lastHeMuMimo = heMuHeader->getMuMimo();
         lastHeUserCount = heMuHeader->getUsersArraySize();
         lastHeTotalNsts = heMuHeader->getTotalNsts();

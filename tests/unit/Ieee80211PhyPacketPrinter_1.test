@@ -42,7 +42,6 @@ Packet hePacket("he-mu");
 auto heHeader = makeShared<Ieee80211HeMuPhyHeader>();
 heHeader->setChunkLength(B(14));
 heHeader->setLengthField(macPacket.getDataLength());
-heHeader->setPpduFormat(0);
 heHeader->setBssColor(1);
 heHeader->setUsersArraySize(1);
 Ieee80211HeMuUserInfo heUser;

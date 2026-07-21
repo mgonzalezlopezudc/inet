@@ -135,7 +135,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
 
     radio->testEncapsulate(packet);
     auto phyHeader = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
-    ASSERT(phyHeader->getPpduFormat() == HE_MU_DOWNLINK);
+    ASSERT(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader) != nullptr);
     ASSERT(phyHeader->getUsersArraySize() == 2);
     const auto& user0 = phyHeader->getUsers(0);
     const auto& user1 = phyHeader->getUsers(1);
@@ -190,8 +190,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     request->setCoding(HE_CODING_BCC);
 
     radio->testEncapsulate(packet);
-    auto phyHeader = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
-    ASSERT(phyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK);
+    auto phyHeader = packet->peekAtFront<Ieee80211HeTbPhyHeader>();
     ASSERT(phyHeader->getTriggerId() == 42);
     ASSERT(phyHeader->getUsersArraySize() == 1);
     const auto& user = phyHeader->getUsers(0);

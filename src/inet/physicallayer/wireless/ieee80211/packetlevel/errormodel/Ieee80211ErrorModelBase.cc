@@ -8,6 +8,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211ErrorModelBase.h"
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -74,19 +75,23 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
     }
     double headerSuccessRate = getHeaderSuccessRate(mode, headerLength.get<b>(), headerSnr);
     double dataSuccessRate;
-    if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader)) {
+    auto hePhyHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(phyHeader);
+    auto allocationPhyHeader = hePhyHeader != nullptr &&
+            (dynamicPtrCast<const Ieee80211HeMuPhyHeader>(hePhyHeader) != nullptr ||
+             dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr) ? hePhyHeader : nullptr;
+    if (allocationPhyHeader != nullptr) {
         const Ieee80211HeMuUserInfo *selectedUser = nullptr;
-        if (heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
-                heMuHeader->getUsersArraySize() == 1)
-            selectedUser = &heMuHeader->getUsers(0);
+        if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr &&
+                allocationPhyHeader->getUsersArraySize() == 1)
+            selectedUser = &allocationPhyHeader->getUsers(0);
         else {
             auto receiver = snir->getReception()->getReceiverRadio();
             auto networkInterface = getContainingNicModule(check_and_cast<const cModule *>(receiver));
             auto staId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
             if (staId.has_value())
-                for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i)
-                    if (heMuHeader->getUsers(i).staId == *staId) {
-                        selectedUser = &heMuHeader->getUsers(i);
+                for (unsigned int i = 0; i < allocationPhyHeader->getUsersArraySize(); ++i)
+                    if (allocationPhyHeader->getUsers(i).staId == *staId) {
+                        selectedUser = &allocationPhyHeader->getUsers(i);
                         break;
                     }
         }
@@ -103,16 +108,16 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
             auto parameters = computeHeUserPhyParameters(selectedUser->psduLength, ru,
                     selectedUser->mcs, selectedUser->numberOfSpatialStreams,
                     selectedUser->dcm,
-                    static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval()),
-                    static_cast<Ieee80211HeCoding>(heMuHeader->getCoding()));
+                    static_cast<Ieee80211HeGuardInterval>(allocationPhyHeader->getGuardInterval()),
+                    static_cast<Ieee80211HeCoding>(allocationPhyHeader->getCoding()));
             dataLength = 16 + selectedUser->psduLength.get<B>() * 8 + 6;
             double userSnir = snr;
             auto dimensionalSnir = dynamic_cast<const DimensionalSnir *>(snir);
             bool channelMatrixLmmse = dimensionalSnir != nullptr && dimensionalSnir->isChannelMatrixLmmse();
-            if (heMuHeader->getMuMimo() && heMuHeader->getTotalNsts() > 0 &&
+            if (allocationPhyHeader->getMuMimo() && allocationPhyHeader->getTotalNsts() > 0 &&
                     !channelMatrixLmmse) {
                 double desiredNsts = selectedUser->numberOfSpatialStreams;
-                double totalNsts = heMuHeader->getTotalNsts();
+                double totalNsts = allocationPhyHeader->getTotalNsts();
                 double signalShare = desiredNsts / totalNsts;
                 double interferenceShare = selectedUser->leakageSum / totalNsts;
                 userSnir = (snr * signalShare) / (1.0 + snr * interferenceShare);

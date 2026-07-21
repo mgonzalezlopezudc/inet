@@ -5,6 +5,7 @@ HE TB/PSR handling, and threshold-based ignoring.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
@@ -156,9 +157,8 @@ static Packet *makeHeMuPacketWithBssColor(const char *name, uint8_t bssColor, ui
         bool nonSrgDisallowed = false, bool srgDisallowed = false, bool psrDisallowed = false, uint8_t spatialReuse = 0)
 {
     auto packet = new Packet(name);
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    auto phyHeader = createIeee80211HePhyHeader(static_cast<Ieee80211HePpduFormat>(ppduFormat));
     phyHeader->setBssColor(bssColor);
-    phyHeader->setPpduFormat(ppduFormat);
     phyHeader->setNonSrgObssPdDisallowed(nonSrgDisallowed);
     phyHeader->setSrgObssPdDisallowed(srgDisallowed);
     phyHeader->setPsrDisallowed(psrDisallowed);

@@ -3,6 +3,7 @@ Test serialization and deserialization of Ieee80211HeMuPhyHeader.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -59,6 +60,7 @@ pk->insertAtFront(origHeader);
 // Serialize packet to raw bytes
 auto bytes = pk->peekDataAsBytes();
 ASSERT(bytes->getChunkLength() == B(14));
+ASSERT(bytes->getBytes() == std::vector<uint8_t>({2, 50, 5, 191, 192, 0, 10, 92, 96, 42, 168, 5, 84, 162}));
 EV << "Serialized to " << bytes->getChunkLength().get<B>() << " bytes\n";
 
 // Put bytes back in a new packet
@@ -66,7 +68,8 @@ auto pk2 = new Packet("recv-packet");
 pk2->insertAtFront(bytes);
 
 // Deserialize header
-auto recvHeader = pk2->popAtFront<Ieee80211HeMuPhyHeader>();
+auto recvHeader = pk2->popAtFront<Ieee80211HePhyHeader>();
+ASSERT(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(recvHeader) != nullptr);
 
 EV << "Deserialized Header:\n";
 EV << "users count = " << recvHeader->getUsersArraySize() << "\n";
@@ -175,20 +178,35 @@ testFullBandwidth160Rejection(1);
 testFullBandwidth160Rejection(2);
 EV << "160 MHz 2x996-tone single-user and shared-RU headers reject uncompressed HE-SIG-B without decoded downgrade.\n";
 
-auto testSingleUserRoundTrip = [](Ieee80211HePpduFormat ppduFormat, b headerLength) {
-    auto header = makeShared<Ieee80211HeMuPhyHeader>();
-    header->setPpduFormat(ppduFormat);
+auto testFormatRoundTrip = [](Ieee80211HePpduFormat ppduFormat, b headerLength,
+        const std::vector<uint8_t>& expectedHeaderBytes) {
+    auto header = createIeee80211HePhyHeader(ppduFormat);
     header->setChunkLength(headerLength);
     auto packet = new Packet("he-single-user-round-trip");
     packet->insertAtBack(makeShared<ByteCountChunk>(B(5)));
     packet->insertAtFront(header);
     auto bytes = packet->peekDataAsBytes();
     ASSERT(bytes->getChunkLength() == headerLength + B(5));
+    ASSERT(std::equal(expectedHeaderBytes.begin(), expectedHeaderBytes.end(), bytes->getBytes().begin()));
 
     auto received = new Packet("he-single-user-received");
     received->insertAtFront(bytes);
-    auto decoded = received->popAtFront<Ieee80211HeMuPhyHeader>();
-    ASSERT(decoded->getPpduFormat() == ppduFormat);
+    auto decoded = received->popAtFront<Ieee80211HePhyHeader>();
+    ASSERT(getIeee80211HePpduFormat(*decoded) == ppduFormat);
+    switch (ppduFormat) {
+        case HE_MU_DOWNLINK:
+            ASSERT(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(decoded) != nullptr);
+            break;
+        case HE_TRIGGER_BASED_UPLINK:
+            ASSERT(dynamicPtrCast<const Ieee80211HeTbPhyHeader>(decoded) != nullptr);
+            break;
+        case HE_SINGLE_USER:
+            ASSERT(dynamicPtrCast<const Ieee80211HeSuPhyHeader>(decoded) != nullptr);
+            break;
+        case HE_EXTENDED_RANGE_SU:
+            ASSERT(dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(decoded) != nullptr);
+            break;
+    }
     ASSERT(decoded->getUsersArraySize() == 0);
     ASSERT(decoded->getChunkLength() == headerLength);
     ASSERT(received->getDataLength() == B(5));
@@ -197,9 +215,50 @@ auto testSingleUserRoundTrip = [](Ieee80211HePpduFormat ppduFormat, b headerLeng
     delete received;
 };
 
-testSingleUserRoundTrip(HE_SINGLE_USER, b(64));
-testSingleUserRoundTrip(HE_EXTENDED_RANGE_SU, b(128));
-EV << "HE SU and ER SU format and payload boundary round trips passed.\n";
+testFormatRoundTrip(HE_TRIGGER_BASED_UPLINK, b(64), {128, 0, 1, 191, 192, 0, 10, 93});
+testFormatRoundTrip(HE_SINGLE_USER, b(64), {0, 0, 1, 191, 192, 0, 10, 94});
+testFormatRoundTrip(HE_EXTENDED_RANGE_SU, b(128),
+        {0, 0, 1, 191, 192, 0, 10, 95, 0, 0, 1, 191, 192, 0, 10, 95});
+EV << "HE TB, SU, and ER SU exact bytes, concrete identity, and payload boundary round trips passed.\n";
+
+auto suHeader = createIeee80211HePhyHeader(HE_SINGLE_USER);
+suHeader->setChunkLength(b(64));
+Packet suPacket("he-su-concrete-mismatch");
+suPacket.insertAtFront(suHeader);
+auto suBytes = suPacket.peekDataAsBytes();
+Packet mismatchedPacket("he-su-as-mu");
+mismatchedPacket.insertAtFront(suBytes);
+bool concreteMismatchRejected = false;
+try {
+    mismatchedPacket.popAtFront<Ieee80211HeMuPhyHeader>();
+}
+catch (const cRuntimeError& error) {
+    concreteMismatchRejected = std::string(error.what()).find(
+            "Packet-level HE PPDU format marker does not match requested header type") != std::string::npos;
+}
+ASSERT(concreteMismatchRejected);
+EV << "Concrete HE header decoding rejects a mismatched packet-level format marker.\n";
+
+bool invalidFactoryFormatRejected = false;
+try {
+    createIeee80211HePhyHeader(static_cast<Ieee80211HePpduFormat>(255));
+}
+catch (const cRuntimeError& error) {
+    invalidFactoryFormatRejected = std::string(error.what()).find(
+            "Unknown IEEE 802.11 HE PPDU format") != std::string::npos;
+}
+ASSERT(invalidFactoryFormatRejected);
+
+bool rawBaseFormatQueryRejected = false;
+try {
+    getIeee80211HePpduFormat(*makeShared<Ieee80211HePhyHeader>());
+}
+catch (const cRuntimeError& error) {
+    rawBaseFormatQueryRejected = std::string(error.what()).find(
+            "Unknown concrete IEEE 802.11 HE PHY header type") != std::string::npos;
+}
+ASSERT(rawBaseFormatQueryRejected);
+EV << "Invalid HE format construction and raw-base format queries are rejected.\n";
 
 auto rus = getHeEqualRuLayout(Hz(5.18e9), Hz(80e6), 4);
 for (size_t i = 0; i < rus.size(); ++i)
@@ -268,7 +327,9 @@ Noncanonical RU indexes decoded to canonical catalog indexes.
 MU-MIMO users sharing one physical RU round trip with canonical indexes.
 80 MHz 996-tone single-user and shared-RU MU-MIMO headers round trip exactly once per content channel.
 160 MHz 2x996-tone single-user and shared-RU headers reject uncompressed HE-SIG-B without decoded downgrade.
-HE SU and ER SU format and payload boundary round trips passed.
+HE TB, SU, and ER SU exact bytes, concrete identity, and payload boundary round trips passed.
+Concrete HE header decoding rejects a mismatched packet-level format marker.
+Invalid HE format construction and raw-base format queries are rejected.
 HE-SIG-B geometry canonicalization, duplicate-user, and overlap validation passed.
 A-MPDU delimiter EOF, length, CRC, and signature round-trip passed.
 .

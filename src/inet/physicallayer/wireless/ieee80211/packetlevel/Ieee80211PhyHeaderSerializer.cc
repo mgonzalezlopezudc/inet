@@ -29,6 +29,7 @@
 //     representation; the full User field format of Tables 27-29 and 27-30 is
 //     approximated.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211OfdmSignalField.h"
@@ -42,12 +43,36 @@ namespace {
 
 // IEEE Std 802.11-2024 Figure 17-5 and 17.3.4: SIGNAL bit 0 is RATE bit R1
 // and the LSB is transmitted first; the shared field helper packs that order.
+class Ieee80211HeSuPhyHeaderSerializer : public Ieee80211HePhyHeaderSerializer
+{
+  public:
+    Ieee80211HeSuPhyHeaderSerializer() : Ieee80211HePhyHeaderSerializer(HE_SINGLE_USER) {}
+};
+
+class Ieee80211HeErSuPhyHeaderSerializer : public Ieee80211HePhyHeaderSerializer
+{
+  public:
+    Ieee80211HeErSuPhyHeaderSerializer() : Ieee80211HePhyHeaderSerializer(HE_EXTENDED_RANGE_SU) {}
+};
+
+class Ieee80211HeMuPhyHeaderSerializer : public Ieee80211HePhyHeaderSerializer
+{
+  public:
+    Ieee80211HeMuPhyHeaderSerializer() : Ieee80211HePhyHeaderSerializer(HE_MU_DOWNLINK) {}
+};
+
+class Ieee80211HeTbPhyHeaderSerializer : public Ieee80211HePhyHeaderSerializer
+{
+  public:
+    Ieee80211HeTbPhyHeaderSerializer() : Ieee80211HePhyHeaderSerializer(HE_TRIGGER_BASED_UPLINK) {}
+};
+
 // IEEE Std 802.11-2024 Figure 27-72 distinguishes HE SU/TB/MU using L-SIG
 // LENGTH and HE-SIG-A constellation information. This serializer does not yet
 // represent those pre-HE signaling details, and it uses a simplified common
 // HE-SIG-A layout for every HE format. Preserve packet-level format identity in
 // the synthetic 12-bit pad that already completes this logical 64-bit block.
-// This is an INET compatibility marker, not an IEEE on-wire field.
+// This temporary INET dispatch-compatibility marker is not an IEEE on-wire field.
 constexpr uint16_t HE_PACKET_LEVEL_FORMAT_PREFIX = 0xA5C;
 constexpr uint16_t HE_PACKET_LEVEL_FORMAT_MASK = 0xFFC;
 constexpr uint16_t HE_PACKET_LEVEL_FORMAT_VALUE_MASK = 0x003;
@@ -82,7 +107,11 @@ Register_Serializer(Ieee80211OfdmPhyHeader, Ieee80211OfdmPhyHeaderSerializer);
 Register_Serializer(Ieee80211ErpOfdmPhyHeader, Ieee80211ErpOfdmPhyHeaderSerializer);
 Register_Serializer(Ieee80211HtPhyHeader, Ieee80211HtPhyHeaderSerializer);
 Register_Serializer(Ieee80211VhtPhyHeader, Ieee80211VhtPhyHeaderSerializer);
+Register_Serializer(Ieee80211HePhyHeader, Ieee80211HePhyHeaderSerializer);
+Register_Serializer(Ieee80211HeSuPhyHeader, Ieee80211HeSuPhyHeaderSerializer);
+Register_Serializer(Ieee80211HeErSuPhyHeader, Ieee80211HeErSuPhyHeaderSerializer);
 Register_Serializer(Ieee80211HeMuPhyHeader, Ieee80211HeMuPhyHeaderSerializer);
+Register_Serializer(Ieee80211HeTbPhyHeader, Ieee80211HeTbPhyHeaderSerializer);
 Register_Serializer(Ieee80211EhtRuPayloadHeader, Ieee80211EhtRuPayloadHeaderSerializer);
 
 /**
@@ -276,12 +305,12 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
 }
 
 /**
- * HE MU
+ * HE
  */
-void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
+void Ieee80211HePhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
-    auto heMuPhyHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(chunk);
-    unsigned int numUsers = heMuPhyHeader->getUsersArraySize();
+    auto hePhyHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(chunk);
+    unsigned int numUsers = hePhyHeader->getUsersArraySize();
     if (numUsers > 255)
         throw cRuntimeError("Too many HE MU users: %u", numUsers);
 
@@ -290,14 +319,12 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     // metadata remains in the chunk object. This is not a complete bit-level
     // PPDU preamble encoder.
 
-    const uint8_t ppduFormat = heMuPhyHeader->getPpduFormat();
-    if (ppduFormat > HE_EXTENDED_RANGE_SU)
-        throw cRuntimeError("Unknown HE PPDU format: %u", ppduFormat);
+    const uint8_t ppduFormat = getIeee80211HePpduFormat(*hePhyHeader);
     const bool extendedRangeSu = ppduFormat == HE_EXTENDED_RANGE_SU;
 
     uint32_t maxToneIndex = 0;
     for (unsigned int i = 0; i < numUsers; ++i) {
-        const auto& u = heMuPhyHeader->getUsers(i);
+        const auto& u = hePhyHeader->getUsers(i);
         maxToneIndex = std::max(maxToneIndex, (uint32_t)(u.ruToneOffset + u.ruToneSize));
     }
     uint8_t bwField = 0;
@@ -307,9 +334,9 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
 
     uint8_t numUsersField = (numUsers > 0) ? (numUsers - 1) & 0xF : 0;
     uint8_t giLtf = 2;
-    if (heMuPhyHeader->getGuardInterval() == 0) giLtf = 1;
-    else if (heMuPhyHeader->getGuardInterval() == 1) giLtf = 2;
-    else if (heMuPhyHeader->getGuardInterval() == 2) giLtf = 3;
+    if (hePhyHeader->getGuardInterval() == 0) giLtf = 1;
+    else if (hePhyHeader->getGuardInterval() == 1) giLtf = 2;
+    else if (hePhyHeader->getGuardInterval() == 2) giLtf = 3;
 
     auto writeHeSigA = [&]() {
         // --- HE-SIG-A (8 bytes = 64 bits) - IEEE Std 802.11-2024 Table 27-21 ---
@@ -317,8 +344,8 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         stream.writeBit(ppduFormat == HE_TRIGGER_BASED_UPLINK); // B0: UL/DL
         stream.writeNBitsOfUint64Be(0, 3); // B1-B3: HE-SIG-B MCS
         stream.writeBit(false); // B4: HE-SIG-B DCM
-        stream.writeNBitsOfUint64Be(heMuPhyHeader->getBssColor() & 0x3F, 6); // B5-B10: BSS Color
-        stream.writeNBitsOfUint64Be(heMuPhyHeader->getSpatialReuse() & 0xF, 4); // B11-B14: Spatial Reuse
+        stream.writeNBitsOfUint64Be(hePhyHeader->getBssColor() & 0x3F, 6); // B5-B10: BSS Color
+        stream.writeNBitsOfUint64Be(hePhyHeader->getSpatialReuse() & 0xF, 4); // B11-B14: Spatial Reuse
         stream.writeNBitsOfUint64Be(bwField, 3); // B15-B17: Bandwidth
         stream.writeNBitsOfUint64Be(numUsersField, 4); // B18-B21: Number of HE-SIG-B Symbols or MU-MIMO Users
         stream.writeBit(false); // B22: HE-SIG-B Compression
@@ -329,7 +356,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         stream.writeNBitsOfUint64Be(127, 7); // B0-B6: TXOP
         stream.writeBit(true); // B7: Reserved
         stream.writeNBitsOfUint64Be(0, 3); // B8-B10: Number of HE-LTF Symbols and Midamble Periodicity
-        stream.writeBit(heMuPhyHeader->getCoding() & 1); // B11: LDPC Extra Symbol Segment
+        stream.writeBit(hePhyHeader->getCoding() & 1); // B11: LDPC Extra Symbol Segment
         stream.writeBit(false); // B12: STBC
         stream.writeNBitsOfUint64Be(0, 2); // B13-B14: Pre-FEC Padding Factor
         stream.writeBit(false); // B15: PE Disambiguity
@@ -347,7 +374,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
         std::vector<Ieee80211HeRu> rus;
         for (unsigned int i = 0; i < numUsers; ++i) {
-            const auto& user = heMuPhyHeader->getUsers(i);
+            const auto& user = hePhyHeader->getUsers(i);
             Ieee80211HeRu ru;
             ru.toneSize = user.ruToneSize;
             ru.toneOffset = user.ruToneOffset;
@@ -372,7 +399,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
 
         std::map<std::pair<int, int>, std::vector<Ieee80211HeMuUserInfo>> usersByRuGeometry;
         for (unsigned int i = 0; i < numUsers; ++i) {
-            const auto& user = heMuPhyHeader->getUsers(i);
+            const auto& user = hePhyHeader->getUsers(i);
             usersByRuGeometry[{user.ruToneSize, user.ruToneOffset}].push_back(user);
         }
 
@@ -444,7 +471,7 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
         auto writeUser = [&](const Ieee80211HeMuUserInfo& user) {
             stream.writeNBitsOfUint64Be(user.staId, 11);
             stream.writeNBitsOfUint64Be(user.mcs, 4);
-            stream.writeBit(heMuPhyHeader->getCoding() & 1);
+            stream.writeBit(hePhyHeader->getCoding() & 1);
             uint8_t nssField = (user.numberOfSpatialStreams > 0) ? (user.numberOfSpatialStreams - 1) & 0x7 : 0;
             stream.writeNBitsOfUint64Be(nssField, 3);
             stream.writeBit(user.dcm);
@@ -459,16 +486,14 @@ void Ieee80211HeMuPhyHeaderSerializer::serialize(MemoryOutputStream& stream, con
     // are not HE PHY signaling bits and are intentionally not serialized here.
 }
 
-const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
+const Ptr<Chunk> Ieee80211HePhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
-    auto heMuPhyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-
     // --- 1. HE-SIG-A (8 bytes = 64 bits) ---
     auto uplink = stream.readBit();
     stream.readNBitsToUint64Be(3); // HE-SIG-B MCS
     stream.readBit(); // HE-SIG-B DCM
-    heMuPhyHeader->setBssColor(stream.readNBitsToUint64Be(6));
-    heMuPhyHeader->setSpatialReuse(stream.readNBitsToUint64Be(4)); // Spatial Reuse
+    auto bssColor = stream.readNBitsToUint64Be(6);
+    auto spatialReuse = stream.readNBitsToUint64Be(4);
     auto bwField = stream.readNBitsToUint64Be(3);
     stream.readNBitsToUint64Be(4); // Number of HE-SIG-B Symbols or MU-MIMO Users
     stream.readBit(); // HE-SIG-B Compression
@@ -477,14 +502,12 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     if (giLtf == 1) gi = 0;
     else if (giLtf == 2) gi = 1;
     else if (giLtf == 3) gi = 2;
-    heMuPhyHeader->setGuardInterval(gi);
     stream.readBit(); // Doppler
 
     stream.readNBitsToUint64Be(7); // TXOP
     stream.readBit(); // Reserved B7
     stream.readNBitsToUint64Be(3); // Number of HE-LTF Symbols
     auto coding = stream.readBit();
-    heMuPhyHeader->setCoding(coding);
     stream.readBit(); // STBC
     stream.readNBitsToUint64Be(2); // Pre-FEC Padding Factor
     stream.readBit(); // PE Disambiguity
@@ -496,7 +519,13 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
     auto ppduFormat = static_cast<Ieee80211HePpduFormat>(formatMarker & HE_PACKET_LEVEL_FORMAT_VALUE_MASK);
     if (uplink != (ppduFormat == HE_TRIGGER_BASED_UPLINK))
         throw cRuntimeError("Inconsistent packet-level HE PPDU format marker");
-    heMuPhyHeader->setPpduFormat(ppduFormat);
+    if (expectedPpduFormat.has_value() && ppduFormat != *expectedPpduFormat)
+        throw cRuntimeError("Packet-level HE PPDU format marker does not match requested header type");
+    auto hePhyHeader = createIeee80211HePhyHeader(ppduFormat);
+    hePhyHeader->setBssColor(bssColor);
+    hePhyHeader->setSpatialReuse(spatialReuse);
+    hePhyHeader->setGuardInterval(gi);
+    hePhyHeader->setCoding(coding);
     if (ppduFormat == HE_EXTENDED_RANGE_SU)
         stream.readNBitsToUint64Be(64); // duplicated HE-SIG-A
 
@@ -639,7 +668,7 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
         for (int i = 0; i < numUsersCC1; ++i) cc1Users.push_back(readUser());
         for (int i = 0; i < numUsersCC2; ++i) cc2Users.push_back(readUser());
 
-        heMuPhyHeader->setUsersArraySize(totalUsersToRead);
+        hePhyHeader->setUsersArraySize(totalUsersToRead);
         int userIdx = 0;
 
         int cc1Idx = 0;
@@ -649,7 +678,7 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
                 info.ruIndex = alloc.first.index;
                 info.ruToneSize = alloc.first.toneSize;
                 info.ruToneOffset = alloc.first.toneOffset;
-                heMuPhyHeader->setUsers(userIdx++, info);
+                hePhyHeader->setUsers(userIdx++, info);
             }
         }
         int cc2Idx = 0;
@@ -659,12 +688,12 @@ const Ptr<Chunk> Ieee80211HeMuPhyHeaderSerializer::deserialize(MemoryInputStream
                 info.ruIndex = alloc.first.index;
                 info.ruToneSize = alloc.first.toneSize;
                 info.ruToneOffset = alloc.first.toneOffset;
-                heMuPhyHeader->setUsers(userIdx++, info);
+                hePhyHeader->setUsers(userIdx++, info);
             }
         }
     }
 
-    return heMuPhyHeader;
+    return hePhyHeader;
 }
 
 /**

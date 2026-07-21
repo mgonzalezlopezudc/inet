@@ -35,6 +35,7 @@
 //     timing misalignment impairments are not modeled.
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/common/analogmodel/dimensional/DimensionalMediumAnalogModel.h"
@@ -53,14 +54,22 @@ namespace physicallayer {
 
 Define_Module(Ieee80211RadioMedium);
 
-static const Ieee80211HeMuPhyHeader *peekHeTbMuMimoHeader(const ITransmission *transmission)
+static Ptr<const Ieee80211HePhyHeader> peekHeMuOrTbPhyHeader(const ITransmission *transmission)
 {
     auto packet = transmission == nullptr ? nullptr : transmission->getPacket();
     if (packet == nullptr || transmission->getPacketProtocol() != &Protocol::ieee80211HePhy ||
-            !packet->hasAtFront<Ieee80211HeMuPhyHeader>())
+            !packet->hasAtFront<Ieee80211HePhyHeader>())
         return nullptr;
-    auto header = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
-    return header->getPpduFormat() == HE_TRIGGER_BASED_UPLINK && header->getMuMimo() &&
+    auto hePhyHeader = packet->peekAtFront<Ieee80211HePhyHeader>();
+    return dynamicPtrCast<const Ieee80211HeMuPhyHeader>(hePhyHeader) != nullptr ||
+            dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr ? hePhyHeader : nullptr;
+}
+
+static const Ieee80211HeTbPhyHeader *peekHeTbMuMimoHeader(const ITransmission *transmission)
+{
+    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
+    auto header = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader);
+    return header != nullptr && header->getMuMimo() &&
             header->getUsersArraySize() == 1 ? header.get() : nullptr;
 }
 
@@ -92,24 +101,23 @@ void Ieee80211RadioMedium::addTransmission(const IRadio *transmitterRadio, const
 
 bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const ITransmission *transmission, Ieee80211HeRu& ru) const
 {
-    auto packet = transmission->getPacket();
-    if (transmission->getPacketProtocol() != &Protocol::ieee80211HePhy || packet == nullptr || !packet->hasAtFront<Ieee80211HeMuPhyHeader>())
+    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
+    if (allocationPhyHeader == nullptr)
         return false;
-    auto heMuPhyHeader = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
     auto networkInterface = getContainingNicModule(check_and_cast<const cModule *>(receiver));
     auto receiverStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
-    if (!receiverStaId.has_value() && heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)
+    bool isTriggerBasedUplink = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr;
+    if (!receiverStaId.has_value() && !isTriggerBasedUplink)
         return false;
     auto narrowbandTransmissionAnalogModel = dynamic_cast<const INarrowbandSignalAnalogModel *>(transmission->getAnalogModel());
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
     if (narrowbandTransmissionAnalogModel == nullptr || ieee80211Transmission == nullptr)
         return false;
-    if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
-            heMuPhyHeader->getUsersArraySize() == 1) {
+    if (isTriggerBasedUplink && allocationPhyHeader->getUsersArraySize() == 1) {
         // HE TB transmitters are centered on their assigned RU by the
         // transmitter model. Reconstruct the full-channel center from the RU
         // offset, then return the user RU for reception/interference filtering.
-        const auto& user = heMuPhyHeader->getUsers(0);
+        const auto& user = allocationPhyHeader->getUsers(0);
         auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
         int channelTones = getHeChannelToneCount(channelBandwidth);
         auto relativeRu = makeHeRu(Hz(0), channelTones,
@@ -120,15 +128,15 @@ bool Ieee80211RadioMedium::findHeMuRuForReceiver(const IRadio *receiver, const I
                 user.ruIndex, user.ruToneSize, user.ruToneOffset);
         return true;
     }
-    for (unsigned int i = 0; i < heMuPhyHeader->getUsersArraySize(); ++i) {
-        const auto& user = heMuPhyHeader->getUsers(i);
+    for (unsigned int i = 0; i < allocationPhyHeader->getUsersArraySize(); ++i) {
+        const auto& user = allocationPhyHeader->getUsers(i);
         if (receiverStaId.has_value() && user.staId == *receiverStaId) {
             // DL HE MU receiver filtering follows the STA-ID and RU location
             // carried in the HE-SIG-B User field (Clause 27.3.11.8.4).
             auto channelBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
             if (user.ruToneSize == 0) {
                 auto legacyRus = calculateHeRus(narrowbandTransmissionAnalogModel->getCenterFrequency(),
-                        channelBandwidth, heMuPhyHeader->getUsersArraySize());
+                        channelBandwidth, allocationPhyHeader->getUsersArraySize());
                 if (user.ruIndex >= 0 && user.ruIndex < (int)legacyRus.size()) {
                     ru = legacyRus[user.ruIndex];
                     return true;
@@ -156,11 +164,8 @@ const IReception *Ieee80211RadioMedium::computeHeMuRuReception(const IRadio *rec
     if (auto scalarMediumAnalogModel = dynamic_cast<const ScalarMediumAnalogModel *>(analogModel)) {
         auto totalBandwidth = ieee80211Transmission->getMode()->getDataMode()->getBandwidth();
         auto aggregatePower = scalarMediumAnalogModel->computeReceptionPower(receiver, transmission, arrival);
-        auto packet = transmission->getPacket();
-        auto heMuHeader = packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>() ?
-                packet->peekAtFront<Ieee80211HeMuPhyHeader>() : nullptr;
-        bool isTriggerBasedUplink = heMuHeader != nullptr &&
-                heMuHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK;
+        auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
+        bool isTriggerBasedUplink = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr;
         // The standard defines the RU's subcarrier allocation, not this packet-level
         // power scaling. For DL MU, scale the aggregate receive power by occupied
         // RU bandwidth; for UL TB, the transmitter already emits on the assigned RU.

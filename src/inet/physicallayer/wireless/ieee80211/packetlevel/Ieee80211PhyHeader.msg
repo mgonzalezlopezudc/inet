@@ -165,10 +165,10 @@ class Ieee80211VhtPhyHeader extends Ieee80211PhyHeader
 }
 
 //
-// IEEE 802.11 22. High Efficiency (HE) Multi-User (MU)
+// IEEE 802.11 22. High Efficiency (HE)
 //
 //
-// Per-user HE MU allocation carried by an Ieee80211HeMuPhyHeader. The RU
+// Per-user HE allocation carried by an Ieee80211HePhyHeader. The RU
 // geometry and station ID identify the intended receiver; MCS, NSS, DCM and
 // PSDU length drive its independent reception calculation.
 //
@@ -188,15 +188,14 @@ struct Ieee80211HeMuUserInfo
 }
 
 //
-// Packet-level common header of a HE downlink MU or trigger-based uplink
-// PPDU. The serializer emits the HE signaling fields only; runtime-only model
+// Packet-level common header of an HE PPDU. The serializer emits the HE
+// signaling fields only; runtime-only model
 // state such as trigger correlation and resolved per-user durations stays in
 // the chunk object and is not part of the serialized PHY header.
 //
-class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
+class Ieee80211HePhyHeader extends Ieee80211PhyHeader
 {
     uint8_t bssColor = 0;
-    uint8_t ppduFormat = 0; // 0: HE MU downlink, 1: HE trigger-based uplink, 2: HE SU, 3: HE ER SU
     uint8_t spatialReuse = 0; // HE-SIG-A Spatial Reuse field
     bool nonSrgObssPdDisallowed = false;
     bool srgObssPdDisallowed = false;
@@ -212,6 +211,22 @@ class Ieee80211HeMuPhyHeader extends Ieee80211PhyHeader
     bool muMimo = false;
     uint8_t spatialConfiguration = 0;
     uint8_t totalNsts = 0;
+}
+
+class Ieee80211HeSuPhyHeader extends Ieee80211HePhyHeader
+{
+}
+
+class Ieee80211HeErSuPhyHeader extends Ieee80211HePhyHeader
+{
+}
+
+class Ieee80211HeMuPhyHeader extends Ieee80211HePhyHeader
+{
+}
+
+class Ieee80211HeTbPhyHeader extends Ieee80211HePhyHeader
+{
 }
 
 //

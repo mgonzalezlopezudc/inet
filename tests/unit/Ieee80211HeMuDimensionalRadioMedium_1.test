@@ -129,7 +129,6 @@ auto rus = calculateHeRus(centerFrequency, channelBandwidth, 4);
 
 auto packet = new Packet("HE-MU-dimensional-PPDU");
 auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
-phyHeader->setPpduFormat(HE_MU_DOWNLINK);
 Ieee80211HeMuUserInfo user;
 user.ruIndex = rus[0].index;
 user.ruToneSize = rus[0].toneSize;

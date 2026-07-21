@@ -12,6 +12,7 @@
 
 #include "inet/common/packet/printer/PacketPrinter.h"
 #include "inet/common/packet/printer/ProtocolPrinterRegistry.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 namespace inet {
@@ -160,15 +161,15 @@ void Ieee80211PhyProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pro
         stream << ", coding=" << codingName(vhtHeader->getCoding());
         context.infoColumn << stream.str();
     }
-    else if (auto heMuHeader = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(chunk)) {
-        context.typeColumn << hePpduFormatName(heMuHeader->getPpduFormat()) << " PHY";
+    else if (auto heHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(chunk)) {
+        context.typeColumn << hePpduFormatName(getIeee80211HePpduFormat(*heHeader)) << " PHY";
         std::ostringstream stream;
-        printCommonPhyInfo(stream, *heMuHeader);
-        stream << ", BSS color=" << static_cast<int>(heMuHeader->getBssColor())
-               << ", GI=" << static_cast<int>(heMuHeader->getGuardInterval())
-               << ", coding=" << codingName(heMuHeader->getCoding())
+        printCommonPhyInfo(stream, *heHeader);
+        stream << ", BSS color=" << static_cast<int>(heHeader->getBssColor())
+               << ", GI=" << static_cast<int>(heHeader->getGuardInterval())
+               << ", coding=" << codingName(heHeader->getCoding())
                << ", ";
-        printUserSummary(stream, *heMuHeader);
+        printUserSummary(stream, *heHeader);
         context.infoColumn << stream.str();
     }
     else if (auto ehtHeader = dynamicPtrCast<const Ieee80211EhtPhyHeader>(chunk)) {

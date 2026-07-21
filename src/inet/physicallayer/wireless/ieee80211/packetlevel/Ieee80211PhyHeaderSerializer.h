@@ -8,7 +8,10 @@
 #ifndef __INET_IEEE80211PHYHEADERSERIALIZER_H
 #define __INET_IEEE80211PHYHEADERSERIALIZER_H
 
+#include <optional>
+
 #include "inet/common/packet/serializer/FieldsChunkSerializer.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
 namespace inet {
 
@@ -124,14 +127,17 @@ class INET_API Ieee80211VhtPhyHeaderSerializer : public FieldsChunkSerializer
  * Converts the INET packet-level representation of an HE PHY header,
  * including the PPDU format, common settings, and per-user RU allocations.
  */
-class INET_API Ieee80211HeMuPhyHeaderSerializer : public FieldsChunkSerializer
+class INET_API Ieee80211HePhyHeaderSerializer : public FieldsChunkSerializer
 {
   protected:
+    std::optional<Ieee80211HePpduFormat> expectedPpduFormat;
+
     virtual void serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const override;
     virtual const Ptr<Chunk> deserialize(MemoryInputStream& stream) const override;
 
   public:
-    Ieee80211HeMuPhyHeaderSerializer() : FieldsChunkSerializer() {}
+    Ieee80211HePhyHeaderSerializer() : FieldsChunkSerializer() {}
+    explicit Ieee80211HePhyHeaderSerializer(Ieee80211HePpduFormat expectedPpduFormat) : FieldsChunkSerializer(), expectedPpduFormat(expectedPpduFormat) {}
 };
 
 /**

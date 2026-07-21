@@ -37,6 +37,7 @@
 #include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
@@ -80,12 +81,19 @@ static bool parseHeBssColor(const char *token, int& color)
     return true;
 }
 
-static Ptr<const Ieee80211HeMuPhyHeader> peekHeMuPhyHeader(const ITransmission *transmission)
+static Ptr<const Ieee80211HePhyHeader> peekHePhyHeader(const ITransmission *transmission)
 {
     auto packet = transmission->getPacket();
-    return transmission->getPacketProtocol() == &Protocol::ieee80211HePhy && packet != nullptr && packet->hasAtFront<Ieee80211HeMuPhyHeader>()
-            ? packet->peekAtFront<Ieee80211HeMuPhyHeader>()
+    return transmission->getPacketProtocol() == &Protocol::ieee80211HePhy && packet != nullptr && packet->hasAtFront<Ieee80211HePhyHeader>()
+            ? packet->peekAtFront<Ieee80211HePhyHeader>()
             : nullptr;
+}
+
+static Ptr<const Ieee80211HePhyHeader> peekHeMuOrTbPhyHeader(const ITransmission *transmission)
+{
+    auto phyHeader = peekHePhyHeader(transmission);
+    return dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader) != nullptr ||
+            dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr ? phyHeader : nullptr;
 }
 
 static W getHeRuAdjustedPowerThreshold(const IReception *reception,
@@ -99,7 +107,7 @@ static W getHeRuAdjustedPowerThreshold(const IReception *reception,
             narrowbandReception->getBandwidth(), channelBandwidth);
 }
 
-static bool containsHeMuUser(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, uint16_t staId)
+static bool containsHeMuUser(const Ptr<const Ieee80211HePhyHeader>& phyHeader, uint16_t staId)
 {
     for (unsigned int i = 0; i < phyHeader->getUsersArraySize(); ++i)
         if (phyHeader->getUsers(i).staId == staId)
@@ -107,9 +115,9 @@ static bool containsHeMuUser(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader,
     return false;
 }
 
-static Ptr<Ieee80211HeMuPhyHeader> copyHeMuPhyHeader(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader)
+static Ptr<Ieee80211HePhyHeader> copyHeMuPhyHeader(const Ptr<const Ieee80211HePhyHeader>& phyHeader)
 {
-    return staticPtrCast<Ieee80211HeMuPhyHeader>(phyHeader->dupShared());
+    return staticPtrCast<Ieee80211HePhyHeader>(phyHeader->dupShared());
 }
 
 static void addReceptionIndications(Packet *packet, const IReception *reception, const IInterference *interference, const ISnir *snir)
@@ -221,7 +229,7 @@ static bool matchesHeMuUser(const Ieee80211HeUserPhyParameters& modelUser,
 }
 
 static bool validateHeMuModelBoundary(const Ieee80211Transmission *transmission,
-        const Ptr<const Ieee80211HeMuPhyHeader>& decodedHeader, b dataFieldLength)
+        const Ptr<const Ieee80211HePhyHeader>& decodedHeader, b dataFieldLength)
 {
     const auto& users = transmission->getHeUserPhyParameters();
     const auto& ppdu = transmission->getHePpduParameters();
@@ -260,14 +268,14 @@ static bool validateHeMuModelBoundary(const Ieee80211Transmission *transmission,
 }
 
 static Packet *extractHeMuMpdu(const Ieee80211Transmission *transmission,
-        const Ptr<const Ieee80211HeMuPhyHeader>& decodedHeader, uint16_t staId)
+        const Ptr<const Ieee80211HePhyHeader>& decodedHeader, uint16_t staId)
 {
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
             Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
             Chunk::PF_ALLOW_REINTERPRETATION;
     auto transmittedPacket = transmission->getPacket();
     auto packetCopy = transmittedPacket->dup();
-    packetCopy->popAtFront<Ieee80211HeMuPhyHeader>(b(-1), parsingFlags);
+    packetCopy->popAtFront<Ieee80211HePhyHeader>(b(-1), parsingFlags);
     if (!validateHeMuModelBoundary(transmission, decodedHeader, packetCopy->getDataLength())) {
         // A model/wire disagreement is not a partially decodable PSDU. Reject
         // extraction so the caller exposes only the legacy-visible preamble.
@@ -334,7 +342,7 @@ static Packet *extractHeMuMpdu(const Ieee80211Transmission *transmission,
 }
 
 static Packet *buildHeMuPhyPacket(const Ieee80211Transmission *transmission,
-        const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, uint16_t staId)
+        const Ptr<const Ieee80211HePhyHeader>& phyHeader, uint16_t staId)
 {
     auto packet = extractHeMuMpdu(transmission, phyHeader, staId);
     if (packet == nullptr)
@@ -346,7 +354,7 @@ static Packet *buildHeMuPhyPacket(const Ieee80211Transmission *transmission,
     return packet;
 }
 
-static Packet *buildLegacyHeMuPreambleIndication(const Ptr<const Ieee80211HeMuPhyHeader>& phyHeader, const IReception *reception)
+static Packet *buildLegacyHeMuPreambleIndication(const Ptr<const Ieee80211HePhyHeader>& phyHeader, const IReception *reception)
 {
     auto packet = new Packet("HE-MU-Legacy-Preamble");
     auto phyHeaderCopy = copyHeMuPhyHeader(phyHeader);
@@ -470,25 +478,25 @@ std::ostream& Ieee80211Receiver::printToStream(std::ostream& stream, int level, 
 
 bool Ieee80211Receiver::isAssignedHeMuRu(const ITransmission *transmission) const
 {
-    auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
-    if (heMuPhyHeader == nullptr)
+    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
+    if (allocationPhyHeader == nullptr)
         return true;
     // HE TB is received by the AP as the addressed receiver of the Trigger
     // exchange; DL HE MU needs the STA-ID match from HE-SIG-B User fields
     // (Clause 27.3.2.5 and Clause 27.3.11.8.4).
-    if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK)
+    if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr)
         return true;
     auto networkInterface = getContainingNicModule(this);
     auto staId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
-    return staId.has_value() && containsHeMuUser(heMuPhyHeader, *staId);
+    return staId.has_value() && containsHeMuUser(allocationPhyHeader, *staId);
 }
 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const ITransmission *transmission) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(transmission);
-    auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
-    if (heMuPhyHeader != nullptr)
-        return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
+    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
+    if (allocationPhyHeader != nullptr)
+        return ieee80211Transmission && allocationPhyHeader->getUsersArraySize() > 0 &&
                NarrowbandReceiverBase::computeIsReceptionPossible(listening, transmission);
     // Non-HE PPDUs use the PHY-specific mode objects annotated in this package
     // (DSSS Clause 15, HR/DSSS Clause 16, OFDM Clause 17, ERP Clause 18,
@@ -502,12 +510,12 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, const IReception *reception, IRadioSignal::SignalPart part) const
 {
     auto ieee80211Transmission = dynamic_cast<const Ieee80211Transmission *>(reception->getTransmission());
-    auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(reception->getTransmission());
     if (shouldIgnoreReceptionDueToHeSpatialReuse(listening, reception, true))
         return false;
-    if (heMuPhyHeader != nullptr) {
+    if (allocationPhyHeader != nullptr) {
         auto ruSensitivity = getHeRuAdjustedPowerThreshold(reception, ieee80211Transmission, sensitivity);
-        return ieee80211Transmission && heMuPhyHeader->getUsersArraySize() > 0 &&
+        return ieee80211Transmission && allocationPhyHeader->getUsersArraySize() > 0 &&
                getAnalogModel()->computeIsReceptionPossible(listening, reception, ruSensitivity);
     }
     // Same non-HE mode-set gate as above; this path evaluates the concrete
@@ -519,10 +527,10 @@ bool Ieee80211Receiver::computeIsReceptionPossible(const IListening *listening, 
 bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening, const IReception *reception,
         IRadioSignal::SignalPart part, const IInterference *interference) const
 {
-    auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(reception->getTransmission());
     if (shouldIgnoreReceptionDueToHeSpatialReuse(listening, reception, false))
         return false;
-    if (heMuPhyHeader == nullptr || heMuPhyHeader->getPpduFormat() != HE_TRIGGER_BASED_UPLINK)
+    if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) == nullptr)
         return FlatReceiverBase::computeIsReceptionAttempted(listening, reception, part, interference);
     if (!computeIsReceptionPossible(listening, reception, part))
         return false;
@@ -536,10 +544,9 @@ bool Ieee80211Receiver::computeIsReceptionAttempted(const IListening *listening,
     auto currentTransmission = reception->getReceiverRadio()->getReceptionInProgress();
     if (currentTransmission == nullptr || currentTransmission == reception->getTransmission())
         return true;
-    auto currentHeader = peekHeMuPhyHeader(currentTransmission);
-    return currentHeader != nullptr &&
-           currentHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
-           currentHeader->getTriggerId() == heMuPhyHeader->getTriggerId();
+    auto currentHeader = peekHeMuOrTbPhyHeader(currentTransmission);
+    return dynamicPtrCast<const Ieee80211HeTbPhyHeader>(currentHeader) != nullptr &&
+           currentHeader->getTriggerId() == allocationPhyHeader->getTriggerId();
 }
 
 namespace {
@@ -601,17 +608,17 @@ bool Ieee80211Receiver::shouldIgnoreReceptionDueToHeSpatialReuse(const IListenin
 Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReuseDecision(const IListening *listening, const IReception *reception) const
 {
     HeSpatialReuseDecision decision;
-    auto heMuPhyHeader = peekHeMuPhyHeader(reception->getTransmission());
+    auto hePhyHeader = peekHePhyHeader(reception->getTransmission());
     if (!enableSpatialReuse) {
         decision.reason = "spatial reuse disabled";
         return decision;
     }
-    if (heMuPhyHeader == nullptr) {
+    if (hePhyHeader == nullptr) {
         decision.reasonCode = HeSpatialReuseReason::NOT_HE_PPDU;
         decision.reason = "not an HE PPDU";
         return decision;
     }
-    auto receivedBssColor = heMuPhyHeader->getBssColor();
+    auto receivedBssColor = hePhyHeader->getBssColor();
     decision.receivedBssColor = receivedBssColor;
     // Table 27-21/27-22 carries BSS Color in HE-SIG-A. Color 0 disables BSS
     // coloring, so OBSS/PD classification cannot be applied.
@@ -646,7 +653,7 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
             decision.reason = "SRG OBSS/PD disabled";
             return decision;
         }
-        if (heMuPhyHeader->getSrgObssPdDisallowed()) {
+        if (hePhyHeader->getSrgObssPdDisallowed()) {
             decision.reasonCode = HeSpatialReuseReason::SRG_DISALLOWED;
             decision.reason = "PPDU disallows SRG OBSS/PD";
             return decision;
@@ -659,7 +666,7 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
             decision.reason = "non-SRG OBSS/PD disabled";
             return decision;
         }
-        if (heMuPhyHeader->getNonSrgObssPdDisallowed()) {
+        if (hePhyHeader->getNonSrgObssPdDisallowed()) {
             decision.reasonCode = HeSpatialReuseReason::NON_SRG_DISALLOWED;
             decision.reason = "PPDU disallows non-SRG OBSS/PD";
             return decision;
@@ -667,7 +674,7 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
         decision.obssPdThreshold = nonSrgObssPdThreshold;
     }
 
-    if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+    if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr) {
         // Table 27-24 defines HE TB Spatial Reuse values. This branch models
         // parameterized spatial reuse only when the PPDU permits it.
         if (!enableParameterizedSpatialReuse) {
@@ -675,7 +682,7 @@ Ieee80211Receiver::HeSpatialReuseDecision Ieee80211Receiver::computeHeSpatialReu
             decision.reason = "HE TB PPDU excluded from OBSS/PD";
             return decision;
         }
-        if (heMuPhyHeader->getPsrDisallowed() || heMuPhyHeader->getSpatialReuse() == 0) {
+        if (hePhyHeader->getPsrDisallowed() || hePhyHeader->getSpatialReuse() == 0) {
             decision.reasonCode = HeSpatialReuseReason::PSR_NOT_PERMITTED;
             decision.reason = "PSR not permitted by PPDU";
             return decision;
@@ -706,13 +713,25 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
 {
     auto transmission = check_and_cast<const Ieee80211Transmission *>(reception->getTransmission());
     auto transmittedPacket = transmission->getPacket();
-    auto heMuPhyHeader = peekHeMuPhyHeader(transmission);
-    if (heMuPhyHeader != nullptr) {
+    auto hePhyHeader = peekHePhyHeader(transmission);
+    if (hePhyHeader != nullptr) {
         lastHeReception = true;
-        lastHePpduFormat = heMuPhyHeader->getPpduFormat();
-        lastHeUserCount = heMuPhyHeader->getUsersArraySize();
-        lastHeBssColor = heMuPhyHeader->getBssColor();
-        if (heMuPhyHeader->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+        lastHePpduFormat = getIeee80211HePpduFormat(*hePhyHeader);
+        lastHeUserCount = hePhyHeader->getUsersArraySize();
+        lastHeBssColor = hePhyHeader->getBssColor();
+        lastHeRuAssigned = false;
+    }
+    else {
+        lastHeReception = false;
+        lastHePpduFormat = -1;
+        lastHeUserCount = 0;
+        lastHeBssColor = 0;
+        lastHeRuAssigned = false;
+    }
+
+    auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
+    if (allocationPhyHeader != nullptr) {
+        if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr) {
             lastHeRuAssigned = true;
             auto packet = transmittedPacket->dup();
             if (!isReceptionSuccessful(decisions))
@@ -724,13 +743,13 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         }
         auto networkInterface = getContainingNicModule(this);
         auto myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
-        lastHeRuAssigned = myStaId.has_value() && containsHeMuUser(heMuPhyHeader, *myStaId);
-        auto packet = myStaId.has_value() && containsHeMuUser(heMuPhyHeader, *myStaId) &&
+        lastHeRuAssigned = myStaId.has_value() && containsHeMuUser(allocationPhyHeader, *myStaId);
+        auto packet = myStaId.has_value() && containsHeMuUser(allocationPhyHeader, *myStaId) &&
                 modeSet->containsMode(transmission->getMode())
-                ? buildHeMuPhyPacket(transmission, heMuPhyHeader, *myStaId)
-                : buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
+                ? buildHeMuPhyPacket(transmission, allocationPhyHeader, *myStaId)
+                : buildLegacyHeMuPreambleIndication(allocationPhyHeader, reception);
         if (packet == nullptr)
-            packet = buildLegacyHeMuPreambleIndication(heMuPhyHeader, reception);
+            packet = buildLegacyHeMuPreambleIndication(allocationPhyHeader, reception);
         if (!applyHeMuMpduReceiveOutcomes(packet, decisions, getRNG(0)))
             packet->setBitError(true);
         addReceptionIndications(packet, reception, interference, snir);
@@ -738,13 +757,8 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
         return new ReceptionResult(reception, decisions, packet);
     }
-    lastHeReception = false;
-    lastHePpduFormat = -1;
-    lastHeUserCount = 0;
-    lastHeBssColor = 0;
-    lastHeRuAssigned = false;
 
-    // Non-HE PPDU reception is packet-level: the standard-specific durations,
+    // Single-user and non-HE PPDU reception is packet-level: the standard-specific durations,
     // header fields, and padding are established in the mode/radio/transmitter
     // code, while this receiver reports the selected PHY mode and channel with
     // the decoded payload.

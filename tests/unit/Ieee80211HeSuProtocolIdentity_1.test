@@ -3,25 +3,53 @@ Test ordinary IEEE 802.11ax HE SU and ER SU packet-level identity, signaling
 length, protocol registration, and analog duration partition.
 
 %includes:
+#include <cmath>
+
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 %file: TestNetwork.ned
 import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211NistErrorModel;
 import inet.mobility.static.StationaryMobility;
+
+module InspectableReceiver extends Ieee80211Receiver
+{
+    parameters:
+        @class(InspectableReceiver);
+}
+
+module TrackingErrorModel extends Ieee80211NistErrorModel
+{
+    parameters:
+        @class(TrackingErrorModel);
+}
+
+module InspectableRadioMedium extends Ieee80211RadioMedium
+{
+    parameters:
+        @class(InspectableRadioMedium);
+}
 
 module InspectableRadio extends Ieee80211ScalarRadio
 {
     parameters:
         @class(InspectableRadio);
+        receiver.typename = "InspectableReceiver";
+        receiver.errorModel.typename = "TrackingErrorModel";
 }
 
 module MockNic
@@ -41,7 +69,7 @@ network TestNetwork
     submodules:
         test: Test;
         interfaceTable: InterfaceTable;
-        radioMedium: Ieee80211RadioMedium;
+        radioMedium: InspectableRadioMedium;
         mobility: StationaryMobility;
 }
 
@@ -74,6 +102,45 @@ class InspectableRadio : public Ieee80211Radio
     void testEncapsulate(Packet *packet) const { encapsulate(packet); }
 };
 
+class InspectableReceiver : public Ieee80211Receiver
+{
+  public:
+    bool testIsAssignedHeMuRu(const ITransmission *transmission) const { return isAssignedHeMuRu(transmission); }
+    bool testIsReceptionPossible(const ITransmission *transmission) const { return computeIsReceptionPossible(nullptr, transmission); }
+};
+
+class TrackingErrorModel : public Ieee80211NistErrorModel
+{
+  public:
+    mutable int genericDataEvaluationCount = 0;
+    mutable int perUserDataEvaluationCount = 0;
+
+  protected:
+    virtual double getDataSuccessRate(const IIeee80211Mode *, unsigned int, double) const override
+    {
+        genericDataEvaluationCount++;
+        return 0.75;
+    }
+
+    virtual double getHeDataSuccessRate(const Ieee80211HeUserPhyParameters&, unsigned int, double) const override
+    {
+        perUserDataEvaluationCount++;
+        return 0;
+    }
+};
+
+class InspectableRadioMedium : public Ieee80211RadioMedium
+{
+  public:
+    void testAddTransmission(const IRadio *transmitter, const ITransmission *transmission) { addTransmission(transmitter, transmission); }
+    void testRemoveTransmission(const ITransmission *transmission) { removeTransmission(transmission); }
+    bool testFindHeMuRuForReceiver(const IRadio *receiver, const ITransmission *transmission) const
+    {
+        Ieee80211HeRu ru;
+        return findHeMuRuForReceiver(receiver, transmission, ru);
+    }
+};
+
 class MockNicModule : public NetworkInterface
 {
   protected:
@@ -87,15 +154,20 @@ class MockNicModule : public NetworkInterface
 };
 
 Define_Module(InspectableRadio);
+Define_Module(InspectableReceiver);
+Define_Module(TrackingErrorModel);
+Define_Module(InspectableRadioMedium);
 Define_Module(MockNicModule);
 
 static void testSingleUserMode(InspectableRadio *radio,
+        const IRadio *receiverRadio, const InspectableReceiver *receiver,
+        InspectableRadioMedium *medium,
         const Ieee80211Transmitter *transmitter, const Ieee80211HeMode *mode,
         Ieee80211HePpduFormat expectedFormat, b expectedHeaderLength,
         B payloadLength, simtime_t startTime)
 {
     auto factoryHeader = mode->getHeaderMode()->createHeader();
-    ASSERT(dynamicPtrCast<Ieee80211HeMuPhyHeader>(factoryHeader) != nullptr);
+    ASSERT(dynamicPtrCast<Ieee80211HeSuPhyHeader>(factoryHeader) != nullptr);
     ASSERT(dynamicPtrCast<Ieee80211HtPhyHeader>(factoryHeader) == nullptr);
 
     auto packet = new Packet("he-single-user");
@@ -104,8 +176,11 @@ static void testSingleUserMode(InspectableRadio *radio,
     radio->testEncapsulate(packet);
 
     ASSERT(packet->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ieee80211HePhy);
-    auto header = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
-    ASSERT(header->getPpduFormat() == expectedFormat);
+    auto header = packet->peekAtFront<Ieee80211HePhyHeader>();
+    ASSERT(getIeee80211HePpduFormat(*header) == expectedFormat);
+    ASSERT(expectedFormat == HE_EXTENDED_RANGE_SU ?
+            dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(header) != nullptr :
+            dynamicPtrCast<const Ieee80211HeSuPhyHeader>(header) != nullptr);
     ASSERT(header->getUsersArraySize() == 0);
     ASSERT(header->getChunkLength() == expectedHeaderLength);
     ASSERT(header->getLengthField() == payloadLength);
@@ -119,7 +194,21 @@ static void testSingleUserMode(InspectableRadio *radio,
     ASSERT(transmission->getDuration() ==
             transmission->getPreambleDuration() + transmission->getDataDuration());
 
-    delete transmission;
+    ASSERT(receiver->testIsAssignedHeMuRu(transmission));
+    ASSERT(receiver->testIsReceptionPossible(transmission));
+    ASSERT(!medium->testFindHeMuRuForReceiver(receiverRadio, transmission));
+
+    medium->testAddTransmission(radio, transmission);
+    auto snir = medium->getSNIR(receiverRadio, transmission);
+    auto errorModel = check_and_cast<const TrackingErrorModel *>(receiver->getErrorModel());
+    auto previousGenericCount = errorModel->genericDataEvaluationCount;
+    auto previousPerUserCount = errorModel->perUserDataEvaluationCount;
+    auto packetErrorRate = errorModel->computePacketErrorRate(snir, IRadioSignal::SIGNAL_PART_DATA);
+    ASSERT(std::abs(packetErrorRate - 0.25) < 1e-12);
+    ASSERT(errorModel->genericDataEvaluationCount == previousGenericCount + 1);
+    ASSERT(errorModel->perUserDataEvaluationCount == previousPerUserCount);
+    medium->testRemoveTransmission(transmission);
+
     delete packet;
 }
 
@@ -134,6 +223,15 @@ nic->callInitialize();
 
 auto radio = check_and_cast<InspectableRadio *>(nic->getSubmodule("radio"));
 auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
+
+cModule *rxNic = nicType->create("rxNic", getSystemModule());
+rxNic->buildInside();
+auto rxNetworkInterface = check_and_cast<MockNicModule *>(rxNic);
+rxNetworkInterface->setMacAddress(MacAddress("02:00:00:00:00:02"));
+rxNic->callInitialize();
+auto receiverRadio = check_and_cast<InspectableRadio *>(rxNic->getSubmodule("radio"));
+auto receiver = check_and_cast<const InspectableReceiver *>(receiverRadio->getReceiver());
+auto medium = check_and_cast<InspectableRadioMedium *>(getParentModule()->getSubmodule("radioMedium"));
 const auto *mcs = &Ieee80211HemcsTable::heMcs0BW20MHzNss1;
 auto heSuMode = Ieee80211HeCompliantModes::getCompliantMode(
         mcs, Ieee80211HeMode::BAND_5GHZ,
@@ -144,17 +242,18 @@ auto heErSuMode = Ieee80211HeCompliantModes::getCompliantMode(
         Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU,
         Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
 
-testSingleUserMode(radio, transmitter, heSuMode, HE_SINGLE_USER,
+testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heSuMode, HE_SINGLE_USER,
         b(64), B(100), SimTime(1, SIMTIME_S));
-testSingleUserMode(radio, transmitter, heErSuMode, HE_EXTENDED_RANGE_SU,
+testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heErSuMode, HE_EXTENDED_RANGE_SU,
         b(128), B(100), SimTime(2, SIMTIME_S));
 ASSERT(heErSuMode->getPreambleMode()->getDuration() ==
         heSuMode->getPreambleMode()->getDuration() + SimTime(8, SIMTIME_US));
 
 nic->deleteModule();
-EV << "HE SU and ER SU retain HE protocol identity and count signaling once.\n";
+rxNic->deleteModule();
+EV << "HE SU and ER SU retain HE protocol identity, generic data handling, and count signaling once.\n";
 EV << ".\n";
 
 %contains: stdout
-HE SU and ER SU retain HE protocol identity and count signaling once.
+HE SU and ER SU retain HE protocol identity, generic data handling, and count signaling once.
 .
