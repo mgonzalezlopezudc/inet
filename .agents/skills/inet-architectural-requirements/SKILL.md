@@ -21,9 +21,11 @@ Files are unsealed by default, but establish that fact from the current status f
 
 - Read [requirements.md](references/requirements.md) when assessing user-facing modeling scope, composition, execution, results, visualization, emulation, documentation, or compatibility.
 - Read [architectural-requirements.md](references/architectural-requirements.md) before designing or reviewing production changes. Search by stable identifiers such as `AR-ORG`, `AR-MOD`, `AR-PKT`, `AR-COM`, `AR-LIFE`, `AR-QUEUE`, `AR-OBS`, `AR-CFG`, `AR-EXT`, `AR-BUILD`, and `AR-QUAL` to focus the review.
+- Read [ieee80211-architectural-requirements.md](references/ieee80211-architectural-requirements.md) when reviewing production changes to 802.11 code.
 - Read [naming-conventions.md](references/naming-conventions.md) for every new or renamed package, file, NED type, gate, parameter, signal, statistic, MSG type or field, C++ identifier, configuration, feature, directory, test, icon, or registered name.
 - Read [architecture-exceptions.md](references/architecture-exceptions.md) before reporting dependency violations, and [naming-exceptions.md](references/naming-exceptions.md) before reporting naming violations. Treat these as ledgers of existing reality, not as rules to copy into new code.
 - Read the [agent-review checklist](references/enforcement/agent-review-checklist.md) for semantic review of a diff. Consult the staged [clang-tidy configuration](references/enforcement/.clang-tidy) for mechanically checkable C++ naming rules.
+- Read the [agent-review checklist for IEEE 802.11](references/enforcement/ieee80211-agent-review-checklist.md) for semantic review of 802.11-specific changes.
 - Use reports under `references/reports/` only as prior audit evidence for the exact scope they cover. Revalidate any claim that may have changed.
 
 ## Apply the requirements
