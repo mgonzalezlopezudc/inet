@@ -22,6 +22,18 @@ void LegacySequenceNumberAssignment::assignSequenceNumber(const Ptr<Ieee80211Dat
     header->setSequenceNumber(lastSeqNum);
 }
 
+std::unique_ptr<ISequenceNumberAssignment> LegacySequenceNumberAssignment::clone() const
+{
+    return std::make_unique<LegacySequenceNumberAssignment>(*this);
+}
+
+void LegacySequenceNumberAssignment::copyStateFrom(const ISequenceNumberAssignment& other)
+{
+    auto source = dynamic_cast<const LegacySequenceNumberAssignment *>(&other);
+    if (source == nullptr)
+        throw cRuntimeError("Cannot copy incompatible sequence-number assignment state");
+    lastSeqNum = source->lastSeqNum;
+}
+
 } /* namespace ieee80211 */
 } /* namespace inet */
-

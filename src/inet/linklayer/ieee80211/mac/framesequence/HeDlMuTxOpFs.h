@@ -15,6 +15,7 @@
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/queueing/contract/IPacketQueue.h"
@@ -57,8 +58,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     int firstStep = -1;
     int step = -1;
 
-    IIeee80211HeDlScheduler *dlScheduler = nullptr;
-    IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
+    const HeDlMuPlan dlPlan;
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     queueing::IPacketQueue *pendingQueue = nullptr;
     IAckHandler *ackHandler = nullptr;
@@ -79,13 +79,14 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
     /** Build the MU container Packet from the scheduler allocation and pending queue. */
     Packet *buildMuContainerPacket(FrameSequenceContext *context);
     virtual MacAddress getTransmitterAddress() const;
+    /** Deterministic fault-injection seam invoked immediately before each packet commit. */
+    virtual void beforePacketCommit(int packetIndex) {}
 
     friend class HeDlMuPerStaBlockAckFs;
     friend class HeDlMuBarBlockAckFs;
 
   public:
-    HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
-                 const IIeee80211HeDlScheduler::ScheduleContext& scheduleContext,
+    HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
                  physicallayer::Ieee80211ModeSet *modeSet,
                  queueing::IPacketQueue *pendingQueue,
                  IAckHandler *ackHandler,

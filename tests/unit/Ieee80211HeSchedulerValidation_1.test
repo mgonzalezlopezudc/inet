@@ -1,0 +1,219 @@
+%description:
+Validates immutable HE scheduler plans with release-active diagnostics before any queue or exchange state can mutate.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
+#include "inet/queueing/contract/IPacketQueue.h"
+
+%file: TestNetwork.ned
+import inet.queueing.queue.PacketQueue;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        queue: PacketQueue;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("%s", message);
+}
+
+static IIeee80211HeDlScheduler::ScheduleContext makeContext(
+        queueing::IPacketQueue *queue, const std::vector<MacAddress>& stations)
+{
+    IIeee80211HeDlScheduler::ScheduleContext context;
+    context.channelCenterFrequency = Hz(5.18e9);
+    context.channelBandwidth = MHz(20);
+    Ieee80211HeCapabilities localCapabilities;
+    Ieee80211HeCapabilities peerCapabilities;
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = context.channelBandwidth;
+    auto negotiated = negotiateHeCapabilities(localCapabilities, peerCapabilities, operation, true);
+    context.localHeCapabilities = localCapabilities;
+    for (size_t i = 0; i < stations.size(); ++i) {
+        IIeee80211HeDlScheduler::CandidateInfo candidate;
+        candidate.staAddress = stations[i];
+        candidate.sourceQueue = queue;
+        candidate.anchor = i == 0;
+        candidate.hasAdvertisedHeCapabilities = true;
+        candidate.advertisedHeCapabilities = peerCapabilities;
+        candidate.hasNegotiatedHeCapabilities = true;
+        candidate.negotiatedHeCapabilities = negotiated;
+        context.candidates.push_back(candidate);
+    }
+    context.anchorSta = stations.front();
+    return context;
+}
+
+static IIeee80211HeDlScheduler::RuAllocation makeAllocation(
+        const MacAddress& station, const Ieee80211HeRu& ru)
+{
+    IIeee80211HeDlScheduler::RuAllocation allocation;
+    allocation.staAddress = station;
+    allocation.ru = ru;
+    allocation.mcs = 3;
+    allocation.numberOfSpatialStreams = 1;
+    allocation.estimatedDuration = SimTime(1, SIMTIME_MS);
+    return allocation;
+}
+
+static void requireRejected(const IIeee80211HeDlScheduler::ScheduleContext& context,
+        const std::vector<IIeee80211HeDlScheduler::RuAllocation>& allocations,
+        HeMuPlanErrorCode expected, const char *message)
+{
+    HeMuPlanDiagnostic diagnostic;
+    auto plan = HeDlMuPlan::create(context, allocations, diagnostic);
+    requireTrue(!plan.has_value() && diagnostic.code == expected, message);
+}
+
+%activity:
+auto queue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("queue"));
+MacAddress sta1("02:00:00:00:30:01");
+MacAddress sta2("02:00:00:00:30:02");
+MacAddress unknown("02:00:00:00:30:ff");
+auto rus = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 9);
+auto context = makeContext(queue, {sta1, sta2});
+auto validAllocations = std::vector<IIeee80211HeDlScheduler::RuAllocation>{
+        makeAllocation(sta1, rus[0]), makeAllocation(sta2, rus[1])};
+
+HeMuPlanDiagnostic diagnostic;
+auto validPlan = HeDlMuPlan::create(context, validAllocations, diagnostic);
+requireTrue(validPlan.has_value() && !diagnostic, "canonical DL scheduler output should produce a plan");
+validAllocations[0].mcs = 11;
+requireTrue(validPlan->getAllocations()[0].mcs == 3,
+        "usable plan must retain an immutable copy of scheduler values");
+
+auto forgedRuAllocations = validPlan->getAllocations();
+forgedRuAllocations[0].ru.dataSubcarriers = 1;
+forgedRuAllocations[0].ru.pilotSubcarriers = 0;
+forgedRuAllocations[0].ru.centerFrequency = Hz(1);
+forgedRuAllocations[0].ru.bandwidth = Hz(1);
+auto normalizedPlan = HeDlMuPlan::create(context, forgedRuAllocations, diagnostic);
+requireTrue(normalizedPlan.has_value() &&
+        normalizedPlan->getAllocations()[0].ru.dataSubcarriers == rus[0].dataSubcarriers &&
+        normalizedPlan->getAllocations()[0].ru.pilotSubcarriers == rus[0].pilotSubcarriers &&
+        normalizedPlan->getAllocations()[0].ru.centerFrequency == rus[0].centerFrequency &&
+        normalizedPlan->getAllocations()[0].ru.bandwidth == rus[0].bandwidth,
+        "plan must replace scheduler-supplied RU details with the canonical catalog entry");
+
+auto allocations = validPlan->getAllocations();
+allocations[1].staAddress = sta1;
+requireRejected(context, allocations, HeMuPlanErrorCode::DUPLICATE_STATION,
+        "duplicate station should have a stable diagnostic");
+
+allocations = validPlan->getAllocations();
+allocations[1].ru = allocations[0].ru;
+requireRejected(context, allocations, HeMuPlanErrorCode::OVERLAPPING_RU,
+        "duplicate physical RU should be rejected when MU-MIMO is disabled");
+
+allocations = validPlan->getAllocations();
+allocations[1].staAddress = unknown;
+requireRejected(context, allocations, HeMuPlanErrorCode::UNKNOWN_STATION,
+        "unknown station should be rejected");
+
+auto nullQueueContext = context;
+nullQueueContext.candidates[1].sourceQueue = nullptr;
+requireRejected(nullQueueContext, validPlan->getAllocations(), HeMuPlanErrorCode::NULL_QUEUE,
+        "null source queue should be rejected");
+
+allocations = validPlan->getAllocations();
+allocations[1].mcs = 12;
+requireRejected(context, allocations, HeMuPlanErrorCode::INVALID_MCS,
+        "invalid MCS should be rejected");
+
+allocations = validPlan->getAllocations();
+allocations[1].numberOfSpatialStreams = 0;
+requireRejected(context, allocations, HeMuPlanErrorCode::INVALID_NSS,
+        "invalid NSS should be rejected");
+
+allocations = validPlan->getAllocations();
+allocations[1].estimatedDuration = SIMTIME_ZERO;
+requireRejected(context, allocations, HeMuPlanErrorCode::INVALID_DURATION,
+        "zero duration should be rejected");
+
+auto invalidBandwidthContext = context;
+invalidBandwidthContext.channelBandwidth = MHz(10);
+requireRejected(invalidBandwidthContext, validPlan->getAllocations(),
+        HeMuPlanErrorCode::INVALID_COMMON_PARAMETERS,
+        "unsupported finite bandwidth should return a structured diagnostic instead of throwing");
+
+auto capabilityContext = context;
+capabilityContext.candidates[1].hasNegotiatedHeCapabilities = false;
+requireRejected(capabilityContext, validPlan->getAllocations(), HeMuPlanErrorCode::UNSUPPORTED_CAPABILITY,
+        "missing negotiated direction should be rejected");
+capabilityContext = context;
+capabilityContext.candidates[1].negotiatedHeCapabilities.localTxPeerRx.valid = false;
+requireRejected(capabilityContext, validPlan->getAllocations(), HeMuPlanErrorCode::UNSUPPORTED_CAPABILITY,
+        "unsupported negotiated direction should be rejected");
+
+auto operatingModeContext = context;
+operatingModeContext.candidates[1].operatingModeRxNss = 1;
+operatingModeContext.candidates[1].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[1] = 11;
+allocations = validPlan->getAllocations();
+allocations[1].numberOfSpatialStreams = 2;
+requireRejected(operatingModeContext, allocations, HeMuPlanErrorCode::UNSUPPORTED_CAPABILITY,
+        "allocation NSS must not exceed the peer's current operating-mode RX NSS");
+
+auto dcmCapabilityContext = context;
+dcmCapabilityContext.candidates[1].negotiatedHeCapabilities.mutual.maxDcmConstellation = 2;
+allocations = validPlan->getAllocations();
+allocations[1].mcs = 3;
+allocations[1].dcm = true;
+requireRejected(dcmCapabilityContext, allocations, HeMuPlanErrorCode::UNSUPPORTED_CAPABILITY,
+        "DCM constellation must not exceed the negotiated maximum");
+
+auto invalidMuMimoContext = context;
+invalidMuMimoContext.enableDlMuMimo = true;
+allocations = validPlan->getAllocations();
+auto wideRus = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 2);
+allocations[0].ru = wideRus[0];
+allocations[1].ru = wideRus[0];
+requireRejected(invalidMuMimoContext, allocations, HeMuPlanErrorCode::UNSUPPORTED_CAPABILITY,
+        "shared-RU MU-MIMO without beamforming, CSI, and antenna support should be rejected");
+
+HeMuMimoCsiManager csiManager;
+auto eligibleMuMimoContext = context;
+eligibleMuMimoContext.enableDlMuMimo = true;
+eligibleMuMimoContext.csiManager = &csiManager;
+eligibleMuMimoContext.numApAntennas = 8;
+eligibleMuMimoContext.localHeCapabilities.dlMuMimoBeamformer = true;
+eligibleMuMimoContext.localHeCapabilities.soundingDimensions = 8;
+for (auto& candidate : eligibleMuMimoContext.candidates) {
+    candidate.hasFreshCsi = true;
+    candidate.advertisedHeCapabilities.dlMuMimoBeamformee = true;
+    candidate.advertisedHeCapabilities.feedbackMode = 2;
+    candidate.advertisedHeCapabilities.beamformeeSts20Mhz = 8;
+    candidate.negotiatedHeCapabilities.localAdvertisement = eligibleMuMimoContext.localHeCapabilities;
+    candidate.negotiatedHeCapabilities.peerAdvertisement = candidate.advertisedHeCapabilities;
+    for (int nss = 0; nss < 8; ++nss)
+        candidate.negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[nss] = 11;
+}
+allocations = validPlan->getAllocations();
+allocations[1].ru = allocations[0].ru;
+requireRejected(eligibleMuMimoContext, allocations, HeMuPlanErrorCode::INVALID_RU,
+        "fully eligible MU-MIMO users still cannot share a 26-tone RU");
+
+allocations[0].ru = wideRus[0];
+allocations[1].ru = wideRus[0];
+allocations[0].numberOfSpatialStreams = 5;
+requireRejected(eligibleMuMimoContext, allocations, HeMuPlanErrorCode::INVALID_NSS,
+        "an HE MU-MIMO user cannot exceed the four-stream spatial-configuration limit");
+
+EV << "Immutable DL scheduler plan rejected every malformed release-path case without queue mutation.\n";
+
+%contains: stdout
+Immutable DL scheduler plan rejected every malformed release-path case without queue mutation.

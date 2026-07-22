@@ -83,6 +83,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             if (staCapabilities == nullptr)
                 continue;
             if (isDlMuMimoEligible(context.localHeCapabilities, *staCapabilities, *negotiated, context.channelBandwidth, context.numApAntennas) &&
+                candidate.hasFreshCsi &&
                 context.csiManager->hasFreshCsi(candidate.staAddress, context.channelBandwidth)) {
                 eligibleCandidates.push_back(candidate);
             }

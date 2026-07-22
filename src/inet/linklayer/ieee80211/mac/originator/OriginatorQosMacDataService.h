@@ -51,6 +51,8 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
     virtual ~OriginatorQosMacDataService();
 
     virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header);
+    virtual std::unique_ptr<ISequenceNumberAssignment> cloneSequenceNumberState() const;
+    virtual void commitSequenceNumberState(const ISequenceNumberAssignment& state);
     virtual std::vector<Packet *> *extractFramesToTransmit(queueing::IPacketQueue *pendingQueue) override;
 };
 
@@ -58,4 +60,3 @@ class INET_API OriginatorQosMacDataService : public IOriginatorMacDataService, p
 } /* namespace inet */
 
 #endif
-

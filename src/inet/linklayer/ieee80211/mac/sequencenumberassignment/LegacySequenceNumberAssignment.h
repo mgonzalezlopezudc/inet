@@ -21,10 +21,11 @@ class INET_API LegacySequenceNumberAssignment : public ISequenceNumberAssignment
 
   public:
     virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header) override;
+    virtual std::unique_ptr<ISequenceNumberAssignment> clone() const override;
+    virtual void copyStateFrom(const ISequenceNumberAssignment& other) override;
 };
 
 } /* namespace ieee80211 */
 } /* namespace inet */
 
 #endif
-

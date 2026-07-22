@@ -50,6 +50,7 @@ class INET_API IIeee80211HeDlScheduler
         bool hasNegotiatedHeCapabilities = false;
         Ieee80211NegotiatedHeCapabilities negotiatedHeCapabilities;
         int operatingModeRxNss = 0;
+        bool hasFreshCsi = false;
     };
 
     /** Shared AP, channel, TXOP, and PHY constraints presented to a DL scheduler. */

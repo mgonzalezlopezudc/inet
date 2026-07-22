@@ -16,6 +16,7 @@
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
@@ -37,6 +38,7 @@ class INET_API HeDlMuPackingPlanner
         int streamStartIndex = 0;
         bool muMimo = false;
         int totalNsts = 0;
+        const physicallayer::IIeee80211Mode *phyMode = nullptr;
     };
 
     struct Parameters {
@@ -52,7 +54,8 @@ class INET_API HeDlMuPackingPlanner
         std::function<void(Packet *, const MacAddress&, Tid, int, const char *)> warnIneligible;
     };
 
-    struct Plan {
+    class Plan {
+      private:
         bool valid = false;
         std::string failureReason;
         std::vector<SelectedAllocation> allocations;
@@ -60,7 +63,16 @@ class INET_API HeDlMuPackingPlanner
         int rejectedFinalValidation = 0;
         int durationTrimIterations = 0;
 
+        friend class HeDlMuPackingPlanner;
+
+      public:
         explicit operator bool() const { return valid; }
+        bool isValid() const { return valid; }
+        const std::string& getFailureReason() const { return failureReason; }
+        const std::vector<SelectedAllocation>& getAllocations() const { return allocations; }
+        const physicallayer::Ieee80211HePhyValidationResult& getPpdu() const { return ppdu; }
+        int getRejectedFinalValidation() const { return rejectedFinalValidation; }
+        int getDurationTrimIterations() const { return durationTrimIterations; }
     };
 
   public:

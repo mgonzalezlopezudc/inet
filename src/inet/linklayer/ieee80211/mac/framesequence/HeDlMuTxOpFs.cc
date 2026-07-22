@@ -246,7 +246,6 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
 
         auto activeRecordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
         auto blockAckDuration = responseMode->getDuration(multiTid ? b(B(18 + 12 * activeRecordCount)) : LENGTH_BASIC_BLOCKACK);
-        auto barDuration = responseMode->getDuration(multiTid ? B(18 + 4 * activeRecordCount) : B(38));
         auto remainingDuration = owner->modeSet->getSifsTime() + blockAckDuration;
         for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++) {
             auto nextNegotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(owner->activeAllocations.at(nextIndex).staAddress) : nullptr;
@@ -362,15 +361,16 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         header->setTransmitterAddress(owner->getTransmitterAddress());
         header->setTriggerType(2); // MU-BAR Trigger
         header->setTriggerId(owner->ackTriggerId);
-        header->setChannelBandwidthMhz(std::lround(owner->scheduleContext.channelBandwidth.get() / 1e6));
+        const auto& scheduleContext = owner->dlPlan.getScheduleContext();
+        header->setChannelBandwidthMhz(std::lround(scheduleContext.channelBandwidth.get() / 1e6));
         header->setGuardInterval(HE_GI_1_6_US);
         header->setLtfType(HE_LTF_2X);
         const bool requiresLdpc = std::any_of(owner->activeAllocations.begin(),
                 owner->activeAllocations.end(), [] (const auto& allocation) {
                     return allocation.ru.toneSize >= 484;
                 });
-        header->setCoding(requiresLdpc ? HE_CODING_LDPC : owner->scheduleContext.coding);
-        header->setPuncturedSubchannelMask(owner->scheduleContext.puncturedSubchannelMask);
+        header->setCoding(requiresLdpc ? HE_CODING_LDPC : scheduleContext.coding);
+        header->setPuncturedSubchannelMask(scheduleContext.puncturedSubchannelMask);
         header->setUsersArraySize(owner->activeAllocations.size());
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(owner->activeAllocations.size());
@@ -378,7 +378,7 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             const auto& allocation = owner->activeAllocations[i];
             auto responseUser = makeTriggeredBlockAckResponseUser(allocation.ru,
                     allocation.associationId, allocation.numberOfSpatialStreams,
-                    allocation.streamStartIndex, owner->scheduleContext.coding);
+                    allocation.streamStartIndex, scheduleContext.coding);
             Ieee80211HeTriggerUserInfo user;
             user.aid = allocation.associationId;
             user.ruIndex = allocation.ruIndex;
@@ -424,8 +424,8 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         }
         header->setNoSignalExtension(false);
         auto finalization = finalizeTriggeredBlockAckResponse(responseUsers,
-                owner->scheduleContext.channelCenterFrequency,
-                owner->scheduleContext.channelBandwidth);
+                scheduleContext.channelCenterFrequency,
+                scheduleContext.channelBandwidth);
         if (!finalization)
             throw cRuntimeError("Cannot finalize MU-BAR Trigger response: %s",
                     finalization.error.c_str());
@@ -523,8 +523,7 @@ class HeDlMuBarBlockAckFs : public OptionalFs
     }
 };
 
-HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
-                             const IIeee80211HeDlScheduler::ScheduleContext& scheduleContext,
+HeDlMuTxOpFs::HeDlMuTxOpFs(const HeDlMuPlan& dlPlan,
                              Ieee80211ModeSet *modeSet,
                              queueing::IPacketQueue *pendingQueue,
                              IAckHandler *ackHandler,
@@ -533,8 +532,7 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                              int maxHeMuPsduLength,
                              simtime_t maxHeMuPpduDuration,
                              AckMethod ackMethod)
-    : dlScheduler(dlScheduler),
-      scheduleContext(scheduleContext),
+    : dlPlan(dlPlan),
       modeSet(modeSet),
       pendingQueue(pendingQueue),
       ackHandler(ackHandler),
@@ -581,7 +579,6 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                                                          return this->ackMethod == AckMethod::MU_BAR_TRIGGER ? 0 : 1;
                                                      })}))
 {
-    ASSERT(dlScheduler != nullptr);
     ASSERT(modeSet != nullptr);
     ASSERT(pendingQueue != nullptr);
     ASSERT(ackHandler != nullptr);
@@ -624,7 +621,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // that PPDU and annotates each user payload with the corresponding RU PHY
     // parameters.
     ASSERT(context != nullptr);
-    ASSERT(dlScheduler != nullptr);
+    const auto& scheduleContext = dlPlan.getScheduleContext();
     activeAllocations.clear();
     auto hcf = dynamic_cast<Hcf *>(callback);
     auto hcfMac = hcf != nullptr ? dynamic_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule()) : nullptr;
@@ -639,17 +636,8 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     EV_INFO << "HE DL MU scheduling " << scheduleContext.candidates.size()
              << " candidates, ackMethod = "
              << (ackMethod == AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR") << "\n";
-    if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
-            std::isnan(scheduleContext.channelBandwidth.get()))
-        throw cRuntimeError("Scheduler context is missing channel geometry");
-    auto allocations = dlScheduler->schedule(scheduleContext);
-    EV_INFO << "Scheduler returned " << allocations.size() << " allocations\n";
-    if (allocations.empty()) {
-        EV_WARN << "Scheduler returned no usable RU allocations; deferring to SU." << endl;
-        notifyPlanningFailure();
-        return nullptr;
-    }
-    ASSERT(!allocations.empty());
+    const auto& allocations = dlPlan.getAllocations();
+    EV_INFO << "Validated scheduler plan contains " << allocations.size() << " allocations\n";
 
     // Assemble the HE MU PPDU container packet.
     auto container = new Packet("HE-MU-PPDU");
@@ -807,7 +795,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         ASSERT(dataOrMgmtHdr != nullptr);
         auto staMode = rateSelection->computeMode(selectedAllocations[idx].packet, dataOrMgmtHdr, nullptr);
         ASSERT(staMode != nullptr);
-        RateSelection::setFrameMode(selectedAllocations[idx].packet, dataOrMgmtHdr, staMode);
+        selectedAllocations[idx].phyMode = staMode;
     }
     if (ackMethod == AckMethod::MU_BAR_TRIGGER) {
         auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
@@ -889,18 +877,18 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
     HeDlMuPackingPlanner packingPlanner;
     auto packingPlan = packingPlanner.plan(packingParameters);
-    const auto& finalAllocations = packingPlan.allocations;
+    const auto& finalAllocations = packingPlan.getAllocations();
     EV_DEBUG << "Building MU container packet: " << finalAllocations.size()
-             << " allocations survived final validation (" << packingPlan.rejectedFinalValidation << " rejected)\n";
-    EV_DEBUG << "Building MU container packet: duration trim took " << packingPlan.durationTrimIterations
+             << " allocations survived final validation (" << packingPlan.getRejectedFinalValidation() << " rejected)\n";
+    EV_DEBUG << "Building MU container packet: duration trim took " << packingPlan.getDurationTrimIterations()
              << " iteration(s), final allocations = " << finalAllocations.size() << "\n";
     if (!packingPlan) {
-        EV_WARN << "Building MU container packet: " << packingPlan.failureReason << endl;
+        EV_WARN << "Building MU container packet: " << packingPlan.getFailureReason() << endl;
         delete container;
         notifyPlanningFailure();
         return nullptr;
     }
-    const auto& plannedPpdu = packingPlan.ppdu;
+    const auto& plannedPpdu = packingPlan.getPpdu();
     ASSERT(plannedPpdu);
     totalDuration = SIMTIME_ZERO;
     auto finalBarDuration = responseMode->getDuration(B(38));
@@ -935,47 +923,60 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     txTag->setNdp(false);
     txTag->setDurationField(totalDuration);
 
-    // Build the final MU container packet and assign duration/sequence numbers.
-    // Each selected STA becomes one per-user PSDU section.  Multiple users on
-    // the same RU are represented as DL MU-MIMO with stream-start indices as in
-    // the HE MU TXVECTOR user parameters (26.5.1 and 27.3.11.13).
+    // Prepare the complete PPDU on private packet copies. Sequence numbers are
+    // assigned against a cloned counter state, so every remaining fallible
+    // operation precedes the queue/BA ownership commit.
+    auto heHcf = dynamic_cast<HeHcf *>(callback);
+    OriginatorQosMacDataService *originatorQosDataService = nullptr;
+    std::unique_ptr<ISequenceNumberAssignment> preparedSequenceNumberState;
+    if (heHcf != nullptr) {
+        originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(
+                heHcf->getOriginatorMacDataService());
+        preparedSequenceNumberState = originatorQosDataService->cloneSequenceNumberState();
+    }
+    std::map<Packet *, std::unique_ptr<Packet>> preparedPackets;
+    for (const auto& selectedAllocation : finalAllocations) {
+        for (auto originalPacket : selectedAllocation.packets) {
+            auto preparedPacket = std::unique_ptr<Packet>(originalPacket->dup());
+            auto writableHeader = preparedPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
+            if (preparedSequenceNumberState != nullptr && !writableHeader->getRetry())
+                preparedSequenceNumberState->assignSequenceNumber(writableHeader);
+            if (auto dataHeader = dynamicPtrCast<Ieee80211DataHeader>(writableHeader))
+                dataHeader->setAckPolicy(BLOCK_ACK);
+            writableHeader->setDurationField(totalDuration);
+            preparedPacket->insertAtFront(writableHeader);
+            RateSelection::setFrameMode(preparedPacket.get(), writableHeader, selectedAllocation.phyMode);
+
+            if (preparedPacket->getDataLength() >= B(4) &&
+                    dynamicPtrCast<const Ieee80211MacTrailer>(preparedPacket->peekAtBack(B(4))) != nullptr) {
+                auto trailer = preparedPacket->removeAtBack<Ieee80211MacTrailer>(B(4));
+                auto fcsMode = hcfMac != nullptr ? hcfMac->getFcsMode() : FCS_DECLARED_CORRECT;
+                trailer->setFcsMode(fcsMode);
+                if (fcsMode == FCS_COMPUTED)
+                    trailer->setFcs(computeEthernetFcs(preparedPacket.get(), fcsMode));
+                preparedPacket->insertAtBack(trailer);
+            }
+            // Header/trailer replacement may clear packet-level region tags
+            // covering the changed chunks. Their regions remain valid because
+            // DL preparation never changes the MPDU length.
+            preparedPacket->getRegionTags() = originalPacket->getRegionTags();
+            preparedPackets.emplace(originalPacket, std::move(preparedPacket));
+        }
+    }
+
+    // Build the final MU container packet from prepared copies. Each selected
+    // STA becomes one per-user PSDU section. Multiple users on the same RU are
+    // represented as DL MU-MIMO with stream-start indices.
     for (const auto& selectedAllocation : finalAllocations) {
         const auto& alloc = selectedAllocation.allocation;
         Packet *firstPacket = selectedAllocation.packet;
-        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(firstPacket->peekAtFront<Ieee80211MacHeader>());
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                preparedPackets.at(firstPacket)->peekAtFront<Ieee80211MacHeader>());
         ASSERT(dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS);
         ASSERT(hasActiveOriginatorBlockAckAgreement(originatorBAHandler,
                 dataHeader->getReceiverAddress(), dataHeader->getTid()));
 
         const auto& staPackets = selectedAllocation.packets;
-
-        for (auto staPacket : staPackets) {
-            auto dequeueQueue = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
-            dequeueQueue->removePacket(staPacket);
-            auto dataOrMgmtHdrWritable = staPacket->removeAtFront<Ieee80211DataOrMgmtHeader>();
-            auto heHcf = dynamic_cast<HeHcf *>(callback);
-            if (heHcf != nullptr && !dataOrMgmtHdrWritable->getRetry()) {
-                auto originatorQosDataService = check_and_cast<OriginatorQosMacDataService *>(heHcf->getOriginatorMacDataService());
-                originatorQosDataService->assignSequenceNumber(dataOrMgmtHdrWritable);
-            }
-            if (auto dataHdrWritable = dynamicPtrCast<Ieee80211DataHeader>(dataOrMgmtHdrWritable))
-                dataHdrWritable->setAckPolicy(BLOCK_ACK);
-            // Set the duration field to totalDuration
-            dataOrMgmtHdrWritable->setDurationField(totalDuration);
-            staPacket->insertAtFront(dataOrMgmtHdrWritable);
-
-            if (staPacket->getDataLength() >= B(4) && dynamicPtrCast<const Ieee80211MacTrailer>(staPacket->peekAtBack(B(4))) != nullptr) {
-                auto trailer = staPacket->removeAtBack<Ieee80211MacTrailer>(B(4));
-                auto fcsMode = hcfMac != nullptr ? hcfMac->getFcsMode() : FCS_DECLARED_CORRECT;
-                trailer->setFcsMode(fcsMode);
-                if (fcsMode == FCS_COMPUTED)
-                    trailer->setFcs(computeEthernetFcs(staPacket, fcsMode));
-                staPacket->insertAtBack(trailer);
-            }
-
-            ackHandler->frameGotInProgress(dataOrMgmtHdrWritable);
-            context->getInProgressFrames()->addInProgressFrame(staPacket);
-        }
 
         Ieee80211HeMuTxAllocationInfo txAllocation;
         txAllocation.ruIndex = alloc.ru.index;
@@ -992,13 +993,17 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         txTag->appendAllocations(txAllocation);
         auto psduStartOffset = container->getDataLength();
         for (size_t i = 0; i < staPackets.size(); ++i) {
+            auto preparedPacket = preparedPackets.at(staPackets[i]).get();
             // 9.7.1 A-MPDU subframes use MPDU delimiters and 4-octet padding;
             // 26.6.2 applies that HE padding model to HE MU PPDUs.
             auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
-            delimiter->setLength(staPackets[i]->getByteLength());
+            delimiter->setLength(preparedPacket->getByteLength());
             container->insertAtBack(delimiter);
-            container->insertAtBack(staPackets[i]->peekAll());
-            int padding = (4 - (B(4) + B(staPackets[i]->getByteLength())).get<B>() % 4) % 4;
+            // Only the active MPDU data region is serialized into the PSDU;
+            // popped historical content remains part of packet identity but
+            // must never reappear on the wire.
+            container->insertAtBack(preparedPacket->peekData());
+            int padding = (4 - (B(4) + B(preparedPacket->getByteLength())).get<B>() % 4) % 4;
             if (i + 1 != staPackets.size() && padding != 0)
                 container->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
         }
@@ -1035,7 +1040,66 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     commonRequest->setPacketExtensionDurationUs(scheduleContext.packetExtensionDurationUs);
     commonRequest->setPuncturedSubchannelMask(scheduleContext.puncturedSubchannelMask);
 
-    ASSERT(activeAllocations.size() >= 2);
+    if (activeAllocations.size() < 2)
+        throw cRuntimeError("Validated HE DL MU plan lost allocations before commit");
+
+    // Revalidate stable packet handles immediately before the only ownership
+    // transition. Failure here leaves queues, packet contents, BA state, and
+    // the live sequence-number counters untouched.
+    for (const auto& selectedAllocation : finalAllocations) {
+        auto sourceQueue = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
+        for (auto packet : selectedAllocation.packets) {
+            bool found = false;
+            for (int i = 0; i < sourceQueue->getNumPackets(); ++i)
+                found |= sourceQueue->getPacket(i) == packet;
+            if (!found)
+                throw cRuntimeError("HE DL MU selected packet changed queue membership before commit");
+        }
+    }
+
+    // Exercise all fallible transaction hooks while every packet is still in
+    // selected-uncommitted state. Aborting here is a complete rollback by
+    // construction: queues, packets, BA state, and sequence counters have not
+    // been mutated and no queue signal has been emitted.
+    try {
+        int packetIndex = 0;
+        for (const auto& selectedAllocation : finalAllocations)
+            for (auto originalPacket : selectedAllocation.packets) {
+                (void)originalPacket;
+                beforePacketCommit(packetIndex++);
+            }
+    }
+    catch (const std::exception& error) {
+        EV_WARN << "HE DL MU transaction aborted before commit: " << error.what() << endl;
+        activeAllocations.clear();
+        delete container;
+        notifyPlanningFailure();
+        return nullptr;
+    }
+
+    // Explicit commit boundary. The state transitions below are invariant
+    // operations over revalidated handles and prepared immutable values. Per
+    // Gate 3 policy, an internal failure after this point is loud; attempting
+    // observer-visible queue reconstruction would not be a valid rollback.
+    if (preparedSequenceNumberState != nullptr)
+        originatorQosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+    for (const auto& selectedAllocation : finalAllocations) {
+        auto sourceQueue = selectedAllocation.sourceQueue == nullptr ? pendingQueue : selectedAllocation.sourceQueue;
+        for (auto originalPacket : selectedAllocation.packets) {
+            auto preparedPacket = preparedPackets.at(originalPacket).get();
+            sourceQueue->removePacket(originalPacket);
+            originalPacket->removeAll();
+            originalPacket->insertAtBack(preparedPacket->peekAll());
+            originalPacket->setFrontOffset(preparedPacket->getFrontOffset());
+            originalPacket->setBackOffset(preparedPacket->getBackOffset());
+            originalPacket->clearTags();
+            originalPacket->copyTags(*preparedPacket);
+            originalPacket->getRegionTags() = preparedPacket->getRegionTags();
+            auto committedHeader = originalPacket->peekAtFront<Ieee80211DataOrMgmtHeader>();
+            ackHandler->frameGotInProgress(committedHeader);
+            context->getInProgressFrames()->addInProgressFrame(originalPacket);
+        }
+    }
 
     EV_INFO << "Assembled HE MU PPDU with "
             << activeAllocations.size() << " RU allocations. Total sequential duration = " << totalDuration << endl;

@@ -9,8 +9,7 @@
 namespace inet {
 namespace ieee80211 {
 
-EhtDlMuTxOpFs::EhtDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
-                             const IIeee80211HeDlScheduler::ScheduleContext& scheduleContext,
+EhtDlMuTxOpFs::EhtDlMuTxOpFs(const HeDlMuPlan& dlPlan,
                              physicallayer::Ieee80211ModeSet *modeSet,
                              queueing::IPacketQueue *pendingQueue,
                              IAckHandler *ackHandler,
@@ -20,7 +19,7 @@ EhtDlMuTxOpFs::EhtDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
                              simtime_t maxHeMuPpduDuration,
                              AckMethod ackMethod,
                              bool ehtEnabled)
-    : HeDlMuTxOpFs(dlScheduler, scheduleContext, modeSet, pendingQueue, ackHandler, callback, maxAmpduMpduCount, maxHeMuPsduLength, maxHeMuPpduDuration, ackMethod)
+    : HeDlMuTxOpFs(dlPlan, modeSet, pendingQueue, ackHandler, callback, maxAmpduMpduCount, maxHeMuPsduLength, maxHeMuPpduDuration, ackMethod)
 {
     this->ehtEnabled = ehtEnabled;
 }

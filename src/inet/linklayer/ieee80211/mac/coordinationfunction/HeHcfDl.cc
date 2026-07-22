@@ -20,6 +20,7 @@
 #include "inet/common/packet/chunk/SequenceChunk.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
@@ -210,6 +211,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             candidate.hasNegotiatedHeCapabilities = peer.getHasNegotiatedCapabilities();
             if (candidate.hasNegotiatedHeCapabilities)
                 candidate.negotiatedHeCapabilities = peer.getNegotiatedCapabilities();
+            candidate.hasFreshCsi = csiManager.hasFreshCsi(dest, context.channelBandwidth);
             Ieee80211HeOperatingMode peerOperatingMode;
             if (getPeerOperatingMode(dest, peerOperatingMode))
                 candidate.operatingModeRxNss = peerOperatingMode.rxNss;
@@ -384,9 +386,14 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
     }
     auto scheduleContext = collectScheduleContext(ac);
     if (scheduleContext.candidates.size() >= 2) {
-        auto previewAllocations = dlScheduler->schedule(scheduleContext);
-        if (previewAllocations.size() < 2) {
-            EV_INFO << "HE DL scheduler preview retained fewer than two MU users; falling back to SU." << endl;
+        auto schedulerAllocations = dlScheduler->schedule(scheduleContext);
+        HeMuPlanDiagnostic diagnostic;
+        auto dlPlan = HeDlMuPlan::create(scheduleContext, schedulerAllocations, diagnostic);
+        if (!dlPlan) {
+            EV_WARN << "HE DL scheduler plan rejected: code=" << (int)diagnostic.code
+                    << ", allocation=" << diagnostic.allocationIndex
+                    << ", station=" << diagnostic.station
+                    << ", detail=" << diagnostic.detail << "; falling back to SU." << endl;
             if (pendingQueue->isEmpty())
                 stagePerStaFrameForSingleUserTransmission(ac);
             Hcf::startFrameSequence(ac);
@@ -403,7 +410,7 @@ bool HeHcf::tryStartDlMuFrameSequence(AccessCategory ac)
                  << (ackMethod == HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR")
                  << " acknowledgment method\n";
         frameSequenceHandler->startFrameSequence(
-                new HeDlMuTxOpFs(dlScheduler, scheduleContext, modeSet,
+                new HeDlMuTxOpFs(*dlPlan, modeSet,
                                  pendingQueue, edcaf->getAckHandler(), this,
                                  par("maxAmpduMpduCount"),
                                  par("maxHeMuPsduLength"),

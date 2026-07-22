@@ -19,8 +19,7 @@ namespace ieee80211 {
 class INET_API EhtDlMuTxOpFs : public HeDlMuTxOpFs
 {
   public:
-    EhtDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
-                  const IIeee80211HeDlScheduler::ScheduleContext& scheduleContext,
+    EhtDlMuTxOpFs(const HeDlMuPlan& dlPlan,
                   physicallayer::Ieee80211ModeSet *modeSet,
                   queueing::IPacketQueue *pendingQueue,
                   IAckHandler *ackHandler,

@@ -8,6 +8,8 @@
 #ifndef __INET_ISEQUENCENUMBERASSIGNMENT_H
 #define __INET_ISEQUENCENUMBERASSIGNMENT_H
 
+#include <memory>
+
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 
 namespace inet {
@@ -19,10 +21,13 @@ class INET_API ISequenceNumberAssignment
     virtual ~ISequenceNumberAssignment() {}
 
     virtual void assignSequenceNumber(const Ptr<Ieee80211DataOrMgmtHeader>& header) = 0;
+    /** Creates an independent counter-state copy for transactional planning. */
+    virtual std::unique_ptr<ISequenceNumberAssignment> clone() const = 0;
+    /** Atomically adopts a previously cloned counter state at transaction commit. */
+    virtual void copyStateFrom(const ISequenceNumberAssignment& other) = 0;
 };
 
 } // namespace ieee80211
 } // namespace inet
 
 #endif
-

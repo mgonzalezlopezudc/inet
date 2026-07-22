@@ -26,6 +26,19 @@ void NonQoSSequenceNumberAssignment::assignSequenceNumber(const Ptr<Ieee80211Dat
     header->setSequenceNumber(lastSeqNum);
 }
 
+std::unique_ptr<ISequenceNumberAssignment> NonQoSSequenceNumberAssignment::clone() const
+{
+    return std::make_unique<NonQoSSequenceNumberAssignment>(*this);
+}
+
+void NonQoSSequenceNumberAssignment::copyStateFrom(const ISequenceNumberAssignment& other)
+{
+    auto source = dynamic_cast<const NonQoSSequenceNumberAssignment *>(&other);
+    if (source == nullptr)
+        throw cRuntimeError("Cannot copy incompatible non-QoS sequence-number assignment state");
+    lastSeqNum = source->lastSeqNum;
+    lastSentSeqNums = source->lastSentSeqNums;
+}
+
 } /* namespace ieee80211 */
 } /* namespace inet */
-

@@ -95,6 +95,7 @@ class MockScheduler : public IIeee80211HeDlScheduler
             RuAllocation alloc;
             alloc.staAddress = scheduledStations[i];
             alloc.ru = rus[i];
+            alloc.estimatedDuration = SimTime(3, SIMTIME_MS);
             allocs.push_back(alloc);
         }
         return allocs;
@@ -231,17 +232,31 @@ std::vector<MacAddress> candidates = {sta1, sta2, sta3};
 IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
 scheduleContext.channelCenterFrequency = Hz(5.18e9);
 scheduleContext.channelBandwidth = MHz(20);
+Ieee80211HeCapabilities localCapabilities;
+Ieee80211HeCapabilities peerCapabilities;
+Ieee80211HeOperation operation;
+operation.operatingChannelWidth = scheduleContext.channelBandwidth;
+auto negotiated = negotiateHeCapabilities(localCapabilities, peerCapabilities, operation, true);
+scheduleContext.localHeCapabilities = localCapabilities;
 for (size_t i = 0; i < candidates.size(); ++i) {
     IIeee80211HeDlScheduler::CandidateInfo candidate;
     candidate.staAddress = candidates[i];
     candidate.anchor = i == 0;
+    candidate.sourceQueue = pendingQueue;
+    candidate.hasAdvertisedHeCapabilities = true;
+    candidate.advertisedHeCapabilities = peerCapabilities;
+    candidate.hasNegotiatedHeCapabilities = true;
+    candidate.negotiatedHeCapabilities = negotiated;
     scheduleContext.candidates.push_back(candidate);
 }
 scheduleContext.anchorSta = candidates.front();
 auto scheduler = new MockScheduler(candidates);
 auto ackHandler = new MockAckHandler();
-
-HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, scheduleContext, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, ackHandler, mockHcf);
+HeMuPlanDiagnostic planDiagnostic;
+auto dlPlan = HeDlMuPlan::create(scheduleContext,
+        scheduler->schedule(candidates, scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth), planDiagnostic);
+ASSERT(dlPlan.has_value());
+HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(*dlPlan, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, ackHandler, mockHcf);
 
 MockInProgressFrames *inProgress = new MockInProgressFrames();
 MockOriginatorBlockAckAgreementHandler baHandler;
@@ -419,6 +434,11 @@ pendingQueue->enqueuePacket(makeDataPacket("handler-sta2", sta2, tid, true));
 auto handlerScheduler = new MockScheduler({sta1, sta2});
 auto handlerScheduleContext = scheduleContext;
 handlerScheduleContext.candidates.resize(2);
+HeMuPlanDiagnostic handlerPlanDiagnostic;
+auto handlerPlan = HeDlMuPlan::create(handlerScheduleContext,
+        handlerScheduler->schedule({sta1, sta2}, handlerScheduleContext.channelCenterFrequency,
+                handlerScheduleContext.channelBandwidth), handlerPlanDiagnostic);
+ASSERT(handlerPlan.has_value());
 auto handlerAckHandler = new MockAckHandler();
 auto handlerInProgress = new MockInProgressFrames();
 MockOriginatorBlockAckAgreementHandler handlerBaHandler;
@@ -428,7 +448,7 @@ auto handlerQosContext = new QoSContext(nullptr, nullptr, &handlerBaHandler, nul
 auto handlerContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), handlerInProgress, nullptr, nullptr, nullptr, handlerQosContext);
 HeFrameSequenceHandler handler;
 handler.startFrameSequence(
-        new HeDlMuTxOpFs(handlerScheduler, handlerScheduleContext, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, handlerAckHandler, mockHcf),
+        new HeDlMuTxOpFs(*handlerPlan, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, handlerAckHandler, mockHcf),
         handlerContext, mockHcf);
 
 handler.transmissionComplete();

@@ -30,20 +30,21 @@ B HeDlMuPackingPlanner::calculateAmpduPsduLength(const std::vector<Packet *>& pa
 
 HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& parameters) const
 {
-    ASSERT(parameters.pendingQueue != nullptr);
-    ASSERT(parameters.hasActiveBlockAckAgreement);
-    ASSERT(parameters.getAvailableBlockAckSlots);
-    ASSERT(parameters.warnIneligible);
-
     Plan plan;
+    if (parameters.pendingQueue == nullptr || !parameters.hasActiveBlockAckAgreement ||
+            !parameters.getAvailableBlockAckSlots || !parameters.warnIneligible) {
+        plan.failureReason = "packing planner parameters are incomplete";
+        return plan;
+    }
     std::map<uint16_t, int> associationIdCounts;
     for (const auto& selectedAllocation : parameters.selectedAllocations)
         associationIdCounts[selectedAllocation.associationId]++;
 
     std::vector<SelectedAllocation> finalAllocations;
     for (auto selectedAllocation : parameters.selectedAllocations) {
-        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                selectedAllocation.packet->peekAtFront<Ieee80211MacHeader>());
+        auto dataHeader = selectedAllocation.packet == nullptr ? nullptr :
+                dynamicPtrCast<const Ieee80211DataHeader>(
+                        selectedAllocation.packet->peekAtFront<Ieee80211MacHeader>());
         if (associationIdCounts[selectedAllocation.associationId] > 1) {
             Tid tid = dataHeader == nullptr ? -1 : dataHeader->getTid();
             auto receiverAddress = dataHeader == nullptr ? selectedAllocation.allocation.staAddress : dataHeader->getReceiverAddress();
@@ -72,7 +73,10 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
         }
 
         auto queueForPacking = selectedAllocation.sourceQueue == nullptr ? parameters.pendingQueue : selectedAllocation.sourceQueue;
-        ASSERT(queueForPacking != nullptr);
+        if (queueForPacking == nullptr) {
+            plan.failureReason = "selected allocation has no source queue";
+            return plan;
+        }
         std::map<Tid, int> selectedPacketsByTid;
         for (int i = 0; i < queueForPacking->getNumPackets() &&
                 (int)selectedAllocation.packets.size() < parameters.maxAmpduMpduCount; ++i) {
@@ -124,12 +128,6 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
         for (const auto& selectedAllocation : finalAllocations) {
             Ieee80211HeUserPhyParameters user;
             user.ru = selectedAllocation.allocation.ru;
-            if (user.ru.toneSize <= 0) {
-                user.ru.toneSize = 26;
-                user.ru.dataSubcarriers = getHeRuDataSubcarrierCount(26);
-                user.ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(26);
-                user.ru.bandwidth = Hz(26 * 78125.0);
-            }
             user.mcs = selectedAllocation.allocation.mcs;
             user.numberOfSpatialStreams = selectedAllocation.allocation.numberOfSpatialStreams;
             user.dcm = selectedAllocation.allocation.dcm;

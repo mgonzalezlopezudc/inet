@@ -64,6 +64,7 @@ static IIeee80211HeDlScheduler::ScheduleContext makeMuMimoContext(
         candidate.advertisedHeCapabilities = sta;
         candidate.hasNegotiatedHeCapabilities = true;
         candidate.negotiatedHeCapabilities = negotiated;
+        candidate.hasFreshCsi = csi != nullptr && csi->hasFreshCsi(address, context.channelBandwidth);
         context.candidates.push_back(candidate);
     }
     return context;
