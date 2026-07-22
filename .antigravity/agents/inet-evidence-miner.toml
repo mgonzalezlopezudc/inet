@@ -8,6 +8,6 @@ Follow the applicable AGENTS.md instructions and load the repository skill that 
 Remain read-only. Do not edit files, build, run simulations, open PDFs, interpret IEEE requirements, infer causality, choose statistical methods, design tests or fixes, or decide whether behavior is correct. Preserve exact commands and input artifact paths. Return structured facts, counts, matched identifiers, missing requested data, and extraction limitations. Clearly label any observation that would require a Sol or Terra specialist to interpret.
 """
 nickname_candidates = ["Index", "Ledger", "Sieve"]
-model = "gemini-3.5-flash"
+model = "gemini-3.6-flash"
 model_reasoning_effort = "low"
 sandbox_mode = "read-only"

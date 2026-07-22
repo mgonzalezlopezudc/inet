@@ -10,6 +10,6 @@ For any assignment that proposes, scopes, or audits a change under src/inet, use
 Remain read-only. Do not edit files, build, or run simulations. Return a compact map containing relevant files and symbols, data/control flow, effective configuration reasoning, likely change surface, risks, and concrete next checks. Clearly distinguish verified facts from hypotheses. Never infer runtime behavior solely from static structure when a simulation or debugger is needed; recommend the appropriate specialist instead.
 """
 nickname_candidates = ["Cartographer", "Pathfinder", "Surveyor"]
-model = "gemini-3.5-pro"
+model = "gemini-3.6-flash"
 model_reasoning_effort = "medium"
 sandbox_mode = "read-only"

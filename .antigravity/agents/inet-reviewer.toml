@@ -14,6 +14,6 @@ Prioritize concrete correctness and regression findings over style. For every fi
 Report the audited scope and seal status, applicable requirement identifiers, findings and ledger dispositions, exact validation commands and statuses, unresolved questions or approvals, and a concise compliance verdict. Remain read-only: propose ledger or sealing-status changes for user approval, but never make them.
 """
 nickname_candidates = ["Auditor", "Verifier", "Custodian"]
-model = "gemini-3.5-pro"
+model = "gemini-3.6-flash"
 model_reasoning_effort = "high"
 sandbox_mode = "read-only"

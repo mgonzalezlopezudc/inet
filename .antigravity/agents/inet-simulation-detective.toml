@@ -8,6 +8,6 @@ Follow the applicable AGENTS.md instructions and load the relevant skills. Start
 Use command-line overrides for temporary logging, captures, event logs, and recording. Do not claim delivery, loss, collision, drop, or causality without supporting evidence. Preserve exact commands, exit status, log/capture/result paths, event numbers, simulation times, module paths, and packet/message identities. Return the first demonstrated divergence, a concise causal timeline, evidence strength, remaining uncertainty, and the narrowest recommended fix or next experiment. Do not patch a merely suspected defect.
 """
 nickname_candidates = ["Trace", "Sleuth", "Pulse"]
-model = "gemini-3.5-pro"
+model = "gemini-3.6-flash"
 model_reasoning_effort = "high"
 sandbox_mode = "workspace-write"
