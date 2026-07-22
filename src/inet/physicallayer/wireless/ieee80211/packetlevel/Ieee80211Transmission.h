@@ -12,7 +12,7 @@
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Channel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 
 namespace inet {
 
@@ -23,18 +23,18 @@ class INET_API Ieee80211Transmission : public TransmissionBase
   protected:
     const IIeee80211Mode *mode;
     const Ieee80211Channel *channel;
-    const std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
-    const Ieee80211HePpduParameters hePpduParameters;
+    const std::shared_ptr<const Ieee80211HeTxVector> heTxVector;
+    const std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout;
 
   public:
-    Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, const std::vector<Ieee80211HeUserPhyParameters>& heUserPhyParameters = {}, const Ieee80211HePpduParameters& hePpduParameters = {});
+    Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, std::shared_ptr<const Ieee80211HeTxVector> heTxVector = {}, std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout = {});
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
     virtual const IIeee80211Mode *getMode() const { return mode; }
     virtual const Ieee80211Channel *getChannel() const { return channel; }
-    virtual const std::vector<Ieee80211HeUserPhyParameters>& getHeUserPhyParameters() const { return heUserPhyParameters; }
-    virtual const Ieee80211HePpduParameters& getHePpduParameters() const { return hePpduParameters; }
+    virtual const std::shared_ptr<const Ieee80211HeTxVector>& getHeTxVector() const { return heTxVector; }
+    virtual const std::shared_ptr<const Ieee80211HePpduLayout>& getHePpduLayout() const { return hePpduLayout; }
 };
 
 } // namespace physicallayer

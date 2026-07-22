@@ -111,6 +111,8 @@ static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::NONE) == 0);
 static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT) == 10);
 static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INVALID_STA_ID) == 14);
 static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INTERNAL_ERROR) == 22);
+static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INVALID_BSS_COLOR) == 23);
+static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INVALID_TXOP_DURATION) == 24);
 static_assert(static_cast<int>(Ieee80211HeRxVectorValidationErrorCode::NONE) == 0);
 static_assert(static_cast<int>(Ieee80211HeRxVectorValidationErrorCode::INTERNAL_ERROR) == 5);
 static_assert(static_cast<int>(Ieee80211HeRxVectorValidationErrorCode::UNSUPPORTED_RX_PROJECTION) == 6);
@@ -164,6 +166,39 @@ const Hz bandwidth = MHz(20);
 auto baseRu = getHeEqualRuLayout(centerFrequency, bandwidth, 1).front();
 auto baseUser = makeUserRequest(baseRu);
 auto baseRequest = makeRequest(centerFrequency, bandwidth, {baseUser});
+auto baseResult = Ieee80211HeTxVectorFactory::create(baseRequest);
+ASSERT(baseResult);
+ASSERT(baseResult.getTxVector()->getCommon().getRequestedTxopDuration() ==
+        Ieee80211HeTxopDuration{});
+ASSERT(baseResult.getPpduLayout()->getCommon().sigA.txopUnspecified);
+ASSERT(baseResult.getPpduLayout()->getCommon().sigA.txopDurationUs == 0);
+auto baseRxResult = Ieee80211HeRxVectorFactory::reconstruct(
+        *baseResult.getTxVector(), *baseResult.getPpduLayout(), makeRxRequest(B(100), 1));
+ASSERT(baseRxResult);
+ASSERT(baseRxResult.getRxVector()->getCommon().getTxopDuration() ==
+        Ieee80211HeTxopDuration{});
+
+auto commonFactsRequest = baseRequest;
+commonFactsRequest.ppduFormat = HE_SINGLE_USER;
+commonFactsRequest.bssColor = 37;
+commonFactsRequest.uplink = true;
+commonFactsRequest.txopDuration = Ieee80211HeTxopDuration{false, 641};
+commonFactsRequest.doppler = true;
+auto commonFactsResult = Ieee80211HeTxVectorFactory::create(commonFactsRequest);
+ASSERT(commonFactsResult);
+ASSERT(commonFactsResult.getTxVector()->getCommon().getRequestedTxopDuration() ==
+        (Ieee80211HeTxopDuration{false, 641}));
+ASSERT(!commonFactsResult.getPpduLayout()->getCommon().sigA.txopUnspecified);
+ASSERT(commonFactsResult.getPpduLayout()->getCommon().sigA.txopDurationUs == 640);
+auto commonFactsRxResult = Ieee80211HeRxVectorFactory::reconstruct(
+        *commonFactsResult.getTxVector(), *commonFactsResult.getPpduLayout(), makeRxRequest(B(100)));
+ASSERT(commonFactsRxResult);
+ASSERT(commonFactsRxResult.getRxVector()->getCommon().getBssColor() == 37);
+ASSERT(commonFactsRxResult.getRxVector()->getCommon().getUplink() == true);
+ASSERT(commonFactsRxResult.getRxVector()->getCommon().getTxopDuration() ==
+        (Ieee80211HeTxopDuration{false, 640}));
+ASSERT(commonFactsRxResult.getRxVector()->getCommon().getDoppler());
+ASSERT(!commonFactsRxResult.getRxVector()->getCommon().getStbc());
 
 auto malformedRequest = baseRequest;
 malformedRequest.ppduFormat = static_cast<Ieee80211HePpduFormat>(99);
@@ -177,6 +212,17 @@ malformedRequest = baseRequest;
 malformedRequest.channelBandwidth = MHz(21);
 assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
         Ieee80211HeValidationErrorCode::INVALID_CHANNEL_BANDWIDTH, "channelBandwidth");
+malformedRequest = baseRequest;
+malformedRequest.bssColor = 64;
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_BSS_COLOR, "bssColor");
+malformedRequest = baseRequest;
+malformedRequest.txopDuration = Ieee80211HeTxopDuration{true, 8};
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_TXOP_DURATION, "txopDuration");
+malformedRequest.txopDuration = Ieee80211HeTxopDuration{false, 8449};
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_TXOP_DURATION, "txopDuration");
 malformedRequest = baseRequest;
 malformedRequest.guardInterval = static_cast<Ieee80211HeGuardInterval>(99);
 assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
@@ -278,11 +324,20 @@ auto su20Result = Ieee80211HeTxVectorFactory::create(su20Request);
 ASSERT(su20Result);
 auto suNdpRequest = su20Request;
 suNdpRequest.users[0].psduLength = B(0);
+suNdpRequest.ndp = true;
 assertInvalid(Ieee80211HeTxVectorFactory::create(suNdpRequest),
         Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION, "packetExtensionDurationUs");
 suNdpRequest.packetExtensionDurationUs = 4;
 auto suNdpResult = Ieee80211HeTxVectorFactory::create(suNdpRequest);
 ASSERT(suNdpResult);
+auto invalidSuNdpGiLtfRequest = suNdpRequest;
+invalidSuNdpGiLtfRequest.guardInterval = HE_GI_0_8_US;
+assertInvalid(Ieee80211HeTxVectorFactory::create(invalidSuNdpGiLtfRequest),
+        Ieee80211HeValidationErrorCode::INVALID_GI_LTF_COMBINATION, "guardInterval/ltfType");
+auto suNdp2xRequest = suNdpRequest;
+suNdp2xRequest.guardInterval = HE_GI_1_6_US;
+suNdp2xRequest.ltfType = HE_LTF_2X;
+ASSERT(Ieee80211HeTxVectorFactory::create(suNdp2xRequest));
 const Hz bandwidth40 = MHz(40);
 auto su40Ru = getHeEqualRuLayout(centerFrequency, bandwidth40, 1).front();
 auto su40Request = makeRequest(centerFrequency, bandwidth40, {makeUserRequest(su40Ru)});
@@ -301,8 +356,13 @@ er242Request.users[0].mcs = 2;
 ASSERT(Ieee80211HeTxVectorFactory::create(er242Request));
 auto erZeroPsduRequest = er242Request;
 erZeroPsduRequest.users[0].psduLength = B(0);
-assertInvalid(Ieee80211HeTxVectorFactory::create(erZeroPsduRequest),
-        Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH, "users[].psduLength");
+auto erZeroPsduResult = Ieee80211HeTxVectorFactory::create(erZeroPsduRequest);
+ASSERT(erZeroPsduResult);
+ASSERT(!erZeroPsduResult.getPpduLayout()->isNdp());
+auto erNdpRequest = erZeroPsduRequest;
+erNdpRequest.ndp = true;
+assertInvalid(Ieee80211HeTxVectorFactory::create(erNdpRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PPDU_FORMAT, "ndp");
 auto erUpper106Request = makeRequest(centerFrequency, bandwidth,
         {makeUserRequest(findRu(106, 136))});
 erUpper106Request.ppduFormat = HE_EXTENDED_RANGE_SU;
@@ -336,8 +396,13 @@ ASSERT(nineRuResult);
 auto allZeroMuRequest = nineRuRequest;
 for (auto& user : allZeroMuRequest.users)
     user.psduLength = B(0);
-assertInvalid(Ieee80211HeTxVectorFactory::create(allZeroMuRequest),
-        Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH, "users[].psduLength");
+auto allZeroMuResult = Ieee80211HeTxVectorFactory::create(allZeroMuRequest);
+ASSERT(allZeroMuResult);
+ASSERT(!allZeroMuResult.getPpduLayout()->isNdp());
+auto muNdpRequest = allZeroMuRequest;
+muNdpRequest.ndp = true;
+assertInvalid(Ieee80211HeTxVectorFactory::create(muNdpRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PPDU_FORMAT, "ndp");
 ASSERT(nineRuResult.getErrorCode() == Ieee80211HeValidationErrorCode::NONE);
 ASSERT(nineRuResult.getTxVector()->getCommon().getCenterFrequency() == centerFrequency);
 ASSERT(nineRuResult.getTxVector()->getUsers().size() == 9);
@@ -403,8 +468,16 @@ assertFieldSpans(*nineRuResult.getPpduLayout(), {
 auto tbNdpRequest = baseRequest;
 tbNdpRequest.ppduFormat = HE_TRIGGER_BASED_UPLINK;
 tbNdpRequest.users[0].psduLength = B(0);
+tbNdpRequest.ndp = true;
 auto tbNdpResult = Ieee80211HeTxVectorFactory::create(tbNdpRequest);
 ASSERT(tbNdpResult);
+auto offsetTbNdpRequest = tbNdpRequest;
+offsetTbNdpRequest.users[0].streamStartIndex = 1;
+ASSERT(Ieee80211HeTxVectorFactory::create(offsetTbNdpRequest));
+auto nonemptyTbNdpRequest = tbNdpRequest;
+nonemptyTbNdpRequest.users[0].psduLength = B(1);
+assertInvalid(Ieee80211HeTxVectorFactory::create(nonemptyTbNdpRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH, "users[].psduLength");
 auto invalidTbNdpPeRequest = tbNdpRequest;
 invalidTbNdpPeRequest.packetExtensionDurationUs = 4;
 assertInvalid(Ieee80211HeTxVectorFactory::create(invalidTbNdpPeRequest),
@@ -476,6 +549,19 @@ auto repeatedResult = Ieee80211HeTxVectorFactory::create(nineRuRequest);
 ASSERT(repeatedResult);
 ASSERT(*nineRuResult.getTxVector() == *repeatedResult.getTxVector());
 ASSERT(*nineRuResult.getPpduLayout() == *repeatedResult.getPpduLayout());
+Ieee80211HeTxVectorReq canonicalHandoff;
+canonicalHandoff.setCanonicalPair(nineRuResult.getTxVector(), nineRuResult.getPpduLayout());
+ASSERT(canonicalHandoff.getTxVector() == nineRuResult.getTxVector());
+ASSERT(canonicalHandoff.getPpduLayout() == nineRuResult.getPpduLayout());
+bool rejectedMismatchedHandoff = false;
+try {
+    Ieee80211HeTxVectorReq mismatchedHandoff;
+    mismatchedHandoff.setCanonicalPair(nineRuResult.getTxVector(), su20Result.getPpduLayout());
+}
+catch (cRuntimeError&) {
+    rejectedMismatchedHandoff = true;
+}
+ASSERT(rejectedMismatchedHandoff);
 
 auto suRxRequest = makeRxRequest(B(100), 2047, 99);
 auto suRxResult = Ieee80211HeRxVectorFactory::reconstruct(
@@ -493,6 +579,9 @@ ASSERT(suRxResult.getRxVector()->getUser().getMcs() == 0);
 ASSERT(suRxResult.getRxVector()->getUser().getNumberOfSpaceTimeStreams() == 1);
 ASSERT(suRxResult.getRxVector()->getUser().getDcm() == false);
 ASSERT(suRxResult.getRxVector()->getUser().getCoding() == HE_CODING_BCC);
+Ieee80211HeRxVectorInd rxVectorIndication;
+rxVectorIndication.setRxVector(suRxResult.getRxVector());
+ASSERT(rxVectorIndication.getRxVector() == suRxResult.getRxVector());
 
 auto erRxResult = Ieee80211HeRxVectorFactory::reconstruct(
         *er242Result.getTxVector(), *er242Result.getPpduLayout(), makeRxRequest(B(100)));

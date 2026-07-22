@@ -7,17 +7,28 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+
 namespace inet {
 
 namespace physicallayer {
 
-Ieee80211Transmission::Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, const std::vector<Ieee80211HeUserPhyParameters>& heUserPhyParameters, const Ieee80211HePpduParameters& hePpduParameters) :
+Ieee80211Transmission::Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, std::shared_ptr<const Ieee80211HeTxVector> heTxVector, std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout) :
     TransmissionBase(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, packetModel, bitModel, symbolModel, sampleModel, analogModel),
     mode(mode),
     channel(channel),
-    heUserPhyParameters(heUserPhyParameters),
-    hePpduParameters(hePpduParameters)
+    heTxVector(std::move(heTxVector)),
+    hePpduLayout(std::move(hePpduLayout))
 {
+    const bool isHe = dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr;
+    if ((this->heTxVector == nullptr) != (this->hePpduLayout == nullptr))
+        throw cRuntimeError("HE TXVECTOR and PPDU layout must be present as a pair");
+    if (isHe && this->heTxVector == nullptr)
+        throw cRuntimeError("HE transmission is missing its canonical TXVECTOR/PPDU-layout handoff");
+    if (!isHe && this->heTxVector != nullptr)
+        throw cRuntimeError("Non-HE transmission cannot carry an HE TXVECTOR/PPDU layout");
+    if (this->hePpduLayout != nullptr && !this->hePpduLayout->matches(*this->heTxVector))
+        throw cRuntimeError("HE transmission received a mismatched TXVECTOR/PPDU-layout pair");
 }
 
 std::ostream& Ieee80211Transmission::printToStream(std::ostream& stream, int level, int evFlags) const

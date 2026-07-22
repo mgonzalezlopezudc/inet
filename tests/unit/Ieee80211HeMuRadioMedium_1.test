@@ -186,29 +186,47 @@ for (auto mpdu : mpdus) {
     delete mpdu;
 }
 
+Ieee80211HeTxVectorRequest canonicalRequest;
+canonicalRequest.centerFrequency = centerFreq;
+canonicalRequest.channelBandwidth = bandwidth;
+for (size_t i = 0; i < phyHeader->getUsersArraySize(); i++) {
+    const auto& projected = phyHeader->getUsers(i);
+    Ieee80211HeUserTxVectorRequest canonicalUser;
+    canonicalUser.ru.index = projected.ruIndex;
+    canonicalUser.ru.toneSize = projected.ruToneSize;
+    canonicalUser.ru.toneOffset = projected.ruToneOffset;
+    canonicalUser.staId = projected.staId;
+    canonicalUser.mcs = projected.mcs;
+    canonicalUser.numberOfSpatialStreams = projected.numberOfSpatialStreams;
+    canonicalUser.streamStartIndex = projected.streamStartIndex;
+    canonicalUser.dcm = projected.dcm;
+    canonicalUser.psduLength = projected.psduLength;
+    canonicalRequest.users.push_back(canonicalUser);
+}
+auto canonical = Ieee80211HeTxVectorFactory::create(canonicalRequest);
+ASSERT(canonical);
+auto duration = canonical.getPpduLayout()->getDuration();
+auto preambleDuration = canonical.getPpduLayout()->getCommonPreambleDuration();
 auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
 auto analogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
-        SimTime(100, SIMTIME_US),
-        SimTime(100, SIMTIME_US),
-        SimTime(800, SIMTIME_US),
-        centerFreq,
-        bandwidth,
-        flatTransmitter->getPower());
+        preambleDuration, SIMTIME_ZERO, duration - preambleDuration,
+        centerFreq, bandwidth, flatTransmitter->getPower());
 
 auto transmission = new Ieee80211Transmission(
         txRadio,
         container,
         SIMTIME_ZERO,
-        SimTime(1, SIMTIME_MS),
-        SimTime(100, SIMTIME_US),
-        SimTime(100, SIMTIME_US),
-        SimTime(800, SIMTIME_US),
+        duration,
+        preambleDuration,
+        SIMTIME_ZERO,
+        duration - preambleDuration,
         Coord(), Coord(),
         Quaternion(), Quaternion(),
         nullptr, nullptr, nullptr, nullptr,
         analogModel,
         mode,
-        channel);
+        channel,
+        canonical.getTxVector(), canonical.getPpduLayout());
 
 medium->testAddTransmission(txRadio, transmission);
 ASSERT(medium->getCommunicationCache()->getNumTransmissions() == 1);

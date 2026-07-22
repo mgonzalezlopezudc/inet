@@ -12,6 +12,7 @@ length, protocol registration, and analog duration partition.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
@@ -100,6 +101,7 @@ class InspectableRadio : public Ieee80211Radio
 {
   public:
     void testEncapsulate(Packet *packet) const { encapsulate(packet); }
+    void testDecapsulate(Packet *packet) const { decapsulate(packet); }
 };
 
 class InspectableReceiver : public Ieee80211Receiver
@@ -173,12 +175,13 @@ static Ptr<Ieee80211HeSuErTxVectorReq> addCompleteTxVector(Packet *packet,
     txVector->setGuardInterval(HE_GI_3_2_US);
     txVector->setCoding(HE_CODING_BCC);
     txVector->setTxTime(txTime);
-    txVector->setUplink(false);
+    txVector->setUplink(true);
     txVector->setNoSignalExtension(false);
     txVector->setLtfType(HE_LTF_4X);
     txVector->setDcm(false);
     txVector->setStbc(false);
-    txVector->setTxopUnspecified(true);
+    txVector->setTxopUnspecified(false);
+    txVector->setTxopDurationUs(641);
     txVector->setHasLdpcExtraSymbolSegment(false);
     txVector->setPreFecPaddingFactor(1);
     txVector->setPacketExtensionDurationUs(0);
@@ -226,21 +229,35 @@ static void testSingleUserMode(InspectableRadio *radio,
     else
         signaling = &dynamicPtrCast<const Ieee80211HeSuPhyHeader>(header)->getSignaling();
     ASSERT(signaling->signalingValid && signaling->lSigLength == expectedLSigLength);
-    ASSERT(!signaling->beamChange && !signaling->uplink && signaling->mcs == 0 && !signaling->dcm);
+    ASSERT(!signaling->beamChange && signaling->uplink && signaling->mcs == 0 && !signaling->dcm);
     ASSERT(signaling->bssColor == 0 && signaling->spatialReuse == 0 && signaling->bandwidth == 0);
     ASSERT(signaling->giLtfSize == 3 && signaling->numberOfSpaceTimeStreams == 1);
-    ASSERT(signaling->midamblePeriodicity == 0 && signaling->txop == 127);
+    ASSERT(signaling->midamblePeriodicity == 0 && signaling->txop == 3);
     ASSERT(!signaling->ldpcCoding && !signaling->ldpcExtraSymbolSegment && !signaling->stbc);
     ASSERT(!signaling->beamformed && signaling->preFecPaddingFactor == 1);
     ASSERT(!signaling->peDisambiguity && !signaling->doppler);
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, startTime));
+    const auto& canonicalLayout = transmission->getHePpduLayout();
+    ASSERT(canonicalLayout != nullptr);
     ASSERT(transmission->getDuration() == txTime);
-    ASSERT(transmission->getPreambleDuration() == mode->getPreambleMode()->getDuration());
+    ASSERT(transmission->getPreambleDuration() == canonicalLayout->getCommonPreambleDuration());
+    ASSERT(canonicalLayout->getCommonPreambleDuration() ==
+            canonicalLayout->getLegacyPreambleDuration() + canonicalLayout->getRlSigDuration() +
+            canonicalLayout->getHeSigADuration() + canonicalLayout->getHeSigBDuration() +
+            canonicalLayout->getHeStfDuration() + canonicalLayout->getHeLtfDuration());
     ASSERT(transmission->getHeaderDuration() == SIMTIME_ZERO);
     ASSERT(transmission->getDuration() ==
             transmission->getPreambleDuration() + transmission->getDataDuration());
+    simtime_t postPreambleDuration = SIMTIME_ZERO;
+    for (const auto& span : canonicalLayout->getFieldSpans()) {
+        if (span.getField() == Ieee80211HePpduField::HE_LTF)
+            ASSERT(span.getEndOffset() == canonicalLayout->getCommonPreambleDuration());
+        if (span.getStartOffset() >= canonicalLayout->getCommonPreambleDuration())
+            postPreambleDuration += span.getDuration();
+    }
+    ASSERT(transmission->getDataDuration() == postPreambleDuration);
 
     ASSERT(receiver->testIsAssignedHeMuRu(transmission));
     ASSERT(receiver->testIsReceptionPossible(transmission));
@@ -255,22 +272,192 @@ static void testSingleUserMode(InspectableRadio *radio,
     ASSERT(std::abs(packetErrorRate - 0.25) < 1e-12);
     ASSERT(errorModel->genericDataEvaluationCount == previousGenericCount + 1);
     ASSERT(errorModel->perUserDataEvaluationCount == previousPerUserCount);
+    auto listening = medium->getListening(receiverRadio, transmission);
+    auto receptionResult = medium->getReceptionResult(receiverRadio, listening, transmission);
+    auto receivedPacket = receptionResult->getPacket();
+    auto rxVector = receivedPacket->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
+    ASSERT(rxVector != nullptr);
+    ASSERT(rxVector->getCommon().getPpduFormat() == expectedFormat);
+    ASSERT(rxVector->getCommon().getUplink() == true);
+    ASSERT(rxVector->getCommon().getTxopDuration() ==
+            (Ieee80211HeTxopDuration{false, 640}));
+    ASSERT(rxVector->getUser().getPsduLength() == payloadLength);
+    ASSERT(!receivedPacket->hasTag<Ieee80211HeTxVectorReq>());
+    auto decapsulatedPacket = receivedPacket->dup();
+    check_and_cast<const InspectableRadio *>(receiverRadio)->testDecapsulate(decapsulatedPacket);
+    ASSERT(decapsulatedPacket->getTag<Ieee80211HeMuRxTag>()->getPpduFormat() == expectedFormat);
+    ASSERT(decapsulatedPacket->getTag<Ieee80211HeRxVectorInd>()->getRxVector() == rxVector);
+    delete decapsulatedPacket;
     medium->testRemoveTransmission(transmission);
 
     delete packet;
 }
 
 static void testUntaggedCompatibility(InspectableRadio *radio,
-        const Ieee80211HeMode *mode, B payloadLength)
+        const Ieee80211Transmitter *transmitter, const Ieee80211HeMode *mode, B payloadLength)
 {
     auto packet = new Packet("untagged-he-single-user");
     packet->insertAtBack(makeShared<ByteCountChunk>(payloadLength));
     packet->addTag<Ieee80211ModeReq>()->setMode(mode);
     radio->testEncapsulate(packet);
+    auto canonicalHandoff = packet->getTag<Ieee80211HeTxVectorReq>();
+    ASSERT(canonicalHandoff->getTxVector() != nullptr);
+    ASSERT(canonicalHandoff->getPpduLayout() != nullptr);
     auto header = packet->peekAtFront<Ieee80211HeSuPhyHeader>();
     ASSERT(!header->getSignaling().signalingValid);
-    ASSERT(header->getCommonDuration() == mode->getDuration(payloadLength));
+    ASSERT(header->getCommonDuration() == canonicalHandoff->getPpduLayout()->getDuration());
     ASSERT(header->getChunkLength() == b(64));
+    auto transmission = check_and_cast<const Ieee80211Transmission *>(
+            transmitter->createTransmission(radio, packet, SIMTIME_ZERO));
+    ASSERT(transmission->getHeTxVector() == canonicalHandoff->getTxVector());
+    ASSERT(transmission->getHePpduLayout() == canonicalHandoff->getPpduLayout());
+    ASSERT(transmission->getDuration() == canonicalHandoff->getPpduLayout()->getDuration());
+    ASSERT(transmission->getPreambleDuration() ==
+            canonicalHandoff->getPpduLayout()->getCommonPreambleDuration());
+    ASSERT(transmission->getHeaderDuration() == SIMTIME_ZERO);
+    ASSERT(transmission->getDataDuration() == transmission->getDuration() -
+            canonicalHandoff->getPpduLayout()->getCommonPreambleDuration());
+    delete transmission;
+    delete packet;
+}
+
+static void testTransitionalSoundingNdp(InspectableRadio *radio, const Ieee80211HeMode *mode)
+{
+    auto packet = new Packet("transitional-he-sounding-ndp");
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    auto txTag = packet->addTag<Ieee80211HeMuTxTag>();
+    txTag->setNdp(true);
+    Ieee80211HeMuTxAllocationInfo target;
+    target.ruIndex = 0;
+    target.ruToneSize = 242;
+    target.ruToneOffset = 0;
+    target.staId = 37;
+    target.mcs = 0;
+    target.numberOfSpatialStreams = 4;
+    target.dcm = false;
+    target.psduLength = B(0);
+    txTag->appendAllocations(target);
+    target.staId = 38;
+    target.streamStartIndex = 4;
+    txTag->appendAllocations(target);
+    target.staId = 39;
+    target.streamStartIndex = 8;
+    txTag->appendAllocations(target);
+    auto common = packet->addTag<Ieee80211HeMuCommonReq>();
+    common->setGuardInterval(HE_GI_3_2_US);
+    common->setCoding(HE_CODING_BCC);
+    common->setPacketExtensionDurationUs(0);
+
+    radio->testEncapsulate(packet);
+    auto header = packet->peekAtFront<Ieee80211HeSuPhyHeader>();
+    auto handoff = packet->getTag<Ieee80211HeTxVectorReq>();
+    ASSERT(header->getNdp());
+    ASSERT(header->getUsersArraySize() == 0);
+    ASSERT(header->getPacketExtensionDurationUs() == 4);
+    ASSERT(header->getSpatialReuse() == 15);
+    ASSERT(handoff->getPpduLayout()->getPpduFormat() == HE_SINGLE_USER);
+    ASSERT(handoff->getPpduLayout()->isNdp());
+    ASSERT(handoff->getPpduLayout()->getUsers().size() == 1);
+    ASSERT(handoff->getPpduLayout()->getUsers().front().psduLength == B(0));
+    ASSERT(handoff->getPpduLayout()->getUsers().front().numberOfSpatialStreams == 4);
+    Packet wirePacket("transitional-he-sounding-ndp-wire", header);
+    auto bytes = wirePacket.peekDataAsBytes();
+    Packet decodedPacket("transitional-he-sounding-ndp-decoded", bytes);
+    auto decodedHeader = decodedPacket.popAtFront<Ieee80211HeSuPhyHeader>();
+    ASSERT(decodedHeader->getSpatialReuse() == 15);
+    delete packet;
+}
+
+static void testRejectedCanonicalHeaderMutation(InspectableRadio *radio,
+        const Ieee80211Transmitter *transmitter, const Ieee80211HeMode *mode,
+        bool mutateTxop)
+{
+    auto packet = new Packet("mutated-he-single-user");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    addCompleteTxVector(packet, HE_SINGLE_USER, B(100), SimTime(180, SIMTIME_US));
+    radio->testEncapsulate(packet);
+    auto header = makeShared<Ieee80211HeSuPhyHeader>(
+            *packet->popAtFront<Ieee80211HeSuPhyHeader>());
+    if (mutateTxop) {
+        auto signaling = header->getSignaling();
+        signaling.txop++;
+        header->setSignaling(signaling);
+    }
+    else
+        header->setBssColor(header->getBssColor() + 1);
+    packet->insertAtFront(header);
+    bool rejected = false;
+    try {
+        delete transmitter->createTransmission(radio, packet, SIMTIME_ZERO);
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    ASSERT(rejected);
+    delete packet;
+}
+
+static void testTriggerBasedRecipientContext(InspectableRadio *radio,
+        const IRadio *receiverRadio, InspectableRadioMedium *medium,
+        const Ieee80211Transmitter *transmitter, const Ieee80211HeMode *mode,
+        simtime_t startTime)
+{
+    auto channel = transmitter->getChannel();
+    ASSERT(channel != nullptr);
+    const auto ru = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4)[2];
+    auto packet = new Packet("he-trigger-based-recipient-context");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    auto request = packet->addTag<Ieee80211HeMuReq>();
+    request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    request->setTriggerId(4242);
+    request->setRuIndex(ru.index);
+    request->setRuToneSize(ru.toneSize);
+    request->setRuToneOffset(ru.toneOffset);
+    request->setStaId(37);
+    request->setMcs(0);
+    request->setNumberOfSpatialStreams(1);
+    request->setDcm(false);
+    request->setGuardInterval(HE_GI_3_2_US);
+    request->setCoding(HE_CODING_BCC);
+    request->setPsduLength(B(100));
+    radio->testEncapsulate(packet);
+
+    auto transmission = check_and_cast<const Ieee80211Transmission *>(
+            transmitter->createTransmission(radio, packet, startTime));
+    medium->testAddTransmission(radio, transmission);
+    auto listening = medium->getListening(receiverRadio, transmission);
+    auto receptionResult = medium->getReceptionResult(receiverRadio, listening, transmission);
+    auto receivedPacket = receptionResult->getPacket();
+    auto rxVector = receivedPacket->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
+    ASSERT(rxVector->getCommon().getPpduFormat() == HE_TRIGGER_BASED_UPLINK);
+    ASSERT(!rxVector->getUser().getStaId());
+    ASSERT(!rxVector->getUser().getRuAllocation());
+    ASSERT(!rxVector->getUser().getMcs());
+    ASSERT(!rxVector->getUser().getNumberOfSpaceTimeStreams());
+    ASSERT(!rxVector->getUser().getDcm());
+    ASSERT(!rxVector->getUser().getCoding());
+    auto context = receivedPacket->getTag<Ieee80211HeTbRecipientContextInd>();
+    ASSERT(context->getRecipientParameters() != nullptr);
+    ASSERT(context->getRecipientParameters().get() == &transmission->getHePpduLayout()->getUsers().front());
+
+    auto decapsulatedPacket = receivedPacket->dup();
+    check_and_cast<const InspectableRadio *>(receiverRadio)->testDecapsulate(decapsulatedPacket);
+    auto compatibility = decapsulatedPacket->getTag<Ieee80211HeMuRxTag>();
+    ASSERT(compatibility->getTriggerId() == 4242);
+    ASSERT(compatibility->getRuIndex() == ru.index);
+    ASSERT(compatibility->getAllocationsArraySize() == 1);
+    const auto& allocation = compatibility->getAllocations(0);
+    ASSERT(allocation.ruIndex == ru.index);
+    ASSERT(allocation.ruToneSize == ru.toneSize);
+    ASSERT(allocation.ruToneOffset == ru.toneOffset);
+    ASSERT(allocation.staId == 37);
+    ASSERT(allocation.mcs == 0);
+    ASSERT(allocation.numberOfSpatialStreams == 1);
+    ASSERT(!allocation.dcm);
+    delete decapsulatedPacket;
+    medium->testRemoveTransmission(transmission);
     delete packet;
 }
 
@@ -359,7 +546,12 @@ testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heSuMode
         b(100), B(100), SimTime(180, SIMTIME_US), 115, SimTime(1, SIMTIME_S));
 testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heErSuMode, HE_EXTENDED_RANGE_SU,
         b(100), B(100), SimTime(188, SIMTIME_US), 122, SimTime(2, SIMTIME_S));
-testUntaggedCompatibility(radio, heSuMode, B(100));
+testTriggerBasedRecipientContext(radio, receiverRadio, medium, transmitter, heSuMode,
+        SimTime(3, SIMTIME_S));
+testUntaggedCompatibility(radio, transmitter, heSuMode, B(100));
+testTransitionalSoundingNdp(radio, heSuMode);
+testRejectedCanonicalHeaderMutation(radio, transmitter, heSuMode, false);
+testRejectedCanonicalHeaderMutation(radio, transmitter, heSuMode, true);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::INCOMPLETE);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::MCS_MISMATCH);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::PSDU_LENGTH_MISMATCH);

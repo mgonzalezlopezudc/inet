@@ -87,19 +87,50 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
+static Ieee80211HeTxVectorValidationResult makeCanonicalPair(const Packet *packet)
+{
+    auto phyHeader = packet->peekAtFront<Ieee80211HePhyHeader>();
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = Hz(5.18e9);
+    request.channelBandwidth = MHz(20);
+    request.ppduFormat = getIeee80211HePpduFormat(*phyHeader);
+    request.bssColor = phyHeader->getBssColor();
+    request.uplink = request.ppduFormat == HE_TRIGGER_BASED_UPLINK;
+    for (unsigned int i = 0; i < phyHeader->getUsersArraySize(); i++) {
+        const auto& projected = phyHeader->getUsers(i);
+        Ieee80211HeUserTxVectorRequest user;
+        user.ru.index = projected.ruIndex;
+        user.ru.toneSize = projected.ruToneSize;
+        user.ru.toneOffset = projected.ruToneOffset;
+        user.staId = projected.staId;
+        user.mcs = projected.mcs;
+        user.numberOfSpatialStreams = projected.numberOfSpatialStreams;
+        user.streamStartIndex = projected.streamStartIndex;
+        user.dcm = projected.dcm;
+        user.coding = static_cast<Ieee80211HeCoding>(phyHeader->getCoding());
+        user.psduLength = projected.psduLength;
+        request.users.push_back(user);
+    }
+    return Ieee80211HeTxVectorFactory::create(request);
+}
+
 class MockIeee80211Transmission : public Ieee80211Transmission
 {
   public:
     MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode, const Ieee80211Channel *channel)
+        : MockIeee80211Transmission(transmitter, packet, mode, channel, makeCanonicalPair(packet)) {}
+    MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode,
+            const Ieee80211Channel *channel, const Ieee80211HeTxVectorValidationResult& canonical)
         : Ieee80211Transmission(
             transmitter,
             packet,
-            0.0, 0.0, // startTime, endTime
-            0.0, 0.0, 0.0, // preamble, header, data duration
+            SIMTIME_ZERO, canonical.getPpduLayout()->getDuration(),
+            canonical.getPpduLayout()->getCommonPreambleDuration(), SIMTIME_ZERO,
+            canonical.getPpduLayout()->getDuration() - canonical.getPpduLayout()->getCommonPreambleDuration(),
             Coord(), Coord(), // start, end position
             Quaternion(), Quaternion(), // start, end orientation
             nullptr, nullptr, nullptr, nullptr, nullptr, // models
-            mode, channel
+            mode, channel, canonical.getTxVector(), canonical.getPpduLayout()
         ) {}
 };
 
@@ -170,6 +201,7 @@ static Packet *makeHeMuPacketWithBssColor(const char *name, uint8_t bssColor, ui
     user.ruToneSize = 242;
     user.ruToneOffset = 0;
     user.staId = 1;
+    user.psduLength = B(36);
     phyHeader->appendUsers(user);
     
     phyHeader->setChunkLength(b(16 + phyHeader->getUsersArraySize() * 73));
@@ -233,12 +265,15 @@ auto runTestCase = [&](const char *label, bool enableSR, uint8_t frameBssColor, 
     auto packet = makeHeMuPacketWithBssColor("test-packet", frameBssColor, ppduFormat,
             nonSrgDisallowed, srgDisallowed, psrDisallowed, spatialReuse);
     auto trans = new MockIeee80211Transmission(radio, packet, mode, channel);
-    
+    const auto& layout = trans->getHePpduLayout();
+    auto preambleDuration = layout->getCommonPreambleDuration();
     auto analogModel = new ScalarReceptionAnalogModel(
-        SIMTIME_ZERO, SIMTIME_ZERO, SimTime(1, SIMTIME_MS), Hz(5.18e9), Hz(20e6), rxPower
+        preambleDuration, SIMTIME_ZERO, layout->getDuration() - preambleDuration,
+        Hz(5.18e9), Hz(20e6), rxPower
     );
     auto reception = new Reception(
-        radio, trans, SIMTIME_ZERO, SimTime(1, SIMTIME_MS), Coord(), Coord(), Quaternion(), Quaternion(), analogModel
+        radio, trans, SIMTIME_ZERO, layout->getDuration(),
+        Coord(), Coord(), Quaternion(), Quaternion(), analogModel
     );
     
     rxModule->setSpatialReuse(enableSR, mW(math::dBmW2mW(-62))); // threshold is -62 dBm
@@ -297,10 +332,13 @@ runTestCase("SR_Enabled_TB_PSR_Disallowed", true, 9, pBetween, true, HE_TRIGGER_
 auto makeReception = [&](uint8_t color, W power) {
     auto packet = makeHeMuPacketWithBssColor("cca-packet", color);
     auto transmission = new MockIeee80211Transmission(radio, packet, mode, channel);
+    const auto& layout = transmission->getHePpduLayout();
+    auto preambleDuration = layout->getCommonPreambleDuration();
     auto analogModel = new ScalarReceptionAnalogModel(
-        SIMTIME_ZERO, SIMTIME_ZERO, SimTime(1, SIMTIME_MS), Hz(5.18e9), Hz(20e6), power
+        preambleDuration, SIMTIME_ZERO, layout->getDuration() - preambleDuration,
+        Hz(5.18e9), Hz(20e6), power
     );
-    return new Reception(radio, transmission, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
+    return new Reception(radio, transmission, SIMTIME_ZERO, layout->getDuration(),
             Coord(), Coord(), Quaternion(), Quaternion(), analogModel);
 };
 rxModule->setEnergyDetection(mW(math::dBmW2mW(-80)));

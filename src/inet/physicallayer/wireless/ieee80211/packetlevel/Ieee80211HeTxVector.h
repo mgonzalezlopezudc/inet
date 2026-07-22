@@ -18,6 +18,7 @@
 #include <utility>
 #include <vector>
 
+#include "inet/common/TagBase.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
 namespace inet {
@@ -43,7 +44,9 @@ inline bool areIeee80211HeCommonParametersEqual(const Ieee80211HeCommonPhyParame
             left.ldpcExtraSymbol == right.ldpcExtraSymbol &&
             left.packetExtensionDurationUs == right.packetExtensionDurationUs &&
             left.sigA.ppduFormat == right.sigA.ppduFormat && left.sigA.bssColor == right.sigA.bssColor &&
-            left.sigA.uplink == right.sigA.uplink && left.sigA.txopDurationUs == right.sigA.txopDurationUs &&
+            left.sigA.uplink == right.sigA.uplink &&
+            left.sigA.txopUnspecified == right.sigA.txopUnspecified &&
+            left.sigA.txopDurationUs == right.sigA.txopDurationUs &&
             left.sigA.doppler == right.sigA.doppler && left.sigA.stbc == right.sigA.stbc &&
             left.sigB.compression == right.sigB.compression && left.sigB.mcs == right.sigB.mcs &&
             left.sigB.numberOfSymbols == right.sigB.numberOfSymbols &&
@@ -100,6 +103,11 @@ struct Ieee80211HeTxVectorRequest
     Hz centerFrequency = Hz(NaN);
     Hz channelBandwidth = Hz(NaN);
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
+    bool ndp = false;
+    uint8_t bssColor = 0;
+    bool uplink = false;
+    Ieee80211HeTxopDuration txopDuration;
+    bool doppler = false;
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US;
     Ieee80211HeLtfType ltfType = HE_LTF_4X;
     int packetExtensionDurationUs = 0;
@@ -113,10 +121,13 @@ class INET_API Ieee80211HeCommonTxVector final
   private:
     const Hz centerFrequency;
     const Ieee80211HeCommonPhyParameters parameters;
+    const Ieee80211HeTxopDuration requestedTxopDuration;
 
     Ieee80211HeCommonTxVector(Hz centerFrequency,
-            const Ieee80211HeCommonPhyParameters& parameters) :
-        centerFrequency(centerFrequency), parameters(parameters) {}
+            const Ieee80211HeCommonPhyParameters& parameters,
+            Ieee80211HeTxopDuration requestedTxopDuration) :
+        centerFrequency(centerFrequency), parameters(parameters),
+        requestedTxopDuration(requestedTxopDuration) {}
 
     friend class Ieee80211HeTxVectorFactory;
 
@@ -127,11 +138,13 @@ class INET_API Ieee80211HeCommonTxVector final
 
     Hz getCenterFrequency() const { return centerFrequency; }
     const Ieee80211HeCommonPhyParameters& getParameters() const { return parameters; }
+    const Ieee80211HeTxopDuration& getRequestedTxopDuration() const { return requestedTxopDuration; }
 
     bool operator==(const Ieee80211HeCommonTxVector& other) const
     {
         return centerFrequency == other.centerFrequency &&
-                areIeee80211HeCommonParametersEqual(parameters, other.parameters);
+                areIeee80211HeCommonParametersEqual(parameters, other.parameters) &&
+                requestedTxopDuration == other.requestedTxopDuration;
     }
 };
 
@@ -467,6 +480,29 @@ class INET_API Ieee80211HeTxVectorFactory final
                     request.channelBandwidth != MHz(80) && request.channelBandwidth != MHz(160))
                 return makeError(Ieee80211HeValidationErrorCode::INVALID_CHANNEL_BANDWIDTH,
                         "channelBandwidth", "unsupported HE channel bandwidth");
+            if (request.bssColor > 63)
+                return makeError(Ieee80211HeValidationErrorCode::INVALID_BSS_COLOR,
+                        "bssColor", "HE BSS color exceeds the 6-bit field width");
+            if ((request.txopDuration.unspecified && request.txopDuration.durationUs != 0) ||
+                    (!request.txopDuration.unspecified && request.txopDuration.durationUs > 8448))
+                return makeError(Ieee80211HeValidationErrorCode::INVALID_TXOP_DURATION,
+                        "txopDuration", "HE TXOP duration must be unspecified or between 0 and 8448 us");
+            if (request.ndp) {
+                if (request.ppduFormat != HE_SINGLE_USER &&
+                        request.ppduFormat != HE_TRIGGER_BASED_UPLINK)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_PPDU_FORMAT,
+                            "ndp", "the modeled HE NDP formats are HE SU sounding and HE TB feedback");
+                if (request.ppduFormat == HE_SINGLE_USER &&
+                        !((request.ltfType == HE_LTF_2X &&
+                           (request.guardInterval == HE_GI_0_8_US || request.guardInterval == HE_GI_1_6_US)) ||
+                          (request.ltfType == HE_LTF_4X && request.guardInterval == HE_GI_3_2_US)))
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_GI_LTF_COMBINATION,
+                            "guardInterval/ltfType", "HE sounding NDP requires 2x HE-LTF with 0.8/1.6 us GI or 4x HE-LTF with 3.2 us GI");
+                if (!std::all_of(request.users.begin(), request.users.end(),
+                        [] (const auto& user) { return user.psduLength == B(0); }))
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                            "users[].psduLength", "an HE NDP must not contain a PSDU");
+            }
 
             auto catalog = getHeRuAllocationCatalog(request.centerFrequency, request.channelBandwidth);
             std::vector<Ieee80211HeUserPhyParameters> calculatorUsers;
@@ -498,6 +534,33 @@ class INET_API Ieee80211HeTxVectorFactory final
                 calculatorUsers.push_back(user);
             }
 
+            if (request.ndp && request.ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+                if (request.guardInterval != HE_GI_3_2_US || request.ltfType != HE_LTF_4X)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_GI_LTF_COMBINATION,
+                            "guardInterval/ltfType", "HE TB feedback NDP requires 4x HE-LTF with 3.2 us GI");
+                if (calculatorUsers.size() != 1)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_USER_COUNT,
+                            "users", "HE TB feedback NDP requires exactly one modeled recipient");
+                const auto& user = calculatorUsers.front();
+                if (user.mcs != 0)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_MCS,
+                            "mcs", "HE TB feedback NDP requires MCS 0", 0);
+                if (user.dcm)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_DCM_COMBINATION,
+                            "dcm", "HE TB feedback NDP does not use DCM", 0);
+                if (user.coding != HE_CODING_BCC)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_CODING,
+                            "coding", "HE TB feedback NDP requires BCC", 0);
+                if (user.numberOfSpatialStreams != 1)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_SPATIAL_STREAMS,
+                            "numberOfSpatialStreams", "HE TB feedback NDP requires one space-time stream", 0);
+                const auto maximumRu = getHeEqualRuLayout(request.centerFrequency,
+                        request.channelBandwidth, 1).front();
+                if (!samePhysicalRu(user.ru, maximumRu))
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
+                            "ru", "HE TB feedback NDP requires the maximum RU for the channel", 0);
+            }
+
             std::vector<Ieee80211HeRu> uniquePhysicalRus;
             for (const auto& user : calculatorUsers) {
                 if (std::none_of(uniquePhysicalRus.begin(), uniquePhysicalRus.end(),
@@ -515,24 +578,36 @@ class INET_API Ieee80211HeTxVectorFactory final
                 return Ieee80211HeTxVectorValidationResult(calculation.errorCode, calculation.context);
 
             auto& parameters = calculation.parameters;
-            const bool allPsdusEmpty = std::all_of(parameters.users.begin(), parameters.users.end(),
-                    [] (const auto& user) { return user.psduLength == B(0); });
-            if (allPsdusEmpty) {
+            if (request.ndp && request.ppduFormat == HE_TRIGGER_BASED_UPLINK &&
+                    parameters.common.heLtfDuration != SimTime(32, SIMTIME_US))
+                return makeError(Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,
+                        "streamStartIndex", "HE TB feedback NDP requires exactly two 4x HE-LTF symbols", 0);
+            parameters.common.sigA.bssColor = request.bssColor;
+            parameters.common.sigA.uplink = request.uplink;
+            parameters.common.sigA.txopUnspecified = request.txopDuration.unspecified;
+            parameters.common.sigA.txopDurationUs = request.txopDuration.unspecified ? 0 :
+                    request.txopDuration.durationUs < 512 ?
+                    request.txopDuration.durationUs / 8 * 8 :
+                    512 + (request.txopDuration.durationUs - 512) / 128 * 128;
+            parameters.common.sigA.doppler = request.doppler;
+            // STBC data processing is outside the canonical factory contract;
+            // all accepted model paths are explicitly non-STBC.
+            parameters.common.sigA.stbc = false;
+            if (request.ndp) {
                 if (parameters.common.ppduFormat == HE_SINGLE_USER) {
                     if (parameters.common.packetExtensionDurationUs != 4)
                         return makeError(Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION,
                                 "packetExtensionDurationUs", "HE SU sounding NDP requires a 4 us packet extension");
                 }
-                else if (parameters.common.ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+                else {
                     if (parameters.common.packetExtensionDurationUs != 0)
                         return makeError(Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION,
                                 "packetExtensionDurationUs", "HE TB feedback NDP requires a zero-duration packet extension");
                 }
-                else
-                    return makeError(Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
-                            "users[].psduLength", "zero-PSDU HE ER SU/MU descriptions are unsupported");
                 parameters.common.ndp = true;
             }
+            else
+                parameters.common.ndp = false;
             const auto calculatedPreambleDuration = parameters.common.legacyPreambleDuration +
                     parameters.common.rlSigDuration + parameters.common.heSigADuration +
                     parameters.common.heSigBDuration + parameters.common.heStfDuration +
@@ -561,7 +636,8 @@ class INET_API Ieee80211HeTxVectorFactory final
                 modelBitOffset += psduBits;
             }
 
-            Ieee80211HeCommonTxVector commonTx(request.centerFrequency, parameters.common);
+            Ieee80211HeCommonTxVector commonTx(request.centerFrequency, parameters.common,
+                    request.txopDuration);
             std::vector<Ieee80211HeUserTxVector> userTx;
             userTx.reserve(parameters.users.size());
             for (const auto& user : parameters.users)
@@ -598,7 +674,7 @@ class INET_API Ieee80211HeCommonRxVector final
     const Ieee80211HeLtfType ltfType;
     const uint8_t bssColor;
     const std::optional<bool> uplink;
-    const int txopDurationUs;
+    const Ieee80211HeTxopDuration txopDuration;
     const bool doppler;
     const bool stbc;
 
@@ -615,7 +691,8 @@ class INET_API Ieee80211HeCommonRxVector final
         guardInterval(common.guardInterval), ltfType(common.ltfType), bssColor(common.sigA.bssColor),
         uplink(common.ppduFormat == HE_TRIGGER_BASED_UPLINK ?
                 std::optional<bool>() : std::optional<bool>(common.sigA.uplink)),
-        txopDurationUs(common.sigA.txopDurationUs),
+        txopDuration{common.sigA.txopUnspecified,
+                static_cast<uint16_t>(common.sigA.txopDurationUs)},
         doppler(common.sigA.doppler), stbc(common.sigA.stbc) {}
 
     friend class Ieee80211HeRxVectorFactory;
@@ -632,7 +709,7 @@ class INET_API Ieee80211HeCommonRxVector final
     Ieee80211HeLtfType getLtfType() const { return ltfType; }
     uint8_t getBssColor() const { return bssColor; }
     const std::optional<bool>& getUplink() const { return uplink; }
-    int getTxopDurationUs() const { return txopDurationUs; }
+    const Ieee80211HeTxopDuration& getTxopDuration() const { return txopDuration; }
     bool getDoppler() const { return doppler; }
     bool getStbc() const { return stbc; }
 
@@ -642,7 +719,7 @@ class INET_API Ieee80211HeCommonRxVector final
                 erSuRuMode == other.erSuRuMode &&
                 guardInterval == other.guardInterval && ltfType == other.ltfType &&
                 bssColor == other.bssColor && uplink == other.uplink &&
-                txopDurationUs == other.txopDurationUs && doppler == other.doppler && stbc == other.stbc;
+                txopDuration == other.txopDuration && doppler == other.doppler && stbc == other.stbc;
     }
 };
 
@@ -901,6 +978,83 @@ class INET_API Ieee80211HeRxVectorFactory final
             return makeError(Ieee80211HeRxVectorValidationErrorCode::INTERNAL_ERROR,
                     "reconstruction", "unknown HE RXVECTOR reconstruction error");
         }
+    }
+};
+
+/**
+ * Short-lived packet-model handoff from radio encapsulation to the transmitter.
+ * The pointed-to objects are immutable and are deliberately not wire content.
+ */
+class INET_API Ieee80211HeTxVectorReq final : public TagBase
+{
+  private:
+    std::shared_ptr<const Ieee80211HeTxVector> txVector;
+    std::shared_ptr<const Ieee80211HePpduLayout> ppduLayout;
+
+  public:
+    Ieee80211HeTxVectorReq() = default;
+    Ieee80211HeTxVectorReq(const Ieee80211HeTxVectorReq&) = default;
+    virtual Ieee80211HeTxVectorReq *dup() const override { return new Ieee80211HeTxVectorReq(*this); }
+
+    void setCanonicalPair(std::shared_ptr<const Ieee80211HeTxVector> txVector,
+            std::shared_ptr<const Ieee80211HePpduLayout> ppduLayout)
+    {
+        if (!txVector || !ppduLayout || !ppduLayout->matches(*txVector))
+            throw cRuntimeError("Invalid canonical HE TXVECTOR/PPDU-layout handoff");
+        this->txVector = std::move(txVector);
+        this->ppduLayout = std::move(ppduLayout);
+    }
+
+    const std::shared_ptr<const Ieee80211HeTxVector>& getTxVector() const { return txVector; }
+    const std::shared_ptr<const Ieee80211HePpduLayout>& getPpduLayout() const { return ppduLayout; }
+};
+
+/** Receiver-decoded, model-only HE RXVECTOR indication. */
+class INET_API Ieee80211HeRxVectorInd final : public TagBase
+{
+  private:
+    std::shared_ptr<const Ieee80211HeRxVector> rxVector;
+
+  public:
+    Ieee80211HeRxVectorInd() = default;
+    Ieee80211HeRxVectorInd(const Ieee80211HeRxVectorInd&) = default;
+    virtual Ieee80211HeRxVectorInd *dup() const override { return new Ieee80211HeRxVectorInd(*this); }
+
+    void setRxVector(std::shared_ptr<const Ieee80211HeRxVector> rxVector)
+    {
+        if (!rxVector)
+            throw cRuntimeError("Invalid empty HE RXVECTOR indication");
+        this->rxVector = std::move(rxVector);
+    }
+
+    const std::shared_ptr<const Ieee80211HeRxVector>& getRxVector() const { return rxVector; }
+};
+
+/**
+ * Model-only Trigger recipient context for an HE TB reception. These parameters
+ * come from the selected canonical PPDU-layout user, not from decoded RXVECTOR
+ * fields, and are deliberately not serialized as received PHY signaling.
+ */
+class INET_API Ieee80211HeTbRecipientContextInd final : public TagBase
+{
+  private:
+    std::shared_ptr<const Ieee80211HeUserPhyParameters> recipientParameters;
+
+  public:
+    Ieee80211HeTbRecipientContextInd() = default;
+    Ieee80211HeTbRecipientContextInd(const Ieee80211HeTbRecipientContextInd&) = default;
+    virtual Ieee80211HeTbRecipientContextInd *dup() const override { return new Ieee80211HeTbRecipientContextInd(*this); }
+
+    void setRecipientParameters(std::shared_ptr<const Ieee80211HeUserPhyParameters> recipientParameters)
+    {
+        if (!recipientParameters || this->recipientParameters)
+            throw cRuntimeError("Invalid HE TB recipient context indication");
+        this->recipientParameters = std::move(recipientParameters);
+    }
+
+    const std::shared_ptr<const Ieee80211HeUserPhyParameters>& getRecipientParameters() const
+    {
+        return recipientParameters;
     }
 };
 

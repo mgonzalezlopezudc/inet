@@ -51,6 +51,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -552,10 +553,16 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         }
     }
     auto request = packet->findTag<Ieee80211HeMuReq>();
+    auto txTag = packet->findTag<Ieee80211HeMuTxTag>();
+    const bool soundingNdp = request == nullptr && txTag != nullptr && txTag->getNdp();
     auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode);
     Ptr<Ieee80211PhyHeader> phyHeader;
     if (request != nullptr)
         phyHeader = createIeee80211HePhyHeader(static_cast<Ieee80211HePpduFormat>(request->getPpduFormat()));
+    else if (soundingNdp)
+        // Clause 27.3.17 defines an HE sounding NDP as an HE SU PPDU.
+        // The preceding NDPA, not HE-SIG-B user fields, identifies beamformees.
+        phyHeader = createIeee80211HePhyHeader(HE_SINGLE_USER);
     else if (!heMuUsers.empty())
         phyHeader = createIeee80211HePhyHeader(HE_MU_DOWNLINK);
     else if (heMode != nullptr)
@@ -568,8 +575,6 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         auto mib = networkInterface ? dynamic_cast<const ieee80211::Ieee80211Mib *>(networkInterface->getSubmodule("mib")) : nullptr;
         if (mib != nullptr)
             hePhyHeader->setBssColor(mib->heOperation.bssColor);
-        auto txTag = packet->findTag<Ieee80211HeMuTxTag>();
-        hePhyHeader->setNdp(txTag != nullptr && txTag->getNdp());
         hePhyHeader->setTriggerId(request == nullptr ? 0 : request->getTriggerId());
         auto commonRequest = packet->findTag<Ieee80211HeMuCommonReq>();
         hePhyHeader->setGuardInterval(request != nullptr ? request->getGuardInterval() :
@@ -579,11 +584,13 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 commonRequest != nullptr ? commonRequest->getCoding() :
                 heMode != nullptr && heMode->getDataMode()->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC);
         hePhyHeader->setPacketExtensionDurationUs(suErRequest != nullptr ? suErRequest->getPacketExtensionDurationUs() :
+                soundingNdp ? 4 :
                 request != nullptr ? request->getPacketExtensionDurationUs() :
                 commonRequest != nullptr ? commonRequest->getPacketExtensionDurationUs() : 0);
         hePhyHeader->setPuncturedSubchannelMask(request != nullptr ? request->getPuncturedSubchannelMask() :
                 commonRequest != nullptr ? commonRequest->getPuncturedSubchannelMask() : 0);
-        hePhyHeader->setSpatialReuse(suErRequest != nullptr ? suErRequest->getSpatialReuse() :
+        hePhyHeader->setSpatialReuse(soundingNdp ? 15 :
+                suErRequest != nullptr ? suErRequest->getSpatialReuse() :
                 request != nullptr ? request->getSpatialReuse() :
                 commonRequest != nullptr ? commonRequest->getSpatialReuse() : 0);
         hePhyHeader->setNonSrgObssPdDisallowed(request != nullptr ? request->getNonSrgObssPdDisallowed() :
@@ -593,87 +600,158 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         hePhyHeader->setPsrDisallowed(request != nullptr ? request->getPsrDisallowed() :
                 commonRequest != nullptr ? commonRequest->getPsrDisallowed() : false);
         auto ppduFormat = getIeee80211HePpduFormat(*hePhyHeader);
-        bool modeDerivedSingleUser = heMuUsers.empty() &&
-                (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU);
-        std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
-        for (auto& user : heMuUsers) {
-            Ieee80211HeRu ru;
-            ru.index = user.ruIndex;
-            ru.toneSize = std::max<int>(user.ruToneSize, 26);
-            ru.toneOffset = user.ruToneOffset;
-            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
-            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
-            ru.bandwidth = Hz(ru.toneSize * 78125.0);
-            Ieee80211HeUserPhyParameters requested;
-            requested.ru = ru;
-            requested.mcs = user.mcs;
-            requested.numberOfSpatialStreams = user.numberOfSpatialStreams;
-            requested.dcm = user.dcm;
-            requested.coding = static_cast<Ieee80211HeCoding>(hePhyHeader->getCoding());
-            requested.psduLength = user.psduLength;
-            requested.streamStartIndex = user.streamStartIndex;
-            requested.staId = user.staId;
-            requestedUsers.push_back(requested);
-        }
         auto guardInterval = static_cast<Ieee80211HeGuardInterval>(hePhyHeader->getGuardInterval());
-        Ieee80211HePhyValidationResult calculation;
-        if (modeDerivedSingleUser) {
-            calculation.valid = true;
-            calculation.parameters.duration = mode->getDuration(packet->getDataLength());
-            hePhyHeader->setTotalNsts(mode->getDataMode()->getNumberOfSpatialStreams());
+        Ieee80211HeTxVectorRequest canonicalRequest;
+        canonicalRequest.centerFrequency = ieee80211Transmitter->computeTransmissionChannel(packet)->getCenterFrequency();
+        canonicalRequest.channelBandwidth = mode->getDataMode()->getBandwidth();
+        canonicalRequest.ppduFormat = ppduFormat;
+        canonicalRequest.ndp = txTag != nullptr && txTag->getNdp();
+        canonicalRequest.bssColor = hePhyHeader->getBssColor();
+        canonicalRequest.uplink = suErRequest != nullptr ? suErRequest->getUplink() :
+                ppduFormat == HE_TRIGGER_BASED_UPLINK;
+        // Nondefault HE MU/TB TXOP and Doppler control is deferred until their
+        // request metadata and packet-level serializer carry those wire facts.
+        // The current serializer emits TXOP=127 (unspecified) and Doppler=false.
+        canonicalRequest.txopDuration = suErRequest != nullptr ?
+                Ieee80211HeTxopDuration{suErRequest->getTxopUnspecified(),
+                        suErRequest->getTxopDurationUs()} : Ieee80211HeTxopDuration{};
+        canonicalRequest.doppler = suErRequest != nullptr && suErRequest->getDoppler();
+        if (suErRequest != nullptr && suErRequest->getStbc())
+            throw cRuntimeError("Ordinary HE SU/ER mode objects do not model STBC data processing");
+        canonicalRequest.guardInterval = guardInterval;
+        canonicalRequest.ltfType = suErRequest != nullptr ?
+                static_cast<Ieee80211HeLtfType>(suErRequest->getLtfType()) :
+                getHeDefaultLtfType(guardInterval);
+        canonicalRequest.packetExtensionDurationUs = hePhyHeader->getPacketExtensionDurationUs();
+        if (soundingNdp) {
+            Ieee80211HeUserTxVectorRequest user;
+            user.ru = getHeEqualRuLayout(canonicalRequest.centerFrequency,
+                    canonicalRequest.channelBandwidth, 1).front();
+            user.mcs = 0;
+            // All beamformees observe the same HE SU sounding NDP. NUM_STS is
+            // the largest requested sounding dimension, not a sum across the
+            // target list carried by the preceding NDPA.
+            user.numberOfSpatialStreams = 2;
+            for (const auto& target : heMuUsers)
+                user.numberOfSpatialStreams = std::max(user.numberOfSpatialStreams,
+                        static_cast<int>(target.numberOfSpatialStreams));
+            user.dcm = false;
+            user.coding = static_cast<Ieee80211HeCoding>(hePhyHeader->getCoding());
+            user.psduLength = B(0);
+            canonicalRequest.users.push_back(user);
+        }
+        else if (heMuUsers.empty() && (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU)) {
+            Ieee80211HeUserTxVectorRequest user;
+            if (ppduFormat == HE_EXTENDED_RANGE_SU && suErRequest != nullptr &&
+                    suErRequest->getErSuRuMode() == 1) {
+                auto catalog = getHeRuAllocationCatalog(canonicalRequest.centerFrequency,
+                        canonicalRequest.channelBandwidth);
+                auto ru = std::max_element(catalog.begin(), catalog.end(),
+                        [] (const auto& left, const auto& right) {
+                            const bool left106 = left.toneSize == 106;
+                            const bool right106 = right.toneSize == 106;
+                            return left106 != right106 ? !left106 : left.toneOffset < right.toneOffset;
+                        });
+                if (ru == catalog.end() || ru->toneSize != 106)
+                    throw cRuntimeError("Cannot resolve the requested HE ER SU 106-tone RU");
+                user.ru = *ru;
+            }
+            else
+                user.ru = getHeEqualRuLayout(canonicalRequest.centerFrequency,
+                        canonicalRequest.channelBandwidth, 1).front();
+            user.mcs = heMode->getDataMode()->getMcsIndex();
+            user.numberOfSpatialStreams = heMode->getDataMode()->getNumberOfSpatialStreams();
+            user.dcm = suErRequest != nullptr && suErRequest->getDcm();
+            user.coding = heMode->getDataMode()->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC;
+            user.psduLength = B((packet->getDataLength().get<b>() + 7) / 8);
+            canonicalRequest.users.push_back(user);
         }
         else {
-            calculation = computeHePpduParameters(requestedUsers,
-                    mode->getDataMode()->getBandwidth(), ppduFormat,
-                    guardInterval, getHeDefaultLtfType(guardInterval),
-                    hePhyHeader->getPacketExtensionDurationUs());
+            for (const auto& modelUser : heMuUsers) {
+                Ieee80211HeUserTxVectorRequest user;
+                user.ru.index = modelUser.ruIndex;
+                user.ru.toneSize = std::max<int>(modelUser.ruToneSize, 26);
+                user.ru.toneOffset = modelUser.ruToneOffset;
+                user.mcs = modelUser.mcs;
+                user.numberOfSpatialStreams = modelUser.numberOfSpatialStreams;
+                user.streamStartIndex = modelUser.streamStartIndex;
+                user.dcm = modelUser.dcm;
+                user.coding = static_cast<Ieee80211HeCoding>(hePhyHeader->getCoding());
+                user.psduLength = modelUser.psduLength;
+                user.staId = modelUser.staId;
+                canonicalRequest.users.push_back(user);
+            }
         }
-        if (!calculation)
-            throw cRuntimeError("Cannot construct HE MU PPDU: %s", calculation.error.c_str());
-        simtime_t commonDuration = request != nullptr && request->getCommonDuration() > SIMTIME_ZERO ?
-                request->getCommonDuration() : calculation.parameters.duration;
+        auto canonicalResult = Ieee80211HeTxVectorFactory::create(canonicalRequest);
+        if (!canonicalResult)
+            throw cRuntimeError("Cannot construct canonical HE TXVECTOR: %s (%s)",
+                    canonicalResult.getContext().fieldName.c_str(), canonicalResult.getContext().detail.c_str());
+        const auto& txVector = canonicalResult.getTxVector();
+        const auto& ppduLayout = canonicalResult.getPpduLayout();
+        if (txTag != nullptr && txTag->getNdp() != ppduLayout->isNdp())
+            throw cRuntimeError("Explicit HE NDP state disagrees with the canonical TXVECTOR");
+        auto handoff = packet->addTag<Ieee80211HeTxVectorReq>();
+        handoff->setCanonicalPair(txVector, ppduLayout);
+        const auto& canonicalUsers = ppduLayout->getUsers();
+        hePhyHeader->setNdp(ppduLayout->isNdp());
+        hePhyHeader->setGuardInterval(ppduLayout->getGuardInterval());
+        hePhyHeader->setPacketExtensionDurationUs(ppduLayout->getPacketExtensionDurationUs());
+        simtime_t commonDuration = ppduLayout->getDuration();
         if (request != nullptr && request->getPpduFormat() == HE_MU_DOWNLINK &&
                 request->getCommonDuration() > SIMTIME_ZERO &&
-                request->getCommonDuration() != calculation.parameters.duration)
+                request->getCommonDuration() != commonDuration)
             throw cRuntimeError("Planned HE MU PPDU duration does not match the resolved PHY parameters");
-        if (request != nullptr && request->getPpduFormat() == HE_TRIGGER_BASED_UPLINK)
-            commonDuration = std::max(commonDuration, calculation.parameters.duration);
         if (suErRequest != nullptr) {
-            if (!modeDerivedSingleUser || heMode == nullptr)
+            if ((ppduFormat != HE_SINGLE_USER && ppduFormat != HE_EXTENDED_RANGE_SU) || heMode == nullptr)
                 throw cRuntimeError("HE SU/ER TXVECTOR is attached to a non-SU transmission");
             populateHeSuErSignaling(hePhyHeader, heMode, suErRequest,
                     B((packet->getDataLength().get<b>() + 7) / 8));
-            commonDuration = suErRequest->getTxTime();
+            if (suErRequest->getTxTime() != commonDuration)
+                throw cRuntimeError("HE SU/ER TXTIME disagrees with the canonical PPDU layout");
         }
-        for (size_t i = 0; i < heMuUsers.size(); ++i) {
-            auto& user = heMuUsers[i];
-            user.duration = commonDuration;
-            hePhyHeader->appendUsers(user);
-            // These vectors are emitted in a fixed per-user order at the same
-            // simulation time, so STA ID, RU, stream, PSDU size, and airtime
-            // can be joined without relying on broadcast MAC addresses.
-            self->emit(heRuIndexSignal, (long)user.ruIndex);
-            self->emit(heRuToneSizeSignal, (long)user.ruToneSize);
-            self->emit(heRuToneOffsetSignal, (long)user.ruToneOffset);
-            self->emit(heStaIdSignal, (long)user.staId);
-            self->emit(heSpatialStreamsSignal, (long)user.numberOfSpatialStreams);
-            self->emit(heStreamStartIndexSignal, (long)user.streamStartIndex);
-            self->emit(heScheduledPsduBytesSignal, (long)user.psduLength.get<B>());
-            self->emit(heUserPpduDurationSignal, user.duration);
+        if (ppduFormat == HE_MU_DOWNLINK || ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+            for (const auto& canonicalUser : canonicalUsers) {
+                Ieee80211HeMuUserInfo user;
+                user.ruIndex = canonicalUser.ru.index;
+                user.ruToneSize = canonicalUser.ru.toneSize;
+                user.ruToneOffset = canonicalUser.ru.toneOffset;
+                user.staId = canonicalUser.staId;
+                user.mcs = canonicalUser.mcs;
+                user.numberOfSpatialStreams = canonicalUser.numberOfSpatialStreams;
+                user.streamStartIndex = canonicalUser.streamStartIndex;
+                user.dcm = canonicalUser.dcm;
+                user.psduLength = canonicalUser.psduLength;
+                user.duration = ppduLayout->getDuration();
+                hePhyHeader->appendUsers(user);
+                // These vectors are emitted in a fixed per-user order at the same
+                // simulation time, so STA ID, RU, stream, PSDU size, and airtime
+                // can be joined without relying on broadcast MAC addresses.
+                self->emit(heRuIndexSignal, (long)user.ruIndex);
+                self->emit(heRuToneSizeSignal, (long)user.ruToneSize);
+                self->emit(heRuToneOffsetSignal, (long)user.ruToneOffset);
+                self->emit(heStaIdSignal, (long)user.staId);
+                self->emit(heSpatialStreamsSignal, (long)user.numberOfSpatialStreams);
+                self->emit(heStreamStartIndexSignal, (long)user.streamStartIndex);
+                self->emit(heScheduledPsduBytesSignal, (long)user.psduLength.get<B>());
+                self->emit(heUserPpduDurationSignal, user.duration);
+            }
         }
         // Detect MU-MIMO
         std::map<int, std::vector<size_t>> ruUserIndices;
-        for (size_t i = 0; i < heMuUsers.size(); ++i) {
-            ruUserIndices[heMuUsers[i].ruIndex].push_back(i);
+        for (size_t i = 0; i < canonicalUsers.size(); ++i) {
+            ruUserIndices[canonicalUsers[i].ru.index].push_back(i);
         }
         bool isMuMimo = false;
         int maxTotalNsts = 0;
+        for (const auto& user : canonicalUsers)
+            maxTotalNsts = std::max(maxTotalNsts,
+                    user.streamStartIndex + user.numberOfSpatialStreams);
         for (const auto& pair : ruUserIndices) {
             if (pair.second.size() > 1) {
                 isMuMimo = true;
                 int groupNsts = 0;
                 for (size_t idx : pair.second) {
-                    groupNsts += heMuUsers[idx].numberOfSpatialStreams;
+                    groupNsts += canonicalUsers[idx].numberOfSpatialStreams;
                 }
                 if (groupNsts > maxTotalNsts)
                     maxTotalNsts = groupNsts;
@@ -696,9 +774,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 }
             }
         }
-        if (isMuMimo) {
-            hePhyHeader->setTotalNsts(maxTotalNsts);
-        }
+        hePhyHeader->setTotalNsts(maxTotalNsts);
         hePhyHeader->setCommonDuration(commonDuration);
         int64_t totalBits = suErRequest != nullptr ? 100 :
                 ppduFormat == HE_EXTENDED_RANGE_SU ? 128 : 64;
@@ -816,41 +892,53 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         packet->setBitError(true);
 
     if (auto hePhyHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(phyHeader)) {
-        auto tag = packet->addTagIfAbsent<Ieee80211HeMuRxTag>();
-        tag->setPpduFormat(getIeee80211HePpduFormat(*hePhyHeader));
-        tag->setTriggerId(hePhyHeader->getTriggerId());
-        tag->setGuardInterval(hePhyHeader->getGuardInterval());
-        tag->setCoding(hePhyHeader->getCoding());
-        tag->setPacketExtensionDurationUs(hePhyHeader->getPacketExtensionDurationUs());
-        tag->setPuncturedSubchannelMask(hePhyHeader->getPuncturedSubchannelMask());
-        tag->setRuIndex(-1);
-        auto networkInterface = getContainingNicModule(this);
-        std::optional<uint16_t> myStaId;
-        if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr) {
-            MacAddress transmitterAddress;
-            if (packet->getDataLength() > b(0))
-                if (auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211TwoAddressHeader>(packet->peekAtFront()))
-                    transmitterAddress = macHeader->getTransmitterAddress();
-            if (!transmitterAddress.isUnspecified())
-                myStaId = resolveHeMuStaIdForReception(networkInterface, transmitterAddress);
-        }
-        else {
-            myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
-        }
-        for (unsigned int i = 0; i < hePhyHeader->getUsersArraySize(); ++i) {
-            const auto& user = hePhyHeader->getUsers(i);
-            Ieee80211HeMuRxAllocationInfo info;
-            info.ruIndex = user.ruIndex;
-            info.staId = user.staId;
-            info.ruToneSize = user.ruToneSize;
-            info.ruToneOffset = user.ruToneOffset;
-            info.mcs = user.mcs;
-            info.numberOfSpatialStreams = user.numberOfSpatialStreams;
-            info.dcm = user.dcm;
-            info.duration = user.duration;
-            tag->appendAllocations(info);
-            if (myStaId.has_value() && user.staId == *myStaId)
-                tag->setRuIndex(user.ruIndex);
+        if (auto decoded = packet->findTag<Ieee80211HeRxVectorInd>()) {
+            auto rxVector = decoded->getRxVector();
+            if (!rxVector)
+                throw cRuntimeError("Empty decoded HE RXVECTOR indication");
+            const auto& common = rxVector->getCommon();
+            const auto& user = rxVector->getUser();
+            auto tag = packet->addTagIfAbsent<Ieee80211HeMuRxTag>();
+            tag->setPpduFormat(common.getPpduFormat());
+            tag->setTriggerId(hePhyHeader->getTriggerId());
+            tag->setGuardInterval(common.getGuardInterval());
+            tag->setPacketExtensionDurationUs(hePhyHeader->getPacketExtensionDurationUs());
+            tag->setPuncturedSubchannelMask(hePhyHeader->getPuncturedSubchannelMask());
+            tag->setRuIndex(-1);
+            if (common.getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+                auto context = packet->findTag<Ieee80211HeTbRecipientContextInd>();
+                if (context == nullptr || !context->getRecipientParameters())
+                    throw cRuntimeError("HE TB reception is missing its Trigger recipient context");
+                const auto& parameters = *context->getRecipientParameters();
+                tag->setCoding(parameters.coding);
+                Ieee80211HeMuRxAllocationInfo info;
+                info.ruIndex = parameters.ru.index;
+                info.staId = parameters.staId;
+                info.ruToneSize = parameters.ru.toneSize;
+                info.ruToneOffset = parameters.ru.toneOffset;
+                info.mcs = parameters.mcs;
+                info.numberOfSpatialStreams = parameters.numberOfSpatialStreams;
+                info.dcm = parameters.dcm;
+                tag->appendAllocations(info);
+                tag->setRuIndex(info.ruIndex);
+            }
+            else {
+                tag->setCoding(user.getCoding().has_value() ? *user.getCoding() : HE_CODING_BCC);
+            }
+            if (common.getPpduFormat() != HE_TRIGGER_BASED_UPLINK &&
+                    user.getStaId() && user.getRuAllocation() && user.getMcs() &&
+                    user.getNumberOfSpaceTimeStreams() && user.getDcm() && user.getCoding()) {
+                Ieee80211HeMuRxAllocationInfo info;
+                info.ruIndex = user.getRuAllocation()->index;
+                info.staId = *user.getStaId();
+                info.ruToneSize = user.getRuAllocation()->toneSize;
+                info.ruToneOffset = user.getRuAllocation()->toneOffset;
+                info.mcs = *user.getMcs();
+                info.numberOfSpatialStreams = *user.getNumberOfSpaceTimeStreams();
+                info.dcm = *user.getDcm();
+                tag->appendAllocations(info);
+                tag->setRuIndex(info.ruIndex);
+            }
         }
     }
     if (auto indication = packet->findTagForUpdate<Ieee80211MpduReceiveInd>()) {

@@ -134,6 +134,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     common->setCoding(HE_CODING_BCC);
 
     radio->testEncapsulate(packet);
+    auto canonicalHandoff = packet->getTag<Ieee80211HeTxVectorReq>();
     auto phyHeader = packet->peekAtFront<Ieee80211HeMuPhyHeader>();
     ASSERT(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader) != nullptr);
     ASSERT(phyHeader->getUsersArraySize() == 2);
@@ -156,16 +157,38 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, SimTime(1, SIMTIME_S)));
+    ASSERT(transmission->getHeTxVector() == canonicalHandoff->getTxVector());
+    ASSERT(transmission->getHePpduLayout() == canonicalHandoff->getPpduLayout());
     ASSERT(transmission->getDuration() == phyHeader->getCommonDuration());
     ASSERT(transmission->getEndTime() ==
             transmission->getStartTime() + phyHeader->getCommonDuration());
-    ASSERT(transmission->getHeUserPhyParameters().size() == 2);
-    ASSERT(transmission->getHeUserPhyParameters()[0].duration == user0.duration);
-    ASSERT(transmission->getHeUserPhyParameters()[1].duration == user1.duration);
+    ASSERT(transmission->getHePpduLayout()->getUsers().size() == 2);
+    ASSERT(transmission->getHePpduLayout()->getUsers()[0].duration == user0.duration);
+    ASSERT(transmission->getHePpduLayout()->getUsers()[1].duration == user1.duration);
     ASSERT(transmission->getPreambleDuration() == expected.parameters.common.commonPreambleDuration);
     ASSERT(transmission->getHeaderDuration() == SIMTIME_ZERO);
     ASSERT(transmission->getDataDuration() ==
             phyHeader->getCommonDuration() - expected.parameters.common.commonPreambleDuration);
+    ASSERT(transmission->getHePpduLayout()->getFieldSpans().back().getEndOffset() ==
+            transmission->getDuration());
+    ASSERT(transmission->getHePpduLayout()->getPsduBitRanges()[1].getStartBitOffset() == b(4800));
+
+    auto mismatchedPacket = packet->dup();
+    auto immutableMismatchedHeader = mismatchedPacket->popAtFront<Ieee80211HeMuPhyHeader>();
+    auto mismatchedHeader = staticPtrCast<Ieee80211HeMuPhyHeader>(immutableMismatchedHeader->dupShared());
+    auto mismatchedUser = mismatchedHeader->getUsers(0);
+    mismatchedUser.mcs++;
+    mismatchedHeader->setUsers(0, mismatchedUser);
+    mismatchedPacket->insertAtFront(mismatchedHeader);
+    bool mismatchRejected = false;
+    try {
+        delete transmitter->createTransmission(radio, mismatchedPacket, SimTime(1, SIMTIME_S));
+    }
+    catch (cRuntimeError&) {
+        mismatchRejected = true;
+    }
+    ASSERT(mismatchRejected);
+    delete mismatchedPacket;
 
     delete transmission;
     delete packet;
@@ -190,6 +213,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     request->setCoding(HE_CODING_BCC);
 
     radio->testEncapsulate(packet);
+    auto canonicalHandoff = packet->getTag<Ieee80211HeTxVectorReq>();
     auto phyHeader = packet->peekAtFront<Ieee80211HeTbPhyHeader>();
     ASSERT(phyHeader->getTriggerId() == 42);
     ASSERT(phyHeader->getUsersArraySize() == 1);
@@ -209,9 +233,11 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, SimTime(2, SIMTIME_S)));
+    ASSERT(transmission->getHeTxVector() == canonicalHandoff->getTxVector());
+    ASSERT(transmission->getHePpduLayout() == canonicalHandoff->getPpduLayout());
     ASSERT(transmission->getDuration() == expected.parameters.duration);
-    ASSERT(transmission->getHeUserPhyParameters().size() == 1);
-    const auto& resolved = transmission->getHeUserPhyParameters().front();
+    ASSERT(transmission->getHePpduLayout()->getUsers().size() == 1);
+    const auto& resolved = transmission->getHePpduLayout()->getUsers().front();
     ASSERT(resolved.mcs == 3);
     ASSERT(resolved.numberOfSpatialStreams == 2);
     ASSERT(resolved.dcm);

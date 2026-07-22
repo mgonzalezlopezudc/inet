@@ -4,9 +4,11 @@ decodes its assigned RU from a single HE MU PPDU and that non-HE receivers get
 only the legacy-visible duration indication.
 
 %includes:
+#include <algorithm>
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -88,21 +90,78 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
+static Ieee80211HeTxVectorValidationResult makeCanonicalPair(
+        const Packet *packet,
+        const std::vector<Ieee80211HeUserPhyParameters>& users,
+        const Ieee80211HePpduParameters& ppdu)
+{
+    auto phyHeader = packet->peekAtFront<Ieee80211HePhyHeader>();
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = Hz(5.18e9);
+    request.channelBandwidth = MHz(20);
+    request.ppduFormat = getIeee80211HePpduFormat(*phyHeader);
+    request.ndp = ppdu.common.ndp;
+    request.bssColor = phyHeader->getBssColor();
+    request.uplink = request.ppduFormat == HE_TRIGGER_BASED_UPLINK;
+    if (users.empty()) {
+        for (size_t i = 0; i < phyHeader->getUsersArraySize(); i++) {
+            const auto& modelUser = phyHeader->getUsers(i);
+            Ieee80211HeUserTxVectorRequest user;
+            user.ru.index = modelUser.ruIndex;
+            user.ru.toneSize = modelUser.ruToneSize;
+            user.ru.toneOffset = modelUser.ruToneOffset;
+            user.mcs = modelUser.mcs;
+            user.numberOfSpatialStreams = modelUser.numberOfSpatialStreams;
+            user.streamStartIndex = modelUser.streamStartIndex;
+            user.dcm = modelUser.dcm;
+            user.coding = static_cast<Ieee80211HeCoding>(phyHeader->getCoding());
+            user.psduLength = modelUser.psduLength;
+            user.staId = modelUser.staId;
+            request.users.push_back(user);
+        }
+    }
+    else {
+        for (const auto& modelUser : users) {
+            Ieee80211HeUserTxVectorRequest user;
+            user.ru = modelUser.ru;
+            user.mcs = modelUser.mcs;
+            user.numberOfSpatialStreams = modelUser.numberOfSpatialStreams;
+            user.streamStartIndex = modelUser.streamStartIndex;
+            user.dcm = modelUser.dcm;
+            user.coding = modelUser.coding;
+            user.psduLength = modelUser.psduLength;
+            user.staId = modelUser.staId;
+            request.users.push_back(user);
+        }
+    }
+    auto result = Ieee80211HeTxVectorFactory::create(request);
+    if (!result)
+        throw cRuntimeError("Cannot construct test HE TXVECTOR: %s", result.getContext().detail.c_str());
+    return result;
+}
+
 class MockIeee80211Transmission : public Ieee80211Transmission
 {
   public:
     MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode,
             const Ieee80211Channel *channel, const std::vector<Ieee80211HeUserPhyParameters>& heUsers = {},
             const Ieee80211HePpduParameters& hePpdu = {})
+        : MockIeee80211Transmission(transmitter, packet, mode, channel,
+                makeCanonicalPair(packet, heUsers, hePpdu)) {}
+
+    MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode,
+            const Ieee80211Channel *channel, const Ieee80211HeTxVectorValidationResult& canonical)
         : Ieee80211Transmission(
             transmitter,
             packet,
-            0.0, 0.0, // startTime, endTime
-            0.0, 0.0, 0.0, // preamble, header, data duration
+            SIMTIME_ZERO, canonical.getPpduLayout()->getDuration(),
+            canonical.getPpduLayout()->getCommonPreambleDuration(), SIMTIME_ZERO,
+            canonical.getPpduLayout()->getDuration() -
+                    canonical.getPpduLayout()->getCommonPreambleDuration(),
             Coord(), Coord(), // start, end position
             Quaternion(), Quaternion(), // start, end orientation
             nullptr, nullptr, nullptr, nullptr, nullptr, // models
-            mode, channel, heUsers, hePpdu
+            mode, channel, canonical.getTxVector(), canonical.getPpduLayout()
         ) {}
 };
 
@@ -172,11 +231,14 @@ static Packet *receiveHeMuPacket(DummyReceiverModule *receiver, const IRadio *ra
         const Ieee80211HePpduParameters& hePpdu = {})
 {
     auto transmission = new MockIeee80211Transmission(radio, packet, mode, channel, heUsers, hePpdu);
+    const auto& layout = transmission->getHePpduLayout();
+    auto preambleDuration = layout->getCommonPreambleDuration();
+    auto dataDuration = layout->getDuration() - preambleDuration;
     auto analogModel = new ScalarReceptionAnalogModel(
-            SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+            preambleDuration, SIMTIME_ZERO, dataDuration,
             Hz(5.18e9), Hz(20e6), mW(1));
     auto reception = new Reception(radio, transmission, SIMTIME_ZERO,
-            SimTime(1, SIMTIME_MS), Coord(), Coord(), Quaternion(), Quaternion(), analogModel);
+            layout->getDuration(), Coord(), Coord(), Quaternion(), Quaternion(), analogModel);
     auto decision = new ReceptionDecision(reception, IRadioSignal::SIGNAL_PART_WHOLE, true, true, true);
     auto decisions = new std::vector<const IReceptionDecision *> { decision };
     DummySnir snir(reception);
@@ -199,6 +261,16 @@ static Ptr<const Ieee80211HeMuPhyHeader> roundTripHeMuPhyHeader(const Ptr<Ieee80
     return decodedPacket.popAtFront<Ieee80211HeMuPhyHeader>();
 }
 
+static Ptr<const Ieee80211HeTbPhyHeader> roundTripHeTbPhyHeader(const Ptr<Ieee80211HeTbPhyHeader>& header)
+{
+    Packet serializedPacket("serialized-he-tb-header");
+    serializedPacket.insertAtFront(header);
+    auto bytes = serializedPacket.peekDataAsBytes();
+    Packet decodedPacket("decoded-he-tb-header");
+    decodedPacket.insertAtFront(bytes);
+    return decodedPacket.popAtFront<Ieee80211HeTbPhyHeader>();
+}
+
 static Ieee80211HeUserPhyParameters makeHeModelUser(const Ieee80211HeRu& ru,
         const MacAddress& address, B psduLength, int mcs = 0,
         int numberOfSpatialStreams = 1, bool dcm = false)
@@ -214,9 +286,11 @@ static Ieee80211HeUserPhyParameters makeHeModelUser(const Ieee80211HeRu& ru,
 }
 
 static Ieee80211HePpduParameters makeHeModelPpdu(
-        const std::vector<Ieee80211HeUserPhyParameters>& users, bool ndp)
+        const std::vector<Ieee80211HeUserPhyParameters>& users, bool ndp,
+        Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK)
 {
     Ieee80211HePpduParameters ppdu;
+    ppdu.common.ppduFormat = ppduFormat;
     ppdu.common.ndp = ndp;
     ppdu.users = users;
     return ppdu;
@@ -326,15 +400,14 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
 // --- Test 4: HE MU PHY packet with an empty allocation map is rejected ---
 {
     auto packet = makeHeMuPacket("empty-allocation-packet", {});
-
-    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
-
-    bool possible1 = rxModule1->checkAssigned(trans);
-    bool possible2 = rxModule2->checkAssigned(trans);
-    EV << "STA1 empty HE MU allocation map: " << (!possible1 ? "PASS" : "FAIL") << "\n";
-    EV << "STA2 empty HE MU allocation map: " << (!possible2 ? "PASS" : "FAIL") << "\n";
-
-    delete trans;
+    bool rejected = false;
+    try {
+        delete new MockIeee80211Transmission(radio1, packet, mode, channel);
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    EV << "Empty HE MU allocation map rejected: " << (rejected ? "PASS" : "FAIL") << "\n";
     delete packet;
 }
 
@@ -342,8 +415,15 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
 {
     auto packet = new Packet("legacy-packet");
     packet->insertAtBack(makeShared<ByteCountChunk>(B(32)));
-
-    auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+    auto legacyMode = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("g(erp)"))->getMode(0);
+    auto legacyDuration = legacyMode->getDuration(B(32));
+    auto legacyPreambleDuration = legacyMode->getPreambleMode()->getDuration();
+    auto legacyHeaderDuration = legacyMode->getHeaderMode()->getDuration();
+    auto trans = new Ieee80211Transmission(radio1, packet,
+            SIMTIME_ZERO, legacyDuration, legacyPreambleDuration, legacyHeaderDuration,
+            legacyDuration - legacyPreambleDuration - legacyHeaderDuration,
+            Coord(), Coord(), Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr, nullptr,
+            legacyMode, channel);
 
     bool possible1 = rxModule1->checkAssigned(trans);
     bool possible2 = rxModule2->checkAssigned(trans);
@@ -361,10 +441,12 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto packet = makeHeMuPacket("he-mu-ppdu-for-legacy", {{rus[0], MacAddress("00:11:22:33:44:55")}});
 
     auto trans = new MockIeee80211Transmission(radio1, packet, mode, channel);
+    const auto& layout = trans->getHePpduLayout();
+    auto preambleDuration = layout->getCommonPreambleDuration();
     auto analogModel = new ScalarReceptionAnalogModel(
-            SimTime(100, SIMTIME_US),
-            SimTime(100, SIMTIME_US),
-            SimTime(800, SIMTIME_US),
+            preambleDuration,
+            SIMTIME_ZERO,
+            layout->getDuration() - preambleDuration,
             Hz(5.18e9),
             Hz(20e6),
             mW(1));
@@ -372,7 +454,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
             radio1,
             trans,
             SIMTIME_ZERO,
-            SimTime(1, SIMTIME_MS),
+            layout->getDuration(),
             Coord(), Coord(),
             Quaternion(), Quaternion(),
             analogModel);
@@ -433,8 +515,6 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
         makeHeModelUser(spanRus[1], MacAddress("66:77:88:99:AA:BB"), B(4 + mpdu2->getByteLength())),
         makeHeModelUser(spanRus[0], MacAddress("00:11:22:33:44:55"), B(4 + mpdu1->getByteLength()))
     };
-    modelUsers[0].ru.index = 8101;
-    modelUsers[1].ru.index = 8102;
     auto modelPpdu = makeHeModelPpdu(modelUsers, false);
     for (auto mpdu : {mpdu2, mpdu1}) {
         auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
@@ -463,36 +543,37 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     delete packet;
 }
 
-// --- Test 8: explicit multi-target NDP reaches each addressed STA as preamble only ---
+// --- Test 8: an explicit single-recipient HE TB feedback NDP reconstructs RXVECTOR ---
 {
-    auto packet = new Packet("he-mu-multi-target-ndp");
-    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    auto packet = new Packet("he-tb-feedback-ndp");
+    auto phyHeader = makeShared<Ieee80211HeTbPhyHeader>();
     phyHeader->setNdp(true);
-    auto ndpRus = calculateHeRus(Hz(5.18e9), Hz(20e6), 2);
-    std::vector<Ieee80211HeUserPhyParameters> modelUsers;
-    int ruIndex = 0;
-    for (const auto& address : {MacAddress("00:11:22:33:44:55"), MacAddress("66:77:88:99:AA:BB")}) {
-        Ieee80211HeMuUserInfo user;
-        user.ruIndex = ndpRus[ruIndex].index;
-        user.ruToneSize = ndpRus[ruIndex].toneSize;
-        user.ruToneOffset = ndpRus[ruIndex].toneOffset;
-        user.staId = computeHeMuStaId(address);
-        user.psduLength = B(0);
-        phyHeader->appendUsers(user);
-        modelUsers.push_back(makeHeModelUser(ndpRus[ruIndex], address, B(0)));
-        ruIndex++;
-    }
-    phyHeader->setChunkLength(B(14));
-    auto decodedHeader = roundTripHeMuPhyHeader(phyHeader);
+    auto ndpRu = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ndpRu.index;
+    user.ruToneSize = ndpRu.toneSize;
+    user.ruToneOffset = ndpRu.toneOffset;
+    user.staId = computeHeMuStaId(MacAddress("66:77:88:99:AA:BB"));
+    user.psduLength = B(0);
+    phyHeader->appendUsers(user);
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(ndpRu, MacAddress("66:77:88:99:AA:BB"), B(0))
+    };
+    phyHeader->setChunkLength(B(8));
+    auto decodedHeader = roundTripHeTbPhyHeader(phyHeader);
     bool runtimeNdpDiscarded = !decodedHeader->getNdp();
     packet->insertAtFront(decodedHeader);
     packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
-    auto modelPpdu = makeHeModelPpdu(modelUsers, true);
+    auto modelPpdu = makeHeModelPpdu(modelUsers, true, HE_TRIGGER_BASED_UPLINK);
     auto received = receiveHeMuPacket(rxModule2, radio1, packet,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
             modelUsers, modelPpdu);
-    bool modelNdp = runtimeNdpDiscarded && received->hasTag<Ieee80211HeMuLegacyPreambleInd>();
-    std::cout << "Transmission model preserves NDP across header round trip: " << (modelNdp ? "PASS" : "FAIL") << "\n";
+    auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
+    bool modelNdp = runtimeNdpDiscarded &&
+            rxVector->getCommon().getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
+            rxVector->getUser().getPsduLength() == B(0);
+    std::cout << "Format-consistent HE TB feedback NDP reconstructs zero-PSDU RXVECTOR: " <<
+            (modelNdp ? "PASS" : "FAIL") << "\n";
     delete received;
     delete packet;
 }
@@ -519,9 +600,13 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto received = receiveHeMuPacket(rxModule2, radio1, packet,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
             modelUsers, modelPpdu);
-    bool zeroLengthData = !received->hasTag<Ieee80211HeMuLegacyPreambleInd>() &&
-            received->hasTag<Ieee80211MpduReceiveInd>();
-    std::cout << "Zero-length non-NDP stays on data path: " << (zeroLengthData ? "PASS" : "FAIL") << "\n";
+    auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
+    bool zeroLengthDataPreserved = !received->hasTag<Ieee80211HeMuLegacyPreambleInd>() &&
+            received->hasTag<Ieee80211MpduReceiveInd>() &&
+            rxVector->getCommon().getPpduFormat() == HE_MU_DOWNLINK &&
+            rxVector->getUser().getPsduLength() == B(0);
+    std::cout << "Zero-length HE MU remains DATA with zero-PSDU RXVECTOR: " <<
+            (zeroLengthDataPreserved ? "PASS" : "FAIL") << "\n";
     delete received;
     delete packet;
 }
@@ -582,8 +667,7 @@ STA1 unassigned in HE MU PPDU: PASS
 STA2 assigned after STA1 omitted: PASS
 STA1 absent from HE MU PPDU: PASS
 STA2 absent from HE MU PPDU: PASS
-STA1 empty HE MU allocation map: PASS
-STA2 empty HE MU allocation map: PASS
+Empty HE MU allocation map rejected: PASS
 STA1 legacy packet without HE MU PHY tag: PASS
 STA2 legacy packet without HE MU PHY tag: PASS
 Legacy receiver gets HE MU duration indication: PASS
@@ -592,7 +676,7 @@ Round-tripped header discards duplicate PSDU lengths: PASS
 Serializer canonicalizes RU indexes and reverses signaling order: PASS
 Transmission model selects unequal second PSDU span: PASS
 TX allocation tag absent after reception: PASS
-Transmission model preserves NDP across header round trip: PASS
-Zero-length non-NDP stays on data path: PASS
+Format-consistent HE TB feedback NDP reconstructs zero-PSDU RXVECTOR: PASS
+Zero-length HE MU remains DATA with zero-PSDU RXVECTOR: PASS
 Oversized model PSDU span rejects leading MPDU: PASS
 .

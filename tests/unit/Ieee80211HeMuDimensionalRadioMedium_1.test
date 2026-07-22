@@ -134,20 +134,34 @@ user.ruIndex = rus[0].index;
 user.ruToneSize = rus[0].toneSize;
 user.ruToneOffset = rus[0].toneOffset;
 user.staId = computeHeMuStaId(rxNetworkInterface->getMacAddress());
+user.psduLength = B(0);
 phyHeader->appendUsers(user);
 phyHeader->setChunkLength(b(16 + 73));
 packet->insertAtFront(phyHeader);
 packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
+Ieee80211HeTxVectorRequest canonicalRequest;
+canonicalRequest.centerFrequency = centerFrequency;
+canonicalRequest.channelBandwidth = channelBandwidth;
+Ieee80211HeUserTxVectorRequest canonicalUser;
+canonicalUser.ru = rus[0];
+canonicalUser.psduLength = user.psduLength;
+canonicalUser.staId = user.staId;
+canonicalRequest.users.push_back(canonicalUser);
+auto canonical = Ieee80211HeTxVectorFactory::create(canonicalRequest);
+ASSERT(canonical);
+auto duration = canonical.getPpduLayout()->getDuration();
+auto preambleDuration = canonical.getPpduLayout()->getCommonPreambleDuration();
 auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(txRadio->getTransmitter());
 auto transmissionAnalogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
-        SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+        preambleDuration, SIMTIME_ZERO, duration - preambleDuration,
         centerFrequency, channelBandwidth, flatTransmitter->getPower());
 auto transmission = new Ieee80211Transmission(
-        txRadio, packet, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
-        SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+        txRadio, packet, SIMTIME_ZERO, duration,
+        preambleDuration, SIMTIME_ZERO, duration - preambleDuration,
         Coord(), Coord(), Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
-        transmissionAnalogModel, mode, channel);
+        transmissionAnalogModel, mode, channel,
+        canonical.getTxVector(), canonical.getPpduLayout());
 
 medium->testAddTransmission(txRadio, transmission);
 auto aggregateAnalogModel = check_and_cast<const DimensionalSignalAnalogModel *>(transmission->getAnalogModel());

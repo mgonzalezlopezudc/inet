@@ -217,58 +217,25 @@ static bool applyHeMuMpduReceiveOutcomes(Packet *packet,
     return true;
 }
 
-static bool matchesHeMuUser(const Ieee80211HeUserPhyParameters& modelUser,
-        const Ieee80211HeMuUserInfo& decodedUser)
+static const Ieee80211HeModelPsduBitRange *findHePsduRange(
+        const Ieee80211Transmission *transmission, uint16_t staId)
 {
-    return modelUser.staId == decodedUser.staId &&
-            modelUser.ru.toneSize == decodedUser.ruToneSize &&
-            modelUser.ru.toneOffset == decodedUser.ruToneOffset &&
-            modelUser.mcs == decodedUser.mcs &&
-            modelUser.numberOfSpatialStreams == decodedUser.numberOfSpatialStreams &&
-            modelUser.dcm == decodedUser.dcm;
-}
-
-static bool validateHeMuModelBoundary(const Ieee80211Transmission *transmission,
-        const Ptr<const Ieee80211HePhyHeader>& decodedHeader, b dataFieldLength)
-{
-    const auto& users = transmission->getHeUserPhyParameters();
-    const auto& ppdu = transmission->getHePpduParameters();
-    if (decodedHeader->getUsersArraySize() != users.size())
-        return false;
-
-    // HE-SIG-B serialization may arrange users by content channel. Match each
-    // decoded user exactly once instead of making serialized order authoritative
-    // for the transmitter's stable PSDU concatenation order.
-    std::vector<bool> matched(users.size(), false);
-    for (unsigned int i = 0; i < decodedHeader->getUsersArraySize(); ++i) {
-        const auto& decodedUser = decodedHeader->getUsers(i);
-        int match = -1;
-        for (size_t j = 0; j < users.size(); ++j) {
-            if (!matched[j] && matchesHeMuUser(users[j], decodedUser)) {
-                if (match != -1)
-                    return false;
-                match = j;
-            }
-        }
-        if (match == -1)
-            return false;
-        matched[match] = true;
+    auto layout = transmission->getHePpduLayout();
+    if (!layout)
+        return nullptr;
+    const Ieee80211HeModelPsduBitRange *result = nullptr;
+    for (const auto& range : layout->getPsduBitRanges()) {
+        if (range.getStaId() != staId)
+            continue;
+        if (result != nullptr)
+            return nullptr;
+        result = &range;
     }
-
-    B totalLength(0);
-    for (const auto& user : users) {
-        auto psduLength = user.psduLength.get();
-        if (psduLength < 0 || totalLength.get() > std::numeric_limits<int64_t>::max() - psduLength)
-            return false;
-        totalLength += user.psduLength;
-        if (ppdu.common.ndp && user.psduLength != B(0))
-            return false;
-    }
-    return ppdu.common.ndp ? dataFieldLength == b(0) : dataFieldLength == b(totalLength);
+    return result;
 }
 
 static Packet *extractHeMuMpdu(const Ieee80211Transmission *transmission,
-        const Ptr<const Ieee80211HePhyHeader>& decodedHeader, uint16_t staId)
+        uint16_t staId, size_t& selectedUserIndex)
 {
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
             Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
@@ -276,31 +243,20 @@ static Packet *extractHeMuMpdu(const Ieee80211Transmission *transmission,
     auto transmittedPacket = transmission->getPacket();
     auto packetCopy = transmittedPacket->dup();
     packetCopy->popAtFront<Ieee80211HePhyHeader>(b(-1), parsingFlags);
-    if (!validateHeMuModelBoundary(transmission, decodedHeader, packetCopy->getDataLength())) {
-        // A model/wire disagreement is not a partially decodable PSDU. Reject
-        // extraction so the caller exposes only the legacy-visible preamble.
+    auto layout = transmission->getHePpduLayout();
+    auto range = findHePsduRange(transmission, staId);
+    if (!layout || layout->isNdp() || range == nullptr ||
+            layout->getPsduBitRanges().empty() ||
+            packetCopy->getDataLength() != layout->getPsduBitRanges().back().getEndBitOffset()) {
         delete packetCopy;
         return nullptr;
     }
-    const auto& users = transmission->getHeUserPhyParameters();
-    B offset(0);
-    B selectedLength(-1);
-    for (const auto& user : users) {
-        if (user.staId == staId) {
-            selectedLength = user.psduLength;
-            break;
-        }
-        offset += user.psduLength;
-    }
-    if (selectedLength == B(-1) || transmission->getHePpduParameters().common.ndp) {
-        delete packetCopy;
-        return nullptr;
-    }
-    if (offset > B(0))
-        packetCopy->popAtFront(offset, parsingFlags);
+    selectedUserIndex = range->getUserIndex();
+    if (range->getStartBitOffset() > b(0))
+        packetCopy->popAtFront(range->getStartBitOffset(), parsingFlags);
     auto mpdu = new Packet(transmittedPacket->getName());
-    if (selectedLength > B(0))
-        mpdu->insertAtBack(packetCopy->popAtFront(selectedLength, parsingFlags));
+    if (range->getBitLength() > b(0))
+        mpdu->insertAtBack(packetCopy->popAtFront(range->getBitLength(), parsingFlags));
     auto indication = mpdu->addTagIfAbsent<Ieee80211MpduReceiveInd>();
     auto parser = mpdu->dup();
     B mpduOffset(0);
@@ -342,9 +298,10 @@ static Packet *extractHeMuMpdu(const Ieee80211Transmission *transmission,
 }
 
 static Packet *buildHeMuPhyPacket(const Ieee80211Transmission *transmission,
-        const Ptr<const Ieee80211HePhyHeader>& phyHeader, uint16_t staId)
+        const Ptr<const Ieee80211HePhyHeader>& phyHeader, uint16_t staId,
+        size_t& selectedUserIndex)
 {
-    auto packet = extractHeMuMpdu(transmission, phyHeader, staId);
+    auto packet = extractHeMuMpdu(transmission, staId, selectedUserIndex);
     if (packet == nullptr)
         return nullptr;
     auto phyHeaderCopy = copyHeMuPhyHeader(phyHeader);
@@ -352,6 +309,38 @@ static Packet *buildHeMuPhyPacket(const Ieee80211Transmission *transmission,
     packet->insertAtFront(phyHeaderCopy);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
     return packet;
+}
+
+static void attachHeRxVector(Packet *packet, const Ieee80211Transmission *transmission,
+        std::optional<size_t> userIndex, std::optional<uint16_t> staId, B receivedPsduLength)
+{
+    auto txVector = transmission->getHeTxVector();
+    auto layout = transmission->getHePpduLayout();
+    if (!txVector || !layout)
+        throw cRuntimeError("HE reception is missing its canonical TXVECTOR/PPDU layout");
+    Ieee80211HeRxVectorReconstructionRequest request;
+    request.selection.userIndex = userIndex;
+    request.selection.staId = staId;
+    request.receivedPsduLength = receivedPsduLength;
+    auto result = Ieee80211HeRxVectorFactory::reconstruct(*txVector, *layout, request);
+    if (!result)
+        throw cRuntimeError("Cannot reconstruct HE RXVECTOR: %s (%s)",
+                result.getContext().fieldName.c_str(), result.getContext().detail.c_str());
+    packet->addTag<Ieee80211HeRxVectorInd>()->setRxVector(result.getRxVector());
+}
+
+static B getObservedHePsduLength(const Packet *packet)
+{
+    constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT |
+            Chunk::PF_ALLOW_INCOMPLETE | Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED |
+            Chunk::PF_ALLOW_REINTERPRETATION;
+    auto packetCopy = packet->dup();
+    packetCopy->popAtFront<Ieee80211HePhyHeader>(b(-1), parsingFlags);
+    auto bitLength = packetCopy->getDataLength().get<b>();
+    delete packetCopy;
+    if (bitLength % 8 != 0)
+        throw cRuntimeError("Received HE PSDU length is not byte aligned");
+    return B(bitLength / 8);
 }
 
 static Packet *buildLegacyHeMuPreambleIndication(const Ptr<const Ieee80211HePhyHeader>& phyHeader, const IReception *reception)
@@ -734,22 +723,40 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr) {
             lastHeRuAssigned = true;
             auto packet = transmittedPacket->dup();
+            packet->clearTags();
+            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
             if (!isReceptionSuccessful(decisions))
                 packet->setBitError(true);
             addReceptionIndications(packet, reception, interference, snir);
             packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
             packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+            auto layout = transmission->getHePpduLayout();
+            if (!layout || layout->getUsers().size() != 1)
+                throw cRuntimeError("Packet-level HE TB reception requires exactly one canonical user");
+            attachHeRxVector(packet, transmission, 0, layout->getUsers().front().staId,
+                    getObservedHePsduLength(packet));
+            auto recipientParameters = std::shared_ptr<const Ieee80211HeUserPhyParameters>(
+                    layout, &layout->getUsers().front());
+            packet->addTag<Ieee80211HeTbRecipientContextInd>()->setRecipientParameters(
+                    std::move(recipientParameters));
             return new ReceptionResult(reception, decisions, packet);
         }
         auto networkInterface = getContainingNicModule(this);
         auto myStaId = resolveHeMuStaIdForReception(networkInterface, networkInterface->getMacAddress());
         lastHeRuAssigned = myStaId.has_value() && containsHeMuUser(allocationPhyHeader, *myStaId);
-        auto packet = myStaId.has_value() && containsHeMuUser(allocationPhyHeader, *myStaId) &&
-                modeSet->containsMode(transmission->getMode())
-                ? buildHeMuPhyPacket(transmission, allocationPhyHeader, *myStaId)
+        size_t selectedUserIndex = 0;
+        bool decodedPsdu = myStaId.has_value() && findHePsduRange(transmission, *myStaId) != nullptr &&
+                modeSet->containsMode(transmission->getMode());
+        auto packet = decodedPsdu
+                ? buildHeMuPhyPacket(transmission, allocationPhyHeader, *myStaId, selectedUserIndex)
                 : buildLegacyHeMuPreambleIndication(allocationPhyHeader, reception);
-        if (packet == nullptr)
+        if (packet == nullptr) {
+            decodedPsdu = false;
             packet = buildLegacyHeMuPreambleIndication(allocationPhyHeader, reception);
+        }
+        if (decodedPsdu)
+            attachHeRxVector(packet, transmission, selectedUserIndex, myStaId,
+                    getObservedHePsduLength(packet));
         if (!applyHeMuMpduReceiveOutcomes(packet, decisions, getRNG(0)))
             packet->setBitError(true);
         addReceptionIndications(packet, reception, interference, snir);
@@ -766,6 +773,8 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     auto packet = const_cast<Packet *>(receptionResult->getPacket());
     packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
     packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+    if (hePhyHeader != nullptr)
+        attachHeRxVector(packet, transmission, {}, {}, getObservedHePsduLength(packet));
     return receptionResult;
 }
 

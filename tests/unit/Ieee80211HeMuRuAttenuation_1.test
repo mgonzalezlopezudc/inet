@@ -3,6 +3,7 @@ Test HE MU RU attenuation behavior — verifies that each RU sub-channel is atte
 based on its own center frequency and bandwidth, not the aggregate channel.
 
 %includes:
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
@@ -81,19 +82,50 @@ network = TestNetwork
 using namespace inet;
 using namespace inet::physicallayer;
 
+static Ieee80211HeTxVectorValidationResult makeCanonicalPair(const Packet *packet)
+{
+    auto phyHeader = packet->peekAtFront<Ieee80211HePhyHeader>();
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = Hz(5.18e9);
+    request.channelBandwidth = MHz(20);
+    request.ppduFormat = getIeee80211HePpduFormat(*phyHeader);
+    request.bssColor = phyHeader->getBssColor();
+    request.uplink = request.ppduFormat == HE_TRIGGER_BASED_UPLINK;
+    for (unsigned int i = 0; i < phyHeader->getUsersArraySize(); i++) {
+        const auto& projected = phyHeader->getUsers(i);
+        Ieee80211HeUserTxVectorRequest user;
+        user.ru.index = projected.ruIndex;
+        user.ru.toneSize = projected.ruToneSize;
+        user.ru.toneOffset = projected.ruToneOffset;
+        user.staId = projected.staId;
+        user.mcs = projected.mcs;
+        user.numberOfSpatialStreams = projected.numberOfSpatialStreams;
+        user.streamStartIndex = projected.streamStartIndex;
+        user.dcm = projected.dcm;
+        user.coding = static_cast<Ieee80211HeCoding>(phyHeader->getCoding());
+        user.psduLength = projected.psduLength;
+        request.users.push_back(user);
+    }
+    return Ieee80211HeTxVectorFactory::create(request);
+}
+
 class MockIeee80211Transmission : public Ieee80211Transmission
 {
   public:
     MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode, const Ieee80211Channel *channel)
+        : MockIeee80211Transmission(transmitter, packet, mode, channel, makeCanonicalPair(packet)) {}
+    MockIeee80211Transmission(const IRadio *transmitter, const Packet *packet, const IIeee80211Mode *mode,
+            const Ieee80211Channel *channel, const Ieee80211HeTxVectorValidationResult& canonical)
         : Ieee80211Transmission(
             transmitter,
             packet,
-            0.0, 0.0, // startTime, endTime
-            0.0, 0.0, 0.0, // preamble, header, data duration
+            SIMTIME_ZERO, canonical.getPpduLayout()->getDuration(),
+            canonical.getPpduLayout()->getCommonPreambleDuration(), SIMTIME_ZERO,
+            canonical.getPpduLayout()->getDuration() - canonical.getPpduLayout()->getCommonPreambleDuration(),
             Coord(), Coord(), // start, end position
             Quaternion(), Quaternion(), // start, end orientation
             nullptr, nullptr, nullptr, nullptr, nullptr, // models
-            mode, channel
+            mode, channel, canonical.getTxVector(), canonical.getPpduLayout()
         ) {}
 };
 

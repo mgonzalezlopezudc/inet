@@ -102,6 +102,11 @@ struct Ieee80211HeTxopDuration
 {
     bool unspecified = true;
     uint16_t durationUs = 0;
+
+    bool operator==(const Ieee80211HeTxopDuration& other) const
+    {
+        return unspecified == other.unspecified && durationUs == other.durationUs;
+    }
 };
 
 /**
@@ -192,7 +197,8 @@ struct Ieee80211HeSigAFields
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
     uint8_t bssColor = 0;           // 6-bit BSS Color identifier (1-63, 0 means disabled)
     bool uplink = false;
-    int txopDurationUs = 0;         // Remaining duration of the TXOP (NAV protection)
+    bool txopUnspecified = true;
+    int txopDurationUs = 0;         // Decoded, wire-quantized remaining TXOP duration
     bool doppler = false;
     bool stbc = false;              // Space-Time Block Coding indicator
 };
@@ -320,6 +326,8 @@ enum class Ieee80211HeValidationErrorCode {
     INVALID_DATA_RATE = 20,
     PPDU_DURATION_EXCEEDED = 21,
     INTERNAL_ERROR = 22,
+    INVALID_BSS_COLOR = 23,
+    INVALID_TXOP_DURATION = 24,
 };
 
 /** Machine-readable location and human-readable detail for an HE validation error. */

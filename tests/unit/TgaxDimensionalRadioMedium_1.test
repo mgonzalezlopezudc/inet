@@ -312,17 +312,32 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
     packet->insertAtFront(phyHeader);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
 
-    auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(sourceRadio->getTransmitter());
     auto transmissionCenterFrequency = triggerBasedUplink ? assignedRu.centerFrequency : centerFrequency;
     auto transmissionBandwidth = triggerBasedUplink ? assignedRu.bandwidth : channelBandwidth;
+    Ieee80211HeTxVectorRequest canonicalRequest;
+    canonicalRequest.centerFrequency = centerFrequency;
+    canonicalRequest.channelBandwidth = channelBandwidth;
+    canonicalRequest.ppduFormat = triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK;
+    Ieee80211HeUserTxVectorRequest canonicalUser;
+    canonicalUser.ru = assignedRu;
+    canonicalUser.psduLength = B(100);
+    canonicalUser.staId = user.staId;
+    canonicalUser.streamStartIndex = user.streamStartIndex;
+    canonicalRequest.users.push_back(canonicalUser);
+    auto canonical = Ieee80211HeTxVectorFactory::create(canonicalRequest);
+    ASSERT(canonical);
+    auto duration = canonical.getPpduLayout()->getDuration();
+    auto preambleDuration = canonical.getPpduLayout()->getCommonPreambleDuration();
+    auto flatTransmitter = check_and_cast<const FlatTransmitterBase *>(sourceRadio->getTransmitter());
     auto transmissionAnalogModel = flatTransmitter->getAnalogModel()->createAnalogModel(
-            SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+            preambleDuration, SIMTIME_ZERO, duration - preambleDuration,
             transmissionCenterFrequency, transmissionBandwidth, flatTransmitter->getPower());
     return new Ieee80211Transmission(
-            sourceRadio, packet, SIMTIME_ZERO, SimTime(1, SIMTIME_MS),
-            SimTime(100, SIMTIME_US), SimTime(100, SIMTIME_US), SimTime(800, SIMTIME_US),
+            sourceRadio, packet, SIMTIME_ZERO, duration,
+            preambleDuration, SIMTIME_ZERO, duration - preambleDuration,
             Coord(), Coord(), Quaternion(), Quaternion(), nullptr, nullptr, nullptr, nullptr,
-            transmissionAnalogModel, mode, channel);
+            transmissionAnalogModel, mode, channel,
+            canonical.getTxVector(), canonical.getPpduLayout());
 };
 
 auto transmitterGain = txRadio->getAntenna()->getGain().get();
@@ -363,8 +378,9 @@ auto computeAndCheckFadingFactor = [&](Ieee80211Transmission *transmission) {
         fadingFactors.push_back(sampleFadingFactor);
     };
 
-    auto earlyDataTime = reception->getStartTime() + SimTime(250, SIMTIME_US);
-    auto lateDataTime = reception->getStartTime() + SimTime(750, SIMTIME_US);
+    auto dataStartTime = reception->getStartTime() + transmission->getPreambleDuration();
+    auto earlyDataTime = dataStartTime + transmission->getDataDuration() / 3;
+    auto lateDataTime = dataStartTime + transmission->getDataDuration() * 2 / 3;
     checkSample(earlyDataTime, rus[0].centerFrequency - rus[0].bandwidth / 4);
     checkSample(earlyDataTime, rus[0].centerFrequency);
     checkSample(earlyDataTime, rus[0].centerFrequency + rus[0].bandwidth / 4);

@@ -57,6 +57,15 @@ namespace inet {
 
 namespace physicallayer {
 
+static uint8_t encodeCanonicalHeTxopDuration(const Ieee80211HeCommonPhyParameters& common)
+{
+    if (common.sigA.txopUnspecified)
+        return 127;
+    return common.sigA.txopDurationUs < 512 ?
+            (common.sigA.txopDurationUs / 8) << 1 :
+            1 | ((common.sigA.txopDurationUs - 512) / 128) << 1;
+}
+
 Define_Module(Ieee80211Transmitter);
 
 Ieee80211Transmitter::~Ieee80211Transmitter()
@@ -284,14 +293,19 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     W transmissionPower = computeTransmissionPower(packet);
     Hz transmissionBandwidth = transmissionMode->getDataMode()->getBandwidth();
     int requiredSpatialStreams = transmissionMode->getDataMode()->getNumberOfSpatialStreams();
+    std::shared_ptr<const Ieee80211HeTxVector> heTxVector;
+    std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout;
     if (heMuHeader != nullptr) {
-        if (heMuHeader->getMuMimo()) {
-            requiredSpatialStreams = heMuHeader->getTotalNsts();
-        } else {
-            for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i)
-                requiredSpatialStreams = std::max(requiredSpatialStreams,
-                        (int)heMuHeader->getUsers(i).numberOfSpatialStreams);
-        }
+        auto handoff = packet->findTag<Ieee80211HeTxVectorReq>();
+        if (handoff == nullptr || !handoff->getTxVector() || !handoff->getPpduLayout())
+            throw cRuntimeError("HE transmission is missing its canonical TXVECTOR/PPDU-layout handoff");
+        heTxVector = handoff->getTxVector();
+        hePpduLayout = handoff->getPpduLayout();
+        if (!hePpduLayout->matches(*heTxVector))
+            throw cRuntimeError("HE transmission has a mismatched canonical TXVECTOR/PPDU-layout handoff");
+        for (const auto& user : hePpduLayout->getUsers())
+            requiredSpatialStreams = std::max(requiredSpatialStreams,
+                    user.streamStartIndex + user.numberOfSpatialStreams);
     }
     if (requiredSpatialStreams > transmitter->getAntenna()->getNumAntennas())
         throw cRuntimeError("Number of spatial streams is higher than the number of antennas");
@@ -303,84 +317,63 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
     // HT 19.4.3, and VHT 21.4.3. The analog model then splits the result into
     // preamble, header/signaling, and DATA intervals.
     Hz transmissionCenterFrequency = centerFrequency;
-    std::vector<Ieee80211HeUserPhyParameters> heUserPhyParameters;
-    Ieee80211HePpduParameters hePpduParameters;
     if (heMuHeader != nullptr) {
-        auto ppduFormat = getIeee80211HePpduFormat(*heMuHeader);
-        bool modeDerivedSingleUser = heMuHeader->getUsersArraySize() == 0 &&
-                (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU);
-        // Clause 27.3.2.2 fixes HE subcarrier spacing at 78.125 kHz. The PHY
-        // header carries canonical RU tone size/offset values; these are
-        // resolved into the calculator's RU model before duration validation.
-        int channelTones = getHeChannelToneCount(transmissionBandwidth);
-        std::vector<Ieee80211HeUserPhyParameters> requestedUsers;
-        for (unsigned int i = 0; i < heMuHeader->getUsersArraySize(); ++i) {
-            const auto& user = heMuHeader->getUsers(i);
-            auto ru = makeHeRu(centerFrequency, channelTones, user.ruIndex,
-                    std::max<int>(user.ruToneSize, 26), user.ruToneOffset);
-            Ieee80211HeUserPhyParameters requested;
-            requested.ru = ru;
-            requested.mcs = user.mcs;
-            requested.numberOfSpatialStreams = user.numberOfSpatialStreams;
-            requested.dcm = user.dcm;
-            requested.coding = static_cast<Ieee80211HeCoding>(heMuHeader->getCoding());
-            requested.psduLength = user.psduLength;
-            requested.streamStartIndex = user.streamStartIndex;
-            requested.staId = user.staId;
-            requestedUsers.push_back(requested);
-        }
-        auto guardInterval = static_cast<Ieee80211HeGuardInterval>(heMuHeader->getGuardInterval());
-        Ieee80211HePhyValidationResult calculation;
-        if (modeDerivedSingleUser) {
-            calculation.valid = true;
-            calculation.parameters.common.ppduFormat = ppduFormat;
-            calculation.parameters.common.channelBandwidth = transmissionBandwidth;
-            calculation.parameters.common.guardInterval = guardInterval;
-            calculation.parameters.common.commonPreambleDuration = preambleDuration;
-            calculation.parameters.duration = duration;
+        if (getIeee80211HePpduFormat(*heMuHeader) != hePpduLayout->getPpduFormat() ||
+                heMuHeader->getNdp() != hePpduLayout->isNdp() ||
+                heMuHeader->getBssColor() != heTxVector->getCommon().getParameters().sigA.bssColor ||
+                heMuHeader->getGuardInterval() != hePpduLayout->getGuardInterval() ||
+                heMuHeader->getPacketExtensionDurationUs() != hePpduLayout->getPacketExtensionDurationUs() ||
+                heMuHeader->getCommonDuration() != hePpduLayout->getDuration())
+            throw cRuntimeError("HE PHY header disagrees with the canonical TXVECTOR/PPDU layout");
+        const auto ppduFormat = hePpduLayout->getPpduFormat();
+        const auto& canonicalCommon = heTxVector->getCommon().getParameters();
+        const Ieee80211HeSuErSignalingFields *signaling = nullptr;
+        if (ppduFormat == HE_SINGLE_USER)
+            signaling = &dynamicPtrCast<const Ieee80211HeSuPhyHeader>(heMuHeader)->getSignaling();
+        else if (ppduFormat == HE_EXTENDED_RANGE_SU)
+            signaling = &dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(heMuHeader)->getSignaling();
+        if (signaling != nullptr && signaling->signalingValid &&
+                (signaling->uplink != canonicalCommon.sigA.uplink ||
+                 signaling->bssColor != canonicalCommon.sigA.bssColor ||
+                 signaling->doppler != canonicalCommon.sigA.doppler ||
+                 signaling->txop != encodeCanonicalHeTxopDuration(canonicalCommon)))
+            throw cRuntimeError("HE SU/ER signaling disagrees with the canonical TXVECTOR");
+        const auto& canonicalUsers = hePpduLayout->getUsers();
+        if (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU) {
+            if (heMuHeader->getUsersArraySize() != 0)
+                throw cRuntimeError("HE SU/ER PHY header must not contain a per-user array");
         }
         else {
-            calculation = computeHePpduParameters(requestedUsers, transmissionBandwidth,
-                    ppduFormat, guardInterval, getHeDefaultLtfType(guardInterval),
-                    heMuHeader->getPacketExtensionDurationUs());
+            if (heMuHeader->getUsersArraySize() != canonicalUsers.size())
+                throw cRuntimeError("HE MU/TB PHY header user count disagrees with the canonical PPDU layout");
+            for (size_t i = 0; i < canonicalUsers.size(); i++) {
+                const auto& projected = heMuHeader->getUsers(i);
+                const auto& canonical = canonicalUsers[i];
+                if (projected.ruIndex != canonical.ru.index ||
+                        projected.ruToneSize != canonical.ru.toneSize ||
+                        projected.ruToneOffset != canonical.ru.toneOffset ||
+                        projected.staId != canonical.staId || projected.mcs != canonical.mcs ||
+                        projected.numberOfSpatialStreams != canonical.numberOfSpatialStreams ||
+                        projected.dcm != canonical.dcm || projected.psduLength != canonical.psduLength ||
+                        projected.duration != hePpduLayout->getDuration() ||
+                        projected.streamStartIndex != canonical.streamStartIndex ||
+                        heMuHeader->getCoding() != canonical.coding)
+                    throw cRuntimeError("HE MU/TB PHY header user %zu disagrees with the canonical PPDU layout", i);
+            }
         }
-        if (!calculation)
-            throw cRuntimeError("Invalid planned HE MU PPDU: %s", calculation.error.c_str());
-        calculation.parameters.common.ndp = heMuHeader->getNdp();
-        hePpduParameters = calculation.parameters;
-        if (dynamicPtrCast<const Ieee80211HeMuPhyHeader>(phyHeader) != nullptr &&
-                heMuHeader->getCommonDuration() > SIMTIME_ZERO &&
-                heMuHeader->getCommonDuration() != calculation.parameters.duration)
-            throw cRuntimeError("Serialized HE MU duration does not match the resolved PHY parameters");
-        bool validatedSuErSignaling = false;
-        if (auto suHeader = dynamicPtrCast<const Ieee80211HeSuPhyHeader>(phyHeader))
-            validatedSuErSignaling = suHeader->getSignaling().signalingValid;
-        else if (auto erSuHeader = dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(phyHeader))
-            validatedSuErSignaling = erSuHeader->getSignaling().signalingValid;
-        if (validatedSuErSignaling) {
-            if (heMuHeader->getCommonDuration() <= SIMTIME_ZERO)
-                throw cRuntimeError("Validated HE SU/ER signaling has no authoritative TXTIME");
-            duration = heMuHeader->getCommonDuration();
-        }
-        else
-            duration = std::max(heMuHeader->getCommonDuration(), calculation.parameters.duration);
-        hePpduParameters.duration = duration;
-        heUserPhyParameters = hePpduParameters.users;
-        for (auto& user : heUserPhyParameters)
-            user.duration = duration;
-        preambleDuration = hePpduParameters.common.commonPreambleDuration;
+        duration = hePpduLayout->getDuration();
+        preambleDuration = hePpduLayout->getCommonPreambleDuration();
         // The packet-level HE preamble duration already includes HE-SIG-A
         // (and its ER-SU repetition), so a separate header interval would
         // count HE signaling twice and shorten the analog DATA interval.
         headerDuration = SIMTIME_ZERO;
-        if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr && heMuHeader->getUsersArraySize() == 1) {
+        if (hePpduLayout->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
+                hePpduLayout->getUsers().size() == 1) {
             // HE TB responses occupy the RU assigned by the Trigger frame
             // User Info field (Clause 9.3.1.22 and Clause 27.3.4). The
             // packet-level analog model narrows the transmit center
             // frequency/bandwidth to that RU for single-user UL-TB transmissions.
-            const auto& user = heMuHeader->getUsers(0);
-            auto ru = makeHeRu(centerFrequency, channelTones,
-                    user.ruIndex, user.ruToneSize, user.ruToneOffset);
+            const auto& ru = hePpduLayout->getUsers().front().ru;
             transmissionBandwidth = ru.bandwidth;
             transmissionCenterFrequency = ru.centerFrequency;
             if (auto request = packet->findTag<Ieee80211HeMuReq>())
@@ -408,7 +401,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         lastHeCenterFrequency = transmissionCenterFrequency;
         lastHeBandwidth = transmissionBandwidth;
         lastHeTransmitPower = transmissionPower;
-        lastHeUserPhyParameters = heUserPhyParameters;
+        lastHeUserPhyParameters = hePpduLayout->getUsers();
     }
     else {
         lastHePpduFormat = -1;
@@ -423,7 +416,7 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         lastHeTransmitPower = transmissionPower;
         lastHeUserPhyParameters.clear();
     }
-    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heUserPhyParameters, hePpduParameters);
+    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heTxVector, hePpduLayout);
 }
 
 } // namespace physicallayer
