@@ -57,6 +57,28 @@ enum Ieee80211HeCoding {
     HE_CODING_LDPC = 1              // Low-Density Parity-Check Coding
 };
 
+/** Source of the common HE-TB timing and padding parameters. */
+enum class Ieee80211HeTriggerMethod {
+    NONE,
+    TRIGGER_FRAME,
+    TRS,
+};
+
+/**
+ * Trigger-derived HE-TB inputs that are common to all solicited users.
+ * TRS is represented explicitly, but remains unsupported until a producer
+ * supplies its UL Data Symbols value.
+ */
+struct Ieee80211HeTbCalculationContext
+{
+    Ieee80211HeTriggerMethod triggerMethod = Ieee80211HeTriggerMethod::NONE;
+    uint16_t ulLength = 0;
+    int preFecPaddingFactor = 0; // semantic a, in the range 1..4
+    bool ldpcExtraSymbolSegment = false;
+    bool peDisambiguity = false;
+    int numberOfHeLtfSymbols = 0;
+};
+
 /**
  * HE long-training-field (HE-LTF) duration multiplier.
  * IEEE 802.11-2024 Clause 27.3.11.10 and Table 27-32.
@@ -203,7 +225,6 @@ INET_API uint32_t getIeee80211HeSignalExtensionNs(Ieee80211HeOperatingBand opera
         bool noSignalExtension);
 INET_API uint32_t getIeee80211HeSignalExtensionNs(Hz centerFrequency,
         bool noSignalExtension);
-
 /**
  * HE-SIG-A fields shared by every user in the PPDU.
  * IEEE 802.11-2024 Table 27-21 ("HE-SIG-A field of an HE MU PPDU").
@@ -248,7 +269,9 @@ struct Ieee80211HeCommonPhyParameters
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US;
     Ieee80211HeLtfType ltfType = HE_LTF_4X;
     int numberOfHeLtfSymbols = 1;
+    int preFecPaddingFactor = 0; // common final a; zero only when the Data field is absent
     bool ldpcExtraSymbol = false;
+    int nominalPacketExtensionDurationUs = 0;
     int packetExtensionDurationUs = 0;
     Ieee80211HeSigAFields sigA;
     Ieee80211HeSigBFields sigB;
@@ -275,19 +298,40 @@ struct Ieee80211HeUserPhyParameters
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US; // compatibility
     Ieee80211HeCoding coding = HE_CODING_BCC;
     B psduLength = B(0);
+    int nominalPacketPaddingDurationUs = 0;
     int streamStartIndex = 0;
     uint16_t staId = 0;
     int numberOfEncoders = 1;
     int codedBitsPerSymbol = 0;
     int dataBitsPerSymbol = 0;
+    int shortDataSubcarriers = 0;
+    int shortCodedBitsPerSymbol = 0;
+    int shortDataBitsPerSymbol = 0;
     int serviceBits = 16;
     int tailBits = 6;
+    int64_t payloadAndServiceBits = 0;
+    int excessBits = 0;
+    int individualInitialPreFecPaddingFactor = 0;
+    int individualInitialNumberOfDataSymbols = 0;
+    int initialPreFecPaddingFactor = 0;
+    int initialNumberOfDataSymbols = 0;
+    int initialLastCodedBitsPerSymbol = 0;
+    int initialLastDataBitsPerSymbol = 0;
+    int finalLastCodedBitsPerSymbol = 0;
+    int finalLastDataBitsPerSymbol = 0;
+    int preFecPaddingBits = 0;
+    int macPreFecPaddingBits = 0;
+    int phyPreFecPaddingBits = 0;
+    int bccCodedPaddingBits = 0;
     // Packet-level representation of the HE LDPC encoder. These fields are
     // deliberately retained in the common calculator result so scheduling,
     // transmission and reception cannot silently use different assumptions.
     int ldpcCodewordLength = 0;
     int ldpcCodewordCount = 0;
+    int ldpcPayloadBits = 0;
+    int ldpcAvailableBits = 0;
     int ldpcShorteningBits = 0;
+    int ldpcPuncturingBits = 0;
     int ldpcRepetitionBits = 0;
     int preFecPaddingFactor = 4;
     int postFecPaddingBits = 0;
@@ -306,6 +350,22 @@ struct Ieee80211HePpduParameters
     std::vector<Ieee80211HeUserPhyParameters> users;
     int commonNumberOfDataSymbols = 0;
     simtime_t duration = SIMTIME_ZERO;
+};
+
+/** Exact Table 19-16 LDPC codeword selection and extra-segment predicates. */
+struct Ieee80211HeLdpcCalculationResult
+{
+    bool valid = false;
+    std::string error;
+    int codewordCount = 0;
+    int codewordLength = 0;
+    int shorteningBits = 0;
+    int puncturingBits = 0;
+    bool primaryExtraSymbolCondition = false;
+    bool extremePuncturingCondition = false;
+    bool extraSymbolRequired = false;
+
+    explicit operator bool() const { return valid; }
 };
 
 inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeUserPhyParameters& user)
@@ -356,6 +416,9 @@ enum class Ieee80211HeValidationErrorCode {
     INVALID_TXOP_DURATION = 24,
     INVALID_L_SIG_LENGTH = 25,
     UNSUPPORTED_DOPPLER_TIMING = 26,
+    INVALID_NOMINAL_PACKET_PADDING = 27,
+    INVALID_TRIGGER_CONTEXT = 28,
+    UNSUPPORTED_STBC = 29,
 };
 
 /** Machine-readable location and human-readable detail for an HE validation error. */
@@ -378,6 +441,41 @@ struct Ieee80211HePhyValidationResult
     Ieee80211HeValidationContext context;
     // Compatibility diagnostic; new callers should use errorCode and context.
     std::string error;
+    Ieee80211HePpduParameters parameters;
+
+    explicit operator bool() const { return valid; }
+};
+
+/**
+ * Complete PHY inputs for finalizing the common timing fields of a
+ * response-soliciting Trigger frame. When durationBudget is present, the
+ * longest legal HE-TB duration not exceeding it is selected; otherwise the
+ * shortest legal duration that contains every requested PSDU is selected.
+ */
+struct Ieee80211HeTriggerResponseFinalizationRequest
+{
+    std::vector<Ieee80211HeUserPhyParameters> users;
+    Hz centerFrequency = Hz(NaN);
+    Hz channelBandwidth = Hz(NaN);
+    Ieee80211HeGuardInterval guardInterval = HE_GI_1_6_US;
+    Ieee80211HeLtfType ltfType = HE_LTF_2X;
+    int packetExtensionDurationUs = 0;
+    bool noSignalExtension = false;
+    std::optional<simtime_t> durationBudget;
+};
+
+/** Canonical common Trigger fields and the resolved HE-TB calculation. */
+struct Ieee80211HeTriggerResponseFinalizationResult
+{
+    bool valid = false;
+    Ieee80211HeValidationErrorCode errorCode = Ieee80211HeValidationErrorCode::NONE;
+    Ieee80211HeValidationContext context;
+    std::string error;
+    uint16_t ulLength = 0;
+    simtime_t commonDuration = SIMTIME_ZERO;
+    bool commonDurationExact = false;
+    bool peDisambiguity = false;
+    simtime_t resolvedTxTime = SIMTIME_ZERO;
     Ieee80211HePpduParameters parameters;
 
     explicit operator bool() const { return valid; }
@@ -553,6 +651,15 @@ int getHeSigBSymbolCount(const Ieee80211HeSigBCommonField& commonField,
         Hz channelBandwidth, int mcs = 0, bool dcm = false);
 
 /**
+ * Calculates IEEE 802.11-2024 Table 19-16 LDPC codeword parameters and the
+ * Clause 27.3.12.5.2 extra-symbol conditions without throwing for malformed
+ * scalar input.
+ */
+INET_API Ieee80211HeLdpcCalculationResult computeHeLdpcParameters(
+        int64_t payloadBits, int64_t availableBits,
+        int rateNumerator, int rateDenominator);
+
+/**
  * Validates and calculates a common-duration HE MU or trigger-based PPDU.
  *
  * IEEE 802.11-2024 Clause 27.3.4, Clause 27.3.11.8, and Clause 27.3.12.5.
@@ -567,7 +674,15 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US,
         Ieee80211HeLtfType ltfType = HE_LTF_4X,
         int packetExtensionDurationUs = 0,
-        bool enforceDurationLimit = true);
+        bool enforceDurationLimit = true,
+        const std::optional<Ieee80211HeTbCalculationContext>& tbContext = std::nullopt);
+
+/**
+ * Finalizes UL Length, HE-LTF count, pre-FEC padding, LDPC extra segment,
+ * PE disambiguity, and packet extension through one HE-TB calculation path.
+ */
+INET_API Ieee80211HeTriggerResponseFinalizationResult finalizeHeTriggerResponse(
+        const Ieee80211HeTriggerResponseFinalizationRequest& request);
 
 inline Ieee80211HeUserPhyParameters computeHeUserPhyParameters(
         B psduLength, const Ieee80211HeRu& ru, int mcs,

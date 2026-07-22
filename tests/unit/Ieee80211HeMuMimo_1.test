@@ -2,16 +2,22 @@
 Test IEEE 802.11ax Downlink MU-MIMO capabilities, sounding sequence, CSI manager, and scheduler stream apportionment.
 
 %includes:
+#include <algorithm>
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/common/Units.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.scheduler.HeDlSchedulerEqualSizedRUs;
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
 
 network TestNetwork
 {
@@ -21,6 +27,7 @@ network TestNetwork
             parameters:
                 schedulingFunction = "fBW";
         }
+        mib: Ieee80211Mib;
 }
 
 %inifile: omnetpp.ini
@@ -32,6 +39,16 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 using namespace inet::units::values;
+
+class TestHeSoundingFs : public HeSoundingFs
+{
+  public:
+    using HeSoundingFs::HeSoundingFs;
+    Packet *buildBfrpTriggerFrameForTest(FrameSequenceContext *context)
+    {
+        return buildBfrpTriggerFrame(context);
+    }
+};
 
 %activity:
 // 1. Test Capabilities & Gating Validation
@@ -132,10 +149,97 @@ using namespace inet::units::values;
     EV << "Feedback frame serialization round trip passed.\n";
 }
 
+// 4. BFRP producer -> Trigger serializer -> canonical HE-TB response factory.
+{
+    auto requireBfrp = [] (bool condition, const char *message) {
+        if (!condition)
+            throw cRuntimeError("BFRP canonical fixture failed: %s", message);
+    };
+    auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+    mib->address = MacAddress("02:00:00:00:30:00");
+    HeMuMimoCsiManager csi;
+    std::vector<HeSoundingFs::TargetSta> targets = {
+        {MacAddress("02:00:00:00:30:01"), 1, 1},
+        {MacAddress("02:00:00:00:30:02"), 2, 1},
+    };
+    auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+    FrameSequenceContext context(mib->address, modeSet, nullptr, nullptr, nullptr, nullptr, nullptr);
+    TestHeSoundingFs sounding(mib, targets, modeSet, &csi, MHz(20), 7, 99);
+    auto triggerPacket = sounding.buildBfrpTriggerFrameForTest(&context);
+    auto directTrigger = triggerPacket->peekAtFront<Ieee80211TriggerFrame>();
+    requireBfrp(directTrigger->getGuardInterval() == HE_GI_1_6_US,
+            "producer GI is not 1.6 us");
+    requireBfrp(directTrigger->getLtfType() == HE_LTF_2X,
+            "producer HE-LTF type is not 2x");
+    requireBfrp(directTrigger->getNumberOfHeLtfSymbols() >= 1,
+            "producer HE-LTF count is empty");
+    triggerPacket->popAtBack<Ieee80211MacTrailer>(B(4));
+    auto trailer = makeShared<Ieee80211MacTrailer>();
+    trailer->setFcsMode(FCS_COMPUTED);
+    trailer->setFcs(0);
+    triggerPacket->insertAtBack(trailer);
+    auto bytes = triggerPacket->peekDataAsBytes();
+    Packet receivedTrigger("received-bfrp-trigger", bytes);
+    auto decodedTrigger = receivedTrigger.popAtFront<Ieee80211TriggerFrame>(
+            B(24 + 6 * targets.size()));
+    requireBfrp(decodedTrigger->getGuardInterval() == directTrigger->getGuardInterval(),
+            "serialized GI differs from the producer value");
+    requireBfrp(decodedTrigger->getLtfType() == directTrigger->getLtfType(),
+            "serialized HE-LTF type differs from the producer value");
+    requireBfrp(decodedTrigger->getNumberOfHeLtfSymbols() == directTrigger->getNumberOfHeLtfSymbols(),
+            "serialized HE-LTF count differs from the producer value");
+
+    Ieee80211HeTxVectorRequest responseRequest;
+    responseRequest.centerFrequency = Hz(5.18e9);
+    responseRequest.channelBandwidth = MHz(decodedTrigger->getChannelBandwidthMhz());
+    responseRequest.ppduFormat = HE_TRIGGER_BASED_UPLINK;
+    responseRequest.lSigLength = decodedTrigger->getUlLength();
+    responseRequest.noSignalExtension = decodedTrigger->getNoSignalExtension();
+    responseRequest.requestedTxTime = decodedTrigger->getCommonDuration();
+    responseRequest.requestedTxTimeExact = decodedTrigger->getCommonDurationExact();
+    responseRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    responseRequest.preFecPaddingFactor = decodedTrigger->getPreFecPaddingFactor();
+    responseRequest.ldpcExtraSymbolSegment = decodedTrigger->getLdpcExtraSymbolSegment();
+    responseRequest.peDisambiguity = decodedTrigger->getPeDisambiguity();
+    responseRequest.numberOfHeLtfSymbols = decodedTrigger->getNumberOfHeLtfSymbols();
+    responseRequest.guardInterval = static_cast<Ieee80211HeGuardInterval>(decodedTrigger->getGuardInterval());
+    responseRequest.ltfType = static_cast<Ieee80211HeLtfType>(decodedTrigger->getLtfType());
+    responseRequest.packetExtensionDurationUs = decodedTrigger->getPacketExtensionDurationUs();
+    const auto catalog = getHeRuAllocationCatalog(responseRequest.centerFrequency,
+            responseRequest.channelBandwidth);
+    for (unsigned int i = 0; i < decodedTrigger->getUsersArraySize(); ++i) {
+        const auto& triggerUser = decodedTrigger->getUsers(i);
+        auto ru = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& candidate) {
+            return candidate.toneSize == triggerUser.ruToneSize &&
+                    candidate.toneOffset == triggerUser.ruToneOffset;
+        });
+        requireBfrp(ru != catalog.end(),
+                "serialized RU is absent from the canonical allocation catalog");
+        Ieee80211HeUserTxVectorRequest responseUser;
+        responseUser.ru = *ru;
+        responseUser.staId = triggerUser.aid;
+        responseUser.mcs = triggerUser.mcs;
+        responseUser.numberOfSpatialStreams = triggerUser.numberOfSpatialStreams;
+        responseUser.streamStartIndex = triggerUser.streamStartIndex;
+        responseUser.coding = static_cast<Ieee80211HeCoding>(triggerUser.coding);
+        responseUser.psduLength = B(34);
+        responseRequest.users.push_back(responseUser);
+    }
+    auto response = Ieee80211HeTxVectorFactory::create(responseRequest);
+    if (!response)
+        throw cRuntimeError("BFRP Trigger did not construct a coherent HE-TB response TXVECTOR: %s",
+                response.getContext().detail.c_str());
+    delete triggerPacket;
+    EV << "BFRP Trigger serialized into a coherent HE-TB feedback response.\n";
+}
+
 EV << ".\n";
 
 %contains: stdout
 MU-MIMO Capability Gating checks passed.
 CSI Manager & Leakage Overrides checks passed.
 Feedback frame serialization round trip passed.
+
+%contains: stdout
+BFRP Trigger serialized into a coherent HE-TB feedback response.
 .

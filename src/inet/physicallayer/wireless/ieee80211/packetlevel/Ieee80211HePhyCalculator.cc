@@ -21,12 +21,9 @@
 //   - Clause 27.3.12: modulation, coding, number of symbols, padding.
 //   - Clause 27.3.12.5: BCC/LDPC coding rules and constraints.
 //
-// Approximations:
-//   - LDPC shortening and repetition are modeled at packet level using the
-//     standard codeword lengths (648/1296/1944 bits), but the exact bit-level
-//     shortening/repetition procedure of Clause 27.3.12.5.2 is approximated.
-//   - HE-SIG-B symbol count uses a closed-form estimate of Clause 27.3.11.8
-//     rather than bit-level encoder emulation.
+// The FEC procedure is represented analytically: no coded bit string is
+// constructed, but every standard-defined capacity, padding, shortening,
+// puncturing, and repetition count is retained in the canonical result.
 
 namespace inet {
 namespace physicallayer {
@@ -35,6 +32,44 @@ namespace {
 
 constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
 constexpr int HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK = 10;
+
+int64_t ceilDivide(int64_t numerator, int64_t denominator)
+{
+    if (numerator < 0 || denominator <= 0)
+        throw cRuntimeError("Invalid nonnegative ceiling division");
+    return numerator / denominator + (numerator % denominator != 0);
+}
+
+int getHeShortDataSubcarrierCount(int toneSize, bool dcm)
+{
+    switch (toneSize) {
+        case 26: return dcm ? 2 : 6;
+        case 52: return dcm ? 6 : 12;
+        case 106: return dcm ? 12 : 24;
+        case 242: return dcm ? 30 : 60;
+        case 484: return dcm ? 60 : 120;
+        case 996: return dcm ? 120 : 240;
+        case 1992: return dcm ? 246 : 492;
+        default: throw cRuntimeError("Invalid HE RU tone size: %d", toneSize);
+    }
+}
+
+int calculateHeNominalPacketExtensionDurationUs(int preFecPaddingFactor,
+        int nominalPacketPaddingDurationUs)
+{
+    static const int values[4][3] = {
+        {0, 0, 4},
+        {0, 0, 8},
+        {0, 4, 12},
+        {0, 8, 16},
+    };
+    int column = nominalPacketPaddingDurationUs == 0 ? 0 :
+            nominalPacketPaddingDurationUs == 8 ? 1 :
+            nominalPacketPaddingDurationUs == 16 ? 2 : -1;
+    if (preFecPaddingFactor < 1 || preFecPaddingFactor > 4 || column < 0)
+        return -1;
+    return values[preFecPaddingFactor - 1][column];
+}
 
 void setHePhyValidationError(Ieee80211HePhyValidationResult& result,
         Ieee80211HeValidationErrorCode errorCode, const char *fieldName,
@@ -280,6 +315,81 @@ bool isHeLtfGiCombinationAllowed(Ieee80211HePpduFormat ppduFormat,
 
 } // namespace
 
+Ieee80211HeLdpcCalculationResult computeHeLdpcParameters(int64_t payloadBits,
+        int64_t availableBits, int rateNumerator, int rateDenominator)
+{
+    using Wide = __int128;
+    Ieee80211HeLdpcCalculationResult result;
+    const bool supportedRate =
+            (rateNumerator == 1 && rateDenominator == 2) ||
+            (rateNumerator == 2 && rateDenominator == 3) ||
+            (rateNumerator == 3 && rateDenominator == 4) ||
+            (rateNumerator == 5 && rateDenominator == 6);
+    if (payloadBits <= 0 || availableBits <= 0 || !supportedRate) {
+        result.error = "invalid HE LDPC payload, capacity, or code rate";
+        return result;
+    }
+    if (availableBits <= 648) {
+        result.codewordCount = 1;
+        result.codewordLength = (Wide)availableBits * rateDenominator >=
+                (Wide)payloadBits * rateDenominator + 912LL * (rateDenominator - rateNumerator) ? 1296 : 648;
+    }
+    else if (availableBits <= 1296) {
+        result.codewordCount = 1;
+        result.codewordLength = (Wide)availableBits * rateDenominator >=
+                (Wide)payloadBits * rateDenominator + 1464LL * (rateDenominator - rateNumerator) ? 1944 : 1296;
+    }
+    else if (availableBits <= 1944) {
+        result.codewordCount = 1;
+        result.codewordLength = 1944;
+    }
+    else if (availableBits <= 2592) {
+        result.codewordCount = 2;
+        result.codewordLength = (Wide)availableBits * rateDenominator >=
+                (Wide)payloadBits * rateDenominator + 2916LL * (rateDenominator - rateNumerator) ? 1944 : 1296;
+    }
+    else {
+        result.codewordLength = 1944;
+        const Wide numerator = (Wide)payloadBits * rateDenominator;
+        const Wide denominator = 1944LL * rateNumerator;
+        const Wide count = numerator / denominator + (numerator % denominator != 0);
+        if (count > std::numeric_limits<int>::max()) {
+            result.error = "HE PSDU requires too many LDPC codewords";
+            return result;
+        }
+        result.codewordCount = static_cast<int>(count);
+    }
+    const Wide codedBits = (Wide)result.codewordCount * result.codewordLength;
+    const Wide informationCapacity = codedBits * rateNumerator / rateDenominator;
+    if ((Wide)payloadBits > informationCapacity) {
+        result.error = "HE LDPC payload exceeds the selected information capacity";
+        return result;
+    }
+    const Wide shortening = std::max<Wide>(0, informationCapacity - (Wide)payloadBits);
+    const Wide puncturing = std::max<Wide>(0,
+            codedBits - (Wide)availableBits - shortening);
+    if (informationCapacity > std::numeric_limits<int64_t>::max() ||
+            shortening > std::numeric_limits<int>::max() ||
+            puncturing > std::numeric_limits<int>::max()) {
+        result.error = "HE LDPC bit counts exceed the model range";
+        return result;
+    }
+    result.shorteningBits = shortening;
+    result.puncturingBits = puncturing;
+    const Wide parityRate = rateDenominator - rateNumerator;
+    const Wide scaledPuncturing = (Wide)10 * rateDenominator * result.puncturingBits;
+    result.primaryExtraSymbolCondition =
+            scaledPuncturing > codedBits * parityRate &&
+            (Wide)5 * parityRate * result.shorteningBits <
+                    (Wide)6 * rateNumerator * result.puncturingBits;
+    result.extremePuncturingCondition =
+            scaledPuncturing > (Wide)3 * codedBits * parityRate;
+    result.extraSymbolRequired = result.primaryExtraSymbolCondition ||
+            result.extremePuncturingCondition;
+    result.valid = true;
+    return result;
+}
+
 Ieee80211HeSuSignalingResult buildIeee80211HeSuSignaling(const Ieee80211HeSuSignalingRequest& request)
 {
     Ieee80211HeSuSignalingResult result;
@@ -481,7 +591,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         Ieee80211HeGuardInterval guardInterval,
         Ieee80211HeLtfType ltfType,
         int packetExtensionDurationUs,
-        bool enforceDurationLimit)
+        bool enforceDurationLimit,
+        const std::optional<Ieee80211HeTbCalculationContext>& tbContext)
 {
     Ieee80211HePhyValidationResult result;
     if (ppduFormat != HE_MU_DOWNLINK && ppduFormat != HE_TRIGGER_BASED_UPLINK &&
@@ -521,6 +632,19 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                 "packetExtensionDurationUs", "invalid HE packet extension duration");
         return result;
     }
+    if (tbContext) {
+        if (ppduFormat != HE_TRIGGER_BASED_UPLINK ||
+                tbContext->triggerMethod != Ieee80211HeTriggerMethod::TRIGGER_FRAME ||
+                tbContext->ulLength > 4095 || tbContext->ulLength % 3 != 1 ||
+                tbContext->preFecPaddingFactor < 1 || tbContext->preFecPaddingFactor > 4 ||
+                (tbContext->numberOfHeLtfSymbols != 1 && tbContext->numberOfHeLtfSymbols != 2 &&
+                 tbContext->numberOfHeLtfSymbols != 4 && tbContext->numberOfHeLtfSymbols != 6 &&
+                 tbContext->numberOfHeLtfSymbols != 8)) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "tbContext", "invalid or unsupported HE-TB Trigger-frame calculation context");
+            return result;
+        }
+    }
     if (requestedUsers.empty()) {
         setHePhyValidationError(result, Ieee80211HeValidationErrorCode::EMPTY_USER_LIST,
                 "users", "HE PPDU has no users");
@@ -553,6 +677,20 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                     "ru.toneSize", "unsupported HE RU tone size", userIndex);
             return result;
         }
+        const int expectedDataSubcarriers = getHeRuDataSubcarrierCount(requested.ru.toneSize);
+        if (requested.ru.dataSubcarriers != 0 &&
+                requested.ru.dataSubcarriers != expectedDataSubcarriers) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
+                    "ru.dataSubcarriers", "HE RU data-subcarrier count disagrees with its tone size", userIndex);
+            return result;
+        }
+        const int expectedPilotSubcarriers = getHeRuPilotSubcarrierCount(requested.ru.toneSize);
+        if (requested.ru.pilotSubcarriers != 0 &&
+                requested.ru.pilotSubcarriers != expectedPilotSubcarriers) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
+                    "ru.pilotSubcarriers", "HE RU pilot-subcarrier count disagrees with its tone size", userIndex);
+            return result;
+        }
         if (requested.numberOfSpatialStreams < 1 || requested.numberOfSpatialStreams > 8) {
             setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_SPATIAL_STREAMS,
                     "numberOfSpatialStreams", "invalid HE number of spatial streams", userIndex);
@@ -577,6 +715,15 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         if (requested.psduLength < B(0)) {
             setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
                     "psduLength", "negative HE PSDU length", userIndex);
+            return result;
+        }
+        if (requested.nominalPacketPaddingDurationUs != 0 &&
+                requested.nominalPacketPaddingDurationUs != 8 &&
+                requested.nominalPacketPaddingDurationUs != 16) {
+            setHePhyValidationError(result,
+                    Ieee80211HeValidationErrorCode::INVALID_NOMINAL_PACKET_PADDING,
+                    "nominalPacketPaddingDurationUs",
+                    "HE nominal packet padding must be 0, 8, or 16 us", userIndex);
             return result;
         }
     }
@@ -686,6 +833,13 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     bool isFeedbackNdp = ppduFormat == HE_TRIGGER_BASED_UPLINK &&
             std::all_of(requestedUsers.begin(), requestedUsers.end(),
                     [] (const auto& requested) { return requested.psduLength == B(0); });
+    if (tbContext && !isFeedbackNdp && tbContext->numberOfHeLtfSymbols <
+            getHeNumberOfLtfSymbols(maximumSpaceTimeStreamsPerRu)) {
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                "tbContext.numberOfHeLtfSymbols",
+                "Trigger HE-LTF count is below the minimum required by the solicited spatial streams");
+        return result;
+    }
     bool isFullBandwidthUlMuMimo = ppduFormat == HE_TRIGGER_BASED_UPLINK &&
             ruGroups.size() == 1 && ruGroups.front().second.size() >= 2 &&
             ruGroups.front().first.toneSize == getHeChannelToneCount(channelBandwidth);
@@ -768,6 +922,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         parameters.common.heStfDuration = ppduFormat == HE_TRIGGER_BASED_UPLINK ?
                 SimTime(8, SIMTIME_US) : SimTime(4, SIMTIME_US);
     }
+    if (tbContext && !isFeedbackNdp)
+        parameters.common.numberOfHeLtfSymbols = tbContext->numberOfHeLtfSymbols;
     parameters.common.heLtfDuration =
             parameters.common.numberOfHeLtfSymbols * getHeLtfSymbolDuration(ltfType, guardInterval);
     parameters.common.commonPreambleDuration =
@@ -778,10 +934,12 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             parameters.common.heStfDuration +
             parameters.common.heLtfDuration;
 
-    auto symbolDuration = SimTime(12800, SIMTIME_NS) + getHeGuardIntervalDuration(guardInterval);
+    const auto symbolDuration = SimTime(12800, SIMTIME_NS) + getHeGuardIntervalDuration(guardInterval);
     for (size_t userIndex = 0; userIndex < requestedUsers.size(); userIndex++) {
         const auto& requested = requestedUsers[userIndex];
         auto user = requested;
+        user.ru.dataSubcarriers = getHeRuDataSubcarrierCount(user.ru.toneSize);
+        user.ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(user.ru.toneSize);
         // IEEE Std 802.11-2024 Clause 27.3.12.5 ("Coding"):
         // "LDPC is the only FEC coding scheme in the HE PPDU Data field for a 484-, 996-, and 2x996-tone RU."
         // "LDPC is the only FEC coding scheme in the HE PPDU Data field for HE-MCSs 10 and 11."
@@ -822,15 +980,22 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                     userIndex);
             return result;
         }
-        int dataSubcarriers = user.ru.dataSubcarriers > 0 ? user.ru.dataSubcarriers :
-                getHeRuDataSubcarrierCount(user.ru.toneSize);
-        auto codeRate = getHeMcsCodeRate(user.mcs);
+        const int dataSubcarriers = user.ru.dataSubcarriers;
+        const auto codeRate = getHeMcsCodeRate(user.mcs);
+        const int bitsPerSubcarrier = getHeMcsBitsPerSubcarrier(user.mcs);
         user.guardInterval = guardInterval;
-        user.codedBitsPerSymbol = dataSubcarriers * getHeMcsBitsPerSubcarrier(user.mcs) *
+        // IEEE 802.11-2024 data-rate tables apply DCM by halving N_SD before
+        // calculating N_CBPS. This matters for odd effective capacities such
+        // as 106-tone MCS 0 DCM (N_CBPS=51).
+        const int effectiveDataSubcarriers = user.dcm ? dataSubcarriers / 2 : dataSubcarriers;
+        user.codedBitsPerSymbol = effectiveDataSubcarriers * bitsPerSubcarrier *
                 user.numberOfSpatialStreams;
         user.dataBitsPerSymbol = user.codedBitsPerSymbol * codeRate.first / codeRate.second;
-        if (user.dcm)
-            user.dataBitsPerSymbol /= 2;
+        user.shortDataSubcarriers = getHeShortDataSubcarrierCount(user.ru.toneSize, user.dcm);
+        user.shortCodedBitsPerSymbol = user.shortDataSubcarriers * bitsPerSubcarrier *
+                user.numberOfSpatialStreams;
+        user.shortDataBitsPerSymbol = user.shortCodedBitsPerSymbol *
+                codeRate.first / codeRate.second;
         if (user.psduLength == B(0)) {
             user.numberOfDataSymbols = 0;
             user.numberOfSymbols = 0;
@@ -839,6 +1004,7 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             user.ldpcCodewordLength = 0;
             user.ldpcCodewordCount = 0;
             user.ldpcShorteningBits = 0;
+            user.ldpcPuncturingBits = 0;
             user.ldpcRepetitionBits = 0;
             user.numberOfEncoders = 0;
             user.tailBits = 0;
@@ -850,13 +1016,16 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                     "dataBitsPerSymbol", "HE user has no data bits per symbol", userIndex);
             return result;
         }
-        // IEEE Std 802.11-2024 Clause 27.3.12.5.1 ("BCC coding and puncturing"):
-        // "When conducting BCC FEC encoding for an HE PPDU, the number of encoders is always 1."
-        if (user.coding == HE_CODING_BCC) {
-            user.numberOfEncoders = 1;
-        } else {
-            user.numberOfEncoders = std::max(1, (user.dataBitsPerSymbol + 647) / 648);
+        if (user.shortCodedBitsPerSymbol <= 0 || user.shortDataBitsPerSymbol <= 0) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_DATA_RATE,
+                    "shortDataBitsPerSymbol", "HE user has no data bits in a short symbol segment", userIndex);
+            return result;
         }
+        // IEEE Std 802.11-2024 27.3.12.5.1: HE BCC always uses one encoder.
+        if (user.coding == HE_CODING_BCC)
+            user.numberOfEncoders = 1;
+        else
+            user.numberOfEncoders = std::max(1, (user.dataBitsPerSymbol + 647) / 648);
         user.tailBits = user.coding == HE_CODING_LDPC ? 0 : 6 * user.numberOfEncoders;
         const int64_t psduBytes = user.psduLength.get<B>();
         const int64_t fixedBits = (int64_t)user.serviceBits + user.tailBits;
@@ -866,77 +1035,256 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                     "psduLength", "HE PSDU length overflows packet-level bit accounting", userIndex);
             return result;
         }
-        const int64_t uncodedBits = fixedBits + psduBytes * 8;
+        user.payloadAndServiceBits = fixedBits + psduBytes * 8;
+        user.excessBits = user.payloadAndServiceBits % user.dataBitsPerSymbol;
+        user.individualInitialPreFecPaddingFactor = user.excessBits == 0 ? 4 :
+                std::min<int64_t>(4, ceilDivide(user.excessBits, user.shortDataBitsPerSymbol));
+        const int64_t individualSymbols = ceilDivide(user.payloadAndServiceBits,
+                user.dataBitsPerSymbol);
+        if (individualSymbols > std::numeric_limits<int>::max()) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                    "psduLength", "HE PSDU requires more data symbols than the model can represent", userIndex);
+            return result;
+        }
+        user.individualInitialNumberOfDataSymbols = individualSymbols;
+        parameters.users.push_back(user);
+    }
+
+    std::vector<size_t> dataUsers;
+    for (size_t i = 0; i < parameters.users.size(); ++i)
+        if (parameters.users[i].psduLength != B(0))
+            dataUsers.push_back(i);
+
+    int commonInitialFactor = 0;
+    int commonInitialSymbols = 0;
+    int finalFactor = 0;
+    int finalSymbols = 0;
+    bool commonLdpcExtra = false;
+    if (!dataUsers.empty() && !tbContext) {
+        // Equation 27-75 compared exactly in quarter-symbol units. The metric
+        // is 4*(N_SYM,init-1)+a_init for the supported non-STBC path.
+        int64_t maximumMetric = -1;
+        for (size_t userIndex : dataUsers) {
+            const auto& user = parameters.users[userIndex];
+            const int64_t metric = 4LL * (user.individualInitialNumberOfDataSymbols - 1) +
+                    user.individualInitialPreFecPaddingFactor;
+            if (metric > maximumMetric) {
+                maximumMetric = metric;
+                commonInitialFactor = user.individualInitialPreFecPaddingFactor;
+                commonInitialSymbols = user.individualInitialNumberOfDataSymbols;
+            }
+        }
+    }
+    else if (!dataUsers.empty()) {
+        finalFactor = tbContext->preFecPaddingFactor;
+        const int64_t hePreambleNs = (parameters.common.commonPreambleDuration -
+                SimTime(20, SIMTIME_US)).inUnit(SIMTIME_NS);
+        const int64_t legacyEnvelopeNs = ((tbContext->ulLength + 5) / 3) * 4000LL;
+        const int64_t symbolDurationNs = symbolDuration.inUnit(SIMTIME_NS);
+        const int64_t availableNs = legacyEnvelopeNs - hePreambleNs;
+        const int64_t derivedSymbols = availableNs / symbolDurationNs -
+                (tbContext->peDisambiguity ? 1 : 0);
+        if (availableNs < 0 || derivedSymbols < 1 || derivedSymbols > std::numeric_limits<int>::max()) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "tbContext.ulLength", "HE Trigger UL Length cannot represent a positive Data field");
+            return result;
+        }
+        finalSymbols = derivedSymbols;
+        const int64_t residualNs = availableNs - derivedSymbols * symbolDurationNs;
+        // Equation 27-114 intentionally rounds the residual down to a whole
+        // 4 us unit; the residual itself need not be divisible by 4 us because
+        // T_SYM can be 13.6 us or 14.4 us.
+        const int derivedPacketExtensionUs = residualNs / 4000 * 4;
+        if (derivedPacketExtensionUs != 0 && derivedPacketExtensionUs != 4 &&
+                derivedPacketExtensionUs != 8 && derivedPacketExtensionUs != 12 &&
+                derivedPacketExtensionUs != 16) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "tbContext.peDisambiguity", "HE Trigger timing derives an invalid packet extension");
+            return result;
+        }
+        parameters.common.packetExtensionDurationUs = derivedPacketExtensionUs;
+        commonLdpcExtra = tbContext->ldpcExtraSymbolSegment;
+    }
+
+    auto initializeUserAtBoundary = [&] (Ieee80211HeUserPhyParameters& user,
+            int initialFactor, int initialSymbols, size_t userIndex) -> bool {
+        user.initialPreFecPaddingFactor = initialFactor;
+        user.initialNumberOfDataSymbols = initialSymbols;
+        user.initialLastDataBitsPerSymbol = initialFactor < 4 ?
+                initialFactor * user.shortDataBitsPerSymbol : user.dataBitsPerSymbol;
+        user.initialLastCodedBitsPerSymbol = initialFactor < 4 ?
+                initialFactor * user.shortCodedBitsPerSymbol : user.codedBitsPerSymbol;
+        const int64_t payloadCapacity = (int64_t)(initialSymbols - 1) * user.dataBitsPerSymbol +
+                user.initialLastDataBitsPerSymbol;
+        const int64_t codedCapacity = (int64_t)(initialSymbols - 1) * user.codedBitsPerSymbol +
+                user.initialLastCodedBitsPerSymbol;
+        const int64_t preFecPadding = payloadCapacity - user.payloadAndServiceBits;
+        if (initialSymbols < 1 || preFecPadding < 0 ||
+                payloadCapacity > std::numeric_limits<int>::max() ||
+                codedCapacity > std::numeric_limits<int>::max() ||
+                preFecPadding > std::numeric_limits<int>::max()) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "preFecPaddingFactor", "HE common padding boundary is shorter than a user payload", userIndex);
+            return false;
+        }
+        user.preFecPaddingBits = preFecPadding;
+        user.macPreFecPaddingBits = preFecPadding / 8 * 8;
+        user.phyPreFecPaddingBits = preFecPadding % 8;
         if (user.coding == HE_CODING_LDPC) {
-            // 802.11 LDPC uses 648/1296/1944-bit codewords. At packet level
-            // we model codeword selection, shortening and repetition while
-            // retaining the standard NDBPS symbol rounding used by the PHY.
-            // The largest legal codeword which can carry a single shortened
-            // payload is chosen first; additional payload is split over equal
-            // codewords. This makes the boundary behaviour deterministic and
-            // keeps the accounting shared by DL and HE-TB calculations.
-            const int candidates[] = {648, 1296, 1944};
-            int codeRateNumerator = codeRate.first;
-            int codeRateDenominator = codeRate.second;
-            user.ldpcCodewordLength = 1944;
-            for (int candidate : candidates) {
-                if (uncodedBits <= candidate * codeRateNumerator / codeRateDenominator) {
-                    user.ldpcCodewordLength = candidate;
-                    break;
+            user.ldpcPayloadBits = payloadCapacity;
+            user.ldpcAvailableBits = codedCapacity;
+            const auto codeRate = getHeMcsCodeRate(user.mcs);
+            auto ldpc = computeHeLdpcParameters(payloadCapacity, codedCapacity,
+                    codeRate.first, codeRate.second);
+            if (!ldpc) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
+                        "ldpc", ldpc.error, userIndex);
+                return false;
+            }
+            user.ldpcCodewordLength = ldpc.codewordLength;
+            user.ldpcCodewordCount = ldpc.codewordCount;
+            user.ldpcShorteningBits = ldpc.shorteningBits;
+            user.ldpcPuncturingBits = ldpc.puncturingBits;
+            user.numberOfEncoders = ldpc.codewordCount;
+        }
+        return true;
+    };
+
+    // First establish the common (MU/SU) or Trigger-reversed (TB LDPC)
+    // initial boundary, then evaluate each LDPC user's extra-segment need.
+    for (size_t userIndex : dataUsers) {
+        auto& user = parameters.users[userIndex];
+        int initialFactor = commonInitialFactor;
+        int initialSymbols = commonInitialSymbols;
+        if (tbContext) {
+            initialFactor = finalFactor;
+            initialSymbols = finalSymbols;
+            if (user.coding == HE_CODING_LDPC && commonLdpcExtra) {
+                if (finalFactor == 1) {
+                    initialFactor = 4;
+                    initialSymbols = finalSymbols - 1;
                 }
+                else
+                    initialFactor = finalFactor - 1;
             }
-            int informationBitsPerCodeword = user.ldpcCodewordLength * codeRateNumerator / codeRateDenominator;
-            int64_t ldpcCodewordCount = uncodedBits / informationBitsPerCodeword +
-                    (uncodedBits % informationBitsPerCodeword != 0);
-            if (ldpcCodewordCount > std::numeric_limits<int>::max()) {
-                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
-                        "psduLength", "HE PSDU requires more LDPC codewords than the model can represent",
-                        userIndex);
+        }
+        if (!initializeUserAtBoundary(user, initialFactor, initialSymbols, userIndex))
+            return result;
+        if (!tbContext && user.coding == HE_CODING_LDPC) {
+            const auto codeRate = getHeMcsCodeRate(user.mcs);
+            auto ldpc = computeHeLdpcParameters(user.ldpcPayloadBits,
+                    user.ldpcAvailableBits, codeRate.first, codeRate.second);
+            if (!ldpc) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
+                        "ldpc", ldpc.error, userIndex);
                 return result;
             }
-            user.ldpcCodewordCount = std::max<int64_t>(1, ldpcCodewordCount);
-            int64_t ldpcInformationCapacity = (int64_t)user.ldpcCodewordCount * informationBitsPerCodeword;
-            user.ldpcShorteningBits = std::max<int64_t>(0, ldpcInformationCapacity - uncodedBits);
-            int64_t codedBits = (int64_t)user.ldpcCodewordCount * user.ldpcCodewordLength;
-            int64_t numberOfDataSymbols = codedBits / user.codedBitsPerSymbol +
-                    (codedBits % user.codedBitsPerSymbol != 0);
-            if (numberOfDataSymbols > std::numeric_limits<int>::max()) {
-                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
-                        "psduLength", "HE PSDU requires more data symbols than the model can represent",
-                        userIndex);
-                return result;
-            }
-            user.numberOfDataSymbols = std::max<int64_t>(1, numberOfDataSymbols);
-            int64_t symbolCapacity = (int64_t)user.numberOfDataSymbols * user.codedBitsPerSymbol;
-            user.ldpcRepetitionBits = std::max<int64_t>(0, symbolCapacity - codedBits);
+            commonLdpcExtra |= ldpc.extraSymbolRequired;
+        }
+    }
+
+    if (!dataUsers.empty() && !tbContext) {
+        if (commonLdpcExtra && commonInitialFactor == 4) {
+            finalFactor = 1;
+            finalSymbols = commonInitialSymbols + 1;
         }
         else {
-            int64_t numberOfDataSymbols = uncodedBits / user.dataBitsPerSymbol +
-                    (uncodedBits % user.dataBitsPerSymbol != 0);
-            if (numberOfDataSymbols > std::numeric_limits<int>::max()) {
-                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
-                        "psduLength", "HE PSDU requires more data symbols than the model can represent",
-                        userIndex);
+            finalFactor = commonInitialFactor + (commonLdpcExtra ? 1 : 0);
+            finalSymbols = commonInitialSymbols;
+        }
+    }
+    parameters.common.preFecPaddingFactor = finalFactor;
+    parameters.common.ldpcExtraSymbol = commonLdpcExtra;
+    parameters.commonNumberOfDataSymbols = finalSymbols;
+
+    for (size_t userIndex : dataUsers) {
+        auto& user = parameters.users[userIndex];
+        const auto codeRate = getHeMcsCodeRate(user.mcs);
+        if (user.coding == HE_CODING_LDPC && commonLdpcExtra) {
+            const int increment = user.initialPreFecPaddingFactor == 3 ?
+                    user.codedBitsPerSymbol - 3 * user.shortCodedBitsPerSymbol :
+                    user.shortCodedBitsPerSymbol;
+            if (increment < 0 || user.ldpcAvailableBits > std::numeric_limits<int>::max() - increment) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
+                        "ldpcAvailableBits", "HE LDPC extra segment overflows the model bit count", userIndex);
                 return result;
             }
-            user.numberOfDataSymbols = std::max<int64_t>(1, numberOfDataSymbols);
+            user.ldpcAvailableBits += increment;
+            const int64_t puncturing = std::max<int64_t>(0,
+                    (int64_t)user.ldpcCodewordCount * user.ldpcCodewordLength -
+                    user.ldpcAvailableBits - user.ldpcShorteningBits);
+            if (puncturing > std::numeric_limits<int>::max()) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
+                        "ldpcPuncturingBits", "HE LDPC puncturing exceeds the model bit count", userIndex);
+                return result;
+            }
+            user.ldpcPuncturingBits = puncturing;
         }
-        int64_t bitsInLastSymbol = uncodedBits -
-                (int64_t)(user.numberOfDataSymbols - 1) * user.dataBitsPerSymbol;
-        user.preFecPaddingFactor = std::clamp<int>(
-                (4 * bitsInLastSymbol + user.dataBitsPerSymbol - 1) / user.dataBitsPerSymbol, 1, 4);
-        int effectiveLastSymbolBits =
-                (user.preFecPaddingFactor * user.dataBitsPerSymbol + 3) / 4;
-        user.postFecPaddingBits = std::max<int64_t>(0, effectiveLastSymbolBits - bitsInLastSymbol);
-        user.numberOfSymbols = user.numberOfDataSymbols;
-        parameters.commonNumberOfDataSymbols =
-                std::max(parameters.commonNumberOfDataSymbols, user.numberOfDataSymbols);
-        parameters.users.push_back(user);
+        user.finalLastCodedBitsPerSymbol = finalFactor < 4 ?
+                finalFactor * user.shortCodedBitsPerSymbol : user.codedBitsPerSymbol;
+        user.finalLastDataBitsPerSymbol = user.coding == HE_CODING_LDPC ?
+                user.initialLastDataBitsPerSymbol : finalFactor < 4 ?
+                finalFactor * user.shortDataBitsPerSymbol : user.dataBitsPerSymbol;
+        if (user.coding == HE_CODING_BCC) {
+            const int64_t finalPayloadCapacity = (int64_t)(finalSymbols - 1) * user.dataBitsPerSymbol +
+                    user.finalLastDataBitsPerSymbol;
+            const int64_t preFecPadding = finalPayloadCapacity - user.payloadAndServiceBits;
+            if (preFecPadding < 0 || preFecPadding > std::numeric_limits<int>::max()) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                        "preFecPaddingFactor", "HE final BCC padding boundary is shorter than the payload", userIndex);
+                return result;
+            }
+            user.preFecPaddingBits = preFecPadding;
+            user.macPreFecPaddingBits = preFecPadding / 8 * 8;
+            user.phyPreFecPaddingBits = preFecPadding % 8;
+            if (user.dcm && user.mcs == 0 && user.numberOfSpatialStreams == 1 &&
+                    (user.ru.toneSize == 106 || user.ru.toneSize == 242)) {
+                const int64_t fecInputBits = user.payloadAndServiceBits + preFecPadding;
+                const int64_t codedBits = fecInputBits * codeRate.second / codeRate.first;
+                user.bccCodedPaddingBits = codedBits / (2 * user.dataBitsPerSymbol);
+            }
+        }
+        else {
+            const int64_t repetition = std::max<int64_t>(0,
+                    user.ldpcAvailableBits -
+                    (int64_t)user.ldpcCodewordCount * user.ldpcCodewordLength *
+                            (codeRate.second - codeRate.first) / codeRate.second -
+                    user.ldpcPayloadBits);
+            if (repetition > std::numeric_limits<int>::max() ||
+                    (repetition > 0 && user.ldpcPuncturingBits > 0)) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
+                        "ldpcRepetitionBits", "HE LDPC puncturing and repetition outcomes are inconsistent", userIndex);
+                return result;
+            }
+            user.ldpcRepetitionBits = repetition;
+        }
+        user.preFecPaddingFactor = finalFactor;
+        user.postFecPaddingBits = user.codedBitsPerSymbol - user.finalLastCodedBitsPerSymbol;
+        user.numberOfDataSymbols = finalSymbols;
+        user.numberOfSymbols = finalSymbols;
+        const int nominalPe = calculateHeNominalPacketExtensionDurationUs(finalFactor,
+                user.nominalPacketPaddingDurationUs);
+        parameters.common.nominalPacketExtensionDurationUs = std::max(
+                parameters.common.nominalPacketExtensionDurationUs, nominalPe);
+    }
+
+    if (isFeedbackNdp) {
+        parameters.common.preFecPaddingFactor = 0;
+        parameters.common.ldpcExtraSymbol = false;
+        parameters.common.nominalPacketExtensionDurationUs = 0;
+        parameters.common.packetExtensionDurationUs = 0;
+        parameters.commonNumberOfDataSymbols = 0;
+    }
+    if (parameters.common.packetExtensionDurationUs <
+            parameters.common.nominalPacketExtensionDurationUs) {
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION,
+                "packetExtensionDurationUs", "HE packet extension is shorter than the nominal value");
+        return result;
     }
 
     parameters.duration = parameters.common.commonPreambleDuration +
             parameters.commonNumberOfDataSymbols * symbolDuration +
-            SimTime(packetExtensionDurationUs, SIMTIME_US);
+            SimTime(parameters.common.packetExtensionDurationUs, SIMTIME_US);
     
     // IEEE 802.11-2024 Table 27-61 defines aPPDUMaxTime = 5.484 ms; Clause 10.12
     // forbids transmitting an HE PPDU whose PLME-TXTIME exceeds that limit.
@@ -955,6 +1303,174 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     result.errorCode = Ieee80211HeValidationErrorCode::NONE;
     result.context = {};
     result.error.clear();
+    return result;
+}
+
+Ieee80211HeTriggerResponseFinalizationResult finalizeHeTriggerResponse(
+        const Ieee80211HeTriggerResponseFinalizationRequest& request)
+{
+    Ieee80211HeTriggerResponseFinalizationResult result;
+    auto fail = [&] (Ieee80211HeValidationErrorCode errorCode,
+            const char *fieldName, const std::string& detail) {
+        result.valid = false;
+        result.errorCode = errorCode;
+        result.context.fieldName = fieldName;
+        result.context.detail = detail;
+        result.error = detail;
+    };
+    if (request.durationBudget && *request.durationBudget <= SIMTIME_ZERO) {
+        fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                "durationBudget", "HE Trigger response has no positive duration budget");
+        return result;
+    }
+
+    uint32_t signalExtensionNs;
+    try {
+        signalExtensionNs = getIeee80211HeSignalExtensionNs(
+                request.centerFrequency, request.noSignalExtension);
+    }
+    catch (const cRuntimeError& error) {
+        fail(Ieee80211HeValidationErrorCode::INVALID_CENTER_FREQUENCY,
+                "centerFrequency", error.what());
+        return result;
+    }
+
+    auto minimum = computeHePpduParameters(request.users, request.channelBandwidth,
+            HE_TRIGGER_BASED_UPLINK, request.guardInterval, request.ltfType,
+            request.packetExtensionDurationUs, false);
+    if (!minimum) {
+        result.errorCode = minimum.errorCode;
+        result.context = minimum.context;
+        result.error = std::string("Cannot calculate HE Trigger response timing: ") +
+                minimum.context.detail;
+        return result;
+    }
+
+    const auto maximumPpduDuration = SimTime(5.484, SIMTIME_MS);
+    auto durationCap = request.durationBudget ?
+            std::min(*request.durationBudget, maximumPpduDuration) : maximumPpduDuration;
+    durationCap = SimTime(durationCap.inUnit(SIMTIME_NS), SIMTIME_NS);
+    const auto signalExtensionDuration = SimTime(signalExtensionNs, SIMTIME_NS);
+    const auto minimumTxTime = minimum.parameters.duration + signalExtensionDuration;
+    if (minimumTxTime > durationCap) {
+        fail(Ieee80211HeValidationErrorCode::PPDU_DURATION_EXCEEDED,
+                "durationBudget",
+                "HE Trigger response duration budget cannot contain the selected preamble and payload");
+        return result;
+    }
+
+    auto projectedMinimum = buildIeee80211HeTriggerUlLength(minimumTxTime,
+            signalExtensionNs);
+    if (!projectedMinimum) {
+        fail(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH, "ulLength",
+                std::string("Cannot select an HE Trigger UL Length: ") +
+                        projectedMinimum.error);
+        return result;
+    }
+
+    const bool feedbackNdp = std::all_of(request.users.begin(), request.users.end(),
+            [] (const auto& user) { return user.psduLength == B(0); });
+    if (feedbackNdp) {
+        auto envelope = getIeee80211HeTriggerTxTimeUpperBound(
+                projectedMinimum.value.length, signalExtensionNs);
+        if (!envelope || envelope.txTime > durationCap) {
+            fail(Ieee80211HeValidationErrorCode::PPDU_DURATION_EXCEEDED,
+                    "durationBudget",
+                    "HE feedback NDP UL Length exceeds the duration budget");
+            return result;
+        }
+        result.ulLength = projectedMinimum.value.length;
+        result.commonDuration = envelope.txTime;
+        result.resolvedTxTime = minimumTxTime;
+        result.parameters = minimum.parameters;
+        result.errorCode = Ieee80211HeValidationErrorCode::NONE;
+        result.valid = true;
+        return result;
+    }
+
+    int firstUlLength = projectedMinimum.value.length;
+    int lastUlLength = 4093;
+    int increment = 3;
+    if (request.durationBudget) {
+        auto highest = buildIeee80211HeTriggerUlLength(durationCap,
+                signalExtensionNs);
+        if (!highest) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH, "ulLength",
+                    std::string("Cannot select an HE Trigger UL Length: ") +
+                            highest.error);
+            return result;
+        }
+        firstUlLength = highest.value.length;
+        lastUlLength = projectedMinimum.value.length;
+        increment = -3;
+    }
+
+    for (int ulLength = firstUlLength;
+            increment > 0 ? ulLength <= lastUlLength : ulLength >= lastUlLength;
+            ulLength += increment) {
+        auto envelope = getIeee80211HeTriggerTxTimeUpperBound(
+                ulLength, signalExtensionNs);
+        if (!envelope || envelope.txTime > durationCap)
+            continue;
+        for (bool ldpcExtraSymbolSegment : {false, true}) {
+            for (bool peDisambiguity : {false, true}) {
+                Ieee80211HeTbCalculationContext tbContext;
+                tbContext.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+                tbContext.ulLength = ulLength;
+                tbContext.preFecPaddingFactor =
+                        minimum.parameters.common.preFecPaddingFactor;
+                tbContext.ldpcExtraSymbolSegment = ldpcExtraSymbolSegment;
+                tbContext.peDisambiguity = peDisambiguity;
+                tbContext.numberOfHeLtfSymbols =
+                        minimum.parameters.common.numberOfHeLtfSymbols;
+                auto candidate = computeHePpduParameters(request.users,
+                        request.channelBandwidth, HE_TRIGGER_BASED_UPLINK,
+                        request.guardInterval, request.ltfType,
+                        request.packetExtensionDurationUs, false, tbContext);
+                if (!candidate)
+                    continue;
+                if (!ldpcExtraSymbolSegment) {
+                    bool shouldSetLdpcExtra = false;
+                    for (const auto& user : candidate.parameters.users) {
+                        if (user.coding != HE_CODING_LDPC)
+                            continue;
+                        const auto codeRate = getHeMcsCodeRate(user.mcs);
+                        auto ldpc = computeHeLdpcParameters(user.ldpcPayloadBits,
+                                user.ldpcAvailableBits, codeRate.first, codeRate.second);
+                        if (!ldpc || ldpc.extraSymbolRequired) {
+                            shouldSetLdpcExtra = true;
+                            break;
+                        }
+                    }
+                    // Clause 27.3.12.5.5 permits a received flag0, but an AP
+                    // finalizing a new Trigger should set flag1 whenever any
+                    // solicited user's reversed LDPC boundary requires it.
+                    if (shouldSetLdpcExtra)
+                        continue;
+                }
+                const auto resolvedTxTime = candidate.parameters.duration +
+                        signalExtensionDuration;
+                if (resolvedTxTime > durationCap || resolvedTxTime < minimumTxTime)
+                    continue;
+                auto projected = buildIeee80211HeTriggerUlLength(resolvedTxTime,
+                        signalExtensionNs);
+                if (!projected || projected.value.length != ulLength)
+                    continue;
+
+                result.ulLength = ulLength;
+                result.commonDuration = envelope.txTime;
+                result.peDisambiguity = peDisambiguity;
+                result.resolvedTxTime = resolvedTxTime;
+                result.parameters = candidate.parameters;
+                result.errorCode = Ieee80211HeValidationErrorCode::NONE;
+                result.valid = true;
+                return result;
+            }
+        }
+    }
+
+    fail(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH, "ulLength",
+            "HE Trigger response has no L_LENGTH bucket with a legal full-symbol TXTIME");
     return result;
 }
 

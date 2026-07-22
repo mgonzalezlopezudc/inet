@@ -45,7 +45,9 @@ inline bool areIeee80211HeCommonParametersEqual(const Ieee80211HeCommonPhyParame
             left.noSignalExtension == right.noSignalExtension &&
             left.signalExtensionNs == right.signalExtensionNs &&
             left.ltfType == right.ltfType && left.numberOfHeLtfSymbols == right.numberOfHeLtfSymbols &&
+            left.preFecPaddingFactor == right.preFecPaddingFactor &&
             left.ldpcExtraSymbol == right.ldpcExtraSymbol &&
+            left.nominalPacketExtensionDurationUs == right.nominalPacketExtensionDurationUs &&
             left.packetExtensionDurationUs == right.packetExtensionDurationUs &&
             left.sigA.ppduFormat == right.sigA.ppduFormat && left.sigA.bssColor == right.sigA.bssColor &&
             left.sigA.uplink == right.sigA.uplink &&
@@ -75,13 +77,36 @@ inline bool areIeee80211HeUserParametersEqual(const Ieee80211HeUserPhyParameters
             left.ndpRuToneSetIndex == right.ndpRuToneSetIndex &&
             left.ndpStartingStsNumber == right.ndpStartingStsNumber &&
             left.guardInterval == right.guardInterval && left.coding == right.coding &&
-            left.psduLength == right.psduLength && left.streamStartIndex == right.streamStartIndex &&
+            left.psduLength == right.psduLength &&
+            left.nominalPacketPaddingDurationUs == right.nominalPacketPaddingDurationUs &&
+            left.streamStartIndex == right.streamStartIndex &&
             left.staId == right.staId && left.numberOfEncoders == right.numberOfEncoders &&
             left.codedBitsPerSymbol == right.codedBitsPerSymbol &&
-            left.dataBitsPerSymbol == right.dataBitsPerSymbol && left.serviceBits == right.serviceBits &&
-            left.tailBits == right.tailBits && left.ldpcCodewordLength == right.ldpcCodewordLength &&
+            left.dataBitsPerSymbol == right.dataBitsPerSymbol &&
+            left.shortDataSubcarriers == right.shortDataSubcarriers &&
+            left.shortCodedBitsPerSymbol == right.shortCodedBitsPerSymbol &&
+            left.shortDataBitsPerSymbol == right.shortDataBitsPerSymbol &&
+            left.serviceBits == right.serviceBits && left.tailBits == right.tailBits &&
+            left.payloadAndServiceBits == right.payloadAndServiceBits &&
+            left.excessBits == right.excessBits &&
+            left.individualInitialPreFecPaddingFactor == right.individualInitialPreFecPaddingFactor &&
+            left.individualInitialNumberOfDataSymbols == right.individualInitialNumberOfDataSymbols &&
+            left.initialPreFecPaddingFactor == right.initialPreFecPaddingFactor &&
+            left.initialNumberOfDataSymbols == right.initialNumberOfDataSymbols &&
+            left.initialLastCodedBitsPerSymbol == right.initialLastCodedBitsPerSymbol &&
+            left.initialLastDataBitsPerSymbol == right.initialLastDataBitsPerSymbol &&
+            left.finalLastCodedBitsPerSymbol == right.finalLastCodedBitsPerSymbol &&
+            left.finalLastDataBitsPerSymbol == right.finalLastDataBitsPerSymbol &&
+            left.preFecPaddingBits == right.preFecPaddingBits &&
+            left.macPreFecPaddingBits == right.macPreFecPaddingBits &&
+            left.phyPreFecPaddingBits == right.phyPreFecPaddingBits &&
+            left.bccCodedPaddingBits == right.bccCodedPaddingBits &&
+            left.ldpcCodewordLength == right.ldpcCodewordLength &&
             left.ldpcCodewordCount == right.ldpcCodewordCount &&
+            left.ldpcPayloadBits == right.ldpcPayloadBits &&
+            left.ldpcAvailableBits == right.ldpcAvailableBits &&
             left.ldpcShorteningBits == right.ldpcShorteningBits &&
+            left.ldpcPuncturingBits == right.ldpcPuncturingBits &&
             left.ldpcRepetitionBits == right.ldpcRepetitionBits &&
             left.preFecPaddingFactor == right.preFecPaddingFactor &&
             left.postFecPaddingBits == right.postFecPaddingBits &&
@@ -108,6 +133,7 @@ struct Ieee80211HeUserTxVectorRequest
     uint8_t ndpStartingStsNumber = 0;
     Ieee80211HeCoding coding = HE_CODING_BCC;
     B psduLength = B(0);
+    int nominalPacketPaddingDurationUs = 0;
     uint16_t staId = 0;
 };
 
@@ -123,6 +149,10 @@ struct Ieee80211HeTxVectorRequest
     simtime_t requestedTxTime = SIMTIME_ZERO;
     bool requestedTxTimeExact = false;
     bool ldpcExtraSymbolSegment = false;
+    int preFecPaddingFactor = 0;
+    bool peDisambiguity = false;
+    int numberOfHeLtfSymbols = 0;
+    Ieee80211HeTriggerMethod triggerMethod = Ieee80211HeTriggerMethod::NONE;
     bool ndp = false;
     uint8_t bssColor = 0;
     bool uplink = false;
@@ -577,6 +607,7 @@ class INET_API Ieee80211HeTxVectorFactory final
                 user.ndpStartingStsNumber = input.ndpStartingStsNumber;
                 user.coding = input.coding;
                 user.psduLength = input.psduLength;
+                user.nominalPacketPaddingDurationUs = input.nominalPacketPaddingDurationUs;
                 user.staId = input.staId;
                 calculatorUsers.push_back(user);
             }
@@ -632,15 +663,31 @@ class INET_API Ieee80211HeTxVectorFactory final
                 return makeError(Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
                         "users[].ru", "HE physical RU layout is duplicate, overlapping, or out of band");
 
+            std::optional<Ieee80211HeTbCalculationContext> tbContext;
+            if (request.ppduFormat == HE_TRIGGER_BASED_UPLINK && !request.ndp) {
+                auto lSig = buildHeTbLSig(request.lSigLength);
+                if (!lSig)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
+                            "lSigLength", lSig.error);
+                if (request.triggerMethod != Ieee80211HeTriggerMethod::TRIGGER_FRAME)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                            "triggerMethod", "HE TB data requires explicit Trigger-frame context");
+                tbContext.emplace();
+                tbContext->triggerMethod = request.triggerMethod;
+                tbContext->ulLength = request.lSigLength;
+                tbContext->preFecPaddingFactor = request.preFecPaddingFactor;
+                tbContext->ldpcExtraSymbolSegment = request.ldpcExtraSymbolSegment;
+                tbContext->peDisambiguity = request.peDisambiguity;
+                tbContext->numberOfHeLtfSymbols = request.numberOfHeLtfSymbols;
+            }
             auto calculation = computeHePpduParameters(calculatorUsers, request.channelBandwidth,
                     request.ppduFormat, request.guardInterval, request.ltfType,
-                    request.packetExtensionDurationUs, request.enforceDurationLimit);
+                    request.packetExtensionDurationUs, request.enforceDurationLimit, tbContext);
             if (!calculation)
                 return Ieee80211HeTxVectorValidationResult(calculation.errorCode, calculation.context);
 
             auto& parameters = calculation.parameters;
             parameters.common.puncturedSubchannelMask = request.puncturedSubchannelMask;
-            parameters.common.ldpcExtraSymbol = request.ldpcExtraSymbolSegment;
             parameters.common.noSignalExtension = request.noSignalExtension;
             parameters.common.signalExtensionNs = getIeee80211HeSignalExtensionNs(
                     request.centerFrequency, request.noSignalExtension);
@@ -691,9 +738,6 @@ class INET_API Ieee80211HeTxVectorFactory final
             }
             else if (request.ppduFormat == HE_TRIGGER_BASED_UPLINK) {
                 auto lSig = buildHeTbLSig(request.lSigLength);
-                if (!lSig)
-                    return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
-                            "lSigLength", lSig.error);
                 parameters.common.lSigLength = lSig.value.length;
 
                 auto upperBound = getIeee80211HeTriggerTxTimeUpperBound(
@@ -701,45 +745,13 @@ class INET_API Ieee80211HeTxVectorFactory final
                 if (!upperBound)
                     return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
                             "lSigLength", upperBound.error);
-                const auto symbolDuration = SimTime(12800, SIMTIME_NS) +
-                        getHeGuardIntervalDuration(request.guardInterval);
-                const auto packetExtensionDuration =
-                        SimTime(parameters.common.packetExtensionDurationUs, SIMTIME_US);
-                const auto fixedDuration = parameters.common.commonPreambleDuration +
-                        packetExtensionDuration + signalExtensionDuration;
-                simtime_t targetDuration;
-                if (request.requestedTxTimeExact) {
-                    if (request.requestedTxTime <= SIMTIME_ZERO)
-                        return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
-                                "requestedTxTime", "an exact HE TB TXTIME must be positive");
-                    targetDuration = request.requestedTxTime;
-                }
-                else if (request.ndp)
-                    // An NDP has no Data field that could absorb padding. Its
-                    // resolved preamble/PE duration must itself select the
-                    // Trigger L_LENGTH bucket.
-                    targetDuration = parameters.duration;
-                else {
-                    // Raw Trigger Common Info recovers only the Equation 27-11
-                    // upper boundary. Select the longest HE-symbol-aligned PPDU
-                    // inside that bucket so a short PSDU is padded instead of
-                    // silently shortening the solicited response.
-                    if (upperBound.txTime < fixedDuration)
-                        return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
-                                "lSigLength", "HE Trigger UL Length cannot contain the selected preamble");
-                    const auto available = upperBound.txTime - fixedDuration;
-                    const int64_t numberOfSymbols = available.inUnit(SIMTIME_NS) /
-                            symbolDuration.inUnit(SIMTIME_NS);
-                    targetDuration = fixedDuration + numberOfSymbols * symbolDuration;
-                }
-                if (targetDuration < parameters.duration)
+                const simtime_t targetDuration = parameters.duration;
+                if (request.requestedTxTimeExact && request.requestedTxTime != targetDuration)
                     return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
-                            "requestedTxTime", "HE TB payload does not fit the solicited TXTIME");
-                if (targetDuration < fixedDuration ||
-                        (targetDuration - fixedDuration).inUnit(SIMTIME_NS) %
-                                symbolDuration.inUnit(SIMTIME_NS) != 0)
+                            "requestedTxTime", "exact HE TB TXTIME disagrees with Trigger-derived timing");
+                if (targetDuration > upperBound.txTime)
                     return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
-                            "requestedTxTime", "HE TB TXTIME is not aligned to a complete HE data symbol");
+                            "lSigLength", "HE TB payload does not fit the Trigger UL Length envelope");
                 auto projected = buildHeLSig(Ieee80211HeSigFormat::SU,
                         targetDuration.inUnit(SIMTIME_NS), parameters.common.signalExtensionNs);
                 if (!projected || projected.value.length != request.lSigLength)
@@ -748,28 +760,9 @@ class INET_API Ieee80211HeTxVectorFactory final
                 if (request.enforceDurationLimit && targetDuration > SimTime(5.484, SIMTIME_MS))
                     return makeError(Ieee80211HeValidationErrorCode::PPDU_DURATION_EXCEEDED,
                             "requestedTxTime", "HE TB solicited TXTIME exceeds the 5.484 ms duration limit");
-                const int64_t targetNumberOfSymbols =
-                        (targetDuration - fixedDuration).inUnit(SIMTIME_NS) /
-                        symbolDuration.inUnit(SIMTIME_NS);
-                if (targetNumberOfSymbols > std::numeric_limits<int>::max())
-                    return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
-                            "requestedTxTime", "HE TB solicited data-symbol count exceeds the model range");
-                parameters.commonNumberOfDataSymbols = targetNumberOfSymbols;
                 parameters.duration = targetDuration;
-                for (auto& user : parameters.users) {
-                    const int extraSymbols = parameters.commonNumberOfDataSymbols - user.numberOfDataSymbols;
-                    if (extraSymbols > 0) {
-                        const int64_t extraPaddingBits = (int64_t)extraSymbols * user.dataBitsPerSymbol;
-                        if (extraPaddingBits > std::numeric_limits<int>::max() - user.postFecPaddingBits)
-                            return makeError(Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
-                                    "requestedTxTime", "HE TB padding exceeds the model bit-count range");
-                        user.postFecPaddingBits += extraPaddingBits;
-                    }
-                    user.numberOfDataSymbols = parameters.commonNumberOfDataSymbols;
-                    user.numberOfSymbols = parameters.commonNumberOfDataSymbols;
-                    user.dataDuration = parameters.commonNumberOfDataSymbols * symbolDuration;
+                for (auto& user : parameters.users)
                     user.duration = targetDuration;
-                }
             }
             if (request.ndp && request.ppduFormat == HE_TRIGGER_BASED_UPLINK &&
                     parameters.common.heLtfDuration != SimTime(32, SIMTIME_US))

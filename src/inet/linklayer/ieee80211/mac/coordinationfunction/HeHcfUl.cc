@@ -70,8 +70,13 @@ void populateHeTbRequestFromTrigger(physicallayer::Ieee80211HeMuReq *request,
     request->setTotalNsts(user.numberOfSpatialStreams);
     request->setMuMimo(user.muMimo);
     request->setGuardInterval(trigger.getGuardInterval());
+    request->setLtfType(trigger.getLtfType());
     request->setCoding(user.coding);
+    request->setTriggerMethod(static_cast<uint8_t>(physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME));
     request->setLdpcExtraSymbolSegment(trigger.getLdpcExtraSymbolSegment());
+    request->setPreFecPaddingFactor(trigger.getPreFecPaddingFactor());
+    request->setPeDisambiguity(trigger.getPeDisambiguity());
+    request->setNumberOfHeLtfSymbols(trigger.getNumberOfHeLtfSymbols());
     request->setPacketExtensionDurationUs(trigger.getPacketExtensionDurationUs());
     request->setPuncturedSubchannelMask(trigger.getPuncturedSubchannelMask());
     request->setCommonDuration(trigger.getCommonDuration());
@@ -185,86 +190,37 @@ HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
         users.push_back(user);
     }
 
-    physicallayer::Ieee80211HeLtfType ltfType;
-    uint32_t signalExtensionNs;
-    try {
-        ltfType = physicallayer::getHeDefaultLtfType(proposedSchedule.guardInterval);
-        signalExtensionNs = physicallayer::getIeee80211HeSignalExtensionNs(
-                centerFrequency, proposedSchedule.noSignalExtension);
-    }
-    catch (const cRuntimeError& error) {
-        result.error = error.what();
-        return result;
-    }
-    auto calculation = physicallayer::computeHePpduParameters(users, channelBandwidth,
-            physicallayer::HE_TRIGGER_BASED_UPLINK, proposedSchedule.guardInterval,
-            ltfType, proposedSchedule.packetExtensionDurationUs, false);
-    if (!calculation) {
-        result.error = std::string("Cannot calculate HE UL schedule timing: ") +
-                calculation.context.detail;
+    physicallayer::Ieee80211HeTriggerResponseFinalizationRequest request;
+    request.users = users;
+    request.centerFrequency = centerFrequency;
+    request.channelBandwidth = channelBandwidth;
+    request.guardInterval = proposedSchedule.guardInterval;
+    request.ltfType = proposedSchedule.ltfType;
+    request.packetExtensionDurationUs = proposedSchedule.packetExtensionDurationUs;
+    request.noSignalExtension = proposedSchedule.noSignalExtension;
+    request.durationBudget = proposedSchedule.commonDuration;
+    auto finalization = physicallayer::finalizeHeTriggerResponse(request);
+    if (!finalization) {
+        result.error = finalization.error;
         return result;
     }
 
-    auto durationCap = std::min(proposedSchedule.commonDuration, SimTime(5.484, SIMTIME_MS));
-    durationCap = SimTime(durationCap.inUnit(SIMTIME_NS), SIMTIME_NS);
-    const auto signalExtensionDuration = SimTime(signalExtensionNs, SIMTIME_NS);
-    const auto minimumTxTime = calculation.parameters.duration + signalExtensionDuration;
-    if (minimumTxTime > durationCap) {
-        result.error = "HE UL schedule duration budget cannot contain the selected preamble and payload";
-        return result;
+    result.schedule.ulLength = finalization.ulLength;
+    result.schedule.commonDuration = finalization.commonDuration;
+    result.schedule.commonDurationExact = finalization.commonDurationExact;
+    result.schedule.numberOfHeLtfSymbols =
+            finalization.parameters.common.numberOfHeLtfSymbols;
+    if (!feedbackNdp) {
+        result.schedule.preFecPaddingFactor =
+                finalization.parameters.common.preFecPaddingFactor;
+        result.schedule.ldpcExtraSymbolSegment =
+                finalization.parameters.common.ldpcExtraSymbol;
+        result.schedule.peDisambiguity = finalization.peDisambiguity;
+        result.schedule.packetExtensionDurationUs =
+                finalization.parameters.common.packetExtensionDurationUs;
     }
-
-    auto highestUlLength = physicallayer::buildIeee80211HeTriggerUlLength(
-            durationCap, signalExtensionNs);
-    if (!highestUlLength) {
-        result.error = std::string("Cannot select an HE Trigger UL Length: ") +
-                highestUlLength.error;
-        return result;
-    }
-    const auto fixedDuration = calculation.parameters.common.commonPreambleDuration +
-            SimTime(proposedSchedule.packetExtensionDurationUs, SIMTIME_US) +
-            signalExtensionDuration;
-    const auto symbolDuration = SimTime(12800, SIMTIME_NS) +
-            physicallayer::getHeGuardIntervalDuration(proposedSchedule.guardInterval);
-
-    // Equation 27-11 quantizes UL Length into 4 us buckets, while legal HE-TB
-    // durations lie on the HE-symbol grid. Search downward because the bucket
-    // selected from the cap may extend beyond the cap or contain no complete
-    // symbol-aligned PPDU. Keeping the bucket envelope intact avoids an
-    // internally inconsistent clamped duration/L_LENGTH pair.
-    for (int ulLength = highestUlLength.value.length; ulLength >= 1; ulLength -= 3) {
-        auto envelope = physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
-                ulLength, signalExtensionNs);
-        if (!envelope || envelope.txTime > durationCap)
-            continue;
-
-        simtime_t resolvedTxTime;
-        if (feedbackNdp)
-            resolvedTxTime = minimumTxTime;
-        else {
-            if (envelope.txTime < fixedDuration + symbolDuration)
-                continue;
-            const auto availableDataTime = envelope.txTime - fixedDuration;
-            const int64_t numberOfSymbols = availableDataTime.inUnit(SIMTIME_NS) /
-                    symbolDuration.inUnit(SIMTIME_NS);
-            resolvedTxTime = fixedDuration + numberOfSymbols * symbolDuration;
-            if (resolvedTxTime < minimumTxTime)
-                continue;
-        }
-        auto projectedUlLength = physicallayer::buildIeee80211HeTriggerUlLength(
-                resolvedTxTime, signalExtensionNs);
-        if (!projectedUlLength || projectedUlLength.value.length != ulLength)
-            continue;
-
-        result.schedule.ulLength = ulLength;
-        result.schedule.commonDuration = envelope.txTime;
-        result.schedule.commonDurationExact = false;
-        result.resolvedTxTime = resolvedTxTime;
-        result.valid = true;
-        return result;
-    }
-
-    result.error = "HE UL duration budget contains no L_LENGTH bucket with a legal full-symbol TXTIME";
+    result.resolvedTxTime = finalization.resolvedTxTime;
+    result.valid = true;
     return result;
 }
 
@@ -427,23 +383,29 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                     [] (const auto& allocation) { return allocation.randomAccess || !allocation.muMimo; }), ulSchedule.allocations.end());
         }
     }
-    // Until Trigger carries an authoritative HE-LTF type, retain active
-    // medium/long GI choices whose deterministic 2x/4x defaults are legal for
-    // HE TB data, and normalize only the N/A short-GI choice to medium GI.
+    // Select one complete Table 9-49 GI/HE-LTF pair. Full-bandwidth UL
+    // MU-MIMO may use the raw-0 1x/1.6 us pair; other medium-GI schedules use
+    // raw 1 (2x/1.6 us), and long GI uses raw 2 (4x/3.2 us).
     if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0))) {
         switch (heMode->getDataMode()->getGuardIntervalType()) {
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
                 ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
+                ulSchedule.ltfType = std::any_of(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
+                        [] (const auto& allocation) { return allocation.muMimo; }) ?
+                        physicallayer::HE_LTF_1X : physicallayer::HE_LTF_2X;
                 break;
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
                 ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
+                ulSchedule.ltfType = physicallayer::HE_LTF_4X;
                 break;
         }
     }
     // Table 27-32 permits only 4x HE-LTF with 3.2 us GI for feedback NDP.
-    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
+        ulSchedule.ltfType = physicallayer::HE_LTF_4X;
+    }
     bool ldpcSupportedByAll = mac->getMib()->localHeCapabilities.ldpc;
     for (const auto& allocation : ulSchedule.allocations) {
         if (allocation.randomAccess)

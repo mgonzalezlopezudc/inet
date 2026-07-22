@@ -94,8 +94,12 @@ static Ieee80211HeTxVectorValidationResult makeCanonicalPair(const Packet *packe
     request.centerFrequency = Hz(5.18e9);
     request.channelBandwidth = MHz(20);
     request.ppduFormat = getIeee80211HePpduFormat(*phyHeader);
-    if (request.ppduFormat == HE_TRIGGER_BASED_UPLINK)
+    if (request.ppduFormat == HE_TRIGGER_BASED_UPLINK) {
         request.lSigLength = 58;
+        request.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+        request.preFecPaddingFactor = 4;
+        request.numberOfHeLtfSymbols = 1;
+    }
     request.bssColor = phyHeader->getBssColor();
     request.uplink = request.ppduFormat == HE_TRIGGER_BASED_UPLINK;
     for (unsigned int i = 0; i < phyHeader->getUsersArraySize(); i++) {

@@ -34,7 +34,11 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setChannelBandwidthMhz(20);
     trigger->setApTxPowerDbm(-20);
     trigger->setGuardInterval(2); // GI = 2
+    trigger->setLtfType(physicallayer::HE_LTF_4X);
+    trigger->setNumberOfHeLtfSymbols(4);
     trigger->setCoding(1); // LDPC = 1
+    trigger->setPreFecPaddingFactor(3);
+    trigger->setPeDisambiguity(true);
     trigger->setUsersArraySize(1);
 
     Ieee80211HeTriggerUserInfo user;
@@ -53,6 +57,11 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     user.targetRssiDbm = -70; // Target Rssi = -70 dBm -> PTARGET = -70 + 110 = 40
     trigger->setUsers(0, user);
 
+    physicallayer::Ieee80211HeMuReq directRequest;
+    populateHeTbRequestFromTrigger(&directRequest, *trigger, trigger->getUsers(0), 7);
+    REQUIRE(directRequest.getNominalPacketPaddingDurationUs() == 0);
+    REQUIRE(directRequest.getLtfType() == physicallayer::HE_LTF_4X);
+
     trigger->setChunkLength(B(24 + 6)); // Basic trigger frame header + 1 user info field
 
     auto pk = new Packet("trigger-packet", trigger);
@@ -65,11 +74,64 @@ REQUIRE(canonical26ToneRus.size() >= 2);
         hexStr += buf;
     }
     EV << "Basic Trigger Serialized hex: " << hexStr << "\n";
-    REQUIRE(hexStr == "24002003FFFFFFFFFFFF100000000000F03122000000C07F07A0764828C6");
+    REQUIRE(hexStr == "24002003FFFFFFFFFFFF100000000000F03122011C00C07F07A0764828C6");
     uint64_t commonInfo = 0;
     for (int i = 0; i < 8; i++)
         commonInfo |= uint64_t(bytes->getByte(16 + i)) << (8 * i);
     REQUIRE(((commonInfo >> 54) & 0x1FF) == 0x1FF);
+    REQUIRE(((commonInfo >> 23) & 0x7) == 2);
+    REQUIRE(((commonInfo >> 34) & 0x3) == 3);
+    REQUIRE(((commonInfo >> 36) & 0x1) == 1);
+
+    struct GiLtfWireCase {
+        physicallayer::Ieee80211HeGuardInterval guardInterval;
+        physicallayer::Ieee80211HeLtfType ltfType;
+        uint8_t raw;
+    };
+    const GiLtfWireCase giLtfWireCases[] = {
+        {physicallayer::HE_GI_1_6_US, physicallayer::HE_LTF_1X, 0},
+        {physicallayer::HE_GI_1_6_US, physicallayer::HE_LTF_2X, 1},
+        {physicallayer::HE_GI_3_2_US, physicallayer::HE_LTF_4X, 2},
+    };
+    for (const auto& wireCase : giLtfWireCases) {
+        auto pairTrigger = makeShared<Ieee80211TriggerFrame>(*trigger);
+        pairTrigger->setGuardInterval(wireCase.guardInterval);
+        pairTrigger->setLtfType(wireCase.ltfType);
+        Packet pairPacket("trigger-gi-ltf-pair", pairTrigger);
+        auto pairBytes = pairPacket.peekDataAsBytes();
+        uint64_t pairCommonInfo = 0;
+        for (int i = 0; i < 8; ++i)
+            pairCommonInfo |= uint64_t(pairBytes->getByte(16 + i)) << (8 * i);
+        REQUIRE(((pairCommonInfo >> 20) & 0x3) == wireCase.raw);
+        Packet decodedPairPacket("decoded-trigger-gi-ltf-pair", pairBytes);
+        auto decodedPair = decodedPairPacket.popAtFront<Ieee80211TriggerFrame>();
+        REQUIRE(decodedPair->getGuardInterval() == wireCase.guardInterval);
+        REQUIRE(decodedPair->getLtfType() == wireCase.ltfType);
+        physicallayer::Ieee80211HeMuReq responseRequest;
+        populateHeTbRequestFromTrigger(&responseRequest, *decodedPair,
+                decodedPair->getUsers(0), 7);
+        REQUIRE(responseRequest.getGuardInterval() == wireCase.guardInterval);
+        REQUIRE(responseRequest.getLtfType() == wireCase.ltfType);
+    }
+
+    auto requireSemanticSerializeRejected = [&] (const char *name, const auto& mutate) {
+        auto malformed = makeShared<Ieee80211TriggerFrame>(*trigger);
+        mutate(malformed);
+        Packet malformedPacket(name, malformed);
+        bool rejected = false;
+        try { malformedPacket.peekDataAsBytes(); }
+        catch (const cRuntimeError&) { rejected = true; }
+        REQUIRE(rejected);
+    };
+    requireSemanticSerializeRejected("trigger-invalid-semantic-ltf-count",
+            [] (const auto& malformed) { malformed->setNumberOfHeLtfSymbols(3); });
+    requireSemanticSerializeRejected("trigger-invalid-semantic-padding-factor",
+            [] (const auto& malformed) { malformed->setPreFecPaddingFactor(0); });
+    requireSemanticSerializeRejected("trigger-invalid-semantic-gi-ltf-pair",
+            [] (const auto& malformed) {
+                malformed->setGuardInterval(physicallayer::HE_GI_1_6_US);
+                malformed->setLtfType(physicallayer::HE_LTF_4X);
+            });
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet", bytes);
@@ -82,7 +144,11 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     REQUIRE(!recvTrigger->getCommonDurationExact());
     REQUIRE(recvTrigger->getUlLength() == 799);
     REQUIRE(recvTrigger->getGuardInterval() == 2);
+    REQUIRE(recvTrigger->getLtfType() == physicallayer::HE_LTF_4X);
+    REQUIRE(recvTrigger->getNumberOfHeLtfSymbols() == 4);
     REQUIRE(recvTrigger->getCoding() == 1);
+    REQUIRE(recvTrigger->getPreFecPaddingFactor() == 3);
+    REQUIRE(recvTrigger->getPeDisambiguity());
     REQUIRE(recvTrigger->getUsersArraySize() == 1);
     REQUIRE(recvTrigger->getUsers(0).aid == 7);
     REQUIRE(recvTrigger->getUsers(0).ruToneSize == 106);
@@ -104,9 +170,42 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     REQUIRE(selectedRequest.getChannelBandwidthMhz() == 20);
     REQUIRE(!selectedRequest.getNoSignalExtension());
     REQUIRE(selectedRequest.getCoding() == 1);
+    REQUIRE(selectedRequest.getTriggerMethod() ==
+            static_cast<uint8_t>(physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME));
     REQUIRE(!selectedRequest.getLdpcExtraSymbolSegment());
+    REQUIRE(selectedRequest.getPreFecPaddingFactor() == 3);
+    REQUIRE(selectedRequest.getPeDisambiguity());
+    REQUIRE(selectedRequest.getNumberOfHeLtfSymbols() == 4);
+    REQUIRE(selectedRequest.getNominalPacketPaddingDurationUs() == 0);
+    REQUIRE(selectedRequest.getNominalPacketPaddingDurationUs() ==
+            directRequest.getNominalPacketPaddingDurationUs());
+    REQUIRE(selectedRequest.getPreFecPaddingFactor() == directRequest.getPreFecPaddingFactor());
+    REQUIRE(selectedRequest.getPeDisambiguity() == directRequest.getPeDisambiguity());
+    REQUIRE(selectedRequest.getNumberOfHeLtfSymbols() == directRequest.getNumberOfHeLtfSymbols());
+    REQUIRE(selectedRequest.getLtfType() == directRequest.getLtfType());
+    REQUIRE(selectedRequest.getLdpcExtraSymbolSegment() ==
+            directRequest.getLdpcExtraSymbolSegment());
     REQUIRE(selectedRequest.getCommonDuration() == SimTime(1092, SIMTIME_US));
     REQUIRE(!selectedRequest.getCommonDurationExact());
+
+    auto requireMalformedCommonRejected = [&] (const char *name, uint64_t malformedCommonInfo) {
+        std::vector<uint8_t> malformed(bytes->getChunkLength().get<B>());
+        for (int i = 0; i < (int)malformed.size(); ++i)
+            malformed[i] = bytes->getByte(i);
+        for (int i = 0; i < 8; ++i)
+            malformed[16 + i] = (malformedCommonInfo >> (8 * i)) & 0xFF;
+        Packet malformedPacket(name, makeShared<BytesChunk>(malformed));
+        bool rejected = false;
+        try { malformedPacket.popAtFront<Ieee80211TriggerFrame>(); }
+        catch (const cRuntimeError&) { rejected = true; }
+        REQUIRE(rejected);
+    };
+    requireMalformedCommonRejected("trigger-reserved-ltf-count",
+            (commonInfo & ~(0x7ULL << 23)) | (0x5ULL << 23));
+    requireMalformedCommonRejected("trigger-unsupported-stbc", commonInfo | (1ULL << 26));
+    requireMalformedCommonRejected("trigger-unsupported-doppler", commonInfo | (1ULL << 53));
+    requireMalformedCommonRejected("trigger-reserved-gi-ltf",
+            (commonInfo & ~(0x3ULL << 20)) | (0x3ULL << 20));
 
     delete pk;
     delete pk2;
@@ -127,6 +226,7 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setApTxPowerDbm(-20);
     trigger->setLdpcExtraSymbolSegment(true);
     trigger->setGuardInterval(1);
+    trigger->setLtfType(physicallayer::HE_LTF_2X);
     trigger->setCoding(0); // BCC = 0
     trigger->setUsersArraySize(2);
 
@@ -213,6 +313,7 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setChannelBandwidthMhz(20);
     trigger->setApTxPowerDbm(-20);
     trigger->setGuardInterval(2);
+    trigger->setLtfType(physicallayer::HE_LTF_4X);
     trigger->setCoding(0);
     trigger->setUsersArraySize(2);
 
@@ -300,6 +401,9 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setNfrpFeedbackType(0);
     trigger->setNfrpTargetRssiDbm(-60);
     trigger->setNfrpMultiplexingFlag(true);
+    trigger->setGuardInterval(physicallayer::HE_GI_3_2_US);
+    trigger->setLtfType(physicallayer::HE_LTF_4X);
+    trigger->setNumberOfHeLtfSymbols(2);
     trigger->setUsersArraySize(0);
     trigger->setChunkLength(B(30));
     Packet wirePacket("nfrp-trigger", trigger);
@@ -328,6 +432,9 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     REQUIRE(decoded->getNfrpTargetRssiDbm() == -60);
     REQUIRE(decoded->getNfrpMultiplexingFlag());
     REQUIRE(decoded->getApTxPowerDbm() == 17);
+    REQUIRE(decoded->getGuardInterval() == trigger->getGuardInterval());
+    REQUIRE(decoded->getLtfType() == trigger->getLtfType());
+    REQUIRE(decoded->getNumberOfHeLtfSymbols() == trigger->getNumberOfHeLtfSymbols());
 
     std::vector<uint8_t> malformedFeedbackType(30);
     for (int i = 0; i < 30; i++)
@@ -390,6 +497,27 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     catch (const cRuntimeError&) { apPowerSerializeRejected = true; }
     REQUIRE(apPowerSerializeRejected);
 
+    auto invalidNfrpLtfCount = makeShared<Ieee80211TriggerFrame>(*trigger);
+    invalidNfrpLtfCount->setNumberOfHeLtfSymbols(1);
+    bool nfrpLtfCountRejected = false;
+    try {
+        Packet bad("nfrp-invalid-ltf-count", invalidNfrpLtfCount);
+        bad.peekDataAsBytes();
+    }
+    catch (const cRuntimeError&) { nfrpLtfCountRejected = true; }
+    REQUIRE(nfrpLtfCountRejected);
+
+    auto invalidNfrpGiLtf = makeShared<Ieee80211TriggerFrame>(*trigger);
+    invalidNfrpGiLtf->setGuardInterval(physicallayer::HE_GI_1_6_US);
+    invalidNfrpGiLtf->setLtfType(physicallayer::HE_LTF_2X);
+    bool nfrpGiLtfRejected = false;
+    try {
+        Packet bad("nfrp-invalid-gi-ltf", invalidNfrpGiLtf);
+        bad.peekDataAsBytes();
+    }
+    catch (const cRuntimeError&) { nfrpGiLtfRejected = true; }
+    REQUIRE(nfrpGiLtfRejected);
+
     std::vector<uint8_t> malformedCommon(30);
     for (int i = 0; i < 30; i++)
         malformedCommon[i] = bytes->getByte(i);
@@ -423,6 +551,7 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setUlLength(742);
     trigger->setChannelBandwidthMhz(80);
     trigger->setGuardInterval(2);
+    trigger->setLtfType(physicallayer::HE_LTF_4X);
     trigger->setUsersArraySize(1);
     Ieee80211HeTriggerUserInfo user;
     user.aid = 37;
@@ -449,7 +578,7 @@ REQUIRE(canonical26ToneRus.size() >= 2);
 EV << ".\n";
 
 %contains: stdout
-Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000F03122000000C07F07A0764828C6
+Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000F03122011C00C07F07A0764828C6
 Basic Trigger Frame round-trip verified successfully.
 BSRP Trigger Serialized hex: 24009001020000000001020000000002041912080000C07F6400E00032C820D0002D
 BSRP Trigger Frame round-trip verified successfully.

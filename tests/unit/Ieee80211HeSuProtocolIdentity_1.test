@@ -97,6 +97,8 @@ network = TestNetwork
 using namespace inet;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 class InspectableRadio : public Ieee80211Radio
 {
   public:
@@ -336,6 +338,36 @@ static void testUntaggedCompatibility(InspectableRadio *radio,
     delete packet;
 }
 
+static void testNominalPacketPadding(InspectableRadio *radio,
+        const Ieee80211HeMode *mode, Ieee80211HePpduFormat ppduFormat,
+        int nominalPaddingUs, int packetExtensionUs, simtime_t txTime,
+        bool expectedValid)
+{
+    auto packet = new Packet("he-su-er-nominal-padding");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    packet->addTag<Ieee80211ModeReq>()->setMode(mode);
+    auto request = addCompleteTxVector(packet, ppduFormat, B(100), txTime);
+    request->setNominalPacketPaddingDurationUs(nominalPaddingUs);
+    request->setPacketExtensionDurationUs(packetExtensionUs);
+    bool accepted = true;
+    try {
+        radio->testEncapsulate(packet);
+    }
+    catch (const cRuntimeError&) {
+        accepted = false;
+    }
+    REQUIRE(accepted == expectedValid);
+    if (accepted) {
+        auto layout = packet->getTag<Ieee80211HeTxVectorReq>()->getPpduLayout();
+        REQUIRE(layout->getCommon().preFecPaddingFactor == 1);
+        REQUIRE(layout->getCommon().nominalPacketExtensionDurationUs ==
+                (nominalPaddingUs == 16 ? 4 : 0));
+        REQUIRE(layout->getCommon().packetExtensionDurationUs == packetExtensionUs);
+        REQUIRE(layout->getDuration() == txTime);
+    }
+    delete packet;
+}
+
 static void testTransitionalSoundingNdp(InspectableRadio *radio, const Ieee80211HeMode *mode)
 {
     auto packet = new Packet("transitional-he-sounding-ndp");
@@ -439,6 +471,9 @@ static void testTriggerBasedRecipientContext(InspectableRadio *radio,
     auto request = packet->addTag<Ieee80211HeMuReq>();
     request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
     request->setLSigLength(742);
+    request->setTriggerMethod(static_cast<uint8_t>(Ieee80211HeTriggerMethod::TRIGGER_FRAME));
+    request->setPreFecPaddingFactor(4);
+    request->setNumberOfHeLtfSymbols(1);
     request->setCommonDurationExact(false);
     request->setTriggerId(4242);
     request->setRuIndex(ru.index);
@@ -504,6 +539,9 @@ static void testTriggerBandwidthOverridesLocalMode(InspectableRadio *radio,
     auto request = packet->addTag<Ieee80211HeMuReq>();
     request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
     request->setLSigLength(742);
+    request->setTriggerMethod(static_cast<uint8_t>(Ieee80211HeTriggerMethod::TRIGGER_FRAME));
+    request->setPreFecPaddingFactor(4);
+    request->setNumberOfHeLtfSymbols(1);
     request->setChannelBandwidthMhz(80);
     request->setCommonDurationExact(false);
     request->setRuIndex(ru80.index);
@@ -529,7 +567,7 @@ enum class InvalidTxVectorCase {
     MCS_MISMATCH,
     PSDU_LENGTH_MISMATCH,
     BSS_COLOR_MISMATCH,
-    SHORT_PACKET_EXTENSION,
+    INSUFFICIENT_TABLE_PACKET_EXTENSION,
     INVALID_LTF_TYPE,
     BCC_WITH_LDPC_EXTRA
 };
@@ -554,8 +592,8 @@ static void testRejectedTxVector(InspectableRadio *radio,
         case InvalidTxVectorCase::BSS_COLOR_MISMATCH:
             txVector->setBssColor(1);
             break;
-        case InvalidTxVectorCase::SHORT_PACKET_EXTENSION:
-            txVector->setNominalPacketPaddingDurationUs(8);
+        case InvalidTxVectorCase::INSUFFICIENT_TABLE_PACKET_EXTENSION:
+            txVector->setNominalPacketPaddingDurationUs(16);
             break;
         case InvalidTxVectorCase::INVALID_LTF_TYPE:
             txVector->setLtfType(3);
@@ -609,6 +647,20 @@ testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heSuMode
         b(100), B(100), SimTime(180, SIMTIME_US), 115, SimTime(1, SIMTIME_S));
 testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heErSuMode, HE_EXTENDED_RANGE_SU,
         b(100), B(100), SimTime(188, SIMTIME_US), 122, SimTime(2, SIMTIME_S));
+// Table 27-47: for final a=1, nominal 8 us permits T_PE=0, while nominal
+// 16 us requires only T_PE=4 (not a raw 16 us comparison).
+testNominalPacketPadding(radio, heSuMode, HE_SINGLE_USER, 8, 0,
+        SimTime(180, SIMTIME_US), true);
+testNominalPacketPadding(radio, heSuMode, HE_SINGLE_USER, 16, 4,
+        SimTime(184, SIMTIME_US), true);
+testNominalPacketPadding(radio, heSuMode, HE_SINGLE_USER, 16, 0,
+        SimTime(180, SIMTIME_US), false);
+testNominalPacketPadding(radio, heErSuMode, HE_EXTENDED_RANGE_SU, 8, 0,
+        SimTime(188, SIMTIME_US), true);
+testNominalPacketPadding(radio, heErSuMode, HE_EXTENDED_RANGE_SU, 16, 4,
+        SimTime(192, SIMTIME_US), true);
+testNominalPacketPadding(radio, heErSuMode, HE_EXTENDED_RANGE_SU, 16, 0,
+        SimTime(188, SIMTIME_US), false);
 testTriggerBasedRecipientContext(radio, receiverRadio, medium, transmitter, heSuMode,
         SimTime(3, SIMTIME_S));
 testTriggerBandwidthOverridesLocalMode(radio, transmitter, heSuMode);
@@ -620,7 +672,7 @@ testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::INCOMPLETE);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::MCS_MISMATCH);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::PSDU_LENGTH_MISMATCH);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::BSS_COLOR_MISMATCH);
-testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::SHORT_PACKET_EXTENSION);
+testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::INSUFFICIENT_TABLE_PACKET_EXTENSION);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::INVALID_LTF_TYPE);
 testRejectedTxVector(radio, heSuMode, InvalidTxVectorCase::BCC_WITH_LDPC_EXTRA);
 ASSERT(heErSuMode->getPreambleMode()->getDuration() ==

@@ -130,8 +130,12 @@ class INET_API IIeee80211HeUlScheduler
         bool commonDurationExact = false;
         bool noSignalExtension = false;
         physicallayer::Ieee80211HeGuardInterval guardInterval = physicallayer::HE_GI_3_2_US;
+        physicallayer::Ieee80211HeLtfType ltfType = physicallayer::HE_LTF_4X;
         physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
         bool ldpcExtraSymbolSegment = false;
+        int preFecPaddingFactor = 4;
+        bool peDisambiguity = false;
+        int numberOfHeLtfSymbols = 1;
         int apTxPowerDbm = 0;
         int packetExtensionDurationUs = 0;
         uint8_t puncturedSubchannelMask = 0;

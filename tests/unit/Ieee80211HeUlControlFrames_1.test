@@ -2,6 +2,7 @@
 Test Trigger, BSR, and Multi-STA Block Ack serialization.
 
 %includes:
+#include <algorithm>
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
@@ -46,6 +47,7 @@ static IIeee80211HeUlScheduler::Schedule makeUlSchedule(
     IIeee80211HeUlScheduler::Schedule schedule;
     schedule.commonDuration = duration;
     schedule.guardInterval = HE_GI_3_2_US;
+    schedule.ltfType = HE_LTF_4X;
     schedule.coding = HE_CODING_BCC;
     schedule.packetExtensionDurationUs = 0;
     schedule.apTxPowerDbm = 17;
@@ -93,6 +95,46 @@ static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
     delete callback;
     delete coordinator;
     return decoded;
+}
+
+static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
+        const Ptr<const Ieee80211TriggerFrame>& decoded, Hz centerFrequency)
+{
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = centerFrequency;
+    request.channelBandwidth = MHz(decoded->getChannelBandwidthMhz());
+    request.ppduFormat = HE_TRIGGER_BASED_UPLINK;
+    request.lSigLength = decoded->getUlLength();
+    request.noSignalExtension = decoded->getNoSignalExtension();
+    request.requestedTxTime = decoded->getCommonDuration();
+    request.requestedTxTimeExact = decoded->getCommonDurationExact();
+    request.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    request.preFecPaddingFactor = decoded->getPreFecPaddingFactor();
+    request.ldpcExtraSymbolSegment = decoded->getLdpcExtraSymbolSegment();
+    request.peDisambiguity = decoded->getPeDisambiguity();
+    request.numberOfHeLtfSymbols = decoded->getNumberOfHeLtfSymbols();
+    request.guardInterval = static_cast<Ieee80211HeGuardInterval>(decoded->getGuardInterval());
+    request.ltfType = static_cast<Ieee80211HeLtfType>(decoded->getLtfType());
+    request.packetExtensionDurationUs = decoded->getPacketExtensionDurationUs();
+    const auto catalog = getHeRuAllocationCatalog(centerFrequency, request.channelBandwidth);
+    for (unsigned int i = 0; i < decoded->getUsersArraySize(); ++i) {
+        const auto& decodedUser = decoded->getUsers(i);
+        auto ru = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& candidate) {
+            return candidate.toneSize == decodedUser.ruToneSize &&
+                    candidate.toneOffset == decodedUser.ruToneOffset;
+        });
+        REQUIRE(ru != catalog.end());
+        Ieee80211HeUserTxVectorRequest user;
+        user.ru = *ru;
+        user.staId = decodedUser.aid;
+        user.mcs = decodedUser.mcs;
+        user.numberOfSpatialStreams = decodedUser.numberOfSpatialStreams;
+        user.streamStartIndex = decodedUser.streamStartIndex;
+        user.coding = static_cast<Ieee80211HeCoding>(decodedUser.coding);
+        user.psduLength = B(1);
+        request.users.push_back(user);
+    }
+    return Ieee80211HeTxVectorFactory::create(request);
 }
 
 %activity:
@@ -170,7 +212,8 @@ static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
     trigger->setUlLength(58);
     trigger->setChannelBandwidthMhz(20);
     trigger->setCommonDuration(SimTime(800, SIMTIME_US));
-    trigger->setGuardInterval(0);
+    trigger->setGuardInterval(HE_GI_1_6_US);
+    trigger->setLtfType(HE_LTF_1X);
     trigger->setCoding(1);
     trigger->setUsersArraySize(2);
     Ieee80211HeTriggerUserInfo scheduled;
@@ -200,7 +243,8 @@ static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
     REQUIRE(decoded->getTriggerId() == 0);
     REQUIRE(decoded->getUlLength() == 58);
     REQUIRE(decoded->getCommonDuration() == SimTime(104, SIMTIME_US));
-    REQUIRE(decoded->getGuardInterval() == 0);
+    REQUIRE(decoded->getGuardInterval() == HE_GI_1_6_US);
+    REQUIRE(decoded->getLtfType() == HE_LTF_1X);
     REQUIRE(decoded->getCoding() == 1);
     REQUIRE(decoded->getUsersArraySize() == 2);
     REQUIRE(decoded->getUsers(0).aid == 7);
@@ -238,6 +282,58 @@ static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
         }
     }
     EV << "HCF-finalized BSRP/NFRP Trigger build and wire round trips passed.\n";
+}
+
+{
+    const auto centerFrequency = Hz(5.18e9);
+    const auto channelBandwidth = MHz(20);
+    struct GiLtfFactoryCase {
+        Ieee80211HeGuardInterval guardInterval;
+        Ieee80211HeLtfType ltfType;
+    };
+    const GiLtfFactoryCase cases[] = {
+        {HE_GI_1_6_US, HE_LTF_1X},
+        {HE_GI_1_6_US, HE_LTF_2X},
+        {HE_GI_3_2_US, HE_LTF_4X},
+    };
+    for (const auto& testCase : cases) {
+        auto proposed = makeUlSchedule(centerFrequency, channelBandwidth,
+                SimTime(1, SIMTIME_MS), IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+        proposed.guardInterval = testCase.guardInterval;
+        proposed.ltfType = testCase.ltfType;
+        if (testCase.ltfType == HE_LTF_1X) {
+            auto fullRu = getHeEqualRuLayout(centerFrequency, channelBandwidth, 1).front();
+            proposed.allocations.front().ru = fullRu;
+            proposed.allocations.front().muMimo = true;
+            auto second = proposed.allocations.front();
+            second.staAddress = MacAddress("02:00:00:00:00:02");
+            second.associationId = 2;
+            second.streamStartIndex = 1;
+            proposed.allocations.push_back(second);
+        }
+        auto finalized = TestHeHcfScheduleFinalizer::finalize(proposed,
+                centerFrequency, channelBandwidth,
+                IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+        REQUIRE(finalized);
+        REQUIRE(finalized.schedule.guardInterval == testCase.guardInterval);
+        REQUIRE(finalized.schedule.ltfType == testCase.ltfType);
+        auto decoded = buildSerializeAndDecodeTrigger(finalized.schedule,
+                IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+        REQUIRE(decoded->getGuardInterval() == testCase.guardInterval);
+        REQUIRE(decoded->getLtfType() == testCase.ltfType);
+        auto txVector = createTxVectorFromDecodedTrigger(decoded, centerFrequency);
+        REQUIRE(txVector);
+        REQUIRE(txVector.getTxVector()->getCommon().getParameters().guardInterval == testCase.guardInterval);
+        REQUIRE(txVector.getTxVector()->getCommon().getParameters().ltfType == testCase.ltfType);
+    }
+    auto invalidPair = makeUlSchedule(centerFrequency, channelBandwidth,
+            SimTime(1, SIMTIME_MS), IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+    invalidPair.guardInterval = HE_GI_1_6_US;
+    invalidPair.ltfType = HE_LTF_4X;
+    REQUIRE(!TestHeHcfScheduleFinalizer::finalize(invalidPair,
+            centerFrequency, channelBandwidth,
+            IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER));
+    EV << "All Trigger GI/HE-LTF wire pairs crossed responder and TXVECTOR boundaries.\n";
 }
 
 {
@@ -284,8 +380,8 @@ static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
             capUlLength.value.length, 6000).txTime > SimTime(5.484, SIMTIME_MS));
     REQUIRE(finalized.schedule.commonDuration <= SimTime(5.484, SIMTIME_MS));
     REQUIRE(finalized.resolvedTxTime <= SimTime(5.484, SIMTIME_MS));
-    REQUIRE(finalized.schedule.commonDuration == SimTime(5.470, SIMTIME_MS));
-    REQUIRE(finalized.resolvedTxTime == SimTime(5.470, SIMTIME_MS));
+    REQUIRE(finalized.schedule.commonDuration == SimTime(5.482, SIMTIME_MS));
+    REQUIRE(finalized.resolvedTxTime == SimTime(5.482, SIMTIME_MS));
     REQUIRE(finalized.schedule.ulLength % 3 == 1);
     auto decoded = buildSerializeAndDecodeTrigger(finalized.schedule,
             IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
@@ -298,8 +394,13 @@ static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
     request.noSignalExtension = decoded->getNoSignalExtension();
     request.requestedTxTime = decoded->getCommonDuration();
     request.requestedTxTimeExact = decoded->getCommonDurationExact();
+    request.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    request.preFecPaddingFactor = decoded->getPreFecPaddingFactor();
+    request.ldpcExtraSymbolSegment = decoded->getLdpcExtraSymbolSegment();
+    request.peDisambiguity = decoded->getPeDisambiguity();
+    request.numberOfHeLtfSymbols = decoded->getNumberOfHeLtfSymbols();
     request.guardInterval = static_cast<Ieee80211HeGuardInterval>(decoded->getGuardInterval());
-    request.ltfType = getHeDefaultLtfType(request.guardInterval);
+    request.ltfType = static_cast<Ieee80211HeLtfType>(decoded->getLtfType());
     request.packetExtensionDurationUs = decoded->getPacketExtensionDurationUs();
     Ieee80211HeUserTxVectorRequest user;
     user.ru = proposed.allocations.front().ru;
@@ -439,6 +540,7 @@ Only an NFRP receive collection admits a valid headerless feedback NDP.
 Trigger-derived path loss controls exact HE-TB power and preserves maximum-power encoding.
 Trigger frame round trip passed.
 HCF-finalized BSRP/NFRP Trigger build and wire round trips passed.
+All Trigger GI/HE-LTF wire pairs crossed responder and TXVECTOR boundaries.
 NFRP AID range and tone-set/STS mapping passed for all HE bandwidths.
 2.4 GHz maximum HE-TB schedule crossed the TXVECTOR boundary legally.
 BE/BK BSR ACI wire mappings passed.

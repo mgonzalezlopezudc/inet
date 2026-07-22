@@ -11,6 +11,8 @@ Test authoritative per-user IEEE 802.11ax PHY duration parameters.
 using namespace inet;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 static void expectRuntimeError(const std::function<void()>& operation)
 {
     bool rejected = false;
@@ -216,7 +218,9 @@ longUser.streamStartIndex = 1;
 longUser.psduLength = B(3000);
 auto commonPpdu = computeHePpduParameters({shortUser, longUser}, Hz(20e6));
 ASSERT(commonPpdu);
-ASSERT(commonPpdu.parameters.users[0].numberOfDataSymbols <
+REQUIRE(commonPpdu.parameters.users[0].individualInitialNumberOfDataSymbols <
+        commonPpdu.parameters.commonNumberOfDataSymbols);
+REQUIRE(commonPpdu.parameters.users[0].numberOfDataSymbols ==
         commonPpdu.parameters.commonNumberOfDataSymbols);
 ASSERT(commonPpdu.parameters.users[0].dataDuration ==
         commonPpdu.parameters.users[1].dataDuration);

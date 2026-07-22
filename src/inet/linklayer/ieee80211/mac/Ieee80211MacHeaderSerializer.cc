@@ -450,8 +450,28 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 default: throw cRuntimeError("Unsupported Trigger UL bandwidth %u MHz",
                             trigger->getChannelBandwidthMhz());
             }
-            uint8_t giAndHeLtf = nfrp ? 2 :
-                    ((trigger->getGuardInterval() <= 2) ? trigger->getGuardInterval() : 2);
+            uint8_t giAndHeLtf;
+            if (trigger->getGuardInterval() == 1 && trigger->getLtfType() == 1)
+                giAndHeLtf = 0;
+            else if (trigger->getGuardInterval() == 1 && trigger->getLtfType() == 2)
+                giAndHeLtf = 1;
+            else if (trigger->getGuardInterval() == 2 && trigger->getLtfType() == 4)
+                giAndHeLtf = 2;
+            else
+                throw cRuntimeError("Invalid Trigger GI And HE-LTF Type semantic pair");
+            if (nfrp && (giAndHeLtf != 2 || trigger->getNumberOfHeLtfSymbols() != 2))
+                throw cRuntimeError("NFRP Trigger requires 4x HE-LTF, 3.2 us GI, and two HE-LTF symbols");
+            uint8_t numberOfHeLtfSymbols;
+            switch (trigger->getNumberOfHeLtfSymbols()) {
+                case 1: numberOfHeLtfSymbols = 0; break;
+                case 2: numberOfHeLtfSymbols = 1; break;
+                case 4: numberOfHeLtfSymbols = 2; break;
+                case 6: numberOfHeLtfSymbols = 3; break;
+                case 8: numberOfHeLtfSymbols = 4; break;
+                default: throw cRuntimeError("Invalid Trigger Number Of HE-LTF Symbols");
+            }
+            if (trigger->getPreFecPaddingFactor() < 1 || trigger->getPreFecPaddingFactor() > 4)
+                throw cRuntimeError("Invalid Trigger Pre-FEC Padding Factor");
             if (trigger->getApTxPowerDbm() < -20 || trigger->getApTxPowerDbm() > 40)
                 throw cRuntimeError("Trigger AP Tx Power is outside the encodable -20..40 dBm/20 MHz range");
             const uint8_t apTxPower = trigger->getApTxPowerDbm() + 20;
@@ -463,9 +483,11 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                     (1ULL << 17) |                                    // B17: CS Required
                     ((static_cast<uint64_t>(ulBw) & 0x3) << 18) |     // B18-B19: UL BW
                     ((static_cast<uint64_t>(giAndHeLtf) & 0x3) << 20) | // B20-B21: GI And HE-LTF Type
-                    (nfrp ? (1ULL << 23) : 0) |                       // B23-B25: NFRP Number Of HE-LTF Symbols = 1
+                    ((static_cast<uint64_t>(nfrp ? 1 : numberOfHeLtfSymbols) & 0x7) << 23) | // B23-B25
                     (nfrp ? 0 : (static_cast<uint64_t>(trigger->getLdpcExtraSymbolSegment()) << 27)) | // B27
                     ((static_cast<uint64_t>(apTxPower) & 0x3F) << 28) | // B28-B33: AP Tx Power + 20 dBm/20 MHz
+                    (nfrp ? 0 : (static_cast<uint64_t>(trigger->getPreFecPaddingFactor() % 4) << 34)) | // B34-B35
+                    (nfrp ? 0 : (static_cast<uint64_t>(trigger->getPeDisambiguity()) << 36)) | // B36
                     (0x1FFULL << 54);                                 // B54-B62: HE variant reserved bits are all ones
             writeLeBits(stream, commonInfo, 64);
 
@@ -1050,13 +1072,40 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             auto ulBw = (commonInfo >> 18) & 0x3;
             trigger->setChannelBandwidthMhz(20U << ulBw);
             auto giAndHeLtf = (commonInfo >> 20) & 0x3;
-            trigger->setGuardInterval(giAndHeLtf);
+            switch (giAndHeLtf) {
+                case 0:
+                    trigger->setGuardInterval(1); // 1.6 us GI
+                    trigger->setLtfType(1); // 1x HE-LTF
+                    break;
+                case 1:
+                    trigger->setGuardInterval(1); // 1.6 us GI
+                    trigger->setLtfType(2); // 2x HE-LTF
+                    break;
+                case 2:
+                    trigger->setGuardInterval(2); // 3.2 us GI
+                    trigger->setLtfType(4); // 4x HE-LTF
+                    break;
+                default:
+                    throw cRuntimeError("Trigger GI And HE-LTF Type uses a reserved encoding");
+            }
 
+            if ((commonInfo >> 26) & 0x1)
+                throw cRuntimeError("Trigger UL STBC is unsupported by the packet-level HE PHY");
             trigger->setLdpcExtraSymbolSegment((commonInfo >> 27) & 0x1);
             auto apTxPower = (commonInfo >> 28) & 0x3F;
             if (apTxPower > 60)
                 throw cRuntimeError("Trigger AP Tx Power uses a reserved encoding");
             trigger->setApTxPowerDbm(static_cast<int8_t>(apTxPower) - 20);
+            auto numberOfHeLtfSymbols = (commonInfo >> 23) & 0x7;
+            if (numberOfHeLtfSymbols > 4)
+                throw cRuntimeError("Trigger Number Of HE-LTF Symbols uses a reserved encoding");
+            static const uint8_t numberOfHeLtfSymbolsValues[] = {1, 2, 4, 6, 8};
+            trigger->setNumberOfHeLtfSymbols(numberOfHeLtfSymbolsValues[numberOfHeLtfSymbols]);
+            auto preFecPaddingFactor = (commonInfo >> 34) & 0x3;
+            trigger->setPreFecPaddingFactor(preFecPaddingFactor == 0 ? 4 : preFecPaddingFactor);
+            trigger->setPeDisambiguity((commonInfo >> 36) & 0x1);
+            if ((commonInfo >> 53) & 0x1)
+                throw cRuntimeError("Trigger Doppler is unsupported until HE midamble timing is modeled");
             if (((commonInfo >> 54) & 0x1FF) != 0x1FF)
                 throw cRuntimeError("HE Trigger Common Info B54-B62 reserved bits are not all ones");
             if ((commonInfo >> 63) != 0)

@@ -235,13 +235,16 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
         return ru.toneSize >= 484;
     });
     header->setCoding(requiresLdpc ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC);
+    header->setGuardInterval(physicallayer::HE_GI_1_6_US);
+    header->setLtfType(physicallayer::HE_LTF_2X);
 
     // A BFRP Trigger is addressed only to users for which the selected
     // equal-sized RU layout has an explicit RU. Keep this assertion next to
     // the indexing below to turn configuration mistakes into local failures.
     ASSERT(targets.size() <= ruLayout.size());
 
-    simtime_t commonDuration = SIMTIME_ZERO;
+    std::vector<physicallayer::Ieee80211HeUserPhyParameters> responseUsers;
+    responseUsers.reserve(targets.size());
     for (size_t i = 0; i < targets.size(); ++i) {
         Ieee80211HeTriggerUserInfo user;
         user.aid = targets[i].aid;
@@ -253,36 +256,43 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
         user.targetRssiDbm = -60;
         header->setUsers(i, user);
 
+        physicallayer::Ieee80211HeUserPhyParameters responseUser;
+        responseUser.ru = ruLayout[i];
+        responseUser.mcs = user.mcs;
+        responseUser.numberOfSpatialStreams = user.numberOfSpatialStreams;
+        responseUser.streamStartIndex = user.streamStartIndex;
+        responseUser.staId = user.aid;
+        responseUser.coding = requiresLdpc ? physicallayer::HE_CODING_LDPC :
+                physicallayer::HE_CODING_BCC;
         // The feedback MPDU is 34 bytes: 24 (MAC hdr) + 6 (§9.6.28.2 body) + 4 (FCS).
-        commonDuration = std::max(commonDuration,
-                physicallayer::estimateHeMuUserDuration(B(34), ruLayout[i].toneSize, 0));
+        responseUser.psduLength = B(34);
+        responseUsers.push_back(responseUser);
     }
-    ASSERT(commonDuration > SIMTIME_ZERO);
     auto heMode = modeSet != nullptr && modeSet->getNumModes() > 0 ?
             dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0)) : nullptr;
     if (heMode == nullptr)
         throw cRuntimeError("Cannot select HE BFRP signal extension without an HE operating band");
     header->setNoSignalExtension(false);
-    const auto signalExtensionNs = physicallayer::getIeee80211HeSignalExtensionNs(
-            heMode->getCenterFrequencyMode() == physicallayer::Ieee80211HeMode::BAND_2_4GHZ ?
-                    physicallayer::Ieee80211HeOperatingBand::BAND_2_4_GHZ :
-                    physicallayer::Ieee80211HeOperatingBand::BAND_5_GHZ,
-            header->getNoSignalExtension());
-    commonDuration += SimTime(signalExtensionNs, SIMTIME_NS);
-    auto ulLength = physicallayer::buildIeee80211HeTriggerUlLength(commonDuration,
-            signalExtensionNs);
-    if (!ulLength)
-        throw cRuntimeError("Cannot encode BFRP Trigger UL Length: %s", ulLength.error.c_str());
-    header->setUlLength(ulLength.value.length);
-    auto durationEnvelope = physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
-            header->getUlLength(), signalExtensionNs);
-    if (!durationEnvelope)
-        throw cRuntimeError("Cannot resolve BFRP Trigger duration envelope: %s",
-                durationEnvelope.error.c_str());
-    commonDuration = durationEnvelope.txTime;
-    header->setCommonDuration(commonDuration);
-    header->setCommonDurationExact(false);
-    header->setDurationField(modeSet->getSifsTime() + commonDuration);
+    physicallayer::Ieee80211HeTriggerResponseFinalizationRequest request;
+    request.users = responseUsers;
+    request.centerFrequency = heMode->getCenterFrequencyMode() ==
+            physicallayer::Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.4e9) : Hz(5e9);
+    request.channelBandwidth = bandwidth;
+    request.guardInterval = physicallayer::HE_GI_1_6_US;
+    request.ltfType = physicallayer::HE_LTF_2X;
+    request.noSignalExtension = header->getNoSignalExtension();
+    auto finalization = physicallayer::finalizeHeTriggerResponse(request);
+    if (!finalization)
+        throw cRuntimeError("Cannot finalize BFRP Trigger response: %s", finalization.error.c_str());
+    header->setUlLength(finalization.ulLength);
+    header->setNumberOfHeLtfSymbols(finalization.parameters.common.numberOfHeLtfSymbols);
+    header->setPreFecPaddingFactor(finalization.parameters.common.preFecPaddingFactor);
+    header->setLdpcExtraSymbolSegment(finalization.parameters.common.ldpcExtraSymbol);
+    header->setPeDisambiguity(finalization.peDisambiguity);
+    header->setPacketExtensionDurationUs(finalization.parameters.common.packetExtensionDurationUs);
+    header->setCommonDuration(finalization.commonDuration);
+    header->setCommonDurationExact(finalization.commonDurationExact);
+    header->setDurationField(modeSet->getSifsTime() + finalization.commonDuration);
     header->setChunkLength(B(24 + 6 * targets.size()));
 
     auto packet = new Packet("HE-BFRP-Trigger", header);

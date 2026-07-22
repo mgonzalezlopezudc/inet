@@ -290,9 +290,13 @@ class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
     uint16_t channelBandwidthMhz = 20; // decoded Trigger Common Info UL BW
     bool noSignalExtension = false; // ordinary HE-TB TXVECTOR policy; not carried by Trigger Common Info
     uint8_t guardInterval = 2;
+    uint8_t ltfType = 4; // semantic HE-LTF type: 1x, 2x, or 4x
+    uint8_t numberOfHeLtfSymbols = 1; // semantic count: 1, 2, 4, 6, or 8
     uint8_t coding = 0; // compatibility summary; each User Info carries its own FEC coding
     bool ldpcExtraSymbolSegment = false; // Trigger Common Info B27
     int8_t apTxPowerDbm = 0; // Trigger Common Info B28-B33, normalized to 20 MHz
+    uint8_t preFecPaddingFactor = 4; // semantic Trigger Common Info value a, 1..4
+    bool peDisambiguity = false; // Trigger Common Info B36
     // INET PHY request metadata copied to the HE-TB PPDU model. These fields
     // summarize behavior that would be carried by several Trigger/HE-SIG
     // subfields in a full bit-level implementation.

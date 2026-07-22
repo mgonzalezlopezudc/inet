@@ -108,9 +108,15 @@ class Ieee80211HeMuReq extends TagBase
     uint8_t ndpRuToneSetIndex = 0;
     uint8_t ndpStartingStsNumber = 0;
     uint8_t guardInterval = 2;
+    uint8_t ltfType = 4; // authoritative Trigger Common Info HE-LTF type for HE TB
     uint8_t coding = 0;
+    uint8_t triggerMethod = 0; // 0: none, 1: Trigger frame, 2: TRS
     bool ldpcExtraSymbolSegment = false; // Trigger Common Info B27 for HE TB
+    uint8_t preFecPaddingFactor = 0; // semantic Trigger value a, 1..4
+    bool peDisambiguity = false;
+    uint8_t numberOfHeLtfSymbols = 0;
     uint8_t packetExtensionDurationUs = 0;
+    uint8_t nominalPacketPaddingDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
     uint8_t spatialReuse = 0;
     bool txopUnspecified = true;
@@ -149,6 +155,7 @@ class Ieee80211HeMuCommonReq extends TagBase
     uint8_t guardInterval = 2;
     uint8_t coding = 0;
     uint8_t packetExtensionDurationUs = 0;
+    uint8_t nominalPacketPaddingDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
     uint8_t spatialReuse = 0;
     bool txopUnspecified = true;

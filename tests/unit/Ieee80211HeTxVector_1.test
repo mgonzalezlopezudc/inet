@@ -559,6 +559,10 @@ REQUIRE(tbNdpResult.getPpduLayout()->getPsduBitRanges().empty());
 auto tbDataRequest = baseRequest;
 tbDataRequest.ppduFormat = HE_TRIGGER_BASED_UPLINK;
 tbDataRequest.lSigLength = 130;
+tbDataRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+tbDataRequest.preFecPaddingFactor = 4;
+tbDataRequest.peDisambiguity = false;
+tbDataRequest.numberOfHeLtfSymbols = 1;
 auto tbDataResult = Ieee80211HeTxVectorFactory::create(tbDataRequest);
 if (!tbDataResult)
     throw cRuntimeError("explicit HE TB L-SIG fixture rejected: %s", tbDataResult.getContext().detail.c_str());
@@ -566,7 +570,7 @@ REQUIRE(tbDataResult);
 REQUIRE(tbDataResult.getTxVector()->getCommon().getParameters().lSigLength == 130);
 REQUIRE(tbDataResult.getPpduLayout()->getDuration() == SimTime(200, SIMTIME_US));
 REQUIRE(tbDataResult.getPpduLayout()->getCommonNumberOfDataSymbols() == 9);
-REQUIRE(tbDataResult.getPpduLayout()->getUsers()[0].postFecPaddingBits > 0);
+REQUIRE(tbDataResult.getPpduLayout()->getUsers()[0].preFecPaddingBits > 0);
 auto exactTbDataRequest = tbDataRequest;
 exactTbDataRequest.requestedTxTime = SimTime(200, SIMTIME_US);
 exactTbDataRequest.requestedTxTimeExact = true;
@@ -574,7 +578,7 @@ REQUIRE(Ieee80211HeTxVectorFactory::create(exactTbDataRequest));
 auto mismatchedExactTbDataRequest = exactTbDataRequest;
 mismatchedExactTbDataRequest.lSigLength = 127;
 assertInvalid(Ieee80211HeTxVectorFactory::create(mismatchedExactTbDataRequest),
-        Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH, "lSigLength");
+        Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH, "requestedTxTime");
 auto unalignedExactTbDataRequest = exactTbDataRequest;
 unalignedExactTbDataRequest.requestedTxTime = SimTime(196, SIMTIME_US);
 assertInvalid(Ieee80211HeTxVectorFactory::create(unalignedExactTbDataRequest),

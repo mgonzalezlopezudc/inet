@@ -78,6 +78,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
   protected:
     /** Build the MU container Packet from the scheduler allocation and pending queue. */
     Packet *buildMuContainerPacket(FrameSequenceContext *context);
+    virtual MacAddress getTransmitterAddress() const;
 
     friend class HeDlMuPerStaBlockAckFs;
     friend class HeDlMuBarBlockAckFs;

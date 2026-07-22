@@ -4,6 +4,7 @@ Test HeDlMuTxOpFs TXOP trimming, compressed MU-BAR Block Ack timing, BA-window e
 %includes:
 #include <map>
 #include <set>
+#include <algorithm>
 
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -17,8 +18,10 @@ Test HeDlMuTxOpFs TXOP trimming, compressed MU-BAR Block Ack timing, BA-window e
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPackingPlanner.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
 %file: TestNetwork.ned
@@ -125,6 +128,18 @@ class MockDlMuScheduler : public IIeee80211HeDlScheduler
 
     virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidates, Hz centerFrequency, Hz bandwidth) override { return allocations; }
     virtual std::vector<RuAllocation> schedule(const ScheduleContext& context) override { return allocations; }
+};
+
+class TestHeDlMuTxOpFs : public HeDlMuTxOpFs
+{
+  protected:
+    virtual MacAddress getTransmitterAddress() const override
+    {
+        return MacAddress("AA:BB:CC:DD:EE:FF");
+    }
+
+  public:
+    using HeDlMuTxOpFs::HeDlMuTxOpFs;
 };
 
 class MockDlMuInProgressFrames : public InProgressFrames
@@ -521,15 +536,83 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     baHandler.addAgreement(sta2, tid);
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
-    HeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)),
+    TestHeDlMuTxOpFs fs(&scheduler, makeScheduleContext({sta1, sta2}, SimTime(1504, SIMTIME_US)),
             modeSet, pendingQueue, &ackHandler, callback, 16, 6500631,
             SimTime(5.484, SIMTIME_MS), HeDlMuTxOpFs::AckMethod::MU_BAR_TRIGGER);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
     requireTrue(step != nullptr, "106-tone MU-BAR responses should leave payload time in an AC_VO TXOP");
     requireTrue(fs.getActiveAllocations().size() == 2, "voice TXOP should preserve both 106-tone users");
+    fsContext->addStep(step);
+    step->setCompletion(IFrameSequenceStep::Completion::ACCEPTED);
+    requireTrue(fs.completeStep(fsContext), "HE MU container step should complete");
+    auto triggerStep = check_and_cast<ITransmitStep *>(fs.prepareStep(fsContext));
+    requireTrue(triggerStep != nullptr, "MU-BAR sequence should produce its Trigger frame");
+    fsContext->addStep(triggerStep);
+    auto triggerPacket = triggerStep->getFrameToTransmit();
+    auto directTrigger = triggerPacket->peekAtFront<Ieee80211TriggerFrame>();
+    requireTrue(directTrigger->getGuardInterval() == HE_GI_1_6_US,
+            "MU-BAR producer should use the mandatory ordinary HE-TB GI");
+    requireTrue(directTrigger->getLtfType() == HE_LTF_2X,
+            "MU-BAR producer should use the mandatory ordinary HE-TB LTF");
+    requireTrue(directTrigger->getNumberOfHeLtfSymbols() >= 1,
+            "MU-BAR producer should finalize the HE-LTF count");
+    triggerPacket->popAtBack<Ieee80211MacTrailer>(B(4));
+    auto computedTrailer = makeShared<Ieee80211MacTrailer>();
+    computedTrailer->setFcsMode(FCS_COMPUTED);
+    computedTrailer->setFcs(0);
+    triggerPacket->insertAtBack(computedTrailer);
+    auto bytes = triggerPacket->peekDataAsBytes();
+    Packet receivedTrigger("received-mu-bar-trigger", bytes);
+    auto decodedTrigger = receivedTrigger.popAtFront<Ieee80211TriggerFrame>(
+            B(24 + 9 * directTrigger->getUsersArraySize()));
+    requireTrue(decodedTrigger->getGuardInterval() == directTrigger->getGuardInterval(),
+            "serialized MU-BAR GI should equal the producer value");
+    requireTrue(decodedTrigger->getLtfType() == directTrigger->getLtfType(),
+            "serialized MU-BAR LTF should equal the producer value");
+    requireTrue(decodedTrigger->getNumberOfHeLtfSymbols() == directTrigger->getNumberOfHeLtfSymbols(),
+            "serialized MU-BAR HE-LTF count should equal the producer value");
+    Ieee80211HeTxVectorRequest responseRequest;
+    responseRequest.centerFrequency = Hz(5.18e9);
+    responseRequest.channelBandwidth = MHz(decodedTrigger->getChannelBandwidthMhz());
+    responseRequest.ppduFormat = HE_TRIGGER_BASED_UPLINK;
+    responseRequest.lSigLength = decodedTrigger->getUlLength();
+    responseRequest.noSignalExtension = decodedTrigger->getNoSignalExtension();
+    responseRequest.requestedTxTime = decodedTrigger->getCommonDuration();
+    responseRequest.requestedTxTimeExact = decodedTrigger->getCommonDurationExact();
+    responseRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    responseRequest.preFecPaddingFactor = decodedTrigger->getPreFecPaddingFactor();
+    responseRequest.ldpcExtraSymbolSegment = decodedTrigger->getLdpcExtraSymbolSegment();
+    responseRequest.peDisambiguity = decodedTrigger->getPeDisambiguity();
+    responseRequest.numberOfHeLtfSymbols = decodedTrigger->getNumberOfHeLtfSymbols();
+    responseRequest.guardInterval = static_cast<Ieee80211HeGuardInterval>(decodedTrigger->getGuardInterval());
+    responseRequest.ltfType = static_cast<Ieee80211HeLtfType>(decodedTrigger->getLtfType());
+    responseRequest.packetExtensionDurationUs = decodedTrigger->getPacketExtensionDurationUs();
+    const auto responseRuCatalog = getHeRuAllocationCatalog(
+            responseRequest.centerFrequency, responseRequest.channelBandwidth);
+    for (unsigned int i = 0; i < decodedTrigger->getUsersArraySize(); ++i) {
+        const auto& triggerUser = decodedTrigger->getUsers(i);
+        auto responseRu = std::find_if(responseRuCatalog.begin(), responseRuCatalog.end(),
+                [&] (const auto& candidate) {
+                    return candidate.toneSize == triggerUser.ruToneSize &&
+                            candidate.toneOffset == triggerUser.ruToneOffset;
+                });
+        requireTrue(responseRu != responseRuCatalog.end(),
+                "decoded MU-BAR RU should resolve in the canonical catalog");
+        Ieee80211HeUserTxVectorRequest responseUser;
+        responseUser.ru = *responseRu;
+        responseUser.staId = triggerUser.aid;
+        responseUser.mcs = triggerUser.mcs;
+        responseUser.numberOfSpatialStreams = triggerUser.numberOfSpatialStreams;
+        responseUser.streamStartIndex = triggerUser.streamStartIndex;
+        responseUser.coding = static_cast<Ieee80211HeCoding>(triggerUser.coding);
+        responseUser.psduLength = LENGTH_COMPRESSED_BLOCKACK;
+        responseRequest.users.push_back(responseUser);
+    }
+    auto responseTxVector = Ieee80211HeTxVectorFactory::create(responseRequest);
+    requireTrue(static_cast<bool>(responseTxVector),
+            "serialized MU-BAR Trigger should construct a coherent HE-TB response TXVECTOR");
     EV << "MU-BAR response timing used scheduled RU widths within the voice TXOP.\n";
-    delete step;
     delete fsContext;
 }
 

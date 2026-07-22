@@ -327,8 +327,12 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
     canonicalRequest.centerFrequency = centerFrequency;
     canonicalRequest.channelBandwidth = channelBandwidth;
     canonicalRequest.ppduFormat = triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK;
-    if (triggerBasedUplink)
+    if (triggerBasedUplink) {
         canonicalRequest.lSigLength = 742;
+        canonicalRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+        canonicalRequest.preFecPaddingFactor = 4;
+        canonicalRequest.numberOfHeLtfSymbols = 1;
+    }
     Ieee80211HeUserTxVectorRequest canonicalUser;
     canonicalUser.ru = assignedRu;
     canonicalUser.psduLength = B(100);

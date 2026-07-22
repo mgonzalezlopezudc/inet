@@ -109,16 +109,34 @@ B getMuBarTriggerFrameLength(size_t numberOfUsers)
     return getMuBarTriggerHeaderLength(numberOfUsers) + B(4);
 }
 
-simtime_t estimateTriggeredBlockAckDuration(int ruToneSize,
-        Ieee80211HeGuardInterval guardInterval, Ieee80211HeCoding coding)
+Ieee80211HeTriggerResponseFinalizationResult finalizeTriggeredBlockAckResponse(
+        const std::vector<Ieee80211HeUserPhyParameters>& users,
+        Hz centerFrequency, Hz channelBandwidth)
 {
-    Ieee80211HeRu ru;
-    ru.toneSize = std::max(ruToneSize, 26);
-    ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
-    ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
-    ru.bandwidth = Hz(ru.toneSize * 78125.0);
-    return computeHeUserPhyParameters(LENGTH_COMPRESSED_BLOCKACK, ru, 0, 1, false,
-            guardInterval, coding).duration;
+    Ieee80211HeTriggerResponseFinalizationRequest request;
+    request.users = users;
+    request.centerFrequency = centerFrequency;
+    request.channelBandwidth = channelBandwidth;
+    // Table 27-32 makes 2x HE-LTF with 1.6 us GI the universally mandatory
+    // HE-TB response pair; 1x/1.6 us is limited to full-bandwidth UL MU-MIMO.
+    request.guardInterval = HE_GI_1_6_US;
+    request.ltfType = HE_LTF_2X;
+    return finalizeHeTriggerResponse(request);
+}
+
+Ieee80211HeUserPhyParameters makeTriggeredBlockAckResponseUser(
+        const Ieee80211HeRu& ru, uint16_t staId, int numberOfSpatialStreams,
+        int streamStartIndex, Ieee80211HeCoding coding)
+{
+    Ieee80211HeUserPhyParameters user;
+    user.ru = ru;
+    user.mcs = 0;
+    user.numberOfSpatialStreams = numberOfSpatialStreams;
+    user.streamStartIndex = streamStartIndex;
+    user.staId = staId;
+    user.coding = ru.toneSize >= 484 ? HE_CODING_LDPC : coding;
+    user.psduLength = LENGTH_COMPRESSED_BLOCKACK;
+    return user;
 }
 
 } // namespace
@@ -342,29 +360,33 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         ASSERT(!owner->activeAllocations.empty());
         auto header = makeShared<Ieee80211TriggerFrame>();
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-        auto hcfModule = check_and_cast<cModule *>(owner->callback);
-        auto mac = check_and_cast<Ieee80211Mac *>(
-                getContainingNicModule(hcfModule)->getSubmodule("mac"));
-        ASSERT(mac != nullptr);
-        header->setTransmitterAddress(mac->getAddress());
+        header->setTransmitterAddress(owner->getTransmitterAddress());
         header->setTriggerType(2); // MU-BAR Trigger
         header->setTriggerId(owner->ackTriggerId);
         header->setChannelBandwidthMhz(std::lround(owner->scheduleContext.channelBandwidth.get() / 1e6));
-        header->setGuardInterval(owner->scheduleContext.guardInterval);
-        header->setCoding(owner->scheduleContext.coding);
-        header->setPacketExtensionDurationUs(owner->scheduleContext.packetExtensionDurationUs);
+        header->setGuardInterval(HE_GI_1_6_US);
+        header->setLtfType(HE_LTF_2X);
+        const bool requiresLdpc = std::any_of(owner->activeAllocations.begin(),
+                owner->activeAllocations.end(), [] (const auto& allocation) {
+                    return allocation.ru.toneSize >= 484;
+                });
+        header->setCoding(requiresLdpc ? HE_CODING_LDPC : owner->scheduleContext.coding);
         header->setPuncturedSubchannelMask(owner->scheduleContext.puncturedSubchannelMask);
         header->setUsersArraySize(owner->activeAllocations.size());
-        simtime_t commonDuration = SIMTIME_ZERO;
+        std::vector<Ieee80211HeUserPhyParameters> responseUsers;
+        responseUsers.reserve(owner->activeAllocations.size());
         for (size_t i = 0; i < owner->activeAllocations.size(); ++i) {
             const auto& allocation = owner->activeAllocations[i];
+            auto responseUser = makeTriggeredBlockAckResponseUser(allocation.ru,
+                    allocation.associationId, allocation.numberOfSpatialStreams,
+                    allocation.streamStartIndex, owner->scheduleContext.coding);
             Ieee80211HeTriggerUserInfo user;
             user.aid = allocation.associationId;
             user.ruIndex = allocation.ruIndex;
             user.ruToneSize = allocation.ru.toneSize;
             user.ruToneOffset = allocation.ru.toneOffset;
             user.mcs = 0;
-            user.coding = owner->scheduleContext.coding;
+            user.coding = responseUser.coding;
             user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
             user.streamStartIndex = allocation.streamStartIndex;
             user.muMimo = allocation.muMimo;
@@ -399,29 +421,24 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             user.muBarFragmentNumber = 0;
             user.muBarStartingSequenceNumber = startingSequenceNumber.get();
             header->setUsers(i, user);
-            commonDuration = std::max(commonDuration,
-                    estimateTriggeredBlockAckDuration(allocation.ru.toneSize,
-                            owner->scheduleContext.guardInterval, owner->scheduleContext.coding));
+            responseUsers.push_back(responseUser);
         }
-        header->setCommonDurationExact(false);
         header->setNoSignalExtension(false);
-        const auto signalExtensionNs = physicallayer::getIeee80211HeSignalExtensionNs(
+        auto finalization = finalizeTriggeredBlockAckResponse(responseUsers,
                 owner->scheduleContext.channelCenterFrequency,
-                header->getNoSignalExtension());
-        commonDuration += SimTime(signalExtensionNs, SIMTIME_NS);
-        auto ulLength = physicallayer::buildIeee80211HeTriggerUlLength(commonDuration,
-                signalExtensionNs);
-        if (!ulLength)
-            throw cRuntimeError("Cannot encode MU-BAR Trigger UL Length: %s", ulLength.error.c_str());
-        header->setUlLength(ulLength.value.length);
-        auto durationEnvelope = physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
-                header->getUlLength(), signalExtensionNs);
-        if (!durationEnvelope)
-            throw cRuntimeError("Cannot resolve MU-BAR Trigger duration envelope: %s",
-                    durationEnvelope.error.c_str());
-        commonDuration = durationEnvelope.txTime;
-        header->setCommonDuration(commonDuration);
-        header->setDurationField(owner->modeSet->getSifsTime() + commonDuration);
+                owner->scheduleContext.channelBandwidth);
+        if (!finalization)
+            throw cRuntimeError("Cannot finalize MU-BAR Trigger response: %s",
+                    finalization.error.c_str());
+        header->setUlLength(finalization.ulLength);
+        header->setNumberOfHeLtfSymbols(finalization.parameters.common.numberOfHeLtfSymbols);
+        header->setPreFecPaddingFactor(finalization.parameters.common.preFecPaddingFactor);
+        header->setLdpcExtraSymbolSegment(finalization.parameters.common.ldpcExtraSymbol);
+        header->setPeDisambiguity(finalization.peDisambiguity);
+        header->setPacketExtensionDurationUs(finalization.parameters.common.packetExtensionDurationUs);
+        header->setCommonDuration(finalization.commonDuration);
+        header->setCommonDurationExact(finalization.commonDurationExact);
+        header->setDurationField(owner->modeSet->getSifsTime() + finalization.commonDuration);
         header->setChunkLength(getMuBarTriggerHeaderLength(owner->activeAllocations.size()));
         auto packet = new Packet("HE-MU-BAR-Trigger", header);
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
@@ -619,6 +636,15 @@ void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 }
 
 HeDlMuTxOpFs::~HeDlMuTxOpFs() = default;
+
+MacAddress HeDlMuTxOpFs::getTransmitterAddress() const
+{
+    auto hcfModule = check_and_cast<cModule *>(callback);
+    auto mac = check_and_cast<Ieee80211Mac *>(
+            getContainingNicModule(hcfModule)->getSubmodule("mac"));
+    ASSERT(mac != nullptr);
+    return mac->getAddress();
+}
 
 Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 {
@@ -828,13 +854,23 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     if (ackMethod == AckMethod::MU_BAR_TRIGGER) {
         auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
-        simtime_t responseDuration = SIMTIME_ZERO;
+        std::vector<Ieee80211HeUserPhyParameters> responseUsers;
+        responseUsers.reserve(selectedAllocations.size());
         for (const auto& selectedAllocation : selectedAllocations)
-            responseDuration = std::max(responseDuration,
-                    estimateTriggeredBlockAckDuration(selectedAllocation.allocation.ru.toneSize,
-                            scheduleContext.guardInterval, scheduleContext.coding));
+            responseUsers.push_back(makeTriggeredBlockAckResponseUser(
+                    selectedAllocation.allocation.ru, selectedAllocation.associationId,
+                    selectedAllocation.allocation.numberOfSpatialStreams,
+                    selectedAllocation.streamStartIndex, scheduleContext.coding));
+        auto response = finalizeTriggeredBlockAckResponse(responseUsers,
+                scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth);
+        if (!response) {
+            EV_WARN << "Cannot reserve MU-BAR response phase: " << response.error << endl;
+            delete container;
+            notifyPlanningFailure();
+            return nullptr;
+        }
         totalDuration = modeSet->getSifsTime() + triggerDuration +
-                modeSet->getSifsTime() + responseDuration;
+                modeSet->getSifsTime() + response.commonDuration;
     }
 
     // Keep the NAV duration in transmitter-local metadata; each real MPDU also
@@ -919,13 +955,23 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     else {
         auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(finalAllocations.size()));
-        simtime_t responseDuration = SIMTIME_ZERO;
+        std::vector<Ieee80211HeUserPhyParameters> responseUsers;
+        responseUsers.reserve(finalAllocations.size());
         for (const auto& finalAllocation : finalAllocations)
-            responseDuration = std::max(responseDuration,
-                    estimateTriggeredBlockAckDuration(finalAllocation.allocation.ru.toneSize,
-                            scheduleContext.guardInterval, scheduleContext.coding));
+            responseUsers.push_back(makeTriggeredBlockAckResponseUser(
+                    finalAllocation.allocation.ru, finalAllocation.associationId,
+                    finalAllocation.allocation.numberOfSpatialStreams,
+                    finalAllocation.streamStartIndex, scheduleContext.coding));
+        auto response = finalizeTriggeredBlockAckResponse(responseUsers,
+                scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth);
+        if (!response) {
+            EV_WARN << "Cannot finalize MU-BAR response phase: " << response.error << endl;
+            delete container;
+            notifyPlanningFailure();
+            return nullptr;
+        }
         totalDuration = modeSet->getSifsTime() + triggerDuration +
-                modeSet->getSifsTime() + responseDuration;
+                modeSet->getSifsTime() + response.commonDuration;
     }
     containerHdr->setDurationField(totalDuration);
     auto txTag = container->addTagIfAbsent<Ieee80211HeMuTxTag>();

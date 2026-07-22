@@ -266,8 +266,12 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     header->setChannelBandwidthMhz(std::lround(schedule.channelBandwidth.get() / 1e6));
     header->setNoSignalExtension(schedule.noSignalExtension);
     header->setGuardInterval(schedule.guardInterval);
+    header->setLtfType(schedule.ltfType);
     header->setCoding(schedule.coding);
     header->setLdpcExtraSymbolSegment(schedule.ldpcExtraSymbolSegment);
+    header->setPreFecPaddingFactor(schedule.preFecPaddingFactor);
+    header->setPeDisambiguity(schedule.peDisambiguity);
+    header->setNumberOfHeLtfSymbols(schedule.numberOfHeLtfSymbols);
     header->setApTxPowerDbm(schedule.apTxPowerDbm);
     header->setPacketExtensionDurationUs(schedule.packetExtensionDurationUs);
     header->setPuncturedSubchannelMask(schedule.puncturedSubchannelMask);

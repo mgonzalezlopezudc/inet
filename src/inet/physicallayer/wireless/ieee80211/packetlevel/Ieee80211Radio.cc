@@ -270,7 +270,7 @@ static Ieee80211HeSuErSignalingFields makeHeSuErSignalingFields(const Ieee80211H
 
 static void populateHeSuErSignaling(const Ptr<Ieee80211HePhyHeader>& phyHeader,
         const Ieee80211HeMode *mode, const Ptr<const Ieee80211HeSuErTxVectorReq>& request,
-        B packetLength)
+        B packetLength, const Ieee80211HeCommonPhyParameters& common)
 {
     if (!request->getComplete())
         throw cRuntimeError("Incomplete HE SU/ER TXVECTOR request");
@@ -289,8 +289,8 @@ static void populateHeSuErSignaling(const Ptr<Ieee80211HePhyHeader>& phyHeader,
             request->getNominalPacketPaddingDurationUs() != 8 &&
             request->getNominalPacketPaddingDurationUs() != 16)
         throw cRuntimeError("HE SU/ER TXVECTOR has an invalid nominal packet padding duration");
-    if (request->getPacketExtensionDurationUs() < request->getNominalPacketPaddingDurationUs())
-        throw cRuntimeError("HE SU/ER packet extension is shorter than nominal packet padding");
+    if (request->getPreFecPaddingFactor() != common.preFecPaddingFactor)
+        throw cRuntimeError("HE SU/ER TXVECTOR Pre-FEC Padding Factor disagrees with the canonical calculation");
     if (request->getDcm() || request->getStbc())
         throw cRuntimeError("Ordinary HE SU/ER mode objects do not model DCM or STBC data processing");
 
@@ -327,8 +327,8 @@ static void populateHeSuErSignaling(const Ptr<Ieee80211HePhyHeader>& phyHeader,
         fec.ldpcExtraSymbolSegment = request->getLdpcExtraSymbolSegment();
     semantics.fec = fec;
     semantics.beamformed = request->getBeamformed();
-    semantics.preFecPaddingFactor = request->getPreFecPaddingFactor();
-    semantics.packetExtensionNs = request->getPacketExtensionDurationUs() * 1000;
+    semantics.preFecPaddingFactor = common.preFecPaddingFactor;
+    semantics.packetExtensionNs = common.packetExtensionDurationUs * 1000;
 
     if (ppduFormat == HE_SINGLE_USER) {
         auto bandwidth = getHeSuBandwidth(request->getSuBandwidth());
@@ -661,6 +661,12 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         canonicalRequest.requestedTxTime = request != nullptr ? request->getCommonDuration() : SIMTIME_ZERO;
         canonicalRequest.requestedTxTimeExact = request != nullptr && request->getCommonDurationExact();
         canonicalRequest.ldpcExtraSymbolSegment = request != nullptr && request->getLdpcExtraSymbolSegment();
+        canonicalRequest.preFecPaddingFactor = request != nullptr ? request->getPreFecPaddingFactor() : 0;
+        canonicalRequest.peDisambiguity = request != nullptr && request->getPeDisambiguity();
+        canonicalRequest.numberOfHeLtfSymbols = request != nullptr ? request->getNumberOfHeLtfSymbols() : 0;
+        canonicalRequest.triggerMethod = request != nullptr ?
+                static_cast<Ieee80211HeTriggerMethod>(request->getTriggerMethod()) :
+                Ieee80211HeTriggerMethod::NONE;
         canonicalRequest.ndp = txTag != nullptr && txTag->getNdp();
         canonicalRequest.bssColor = hePhyHeader->getBssColor();
         canonicalRequest.uplink = suErRequest != nullptr ? suErRequest->getUplink() :
@@ -682,6 +688,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         canonicalRequest.guardInterval = guardInterval;
         canonicalRequest.ltfType = suErRequest != nullptr ?
                 static_cast<Ieee80211HeLtfType>(suErRequest->getLtfType()) :
+                ppduFormat == HE_TRIGGER_BASED_UPLINK && request != nullptr ?
+                static_cast<Ieee80211HeLtfType>(request->getLtfType()) :
                 getHeDefaultLtfType(guardInterval);
         canonicalRequest.packetExtensionDurationUs = hePhyHeader->getPacketExtensionDurationUs();
         if (soundingNdp) {
@@ -725,6 +733,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             user.dcm = suErRequest != nullptr && suErRequest->getDcm();
             user.coding = heMode->getDataMode()->isLdpc() ? HE_CODING_LDPC : HE_CODING_BCC;
             user.psduLength = B((packet->getDataLength().get<b>() + 7) / 8);
+            user.nominalPacketPaddingDurationUs = suErRequest != nullptr ?
+                    suErRequest->getNominalPacketPaddingDurationUs() : 0;
             canonicalRequest.users.push_back(user);
         }
         else {
@@ -743,6 +753,9 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 user.ndpStartingStsNumber = modelUser.ndpStartingStsNumber;
                 user.coding = static_cast<Ieee80211HeCoding>(hePhyHeader->getCoding());
                 user.psduLength = modelUser.psduLength;
+                user.nominalPacketPaddingDurationUs = request != nullptr ?
+                        request->getNominalPacketPaddingDurationUs() :
+                        commonRequest != nullptr ? commonRequest->getNominalPacketPaddingDurationUs() : 0;
                 user.staId = modelUser.staId;
                 canonicalRequest.users.push_back(user);
             }
@@ -753,6 +766,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                     canonicalResult.getContext().fieldName.c_str(), canonicalResult.getContext().detail.c_str());
         const auto& txVector = canonicalResult.getTxVector();
         const auto& ppduLayout = canonicalResult.getPpduLayout();
+        const auto& common = ppduLayout->getCommon();
         if (txTag != nullptr && txTag->getNdp() != ppduLayout->isNdp())
             throw cRuntimeError("Explicit HE NDP state disagrees with the canonical TXVECTOR");
         auto handoff = packet->addTag<Ieee80211HeTxVectorReq>();
@@ -770,7 +784,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             if ((ppduFormat != HE_SINGLE_USER && ppduFormat != HE_EXTENDED_RANGE_SU) || heMode == nullptr)
                 throw cRuntimeError("HE SU/ER TXVECTOR is attached to a non-SU transmission");
             populateHeSuErSignaling(hePhyHeader, heMode, suErRequest,
-                    B((packet->getDataLength().get<b>() + 7) / 8));
+                    B((packet->getDataLength().get<b>() + 7) / 8), common);
             if (suErRequest->getTxTime() != commonDuration)
                 throw cRuntimeError("HE SU/ER TXTIME disagrees with the canonical PPDU layout");
         }
@@ -860,7 +874,6 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
         }
         hePhyHeader->setTotalNsts(maxTotalNsts);
         hePhyHeader->setCommonDuration(commonDuration);
-        const auto& common = ppduLayout->getCommon();
         if (ppduFormat == HE_MU_DOWNLINK) {
             auto header = dynamicPtrCast<Ieee80211HeMuPhyHeader>(phyHeader);
             Ieee80211HeMuSignalingFields signaling;
@@ -885,11 +898,7 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
             signaling.txop = encodeHeTxop(common.sigA);
             signaling.numberOfHeLtfSymbols = common.numberOfHeLtfSymbols;
             signaling.ldpcExtraSymbolSegment = common.ldpcExtraSymbol;
-            int preFecPaddingFactor = 4;
-            for (const auto& user : canonicalUsers)
-                if (user.preFecPaddingFactor != 0)
-                    preFecPaddingFactor = std::min(preFecPaddingFactor, user.preFecPaddingFactor);
-            signaling.preFecPaddingFactor = preFecPaddingFactor % 4;
+            signaling.preFecPaddingFactor = common.preFecPaddingFactor % 4;
             header->setSignaling(signaling);
         }
         else if (ppduFormat == HE_TRIGGER_BASED_UPLINK) {

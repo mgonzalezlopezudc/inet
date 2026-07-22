@@ -1,0 +1,416 @@
+%description:
+Golden IEEE 802.11-2024 HE BCC, LDPC, DCM, padding, and packet-extension calculations.
+
+%includes:
+#include <algorithm>
+#include <array>
+#include <limits>
+#include <vector>
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static Ieee80211HeRu makeGoldenRu(int toneSize)
+{
+    Ieee80211HeRu ru;
+    ru.index = 0;
+    ru.toneSize = toneSize;
+    ru.toneOffset = 0;
+    ru.dataSubcarriers = getHeRuDataSubcarrierCount(toneSize);
+    ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(toneSize);
+    ru.bandwidth = Hz(toneSize * 78125.0);
+    return ru;
+}
+
+static Ieee80211HeUserPhyParameters makeGoldenUser(int toneSize, int mcs,
+        Ieee80211HeCoding coding, int apepLength, bool dcm = false)
+{
+    Ieee80211HeUserPhyParameters user;
+    user.ru = makeGoldenRu(toneSize);
+    user.mcs = mcs;
+    user.coding = coding;
+    user.dcm = dcm;
+    user.psduLength = B(apepLength);
+    return user;
+}
+
+static Ieee80211HeUserPhyParameters calculateGoldenUser(int toneSize, int mcs,
+        Ieee80211HeCoding coding, int apepLength, bool dcm = false)
+{
+    const Hz bandwidth = toneSize >= 1992 ? MHz(160) :
+            toneSize >= 996 ? MHz(80) : toneSize >= 484 ? MHz(40) : MHz(20);
+    auto result = computeHePpduParameters(
+            {makeGoldenUser(toneSize, mcs, coding, apepLength, dcm)}, bandwidth,
+            HE_MU_DOWNLINK, HE_GI_3_2_US, HE_LTF_4X, 0, false);
+    REQUIRE(result);
+    return result.parameters.users.front();
+}
+
+%activity:
+// IEEE 802.11-2024 Table 19-16: independently exercise every available-bit
+// interval and both selectable codeword lengths where the table permits them.
+struct LdpcTableFixture {
+    int64_t payloadBits;
+    int64_t availableBits;
+    int expectedCodewordCount;
+    int expectedCodewordLength;
+};
+const LdpcTableFixture ldpcTableFixtures[] = {
+    {200, 600, 1, 648},    // N_avbits <= 648, short codeword
+    {100, 600, 1, 1296},   // N_avbits <= 648, long codeword
+    {400, 1000, 1, 1296},  // 648 < N_avbits <= 1296, short codeword
+    {200, 1000, 1, 1944},  // 648 < N_avbits <= 1296, long codeword
+    {800, 1500, 1, 1944},  // 1296 < N_avbits <= 1944
+    {800, 2200, 2, 1296},  // 1944 < N_avbits <= 2592, short codeword
+    {600, 2200, 2, 1944},  // 1944 < N_avbits <= 2592, long codeword
+    {4000, 7400, 5, 1944}, // N_avbits > 2592
+};
+for (const auto& fixture : ldpcTableFixtures) {
+    auto ldpc = computeHeLdpcParameters(fixture.payloadBits,
+            fixture.availableBits, 1, 2);
+    REQUIRE(ldpc);
+    REQUIRE(ldpc.codewordCount == fixture.expectedCodewordCount);
+    REQUIRE(ldpc.codewordLength == fixture.expectedCodewordLength);
+    REQUIRE(ldpc.shorteningBits >= 0);
+    REQUIRE(ldpc.puncturingBits >= 0);
+}
+REQUIRE(!computeHeLdpcParameters(0, 600, 1, 2));
+REQUIRE(!computeHeLdpcParameters(100, 600, 2, 2));
+REQUIRE(!computeHeLdpcParameters(std::numeric_limits<int64_t>::max(),
+        std::numeric_limits<int64_t>::max(), 1, 2));
+REQUIRE(!computeHeLdpcParameters(std::numeric_limits<int64_t>::max(),
+        600, 1, 2));
+REQUIRE(!computeHeLdpcParameters(100, 600,
+        std::numeric_limits<int>::max(), std::numeric_limits<int>::max()));
+
+// Both comparisons are strict. At exact equality, the corresponding
+// condition must remain false.
+auto primaryEquality = computeHeLdpcParameters(4374, 8748, 1, 2);
+REQUIRE(primaryEquality);
+REQUIRE(10LL * 2 * primaryEquality.puncturingBits ==
+        1LL * primaryEquality.codewordCount * primaryEquality.codewordLength);
+REQUIRE(!primaryEquality.primaryExtraSymbolCondition);
+REQUIRE(!primaryEquality.extraSymbolRequired);
+auto extremeEquality = computeHeLdpcParameters(4000, 7402, 1, 2);
+REQUIRE(extremeEquality);
+REQUIRE(10LL * 2 * extremeEquality.puncturingBits ==
+        3LL * extremeEquality.codewordCount * extremeEquality.codewordLength);
+REQUIRE(!extremeEquality.extremePuncturingCondition);
+REQUIRE(extremeEquality.primaryExtraSymbolCondition);
+REQUIRE(extremeEquality.extraSymbolRequired);
+
+// 26-tone, MCS 0, DCM, BCC, APEP_LENGTH=2.
+auto bcc26 = calculateGoldenUser(26, 0, HE_CODING_BCC, 2, true);
+REQUIRE(bcc26.codedBitsPerSymbol == 12);
+REQUIRE(bcc26.dataBitsPerSymbol == 6);
+REQUIRE(bcc26.shortCodedBitsPerSymbol == 2);
+REQUIRE(bcc26.shortDataBitsPerSymbol == 1);
+REQUIRE(bcc26.payloadAndServiceBits == 38);
+REQUIRE(bcc26.excessBits == 2);
+REQUIRE(bcc26.initialNumberOfDataSymbols == 7);
+REQUIRE(bcc26.preFecPaddingFactor == 2);
+REQUIRE(bcc26.finalLastDataBitsPerSymbol == 2);
+REQUIRE(bcc26.finalLastCodedBitsPerSymbol == 4);
+REQUIRE(bcc26.preFecPaddingBits == 0);
+REQUIRE(bcc26.postFecPaddingBits == 8);
+
+// 106-tone, MCS 0, DCM, BCC, APEP_LENGTH=4, including the special
+// one coded padding bit after every 2*N_DBPS coded bits.
+auto bcc106 = calculateGoldenUser(106, 0, HE_CODING_BCC, 4, true);
+REQUIRE(bcc106.codedBitsPerSymbol == 51);
+REQUIRE(bcc106.dataBitsPerSymbol == 25);
+REQUIRE(bcc106.shortCodedBitsPerSymbol == 12);
+REQUIRE(bcc106.shortDataBitsPerSymbol == 6);
+REQUIRE(bcc106.payloadAndServiceBits == 54);
+REQUIRE(bcc106.excessBits == 4);
+REQUIRE(bcc106.initialNumberOfDataSymbols == 3);
+REQUIRE(bcc106.preFecPaddingFactor == 1);
+REQUIRE(bcc106.finalLastDataBitsPerSymbol == 6);
+REQUIRE(bcc106.finalLastCodedBitsPerSymbol == 12);
+REQUIRE(bcc106.preFecPaddingBits == 2);
+REQUIRE(bcc106.macPreFecPaddingBits == 0);
+REQUIRE(bcc106.phyPreFecPaddingBits == 2);
+REQUIRE(bcc106.postFecPaddingBits == 39);
+REQUIRE(bcc106.bccCodedPaddingBits == 2);
+
+auto bcc242 = calculateGoldenUser(242, 0, HE_CODING_BCC, 14, true);
+REQUIRE(bcc242.codedBitsPerSymbol == 117);
+REQUIRE(bcc242.dataBitsPerSymbol == 58);
+REQUIRE(bcc242.shortCodedBitsPerSymbol == 30);
+REQUIRE(bcc242.shortDataBitsPerSymbol == 15);
+REQUIRE(bcc242.payloadAndServiceBits == 134);
+REQUIRE(bcc242.excessBits == 18);
+REQUIRE(bcc242.initialNumberOfDataSymbols == 3);
+REQUIRE(bcc242.preFecPaddingFactor == 2);
+REQUIRE(bcc242.finalLastDataBitsPerSymbol == 30);
+REQUIRE(bcc242.finalLastCodedBitsPerSymbol == 60);
+REQUIRE(bcc242.preFecPaddingBits == 12);
+REQUIRE(bcc242.macPreFecPaddingBits == 8);
+REQUIRE(bcc242.phyPreFecPaddingBits == 4);
+REQUIRE(bcc242.postFecPaddingBits == 57);
+REQUIRE(bcc242.bccCodedPaddingBits == 2);
+
+auto ldpc26 = calculateGoldenUser(26, 0, HE_CODING_LDPC, 35);
+REQUIRE(ldpc26.codedBitsPerSymbol == 24);
+REQUIRE(ldpc26.dataBitsPerSymbol == 12);
+REQUIRE(ldpc26.shortCodedBitsPerSymbol == 6);
+REQUIRE(ldpc26.shortDataBitsPerSymbol == 3);
+REQUIRE(ldpc26.payloadAndServiceBits == 296);
+REQUIRE(ldpc26.individualInitialNumberOfDataSymbols == 25);
+REQUIRE(ldpc26.excessBits == 8);
+REQUIRE(ldpc26.initialPreFecPaddingFactor == 3);
+REQUIRE(ldpc26.initialLastDataBitsPerSymbol == 9);
+REQUIRE(ldpc26.initialLastCodedBitsPerSymbol == 18);
+REQUIRE(ldpc26.ldpcPayloadBits == 297);
+REQUIRE(ldpc26.ldpcAvailableBits == 594);
+REQUIRE(ldpc26.ldpcCodewordCount == 1);
+REQUIRE(ldpc26.ldpcCodewordLength == 648);
+REQUIRE(ldpc26.ldpcShorteningBits == 27);
+REQUIRE(ldpc26.ldpcPuncturingBits == 27);
+REQUIRE(!ldpc26.ldpcRepetitionBits);
+REQUIRE(ldpc26.preFecPaddingFactor == 3);
+REQUIRE(ldpc26.postFecPaddingBits == 6);
+
+auto ldpc106 = calculateGoldenUser(106, 0, HE_CODING_LDPC, 2);
+REQUIRE(ldpc106.payloadAndServiceBits == 32);
+REQUIRE(ldpc106.initialNumberOfDataSymbols == 1);
+REQUIRE(ldpc106.initialPreFecPaddingFactor == 3);
+REQUIRE(ldpc106.initialLastDataBitsPerSymbol == 36);
+REQUIRE(ldpc106.initialLastCodedBitsPerSymbol == 72);
+REQUIRE(ldpc106.ldpcPayloadBits == 36);
+REQUIRE(ldpc106.ldpcAvailableBits == 102);
+REQUIRE(ldpc106.ldpcCodewordCount == 1);
+REQUIRE(ldpc106.ldpcCodewordLength == 648);
+REQUIRE(ldpc106.ldpcShorteningBits == 288);
+REQUIRE(ldpc106.ldpcPuncturingBits == 258);
+REQUIRE(ldpc106.preFecPaddingFactor == 4);
+REQUIRE(ldpc106.postFecPaddingBits == 0);
+
+auto ldpc26Mcs4 = calculateGoldenUser(26, 4, HE_CODING_LDPC, 50);
+REQUIRE(ldpc26Mcs4.codedBitsPerSymbol == 96);
+REQUIRE(ldpc26Mcs4.dataBitsPerSymbol == 72);
+REQUIRE(ldpc26Mcs4.shortCodedBitsPerSymbol == 24);
+REQUIRE(ldpc26Mcs4.shortDataBitsPerSymbol == 18);
+REQUIRE(ldpc26Mcs4.payloadAndServiceBits == 416);
+REQUIRE(ldpc26Mcs4.initialNumberOfDataSymbols == 6);
+REQUIRE(ldpc26Mcs4.initialPreFecPaddingFactor == 4);
+REQUIRE(ldpc26Mcs4.ldpcPayloadBits == 432);
+REQUIRE(ldpc26Mcs4.ldpcAvailableBits == 600);
+REQUIRE(ldpc26Mcs4.ldpcCodewordLength == 648);
+REQUIRE(ldpc26Mcs4.ldpcShorteningBits == 54);
+REQUIRE(ldpc26Mcs4.ldpcPuncturingBits == 0);
+REQUIRE(ldpc26Mcs4.numberOfDataSymbols == 7);
+REQUIRE(ldpc26Mcs4.preFecPaddingFactor == 1);
+REQUIRE(ldpc26Mcs4.ldpcRepetitionBits == 6);
+REQUIRE(ldpc26Mcs4.postFecPaddingBits == 72);
+
+auto ldpc996 = calculateGoldenUser(996, 0, HE_CODING_LDPC, 300);
+REQUIRE(ldpc996.codedBitsPerSymbol == 980);
+REQUIRE(ldpc996.dataBitsPerSymbol == 490);
+REQUIRE(ldpc996.shortCodedBitsPerSymbol == 240);
+REQUIRE(ldpc996.shortDataBitsPerSymbol == 120);
+REQUIRE(ldpc996.payloadAndServiceBits == 2416);
+REQUIRE(ldpc996.initialNumberOfDataSymbols == 5);
+REQUIRE(ldpc996.initialPreFecPaddingFactor == 4);
+REQUIRE(ldpc996.ldpcPayloadBits == 2450);
+REQUIRE(ldpc996.ldpcAvailableBits == 5140);
+REQUIRE(ldpc996.ldpcCodewordCount == 3);
+REQUIRE(ldpc996.ldpcCodewordLength == 1944);
+REQUIRE(ldpc996.ldpcShorteningBits == 466);
+REQUIRE(ldpc996.ldpcPuncturingBits == 226);
+REQUIRE(ldpc996.numberOfDataSymbols == 6);
+REQUIRE(ldpc996.preFecPaddingFactor == 1);
+REQUIRE(ldpc996.ldpcRepetitionBits == 0);
+REQUIRE(ldpc996.postFecPaddingBits == 740);
+
+// Mixed-FEC MU: the LDPC user wins Equation 27-75 and drives the common
+// extra segment. Reversing user order must not change either STA's outcome.
+auto muLdpc = makeGoldenUser(106, 4, HE_CODING_LDPC, 17);
+muLdpc.staId = 1;
+auto muBcc = makeGoldenUser(106, 1, HE_CODING_BCC, 1);
+muBcc.staId = 2;
+muBcc.streamStartIndex = 1;
+auto mu = computeHePpduParameters({muLdpc, muBcc}, MHz(20), HE_MU_DOWNLINK,
+        HE_GI_3_2_US, HE_LTF_4X, 0, false);
+REQUIRE(mu);
+REQUIRE(mu.parameters.users[0].individualInitialNumberOfDataSymbols == 1);
+REQUIRE(mu.parameters.users[0].individualInitialPreFecPaddingFactor == 3);
+REQUIRE(mu.parameters.users[1].individualInitialNumberOfDataSymbols == 1);
+REQUIRE(mu.parameters.users[1].individualInitialPreFecPaddingFactor == 2);
+REQUIRE(mu.parameters.common.preFecPaddingFactor == 4);
+REQUIRE(mu.parameters.common.ldpcExtraSymbol);
+REQUIRE(mu.parameters.users[0].ldpcPayloadBits == 216);
+REQUIRE(mu.parameters.users[0].ldpcAvailableBits == 408);
+REQUIRE(mu.parameters.users[0].ldpcCodewordLength == 648);
+REQUIRE(mu.parameters.users[0].ldpcShorteningBits == 270);
+REQUIRE(mu.parameters.users[0].ldpcPuncturingBits == 0);
+REQUIRE(mu.parameters.users[0].ldpcRepetitionBits == 30);
+REQUIRE(mu.parameters.users[1].preFecPaddingBits == 72);
+REQUIRE(mu.parameters.users[0].postFecPaddingBits == 0);
+REQUIRE(mu.parameters.users[1].postFecPaddingBits == 0);
+auto reverseMu = computeHePpduParameters({muBcc, muLdpc}, MHz(20), HE_MU_DOWNLINK,
+        HE_GI_3_2_US, HE_LTF_4X, 0, false);
+REQUIRE(reverseMu);
+for (const auto& forwardUser : mu.parameters.users) {
+    auto reverseUser = std::find_if(reverseMu.parameters.users.begin(), reverseMu.parameters.users.end(),
+            [&] (const auto& candidate) { return candidate.staId == forwardUser.staId; });
+    REQUIRE(reverseUser != reverseMu.parameters.users.end());
+    REQUIRE(reverseUser->preFecPaddingFactor == forwardUser.preFecPaddingFactor);
+    REQUIRE(reverseUser->preFecPaddingBits == forwardUser.preFecPaddingBits);
+    REQUIRE(reverseUser->ldpcAvailableBits == forwardUser.ldpcAvailableBits);
+    REQUIRE(reverseUser->ldpcPuncturingBits == forwardUser.ldpcPuncturingBits);
+    REQUIRE(reverseUser->ldpcRepetitionBits == forwardUser.ldpcRepetitionBits);
+}
+
+// Trigger-frame-derived HE TB timing and Equation 27-90 reverse branch.
+Ieee80211HeTbCalculationContext tbContext;
+tbContext.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+tbContext.ulLength = 76;
+tbContext.preFecPaddingFactor = 1;
+tbContext.ldpcExtraSymbolSegment = true;
+tbContext.peDisambiguity = true;
+tbContext.numberOfHeLtfSymbols = 2;
+auto tbUser = makeGoldenUser(106, 0, HE_CODING_LDPC, 16);
+auto tb = computeHePpduParameters({tbUser}, MHz(20), HE_TRIGGER_BASED_UPLINK,
+        HE_GI_1_6_US, HE_LTF_2X, 0, false, tbContext);
+REQUIRE(tb);
+REQUIRE(tb.parameters.commonNumberOfDataSymbols == 4);
+REQUIRE(tb.parameters.common.packetExtensionDurationUs == 12);
+REQUIRE(tb.parameters.common.preFecPaddingFactor == 1);
+REQUIRE(tb.parameters.common.ldpcExtraSymbol);
+const auto& tbResult = tb.parameters.users.front();
+REQUIRE(tbResult.payloadAndServiceBits == 144);
+REQUIRE(tbResult.initialNumberOfDataSymbols == 3);
+REQUIRE(tbResult.initialPreFecPaddingFactor == 4);
+REQUIRE(tbResult.ldpcPayloadBits == 153);
+REQUIRE(tbResult.preFecPaddingBits == 9);
+REQUIRE(tbResult.ldpcAvailableBits == 330);
+REQUIRE(tbResult.ldpcCodewordLength == 648);
+REQUIRE(tbResult.ldpcShorteningBits == 171);
+REQUIRE(tbResult.ldpcPuncturingBits == 147);
+REQUIRE(tbResult.postFecPaddingBits == 78);
+
+auto insufficientLtfUser = tbUser;
+insufficientLtfUser.numberOfSpatialStreams = 2;
+auto insufficientLtfContext = tbContext;
+insufficientLtfContext.numberOfHeLtfSymbols = 1;
+auto insufficientLtf = computeHePpduParameters({insufficientLtfUser}, MHz(20),
+        HE_TRIGGER_BASED_UPLINK, HE_GI_1_6_US, HE_LTF_2X, 0, false,
+        insufficientLtfContext);
+REQUIRE(!insufficientLtf);
+REQUIRE(insufficientLtf.errorCode == Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT);
+REQUIRE(insufficientLtf.context.fieldName == "tbContext.numberOfHeLtfSymbols");
+
+// A longer Trigger budget can cross the Clause 27.3.12.5.5 LDPC extra-segment
+// threshold even when the minimum-duration calculation does not. The shared
+// finalizer must re-evaluate the reversed initial boundary for every candidate.
+Ieee80211HeTriggerResponseFinalizationRequest thresholdRequest;
+thresholdRequest.users = {makeGoldenUser(26, 0, HE_CODING_LDPC, 35)};
+thresholdRequest.centerFrequency = Hz(5.18e9);
+thresholdRequest.channelBandwidth = MHz(20);
+thresholdRequest.guardInterval = HE_GI_1_6_US;
+thresholdRequest.ltfType = HE_LTF_2X;
+thresholdRequest.durationBudget = SimTime(500, SIMTIME_US);
+auto threshold = finalizeHeTriggerResponse(thresholdRequest);
+REQUIRE(threshold);
+REQUIRE(threshold.parameters.users.front().initialNumberOfDataSymbols >= 28);
+REQUIRE(threshold.parameters.common.ldpcExtraSymbol);
+auto clearedExtraContext = tbContext;
+clearedExtraContext.ulLength = threshold.ulLength;
+clearedExtraContext.preFecPaddingFactor = threshold.parameters.common.preFecPaddingFactor;
+clearedExtraContext.ldpcExtraSymbolSegment = false;
+clearedExtraContext.peDisambiguity = threshold.peDisambiguity;
+clearedExtraContext.numberOfHeLtfSymbols = threshold.parameters.common.numberOfHeLtfSymbols;
+auto clearedExtra = computeHePpduParameters(thresholdRequest.users, MHz(20),
+        HE_TRIGGER_BASED_UPLINK, HE_GI_1_6_US, HE_LTF_2X, 0, false,
+        clearedExtraContext);
+REQUIRE(clearedExtra);
+REQUIRE(!clearedExtra.parameters.common.ldpcExtraSymbol);
+
+auto invalidFinalizationRequest = thresholdRequest;
+invalidFinalizationRequest.durationBudget = SIMTIME_ZERO;
+auto invalidFinalization = finalizeHeTriggerResponse(invalidFinalizationRequest);
+REQUIRE(!invalidFinalization);
+REQUIRE(invalidFinalization.errorCode == Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT);
+REQUIRE(invalidFinalization.context.fieldName == "durationBudget");
+invalidFinalizationRequest = thresholdRequest;
+invalidFinalizationRequest.users.front().mcs = std::numeric_limits<int>::max();
+invalidFinalization = finalizeHeTriggerResponse(invalidFinalizationRequest);
+REQUIRE(!invalidFinalization);
+REQUIRE(invalidFinalization.errorCode == Ieee80211HeValidationErrorCode::INVALID_MCS);
+REQUIRE(invalidFinalization.context.fieldName == "mcs");
+
+const int expectedPe[4][3] = {{0, 0, 4}, {0, 0, 8}, {0, 4, 12}, {0, 8, 16}};
+const int nominalPadding[3] = {0, 8, 16};
+const std::array<Ieee80211HeUserPhyParameters, 4> factorUsers = {
+    makeGoldenUser(106, 0, HE_CODING_BCC, 4, true),
+    makeGoldenUser(26, 0, HE_CODING_BCC, 2, true),
+    makeGoldenUser(26, 0, HE_CODING_LDPC, 35),
+    makeGoldenUser(106, 0, HE_CODING_LDPC, 2),
+};
+for (int factor = 1; factor <= 4; ++factor) {
+    for (int column = 0; column < 3; ++column) {
+        auto user = factorUsers[factor - 1];
+        user.nominalPacketPaddingDurationUs = nominalPadding[column];
+        auto pe = computeHePpduParameters({user}, MHz(20), HE_MU_DOWNLINK,
+                HE_GI_3_2_US, HE_LTF_4X, 16, false);
+        REQUIRE(pe);
+        REQUIRE(pe.parameters.common.preFecPaddingFactor == factor);
+        REQUIRE(pe.parameters.common.nominalPacketExtensionDurationUs ==
+                expectedPe[factor - 1][column]);
+    }
+}
+for (int invalidNominalPadding : {-1, 7, 17}) {
+    auto user = factorUsers.front();
+    user.nominalPacketPaddingDurationUs = invalidNominalPadding;
+    auto invalid = computeHePpduParameters({user}, MHz(20), HE_MU_DOWNLINK,
+            HE_GI_3_2_US, HE_LTF_4X, 16, false);
+    REQUIRE(!invalid);
+    REQUIRE(invalid.errorCode ==
+            Ieee80211HeValidationErrorCode::INVALID_NOMINAL_PACKET_PADDING);
+    REQUIRE(invalid.context.fieldName == "nominalPacketPaddingDurationUs");
+}
+for (int invalidFactor : {0, 5}) {
+    auto invalidContext = tbContext;
+    invalidContext.preFecPaddingFactor = invalidFactor;
+    auto invalid = computeHePpduParameters({tbUser}, MHz(20),
+            HE_TRIGGER_BASED_UPLINK, HE_GI_1_6_US, HE_LTF_2X, 0, false,
+            invalidContext);
+    REQUIRE(!invalid);
+    REQUIRE(invalid.errorCode == Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT);
+}
+auto insufficientPeUser = makeGoldenUser(106, 0, HE_CODING_BCC, 4);
+insufficientPeUser.nominalPacketPaddingDurationUs = 16;
+auto insufficientPe = computeHePpduParameters({insufficientPeUser}, MHz(20),
+        HE_MU_DOWNLINK, HE_GI_3_2_US, HE_LTF_4X, 0, false);
+REQUIRE(!insufficientPe);
+REQUIRE(insufficientPe.errorCode == Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION);
+
+for (int malformedDataSubcarriers : {
+        getHeRuDataSubcarrierCount(106) + 1, std::numeric_limits<int>::max()}) {
+    auto malformedRuUser = makeGoldenUser(106, 0, HE_CODING_BCC, 4);
+    malformedRuUser.ru.dataSubcarriers = malformedDataSubcarriers;
+    auto malformedRu = computeHePpduParameters({malformedRuUser}, MHz(20),
+            HE_MU_DOWNLINK, HE_GI_3_2_US, HE_LTF_4X, 0, false);
+    REQUIRE(!malformedRu);
+    REQUIRE(malformedRu.errorCode == Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT);
+    REQUIRE(malformedRu.context.fieldName == "ru.dataSubcarriers");
+}
+auto malformedPilotUser = makeGoldenUser(106, 0, HE_CODING_BCC, 4);
+malformedPilotUser.ru.pilotSubcarriers++;
+auto malformedPilot = computeHePpduParameters({malformedPilotUser}, MHz(20),
+        HE_MU_DOWNLINK, HE_GI_3_2_US, HE_LTF_4X, 0, false);
+REQUIRE(!malformedPilot);
+REQUIRE(malformedPilot.errorCode == Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT);
+REQUIRE(malformedPilot.context.fieldName == "ru.pilotSubcarriers");
+
+EV << "Exact HE BCC/LDPC/DCM/padding/PE golden calculations passed.\n";
+EV << ".\n";
+
+%contains: stdout
+Exact HE BCC/LDPC/DCM/padding/PE golden calculations passed.
+.
