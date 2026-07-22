@@ -439,7 +439,7 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
             auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddr) : nullptr;
             Packet *blockAckPacket = nullptr;
 
-            if (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx) {
+            if (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation) {
                 // Collect starting sequence numbers by TID from in-progress frames for receiverAddr
                 std::map<Tid, SequenceNumberCyclic> recordsByTid;
                 for (int i = 0; i < inProgress->getLength(); i++) {

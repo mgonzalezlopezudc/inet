@@ -71,9 +71,9 @@ class TestHeSoundingFs : public HeSoundingFs
     Ieee80211HeOperation operation;
     operation.operatingChannelWidth = Hz(20e6);
 
-    Ieee80211NegotiatedHeCapabilities negotiated = negotiateHeCapabilities(apCap, staCap, operation);
-    negotiated.intersection.txMcsNss = mcsNssMap;
-    negotiated.valid = true;
+    Ieee80211NegotiatedHeCapabilities negotiated = negotiateHeCapabilities(apCap, staCap, operation, true);
+    negotiated.localTxPeerRx.mcsNss = mcsNssMap;
+    negotiated.localTxPeerRx.valid = true;
 
     ASSERT(isDlMuMimoEligible(apCap, staCap, negotiated, Hz(20e6), 4));
     

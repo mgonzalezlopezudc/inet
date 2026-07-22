@@ -1,0 +1,275 @@
+%description:
+Test release-effective STA reassociation preservation and local peer-cache teardown.
+
+%includes:
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtSta.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mgmt.Ieee80211MgmtSta;
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+simple TestMgmtSta extends Ieee80211MgmtSta
+{
+    parameters:
+        @class(TestMgmtSta);
+        interfaceTableModule = "";
+        mibModule = "^.mib";
+        macModule = "";
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mib: Ieee80211Mib;
+        mgmt: TestMgmtSta;
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+static void requireLifecycle(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HE association lifecycle invariant failed: %s", message);
+}
+
+class TestMgmtSta : public Ieee80211MgmtSta
+{
+  protected:
+    int lastSubtype = -1;
+    int lastChannel = -1;
+    Ptr<Ieee80211MgmtFrame> lastFrame;
+    bool lastConfirmWasReassociation = false;
+    Ieee80211PrimResultCode lastConfirmResult = static_cast<Ieee80211PrimResultCode>(-1);
+    MacAddress lastConfirmAddress;
+
+  protected:
+    virtual void initialize(int stage) override
+    {
+        if (stage == INITSTAGE_LOCAL) {
+            mib.reference(this, "mibModule", true);
+            mib->bssStationData.stationType = Ieee80211Mib::STATION;
+            mib->bssStationData.isAssociated = false;
+            assocTimeoutMsg = nullptr;
+            pendingReassociation = false;
+            numChannels = 1;
+        }
+    }
+
+    virtual bool isHeManagementSupported() override { return false; }
+    virtual void changeChannel(int channelNum) override { lastChannel = channelNum; }
+    virtual void handleMessageWhenDown(cMessage *message) override { delete message; }
+
+    virtual void sendManagementFrame(const char *, const Ptr<Ieee80211MgmtFrame>& body,
+            int subtype, const MacAddress&) override
+    {
+        lastSubtype = subtype;
+        lastFrame = body;
+    }
+
+    virtual void sendConfirm(Ieee80211PrimConfirm *confirm, Ieee80211PrimResultCode resultCode) override
+    {
+        lastConfirmWasReassociation = dynamic_cast<Ieee80211Prim_ReassociateConfirm *>(confirm) != nullptr;
+        lastConfirmResult = resultCode;
+        if (auto associationConfirm = dynamic_cast<Ieee80211Prim_AssociateConfirm *>(confirm))
+            lastConfirmAddress = associationConfirm->getAddress();
+        delete confirm;
+    }
+
+  public:
+    void addAp(const MacAddress& address, int channel)
+    {
+        ApInfo ap;
+        ap.address = address;
+        ap.channel = channel;
+        ap.ssid = "he";
+        ap.isAuthenticated = true;
+        apList.push_back(ap);
+    }
+
+    void associateWith(const MacAddress& address)
+    {
+        auto ap = lookupAP(address);
+        requireLifecycle(ap != nullptr, "test AP must exist");
+        mib->bssStationData.isAssociated = true;
+        mib->bssStationData.associationId = 7;
+        (ApInfo&)assocAP = *ap;
+        assocAP.beaconTimeoutMsg = nullptr;
+    }
+
+    void setAuthenticated(const MacAddress& address, bool authenticated)
+    {
+        auto ap = lookupAP(address);
+        requireLifecycle(ap != nullptr, "test AP must exist");
+        ap->isAuthenticated = authenticated;
+    }
+
+    void forceNotAssociated()
+    {
+        if (assocTimeoutMsg != nullptr) {
+            cancelAndDelete(assocTimeoutMsg);
+            assocTimeoutMsg = nullptr;
+        }
+        pendingReassociation = false;
+        mib->bssStationData.isAssociated = false;
+        mib->bssStationData.associationId = -1;
+        assocAP = AssociatedApInfo();
+    }
+
+    void beginReassociation(const MacAddress& address)
+    {
+        Enter_Method("beginReassociation");
+        startReassociation(lookupAP(address), SimTime(1, SIMTIME_S));
+    }
+
+    void refuseReassociation(const MacAddress& address)
+    {
+        Enter_Method("refuseReassociation");
+        auto response = makeShared<Ieee80211ReassociationResponseFrame>();
+        response->setStatusCode(SC_UNSPECIFIED);
+        response->setChunkLength(B(6));
+        auto packet = new Packet("ReassocResp-refused", response);
+        auto header = makeShared<Ieee80211MgmtHeader>();
+        header->setTransmitterAddress(address);
+        handleReassociationResponseFrame(packet, header);
+    }
+
+    void locallyDeauthenticate(const MacAddress& address)
+    {
+        Enter_Method("locallyDeauthenticate");
+        auto request = new Ieee80211Prim_DeauthenticateRequest();
+        request->setAddress(address);
+        request->setReasonCode(RC_UNSPECIFIED);
+        processDeauthenticateCommand(request);
+        delete request;
+    }
+
+    void locallyDisassociate(const MacAddress& address)
+    {
+        Enter_Method("locallyDisassociate");
+        auto request = new Ieee80211Prim_DisassociateRequest();
+        request->setAddress(address);
+        request->setReasonCode(RC_UNSPECIFIED);
+        processDisassociateCommand(request);
+        delete request;
+    }
+
+    void startPassiveScan()
+    {
+        Enter_Method("startPassiveScan");
+        auto request = new Ieee80211Prim_ScanRequest();
+        request->setBSSType(BSSTYPE_INFRASTRUCTURE);
+        request->setActiveScan(false);
+        request->setMinChannelTime(SIMTIME_ZERO);
+        request->setMaxChannelTime(SIMTIME_ZERO);
+        processScanCommand(request);
+        delete request;
+    }
+
+    int getLastSubtype() const { return lastSubtype; }
+    int getLastChannel() const { return lastChannel; }
+    bool getLastConfirmWasReassociation() const { return lastConfirmWasReassociation; }
+    Ieee80211PrimResultCode getLastConfirmResult() const { return lastConfirmResult; }
+    const MacAddress& getLastConfirmAddress() const { return lastConfirmAddress; }
+    const AssociatedApInfo& getAssociatedApForTest() const { return assocAP; }
+    Ptr<Ieee80211MgmtFrame> getLastFrame() const { return lastFrame; }
+    bool hasPendingAssociationTransition() const { return assocTimeoutMsg != nullptr; }
+};
+
+Define_Module(TestMgmtSta);
+
+static void cacheAllCapabilities(Ieee80211Mib *mib, const MacAddress& address)
+{
+    mib->setPeerHeCapabilities(address, Ieee80211HeCapabilities(), Ieee80211HeOperation());
+    mib->setPeerEhtCapabilities(address, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
+    mib->setPeerVhtCapabilities(address, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
+}
+
+static void requireAllCapabilities(Ieee80211Mib *mib, const MacAddress& address, bool present)
+{
+    requireLifecycle((mib->findNegotiatedHeCapabilities(address) != nullptr) == present,
+            "HE cache presence mismatch");
+    requireLifecycle((mib->findNegotiatedEhtCapabilities(address) != nullptr) == present,
+            "EHT cache presence mismatch");
+    requireLifecycle((mib->findNegotiatedVhtCapabilities(address) != nullptr) == present,
+            "VHT cache presence mismatch");
+}
+
+%activity:
+auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+auto mgmt = check_and_cast<TestMgmtSta *>(getParentModule()->getSubmodule("mgmt"));
+MacAddress oldAp("02:00:00:00:00:01");
+MacAddress targetAp("02:00:00:00:00:02");
+MacAddress wrongAp("02:00:00:00:00:03");
+mgmt->addAp(oldAp, 1);
+mgmt->addAp(targetAp, 6);
+mgmt->addAp(wrongAp, 11);
+mgmt->associateWith(oldAp);
+cacheAllCapabilities(mib, oldAp);
+cacheAllCapabilities(mib, targetAp);
+
+mgmt->beginReassociation(targetAp);
+requireLifecycle(mgmt->getLastSubtype() == ST_REASSOCIATIONREQUEST,
+        "reassociation command must send a Reassociation Request");
+auto request = dynamicPtrCast<Ieee80211ReassociationRequestFrame>(mgmt->getLastFrame());
+requireLifecycle(request != nullptr && request->getCurrentAP() == oldAp,
+        "Reassociation Request must identify the current AP");
+requireLifecycle(mgmt->getLastChannel() == 6, "reassociation must tune to the target AP");
+
+mgmt->refuseReassociation(wrongAp);
+requireLifecycle(mgmt->hasPendingAssociationTransition() &&
+        mib->bssStationData.isAssociated && mgmt->getAssociatedApForTest().address == oldAp,
+        "response from the wrong AP must not cancel the pending reassociation");
+requireAllCapabilities(mib, targetAp, true);
+
+mgmt->refuseReassociation(targetAp);
+requireLifecycle(mib->bssStationData.isAssociated &&
+        mgmt->getAssociatedApForTest().address == oldAp,
+        "refused reassociation must preserve the old association");
+requireAllCapabilities(mib, oldAp, true);
+requireAllCapabilities(mib, targetAp, false);
+requireLifecycle(mgmt->getLastChannel() == 1,
+        "refused reassociation must restore the old AP channel");
+requireLifecycle(mgmt->getLastConfirmWasReassociation() &&
+        mgmt->getLastConfirmResult() == PRC_REFUSED &&
+        mgmt->getLastConfirmAddress() == targetAp,
+        "refused reassociation must emit the typed reassociation confirmation");
+
+cacheAllCapabilities(mib, targetAp);
+mgmt->beginReassociation(targetAp);
+mgmt->locallyDisassociate(targetAp);
+requireLifecycle(!mgmt->hasPendingAssociationTransition() &&
+        mib->bssStationData.isAssociated && mgmt->getAssociatedApForTest().address == oldAp &&
+        mgmt->getLastChannel() == 1,
+        "canceling the target reassociation must preserve and retune to the old AP");
+requireAllCapabilities(mib, targetAp, false);
+
+mgmt->forceNotAssociated();
+cacheAllCapabilities(mib, targetAp);
+mgmt->locallyDeauthenticate(targetAp);
+requireAllCapabilities(mib, targetAp, false);
+
+cacheAllCapabilities(mib, targetAp);
+mgmt->locallyDisassociate(targetAp);
+requireAllCapabilities(mib, targetAp, false);
+
+mgmt->setAuthenticated(targetAp, true);
+mgmt->associateWith(oldAp);
+cacheAllCapabilities(mib, oldAp);
+mgmt->beginReassociation(targetAp);
+mgmt->startPassiveScan();
+requireLifecycle(!mgmt->hasPendingAssociationTransition(),
+        "scan must cancel reassociation before clearing the AP list");
+requireAllCapabilities(mib, oldAp, false);
+
+EV << "Reassociation target validation, cancellation safety, and cache invalidation passed.\n";
+
+%contains: stdout
+Reassociation target validation, cancellation safety, and cache invalidation passed.

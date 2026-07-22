@@ -168,8 +168,8 @@ int HeDlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
     constraints.ldpc = context.coding == HE_CODING_LDPC;
     constraints.maxMcs = context.coding == HE_CODING_BCC ? 9 : 11;
     if (candidate.negotiatedHeCapabilities != nullptr &&
-            candidate.negotiatedHeCapabilities->valid) {
-        int peerMaxMcs = candidate.negotiatedHeCapabilities->intersection.txMcsNss.maxMcsPerNss[0];
+            candidate.negotiatedHeCapabilities->localTxPeerRx.valid) {
+        int peerMaxMcs = candidate.negotiatedHeCapabilities->localTxPeerRx.mcsNss.maxMcsPerNss[0];
         if (peerMaxMcs >= 0)
             constraints.maxMcs = std::min(constraints.maxMcs, peerMaxMcs);
     }
@@ -299,10 +299,10 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         for (size_t i = 0; i < candidates.size(); ++i) {
             const auto *negotiated = candidates[i].negotiatedHeCapabilities;
             if (negotiated != nullptr &&
-                    (!negotiated->valid ||
-                     !negotiated->intersection.dlOfdma ||
-                     negotiated->intersection.supportedChannelWidths.count(context.channelBandwidth) == 0 ||
-                     negotiated->intersection.supportedRuToneSizes.count(rusByCandidate[i].toneSize) == 0))
+                    (!negotiated->localTxPeerRx.valid ||
+                     !negotiated->localTxPeerRx.ofdma ||
+                     negotiated->localTxPeerRx.supportedChannelWidths.count(context.channelBandwidth) == 0 ||
+                     negotiated->localTxPeerRx.supportedRuToneSizes.count(rusByCandidate[i].toneSize) == 0))
                 return false;
             RuAllocation allocation;
             allocation.staAddress = candidates[i].staAddress;
@@ -313,7 +313,7 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
             if (context.coding == HE_CODING_BCC)
                 allocation.mcs = std::min(allocation.mcs, 9);
             if (negotiated != nullptr) {
-                int maxMcs = negotiated->intersection.txMcsNss.maxMcsPerNss[0];
+                int maxMcs = negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[0];
                 if (maxMcs < 0)
                     return false;
                 allocation.mcs = std::min(allocation.mcs, maxMcs);

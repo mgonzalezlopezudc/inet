@@ -1053,8 +1053,8 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                 auto mib = mac->getMib();
                 if (mib != nullptr) {
                     auto negotiated = mib->findNegotiatedHeCapabilities(dataFrame->getReceiverAddress());
-                    if (negotiated != nullptr && negotiated->valid) {
-                        maxAmpduLengthExponent = negotiated->intersection.maxAmpduLengthExponent;
+                    if (negotiated != nullptr && negotiated->localTxPeerRx.valid) {
+                        maxAmpduLengthExponent = negotiated->localTxPeerRx.receiverMaxAmpduLengthExponent;
                     }
                     else {
                         auto negotiatedVht = mib->findNegotiatedVhtCapabilities(dataFrame->getReceiverAddress());

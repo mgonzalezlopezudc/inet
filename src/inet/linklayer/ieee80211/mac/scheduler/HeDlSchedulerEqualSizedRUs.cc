@@ -32,12 +32,12 @@ bool isCompatibleEqualRuAllocation(const IIeee80211HeDlScheduler::ScheduleContex
     const auto *negotiated = candidate.negotiatedHeCapabilities;
     if (negotiated == nullptr)
         return true;
-    const auto& capabilities = negotiated->intersection;
-    return negotiated->valid && capabilities.dlOfdma &&
+    const auto& capabilities = negotiated->localTxPeerRx;
+    return capabilities.valid && capabilities.ofdma &&
             capabilities.supportedChannelWidths.count(context.channelBandwidth) != 0 &&
             capabilities.supportedRuToneSizes.count(ru.toneSize) != 0 &&
-            capabilities.txMcsNss.maxMcsPerNss[0] >= 0 &&
-            (context.coding != HE_CODING_LDPC || capabilities.ldpc);
+            capabilities.mcsNss.maxMcsPerNss[0] >= 0 &&
+            (context.coding != HE_CODING_LDPC || negotiated->mutual.ldpc);
 }
 
 } // namespace
@@ -79,7 +79,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         std::vector<CandidateInfo> eligibleCandidates;
         for (const auto& candidate : context.candidates) {
             auto negotiated = candidate.negotiatedHeCapabilities;
-            if (negotiated == nullptr || !negotiated->valid)
+            if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
                 continue;
             auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
             const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
@@ -101,7 +101,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     auto negotiated = mib->findNegotiatedHeCapabilities(station.first);
                     auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(station.first);
                     const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
-                    if (negotiated != nullptr && negotiated->valid && staCapabilities != nullptr) {
+                    if (negotiated != nullptr && negotiated->localTxPeerRx.valid && staCapabilities != nullptr) {
                         if (isDlMuMimoEligible(mib->localHeCapabilities, *staCapabilities, *negotiated, context.channelBandwidth, context.numApAntennas)) {
                             allEligibleStas.push_back(station.first);
                         }
@@ -179,7 +179,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                     int totalAllocated = tempGroup.size();
                     std::vector<int> limitNss(tempGroup.size());
                     for (size_t i = 0; i < tempGroup.size(); ++i) {
-                        int maxRxNss = getMaxNss(tempGroup[i].negotiatedHeCapabilities->intersection.txMcsNss);
+                        int maxRxNss = getMaxNss(tempGroup[i].negotiatedHeCapabilities->localTxPeerRx.mcsNss);
                         if (hcf != nullptr) {
                             Ieee80211HeOperatingMode peerMode;
                             if (hcf->getPeerOperatingMode(tempGroup[i].staAddress, peerMode)) {
@@ -252,7 +252,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
                                 finalNss[i]);
                         if (context.coding == HE_CODING_BCC)
                             alloc.mcs = std::min(alloc.mcs, 9);
-                        int maxMcs = groupCandidates[i].negotiatedHeCapabilities->intersection.txMcsNss.maxMcsPerNss[finalNss[i] - 1];
+                        int maxMcs = groupCandidates[i].negotiatedHeCapabilities->localTxPeerRx.mcsNss.maxMcsPerNss[finalNss[i] - 1];
                         if (maxMcs >= 0) {
                             alloc.mcs = std::min(alloc.mcs, maxMcs);
                         }
@@ -360,7 +360,7 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
             alloc.mcs = std::min(alloc.mcs, 9);
         int maxMcs = -1;
         if (selectedCandidates[i].negotiatedHeCapabilities != nullptr) {
-            maxMcs = selectedCandidates[i].negotiatedHeCapabilities->intersection.txMcsNss.maxMcsPerNss[0];
+            maxMcs = selectedCandidates[i].negotiatedHeCapabilities->localTxPeerRx.mcsNss.maxMcsPerNss[0];
         }
         if (maxMcs >= 0) {
             alloc.mcs = std::min(alloc.mcs, maxMcs);

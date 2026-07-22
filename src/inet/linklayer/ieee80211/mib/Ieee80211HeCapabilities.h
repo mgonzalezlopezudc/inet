@@ -94,86 +94,132 @@ struct Ieee80211HeOperation
     int defaultPeDurationUs = 0;
 };
 
-/** Usable HE feature set and operation produced for a local/peer association. */
+/** Capabilities usable for one transmitter-to-receiver direction. */
+struct Ieee80211HeDirectionalCapabilities
+{
+    bool valid = false;
+    std::set<Hz> supportedChannelWidths;
+    Ieee80211HeMcsNssMap mcsNss;
+    bool ofdma = false;
+    bool preamblePuncturing = false;
+    bool multiTidAggregation = false;
+    bool receiverCanReceiveMuBarTrigger = false;
+    bool transmitterCanTransmitHeTbBlockAck = false;
+    bool transmitterCanTransmitNdpFeedbackReport = false;
+    bool transmitterCanTransmitFullBandwidthUlMuMimo = false;
+    bool transmitterCanTransmitPartialBandwidthUlMuMimo = false;
+    int receiverDynamicFragmentationLevel = 0;
+    int receiverMaxAmpduLengthExponent = 0;
+    int receiverMaxMpduLength = 0;
+    int receiverMaxBlockAckBufferSize = 0;
+    std::set<int> supportedRuToneSizes;
+};
+
+/** Symmetric capabilities which require support at both endpoints. */
+struct Ieee80211HeMutualCapabilities
+{
+    bool dcm = false;
+    int maxDcmConstellation = 0;
+    int maxDcmNss = 0;
+    bool ldpc = false;
+    bool omControl = false;
+    bool twoNav = false;
+    bool erBss = false;
+};
+
+/** Auditable HE contracts and operation produced for a local/peer association. */
 struct Ieee80211NegotiatedHeCapabilities
 {
-    Ieee80211HeCapabilities intersection;
+    Ieee80211HeCapabilities localAdvertisement;
+    Ieee80211HeCapabilities peerAdvertisement;
+    Ieee80211HeDirectionalCapabilities localTxPeerRx;
+    Ieee80211HeDirectionalCapabilities localRxPeerTx;
+    Ieee80211HeMutualCapabilities mutual;
     Ieee80211HeOperation operation;
-    bool valid = false;
 };
 
 /**
- * Computes directional MCS/NSS maps and mutual HE capabilities.
- *
- * The result is valid only when downlink OFDMA, the requested operating width,
- * at least one RU size, and one transmit stream are mutually supported.
+ * Computes explicit local-TX/peer-RX and local-RX/peer-TX contracts. The local
+ * role determines whether a direction uses the advertised DL or UL OFDMA bit.
  */
 inline Ieee80211NegotiatedHeCapabilities negotiateHeCapabilities(
         const Ieee80211HeCapabilities& local,
         const Ieee80211HeCapabilities& peer,
-        const Ieee80211HeOperation& operation)
+        const Ieee80211HeOperation& operation,
+        bool localIsAccessPoint)
 {
     Ieee80211NegotiatedHeCapabilities negotiated;
+    negotiated.localAdvertisement = local;
+    negotiated.peerAdvertisement = peer;
     negotiated.operation = operation;
-    negotiated.intersection.supportedChannelWidths.clear();
-    for (const auto& width : local.supportedChannelWidths)
-        if (peer.supportedChannelWidths.count(width) != 0)
-            negotiated.intersection.supportedChannelWidths.insert(width);
-    negotiated.intersection.rxMcsNss.maxMcsPerNss.fill(-1);
-    negotiated.intersection.txMcsNss.maxMcsPerNss.fill(-1);
+    negotiated.localTxPeerRx.supportedChannelWidths.clear();
+    negotiated.localRxPeerTx.supportedChannelWidths.clear();
+    for (const auto& width : local.supportedChannelWidths) {
+        if (peer.supportedChannelWidths.count(width) != 0) {
+            negotiated.localTxPeerRx.supportedChannelWidths.insert(width);
+            negotiated.localRxPeerTx.supportedChannelWidths.insert(width);
+        }
+    }
+    negotiated.localTxPeerRx.mcsNss.maxMcsPerNss.fill(-1);
+    negotiated.localRxPeerTx.mcsNss.maxMcsPerNss.fill(-1);
     for (size_t i = 0; i < 8; ++i) {
         int localTx = local.txMcsNss.maxMcsPerNss[i];
         int peerRx = peer.rxMcsNss.maxMcsPerNss[i];
         int localRx = local.rxMcsNss.maxMcsPerNss[i];
         int peerTx = peer.txMcsNss.maxMcsPerNss[i];
-        negotiated.intersection.txMcsNss.maxMcsPerNss[i] =
+        negotiated.localTxPeerRx.mcsNss.maxMcsPerNss[i] =
                 localTx < 0 || peerRx < 0 ? -1 : std::min(localTx, peerRx);
-        negotiated.intersection.rxMcsNss.maxMcsPerNss[i] =
+        negotiated.localRxPeerTx.mcsNss.maxMcsPerNss[i] =
                 localRx < 0 || peerTx < 0 ? -1 : std::min(localRx, peerTx);
     }
-    negotiated.intersection.dlOfdma = local.dlOfdma && peer.dlOfdma;
-    negotiated.intersection.ulOfdma = local.ulOfdma && peer.ulOfdma;
-    negotiated.intersection.dcm = local.dcm && peer.dcm;
-    negotiated.intersection.maxDcmConstellation =
+    negotiated.localTxPeerRx.ofdma = localIsAccessPoint ?
+            local.dlOfdma && peer.dlOfdma : local.ulOfdma && peer.ulOfdma;
+    negotiated.localRxPeerTx.ofdma = localIsAccessPoint ?
+            local.ulOfdma && peer.ulOfdma : local.dlOfdma && peer.dlOfdma;
+    negotiated.mutual.dcm = local.dcm && peer.dcm;
+    negotiated.mutual.maxDcmConstellation =
             std::min(local.maxDcmConstellation, peer.maxDcmConstellation);
-    negotiated.intersection.maxDcmNss = std::min(local.maxDcmNss, peer.maxDcmNss);
-    negotiated.intersection.ldpc = local.ldpc && peer.ldpc;
-    negotiated.intersection.preamblePuncturing = local.preamblePuncturing && peer.preamblePuncturing;
-    negotiated.intersection.multiTidAggregationRx =
-            local.multiTidAggregationRx && peer.multiTidAggregationTx;
-    negotiated.intersection.multiTidAggregationTx =
+    negotiated.mutual.maxDcmNss = std::min(local.maxDcmNss, peer.maxDcmNss);
+    negotiated.mutual.ldpc = local.ldpc && peer.ldpc;
+    negotiated.localTxPeerRx.preamblePuncturing = local.preamblePuncturing && peer.preamblePuncturing;
+    negotiated.localRxPeerTx.preamblePuncturing = local.preamblePuncturing && peer.preamblePuncturing;
+    negotiated.localTxPeerRx.multiTidAggregation =
             local.multiTidAggregationTx && peer.multiTidAggregationRx;
-    negotiated.intersection.muBarTriggerRx = local.muBarTriggerRx && peer.muBarTriggerRx;
-    negotiated.intersection.heTbBlockAckTx = local.heTbBlockAckTx && peer.heTbBlockAckTx;
-    negotiated.intersection.dynamicFragmentationLevel =
-            std::min(local.dynamicFragmentationLevel, peer.dynamicFragmentationLevel);
-    negotiated.intersection.omControl = local.omControl && peer.omControl;
-    negotiated.intersection.twoNav = local.twoNav && peer.twoNav;
-    negotiated.intersection.erBss = local.erBss && peer.erBss;
-    negotiated.intersection.ndpFeedbackReport = local.ndpFeedbackReport && peer.ndpFeedbackReport;
-    negotiated.intersection.maxAmpduLengthExponent =
-            std::min(local.maxAmpduLengthExponent, peer.maxAmpduLengthExponent);
-    negotiated.intersection.maxMpduLength = std::min(local.maxMpduLength, peer.maxMpduLength);
-    negotiated.intersection.maxBlockAckBufferSize =
-            std::min(local.maxBlockAckBufferSize, peer.maxBlockAckBufferSize);
-    negotiated.intersection.supportedRuToneSizes.clear();
-    for (int toneSize : local.supportedRuToneSizes)
-        if (peer.supportedRuToneSizes.count(toneSize) != 0)
-            negotiated.intersection.supportedRuToneSizes.insert(toneSize);
-    negotiated.intersection.dlMuMimoBeamformer = local.dlMuMimoBeamformer;
-    negotiated.intersection.dlMuMimoBeamformee = peer.dlMuMimoBeamformee;
-    negotiated.intersection.fullBandwidthUlMuMimo =
-            local.fullBandwidthUlMuMimo && peer.fullBandwidthUlMuMimo;
-    negotiated.intersection.partialBandwidthUlMuMimo =
-            local.partialBandwidthUlMuMimo && peer.partialBandwidthUlMuMimo;
-    negotiated.intersection.soundingDimensions = local.soundingDimensions;
-    negotiated.intersection.beamformeeSts20Mhz = peer.beamformeeSts20Mhz;
-    negotiated.intersection.beamformeeStsAbove20Mhz = peer.beamformeeStsAbove20Mhz;
-    negotiated.intersection.feedbackMode = peer.feedbackMode;
-    negotiated.valid = negotiated.intersection.dlOfdma &&
-            negotiated.intersection.supportedChannelWidths.count(operation.operatingChannelWidth) != 0 &&
-            !negotiated.intersection.supportedRuToneSizes.empty() &&
-            negotiated.intersection.txMcsNss.maxMcsPerNss[0] >= 0;
+    negotiated.localRxPeerTx.multiTidAggregation =
+            peer.multiTidAggregationTx && local.multiTidAggregationRx;
+    negotiated.localTxPeerRx.receiverCanReceiveMuBarTrigger = peer.muBarTriggerRx;
+    negotiated.localRxPeerTx.receiverCanReceiveMuBarTrigger = local.muBarTriggerRx;
+    negotiated.localTxPeerRx.transmitterCanTransmitHeTbBlockAck = local.heTbBlockAckTx;
+    negotiated.localRxPeerTx.transmitterCanTransmitHeTbBlockAck = peer.heTbBlockAckTx;
+    negotiated.localTxPeerRx.transmitterCanTransmitNdpFeedbackReport = local.ndpFeedbackReport;
+    negotiated.localRxPeerTx.transmitterCanTransmitNdpFeedbackReport = peer.ndpFeedbackReport;
+    negotiated.localTxPeerRx.transmitterCanTransmitFullBandwidthUlMuMimo = local.fullBandwidthUlMuMimo;
+    negotiated.localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo = peer.fullBandwidthUlMuMimo;
+    negotiated.localTxPeerRx.transmitterCanTransmitPartialBandwidthUlMuMimo = local.partialBandwidthUlMuMimo;
+    negotiated.localRxPeerTx.transmitterCanTransmitPartialBandwidthUlMuMimo = peer.partialBandwidthUlMuMimo;
+    negotiated.localTxPeerRx.receiverDynamicFragmentationLevel = peer.dynamicFragmentationLevel;
+    negotiated.localRxPeerTx.receiverDynamicFragmentationLevel = local.dynamicFragmentationLevel;
+    negotiated.localTxPeerRx.receiverMaxAmpduLengthExponent = peer.maxAmpduLengthExponent;
+    negotiated.localRxPeerTx.receiverMaxAmpduLengthExponent = local.maxAmpduLengthExponent;
+    negotiated.localTxPeerRx.receiverMaxMpduLength = peer.maxMpduLength;
+    negotiated.localRxPeerTx.receiverMaxMpduLength = local.maxMpduLength;
+    negotiated.localTxPeerRx.receiverMaxBlockAckBufferSize = peer.maxBlockAckBufferSize;
+    negotiated.localRxPeerTx.receiverMaxBlockAckBufferSize = local.maxBlockAckBufferSize;
+    for (int toneSize : local.supportedRuToneSizes) {
+        if (peer.supportedRuToneSizes.count(toneSize) != 0) {
+            negotiated.localTxPeerRx.supportedRuToneSizes.insert(toneSize);
+            negotiated.localRxPeerTx.supportedRuToneSizes.insert(toneSize);
+        }
+    }
+    negotiated.mutual.omControl = local.omControl && peer.omControl;
+    negotiated.mutual.twoNav = local.twoNav && peer.twoNav;
+    negotiated.mutual.erBss = local.erBss && peer.erBss;
+    negotiated.localTxPeerRx.valid =
+            negotiated.localTxPeerRx.supportedChannelWidths.count(operation.operatingChannelWidth) != 0 &&
+            negotiated.localTxPeerRx.mcsNss.maxMcsPerNss[0] >= 0;
+    negotiated.localRxPeerTx.valid =
+            negotiated.localRxPeerTx.supportedChannelWidths.count(operation.operatingChannelWidth) != 0 &&
+            negotiated.localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0;
     return negotiated;
 }
 
@@ -224,8 +270,9 @@ inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeOperation& op
 
 inline std::ostream& operator<<(std::ostream& os, const Ieee80211NegotiatedHeCapabilities& capabilities)
 {
-    os << "valid=" << (capabilities.valid ? "yes" : "no")
-       << " {" << capabilities.intersection << "}"
+    os << "localTxPeerRx=" << (capabilities.localTxPeerRx.valid ? "valid" : "invalid")
+       << " localRxPeerTx=" << (capabilities.localRxPeerTx.valid ? "valid" : "invalid")
+       << " ldpc=" << (capabilities.mutual.ldpc ? "yes" : "no")
        << " operation={" << capabilities.operation << "}";
     return os;
 }
@@ -249,7 +296,7 @@ inline bool isDlMuMimoEligible(
     if (staCapabilities.feedbackMode != 2 && staCapabilities.feedbackMode != 3)
         return false;
 
-    int negotiatedNss = getMaxNss(negotiated.intersection.txMcsNss);
+    int negotiatedNss = getMaxNss(negotiated.localTxPeerRx.mcsNss);
     if (negotiatedNss < 1)
         return false;
 

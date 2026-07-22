@@ -402,6 +402,7 @@ void Ieee80211MgmtAp::handleAuthenticationFrame(Packet *packet, const Ptr<const 
             catch (const cException &e) {
                 EV_DEBUG << "Could not get MAC module for queue bank destruction: " << e.what() << "\n";
             }
+            mib->releaseAssociationId(sta->address);
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::AUTHENTICATED; // TODO only when ACK of this frame arrives
         EV << "STA authenticated\n";
@@ -439,7 +440,7 @@ void Ieee80211MgmtAp::handleDeauthenticationFrame(Packet *packet, const Ptr<cons
             }
         }
         mib->bssAccessPointData.stations[sta->address] = Ieee80211Mib::NOT_AUTHENTICATED;
-        mib->removePeerHeCapabilities(sta->address);
+        mib->releaseAssociationId(sta->address);
         sta->authSeqExpected = 1;
     }
 }

@@ -177,7 +177,7 @@ int Ieee80211Mib::getNegotiatedHePeerCount() const
 {
     int count = 0;
     for (const auto& entry : bssAccessPointData.negotiatedHeCapabilities)
-        if (entry.second.valid)
+        if (entry.second.localTxPeerRx.valid || entry.second.localRxPeerTx.valid)
             count++;
     return count;
 }
@@ -306,9 +306,7 @@ short Ieee80211Mib::allocateAssociationId(const MacAddress& address)
 void Ieee80211Mib::releaseAssociationId(const MacAddress& address)
 {
     bssAccessPointData.associationIds.erase(address);
-    removePeerHeCapabilities(address);
-    removePeerEhtCapabilities(address);
-    removePeerVhtCapabilities(address);
+    removePeerCapabilities(address);
 }
 
 short Ieee80211Mib::getAssociationId(const MacAddress& address) const
@@ -330,13 +328,21 @@ void Ieee80211Mib::setPeerHeCapabilities(const MacAddress& address,
 {
     bssAccessPointData.advertisedHeCapabilities[address] = capabilities;
     bssAccessPointData.negotiatedHeCapabilities[address] =
-            negotiateHeCapabilities(localHeCapabilities, capabilities, operation);
+            negotiateHeCapabilities(localHeCapabilities, capabilities, operation,
+                    bssStationData.stationType == ACCESS_POINT);
 }
 
 void Ieee80211Mib::removePeerHeCapabilities(const MacAddress& address)
 {
     bssAccessPointData.advertisedHeCapabilities.erase(address);
     bssAccessPointData.negotiatedHeCapabilities.erase(address);
+}
+
+void Ieee80211Mib::removePeerCapabilities(const MacAddress& address)
+{
+    removePeerHeCapabilities(address);
+    removePeerEhtCapabilities(address);
+    removePeerVhtCapabilities(address);
 }
 
 const Ieee80211NegotiatedHeCapabilities *Ieee80211Mib::findNegotiatedHeCapabilities(

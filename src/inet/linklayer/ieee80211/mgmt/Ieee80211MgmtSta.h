@@ -100,6 +100,7 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
 
     // associated Access Point
     cMessage *assocTimeoutMsg; // if non-nullptr: association is in progress
+    bool pendingReassociation = false;
     AssociatedApInfo assocAP;
     std::map<uint8_t, Ieee80211Prim_TwtSetupRequest> pendingTwtSetups;
     uint8_t nextTwtDialogToken = 1;
@@ -124,6 +125,13 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
 
     /** Utility function: sends association request */
     virtual void startAssociation(ApInfo *ap, simtime_t timeout);
+
+    /** Utility function: sends reassociation request while preserving the current association. */
+    virtual void startReassociation(ApInfo *ap, simtime_t timeout);
+
+    /** Cancels a pending association transition and optionally retunes to the preserved AP. */
+    virtual void cancelAssociationTransition(bool restorePreviousChannel);
+    virtual MacAddress getPendingAssociationAddress() const;
 
     /** Utility function: looks up AP in our AP list. Returns nullptr if not found. */
     virtual ApInfo *lookupAP(const MacAddress& address);
@@ -154,6 +162,10 @@ class INET_API Ieee80211MgmtSta : public Ieee80211MgmtBase
 
     /** Sends back result of association to the agent */
     virtual void sendAssociationConfirm(ApInfo *ap, Ieee80211PrimResultCode resultCode);
+    virtual void sendReassociationConfirm(ApInfo *ap, Ieee80211PrimResultCode resultCode);
+
+    /** Applies a successful/refused association or reassociation response. */
+    virtual void handleAssociationResponse(Packet *packet, const Ptr<const Ieee80211MgmtHeader>& header, bool reassociation);
 
     /** Utility function: Cancel the existing association */
     virtual void disassociate();

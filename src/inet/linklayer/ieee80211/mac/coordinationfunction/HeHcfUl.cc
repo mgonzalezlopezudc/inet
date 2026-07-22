@@ -122,8 +122,8 @@ bool HeHcf::allAssociatedStationsSupportPreamblePuncturing() const
             mac->getMib()->bssAccessPointData.stations.end(), [&] (const auto& station) {
                 auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
                 return station.second != Ieee80211Mib::ASSOCIATED ||
-                        (capabilities != nullptr && capabilities->valid &&
-                         capabilities->intersection.preamblePuncturing);
+                        (capabilities != nullptr && capabilities->localRxPeerTx.valid &&
+                         capabilities->localRxPeerTx.preamblePuncturing);
             });
 }
 
@@ -132,7 +132,7 @@ bool HeHcf::supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocati
     if (allocation.randomAccess)
         return allAssociatedStationsSupportPreamblePuncturing();
     auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-    return capabilities != nullptr && capabilities->valid && capabilities->intersection.preamblePuncturing;
+    return capabilities != nullptr && capabilities->localRxPeerTx.valid && capabilities->localRxPeerTx.preamblePuncturing;
 }
 
 HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
@@ -278,7 +278,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             }
             auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(station.first);
             if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
-                    (negotiated == nullptr || !negotiated->valid || !negotiated->intersection.ndpFeedbackReport))
+                    (negotiated == nullptr || !negotiated->localRxPeerTx.valid ||
+                     !negotiated->localRxPeerTx.transmitterCanTransmitNdpFeedbackReport))
                 continue;
             if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
                 nfrpEligibleAids.push_back(mac->getMib()->getAssociationId(station.first));
@@ -367,7 +368,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             if (allocation.randomAccess)
                 continue;
             auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-            if (negotiated != nullptr && negotiated->valid && negotiated->intersection.fullBandwidthUlMuMimo)
+            if (negotiated != nullptr && negotiated->localRxPeerTx.valid &&
+                    negotiated->localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo)
                 eligible.push_back(&allocation);
         }
         if (eligible.size() >= 2) {
@@ -410,8 +412,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         if (allocation.randomAccess)
             continue;
         auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-        ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr && capabilities->valid &&
-                capabilities->intersection.ldpc;
+        ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr &&
+                capabilities->localRxPeerTx.valid && capabilities->mutual.ldpc;
     }
     ulSchedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
     auto triggerType = pendingUlTrigger;

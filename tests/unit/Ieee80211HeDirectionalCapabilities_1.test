@@ -1,0 +1,167 @@
+%description:
+Test directional IEEE 802.11ax capability negotiation and peer-cache lifecycle.
+
+%includes:
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        mib: Ieee80211Mib;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::units::values;
+
+static void requireTrue(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("Directional HE capability invariant failed: %s", message);
+}
+
+static Ieee80211HeCapabilities makeLocalCapabilities()
+{
+    Ieee80211HeCapabilities capabilities;
+    capabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+    capabilities.txMcsNss.maxMcsPerNss.fill(-1);
+    capabilities.rxMcsNss.maxMcsPerNss[0] = 7;
+    capabilities.txMcsNss.maxMcsPerNss[0] = 11;
+    capabilities.multiTidAggregationTx = true;
+    capabilities.multiTidAggregationRx = false;
+    capabilities.dynamicFragmentationLevel = 1;
+    capabilities.maxAmpduLengthExponent = 7;
+    capabilities.muBarTriggerRx = false;
+    capabilities.heTbBlockAckTx = true;
+    capabilities.ndpFeedbackReport = false;
+    capabilities.fullBandwidthUlMuMimo = false;
+    capabilities.partialBandwidthUlMuMimo = false;
+    capabilities.twtRequester = true;
+    capabilities.dlOfdma = false;
+    capabilities.ulOfdma = false;
+    return capabilities;
+}
+
+static Ieee80211HeCapabilities makePeerCapabilities()
+{
+    Ieee80211HeCapabilities capabilities;
+    capabilities.rxMcsNss.maxMcsPerNss.fill(-1);
+    capabilities.txMcsNss.maxMcsPerNss.fill(-1);
+    capabilities.rxMcsNss.maxMcsPerNss[0] = 9;
+    capabilities.txMcsNss.maxMcsPerNss[0] = 3;
+    capabilities.multiTidAggregationTx = false;
+    capabilities.multiTidAggregationRx = true;
+    capabilities.dynamicFragmentationLevel = 3;
+    capabilities.maxAmpduLengthExponent = 3;
+    capabilities.muBarTriggerRx = true;
+    capabilities.heTbBlockAckTx = false;
+    capabilities.ndpFeedbackReport = true;
+    capabilities.fullBandwidthUlMuMimo = true;
+    capabilities.partialBandwidthUlMuMimo = true;
+    capabilities.twtResponder = true;
+    capabilities.ldpc = false;
+    capabilities.dlOfdma = false;
+    capabilities.ulOfdma = false;
+    return capabilities;
+}
+
+%activity:
+Ieee80211HeOperation operation;
+operation.operatingChannelWidth = Hz(20e6);
+auto local = makeLocalCapabilities();
+auto peer = makePeerCapabilities();
+auto negotiated = negotiateHeCapabilities(local, peer, operation, true);
+
+requireTrue(negotiated.localTxPeerRx.valid, "local TX contract must not depend on OFDMA");
+requireTrue(negotiated.localRxPeerTx.valid, "local RX contract must not depend on OFDMA");
+requireTrue(!negotiated.localTxPeerRx.ofdma && !negotiated.localRxPeerTx.ofdma,
+        "OFDMA must remain an explicit feature gate");
+requireTrue(negotiated.localTxPeerRx.mcsNss.maxMcsPerNss[0] == 9,
+        "local TX must be limited by peer RX MCS");
+requireTrue(negotiated.localRxPeerTx.mcsNss.maxMcsPerNss[0] == 3,
+        "local RX must be limited by peer TX MCS");
+requireTrue(negotiated.localTxPeerRx.multiTidAggregation,
+        "local TX/peer RX Multi-TID pairing must be enabled");
+requireTrue(!negotiated.localRxPeerTx.multiTidAggregation,
+        "peer TX/local RX Multi-TID pairing must be disabled");
+requireTrue(negotiated.localTxPeerRx.receiverDynamicFragmentationLevel == 3,
+        "peer fragmentation level must govern local transmissions");
+requireTrue(negotiated.localRxPeerTx.receiverDynamicFragmentationLevel == 1,
+        "local fragmentation level must govern peer transmissions");
+requireTrue(negotiated.localTxPeerRx.receiverMaxAmpduLengthExponent == 3,
+        "peer A-MPDU exponent must cap local transmissions");
+requireTrue(negotiated.localRxPeerTx.receiverMaxAmpduLengthExponent == 7,
+        "local A-MPDU exponent must cap peer transmissions");
+requireTrue(negotiated.localTxPeerRx.receiverCanReceiveMuBarTrigger,
+        "peer MU-BAR receive capability must gate local DL");
+requireTrue(!negotiated.localRxPeerTx.receiverCanReceiveMuBarTrigger,
+        "local MU-BAR receive capability must remain directional");
+requireTrue(negotiated.localTxPeerRx.transmitterCanTransmitHeTbBlockAck,
+        "local HE-TB Block Ack transmit capability must be retained");
+requireTrue(!negotiated.localRxPeerTx.transmitterCanTransmitHeTbBlockAck,
+        "peer HE-TB Block Ack transmit capability must gate the response");
+requireTrue(!negotiated.localTxPeerRx.transmitterCanTransmitNdpFeedbackReport &&
+        negotiated.localRxPeerTx.transmitterCanTransmitNdpFeedbackReport,
+        "NDP feedback producer capability must follow the transmitter");
+requireTrue(!negotiated.localTxPeerRx.transmitterCanTransmitFullBandwidthUlMuMimo &&
+        negotiated.localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo,
+        "UL MU-MIMO producer capability must follow the transmitter");
+requireTrue(!negotiated.mutual.ldpc, "LDPC must require support at both endpoints");
+requireTrue(negotiated.localAdvertisement.twtRequester && negotiated.peerAdvertisement.twtResponder,
+        "raw TWT advertisements must remain auditable independently of OFDMA");
+
+auto apLocal = local;
+auto apPeer = peer;
+apLocal.dlOfdma = apPeer.dlOfdma = true;
+apLocal.ulOfdma = apPeer.ulOfdma = false;
+auto apView = negotiateHeCapabilities(apLocal, apPeer, operation, true);
+auto staView = negotiateHeCapabilities(apPeer, apLocal, operation, false);
+requireTrue(apView.localTxPeerRx.ofdma && !apView.localRxPeerTx.ofdma,
+        "AP perspective must map DL to local TX and UL to local RX");
+requireTrue(staView.localRxPeerTx.ofdma && !staView.localTxPeerRx.ofdma,
+        "STA perspective must be the inverse of the AP perspective");
+requireTrue(apView.localTxPeerRx.mcsNss.maxMcsPerNss == staView.localRxPeerTx.mcsNss.maxMcsPerNss &&
+        apView.localRxPeerTx.mcsNss.maxMcsPerNss == staView.localTxPeerRx.mcsNss.maxMcsPerNss,
+        "AP and STA directional MCS contracts must be perspective inverses");
+
+auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
+mib->bssStationData.stationType = Ieee80211Mib::ACCESS_POINT;
+mib->localHeCapabilities = local;
+MacAddress address("02:00:00:00:00:42");
+mib->setPeerHeCapabilities(address, peer, operation);
+mib->setPeerEhtCapabilities(address, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
+mib->setPeerVhtCapabilities(address, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
+requireTrue(mib->findNegotiatedHeCapabilities(address) != nullptr &&
+        mib->findNegotiatedEhtCapabilities(address) != nullptr &&
+        mib->findNegotiatedVhtCapabilities(address) != nullptr,
+        "all peer capability families must be cached before invalidation");
+mib->removePeerCapabilities(address);
+requireTrue(mib->findNegotiatedHeCapabilities(address) == nullptr &&
+        mib->findNegotiatedEhtCapabilities(address) == nullptr &&
+        mib->findNegotiatedVhtCapabilities(address) == nullptr,
+        "common invalidation must remove HE, EHT, and VHT caches");
+
+mib->allocateAssociationId(address);
+mib->setPeerHeCapabilities(address, peer, operation);
+mib->setPeerEhtCapabilities(address, Ieee80211EhtCapabilities(), Ieee80211EhtOperation());
+mib->setPeerVhtCapabilities(address, Ieee80211VhtCapabilities(), Ieee80211VhtOperation());
+mib->releaseAssociationId(address);
+requireTrue(mib->getAssociationId(address) == -1 &&
+        mib->findNegotiatedHeCapabilities(address) == nullptr &&
+        mib->findNegotiatedEhtCapabilities(address) == nullptr &&
+        mib->findNegotiatedVhtCapabilities(address) == nullptr,
+        "association release must invalidate every peer capability family");
+
+EV << "Directional HE negotiation, role inversion, TWT independence, and cache invalidation passed.\n";
+
+%contains: stdout
+Directional HE negotiation, role inversion, TWT independence, and cache invalidation passed.

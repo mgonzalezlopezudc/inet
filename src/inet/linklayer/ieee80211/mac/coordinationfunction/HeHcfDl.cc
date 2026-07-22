@@ -179,15 +179,15 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             }
             auto negotiated = mib->findNegotiatedHeCapabilities(dest);
             if (negotiated != nullptr &&
-                    (!negotiated->valid ||
-                     !negotiated->intersection.dlOfdma ||
-                     negotiated->intersection.supportedChannelWidths.count(context.channelBandwidth) == 0 ||
+                    (!negotiated->localTxPeerRx.valid ||
+                     !negotiated->localTxPeerRx.ofdma ||
+                     negotiated->localTxPeerRx.supportedChannelWidths.count(context.channelBandwidth) == 0 ||
                      (par("dlMuAckMethod").stdstringValue() != "sequentialBar" &&
-                      (!negotiated->intersection.muBarTriggerRx ||
-                       !negotiated->intersection.heTbBlockAckTx)))) {
-                const char *reason = !negotiated->valid ? "invalid negotiated capabilities" :
-                        !negotiated->intersection.dlOfdma ? "DL OFDMA not supported" :
-                        negotiated->intersection.supportedChannelWidths.count(context.channelBandwidth) == 0 ?
+                      (!negotiated->localTxPeerRx.receiverCanReceiveMuBarTrigger ||
+                       !negotiated->localRxPeerTx.transmitterCanTransmitHeTbBlockAck)))) {
+                const char *reason = !negotiated->localTxPeerRx.valid ? "invalid local-TX/peer-RX capabilities" :
+                        !negotiated->localTxPeerRx.ofdma ? "DL OFDMA not supported" :
+                        negotiated->localTxPeerRx.supportedChannelWidths.count(context.channelBandwidth) == 0 ?
                                 "channel bandwidth not supported" :
                         par("dlMuAckMethod").stdstringValue() != "sequentialBar" ?
                                 "MU-BAR/HE-TB BlockAck not supported" : "unknown";
@@ -196,7 +196,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                 continue;
             }
             if (!context.puncturedSubchannels.empty() && (negotiated == nullptr ||
-                    !negotiated->intersection.preamblePuncturing)) {
+                    !negotiated->localTxPeerRx.preamblePuncturing)) {
                 EV_INFO << "HE DL schedule context: skipping packet " << i << " to " << dest
                          << " — preamble puncturing not supported\n";
                 continue;
@@ -275,7 +275,7 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
     context.coding = mac->getMib()->localHeCapabilities.ldpc &&
             std::all_of(context.candidates.begin(), context.candidates.end(), [] (const auto& candidate) {
                 return candidate.negotiatedHeCapabilities != nullptr &&
-                        candidate.negotiatedHeCapabilities->valid && candidate.negotiatedHeCapabilities->intersection.ldpc;
+                        candidate.negotiatedHeCapabilities->localTxPeerRx.valid && candidate.negotiatedHeCapabilities->mutual.ldpc;
             }) ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
     context.csiManager = &csiManager;
     context.numApAntennas = radio->getAntenna()->getNumAntennas();

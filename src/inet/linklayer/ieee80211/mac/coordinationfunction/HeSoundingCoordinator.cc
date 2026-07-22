@@ -69,7 +69,7 @@ bool HeSoundingCoordinator::tryStartSoundingSequence(AccessCategory ac,
     std::vector<HeSoundingFs::TargetSta> soundingStas;
     for (const auto& candidate : scheduleContext.candidates) {
         auto negotiated = candidate.negotiatedHeCapabilities;
-        if (negotiated == nullptr || !negotiated->valid)
+        if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
             continue;
         auto mib = mac->getMib();
         auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
@@ -82,7 +82,7 @@ bool HeSoundingCoordinator::tryStartSoundingSequence(AccessCategory ac,
             HeSoundingFs::TargetSta target;
             target.address = candidate.staAddress;
             target.aid = mac->getMib()->getAssociationId(candidate.staAddress);
-            target.maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
+            target.maxNss = std::min(getMaxNss(negotiated->localTxPeerRx.mcsNss), 4);
             soundingStas.push_back(target);
         }
     }
@@ -179,8 +179,8 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                 if (selected != nullptr) {
                     int maxNss = 1;
                     auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(trigger->getTransmitterAddress());
-                    if (negotiated != nullptr && negotiated->valid) {
-                        maxNss = std::min(getMaxNss(negotiated->intersection.txMcsNss), 4);
+                    if (negotiated != nullptr && negotiated->localRxPeerTx.valid) {
+                        maxNss = std::min(getMaxNss(negotiated->localRxPeerTx.mcsNss), 4);
                     }
 
                     auto feedback = makeShared<Ieee80211HeCompressedBeamformingFeedback>();

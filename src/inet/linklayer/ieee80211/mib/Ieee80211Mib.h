@@ -115,6 +115,7 @@ class INET_API Ieee80211Mib : public SimpleModule
     void setPeerHeCapabilities(const MacAddress& address, const Ieee80211HeCapabilities& capabilities,
             const Ieee80211HeOperation& operation);
     void removePeerHeCapabilities(const MacAddress& address);
+    void removePeerCapabilities(const MacAddress& address);
     const Ieee80211NegotiatedHeCapabilities *findNegotiatedHeCapabilities(const MacAddress& address) const;
     void setPeerEhtCapabilities(const MacAddress& address, const Ieee80211EhtCapabilities& capabilities,
             const Ieee80211EhtOperation& operation);

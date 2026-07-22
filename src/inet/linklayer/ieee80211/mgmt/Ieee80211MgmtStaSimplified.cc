@@ -43,8 +43,8 @@ void Ieee80211MgmtStaSimplified::initialize(int stage)
             EV_INFO << "Peer HE capabilities set for AP address=" << apMib->address << ", BSS color=" << (int)mib->heOperation.bssColor << "\n";
         }
         else {
-            apMib->removePeerHeCapabilities(mib->address);
-            mib->removePeerHeCapabilities(apMib->address);
+            apMib->removePeerCapabilities(mib->address);
+            mib->removePeerCapabilities(apMib->address);
             mib->heOperation.bssColor = 0;
         }
         if (isEhtManagementSupported()) {

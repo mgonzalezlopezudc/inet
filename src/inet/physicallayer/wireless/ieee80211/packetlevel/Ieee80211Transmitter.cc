@@ -209,7 +209,7 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
         else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(transmissionMode)) {
             if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
                 auto negotiatedHe = mib->findNegotiatedHeCapabilities(receiverAddress);
-                useLdpc = negotiatedHe ? negotiatedHe->intersection.ldpc : mib->localHeCapabilities.ldpc;
+                useLdpc = negotiatedHe ? negotiatedHe->mutual.ldpc : mib->localHeCapabilities.ldpc;
             }
             else {
                 useLdpc = mib->localHeCapabilities.ldpc;

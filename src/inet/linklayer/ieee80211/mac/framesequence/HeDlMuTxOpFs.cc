@@ -201,7 +201,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
         auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddress) : nullptr;
-        if (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx) {
+        if (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation) {
             // 26.6.3 allows DL HE MU multi-TID A-MPDUs when negotiated.  The
             // matching Multi-TID BAR carries one record per TID included in the
             // per-user A-MPDU.
@@ -243,7 +243,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
         auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(getActiveAllocation().staAddress) : nullptr;
-        bool multiTid = (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx);
+        bool multiTid = (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation);
 
         auto activeRecordCount = multiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(getActiveAllocation().packets).size()) : 0;
         auto blockAckDuration = responseMode->getDuration(multiTid ? b(B(18 + 12 * activeRecordCount)) : LENGTH_BASIC_BLOCKACK);
@@ -251,7 +251,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         auto remainingDuration = owner->modeSet->getSifsTime() + blockAckDuration;
         for (int nextIndex = allocationIndex + 1; nextIndex < (int)owner->activeAllocations.size(); nextIndex++) {
             auto nextNegotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(owner->activeAllocations.at(nextIndex).staAddress) : nullptr;
-            bool nextMultiTid = (nextNegotiated != nullptr && nextNegotiated->intersection.multiTidAggregationTx);
+            bool nextMultiTid = (nextNegotiated != nullptr && nextNegotiated->localTxPeerRx.multiTidAggregation);
             auto nextRecordCount = nextMultiTid ? std::max<size_t>(1, collectStartingSequenceNumbersByTid(owner->activeAllocations.at(nextIndex).packets).size()) : 0;
             auto nextBlockAckDuration = responseMode->getDuration(nextMultiTid ? b(B(18 + 12 * nextRecordCount)) : LENGTH_BASIC_BLOCKACK);
             auto nextBarDuration = responseMode->getDuration(nextMultiTid ? B(18 + 4 * nextRecordCount) : B(38));
@@ -266,7 +266,7 @@ class HeDlMuPerStaBlockAckFs : public SequentialFs
         auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
         auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
         auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(getActiveAllocation().staAddress) : nullptr;
-        bool multiTid = (negotiated != nullptr && negotiated->intersection.multiTidAggregationTx);
+        bool multiTid = (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation);
 
         Ptr<Ieee80211BlockAckReq> dummyReq;
         if (multiTid) {
@@ -805,7 +805,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         auto hcfMacForCapabilities = hcf != nullptr ? dynamic_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule()) : nullptr;
         auto negotiated = hcfMacForCapabilities != nullptr ? hcfMacForCapabilities->getMib()->findNegotiatedHeCapabilities(alloc.staAddress) : nullptr;
         selectedAllocation.multiTidAggregation = negotiated != nullptr &&
-                negotiated->valid && negotiated->intersection.multiTidAggregationTx;
+                negotiated->localTxPeerRx.valid && negotiated->localTxPeerRx.multiTidAggregation;
         if (hcf != nullptr) {
             auto hcfMac = check_and_cast<Ieee80211Mac *>(check_and_cast<cModule *>(hcf)->getParentModule());
             ASSERT(hcfMac != nullptr);

@@ -259,7 +259,7 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
             continue;
         auto negotiated = mib->findNegotiatedHeCapabilities(allocation.staAddress);
         ldpcSupportedByAll = ldpcSupportedByAll && negotiated != nullptr &&
-                negotiated->valid && negotiated->intersection.ldpc;
+                negotiated->localRxPeerTx.valid && negotiated->mutual.ldpc;
     }
     schedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
     if (schedule.coding == physicallayer::HE_CODING_BCC) {

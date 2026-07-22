@@ -37,7 +37,8 @@ std::vector<int> HeDynamicFragmentationPolicy::computeFragmentSizes(Packet *fram
 
     auto negotiated = !receiverAddress.isUnspecified() && mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddress) : nullptr;
 
-    if (negotiated == nullptr || !negotiated->valid || negotiated->intersection.dynamicFragmentationLevel < requiredLevel) {
+    if (negotiated == nullptr || !negotiated->localTxPeerRx.valid ||
+            negotiated->localTxPeerRx.receiverDynamicFragmentationLevel < requiredLevel) {
         EV_INFO << "HE dynamic fragmentation suppressed: peer did not negotiate level " << requiredLevel << endl;
         return {};
     }
