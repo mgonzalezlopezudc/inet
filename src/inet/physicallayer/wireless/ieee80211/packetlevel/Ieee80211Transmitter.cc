@@ -55,6 +55,12 @@ namespace inet {
 
 namespace physicallayer {
 
+static Hz getModeSelectionBandwidth(const Ieee80211ModeSet *modeSet,
+        const IIeee80211Band *band, Hz configuredBandwidth)
+{
+    return modeSet != nullptr ? modeSet->getModeBandwidth(band, configuredBandwidth) : configuredBandwidth;
+}
+
 static uint8_t encodeCanonicalHeTxopDuration(const Ieee80211HeCommonPhyParameters& common)
 {
     if (common.sigA.txopUnspecified)
@@ -89,10 +95,15 @@ void Ieee80211Transmitter::initialize(int stage)
     FlatTransmitterBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         const char *opMode = par("opMode");
-        setModeSet(*opMode ? Ieee80211ModeSet::getModeSet(opMode) : nullptr);
         const char *bandName = par("bandName");
         setBand(*bandName != '\0' ? Ieee80211CompliantBands::getBand(bandName) : nullptr);
-        setMode(modeSet != nullptr ? (bitrate != bps(-1) ? modeSet->getMode(bitrate, band ? band->getSpacing() : bandwidth) : modeSet->getFastestMode(band ? band->getSpacing() : bandwidth)) : nullptr);
+        // The containing radio resolves the band-aware HE profile once at the
+        // physical-layer stage. Legacy standalone transmitters retain their
+        // local mode-set initialization for compatibility.
+        setModeSet(*opMode && strcmp(opMode, "ax") ? Ieee80211ModeSet::getModeSet(opMode) : nullptr);
+        auto channelWidth = getModeSelectionBandwidth(modeSet, band, bandwidth);
+        if (modeSet != nullptr)
+            setMode(bitrate != bps(-1) ? modeSet->getMode(bitrate, channelWidth) : modeSet->getFastestMode(channelWidth));
         int channelNumber = par("channelNumber");
         if (channelNumber != -1)
             setChannelNumber(channelNumber);
@@ -149,7 +160,7 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
         transmissionMode = modeReq->getMode();
     }
     else if (modeSet != nullptr && bitrateReq != nullptr)
-        transmissionMode = modeSet->getMode(bitrateReq->getDataBitrate(), band ? band->getSpacing() : bandwidth);
+        transmissionMode = modeSet->getMode(bitrateReq->getDataBitrate(), getModeSelectionBandwidth(modeSet, band, bandwidth));
     else
         transmissionMode = mode;
     if (transmissionMode == nullptr)
@@ -243,11 +254,22 @@ const Ieee80211Channel *Ieee80211Transmitter::computeTransmissionChannel(const P
 
 void Ieee80211Transmitter::setModeSet(const Ieee80211ModeSet *modeSet)
 {
-    if (this->modeSet != modeSet) {
-        this->modeSet = modeSet;
-        if (mode != nullptr)
-            mode = modeSet != nullptr ? modeSet->getMode(mode->getDataMode()->getNetBitrate(), band ? band->getSpacing() : bandwidth) : nullptr;
-    }
+    this->modeSet = modeSet;
+    auto channelWidth = getModeSelectionBandwidth(modeSet, band, bandwidth);
+    if (modeSet == nullptr)
+        mode = nullptr;
+    else if (bitrate != bps(-1))
+        mode = modeSet->getMode(bitrate, channelWidth);
+    else
+        mode = modeSet->getFastestMode(channelWidth);
+}
+
+void Ieee80211Transmitter::setModeSetAndMode(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode)
+{
+    if (modeSet == nullptr || mode == nullptr || !modeSet->containsMode(mode))
+        throw cRuntimeError("The explicit 802.11 mode is not part of the target mode profile");
+    this->modeSet = modeSet;
+    this->mode = mode;
 }
 
 void Ieee80211Transmitter::setMode(const IIeee80211Mode *mode)
@@ -262,18 +284,21 @@ void Ieee80211Transmitter::setMode(const IIeee80211Mode *mode)
 void Ieee80211Transmitter::setBand(const IIeee80211Band *band)
 {
     if (this->band != band) {
-        this->band = band;
         if (channel != nullptr)
             setChannel(new Ieee80211Channel(band, channel->getChannelNumber()));
+        else
+            this->band = band;
     }
 }
 
 void Ieee80211Transmitter::setChannel(const Ieee80211Channel *channel)
 {
     if (this->channel != channel) {
+        auto centerFrequency = channel->getCenterFrequency();
         delete this->channel;
         this->channel = channel;
-        setCenterFrequency(channel->getCenterFrequency());
+        this->band = channel->getBand();
+        setCenterFrequency(centerFrequency);
     }
 }
 

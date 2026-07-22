@@ -18,7 +18,7 @@
 namespace inet {
 namespace physicallayer {
 
-class INET_API Ieee80211Radio : public FlatRadioBase
+class INET_API Ieee80211Radio : public FlatRadioBase, public IIeee80211ModeSetProvider
 {
   public:
     /**
@@ -42,6 +42,13 @@ class INET_API Ieee80211Radio : public FlatRadioBase
 
   protected:
     FcsMode fcsMode = FCS_MODE_UNDEFINED;
+    const Ieee80211ModeSet *modeSet = nullptr;
+    const IIeee80211Band *band = nullptr;
+    std::string opMode;
+    bool configurationUpdateInProgress = false;
+    bool listeningChangePending = false;
+    bool channelChangePending = false;
+    int pendingChannelNumber = -1;
 
   protected:
     virtual void initialize(int stage) override;
@@ -50,6 +57,10 @@ class INET_API Ieee80211Radio : public FlatRadioBase
 
     virtual void insertFcs(const Ptr<Ieee80211PhyHeader>& phyHeader) const;
     virtual bool verifyFcs(const Ptr<const Ieee80211PhyHeader>& phyHeader) const;
+    virtual void notifyListeningChanged();
+    virtual void notifyChannelChanged(int channelNumber);
+    virtual void finishConfigurationUpdate(bool publishModeSet);
+    virtual void cancelConfigurationUpdate();
 
     virtual void encapsulate(Packet *packet) const override;
     virtual void decapsulate(Packet *packet) const override;
@@ -58,7 +69,13 @@ class INET_API Ieee80211Radio : public FlatRadioBase
   public:
     Ieee80211Radio();
 
+    virtual const Ieee80211ModeSet *getModeSet() const override { return modeSet; }
+    virtual const IIeee80211Band *getBand() const override { return band; }
+    virtual Hz getChannelWidth() const override;
+    virtual Hz getModeBandwidth() const override;
+
     virtual void setModeSet(const Ieee80211ModeSet *modeSet);
+    virtual void setModeSetAndMode(const Ieee80211ModeSet *modeSet, const IIeee80211Mode *mode);
     virtual void setMode(const IIeee80211Mode *mode);
     virtual void setBand(const IIeee80211Band *band);
     virtual void setChannel(const Ieee80211Channel *channel);

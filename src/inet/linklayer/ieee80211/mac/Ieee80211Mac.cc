@@ -28,6 +28,7 @@
 #include "inet/linklayer/ieee80211/mac/aggregation/MpduDeaggregation.h"
 #include "inet/networklayer/contract/IInterfaceTable.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
@@ -67,7 +68,11 @@ void Ieee80211Mac::initialize(int stage)
         radioModule->subscribe(IRadio::receptionStateChangedSignal, this);
         radioModule->subscribe(IRadio::transmissionStateChangedSignal, this);
         radioModule->subscribe(IRadio::receivedSignalPartChangedSignal, this);
+        radioModule->subscribe(modesetChangedSignal, this);
         radio = check_and_cast<IRadio *>(radioModule);
+        auto modeSetProvider = dynamic_cast<IIeee80211ModeSetProvider *>(radio.get());
+        if (modeSetProvider != nullptr && modeSetProvider->getModeSet() != nullptr)
+            modeSet = modeSetProvider->getModeSet();
         ds = check_and_cast<IDs *>(getSubmodule("ds"));
         rx = check_and_cast<IRx *>(getSubmodule("rx"));
         tx = check_and_cast<ITx *>(getSubmodule("tx"));
@@ -433,6 +438,19 @@ void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, intva
     }
     else if (signalID == IRadio::receivedSignalPartChangedSignal) {
         rx->receivedSignalPartChanged(static_cast<IRadioSignal::SignalPart>(value));
+    }
+}
+
+void Ieee80211Mac::receiveSignal(cComponent *source, simsignal_t signalID, cObject *value, cObject *details)
+{
+    Enter_Method("%s", cComponent::getSignalName(signalID));
+
+    if (signalID == modesetChangedSignal) {
+        auto updatedModeSet = check_and_cast<Ieee80211ModeSet *>(value);
+        auto modeSetProvider = dynamic_cast<IIeee80211ModeSetProvider *>(radio.get());
+        if (modeSetProvider == nullptr || updatedModeSet != modeSetProvider->getModeSet())
+            throw cRuntimeError("Radio published an inconsistent 802.11 mode profile");
+        modeSet = updatedModeSet;
     }
 }
 

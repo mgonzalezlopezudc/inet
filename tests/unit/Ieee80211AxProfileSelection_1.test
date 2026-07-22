@@ -1,0 +1,273 @@
+%description:
+Verify that the radio resolves one band-aware ax profile and injects the identical pointer into TX and RX.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/ratecontrol/AarfRateControl.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtAdhoc.h"
+#include "inet/common/Simsignals.h"
+#include "inet/common/packet/Message.h"
+
+%file: TestNetwork.ned
+import inet.mobility.static.StationaryMobility;
+import inet.networklayer.common.InterfaceTable;
+import inet.linklayer.ieee80211.Ieee80211Interface;
+import inet.linklayer.ieee80211.mgmt.Ieee80211MgmtAdhoc;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+
+module InspectableRadio extends Ieee80211ScalarRadio
+{
+    parameters:
+        @class(InspectableRadio);
+}
+
+simple InspectableMgmtAdhoc extends Ieee80211MgmtAdhoc
+{
+    parameters:
+        @class(InspectableMgmtAdhoc);
+}
+
+network TestNetwork
+{
+    parameters:
+        @networkNode;
+    submodules:
+        test: Test;
+        mobility: StationaryMobility;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        nic: Ieee80211Interface {
+            parameters:
+                opMode = "ax";
+                bitrate = 14.625Mbps;
+                interfaceTableModule = "^.interfaceTable";
+                agent.typename = "";
+                mgmt.typename = "InspectableMgmtAdhoc";
+                mac.qosStation = false;
+                mac.dcf.rateControl.typename = "AarfRateControl";
+                mac.dcf.rateControl.initialRate = 14.625Mbps;
+                radio.typename = "InspectableRadio";
+                radio.bandName = "5 GHz";
+                radio.bandwidth = 20MHz;
+                radio.transmitter.bitrate = 14.625Mbps;
+        }
+    connections allowunconnected:
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+**.nic.radio.radioMediumModule = "^.^.radioMedium"
+**.nic.radio.antenna.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 0m
+**.constraintAreaMaxY = 0m
+**.constraintAreaMaxZ = 0m
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class InspectableRadio : public Ieee80211Radio
+{
+  public:
+    bool configureAx(const IIeee80211Band *band, Hz bandwidth, int channelNumber,
+            const IIeee80211Mode *mode = nullptr, bps bitrate = bps(NaN))
+    {
+        auto command = new Ieee80211ConfigureRadioCommand();
+        command->setOpMode("ax");
+        command->setBand(const_cast<IIeee80211Band *>(band));
+        command->setBandwidth(bandwidth);
+        command->setChannelNumber(channelNumber);
+        if (mode != nullptr)
+            command->setMode(const_cast<IIeee80211Mode *>(mode));
+        if (!std::isnan(bitrate.get()))
+            command->setBitrate(bitrate);
+        auto request = new Request("configureAx", RADIO_C_CONFIGURE);
+        request->setControlInfo(command);
+        try {
+            handleUpperCommand(request);
+            return true;
+        }
+        catch (cRuntimeError&) {
+            delete request;
+            return false;
+        }
+    }
+};
+
+class InspectableMgmtAdhoc : public ieee80211::Ieee80211MgmtAdhoc
+{
+  public:
+    const Ieee80211ModeSet *getModeSet() const { return modeSet; }
+};
+
+class ProfileUpdateListener : public cListener
+{
+  public:
+    int profileUpdates = 0;
+    int listeningUpdates = 0;
+    int datarateUpdates = 0;
+    const Ieee80211ModeSet *lastModeSet = nullptr;
+
+    virtual void receiveSignal(cComponent *, simsignal_t signalID, cObject *value, cObject *) override
+    {
+        if (signalID == modesetChangedSignal) {
+            profileUpdates++;
+            lastModeSet = check_and_cast<Ieee80211ModeSet *>(value);
+        }
+    }
+
+    virtual void receiveSignal(cComponent *, simsignal_t signalID, intval_t, cObject *) override
+    {
+        if (signalID == IRadio::listeningChangedSignal)
+            listeningUpdates++;
+    }
+
+    virtual void receiveSignal(cComponent *, simsignal_t signalID, double, cObject *) override
+    {
+        if (signalID == ieee80211::RateControlBase::datarateChangedSignal)
+            datarateUpdates++;
+    }
+};
+
+Define_Module(InspectableRadio);
+Define_Module(InspectableMgmtAdhoc);
+
+%activity:
+auto nic = getSystemModule()->getSubmodule("nic");
+auto radio = check_and_cast<InspectableRadio *>(nic->getSubmodule("radio"));
+auto mac = check_and_cast<ieee80211::Ieee80211Mac *>(nic->getSubmodule("mac"));
+auto mgmt = check_and_cast<InspectableMgmtAdhoc *>(nic->getSubmodule("mgmt"));
+auto dcf = mac->getSubmodule("dcf");
+auto rateControl = check_and_cast<ieee80211::AarfRateControl *>(dcf->getSubmodule("rateControl"));
+auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
+auto receiver = check_and_cast<const Ieee80211Receiver *>(radio->getReceiver());
+auto modeSet = radio->getModeSet();
+
+REQUIRE(modeSet != nullptr);
+REQUIRE(modeSet == Ieee80211ModeSet::getModeSet("ax-5GHz"));
+REQUIRE(transmitter->getModeSet() == modeSet);
+REQUIRE(receiver->getModeSet() == modeSet);
+REQUIRE(transmitter->getMode() != nullptr);
+REQUIRE(dynamic_cast<const Ieee80211HeMode *>(transmitter->getMode()) != nullptr);
+REQUIRE(transmitter->getMode()->getDataMode()->getBandwidth() == MHz(20));
+REQUIRE(mac->getModeSet() == modeSet);
+REQUIRE(mgmt->getModeSet() == modeSet);
+REQUIRE(rateControl->getRate()->getDataMode()->getBandwidth() == MHz(20));
+
+ProfileUpdateListener listener;
+nic->subscribe(modesetChangedSignal, &listener);
+radio->subscribe(IRadio::listeningChangedSignal, &listener);
+rateControl->subscribe(ieee80211::RateControlBase::datarateChangedSignal, &listener);
+
+REQUIRE(radio->configureAx(&Ieee80211CompliantBands::band6GHz, MHz(20), 50));
+modeSet = radio->getModeSet();
+REQUIRE(modeSet == Ieee80211ModeSet::getModeSet("ax-6GHz"));
+REQUIRE(transmitter->getModeSet() == modeSet);
+REQUIRE(receiver->getModeSet() == modeSet);
+REQUIRE(mac->getModeSet() == modeSet);
+REQUIRE(mgmt->getModeSet() == modeSet);
+REQUIRE(rateControl->getRate()->getDataMode()->getBandwidth() == MHz(20));
+REQUIRE(transmitter->getChannel()->getChannelNumber() == 50);
+REQUIRE(listener.profileUpdates == 1);
+REQUIRE(listener.listeningUpdates == 1);
+REQUIRE(listener.datarateUpdates == 1);
+REQUIRE(listener.lastModeSet == modeSet);
+
+REQUIRE(radio->configureAx(&Ieee80211CompliantBands::band2_4GHz, MHz(40), 1));
+modeSet = radio->getModeSet();
+REQUIRE(modeSet == Ieee80211ModeSet::getModeSet("ax-2.4GHz"));
+REQUIRE(transmitter->getModeSet() == modeSet);
+REQUIRE(receiver->getModeSet() == modeSet);
+REQUIRE(mac->getModeSet() == modeSet);
+REQUIRE(mgmt->getModeSet() == modeSet);
+REQUIRE(rateControl->getRate()->getDataMode()->getBandwidth() == MHz(40));
+REQUIRE(transmitter->getChannel()->getChannelNumber() == 1);
+REQUIRE(listener.profileUpdates == 2);
+REQUIRE(listener.listeningUpdates == 2);
+REQUIRE(listener.datarateUpdates == 2);
+REQUIRE(listener.lastModeSet == modeSet);
+
+auto stableMode = transmitter->getMode();
+auto stableChannel = transmitter->getChannel()->getChannelNumber();
+REQUIRE(!radio->configureAx(&Ieee80211CompliantBands::band2_4GHz, MHz(40), 100));
+REQUIRE(radio->getModeSet() == modeSet);
+REQUIRE(transmitter->getModeSet() == modeSet);
+REQUIRE(receiver->getModeSet() == modeSet);
+REQUIRE(transmitter->getMode() == stableMode);
+REQUIRE(transmitter->getChannel()->getChannelNumber() == stableChannel);
+REQUIRE(listener.profileUpdates == 2);
+REQUIRE(listener.listeningUpdates == 2);
+REQUIRE(listener.datarateUpdates == 2);
+
+REQUIRE(radio->configureAx(&Ieee80211CompliantBands::band6GHz40MHz, MHz(40), 1));
+modeSet = radio->getModeSet();
+REQUIRE(modeSet == Ieee80211ModeSet::getModeSet("ax-6GHz"));
+REQUIRE(mac->getModeSet() == modeSet);
+REQUIRE(mgmt->getModeSet() == modeSet);
+REQUIRE(rateControl->getRate()->getDataMode()->getBandwidth() == MHz(40));
+REQUIRE(listener.profileUpdates == 3);
+REQUIRE(listener.listeningUpdates == 3);
+REQUIRE(listener.datarateUpdates == 3);
+auto heMode = check_and_cast<const Ieee80211HeMode *>(transmitter->getMode());
+REQUIRE(heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_6GHZ);
+REQUIRE(heMode->getDataMode()->getBandwidth() == MHz(40));
+REQUIRE(heMode->getDataMode()->isLdpc());
+
+REQUIRE(radio->configureAx(&Ieee80211CompliantBands::band6GHz20MHz, MHz(20), 1,
+        nullptr, bps(7.3125e6)));
+modeSet = radio->getModeSet();
+REQUIRE(modeSet == Ieee80211ModeSet::getModeSet("ax-6GHz"));
+REQUIRE(transmitter->getMode()->getDataMode()->getBandwidth() == MHz(20));
+REQUIRE(transmitter->getMode()->getDataMode()->getNetBitrate() == bps(7.3125e6));
+REQUIRE(rateControl->getRate()->getDataMode()->getBandwidth() == MHz(20));
+REQUIRE(listener.profileUpdates == 4);
+REQUIRE(listener.listeningUpdates == 4);
+REQUIRE(listener.datarateUpdates == 4);
+
+auto explicitMode = modeSet->findHeMode(0, 1, MHz(40), true);
+REQUIRE(explicitMode != nullptr);
+REQUIRE(radio->configureAx(&Ieee80211CompliantBands::band6GHz40MHz, MHz(40), 1, explicitMode));
+REQUIRE(transmitter->getMode() == explicitMode);
+REQUIRE(transmitter->getMode()->getDataMode()->getBandwidth() == MHz(40));
+REQUIRE(rateControl->getRate()->getDataMode()->getBandwidth() == MHz(40));
+REQUIRE(mac->getModeSet() == modeSet);
+REQUIRE(mgmt->getModeSet() == modeSet);
+REQUIRE(listener.profileUpdates == 5);
+REQUIRE(listener.listeningUpdates == 5);
+REQUIRE(listener.datarateUpdates == 5);
+
+stableMode = transmitter->getMode();
+stableChannel = transmitter->getChannel()->getChannelNumber();
+REQUIRE(!radio->configureAx(&Ieee80211CompliantBands::band6GHz40MHz, MHz(40), 1,
+        explicitMode, bps(7.3125e6)));
+REQUIRE(radio->getModeSet() == modeSet);
+REQUIRE(transmitter->getModeSet() == modeSet);
+REQUIRE(receiver->getModeSet() == modeSet);
+REQUIRE(transmitter->getMode() == stableMode);
+REQUIRE(transmitter->getChannel()->getChannelNumber() == stableChannel);
+REQUIRE(radio->getModeBandwidth() == MHz(40));
+REQUIRE(listener.profileUpdates == 5);
+REQUIRE(listener.listeningUpdates == 5);
+REQUIRE(listener.datarateUpdates == 5);
+
+nic->unsubscribe(modesetChangedSignal, &listener);
+radio->unsubscribe(IRadio::listeningChangedSignal, &listener);
+rateControl->unsubscribe(ieee80211::RateControlBase::datarateChangedSignal, &listener);
+
+EV << "Canonical ax profile selection: PASS\n";
+
+%contains: stdout
+Canonical ax profile selection: PASS

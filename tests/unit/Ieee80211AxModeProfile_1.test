@@ -1,0 +1,159 @@
+%description:
+Release-effective verification of the band-aware standards-oriented IEEE 802.11ax mode profile.
+
+%includes:
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+#include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
+#include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static int countFamily(const Ieee80211ModeSet *modeSet, Ieee80211PhyFamily family)
+{
+    int count = 0;
+    for (int i = 0; i < modeSet->getNumModes(); i++)
+        if (modeSet->getPhyFamily(i) == family)
+            count++;
+    return count;
+}
+
+static int countRequiredHeModes(const Ieee80211ModeSet *modeSet)
+{
+    int count = 0;
+    for (int i = 0; i < modeSet->getNumModes(); i++)
+        if (modeSet->getPhyFamily(i) == Ieee80211PhyFamily::HE &&
+                modeSet->getSupportRequirement(i) == Ieee80211SupportRequirement::MANDATORY)
+            count++;
+    return count;
+}
+
+template<typename F>
+static bool throwsRuntimeError(F function)
+{
+    try { function(); }
+    catch (const cRuntimeError&) { return true; }
+    return false;
+}
+
+%activity:
+auto profile24 = Ieee80211ModeSet::getModeSet("ax", &Ieee80211CompliantBands::band2_4GHz);
+auto profile5 = Ieee80211ModeSet::getModeSet("ax", &Ieee80211CompliantBands::band5GHz80MHz);
+auto profile6 = Ieee80211ModeSet::getModeSet("ax", &Ieee80211CompliantBands::band6GHz80MHz);
+
+REQUIRE(profile24 == Ieee80211ModeSet::getModeSet("ax-2.4GHz"));
+REQUIRE(profile5 == Ieee80211ModeSet::getModeSet("ax"));
+REQUIRE(profile6 == Ieee80211ModeSet::getModeSet("ax-6GHz"));
+REQUIRE(Ieee80211ModeSet::findModeSet("ax-catalog") == nullptr);
+REQUIRE(std::string(profile24->getName()) == "ax");
+REQUIRE(profile24->getOperatingBand() == Ieee80211OperatingBand::BAND_2_4_GHZ);
+REQUIRE(profile5->getOperatingBand() == Ieee80211OperatingBand::BAND_5_GHZ);
+REQUIRE(profile6->getOperatingBand() == Ieee80211OperatingBand::BAND_6_GHZ);
+REQUIRE(profile24->getSifsTime() == SimTime(10, SIMTIME_US));
+REQUIRE(profile5->getSifsTime() == SimTime(16, SIMTIME_US));
+REQUIRE(profile6->getSifsTime() == SimTime(16, SIMTIME_US));
+
+REQUIRE(countFamily(profile24, Ieee80211PhyFamily::DSSS) > 0);
+REQUIRE(countFamily(profile24, Ieee80211PhyFamily::ERP_OFDM) > 0);
+REQUIRE(countFamily(profile24, Ieee80211PhyFamily::HT) > 0);
+REQUIRE(countFamily(profile24, Ieee80211PhyFamily::VHT) == 0);
+REQUIRE(countFamily(profile5, Ieee80211PhyFamily::OFDM) > 0);
+REQUIRE(countFamily(profile5, Ieee80211PhyFamily::HT) > 0);
+REQUIRE(countFamily(profile5, Ieee80211PhyFamily::VHT) > 0);
+REQUIRE(countFamily(profile6, Ieee80211PhyFamily::OFDM) == 8);
+REQUIRE(countFamily(profile6, Ieee80211PhyFamily::HT) == 0);
+REQUIRE(countFamily(profile6, Ieee80211PhyFamily::VHT) == 0);
+
+REQUIRE(countRequiredHeModes(profile24) == 16);
+REQUIRE(countRequiredHeModes(profile5) == 32);
+REQUIRE(countRequiredHeModes(profile6) == 32);
+REQUIRE((profile24->getSupportedChannelWidths() & IEEE80211_WIDTH_80) == 0);
+REQUIRE((profile5->getSupportedChannelWidths() & IEEE80211_WIDTH_160) != 0);
+REQUIRE((profile5->getSupportedChannelWidths() & IEEE80211_WIDTH_80P80) == 0);
+
+auto mcs7 = check_and_cast<const Ieee80211HeMode *>(profile5->findHeMode(7, 1, MHz(80), true));
+auto mcs7Bw20 = check_and_cast<const Ieee80211HeMode *>(profile5->findHeMode(7, 1, MHz(20), false));
+auto mcs10 = check_and_cast<const Ieee80211HeMode *>(profile5->findHeMode(10, 1, MHz(80), true));
+auto mcs11 = check_and_cast<const Ieee80211HeMode *>(profile6->findHeMode(11, 1, MHz(80), true));
+REQUIRE(mcs7 != nullptr && mcs7->getDataMode()->isLdpc());
+REQUIRE(mcs7Bw20 != nullptr && !mcs7Bw20->getDataMode()->isLdpc());
+REQUIRE(mcs10 != nullptr && mcs10->getDataMode()->isLdpc());
+REQUIRE(mcs11 != nullptr && mcs11->getDataMode()->isLdpc());
+REQUIRE(profile5->findHeMode(7, 1, MHz(80), false) == nullptr);
+REQUIRE(profile5->findHeMode(10, 1, MHz(80), false) == nullptr);
+auto illegalWideBcc = Ieee80211HeCompliantModes::getCompliantMode(
+        mcs7->getDataMode()->getModulationAndCodingScheme(), Ieee80211HeMode::BAND_5GHZ,
+        Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+        Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, false);
+REQUIRE(!profile5->containsMode(illegalWideBcc));
+REQUIRE(mcs11->getCenterFrequencyMode() == Ieee80211HeMode::BAND_6GHZ);
+REQUIRE(profile5->getSupportRequirement(mcs7) == Ieee80211SupportRequirement::MANDATORY);
+REQUIRE(profile5->getSupportRequirement(mcs10) == Ieee80211SupportRequirement::OPTIONAL);
+REQUIRE(profile5->getFastestBasicMode(MHz(80)) != nullptr);
+REQUIRE(profile5->getFastestBasicMode(MHz(80))->getDataMode()->getBandwidth() == MHz(20));
+REQUIRE(profile5->getFastestBasicMode(MHz(80))->getDataMode()->getNetBitrate() == Mbps(24));
+REQUIRE(profile5->getFastestMandatoryMode(MHz(80)) == nullptr);
+REQUIRE(profile6->getFastestBasicMode(MHz(80)) != nullptr);
+REQUIRE(profile6->getFastestBasicMode(MHz(80))->getDataMode()->getNetBitrate() == Mbps(24));
+
+Ieee80211SupportedRatesElement sixGhzRates;
+for (int i = 0; i < profile6->getNumModes() && sixGhzRates.numRates < 8; i++)
+    if (profile6->isMandatory(i))
+        sixGhzRates.rate[sixGhzRates.numRates++] = profile6->getMode(i)->getDataMode()->getNetBitrate().get<Mbps>();
+REQUIRE(sixGhzRates.numRates == 3);
+REQUIRE(sixGhzRates.rate[0] == 6);
+REQUIRE(sixGhzRates.rate[1] == 12);
+REQUIRE(sixGhzRates.rate[2] == 24);
+auto probeRequest = makeShared<Ieee80211ProbeRequestFrame>();
+probeRequest->setSSID("");
+probeRequest->setSupportedRates(sixGhzRates);
+probeRequest->setChunkLength(B(7));
+Packet serializedRates("six-gigahertz-rates", probeRequest);
+auto rateBytes = serializedRates.peekDataAsBytes()->getBytes();
+REQUIRE(rateBytes == std::vector<uint8_t>({0, 0, 1, 3, 12, 24, 48}));
+
+REQUIRE(Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band5GHz, Hz(NaN)) == MHz(20));
+REQUIRE(Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band5GHz, MHz(80)) == MHz(80));
+REQUIRE(Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band5_9GHz, Hz(NaN)) == MHz(10));
+REQUIRE(Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band6GHz320MHz, Hz(NaN)) == MHz(320));
+REQUIRE(Ieee80211ModeSet::getModeSet("ax", &Ieee80211CompliantBands::band5_9GHz) == profile5);
+REQUIRE(Ieee80211ModeSet::getModeSet("ax", &Ieee80211CompliantBands::band6GHz320MHz) == profile6);
+for (auto band : std::vector<const IIeee80211Band *>({&Ieee80211CompliantBands::band5GHz,
+                  &Ieee80211CompliantBands::band5GHz20MHz,
+                  &Ieee80211CompliantBands::band5GHz40MHz,
+                  &Ieee80211CompliantBands::band5GHz80MHz,
+                  &Ieee80211CompliantBands::band5GHz160MHz,
+                  &Ieee80211CompliantBands::band5GHz80_80MHz,
+                  &Ieee80211CompliantBands::band5_9GHz}))
+    REQUIRE(Ieee80211ModeSet::getModeSet("ax", band) == profile5);
+for (auto band : std::vector<const IIeee80211Band *>({&Ieee80211CompliantBands::band6GHz,
+                  &Ieee80211CompliantBands::band6GHz20MHz,
+                  &Ieee80211CompliantBands::band6GHz40MHz,
+                  &Ieee80211CompliantBands::band6GHz80MHz,
+                  &Ieee80211CompliantBands::band6GHz160MHz,
+                  &Ieee80211CompliantBands::band6GHz320MHz}))
+    REQUIRE(Ieee80211ModeSet::getModeSet("ax", band) == profile6);
+REQUIRE(profile5->supportsChannel(&Ieee80211CompliantBands::band5_9GHz, MHz(20)));
+REQUIRE(!profile5->supportsChannel(&Ieee80211CompliantBands::band5_9GHz));
+REQUIRE(!profile6->supportsChannel(&Ieee80211CompliantBands::band6GHz320MHz));
+REQUIRE(throwsRuntimeError([&]() { profile6->validateChannel(&Ieee80211CompliantBands::band6GHz320MHz); }));
+REQUIRE(throwsRuntimeError([&]() { profile5->validateChannel(&Ieee80211CompliantBands::band5GHz80_80MHz); }));
+REQUIRE(throwsRuntimeError([&]() { Ieee80211ModeSet::getChannelWidth(&Ieee80211CompliantBands::band5GHz80_80MHz); }));
+REQUIRE(Ieee80211ModeSet::getModeSet("a")->getNumModes() == 8);
+REQUIRE(Ieee80211ModeSet::getModeSet("g(mixed)")->getNumModes() == 12);
+REQUIRE(Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)")->getNumModes() == 64);
+REQUIRE(Ieee80211ModeSet::getModeSet("ac")->getNumModes() == 310);
+
+EV << "Band-aware ax profiles: PASS\n";
+
+%contains: stdout
+Band-aware ax profiles: PASS

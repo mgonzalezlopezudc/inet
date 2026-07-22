@@ -253,7 +253,8 @@ class INET_API Ieee80211HeMode : public Ieee80211ModeBase
   public:
     enum BandMode {
         BAND_2_4GHZ,
-        BAND_5GHZ
+        BAND_5GHZ,
+        BAND_6GHZ
     };
 
   protected:

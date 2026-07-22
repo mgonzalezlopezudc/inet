@@ -238,10 +238,9 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     auto transmitter = check_and_cast<const physicallayer::NarrowbandTransmitterBase *>(radio->getTransmitter());
     auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
     auto centerFrequency = transmitter->getCenterFrequency();
-    Hz channelBandwidth = Hz(20e6);
-    if (modeSet->getNumModes() > 0)
-        if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0)))
-            channelBandwidth = heMode->getDataMode()->getBandwidth();
+    Hz channelBandwidth = transmitter->getBandwidth();
+    if (std::isnan(channelBandwidth.get()) || modeSet->findHeMode(0, 1, channelBandwidth, channelBandwidth > MHz(20)) == nullptr)
+        channelBandwidth = MHz(20);
     auto edcaf = edca->getEdcaf(ac);
     simtime_t txopLimit = SIMTIME_ZERO;
     if (edcaf->getTxopProcedure()->getLimit() > SIMTIME_ZERO)
@@ -386,7 +385,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     // Select one complete Table 9-49 GI/HE-LTF pair. Full-bandwidth UL
     // MU-MIMO may use the raw-0 1x/1.6 us pair; other medium-GI schedules use
     // raw 1 (2x/1.6 us), and long GI uses raw 2 (4x/3.2 us).
-    if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0))) {
+    if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->findHeMode(0, 1, channelBandwidth, channelBandwidth > MHz(20)))) {
         switch (heMode->getDataMode()->getGuardIntervalType()) {
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
             case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:

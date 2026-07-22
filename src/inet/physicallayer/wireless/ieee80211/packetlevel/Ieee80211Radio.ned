@@ -47,6 +47,7 @@ module Ieee80211Radio extends FlatRadioBase
         *.channelNumber = this.channelNumber;
         @class(Ieee80211Radio);
         @signal[radioChannelChanged](type=long);
+        @signal[modesetChanged](type=inet::physicallayer::Ieee80211ModeSet);
         @signal[heRuIndex](type=long);
         @signal[heRuToneSize](type=long);
         @signal[heRuToneOffset](type=long);

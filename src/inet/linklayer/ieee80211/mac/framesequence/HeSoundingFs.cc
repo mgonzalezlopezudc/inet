@@ -268,15 +268,15 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
         responseUser.psduLength = B(34);
         responseUsers.push_back(responseUser);
     }
-    auto heMode = modeSet != nullptr && modeSet->getNumModes() > 0 ?
-            dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0)) : nullptr;
+    auto heMode = modeSet != nullptr ? dynamic_cast<const physicallayer::Ieee80211HeMode *>(
+            modeSet->findHeMode(0, 1, bandwidth, bandwidth > MHz(20))) : nullptr;
     if (heMode == nullptr)
         throw cRuntimeError("Cannot select HE BFRP signal extension without an HE operating band");
     header->setNoSignalExtension(false);
     physicallayer::Ieee80211HeTriggerResponseFinalizationRequest request;
     request.users = responseUsers;
-    request.centerFrequency = heMode->getCenterFrequencyMode() ==
-            physicallayer::Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.4e9) : Hz(5e9);
+    request.centerFrequency = heMode->getCenterFrequencyMode() == physicallayer::Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.4e9) :
+            heMode->getCenterFrequencyMode() == physicallayer::Ieee80211HeMode::BAND_6GHZ ? Hz(6e9) : Hz(5e9);
     request.channelBandwidth = bandwidth;
     request.guardInterval = physicallayer::HE_GI_1_6_US;
     request.ltfType = physicallayer::HE_LTF_2X;

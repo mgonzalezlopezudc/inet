@@ -117,6 +117,8 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
   public:
     virtual ~Ieee80211Receiver();
 
+    virtual const Ieee80211ModeSet *getModeSet() const { return modeSet; }
+
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
     virtual void setModeSet(const Ieee80211ModeSet *modeSet);

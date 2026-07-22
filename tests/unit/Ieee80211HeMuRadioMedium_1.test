@@ -144,7 +144,7 @@ auto txRadio = check_and_cast<IRadio *>(txNic->getSubmodule("radio"));
 auto rxRadio = check_and_cast<IRadio *>(rxNic->getSubmodule("radio"));
 
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");
-auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto mode = modeSet->findHeMode(0, 1, MHz(20), false);
 auto band = Ieee80211CompliantBands::getBand("5 GHz");
 auto channel = new Ieee80211Channel(band, 0);
 Hz centerFreq = channel->getCenterFrequency();

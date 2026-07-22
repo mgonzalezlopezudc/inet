@@ -248,7 +248,7 @@ mibModule->heOperation.bssColor = 5;
 
 // Retrieve mode and channel for mock transmissions
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");
-auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto mode = modeSet->findHeMode(0, 1, MHz(20), false);
 auto channel = new Ieee80211Channel(nullptr, 1);
 
 // Construct Listening object

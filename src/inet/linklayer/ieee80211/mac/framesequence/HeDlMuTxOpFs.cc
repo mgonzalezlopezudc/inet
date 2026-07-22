@@ -613,11 +613,13 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
           if (!candidates.empty())
               context.anchorSta = candidates.front();
           if (modeSet != nullptr && modeSet->getNumModes() > 0) {
-              auto firstMode = modeSet->getMode(0);
+              auto firstMode = modeSet->findHeMode(0, 1, MHz(20), false);
+              if (firstMode == nullptr)
+                  throw cRuntimeError("The configured mode profile has no baseline HE MCS 0 mode");
               context.channelBandwidth = firstMode->getDataMode()->getBandwidth();
               if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(firstMode))
-                  context.channelCenterFrequency = heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ?
-                          Hz(2.412e9) : Hz(5.18e9);
+                  context.channelCenterFrequency = heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.412e9) :
+                          heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_6GHZ ? Hz(5.955e9) : Hz(5.18e9);
           }
           return context;
       }(), modeSet, pendingQueue, ackHandler, callback, 16, 6500631,
@@ -674,12 +676,13 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         if (hcf != nullptr)
             throw cRuntimeError("Scheduler context is missing active radio channel geometry");
         if (modeSet != nullptr && modeSet->getNumModes() > 0) {
-            auto firstMode = modeSet->getMode(0);
+            auto firstMode = modeSet->findHeMode(0, 1, MHz(20), false);
+            if (firstMode == nullptr)
+                throw cRuntimeError("The configured mode profile has no baseline HE MCS 0 mode");
             scheduleContext.channelBandwidth = firstMode->getDataMode()->getBandwidth();
             if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(firstMode))
-                scheduleContext.channelCenterFrequency =
-                        heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ?
-                        Hz(2.412e9) : Hz(5.18e9);
+                scheduleContext.channelCenterFrequency = heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.412e9) :
+                        heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_6GHZ ? Hz(5.955e9) : Hz(5.18e9);
         }
     }
     if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||

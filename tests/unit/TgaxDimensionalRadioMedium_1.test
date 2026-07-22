@@ -292,7 +292,7 @@ ASSERT(Hz(channelModelModule->par("systemBandwidth")) == MHz(20));
 ASSERT(Hz(channelModelModule->par("referenceFrequency")) == GHz(5));
 
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");
-auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto mode = modeSet->findHeMode(0, 1, MHz(20), false);
 auto band = Ieee80211CompliantBands::getBand("5 GHz (20 MHz)");
 auto channel = new Ieee80211Channel(band, 0);
 auto centerFrequency = channel->getCenterFrequency();

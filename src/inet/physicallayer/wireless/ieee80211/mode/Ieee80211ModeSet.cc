@@ -10,6 +10,7 @@
 #include <algorithm>
 
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211DsssMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211FhssMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HrDsssMode.h"
@@ -53,7 +54,133 @@ Register_Abstract_Class(Ieee80211ModeSet);
     EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 7) \
     EHT_MODE_ENTRIES_FOR_NSS(WIDTH, 8)
 
-const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSets([]() { return new std::vector<Ieee80211ModeSet> {
+namespace {
+
+Ieee80211PhyFamily classifyPhyFamily(const IIeee80211Mode *mode)
+{
+    if (dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr)
+        return Ieee80211PhyFamily::HE;
+    if (dynamic_cast<const Ieee80211EhtMode *>(mode) != nullptr)
+        return Ieee80211PhyFamily::EHT;
+    if (dynamic_cast<const Ieee80211VhtMode *>(mode) != nullptr)
+        return Ieee80211PhyFamily::VHT;
+    if (dynamic_cast<const Ieee80211HtMode *>(mode) != nullptr)
+        return Ieee80211PhyFamily::HT;
+    if (dynamic_cast<const Ieee80211ErpOfdmMode *>(mode) != nullptr)
+        return Ieee80211PhyFamily::ERP_OFDM;
+    if (dynamic_cast<const Ieee80211OfdmMode *>(mode) != nullptr)
+        return Ieee80211PhyFamily::OFDM;
+    if (dynamic_cast<const Ieee80211DsssMode *>(mode) != nullptr ||
+            dynamic_cast<const Ieee80211HrDsssMode *>(mode) != nullptr)
+        return Ieee80211PhyFamily::DSSS;
+    return Ieee80211PhyFamily::UNSPECIFIED;
+}
+
+} // namespace
+
+Ieee80211ModeSet Ieee80211ModeSet::createHeProfile(const char *profileName,
+        Ieee80211OperatingBand operatingBand, const std::vector<Ieee80211ModeSet>& baseModeSets)
+{
+    std::vector<Entry> entries;
+    auto appendCompatibilitySet = [&](const char *baseName, bool preserveBasicRates) {
+        for (const auto& modeSet : baseModeSets) {
+            if (modeSet.profileName != baseName)
+                continue;
+            for (const auto& source : modeSet.entries) {
+                auto family = classifyPhyFamily(source.mode);
+                auto requirement = Ieee80211SupportRequirement::COMPATIBILITY;
+                if (family == Ieee80211PhyFamily::HT) {
+                    auto dataMode = check_and_cast<const Ieee80211HtMode *>(source.mode)->getDataMode();
+                    requirement = dataMode->getNumberOfSpatialStreams() == 1 && dataMode->getMcsIndex() <= 7 && dataMode->getBandwidth() == MHz(20) ?
+                            Ieee80211SupportRequirement::MANDATORY : Ieee80211SupportRequirement::OPTIONAL;
+                }
+                else if (family == Ieee80211PhyFamily::VHT) {
+                    auto dataMode = check_and_cast<const Ieee80211VhtMode *>(source.mode)->getDataMode();
+                    requirement = dataMode->getNumberOfSpatialStreams() == 1 && dataMode->getMcsIndex() <= 7 ?
+                            Ieee80211SupportRequirement::CONDITIONALLY_MANDATORY : Ieee80211SupportRequirement::OPTIONAL;
+                }
+                entries.push_back({preserveBasicRates && source.isMandatory,
+                        source.mode, family, requirement});
+            }
+            return;
+        }
+        throw cRuntimeError("Missing compatibility mode set '%s' while constructing '%s'", baseName, profileName);
+    };
+
+    // IEEE Std 802.11-2024 Clause 27.1.1: admit only the earlier PHYs that
+    // apply to the selected operating band. Their legacy/basic-rate bits stay
+    // separate from the HE mandatory/optional support classification.
+    if (operatingBand == Ieee80211OperatingBand::BAND_2_4_GHZ) {
+        appendCompatibilitySet("g(mixed)", true);
+        appendCompatibilitySet("n(mixed-2.4Ghz)", false);
+    }
+    else if (operatingBand == Ieee80211OperatingBand::BAND_5_GHZ) {
+        appendCompatibilitySet("a", true);
+        appendCompatibilitySet("ac", false);
+        // Rebind the existing 2.4 GHz HT catalog to its 5 GHz timing mode;
+        // the repository does not otherwise expose an n(mixed-5GHz) set.
+        for (const auto& modeSet : baseModeSets) {
+            if (modeSet.profileName != "n(mixed-2.4Ghz)")
+                continue;
+            for (const auto& source : modeSet.entries) {
+                auto sourceMode = check_and_cast<const Ieee80211HtMode *>(source.mode);
+                auto dataMode = sourceMode->getDataMode();
+                auto mode = Ieee80211HtCompliantModes::getCompliantMode(
+                        dataMode->getModulationAndCodingScheme(), Ieee80211HtMode::BAND_5GHZ,
+                        sourceMode->getPreambleMode()->getPreambleFormat(), dataMode->getGuardIntervalType(),
+                        dataMode->getCode() != nullptr && dataMode->getCode()->isLdpc());
+                bool baseline = dataMode->getNumberOfSpatialStreams() == 1 && dataMode->getMcsIndex() <= 7 && dataMode->getBandwidth() == MHz(20);
+                entries.push_back({false, mode, Ieee80211PhyFamily::HT,
+                        baseline ? Ieee80211SupportRequirement::CONDITIONALLY_MANDATORY : Ieee80211SupportRequirement::OPTIONAL});
+            }
+            break;
+        }
+    }
+    else if (operatingBand == Ieee80211OperatingBand::BAND_6_GHZ) {
+        // Clause 27.1.1 bases 6 GHz HE operation directly on the Clause 17
+        // OFDM PHY. Preserve its mandatory 6, 12, and 24 Mb/s basic rates.
+        appendCompatibilitySet("a", true);
+    }
+
+    const Ieee80211ModeSet *catalog = nullptr;
+    for (const auto& modeSet : baseModeSets)
+        if (modeSet.profileName == "ax-catalog") {
+            catalog = &modeSet;
+            break;
+        }
+    if (catalog == nullptr)
+        throw cRuntimeError("Missing HE mode catalog");
+
+    Ieee80211HeMode::BandMode bandMode = Ieee80211HeMode::BAND_5GHZ;
+    if (operatingBand == Ieee80211OperatingBand::BAND_2_4_GHZ)
+        bandMode = Ieee80211HeMode::BAND_2_4GHZ;
+    else if (operatingBand == Ieee80211OperatingBand::BAND_6_GHZ)
+        bandMode = Ieee80211HeMode::BAND_6GHZ;
+
+    for (const auto& source : catalog->entries) {
+        auto sourceMode = check_and_cast<const Ieee80211HeMode *>(source.mode);
+        auto dataMode = sourceMode->getDataMode();
+        auto bandwidth = dataMode->getBandwidth();
+        if (operatingBand == Ieee80211OperatingBand::BAND_2_4_GHZ && bandwidth > MHz(40))
+            continue;
+        auto mcs = dataMode->getMcsIndex();
+        auto nss = dataMode->getNumberOfSpatialStreams();
+        // Clause 27.1.1: BCC is not used for an HE SU PPDU wider than
+        // 20 MHz or for HE-MCS 10/11.
+        bool requiresLdpc = bandwidth > MHz(20) || mcs >= 10;
+        auto mode = Ieee80211HeCompliantModes::getCompliantMode(
+                dataMode->getModulationAndCodingScheme(), bandMode,
+                Ieee80211HePreambleMode::HE_PREAMBLE_SU,
+                Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, requiresLdpc);
+        bool mandatoryHeMode = nss == 1 && mcs <= 7;
+        entries.push_back({false, mode, Ieee80211PhyFamily::HE,
+                mandatoryHeMode ? Ieee80211SupportRequirement::MANDATORY : Ieee80211SupportRequirement::OPTIONAL});
+    }
+    return Ieee80211ModeSet(profileName, "ax", operatingBand, entries);
+}
+
+const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSets([]() {
+    auto result = new std::vector<Ieee80211ModeSet> {
     Ieee80211ModeSet("a", {
         { true, &Ieee80211OfdmCompliantModes::ofdmMode6MbpsCS20MHz },
         { false, &Ieee80211OfdmCompliantModes::ofdmMode9MbpsCS20MHz },
@@ -483,7 +610,7 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
         { false, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs8BW160MHzNss8, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT) },
         { false, Ieee80211VhtCompliantModes::getCompliantMode(&Ieee80211VhtmcsTable::vhtMcs9BW160MHzNss8, Ieee80211VhtMode::BAND_5GHZ, Ieee80211VhtPreambleMode::HT_PREAMBLE_MIXED, Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT) },
     }),
-        Ieee80211ModeSet("ax", {
+        Ieee80211ModeSet("ax-catalog", "ax", Ieee80211OperatingBand::BAND_5_GHZ, {
         { true, Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs0BW20MHzNss1, Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU, Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG) },
         { true, Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs1BW20MHzNss1, Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU, Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG) },
         { true, Ieee80211HeCompliantModes::getCompliantMode(&Ieee80211HemcsTable::heMcs2BW20MHzNss1, Ieee80211HeMode::BAND_5GHZ, Ieee80211HePreambleMode::HE_PREAMBLE_SU, Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG) },
@@ -876,7 +1003,12 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
         EHT_MODE_ENTRIES_FOR_BW(160)
         EHT_MODE_ENTRIES_FOR_BW(320)
     })
-}; });
+    };
+    result->push_back(createHeProfile("ax-2.4GHz", Ieee80211OperatingBand::BAND_2_4_GHZ, *result));
+    result->push_back(createHeProfile("ax-5GHz", Ieee80211OperatingBand::BAND_5_GHZ, *result));
+    result->push_back(createHeProfile("ax-6GHz", Ieee80211OperatingBand::BAND_6_GHZ, *result));
+    return result;
+});
 
 #undef EHT_MODE_ENTRIES_FOR_BW
 #undef EHT_MODE_ENTRIES_FOR_NSS
@@ -884,6 +1016,7 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
 
 Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> entries) :
     name(name),
+    profileName(name),
     entries(entries)
 {
     std::vector<Entry> *nonConstEntries = const_cast<std::vector<Entry> *>(&this->entries);
@@ -898,6 +1031,24 @@ Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> en
             // FIXME throw cRuntimeError("Sifs, slot and phyRxStartDelay time must be identical within a ModeSet");
         }
     }
+}
+
+Ieee80211ModeSet::Ieee80211ModeSet(const char *profileName, const char *name,
+        Ieee80211OperatingBand operatingBand, const std::vector<Entry> entries) :
+    name(name),
+    profileName(profileName),
+    entries(entries),
+    operatingBand(operatingBand)
+{
+    std::vector<Entry> *nonConstEntries = const_cast<std::vector<Entry> *>(&this->entries);
+    std::stable_sort(nonConstEntries->begin(), nonConstEntries->end(), EntryNetBitrateComparator());
+    if (entries.empty())
+        throw cRuntimeError("Empty 802.11 mode profile '%s'", profileName);
+    supportedChannelWidths = IEEE80211_WIDTH_20 | IEEE80211_WIDTH_40;
+    if (operatingBand != Ieee80211OperatingBand::BAND_2_4_GHZ)
+        supportedChannelWidths |= IEEE80211_WIDTH_80 | IEEE80211_WIDTH_160;
+    channelWidthScopedBasicRates = false;
+    bandAware = true;
 }
 
 namespace {
@@ -956,12 +1107,15 @@ bool isSameHeModeIgnoringLdpc(const IIeee80211Mode *a, const IIeee80211Mode *b)
              preambleB == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU) ||
             (preambleA == Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU &&
              preambleB == Ieee80211HePreambleMode::HE_PREAMBLE_SU);
+    bool codingCanDiffer = dataA->getBandwidth() == MHz(20) &&
+            dataA->getMcsIndex() <= 9 && dataA->getNumberOfSpatialStreams() <= 4;
     return dataA->getMcsIndex() == dataB->getMcsIndex() &&
            dataA->getNumberOfSpatialStreams() == dataB->getNumberOfSpatialStreams() &&
            dataA->getBandwidth() == dataB->getBandwidth() &&
            dataA->getGuardIntervalType() == dataB->getGuardIntervalType() &&
            compatibleSuPreamble &&
-           heA->getCenterFrequencyMode() == heB->getCenterFrequencyMode();
+           heA->getCenterFrequencyMode() == heB->getCenterFrequencyMode() &&
+           (dataA->isLdpc() == dataB->isLdpc() || codingCanDiffer);
 }
 
 bool isSameEhtMode(const IIeee80211Mode *a, const IIeee80211Mode *b)
@@ -987,7 +1141,8 @@ int Ieee80211ModeSet::findModeIndex(const IIeee80211Mode *mode) const
     for (size_t index = 0; index < entries.size(); index++)
         if (entries[index].mode == mode)
             return index;
-    // Mode sets contain the BCC variants; accept LDPC variants as equivalent.
+    // Where both coding schemes are legal, accept the corresponding LDPC/BCC
+    // object as the same supported modulation profile.
     for (size_t index = 0; index < entries.size(); index++)
         if (isSameHtModeIgnoringLdpc(entries[index].mode, mode) ||
             isSameVhtModeIgnoringLdpc(entries[index].mode, mode) ||
@@ -1009,6 +1164,21 @@ int Ieee80211ModeSet::getModeIndex(const IIeee80211Mode *mode) const
 bool Ieee80211ModeSet::getIsMandatory(const IIeee80211Mode *mode) const
 {
     return entries[getModeIndex(mode)].isMandatory;
+}
+
+const IIeee80211Mode *Ieee80211ModeSet::findHeMode(int mcs, int numSpatialStreams, Hz bandwidth, bool ldpc) const
+{
+    for (const auto& entry : entries) {
+        auto heMode = dynamic_cast<const Ieee80211HeMode *>(entry.mode);
+        if (heMode == nullptr)
+            continue;
+        auto dataMode = heMode->getDataMode();
+        if ((int)dataMode->getMcsIndex() == mcs &&
+                dataMode->getNumberOfSpatialStreams() == numSpatialStreams &&
+                dataMode->getBandwidth() == bandwidth && dataMode->isLdpc() == ldpc)
+            return heMode;
+    }
+    return nullptr;
 }
 
 const IIeee80211Mode *Ieee80211ModeSet::findMode(bps bitrate, Hz bandwidth, int numSpatialStreams) const
@@ -1104,6 +1274,11 @@ const IIeee80211Mode *Ieee80211ModeSet::getFastestMandatoryMode(Hz bandwidth) co
     return nullptr;
 }
 
+const IIeee80211Mode *Ieee80211ModeSet::getFastestBasicMode(Hz operatingChannelWidth) const
+{
+    return getFastestMandatoryMode(channelWidthScopedBasicRates ? operatingChannelWidth : Hz(NaN));
+}
+
 const IIeee80211Mode *Ieee80211ModeSet::getSlowerMandatoryMode(const IIeee80211Mode *mode) const
 {
     int index = findModeIndex(mode);
@@ -1126,12 +1301,31 @@ const IIeee80211Mode *Ieee80211ModeSet::getFasterMandatoryMode(const IIeee80211M
 
 const Ieee80211ModeSet *Ieee80211ModeSet::findModeSet(const char *mode)
 {
+    // The compatibility spelling resolves to the canonical 5 GHz profile;
+    // configured radios use the band-aware overload below.
+    if (!strcmp(mode, "ax"))
+        mode = "ax-5GHz";
     for (size_t index = 0; index < (&modeSets)->size(); index++) {
         const Ieee80211ModeSet *modeSet = &(&modeSets)->at(index);
-        if (strcmp(modeSet->getName(), mode) == 0)
+        if (!strcmp(modeSet->getProfileName(), "ax-catalog"))
+            continue;
+        if (strcmp(modeSet->getProfileName(), mode) == 0)
             return modeSet;
     }
     return nullptr;
+}
+
+const Ieee80211ModeSet *Ieee80211ModeSet::findModeSet(const char *mode, const IIeee80211Band *band)
+{
+    if (strcmp(mode, "ax") || band == nullptr)
+        return findModeSet(mode);
+    switch (band->getBandFamily()) {
+        case Ieee80211BandFamily::BAND_2_4_GHZ: return findModeSet("ax-2.4GHz");
+        case Ieee80211BandFamily::BAND_5_GHZ:
+        case Ieee80211BandFamily::BAND_5_9_GHZ: return findModeSet("ax-5GHz");
+        case Ieee80211BandFamily::BAND_6_GHZ: return findModeSet("ax-6GHz");
+        default: throw cRuntimeError("The standards-oriented ax profile is not defined for band '%s'", band->getName());
+    }
 }
 
 const Ieee80211ModeSet *Ieee80211ModeSet::getModeSet(const char *mode)
@@ -1141,12 +1335,75 @@ const Ieee80211ModeSet *Ieee80211ModeSet::getModeSet(const char *mode)
         std::string validModeSets;
         for (size_t index = 0; index < (&modeSets)->size(); index++) {
             const Ieee80211ModeSet *modeSet = &(&modeSets)->at(index);
+            if (!strcmp(modeSet->getProfileName(), "ax-catalog"))
+                continue;
             validModeSets += std::string("'") + modeSet->getName() + "' ";
         }
         throw cRuntimeError("Unknown 802.11 operational mode: '%s', valid modes are: %s", mode, validModeSets.c_str());
     }
     else
         return modeSet;
+}
+
+const Ieee80211ModeSet *Ieee80211ModeSet::getModeSet(const char *mode, const IIeee80211Band *band)
+{
+    const Ieee80211ModeSet *modeSet = findModeSet(mode, band);
+    if (modeSet == nullptr)
+        throw cRuntimeError("Unknown 802.11 operational mode '%s' for band '%s'", mode,
+                band == nullptr ? "<unspecified>" : band->getName());
+    return modeSet;
+}
+
+Hz Ieee80211ModeSet::getChannelWidth(const IIeee80211Band *band, Hz configuredBandwidth)
+{
+    if (band == nullptr)
+        return configuredBandwidth;
+    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
+        throw cRuntimeError("80+80 MHz topology cannot be represented by a scalar channel width");
+    if (!std::isnan(configuredBandwidth.get()))
+        return configuredBandwidth;
+    if (!std::isnan(band->getChannelWidth().get()))
+        return band->getChannelWidth();
+    return MHz(20);
+}
+
+Hz Ieee80211ModeSet::getModeBandwidth(const IIeee80211Band *band, Hz configuredBandwidth) const
+{
+    return bandAware ? getChannelWidth(band, configuredBandwidth) :
+            band != nullptr ? band->getSpacing() : configuredBandwidth;
+}
+
+bool Ieee80211ModeSet::supportsChannel(const IIeee80211Band *band, Hz configuredBandwidth) const
+{
+    if (band == nullptr || band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
+        return false;
+    bool matchingBand = operatingBand == Ieee80211OperatingBand::BAND_2_4_GHZ ?
+            band->getBandFamily() == Ieee80211BandFamily::BAND_2_4_GHZ :
+            operatingBand == Ieee80211OperatingBand::BAND_5_GHZ ?
+                    band->getBandFamily() == Ieee80211BandFamily::BAND_5_GHZ ||
+                    band->getBandFamily() == Ieee80211BandFamily::BAND_5_9_GHZ :
+                    band->getBandFamily() == Ieee80211BandFamily::BAND_6_GHZ;
+    if (!matchingBand)
+        return false;
+    auto width = getChannelWidth(band, configuredBandwidth);
+    uint8_t widthMask = width == MHz(20) ? IEEE80211_WIDTH_20 :
+            width == MHz(40) ? IEEE80211_WIDTH_40 :
+            width == MHz(80) ? IEEE80211_WIDTH_80 :
+            width == MHz(160) ? IEEE80211_WIDTH_160 : 0;
+    return widthMask != 0 && (supportedChannelWidths & widthMask) != 0;
+}
+
+void Ieee80211ModeSet::validateChannel(const IIeee80211Band *band, Hz configuredBandwidth) const
+{
+    if (band == nullptr)
+        throw cRuntimeError("802.11 mode profile '%s' requires an operating band", profileName.c_str());
+    if (band->getChannelTopology() == Ieee80211ChannelTopology::NONCONTIGUOUS)
+        throw cRuntimeError("802.11 mode profile '%s' does not support noncontiguous band '%s'",
+                profileName.c_str(), band->getName());
+    auto width = getChannelWidth(band, configuredBandwidth);
+    if (!supportsChannel(band, configuredBandwidth))
+        throw cRuntimeError("802.11 mode profile '%s' does not support channel width %g MHz on band '%s'",
+                profileName.c_str(), width.get<MHz>(), band->getName());
 }
 
 } // namespace physicallayer

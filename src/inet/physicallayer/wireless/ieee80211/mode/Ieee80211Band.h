@@ -17,6 +17,19 @@ namespace physicallayer {
 
 using namespace inet::units::values;
 
+enum class Ieee80211BandFamily {
+    BAND_2_4_GHZ,
+    BAND_5_GHZ,
+    BAND_5_9_GHZ,
+    BAND_6_GHZ,
+};
+
+enum class Ieee80211ChannelTopology {
+    GENERIC,
+    CONTIGUOUS,
+    NONCONTIGUOUS,
+};
+
 class INET_API IIeee80211Band : public cObject, public IPrintableObject
 {
   public:
@@ -25,17 +38,27 @@ class INET_API IIeee80211Band : public cObject, public IPrintableObject
     virtual int getNumChannels() const = 0;
     virtual Hz getCenterFrequency(int channelNumber) const = 0;
     virtual Hz getSpacing() const = 0;
+    virtual Ieee80211BandFamily getBandFamily() const = 0;
+    virtual Ieee80211ChannelTopology getChannelTopology() const = 0;
+    virtual Hz getChannelWidth() const = 0;
 };
 
 class INET_API Ieee80211BandBase : public IIeee80211Band
 {
   protected:
     const char *name;
+    Ieee80211BandFamily bandFamily;
+    Ieee80211ChannelTopology channelTopology;
+    Hz channelWidth;
 
   public:
-    Ieee80211BandBase(const char *name);
+    Ieee80211BandBase(const char *name, Ieee80211BandFamily bandFamily,
+            Ieee80211ChannelTopology channelTopology, Hz channelWidth);
 
     virtual const char *getName() const override { return name; }
+    virtual Ieee80211BandFamily getBandFamily() const override { return bandFamily; }
+    virtual Ieee80211ChannelTopology getChannelTopology() const override { return channelTopology; }
+    virtual Hz getChannelWidth() const override { return channelWidth; }
 };
 
 class INET_API Ieee80211EnumeratedBand : public Ieee80211BandBase
@@ -44,7 +67,8 @@ class INET_API Ieee80211EnumeratedBand : public Ieee80211BandBase
     std::vector<Hz> centers;
 
   public:
-    Ieee80211EnumeratedBand(const char *name, const std::vector<Hz> centers);
+    Ieee80211EnumeratedBand(const char *name, Ieee80211BandFamily bandFamily,
+            Ieee80211ChannelTopology channelTopology, Hz channelWidth, const std::vector<Hz> centers);
 
     virtual int getNumChannels() const override { return centers.size(); }
     virtual Hz getCenterFrequency(int channelNumber) const override;
@@ -59,7 +83,9 @@ class INET_API Ieee80211ArithmeticalBand : public Ieee80211BandBase
     int numChannels;
 
   public:
-    Ieee80211ArithmeticalBand(const char *name, Hz start, Hz spacing, int numChannels);
+    Ieee80211ArithmeticalBand(const char *name, Ieee80211BandFamily bandFamily,
+            Ieee80211ChannelTopology channelTopology, Hz channelWidth,
+            Hz start, Hz spacing, int numChannels);
 
     virtual int getNumChannels() const override { return numChannels; }
     virtual Hz getCenterFrequency(int channelNumber) const override;

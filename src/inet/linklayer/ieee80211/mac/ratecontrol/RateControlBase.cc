@@ -9,7 +9,7 @@
 
 #include "inet/common/Simsignals.h"
 #include "inet/networklayer/common/NetworkInterface.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -52,28 +52,18 @@ void RateControlBase::receiveSignal(cComponent *source, simsignal_t signalID, cO
         modeSet = check_and_cast<Ieee80211ModeSet *>(obj);
         cModule *nic = getContainingNicModule(this);
         cModule *radio = nic ? nic->getSubmodule("radio") : nullptr;
-        cModule *transmitter = radio ? radio->getSubmodule("transmitter") : nullptr;
-        Hz bandBw = Hz(NaN);
-        std::string bandName = "";
-        if (transmitter && transmitter->hasPar("bandName")) {
-            bandName = transmitter->par("bandName").stringValue();
-        } else if (radio && radio->hasPar("bandName")) {
-            bandName = radio->par("bandName").stringValue();
-        }
-        if (!bandName.empty()) {
-            auto band = Ieee80211CompliantBands::getBand(bandName.c_str());
-            if (band)
-                bandBw = band->getSpacing();
-        }
-        if (std::isnan(bandBw.get()) && transmitter && transmitter->hasPar("bandwidth")) {
-            bandBw = Hz(transmitter->par("bandwidth").doubleValue());
-        }
+        auto modeSetProvider = dynamic_cast<IIeee80211ModeSetProvider *>(radio);
+        if (modeSetProvider == nullptr || modeSetProvider->getModeSet() != modeSet)
+            throw cRuntimeError("Rate control received an inconsistent 802.11 mode profile");
+        Hz modeBandwidth = modeSetProvider->getModeBandwidth();
         double initRate = par("initialRate");
-        currentMode = initRate == -1 ? modeSet->getFastestMandatoryMode(bandBw) : modeSet->getMode(bps(initRate), bandBw);
+        // Basic/control rates are 20 MHz legacy rates even when an HE data
+        // channel is wider. An explicitly configured data rate, however,
+        // must resolve against the operational channel width.
+        currentMode = initRate == -1 ? modeSet->getFastestBasicMode(modeBandwidth) : modeSet->getMode(bps(initRate), modeBandwidth);
         emitDatarateChangedSignal();
     }
 }
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

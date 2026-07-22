@@ -11,13 +11,18 @@ namespace inet {
 
 namespace physicallayer {
 
-Ieee80211BandBase::Ieee80211BandBase(const char *name) :
-    name(name)
+Ieee80211BandBase::Ieee80211BandBase(const char *name, Ieee80211BandFamily bandFamily,
+        Ieee80211ChannelTopology channelTopology, Hz channelWidth) :
+    name(name),
+    bandFamily(bandFamily),
+    channelTopology(channelTopology),
+    channelWidth(channelWidth)
 {
 }
 
-Ieee80211EnumeratedBand::Ieee80211EnumeratedBand(const char *name, const std::vector<Hz> centers) :
-    Ieee80211BandBase(name),
+Ieee80211EnumeratedBand::Ieee80211EnumeratedBand(const char *name, Ieee80211BandFamily bandFamily,
+        Ieee80211ChannelTopology channelTopology, Hz channelWidth, const std::vector<Hz> centers) :
+    Ieee80211BandBase(name, bandFamily, channelTopology, channelWidth),
     centers(centers)
 {
 }
@@ -29,8 +34,10 @@ Hz Ieee80211EnumeratedBand::getCenterFrequency(int channelNumber) const
     return centers[channelNumber];
 }
 
-Ieee80211ArithmeticalBand::Ieee80211ArithmeticalBand(const char *name, Hz start, Hz spacing, int numChannels) :
-    Ieee80211BandBase(name),
+Ieee80211ArithmeticalBand::Ieee80211ArithmeticalBand(const char *name, Ieee80211BandFamily bandFamily,
+        Ieee80211ChannelTopology channelTopology, Hz channelWidth,
+        Hz start, Hz spacing, int numChannels) :
+    Ieee80211BandBase(name, bandFamily, channelTopology, channelWidth),
     start(start),
     spacing(spacing),
     numChannels(numChannels)
@@ -45,6 +52,7 @@ Hz Ieee80211ArithmeticalBand::getCenterFrequency(int channelNumber) const
 }
 
 const Ieee80211EnumeratedBand Ieee80211CompliantBands::band2_4GHz("2.4 GHz",
+        Ieee80211BandFamily::BAND_2_4_GHZ, Ieee80211ChannelTopology::GENERIC, MHz(20),
 {
     GHz(2.412),    // 1
     GHz(2.417),    // 2
@@ -62,34 +70,47 @@ const Ieee80211EnumeratedBand Ieee80211CompliantBands::band2_4GHz("2.4 GHz",
     GHz(2.484),    // 14, this channel is intentionally further away from the previous than the others, see 802.11 specification
 });
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz("5 GHz", GHz(5), MHz(5), 200);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz("5 GHz",
+        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::GENERIC, Hz(NaN), GHz(5), MHz(5), 200);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz20MHz("5 GHz (20 MHz)", GHz(5), MHz(20), 25);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz20MHz("5 GHz (20 MHz)",
+        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(20), GHz(5), MHz(20), 25);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz40MHz("5 GHz (40 MHz)", GHz(5), MHz(40), 12);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz40MHz("5 GHz (40 MHz)",
+        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(40), GHz(5), MHz(40), 12);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz80MHz("5 GHz (80 MHz)", GHz(5), MHz(80), 5);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz80MHz("5 GHz (80 MHz)",
+        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(80), GHz(5), MHz(80), 5);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz160MHz("5 GHz (160 MHz)", GHz(5), MHz(160), 2);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz160MHz("5 GHz (160 MHz)",
+        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(160), GHz(5), MHz(160), 2);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz80_80MHz("5 GHz (80+80 MHz)", GHz(5), MHz(160), 2);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5GHz80_80MHz("5 GHz (80+80 MHz)",
+        Ieee80211BandFamily::BAND_5_GHZ, Ieee80211ChannelTopology::NONCONTIGUOUS, MHz(160), GHz(5), MHz(160), 2);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5_9GHz("5.9 GHz", GHz(5.855), MHz(10), 7);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band5_9GHz("5.9 GHz",
+        Ieee80211BandFamily::BAND_5_9_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(10), GHz(5.855), MHz(10), 7);
 
 // 6 GHz channel centers follow 80211ax-2024:chunk:10362.
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz("6 GHz", GHz(5.9525), MHz(5), 233);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz("6 GHz",
+        Ieee80211BandFamily::BAND_6_GHZ, Ieee80211ChannelTopology::GENERIC, Hz(NaN), GHz(5.9525), MHz(5), 233);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz20MHz("6 GHz (20 MHz)", GHz(5.945), MHz(20), 59);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz20MHz("6 GHz (20 MHz)",
+        Ieee80211BandFamily::BAND_6_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(20), GHz(5.945), MHz(20), 59);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz40MHz("6 GHz (40 MHz)", GHz(5.945), MHz(40), 29);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz40MHz("6 GHz (40 MHz)",
+        Ieee80211BandFamily::BAND_6_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(40), GHz(5.945), MHz(40), 29);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz80MHz("6 GHz (80 MHz)", GHz(5.945), MHz(80), 14);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz80MHz("6 GHz (80 MHz)",
+        Ieee80211BandFamily::BAND_6_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(80), GHz(5.945), MHz(80), 14);
 
-const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz160MHz("6 GHz (160 MHz)", GHz(5.945), MHz(160), 7);
+const Ieee80211ArithmeticalBand Ieee80211CompliantBands::band6GHz160MHz("6 GHz (160 MHz)",
+        Ieee80211BandFamily::BAND_6_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(160), GHz(5.945), MHz(160), 7);
 
 // 80211be-2024:chunk:01859 defines 320 MHz-1 and 320 MHz-2 center-frequency
 // channel numbers 31/95/159 and 63/127/191 respectively.
 const Ieee80211EnumeratedBand Ieee80211CompliantBands::band6GHz320MHz("6 GHz (320 MHz)",
+        Ieee80211BandFamily::BAND_6_GHZ, Ieee80211ChannelTopology::CONTIGUOUS, MHz(320),
 {
     GHz(6.105),
     GHz(6.265),

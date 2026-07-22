@@ -381,9 +381,9 @@ void Ieee80211Receiver::initialize(int stage)
     FlatReceiverBase::initialize(stage);
     if (stage == INITSTAGE_LOCAL) {
         const char *opMode = par("opMode");
-        setModeSet(*opMode ? Ieee80211ModeSet::getModeSet(opMode) : nullptr);
         const char *bandName = par("bandName");
         setBand(*bandName != '\0' ? Ieee80211CompliantBands::getBand(bandName) : nullptr);
+        setModeSet(*opMode && strcmp(opMode, "ax") ? Ieee80211ModeSet::getModeSet(opMode) : nullptr);
         int channelNumber = par("channelNumber");
         if (channelNumber != -1)
             setChannelNumber(channelNumber);
@@ -842,18 +842,21 @@ void Ieee80211Receiver::setModeSet(const Ieee80211ModeSet *modeSet)
 void Ieee80211Receiver::setBand(const IIeee80211Band *band)
 {
     if (this->band != band) {
-        this->band = band;
         if (channel != nullptr)
             setChannel(new Ieee80211Channel(band, channel->getChannelNumber()));
+        else
+            this->band = band;
     }
 }
 
 void Ieee80211Receiver::setChannel(const Ieee80211Channel *channel)
 {
     if (this->channel != channel) {
+        auto centerFrequency = channel->getCenterFrequency();
         delete this->channel;
         this->channel = channel;
-        setCenterFrequency(channel->getCenterFrequency());
+        this->band = channel->getBand();
+        setCenterFrequency(centerFrequency);
     }
 }
 

@@ -66,7 +66,7 @@ class MockDlMuRateSelection : public cSimpleModule, public IQosRateSelection
     const IIeee80211Mode *getSlowHeMode() const
     {
         auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
-        return modeSet->getMode(0);
+        return modeSet->findHeMode(0, 1, MHz(20), false);
     }
 
   public:

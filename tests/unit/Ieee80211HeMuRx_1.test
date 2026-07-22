@@ -438,7 +438,7 @@ auto radio1 = check_and_cast<IRadio *>(nic1->getSubmodule("radio"));
 
 // Retrieve mode and channel for mock transmissions
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");
-auto mode = const_cast<Ieee80211ModeSet *>(modeSet)->getMode(0);
+auto mode = modeSet->findHeMode(0, 1, MHz(20), false);
 auto channel = new Ieee80211Channel(nullptr, 1);
 
 auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
@@ -621,7 +621,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     packet->addTag<Ieee80211HeMuTxTag>();
 
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, modelPpdu);
     received->popAtFront<Ieee80211HeMuPhyHeader>();
     auto selectedDelimiter = received->popAtFront<Ieee80211MpduSubframeHeader>();
@@ -670,7 +670,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
     auto modelPpdu = makeHeModelPpdu(modelUsers, true, HE_TRIGGER_BASED_UPLINK);
     auto received = receiveHeMuPacket(rxModule2, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, modelPpdu);
     auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
     bool modelNdp = runtimeNdpDiscarded &&
@@ -705,7 +705,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     };
     auto modelPpdu = makeHeModelPpdu(modelUsers, false);
     auto received = receiveHeMuPacket(rxModule2, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, modelPpdu);
     auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
     bool zeroLengthDataPreserved = !received->hasTag<Ieee80211HeMuLegacyPreambleInd>() &&
@@ -753,7 +753,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     };
     auto modelPpdu = makeHeModelPpdu(modelUsers, false);
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, modelPpdu);
     bool rejectedData = received->hasTag<Ieee80211HeMuLegacyPreambleInd>() &&
             !received->hasTag<Ieee80211MpduReceiveInd>();
@@ -802,7 +802,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto rng = rxModule1->getRNG(0);
     auto drawsBefore = rng->getNumbersDrawn();
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, modelPpdu);
     auto drawsAfter = rng->getNumbersDrawn();
     auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
@@ -817,7 +817,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     testErrorModel->evaluatedBitLengths.clear();
     drawsBefore = rng->getNumbersDrawn();
     auto commonFailed = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, modelPpdu, false, true);
     REQUIRE(commonFailed->hasBitError());
     auto unevaluated = commonFailed->getTag<Ieee80211MpduReceiveInd>();
@@ -830,7 +830,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
 
     drawsBefore = rng->getNumbersDrawn();
     auto physicalDataFailed = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, modelPpdu, true, false);
     REQUIRE(physicalDataFailed->hasBitError());
     auto physicalFailures = physicalDataFailed->getTag<Ieee80211MpduReceiveInd>();
@@ -873,7 +873,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto rng = rxModule1->getRNG(0);
     auto drawsBefore = rng->getNumbersDrawn();
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, makeHeModelPpdu(modelUsers, false));
     REQUIRE(received->hasTag<Ieee80211MpduReceiveInd>());
     REQUIRE(received->getTag<Ieee80211MpduReceiveInd>()->getResultsArraySize() == 0);
@@ -915,7 +915,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     bool rejected = false;
     try {
         delete receiveHeMuPacket(rxModule1, radio1, packet,
-                const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+                mode, channel,
                 modelUsers, makeHeModelPpdu(modelUsers, false));
     }
     catch (cRuntimeError&) {
@@ -965,7 +965,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto rng = rxModule1->getRNG(0);
     auto drawsBefore = rng->getNumbersDrawn();
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, makeHeModelPpdu(modelUsers, false, HE_TRIGGER_BASED_UPLINK));
     auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
     REQUIRE(outcomes->getResultsArraySize() == 1);
@@ -1017,7 +1017,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto rng = rxModule1->getRNG(0);
     auto drawsBefore = rng->getNumbersDrawn();
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
-            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            mode, channel,
             modelUsers, makeHeModelPpdu(modelUsers, false));
     auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
     REQUIRE(outcomes->getResultsArraySize() == 1);
