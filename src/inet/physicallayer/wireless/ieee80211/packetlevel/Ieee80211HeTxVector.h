@@ -9,7 +9,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -77,6 +79,7 @@ inline bool areIeee80211HeUserParametersEqual(const Ieee80211HeUserPhyParameters
 }
 
 class Ieee80211HeTxVectorFactory;
+class Ieee80211HeRxVectorFactory;
 
 /** Caller-controlled inputs for one user of an HE TXVECTOR; no calculated fields are accepted. */
 struct Ieee80211HeUserTxVectorRequest
@@ -182,26 +185,163 @@ class INET_API Ieee80211HeTxVector final
     }
 };
 
-/** Immutable calculated timing and symbol summary; logical field offsets remain a Gate 2 concern. */
-class INET_API Ieee80211HePpduTimingLayout final
+/** Ordered packet-level HE PPDU fields from Figures 27-8 through 27-11. */
+enum class Ieee80211HePpduField {
+    L_STF,
+    L_LTF,
+    L_SIG,
+    RL_SIG,
+    HE_SIG_A,
+    HE_SIG_B,
+    HE_STF,
+    HE_LTF,
+    DATA,
+    PE,
+};
+
+/**
+ * Immutable half-open temporal span [startOffset, endOffset) relative to PPDU start.
+ * These are time-domain model offsets, not coded over-the-air bit offsets.
+ */
+class INET_API Ieee80211HePpduFieldSpan final
 {
   private:
+    const Ieee80211HePpduField field;
+    const simtime_t startOffset;
+    const simtime_t endOffset;
+
+    Ieee80211HePpduFieldSpan(Ieee80211HePpduField field, simtime_t startOffset,
+            simtime_t endOffset) : field(field), startOffset(startOffset), endOffset(endOffset) {}
+
+    friend class Ieee80211HePpduLayout;
+
+  public:
+    Ieee80211HePpduFieldSpan(const Ieee80211HePpduFieldSpan&) = default;
+    Ieee80211HePpduFieldSpan(Ieee80211HePpduFieldSpan&&) = default;
+    Ieee80211HePpduFieldSpan& operator=(const Ieee80211HePpduFieldSpan&) = delete;
+
+    Ieee80211HePpduField getField() const { return field; }
+    simtime_t getStartOffset() const { return startOffset; }
+    simtime_t getEndOffset() const { return endOffset; }
+    simtime_t getDuration() const { return endOffset - startOffset; }
+
+    bool operator==(const Ieee80211HePpduFieldSpan& other) const
+    {
+        return field == other.field && startOffset == other.startOffset && endOffset == other.endOffset;
+    }
+};
+
+/**
+ * Immutable half-open PSDU bit range [startBitOffset, endBitOffset) in the packet-model
+ * DATA container. This metadata describes stable user concatenation only; it is not a
+ * coded or interleaved over-the-air PHY bit position.
+ */
+class INET_API Ieee80211HeModelPsduBitRange final
+{
+  private:
+    const size_t userIndex;
+    const uint16_t staId;
+    const b startBitOffset;
+    const b endBitOffset;
+
+    Ieee80211HeModelPsduBitRange(size_t userIndex, uint16_t staId, b startBitOffset,
+            b endBitOffset) : userIndex(userIndex), staId(staId),
+        startBitOffset(startBitOffset), endBitOffset(endBitOffset) {}
+
+    friend class Ieee80211HePpduLayout;
+
+  public:
+    Ieee80211HeModelPsduBitRange(const Ieee80211HeModelPsduBitRange&) = default;
+    Ieee80211HeModelPsduBitRange(Ieee80211HeModelPsduBitRange&&) = default;
+    Ieee80211HeModelPsduBitRange& operator=(const Ieee80211HeModelPsduBitRange&) = delete;
+
+    size_t getUserIndex() const { return userIndex; }
+    uint16_t getStaId() const { return staId; }
+    b getStartBitOffset() const { return startBitOffset; }
+    b getEndBitOffset() const { return endBitOffset; }
+    b getBitLength() const { return endBitOffset - startBitOffset; }
+
+    bool operator==(const Ieee80211HeModelPsduBitRange& other) const
+    {
+        return userIndex == other.userIndex && staId == other.staId &&
+                startBitOffset == other.startBitOffset && endBitOffset == other.endBitOffset;
+    }
+};
+
+/**
+ * Canonical immutable calculated HE PPDU temporal and packet-container layout.
+ * DATA is omitted for an NDP and present otherwise. PE is always the terminal
+ * temporal field, including when its duration is zero.
+ */
+class INET_API Ieee80211HePpduLayout final
+{
+  private:
+    const Hz centerFrequency;
     const Ieee80211HeCommonPhyParameters common;
     const std::vector<Ieee80211HeUserPhyParameters> users;
     const int commonNumberOfDataSymbols;
     const simtime_t duration;
+    const std::vector<Ieee80211HePpduFieldSpan> fieldSpans;
+    const std::vector<Ieee80211HeModelPsduBitRange> psduBitRanges;
 
-    explicit Ieee80211HePpduTimingLayout(const Ieee80211HePpduParameters& parameters) :
-        common(parameters.common), users(parameters.users),
-        commonNumberOfDataSymbols(parameters.commonNumberOfDataSymbols), duration(parameters.duration) {}
+    static std::vector<Ieee80211HePpduFieldSpan> makeFieldSpans(
+            const Ieee80211HePpduParameters& parameters)
+    {
+        std::vector<Ieee80211HePpduFieldSpan> spans;
+        spans.reserve(10);
+        simtime_t offset = SIMTIME_ZERO;
+        auto append = [&] (Ieee80211HePpduField field, simtime_t fieldDuration) {
+            spans.emplace_back(Ieee80211HePpduFieldSpan(field, offset, offset + fieldDuration));
+            offset += fieldDuration;
+        };
+        append(Ieee80211HePpduField::L_STF, SimTime(8, SIMTIME_US));
+        append(Ieee80211HePpduField::L_LTF, SimTime(8, SIMTIME_US));
+        append(Ieee80211HePpduField::L_SIG, SimTime(4, SIMTIME_US));
+        append(Ieee80211HePpduField::RL_SIG, parameters.common.rlSigDuration);
+        append(Ieee80211HePpduField::HE_SIG_A, parameters.common.heSigADuration);
+        if (parameters.common.ppduFormat == HE_MU_DOWNLINK)
+            append(Ieee80211HePpduField::HE_SIG_B, parameters.common.heSigBDuration);
+        append(Ieee80211HePpduField::HE_STF, parameters.common.heStfDuration);
+        append(Ieee80211HePpduField::HE_LTF, parameters.common.heLtfDuration);
+        const auto packetExtensionDuration = SimTime(parameters.common.packetExtensionDurationUs, SIMTIME_US);
+        if (!parameters.common.ndp)
+            append(Ieee80211HePpduField::DATA,
+                    parameters.duration - parameters.common.commonPreambleDuration - packetExtensionDuration);
+        append(Ieee80211HePpduField::PE, packetExtensionDuration);
+        return spans;
+    }
+
+    static std::vector<Ieee80211HeModelPsduBitRange> makePsduBitRanges(
+            const Ieee80211HePpduParameters& parameters)
+    {
+        std::vector<Ieee80211HeModelPsduBitRange> ranges;
+        if (parameters.common.ndp)
+            return ranges;
+        ranges.reserve(parameters.users.size());
+        int64_t bitOffset = 0;
+        for (size_t userIndex = 0; userIndex < parameters.users.size(); userIndex++) {
+            const auto& user = parameters.users[userIndex];
+            const int64_t bitLength = user.psduLength.get<B>() * 8;
+            ranges.emplace_back(Ieee80211HeModelPsduBitRange(userIndex, user.staId,
+                    b(bitOffset), b(bitOffset + bitLength)));
+            bitOffset += bitLength;
+        }
+        return ranges;
+    }
+
+    Ieee80211HePpduLayout(Hz centerFrequency, const Ieee80211HePpduParameters& parameters) :
+        centerFrequency(centerFrequency), common(parameters.common), users(parameters.users),
+        commonNumberOfDataSymbols(parameters.commonNumberOfDataSymbols), duration(parameters.duration),
+        fieldSpans(makeFieldSpans(parameters)), psduBitRanges(makePsduBitRanges(parameters)) {}
 
     friend class Ieee80211HeTxVectorFactory;
 
   public:
-    Ieee80211HePpduTimingLayout(const Ieee80211HePpduTimingLayout&) = default;
-    Ieee80211HePpduTimingLayout(Ieee80211HePpduTimingLayout&&) = default;
-    Ieee80211HePpduTimingLayout& operator=(const Ieee80211HePpduTimingLayout&) = delete;
+    Ieee80211HePpduLayout(const Ieee80211HePpduLayout&) = default;
+    Ieee80211HePpduLayout(Ieee80211HePpduLayout&&) = default;
+    Ieee80211HePpduLayout& operator=(const Ieee80211HePpduLayout&) = delete;
 
+    Hz getCenterFrequency() const { return centerFrequency; }
     Ieee80211HePpduFormat getPpduFormat() const { return common.ppduFormat; }
     Hz getChannelBandwidth() const { return common.channelBandwidth; }
     Ieee80211HeGuardInterval getGuardInterval() const { return common.guardInterval; }
@@ -216,9 +356,24 @@ class INET_API Ieee80211HePpduTimingLayout final
     simtime_t getCommonPreambleDuration() const { return common.commonPreambleDuration; }
     int getCommonNumberOfDataSymbols() const { return commonNumberOfDataSymbols; }
     int getPacketExtensionDurationUs() const { return common.packetExtensionDurationUs; }
+    bool isNdp() const { return common.ndp; }
     simtime_t getDuration() const { return duration; }
     const Ieee80211HeCommonPhyParameters& getCommon() const { return common; }
     const std::vector<Ieee80211HeUserPhyParameters>& getUsers() const { return users; }
+    const std::vector<Ieee80211HePpduFieldSpan>& getFieldSpans() const { return fieldSpans; }
+    const std::vector<Ieee80211HeModelPsduBitRange>& getPsduBitRanges() const { return psduBitRanges; }
+
+    bool matches(const Ieee80211HeTxVector& txVector) const
+    {
+        if (centerFrequency != txVector.getCommon().getCenterFrequency() ||
+                !areIeee80211HeCommonParametersEqual(common, txVector.getCommon().getParameters()) ||
+                users.size() != txVector.getUsers().size())
+            return false;
+        for (size_t i = 0; i < users.size(); i++)
+            if (!areIeee80211HeUserParametersEqual(users[i], txVector.getUsers()[i].getParameters()))
+                return false;
+        return true;
+    }
 
     bool matches(const Ieee80211HePpduParameters& parameters) const
     {
@@ -232,49 +387,51 @@ class INET_API Ieee80211HePpduTimingLayout final
         return true;
     }
 
-    bool operator==(const Ieee80211HePpduTimingLayout& other) const
+    bool operator==(const Ieee80211HePpduLayout& other) const
     {
-        Ieee80211HePpduParameters parameters;
-        parameters.common = other.common;
-        parameters.users = other.users;
-        parameters.commonNumberOfDataSymbols = other.commonNumberOfDataSymbols;
-        parameters.duration = other.duration;
-        return matches(parameters);
+        return centerFrequency == other.centerFrequency &&
+                areIeee80211HeCommonParametersEqual(common, other.common) && users.size() == other.users.size() &&
+                commonNumberOfDataSymbols == other.commonNumberOfDataSymbols && duration == other.duration &&
+                fieldSpans == other.fieldSpans && psduBitRanges == other.psduBitRanges &&
+                std::equal(users.begin(), users.end(), other.users.begin(),
+                        [] (const auto& left, const auto& right) {
+                            return areIeee80211HeUserParametersEqual(left, right);
+                        });
     }
 };
 
-/** Malformed-input validation outcome. Invalid outcomes contain neither a vector nor a timing layout. */
+/** Malformed-input validation outcome. Invalid outcomes contain neither a vector nor a PPDU layout. */
 class INET_API Ieee80211HeTxVectorValidationResult final
 {
   private:
     Ieee80211HeValidationErrorCode errorCode = Ieee80211HeValidationErrorCode::NONE;
     Ieee80211HeValidationContext context;
     std::shared_ptr<const Ieee80211HeTxVector> txVector;
-    std::shared_ptr<const Ieee80211HePpduTimingLayout> timingLayout;
+    std::shared_ptr<const Ieee80211HePpduLayout> ppduLayout;
 
     Ieee80211HeTxVectorValidationResult(Ieee80211HeValidationErrorCode errorCode,
             Ieee80211HeValidationContext context) : errorCode(errorCode), context(std::move(context)) {}
 
     Ieee80211HeTxVectorValidationResult(std::shared_ptr<const Ieee80211HeTxVector> txVector,
-            std::shared_ptr<const Ieee80211HePpduTimingLayout> timingLayout) :
-        txVector(std::move(txVector)), timingLayout(std::move(timingLayout)) {}
+            std::shared_ptr<const Ieee80211HePpduLayout> ppduLayout) :
+        txVector(std::move(txVector)), ppduLayout(std::move(ppduLayout)) {}
 
     friend class Ieee80211HeTxVectorFactory;
 
   public:
     explicit operator bool() const
     {
-        return errorCode == Ieee80211HeValidationErrorCode::NONE && txVector && timingLayout;
+        return errorCode == Ieee80211HeValidationErrorCode::NONE && txVector && ppduLayout;
     }
 
     Ieee80211HeValidationErrorCode getErrorCode() const { return errorCode; }
     const Ieee80211HeValidationContext& getContext() const { return context; }
     const std::shared_ptr<const Ieee80211HeTxVector>& getTxVector() const { return txVector; }
-    const std::shared_ptr<const Ieee80211HePpduTimingLayout>& getTimingLayout() const { return timingLayout; }
+    const std::shared_ptr<const Ieee80211HePpduLayout>& getPpduLayout() const { return ppduLayout; }
 };
 
 /**
- * The only public construction path for canonical HE TXVECTOR/timing objects.
+ * The only public construction path for canonical HE TXVECTOR/PPDU-layout objects.
  * Ordinary malformed inputs return diagnostics; allocation failures are not a noexcept guarantee.
  */
 class INET_API Ieee80211HeTxVectorFactory final
@@ -357,16 +514,63 @@ class INET_API Ieee80211HeTxVectorFactory final
             if (!calculation)
                 return Ieee80211HeTxVectorValidationResult(calculation.errorCode, calculation.context);
 
-            Ieee80211HeCommonTxVector commonTx(request.centerFrequency, calculation.parameters.common);
+            auto& parameters = calculation.parameters;
+            const bool allPsdusEmpty = std::all_of(parameters.users.begin(), parameters.users.end(),
+                    [] (const auto& user) { return user.psduLength == B(0); });
+            if (allPsdusEmpty) {
+                if (parameters.common.ppduFormat == HE_SINGLE_USER) {
+                    if (parameters.common.packetExtensionDurationUs != 4)
+                        return makeError(Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION,
+                                "packetExtensionDurationUs", "HE SU sounding NDP requires a 4 us packet extension");
+                }
+                else if (parameters.common.ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+                    if (parameters.common.packetExtensionDurationUs != 0)
+                        return makeError(Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION,
+                                "packetExtensionDurationUs", "HE TB feedback NDP requires a zero-duration packet extension");
+                }
+                else
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                            "users[].psduLength", "zero-PSDU HE ER SU/MU descriptions are unsupported");
+                parameters.common.ndp = true;
+            }
+            const auto calculatedPreambleDuration = parameters.common.legacyPreambleDuration +
+                    parameters.common.rlSigDuration + parameters.common.heSigADuration +
+                    parameters.common.heSigBDuration + parameters.common.heStfDuration +
+                    parameters.common.heLtfDuration;
+            const auto packetExtensionDuration =
+                    SimTime(parameters.common.packetExtensionDurationUs, SIMTIME_US);
+            if (parameters.common.legacyPreambleDuration != SimTime(20, SIMTIME_US) ||
+                    parameters.common.commonPreambleDuration != calculatedPreambleDuration ||
+                    parameters.duration < parameters.common.commonPreambleDuration + packetExtensionDuration ||
+                    (parameters.common.ndp && parameters.duration !=
+                            parameters.common.commonPreambleDuration + packetExtensionDuration) ||
+                    (parameters.common.ppduFormat == HE_MU_DOWNLINK) !=
+                            (parameters.common.heSigBDuration != SIMTIME_ZERO))
+                return makeError(Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
+                        "ppduLayout", "calculated HE PPDU field durations are inconsistent");
+            int64_t modelBitOffset = 0;
+            for (size_t userIndex = 0; userIndex < parameters.users.size(); userIndex++) {
+                const int64_t psduBytes = parameters.users[userIndex].psduLength.get<B>();
+                if (psduBytes < 0 || psduBytes > std::numeric_limits<int64_t>::max() / 8)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                            "psduLength", "HE PSDU bit range exceeds the model offset representation", userIndex);
+                const int64_t psduBits = psduBytes * 8;
+                if (modelBitOffset > std::numeric_limits<int64_t>::max() - psduBits)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                            "psduLength", "concatenated HE PSDU bit ranges overflow", userIndex);
+                modelBitOffset += psduBits;
+            }
+
+            Ieee80211HeCommonTxVector commonTx(request.centerFrequency, parameters.common);
             std::vector<Ieee80211HeUserTxVector> userTx;
-            userTx.reserve(calculation.parameters.users.size());
-            for (const auto& user : calculation.parameters.users)
+            userTx.reserve(parameters.users.size());
+            for (const auto& user : parameters.users)
                 userTx.push_back(Ieee80211HeUserTxVector(user));
             auto txVector = std::shared_ptr<const Ieee80211HeTxVector>(
                     new Ieee80211HeTxVector(std::move(commonTx), std::move(userTx)));
-            auto timingLayout = std::shared_ptr<const Ieee80211HePpduTimingLayout>(
-                    new Ieee80211HePpduTimingLayout(calculation.parameters));
-            return Ieee80211HeTxVectorValidationResult(std::move(txVector), std::move(timingLayout));
+            auto ppduLayout = std::shared_ptr<const Ieee80211HePpduLayout>(
+                    new Ieee80211HePpduLayout(request.centerFrequency, parameters));
+            return Ieee80211HeTxVectorValidationResult(std::move(txVector), std::move(ppduLayout));
         }
         catch (const std::exception& error) {
             return makeError(Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
@@ -375,6 +579,327 @@ class INET_API Ieee80211HeTxVectorFactory final
         catch (...) {
             return makeError(Ieee80211HeValidationErrorCode::INTERNAL_ERROR,
                     "factory", "unknown HE TXVECTOR construction error");
+        }
+    }
+};
+
+/**
+ * Immutable common RXVECTOR facts available after format-aware HE reception.
+ * HE ER SU represents CH_BANDWIDTH with its RU mode rather than a physical Hz
+ * value, and the HE TB UPLINK_FLAG is explicitly absent.
+ */
+class INET_API Ieee80211HeCommonRxVector final
+{
+  private:
+    const Ieee80211HePpduFormat ppduFormat;
+    const std::optional<Hz> channelBandwidth;
+    const std::optional<Ieee80211HeErSuRuMode> erSuRuMode;
+    const Ieee80211HeGuardInterval guardInterval;
+    const Ieee80211HeLtfType ltfType;
+    const uint8_t bssColor;
+    const std::optional<bool> uplink;
+    const int txopDurationUs;
+    const bool doppler;
+    const bool stbc;
+
+    Ieee80211HeCommonRxVector(const Ieee80211HeCommonPhyParameters& common,
+            const Ieee80211HeUserPhyParameters& user) :
+        ppduFormat(common.ppduFormat),
+        channelBandwidth(common.ppduFormat == HE_EXTENDED_RANGE_SU ?
+                std::optional<Hz>() : std::optional<Hz>(common.channelBandwidth)),
+        erSuRuMode(common.ppduFormat != HE_EXTENDED_RANGE_SU ?
+                std::optional<Ieee80211HeErSuRuMode>() :
+                std::optional<Ieee80211HeErSuRuMode>(user.ru.toneSize == 242 ?
+                        Ieee80211HeErSuRuMode::PRIMARY_242_TONE :
+                        Ieee80211HeErSuRuMode::PRIMARY_UPPER_106_TONE)),
+        guardInterval(common.guardInterval), ltfType(common.ltfType), bssColor(common.sigA.bssColor),
+        uplink(common.ppduFormat == HE_TRIGGER_BASED_UPLINK ?
+                std::optional<bool>() : std::optional<bool>(common.sigA.uplink)),
+        txopDurationUs(common.sigA.txopDurationUs),
+        doppler(common.sigA.doppler), stbc(common.sigA.stbc) {}
+
+    friend class Ieee80211HeRxVectorFactory;
+
+  public:
+    Ieee80211HeCommonRxVector(const Ieee80211HeCommonRxVector&) = default;
+    Ieee80211HeCommonRxVector(Ieee80211HeCommonRxVector&&) = default;
+    Ieee80211HeCommonRxVector& operator=(const Ieee80211HeCommonRxVector&) = delete;
+
+    Ieee80211HePpduFormat getPpduFormat() const { return ppduFormat; }
+    const std::optional<Hz>& getChannelBandwidth() const { return channelBandwidth; }
+    const std::optional<Ieee80211HeErSuRuMode>& getErSuRuMode() const { return erSuRuMode; }
+    Ieee80211HeGuardInterval getGuardInterval() const { return guardInterval; }
+    Ieee80211HeLtfType getLtfType() const { return ltfType; }
+    uint8_t getBssColor() const { return bssColor; }
+    const std::optional<bool>& getUplink() const { return uplink; }
+    int getTxopDurationUs() const { return txopDurationUs; }
+    bool getDoppler() const { return doppler; }
+    bool getStbc() const { return stbc; }
+
+    bool operator==(const Ieee80211HeCommonRxVector& other) const
+    {
+        return ppduFormat == other.ppduFormat && channelBandwidth == other.channelBandwidth &&
+                erSuRuMode == other.erSuRuMode &&
+                guardInterval == other.guardInterval && ltfType == other.ltfType &&
+                bssColor == other.bssColor && uplink == other.uplink &&
+                txopDurationUs == other.txopDurationUs && doppler == other.doppler && stbc == other.stbc;
+    }
+};
+
+/**
+ * Immutable per-user RXVECTOR facts. Absence is format-significant: HE TB user
+ * RU/MCS/FEC/DCM/NUM_STS values are trigger-derived MU parameters and are therefore
+ * not projected here as received wire facts. PSDU length is supplied by the
+ * receiver and checked against the packet-model bit range, which remains
+ * exclusively in Ieee80211HePpduLayout.
+ */
+class INET_API Ieee80211HeUserRxVector final
+{
+  private:
+    const B psduLength;
+    const std::optional<uint16_t> staId;
+    const std::optional<Ieee80211HeRu> ruAllocation;
+    const std::optional<int> mcs;
+    const std::optional<int> numberOfSpaceTimeStreams;
+    const std::optional<bool> dcm;
+    const std::optional<Ieee80211HeCoding> coding;
+
+    Ieee80211HeUserRxVector(B psduLength, std::optional<uint16_t> staId,
+            std::optional<Ieee80211HeRu> ruAllocation, std::optional<int> mcs,
+            std::optional<int> numberOfSpaceTimeStreams,
+            std::optional<bool> dcm, std::optional<Ieee80211HeCoding> coding) :
+        psduLength(psduLength), staId(std::move(staId)), ruAllocation(std::move(ruAllocation)),
+        mcs(std::move(mcs)), numberOfSpaceTimeStreams(std::move(numberOfSpaceTimeStreams)),
+        dcm(std::move(dcm)), coding(std::move(coding)) {}
+
+    friend class Ieee80211HeRxVectorFactory;
+
+  public:
+    Ieee80211HeUserRxVector(const Ieee80211HeUserRxVector&) = default;
+    Ieee80211HeUserRxVector(Ieee80211HeUserRxVector&&) = default;
+    Ieee80211HeUserRxVector& operator=(const Ieee80211HeUserRxVector&) = delete;
+
+    B getPsduLength() const { return psduLength; }
+    const std::optional<uint16_t>& getStaId() const { return staId; }
+    const std::optional<Ieee80211HeRu>& getRuAllocation() const { return ruAllocation; }
+    const std::optional<int>& getMcs() const { return mcs; }
+    const std::optional<int>& getNumberOfSpaceTimeStreams() const { return numberOfSpaceTimeStreams; }
+    const std::optional<bool>& getDcm() const { return dcm; }
+    const std::optional<Ieee80211HeCoding>& getCoding() const { return coding; }
+
+    bool operator==(const Ieee80211HeUserRxVector& other) const
+    {
+        return psduLength == other.psduLength && staId == other.staId &&
+                ruAllocation == other.ruAllocation && mcs == other.mcs &&
+                numberOfSpaceTimeStreams == other.numberOfSpaceTimeStreams &&
+                dcm == other.dcm && coding == other.coding;
+    }
+};
+
+/** Complete immutable reconstructed HE RXVECTOR for one selected recipient. */
+class INET_API Ieee80211HeRxVector final
+{
+  private:
+    const Ieee80211HeCommonRxVector common;
+    const Ieee80211HeUserRxVector user;
+
+    Ieee80211HeRxVector(Ieee80211HeCommonRxVector common, Ieee80211HeUserRxVector user) :
+        common(std::move(common)), user(std::move(user)) {}
+
+    friend class Ieee80211HeRxVectorFactory;
+
+  public:
+    Ieee80211HeRxVector(const Ieee80211HeRxVector&) = default;
+    Ieee80211HeRxVector(Ieee80211HeRxVector&&) = default;
+    Ieee80211HeRxVector& operator=(const Ieee80211HeRxVector&) = delete;
+
+    const Ieee80211HeCommonRxVector& getCommon() const { return common; }
+    const Ieee80211HeUserRxVector& getUser() const { return user; }
+
+    bool operator==(const Ieee80211HeRxVector& other) const
+    {
+        return common == other.common && user == other.user;
+    }
+};
+
+/** Explicit recipient selection for HE MU and HE TB reconstruction. */
+struct Ieee80211HeRxVectorSelection
+{
+    std::optional<uint16_t> staId;
+    std::optional<size_t> userIndex;
+};
+
+/** Receiver-provided facts required to reconstruct one HE RXVECTOR. */
+struct Ieee80211HeRxVectorReconstructionRequest
+{
+    Ieee80211HeRxVectorSelection selection;
+    std::optional<B> receivedPsduLength;
+};
+
+/** Stable errors local to RXVECTOR reconstruction; append new values only. */
+enum class Ieee80211HeRxVectorValidationErrorCode {
+    NONE = 0,
+    VECTOR_LAYOUT_MISMATCH = 1,
+    MISSING_USER_SELECTION = 2,
+    USER_NOT_FOUND = 3,
+    AMBIGUOUS_USER_SELECTION = 4,
+    INTERNAL_ERROR = 5,
+    UNSUPPORTED_RX_PROJECTION = 6,
+    MISSING_RECEIVED_PSDU_LENGTH = 7,
+    INVALID_RECEIVED_PSDU_LENGTH = 8,
+    RECEIVED_PSDU_LENGTH_MISMATCH = 9,
+};
+
+/** Invalid reconstruction results never contain a usable RXVECTOR. */
+class INET_API Ieee80211HeRxVectorValidationResult final
+{
+  private:
+    Ieee80211HeRxVectorValidationErrorCode errorCode = Ieee80211HeRxVectorValidationErrorCode::NONE;
+    Ieee80211HeValidationContext context;
+    std::shared_ptr<const Ieee80211HeRxVector> rxVector;
+
+    Ieee80211HeRxVectorValidationResult(Ieee80211HeRxVectorValidationErrorCode errorCode,
+            Ieee80211HeValidationContext context) : errorCode(errorCode), context(std::move(context)) {}
+    explicit Ieee80211HeRxVectorValidationResult(std::shared_ptr<const Ieee80211HeRxVector> rxVector) :
+        rxVector(std::move(rxVector)) {}
+
+    friend class Ieee80211HeRxVectorFactory;
+
+  public:
+    explicit operator bool() const
+    {
+        return errorCode == Ieee80211HeRxVectorValidationErrorCode::NONE && rxVector;
+    }
+
+    Ieee80211HeRxVectorValidationErrorCode getErrorCode() const { return errorCode; }
+    const Ieee80211HeValidationContext& getContext() const { return context; }
+    const std::shared_ptr<const Ieee80211HeRxVector>& getRxVector() const { return rxVector; }
+};
+
+/**
+ * Format-aware, non-throwing packet-level reconstruction from one canonical
+ * TXVECTOR and its matching calculated PPDU description. This foundation does
+ * not claim to decode a complete physical bit stream. A receiver-provided PSDU
+ * length is mandatory and is checked against the selected model-container range;
+ * TX metadata alone can never produce a normative received vector. Timing and
+ * PSDU ranges remain model metadata supplied by Ieee80211HePpduLayout.
+ */
+class INET_API Ieee80211HeRxVectorFactory final
+{
+  private:
+    static Ieee80211HeRxVectorValidationResult makeError(
+            Ieee80211HeRxVectorValidationErrorCode errorCode, const char *fieldName,
+            const std::string& detail, std::optional<size_t> userIndex = {})
+    {
+        Ieee80211HeValidationContext context;
+        context.userIndex = userIndex;
+        context.fieldName = fieldName;
+        context.detail = detail;
+        return Ieee80211HeRxVectorValidationResult(errorCode, std::move(context));
+    }
+
+  public:
+    static Ieee80211HeRxVectorValidationResult reconstruct(const Ieee80211HeTxVector& txVector,
+            const Ieee80211HePpduLayout& ppduLayout,
+            const Ieee80211HeRxVectorReconstructionRequest& request)
+    {
+        try {
+            if (!ppduLayout.matches(txVector))
+                return makeError(Ieee80211HeRxVectorValidationErrorCode::VECTOR_LAYOUT_MISMATCH,
+                        "txVector/ppduLayout", "HE TXVECTOR and PPDU layout are not the same canonical description");
+
+            const auto format = txVector.getCommon().getParameters().ppduFormat;
+            const auto& users = txVector.getUsers();
+            size_t selectedUserIndex = 0;
+            if (format == HE_MU_DOWNLINK || format == HE_TRIGGER_BASED_UPLINK) {
+                if (!request.selection.staId && !request.selection.userIndex)
+                    return makeError(Ieee80211HeRxVectorValidationErrorCode::MISSING_USER_SELECTION,
+                            "selection", "HE MU/TB RXVECTOR reconstruction requires a STA ID or user index");
+                if (request.selection.userIndex) {
+                    if (*request.selection.userIndex >= users.size())
+                        return makeError(Ieee80211HeRxVectorValidationErrorCode::USER_NOT_FOUND,
+                                "userIndex", "selected HE user index is outside the canonical user list");
+                    selectedUserIndex = *request.selection.userIndex;
+                    if (request.selection.staId &&
+                            users[selectedUserIndex].getParameters().staId != *request.selection.staId)
+                        return makeError(Ieee80211HeRxVectorValidationErrorCode::AMBIGUOUS_USER_SELECTION,
+                                "selection", "HE STA ID and user index select different users", selectedUserIndex);
+                }
+                else {
+                    std::optional<size_t> matchingUserIndex;
+                    for (size_t userIndex = 0; userIndex < users.size(); userIndex++) {
+                        if (users[userIndex].getParameters().staId != *request.selection.staId)
+                            continue;
+                        if (matchingUserIndex)
+                            return makeError(Ieee80211HeRxVectorValidationErrorCode::AMBIGUOUS_USER_SELECTION,
+                                    "staId", "HE STA ID identifies multiple users; supply a user index");
+                        matchingUserIndex = userIndex;
+                    }
+                    if (!matchingUserIndex)
+                        return makeError(Ieee80211HeRxVectorValidationErrorCode::USER_NOT_FOUND,
+                                "staId", "HE STA ID is absent from the canonical user list");
+                    selectedUserIndex = *matchingUserIndex;
+                }
+            }
+
+            const auto& commonParameters = txVector.getCommon().getParameters();
+            const auto& userParameters = users[selectedUserIndex].getParameters();
+            if (!request.receivedPsduLength)
+                return makeError(Ieee80211HeRxVectorValidationErrorCode::MISSING_RECEIVED_PSDU_LENGTH,
+                        "receivedPsduLength", "HE RXVECTOR reconstruction requires a receiver-provided PSDU length",
+                        selectedUserIndex);
+            const int64_t receivedPsduBytes = request.receivedPsduLength->get<B>();
+            if (receivedPsduBytes < 0 || receivedPsduBytes > std::numeric_limits<int64_t>::max() / 8)
+                return makeError(Ieee80211HeRxVectorValidationErrorCode::INVALID_RECEIVED_PSDU_LENGTH,
+                        "receivedPsduLength", "received HE PSDU length exceeds the model offset representation",
+                        selectedUserIndex);
+            const b receivedPsduBitLength(receivedPsduBytes * 8);
+            if (ppduLayout.isNdp()) {
+                if (*request.receivedPsduLength != B(0))
+                    return makeError(Ieee80211HeRxVectorValidationErrorCode::RECEIVED_PSDU_LENGTH_MISMATCH,
+                            "receivedPsduLength", "an HE NDP has no received PSDU", selectedUserIndex);
+            }
+            else {
+                auto range = std::find_if(ppduLayout.getPsduBitRanges().begin(),
+                        ppduLayout.getPsduBitRanges().end(),
+                        [=] (const auto& candidate) { return candidate.getUserIndex() == selectedUserIndex; });
+                if (range == ppduLayout.getPsduBitRanges().end())
+                    return makeError(Ieee80211HeRxVectorValidationErrorCode::VECTOR_LAYOUT_MISMATCH,
+                            "ppduLayout.psduBitRanges", "selected HE user has no model-container PSDU range",
+                            selectedUserIndex);
+                if (range->getBitLength() != receivedPsduBitLength)
+                    return makeError(Ieee80211HeRxVectorValidationErrorCode::RECEIVED_PSDU_LENGTH_MISMATCH,
+                            "receivedPsduLength", "received HE PSDU length disagrees with the canonical layout range",
+                            selectedUserIndex);
+            }
+            // The current canonical request contract has no STBC input and validates a
+            // non-STBC foundation, where its spatial-stream count is exactly NUM_STS.
+            // Reject a future/mixed STBC description instead of inventing a transform.
+            if (commonParameters.sigA.stbc)
+                return makeError(Ieee80211HeRxVectorValidationErrorCode::UNSUPPORTED_RX_PROJECTION,
+                        "stbc", "STBC NUM_STS reconstruction is outside the canonical HE foundation");
+            Ieee80211HeCommonRxVector commonRx(commonParameters, userParameters);
+            const bool isTb = format == HE_TRIGGER_BASED_UPLINK;
+            const bool isMu = format == HE_MU_DOWNLINK;
+            Ieee80211HeUserRxVector userRx(*request.receivedPsduLength,
+                    isMu ? std::optional<uint16_t>(userParameters.staId) : std::optional<uint16_t>(),
+                    isMu ? std::optional<Ieee80211HeRu>(userParameters.ru) : std::optional<Ieee80211HeRu>(),
+                    !isTb ? std::optional<int>(userParameters.mcs) : std::optional<int>(),
+                    !isTb ? std::optional<int>(userParameters.numberOfSpatialStreams) : std::optional<int>(),
+                    !isTb ? std::optional<bool>(userParameters.dcm) : std::optional<bool>(),
+                    !isTb ? std::optional<Ieee80211HeCoding>(userParameters.coding) :
+                            std::optional<Ieee80211HeCoding>());
+            auto rxVector = std::shared_ptr<const Ieee80211HeRxVector>(
+                    new Ieee80211HeRxVector(std::move(commonRx), std::move(userRx)));
+            return Ieee80211HeRxVectorValidationResult(std::move(rxVector));
+        }
+        catch (const std::exception& error) {
+            return makeError(Ieee80211HeRxVectorValidationErrorCode::INTERNAL_ERROR,
+                    "reconstruction", error.what());
+        }
+        catch (...) {
+            return makeError(Ieee80211HeRxVectorValidationErrorCode::INTERNAL_ERROR,
+                    "reconstruction", "unknown HE RXVECTOR reconstruction error");
         }
     }
 };
