@@ -45,17 +45,23 @@ If a model is unavailable, move upward in capability: Luna to Terra, then Terra 
 
 Use the relevant repository workflow skills inside each lane. An agent role does not replace `inet-simulation-run`, `inet-80211-packet-debugging`, `ieee80211-standards`, testing, build, or result-analysis skills.
 
+## Apply the IEEE 802.11 architecture overlay
+
+For any proposed or actual production change under `src/inet/linklayer/ieee80211/` or `src/inet/physicallayer/wireless/ieee80211/`, require the navigator, implementer, and reviewer to use `inet-architectural-requirements` and read `.agents/skills/inet-architectural-requirements/references/ieee80211-architectural-requirements.md` in full. Map the change to the applicable `AR-WLAN-*` identifiers in addition to the general `R-*` and `AR-*` identifiers. Treat the WLAN rules as design and review constraints, not as evidence of normative IEEE behavior; normative claims still require the applicable standard revision and clause through `ieee80211-standards`.
+
+For every diff review in those subtrees, require the reviewer to apply both semantic checklists: the general `.agents/skills/inet-architectural-requirements/references/enforcement/agent-review-checklist.md` and the WLAN-specific `.agents/skills/inet-architectural-requirements/references/enforcement/ieee80211-agent-review-checklist.md`. Emit the complete general checklist and its `REVIEW: ...` footer first, then the complete WLAN checklist and its final `WLAN REVIEW: ...` footer. Do not collapse, sample, or replace either checklist. Require the regression lane to assess the focused and legacy coverage called for by `AR-WLAN-QUAL-TESTS`.
+
 ## Decompose by evidence lane
 
 Delegate proactively when two or more lanes below are independent. Start no more lanes than the task needs and leave thread capacity for follow-up work.
 
 ### Static architecture or configuration
 
-Assign `inet-navigator` for ownership, dependency, composition, and effective-configuration tracing, including the pre-change seal and R-*/AR-* map. Assign `inet-reviewer` when the deliverable is a formal diff-compliance verdict, naming audit, full-scope architecture audit, or sealing audit; require the exact semantic-checklist output and ledger disposition. Add `inet-wifi-specialist` only when the answer depends on 802.11 semantics. Add `inet-evidence-miner` only for a large, explicitly bounded inventory. Keep the work read-only.
+Assign `inet-navigator` for ownership, dependency, composition, and effective-configuration tracing, including the pre-change seal and R-*/AR-* map and, for an 802.11 scope, the applicable `AR-WLAN-*` map. Assign `inet-reviewer` when the deliverable is a formal diff-compliance verdict, naming audit, full-scope architecture audit, or sealing audit; require the exact semantic-checklist output and ledger disposition, including both checklist contracts for an 802.11 diff. Add `inet-wifi-specialist` only when the answer depends on 802.11 semantics. Add `inet-evidence-miner` only for a large, explicitly bounded inventory. Keep the work read-only.
 
 ### Wi-Fi standards or model gap
 
-Assign `inet-wifi-specialist` to establish the normative rule and implemented behavior. In parallel, use `inet-navigator` for the relevant INET control/data path when that path is broad or unclear. Require exact IEEE clause/table/field evidence and exact INET files/symbols. Do not start implementation until the discrepancy is demonstrated.
+Assign `inet-wifi-specialist` to establish the normative rule and implemented behavior and to identify relevant `AR-WLAN-*` constraints without treating them as normative evidence. In parallel, use `inet-navigator` for the relevant INET control/data path when that path is broad or unclear. Require exact IEEE clause/table/field evidence, exact INET files/symbols, and the applicable WLAN architecture identifiers. Do not start implementation until the discrepancy is demonstrated.
 
 ### Runtime failure or packet/timing mystery
 
@@ -63,7 +69,7 @@ Assign `inet-simulation-detective` as lead. It may create only named diagnostic 
 
 ### Production change
 
-Establish mechanism and change surface first with the appropriate read-only or runtime lanes. Before implementation under src/inet, enumerate the target paths, resolve their current seal status, map the applicable R-* and AR-* identifiers, and obtain explicit current-conversation user permission for every sealed file. Then assign exactly one `inet-implementer` with file ownership and permitted test scope. After the patch stabilizes, assign `inet-regression-guard` when the risk warrants independent regression evidence, and assign `inet-reviewer` for every architecture-sensitive src/inet change as well as every nontrivial or 802.11 behavior change. Do not have reviewer and implementer edit concurrently.
+Establish mechanism and change surface first with the appropriate read-only or runtime lanes. Before implementation under src/inet, enumerate the target paths, resolve their current seal status, map the applicable R-* and AR-* identifiers, and obtain explicit current-conversation user permission for every sealed file. For either 802.11 subtree, also require the full WLAN architecture reference to be loaded, map the applicable `AR-WLAN-*` identifiers, and establish the IEEE revision and clause for new normative behavior. Then assign exactly one `inet-implementer` with file ownership and permitted test scope. After the patch stabilizes, assign `inet-regression-guard` when the risk warrants independent regression evidence, and assign `inet-reviewer` for every architecture-sensitive src/inet change as well as every nontrivial or 802.11 behavior change. For an 802.11 change, regression must address `AR-WLAN-QUAL-TESTS` and review must apply both semantic checklists. Do not have reviewer and implementer edit concurrently.
 
 ### Results or plots
 
@@ -77,6 +83,7 @@ Include all of the following in each delegated task:
 - Relevant paths, symbols, INI configuration, run number/seed, and existing artifact paths.
 - Explicit inclusions and exclusions.
 - Whether the agent is read-only, may create diagnostic artifacts, may edit tests, or owns named files.
+- Applicable general and, for an 802.11 production scope, `AR-WLAN-*` identifiers and the exact architecture/checklist references the lane must load.
 - Required evidence and the definition of done.
 - Required return shape: concise conclusion, evidence references, exact commands and statuses when commands ran, uncertainty, and recommended next handoff.
 
@@ -98,10 +105,10 @@ Use the applicable IEEE revision as authority for normative behavior and checked
 
 Gate each transition:
 
-- Diagnose to implement: require a demonstrated failure mechanism, bounded change surface, target-path seal decision, applicable R-*/AR-* map, and explicit permission for every sealed target.
+- Diagnose to implement: require a demonstrated failure mechanism, bounded change surface, target-path seal decision, applicable R-*/AR-* map, applicable `AR-WLAN-*` map for an 802.11 scope, and explicit permission for every sealed target.
 - Implement to verify: require a stable diff and exact claimed behavior.
-- Verify to conclude: require tests that exercise the claim, not merely a passing unrelated suite.
-- Architecture-sensitive change to conclude: require the applicable check-architecture.sh result reconciled with the ledgers and the complete semantic-checklist verdict.
+- Verify to conclude: require tests that exercise the claim, not merely a passing unrelated suite; for 802.11 behavior, reconcile the evidence with `AR-WLAN-QUAL-TESTS`, including applicable boundary and legacy-mode coverage.
+- Architecture-sensitive change to conclude: require the applicable check-architecture.sh result reconciled with the ledgers and the complete general semantic-checklist verdict; for an 802.11 diff, also require every WLAN checklist item and the `WLAN REVIEW: ...` footer.
 - Audit to seal: require a complete compliant-scope audit, resolution or explicit sanction of every finding, and explicit user approval before recording the seal.
 - Fingerprint update: require explicit user approval after explaining the trajectory change.
 
