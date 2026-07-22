@@ -1,0 +1,109 @@
+%description:
+Test that DL MU-MIMO round-robin fairness survives changing instantaneous candidate sets.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.scheduler.HeDlSchedulerEqualSizedRUs;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        scheduler: HeDlSchedulerEqualSizedRUs {
+            parameters:
+                schedulingFunction = "fBW";
+        }
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::units::values;
+
+static IIeee80211HeDlScheduler::ScheduleContext makeMuMimoContext(
+        const std::vector<MacAddress>& addresses, HeMuMimoCsiManager *csi)
+{
+    Ieee80211HeCapabilities ap;
+    ap.dlMuMimoBeamformer = true;
+    ap.soundingDimensions = 4;
+
+    Ieee80211HeCapabilities sta;
+    sta.dlMuMimoBeamformee = true;
+    sta.feedbackMode = 2;
+    sta.beamformeeSts20Mhz = 4;
+
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = MHz(20);
+    auto negotiated = negotiateHeCapabilities(ap, sta, operation, true);
+
+    IIeee80211HeDlScheduler::ScheduleContext context;
+    context.channelCenterFrequency = Hz(5.18e9);
+    context.channelBandwidth = MHz(20);
+    context.totalTransmitPower = W(0.1);
+    context.receiverSensitivity = W(1e-10);
+    context.noiseFigureDb = 7;
+    context.numApAntennas = 4;
+    context.enableDlMuMimo = true;
+    context.localHeCapabilities = ap;
+    context.csiManager = csi;
+    for (const auto& address : addresses) {
+        IIeee80211HeDlScheduler::CandidateInfo candidate;
+        candidate.staAddress = address;
+        candidate.backlogBytes = 1000;
+        candidate.holPacketBytes = 200;
+        candidate.pathLossDb = 45;
+        candidate.hasFreshPathLoss = true;
+        candidate.hasAdvertisedHeCapabilities = true;
+        candidate.advertisedHeCapabilities = sta;
+        candidate.hasNegotiatedHeCapabilities = true;
+        candidate.negotiatedHeCapabilities = negotiated;
+        context.candidates.push_back(candidate);
+    }
+    return context;
+}
+
+%activity:
+auto scheduler = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
+        getParentModule()->getSubmodule("scheduler"));
+const MacAddress a("02:00:00:00:00:01");
+const MacAddress b("02:00:00:00:00:02");
+const MacAddress c("02:00:00:00:00:03");
+const MacAddress d("02:00:00:00:00:04");
+const std::vector<MacAddress> stableRoster = {a, b, c, d};
+
+HeMuMimoCsiManager csi;
+csi.configure(SimTime(1, SIMTIME_S), 0.001, "");
+csi.setTimeProvider([]() { return SIMTIME_ZERO; });
+auto getAid = [&](const MacAddress& address) {
+    for (size_t i = 0; i < stableRoster.size(); ++i)
+        if (stableRoster[i] == address)
+            return static_cast<int>(i + 1);
+    return 0;
+};
+for (const auto& address : stableRoster)
+    csi.updateCsi(address, MHz(20), stableRoster, getAid);
+
+const std::vector<std::vector<MacAddress>> candidateSets = {
+    {a, b}, {a, b}, {a, b}, {a, b}, {b, c}
+};
+const std::vector<MacAddress> expectedAnchors = {a, b, a, b, c};
+for (size_t i = 0; i < candidateSets.size(); ++i) {
+    auto allocations = scheduler->schedule(makeMuMimoContext(candidateSets[i], &csi));
+    if (allocations.size() < 2)
+        throw cRuntimeError("MU-MIMO fairness regression did not form a two-user group");
+    if (allocations.front().staAddress != expectedAnchors[i])
+        throw cRuntimeError("MU-MIMO fairness regression selected anchor %s instead of %s at step %zu",
+                allocations.front().staAddress.str().c_str(), expectedAnchors[i].str().c_str(), i);
+}
+
+EV << "DL MU-MIMO MAC-key round-robin remained stable across changing candidate sets.\n";
+
+%contains: stdout
+DL MU-MIMO MAC-key round-robin remained stable across changing candidate sets.

@@ -94,12 +94,6 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
                  int maxHeMuPsduLength = 6500631,
                  simtime_t maxHeMuPpduDuration = SimTime(5.484, SIMTIME_MS),
                  AckMethod ackMethod = AckMethod::EXPLICIT_SEQUENTIAL_BAR);
-    HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
-                 const std::vector<MacAddress>& candidates,
-                 physicallayer::Ieee80211ModeSet *modeSet,
-                 queueing::IPacketQueue *pendingQueue,
-                 IAckHandler *ackHandler,
-                 IFrameSequenceHandler::ICallback *callback);
     virtual ~HeDlMuTxOpFs();
 
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;

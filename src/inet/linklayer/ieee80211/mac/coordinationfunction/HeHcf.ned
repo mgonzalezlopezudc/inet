@@ -29,7 +29,6 @@ module HeHcf extends Hcf
 {
     parameters:
         @class(HeHcf);
-        double totalTransmitPower @unit(W) = default(20mW); // Total AP power shared by the scheduled downlink RUs
         double receiverNoiseFigure @unit(dB) = default(10dB); // Noise figure used by the DL scheduler's SNR estimate
         double linkEstimateMaxAge @unit(s) = default(1s); // Maximum age of a path-loss estimate considered by the scheduler
         int maxAmpduMpduCount = default(16); // Maximum MPDUs contributed by one STA to a DL MU A-MPDU

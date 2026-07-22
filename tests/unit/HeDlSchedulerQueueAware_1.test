@@ -201,6 +201,14 @@ auto holScheduler = check_and_cast<HeDlSchedulerHoLMinDelay *>(
     shortContext.guardInterval = HE_GI_0_8_US;
     auto shortAllocations = backlogScheduler->schedule(shortContext);
 
+    auto noNoiseContext = shortContext;
+    noNoiseContext.noiseFigureDb = NaN;
+    auto noNoiseAllocations = backlogScheduler->schedule(noNoiseContext);
+    for (const auto& allocation : noNoiseAllocations) {
+        if (!std::isnan(allocation.estimatedSnrDb) || allocation.mcs != 0)
+            throw cRuntimeError("Unavailable receiver noise data did not select deterministic MCS 0 fallback");
+    }
+
     auto longContext = shortContext;
     longContext.guardInterval = HE_GI_3_2_US;
     auto longAllocations = backlogScheduler->schedule(longContext);

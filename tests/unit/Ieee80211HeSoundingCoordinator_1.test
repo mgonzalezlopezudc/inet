@@ -41,6 +41,7 @@ network = TestNetwork
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
+using namespace inet::units::values;
 
 class MockTransmitter : public ITx
 {
@@ -66,6 +67,21 @@ class MockMacReal : public Ieee80211Mac {
     }
 };
 
+class MockHeLinkPhyContext : public IIeee80211HeLinkPhyContext
+{
+  private:
+    const Ieee80211HeLinkPhySnapshot snapshot;
+
+  public:
+    explicit MockHeLinkPhyContext(const Ieee80211HeLinkPhySnapshot& snapshot) : snapshot(snapshot) {}
+    virtual Ieee80211HeLinkPhySnapshot getSnapshot() const override { return snapshot; }
+    virtual Ieee80211HePeerLinkSnapshot getPeerSnapshot(const MacAddress&, simtime_t) const override
+    {
+        return Ieee80211HePeerLinkSnapshot(false, Ieee80211HeCapabilities(), false,
+                Ieee80211NegotiatedHeCapabilities(), NaN, false);
+    }
+};
+
 %activity:
 auto nic = getParentModule()->getSubmodule("nic");
 auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(nic->getSubmodule("soundingCoordinator"));
@@ -80,6 +96,12 @@ mockMac.mibRef = macMib;
 MockTransmitter mockTx;
     auto modeSet = const_cast<physicallayer::Ieee80211ModeSet *>(physicallayer::Ieee80211ModeSet::getModeSet("ax"));
 HeMuMimoCsiManager csiManager;
+Ieee80211HeCapabilities localCapabilities;
+Ieee80211HeLinkPhySnapshot linkPhySnapshot(36, Hz(5.18e9), MHz(20),
+        W(0.02), W(0.02), W(1e-10), 10, 1,
+        physicallayer::HE_GI_0_8_US, physicallayer::HE_LTF_4X,
+        0, {}, 0, localCapabilities);
+MockHeLinkPhyContext linkPhyContext(linkPhySnapshot);
 
 // 1. Send NDP Announcement targeting AID 5
 {
@@ -100,7 +122,8 @@ HeMuMimoCsiManager csiManager;
     auto pkt = new Packet("NDPA", header);
     pkt->insertAtBack(ndpa);
 
-    bool res = soundingCoordinator->processSoundingFrame(pkt, header, &mockMac, modeSet, csiManager, &mockTx, nullptr);
+    bool res = soundingCoordinator->processSoundingFrame(pkt, header, &mockMac, modeSet,
+            csiManager, linkPhyContext, &mockTx, nullptr);
     EV << "NDPA processed: " << (res ? "yes" : "no") << "\n";
 }
 
@@ -125,7 +148,8 @@ HeMuMimoCsiManager csiManager;
     trigger->setTransmitterAddress(MacAddress("66:77:88:99:AA:BB"));
 
     auto pkt = new Packet("BRP", trigger);
-    bool res = soundingCoordinator->processSoundingFrame(pkt, trigger, &mockMac, modeSet, csiManager, &mockTx, nullptr);
+    bool res = soundingCoordinator->processSoundingFrame(pkt, trigger, &mockMac, modeSet,
+            csiManager, linkPhyContext, &mockTx, nullptr);
     EV << "BRP processed: " << (res ? "yes" : "no") << "\n";
 
     if (mockTx.lastSent != nullptr) {

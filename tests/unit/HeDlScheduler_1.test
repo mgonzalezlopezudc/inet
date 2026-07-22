@@ -180,8 +180,10 @@ auto schedulerFholCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
             negotiateHeCapabilities(local, peer, operation, true));
     ASSERT(negotiated[0].localTxPeerRx.supportedChannelWidths.size() == 1);
     auto context = makeContext(2, Hz(20e6));
-    for (int i = 0; i < 2; ++i)
-        context.candidates[i].negotiatedHeCapabilities = &negotiated[i];
+    for (int i = 0; i < 2; ++i) {
+        context.candidates[i].hasNegotiatedHeCapabilities = true;
+        context.candidates[i].negotiatedHeCapabilities = negotiated[i];
+    }
     auto allocations = schedulerFhol->schedule(context);
     ASSERT(allocations.size() == 2);
     for (const auto& allocation : allocations) {
@@ -189,22 +191,22 @@ auto schedulerFholCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
         ASSERT(allocation.mcs <= 3);
     }
 
-    negotiated[0].localTxPeerRx.supportedChannelWidths.clear();
+    context.candidates[0].negotiatedHeCapabilities.localTxPeerRx.supportedChannelWidths.clear();
     ASSERT(schedulerFhol->schedule(context).empty());
-    negotiated[0].localTxPeerRx.supportedChannelWidths = {Hz(20e6)};
+    context.candidates[0].negotiatedHeCapabilities.localTxPeerRx.supportedChannelWidths = {Hz(20e6)};
 
     context.coding = HE_CODING_LDPC;
     ASSERT(schedulerFhol->schedule(context).empty());
     context.coding = HE_CODING_BCC;
 
-    negotiated[0].localTxPeerRx.mcsNss.maxMcsPerNss[0] = -1;
+    context.candidates[0].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[0] = -1;
     ASSERT(schedulerFhol->schedule(context).empty());
-    negotiated[0].localTxPeerRx.mcsNss.maxMcsPerNss[0] = 3;
+    context.candidates[0].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[0] = 3;
 
-    negotiated[1].localTxPeerRx.ofdma = false;
+    context.candidates[1].negotiatedHeCapabilities.localTxPeerRx.ofdma = false;
     ASSERT(schedulerFhol->schedule(context).empty());
-    negotiated[1].localTxPeerRx.ofdma = true;
-    negotiated[1].localTxPeerRx.valid = false;
+    context.candidates[1].negotiatedHeCapabilities.localTxPeerRx.ofdma = true;
+    context.candidates[1].negotiatedHeCapabilities.localTxPeerRx.valid = false;
     ASSERT(schedulerFhol->schedule(context).empty());
     EV << "Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.\n";
 }

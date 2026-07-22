@@ -1,0 +1,186 @@
+%description:
+Test immutable IEEE 802.11ax link/PHY snapshots, mockability, validation, and copied directional peer state.
+
+%includes:
+#include <utility>
+
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
+
+%file: TestNetwork.ned
+network TestNetwork
+{
+    submodules:
+        test: Test;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+static void requireLinkContext(bool condition, const char *message)
+{
+    if (!condition)
+        throw cRuntimeError("HE link/PHY context regression: %s", message);
+}
+
+class MockHeLinkPhyContext : public IIeee80211HeLinkPhyContext
+{
+  private:
+    const Ieee80211HeLinkPhySnapshot snapshot;
+    const MacAddress peerAddress;
+    const Ieee80211HePeerLinkSnapshot peerSnapshot;
+
+  public:
+    MockHeLinkPhyContext(const Ieee80211HeLinkPhySnapshot& snapshot,
+            const MacAddress& peerAddress, const Ieee80211HePeerLinkSnapshot& peerSnapshot) :
+        snapshot(snapshot), peerAddress(peerAddress), peerSnapshot(peerSnapshot) {}
+
+    virtual Ieee80211HeLinkPhySnapshot getSnapshot() const override { return snapshot; }
+
+    virtual Ieee80211HePeerLinkSnapshot getPeerSnapshot(const MacAddress& address,
+            simtime_t maximumLinkEstimateAge) const override
+    {
+        requireLinkContext(address == peerAddress, "unexpected peer lookup");
+        return peerSnapshot;
+    }
+};
+
+%activity:
+Ieee80211HeCapabilities local;
+local.supportedChannelWidths = {MHz(20), MHz(80)};
+local.txMcsNss.maxMcsPerNss[0] = 11;
+local.rxMcsNss.maxMcsPerNss[0] = 7;
+
+Ieee80211HeCapabilities peerAdvertisement;
+peerAdvertisement.supportedChannelWidths = {MHz(80)};
+peerAdvertisement.txMcsNss.maxMcsPerNss[0] = 5;
+peerAdvertisement.rxMcsNss.maxMcsPerNss[0] = 9;
+Ieee80211HeOperation operation;
+operation.operatingChannelWidth = MHz(80);
+auto negotiated = negotiateHeCapabilities(local, peerAdvertisement, operation, true);
+
+const MacAddress peerAddress("02:00:00:00:80:01");
+Ieee80211HeLinkPhySnapshot scalarSnapshot(42, Hz(5.21e9), MHz(80),
+        W(0.08), W(0.1), W(1e-10), 7, 4,
+        HE_GI_1_6_US, HE_LTF_2X, 8, {false, true, false, false}, 0x02, local);
+Ieee80211HeLinkPhySnapshot dimensionalSnapshot(42, Hz(5.21e9), MHz(80),
+        W(0.08), W(0.1), W(1e-10), 7, 4,
+        HE_GI_1_6_US, HE_LTF_2X, 8, {false, true, false, false}, 0x02, local);
+Ieee80211HePeerLinkSnapshot peerSnapshot(true, peerAdvertisement, true, negotiated, 63.5, true);
+MockHeLinkPhyContext scalarContext(scalarSnapshot, peerAddress, peerSnapshot);
+MockHeLinkPhyContext dimensionalContext(dimensionalSnapshot, peerAddress, peerSnapshot);
+
+auto scalar = scalarContext.getSnapshot();
+auto dimensional = dimensionalContext.getSnapshot();
+requireLinkContext(scalar.getChannelNumber() == 42, "channel number was not retained");
+requireLinkContext(scalar.getChannelCenterFrequency() == dimensional.getChannelCenterFrequency(),
+        "scalar/dimensional center frequency projections differ");
+requireLinkContext(scalar.getChannelBandwidth() == dimensional.getChannelBandwidth(),
+        "scalar/dimensional bandwidth projections differ");
+requireLinkContext(scalar.getPuncturedSubchannelMask() == 0x02 &&
+        scalar.getPuncturedSubchannels().size() == 4 && scalar.getPuncturedSubchannels()[1],
+        "puncturing policy was not retained");
+requireLinkContext(scalar.getGuardInterval() == HE_GI_1_6_US && scalar.getLtfType() == HE_LTF_2X,
+        "GI/LTF policy was not retained");
+requireLinkContext(scalar.getEffectiveTransmitPower() == W(0.08) &&
+        scalar.getMaximumTransmitPower() == W(0.1) && scalar.getReceiveSensitivity() == W(1e-10),
+        "power constraints were not retained");
+
+auto copiedPeer = scalarContext.getPeerSnapshot(peerAddress, SimTime(1, SIMTIME_S));
+requireLinkContext(copiedPeer.getHasAdvertisement() && copiedPeer.getHasNegotiatedCapabilities(),
+        "peer capability provenance was lost");
+requireLinkContext(copiedPeer.getNegotiatedCapabilities().localTxPeerRx.mcsNss.maxMcsPerNss[0] == 9,
+        "local-TX/peer-RX MCS direction was not retained");
+requireLinkContext(copiedPeer.getNegotiatedCapabilities().localRxPeerTx.mcsNss.maxMcsPerNss[0] == 5,
+        "local-RX/peer-TX MCS direction was not retained");
+requireLinkContext(copiedPeer.getHasFreshPathLoss() && copiedPeer.getPathLossDb() == 63.5,
+        "fresh path-loss state was not retained");
+
+Ieee80211HePeerLinkSnapshot stalePeer(true, peerAdvertisement, true, negotiated, 63.5, false);
+MockHeLinkPhyContext staleContext(scalarSnapshot, peerAddress, stalePeer);
+requireLinkContext(!staleContext.getPeerSnapshot(peerAddress, SIMTIME_ZERO).getHasFreshPathLoss(),
+        "stale link estimate became fresh");
+
+bool missingGeometryRejected = false;
+try {
+    Ieee80211HeLinkPhySnapshot invalid(-1, Hz(NaN), Hz(NaN), W(0.08), W(0.1), W(1e-10),
+            7, 4, HE_GI_1_6_US, HE_LTF_2X, 0, {}, 0, local);
+}
+catch (const cRuntimeError&) {
+    missingGeometryRejected = true;
+}
+requireLinkContext(missingGeometryRejected, "missing geometry was silently defaulted");
+
+bool inconsistentPuncturingRejected = false;
+try {
+    Ieee80211HeLinkPhySnapshot invalid(42, Hz(5.21e9), MHz(80), W(0.08), W(0.1), W(1e-10),
+            7, 4, HE_GI_1_6_US, HE_LTF_2X, 0, {false, true, false, false}, 0, local);
+}
+catch (const cRuntimeError&) {
+    inconsistentPuncturingRejected = true;
+}
+requireLinkContext(inconsistentPuncturingRejected, "inconsistent puncturing mask was accepted");
+
+bool primaryPuncturingRejected = false;
+try {
+    Ieee80211HeLinkPhySnapshot invalid(42, Hz(5.21e9), MHz(80), W(0.08), W(0.1), W(1e-10),
+            7, 4, HE_GI_1_6_US, HE_LTF_2X, 0, {true, false, false, false}, 0x01, local);
+}
+catch (const cRuntimeError&) {
+    primaryPuncturingRejected = true;
+}
+requireLinkContext(primaryPuncturingRejected, "primary 20 MHz puncturing was accepted");
+
+bool unsupportedPuncturingRejected = false;
+try {
+    Ieee80211HeLinkPhySnapshot invalid(42, Hz(5.21e9), MHz(80), W(0.08), W(0.1), W(1e-10),
+            7, 4, HE_GI_1_6_US, HE_LTF_2X, 0, {false, true, true, false}, 0x06, local);
+}
+catch (const cRuntimeError&) {
+    unsupportedPuncturingRejected = true;
+}
+requireLinkContext(unsupportedPuncturingRejected, "unsupported HE puncturing pattern was accepted");
+
+bool invalidGiRejected = false;
+try {
+    Ieee80211HeLinkPhySnapshot invalid(42, Hz(5.21e9), MHz(80), W(0.08), W(0.1), W(1e-10),
+            7, 4, static_cast<Ieee80211HeGuardInterval>(99), HE_LTF_2X, 0, {}, 0, local);
+}
+catch (const cRuntimeError&) {
+    invalidGiRejected = true;
+}
+requireLinkContext(invalidGiRejected, "invalid HE guard-interval enum was accepted");
+
+bool invalidLtfRejected = false;
+try {
+    Ieee80211HeLinkPhySnapshot invalid(42, Hz(5.21e9), MHz(80), W(0.08), W(0.1), W(1e-10),
+            7, 4, HE_GI_1_6_US, static_cast<Ieee80211HeLtfType>(99), 0, {}, 0, local);
+}
+catch (const cRuntimeError&) {
+    invalidLtfRejected = true;
+}
+requireLinkContext(invalidLtfRejected, "invalid HE-LTF enum was accepted");
+
+for (const auto& combination : std::vector<std::pair<Ieee80211HeGuardInterval, Ieee80211HeLtfType>>{
+        {HE_GI_3_2_US, HE_LTF_1X}, {HE_GI_3_2_US, HE_LTF_2X}, {HE_GI_1_6_US, HE_LTF_4X}}) {
+    bool unsupportedCombinationRejected = false;
+    try {
+        Ieee80211HeLinkPhySnapshot invalid(42, Hz(5.21e9), MHz(80), W(0.08), W(0.1), W(1e-10),
+                7, 4, combination.first, combination.second, 0, {}, 0, local);
+    }
+    catch (const cRuntimeError&) {
+        unsupportedCombinationRejected = true;
+    }
+    requireLinkContext(unsupportedCombinationRejected, "unsupported HE GI/LTF pair was accepted");
+}
+
+EV << "Immutable scalar/dimensional HE link/PHY snapshots matched, directional peer state was copied, and invalid defaults were rejected.\n";
+
+%contains: stdout
+Immutable scalar/dimensional HE link/PHY snapshots matched, directional peer state was copied, and invalid defaults were rejected.

@@ -14,6 +14,7 @@
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
 #include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 #include "inet/queueing/contract/IPacketQueue.h"
@@ -74,6 +75,7 @@ class INET_API HeHcf : public Hcf
     IIeee80211HeDlScheduler *dlScheduler = nullptr;
     HeUlCoordinator *ulCoordinator = nullptr;
     std::unique_ptr<StationQueueBankManager> queueBankManager;
+    std::unique_ptr<IIeee80211HeLinkPhyContext> linkPhyContext;
     cMessage *ulTriggerTimer = nullptr;
     IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     bool ulTriggerAccessRequested = false;
@@ -121,6 +123,7 @@ class INET_API HeHcf : public Hcf
     virtual AccessCategory mapTidToAccessCategory(Tid tid) const;
     virtual bool allAssociatedStationsSupportPreamblePuncturing() const;
     virtual bool supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const;
+    virtual const IIeee80211HeLinkPhyContext& getLinkPhyContext() const;
     static HeUlScheduleFinalizationResult finalizeUlSchedule(
             const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
             Hz centerFrequency, Hz channelBandwidth,

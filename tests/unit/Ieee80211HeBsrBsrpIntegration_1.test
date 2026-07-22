@@ -80,6 +80,31 @@ class RecordingHeUlScheduler : public cSimpleModule, public IIeee80211HeUlSchedu
     }
 };
 
+class MockHeLinkPhyContext : public IIeee80211HeLinkPhyContext
+{
+  private:
+    const Ieee80211Mib *mib;
+
+  public:
+    explicit MockHeLinkPhyContext(const Ieee80211Mib *mib) : mib(mib) {}
+
+    virtual Ieee80211HeLinkPhySnapshot getSnapshot() const override
+    {
+        return Ieee80211HeLinkPhySnapshot(36, Hz(5.18e9), MHz(20),
+                W(0.02), W(0.02), W(1e-10), 10, 1,
+                HE_GI_0_8_US, HE_LTF_4X, 0, {}, 0, mib->localHeCapabilities);
+    }
+
+    virtual Ieee80211HePeerLinkSnapshot getPeerSnapshot(const MacAddress& address,
+            simtime_t maximumLinkEstimateAge) const override
+    {
+        auto link = mib->findStationLink(address);
+        return Ieee80211HePeerLinkSnapshot(false, Ieee80211HeCapabilities(), false,
+                Ieee80211NegotiatedHeCapabilities(), link == nullptr ? NaN : link->pathLossDb,
+                link != nullptr && link->valid && simTime() - link->lastUpdate <= maximumLinkEstimateAge);
+    }
+};
+
 Define_Module(RecordingHeUlScheduler);
 
 static void associate(Ieee80211Mib *mib, const MacAddress& sta)
@@ -92,6 +117,7 @@ static void associate(Ieee80211Mib *mib, const MacAddress& sta)
 auto mib = check_and_cast<Ieee80211Mib *>(getParentModule()->getSubmodule("mib"));
 auto coordinator = check_and_cast<HeUlCoordinator *>(getParentModule()->getSubmodule("coordinator"));
 auto scheduler = check_and_cast<RecordingHeUlScheduler *>(getParentModule()->getSubmodule("ulScheduler"));
+MockHeLinkPhyContext linkPhyContext(mib);
 
 MacAddress sta1("02:00:00:00:10:01");
 MacAddress sta2("02:00:00:00:10:02");
@@ -112,7 +138,7 @@ ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRI
 ASSERT(coordinator->getPreferredAccessCategory() == AC_VI);
 EV << "Fresh backlogged and retry reports selected a Basic Trigger.\n";
 
-auto freshSchedule = coordinator->createSchedule(mib, Hz(5.18e9), Hz(20e6),
+auto freshSchedule = coordinator->createSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
         SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
 ASSERT(freshSchedule.allocations.size() == 2);
 ASSERT(scheduler->lastContext.candidates.size() == 2);
@@ -137,7 +163,7 @@ EV << "Per-AC retry state survived an unrelated report and cleared independently
 
 wait(0.011);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
-auto staleSchedule = coordinator->createSchedule(mib, Hz(5.18e9), Hz(20e6),
+auto staleSchedule = coordinator->createSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
         SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
 ASSERT(staleSchedule.allocations.empty());
 ASSERT(scheduler->lastContext.candidates.empty());
@@ -145,7 +171,7 @@ EV << "Stale reports were excluded and selected BSRP polling.\n";
 
 coordinator->updateBufferStatus(aid3, AC_VO, 6, 800, false);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
-auto implicitSchedule = coordinator->createSchedule(mib, Hz(5.18e9), Hz(20e6),
+auto implicitSchedule = coordinator->createSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
         SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
 ASSERT(implicitSchedule.allocations.size() == 1);
 ASSERT(scheduler->lastContext.candidates.size() == 1);

@@ -9,7 +9,6 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
 #include "inet/networklayer/common/NetworkInterface.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
@@ -68,15 +67,15 @@ bool HeSoundingCoordinator::tryStartSoundingSequence(AccessCategory ac,
     int lackCsiCount = 0;
     std::vector<HeSoundingFs::TargetSta> soundingStas;
     for (const auto& candidate : scheduleContext.candidates) {
-        auto negotiated = candidate.negotiatedHeCapabilities;
+        auto negotiated = candidate.hasNegotiatedHeCapabilities ?
+                &candidate.negotiatedHeCapabilities : nullptr;
         if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
             continue;
-        auto mib = mac->getMib();
-        auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
-        const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
+        const Ieee80211HeCapabilities *staCapabilities = candidate.hasAdvertisedHeCapabilities ?
+                &candidate.advertisedHeCapabilities : nullptr;
         if (staCapabilities == nullptr)
             continue;
-        if (isDlMuMimoEligible(mac->getMib()->localHeCapabilities, *staCapabilities, *negotiated, scheduleContext.channelBandwidth, scheduleContext.numApAntennas)) {
+        if (isDlMuMimoEligible(scheduleContext.localHeCapabilities, *staCapabilities, *negotiated, scheduleContext.channelBandwidth, scheduleContext.numApAntennas)) {
             if (!csiManager.hasFreshCsi(candidate.staAddress, scheduleContext.channelBandwidth))
                 lackCsiCount++;
             HeSoundingFs::TargetSta target;
@@ -105,6 +104,7 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                           Ieee80211Mac *mac,
                           physicallayer::Ieee80211ModeSet *modeSet,
                           HeMuMimoCsiManager& csiManager,
+                          const IIeee80211HeLinkPhyContext& linkPhyContext,
                           ITx *tx,
                           ITx::ICallback *callback)
 {
@@ -145,15 +145,11 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                 auto getAid = [mac](const MacAddress& addr) {
                     return mac->getMib()->getAssociationId(addr);
                 };
-                auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
-                auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
-                Hz bw = Hz(20e6);
-                if (transmitter && transmitter->getMode()) {
-                    bw = transmitter->getMode()->getDataMode()->getBandwidth();
-                }
                 auto twoAddrHeader = dynamicPtrCast<const Ieee80211TwoAddressHeader>(header);
                 if (twoAddrHeader != nullptr) {
-                    csiManager.updateCsi(twoAddrHeader->getTransmitterAddress(), bw, allAssociatedStations, getAid);
+                    const auto linkPhySnapshot = linkPhyContext.getSnapshot();
+                    csiManager.updateCsi(twoAddrHeader->getTransmitterAddress(),
+                            linkPhySnapshot.getChannelBandwidth(), allAssociatedStations, getAid);
                 }
             }
             delete packet;

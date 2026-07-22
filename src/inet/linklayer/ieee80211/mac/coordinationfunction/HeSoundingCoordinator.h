@@ -17,6 +17,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 #include "inet/linklayer/ieee80211/mac/contract/ITx.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
 
 namespace inet {
@@ -65,6 +66,7 @@ class INET_API HeSoundingCoordinator : public omnetpp::cSimpleModule
                               Ieee80211Mac *mac,
                               physicallayer::Ieee80211ModeSet *modeSet,
                               HeMuMimoCsiManager& csiManager,
+                              const IIeee80211HeLinkPhyContext& linkPhyContext,
                               ITx *tx,
                               ITx::ICallback *callback);
 

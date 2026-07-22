@@ -6,7 +6,6 @@
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerEqualSizedRUs.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -20,20 +19,11 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
     ASSERT(availableRus >= 0);
     int raCount = computeRandomAccessRuCount(context, availableRus);
 
-    // Filter candidates based on ulMuDisable flag in operating modes
+    // The coordinator projects operating-mode state into the immutable context.
     std::vector<CandidateInfo> candidates;
-    auto hcf = dynamic_cast<const HeHcf *>(getParentModule());
     for (const auto& candidate : context.candidates) {
-        bool ulMuDisable = false;
-        if (hcf != nullptr) {
-            Ieee80211HeOperatingMode peerMode;
-            if (hcf->getPeerOperatingMode(candidate.staAddress, peerMode)) {
-                ulMuDisable = peerMode.ulMuDisable;
-            }
-        }
-        if (!ulMuDisable) {
+        if (!candidate.ulMuDisabled)
             candidates.push_back(candidate);
-        }
     }
 
     int scheduledCount = std::min({(int)candidates.size(), maxMuStations,

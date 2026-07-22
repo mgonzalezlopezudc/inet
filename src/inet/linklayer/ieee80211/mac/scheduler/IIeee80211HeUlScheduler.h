@@ -78,6 +78,7 @@ class INET_API IIeee80211HeUlScheduler
         bool anchor = false;
         double pathLossDb = NaN;
         bool hasFreshPathLoss = false;
+        bool ulMuDisabled = false;
         simtime_t lastService = SIMTIME_ZERO;
 
         int64_t getSelectedBacklogBytes() const { return backlogBytes[selectedAccessCategory]; }

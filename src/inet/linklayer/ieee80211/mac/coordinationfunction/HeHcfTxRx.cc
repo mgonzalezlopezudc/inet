@@ -29,13 +29,9 @@
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
-#include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
-#include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HePreamblePuncturing.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTwtGating.h"
@@ -49,7 +45,8 @@ namespace ieee80211 {
 void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
     auto soundingCoordinator = check_and_cast<HeSoundingCoordinator *>(getSubmodule("soundingCoordinator"));
-    if (soundingCoordinator->processSoundingFrame(packet, header, mac, modeSet, csiManager, tx, this))
+    if (soundingCoordinator->processSoundingFrame(packet, header, mac, modeSet, csiManager,
+            getLinkPhyContext(), tx, this))
         return;
 
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {

@@ -147,12 +147,13 @@ class Ieee80211HeMuTxTag extends TagBase
 
 //
 // Common HE MU settings supplied separately from the per-user request when a
-// caller only needs to configure guard interval, coding, extension, or
+// caller only needs to configure guard interval, HE-LTF, coding, extension, or
 // puncturing.
 //
 class Ieee80211HeMuCommonReq extends TagBase
 {
     uint8_t guardInterval = 2;
+    uint8_t ltfType = 0; // 1, 2, or 4; zero retains the guard-interval default
     uint8_t coding = 0;
     uint8_t packetExtensionDurationUs = 0;
     uint8_t nominalPacketPaddingDurationUs = 0;

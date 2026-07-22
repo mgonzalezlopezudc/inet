@@ -45,7 +45,11 @@ class INET_API IIeee80211HeDlScheduler
         double pathLossDb = NaN;
         bool hasFreshPathLoss = false;
         queueing::IPacketQueue *sourceQueue = nullptr;
-        const Ieee80211NegotiatedHeCapabilities *negotiatedHeCapabilities = nullptr;
+        bool hasAdvertisedHeCapabilities = false;
+        Ieee80211HeCapabilities advertisedHeCapabilities;
+        bool hasNegotiatedHeCapabilities = false;
+        Ieee80211NegotiatedHeCapabilities negotiatedHeCapabilities;
+        int operatingModeRxNss = 0;
     };
 
     /** Shared AP, channel, TXOP, and PHY constraints presented to a DL scheduler. */
@@ -59,14 +63,17 @@ class INET_API IIeee80211HeDlScheduler
         int maxAmpduMpduCount = 16;
         W totalTransmitPower = W(NaN);
         W receiverSensitivity = W(NaN);
-        double noiseFigureDb = 0;
+        double noiseFigureDb = NaN;
         physicallayer::Ieee80211HeGuardInterval guardInterval = physicallayer::HE_GI_3_2_US;
+        physicallayer::Ieee80211HeLtfType ltfType = physicallayer::HE_LTF_4X;
         physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
         int packetExtensionDurationUs = 0;
         uint8_t puncturedSubchannelMask = 0;
         std::vector<bool> puncturedSubchannels;
         const HeMuMimoCsiManager *csiManager = nullptr;
         int numApAntennas = 1;
+        bool enableDlMuMimo = false;
+        Ieee80211HeCapabilities localHeCapabilities;
     };
 
     /** One scheduled STA's RU and selected PHY parameters. */

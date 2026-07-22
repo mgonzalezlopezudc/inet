@@ -32,13 +32,9 @@
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
-#include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
-#include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HePreamblePuncturing.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTwtGating.h"
@@ -234,24 +230,20 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         return false;
 
     ulTriggerAccessRequested = false;
-    auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
-    auto transmitter = check_and_cast<const physicallayer::NarrowbandTransmitterBase *>(radio->getTransmitter());
-    auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
-    auto centerFrequency = transmitter->getCenterFrequency();
-    Hz channelBandwidth = transmitter->getBandwidth();
-    if (std::isnan(channelBandwidth.get()) || modeSet->findHeMode(0, 1, channelBandwidth, channelBandwidth > MHz(20)) == nullptr)
-        channelBandwidth = MHz(20);
+    const auto phy = getLinkPhyContext().getSnapshot();
+    auto centerFrequency = phy.getChannelCenterFrequency();
+    auto channelBandwidth = phy.getChannelBandwidth();
     auto edcaf = edca->getEdcaf(ac);
     simtime_t txopLimit = SIMTIME_ZERO;
     if (edcaf->getTxopProcedure()->getLimit() > SIMTIME_ZERO)
         txopLimit = std::max(SIMTIME_ZERO,
                 edcaf->getTxopProcedure()->getLimit() - edcaf->getTxopProcedure()->getDuration());
-    auto sensitivityDbm = math::mW2dBmW(receiver->getSensitivity().get<mW>());
+    auto sensitivityDbm = math::mW2dBmW(phy.getReceiveSensitivity().get<mW>());
     IIeee80211HeUlScheduler::Schedule ulSchedule;
     // 9.3.1.22 encodes the triggering AP's combined transmit power normalized
     // to 20 MHz in one-dB steps. Keep the projected value in the schedule so
     // the frame sequence and serializer cannot silently substitute a default.
-    auto apTxPowerDbm20Mhz = math::mW2dBmW(transmitter->getMaxPower().get<mW>()) -
+    auto apTxPowerDbm20Mhz = math::mW2dBmW(phy.getMaximumTransmitPower().get<mW>()) -
             10 * std::log10(channelBandwidth.get() / 20e6);
     if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
             pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
@@ -341,16 +333,21 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                     simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge())
                 staleOrUnknown++;
         }
-        ulSchedule = ulCoordinator->createSchedule(mac->getMib(), centerFrequency, channelBandwidth,
+        ulSchedule = ulCoordinator->createSchedule(mac->getMib(), getLinkPhyContext(),
+                SimTime(par("linkEstimateMaxAge")), centerFrequency, channelBandwidth,
                 txopLimit, par("maxHeTbPpduDuration"), sensitivityDbm,
-                par("ulTargetRssiMargin"), staleOrUnknown, 0, 0);
+                par("ulTargetRssiMargin"), staleOrUnknown, 0, 0,
+                [this] (const MacAddress& address) {
+                    Ieee80211HeOperatingMode mode;
+                    return getPeerOperatingMode(address, mode) && mode.ulMuDisable;
+                });
     }
     ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
             [this] (const auto& allocation) {
                 return !allocation.randomAccess && isTwtSleeping(mac, allocation.staAddress);
             }), ulSchedule.allocations.end());
     auto puncturedSubchannels = pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
-            std::vector<bool>() : resolveHePreamblePuncturing(this, channelBandwidth);
+            std::vector<bool>() : phy.getPuncturedSubchannels();
     if (!puncturedSubchannels.empty()) {
         for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
             if (puncturedSubchannels[i])
@@ -361,7 +358,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                             !supportsPreamblePuncturing(allocation);
                 }), ulSchedule.allocations.end());
     }
-    ulSchedule.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
+    ulSchedule.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
     if (par("enableUlMuMimo").boolValue() && pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER) {
         std::vector<IIeee80211HeUlScheduler::RuAllocation *> eligible;
         for (auto& allocation : ulSchedule.allocations) {
@@ -387,20 +384,18 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     // Select one complete Table 9-49 GI/HE-LTF pair. Full-bandwidth UL
     // MU-MIMO may use the raw-0 1x/1.6 us pair; other medium-GI schedules use
     // raw 1 (2x/1.6 us), and long GI uses raw 2 (4x/3.2 us).
-    if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->findHeMode(0, 1, channelBandwidth, channelBandwidth > MHz(20)))) {
-        switch (heMode->getDataMode()->getGuardIntervalType()) {
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
-                ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
-                ulSchedule.ltfType = std::any_of(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
-                        [] (const auto& allocation) { return allocation.muMimo; }) ?
-                        physicallayer::HE_LTF_1X : physicallayer::HE_LTF_2X;
-                break;
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
-                ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
-                ulSchedule.ltfType = physicallayer::HE_LTF_4X;
-                break;
-        }
+    switch (phy.getGuardInterval()) {
+        case physicallayer::HE_GI_0_8_US:
+        case physicallayer::HE_GI_1_6_US:
+            ulSchedule.guardInterval = physicallayer::HE_GI_1_6_US;
+            ulSchedule.ltfType = std::any_of(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
+                    [] (const auto& allocation) { return allocation.muMimo; }) ?
+                    physicallayer::HE_LTF_1X : physicallayer::HE_LTF_2X;
+            break;
+        case physicallayer::HE_GI_3_2_US:
+            ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
+            ulSchedule.ltfType = physicallayer::HE_LTF_4X;
+            break;
     }
     // Table 27-32 permits only 4x HE-LTF with 3.2 us GI for feedback NDP.
     if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
@@ -992,11 +987,10 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
             triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
     }
 
-    auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
-    auto transmitter = check_and_cast<const physicallayer::FlatTransmitterBase *>(radio->getTransmitter());
-    W transmitPower = transmitter->getMaxPower();
+    const auto phy = getLinkPhyContext().getSnapshot();
+    W transmitPower = phy.getMaximumTransmitPower();
     if (triggerPathLossDb.has_value())
-        transmitPower = computeIeee80211HeTbTransmitPower(transmitter->getMaxPower(),
+        transmitPower = computeIeee80211HeTbTransmitPower(phy.getMaximumTransmitPower(),
                 selected->targetRssiDbm, *triggerPathLossDb, selected->useMaximumTransmitPower);
     // 26.5.2.3.3 and 27.3.11.12: the HE TB TXVECTOR is derived from the
     // selected Trigger User Info and Common Info fields.  These request tags

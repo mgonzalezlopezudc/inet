@@ -8,6 +8,7 @@
 #define __INET_HEULCOORDINATOR_H
 
 #include <array>
+#include <functional>
 #include <map>
 #include <ostream>
 #include <string>
@@ -15,6 +16,7 @@
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/IIeee80211HeUlTriggerPolicy.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeUlScheduler.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 
@@ -80,9 +82,11 @@ class INET_API HeUlCoordinator : public SimpleModule
     IIeee80211HeUlTriggerPolicy::TriggerType selectTrigger(const Ieee80211Mib *mib) const;
     AccessCategory getPreferredAccessCategory() const;
     IIeee80211HeUlScheduler::Schedule createSchedule(const Ieee80211Mib *mib,
+            const IIeee80211HeLinkPhyContext& linkPhyContext, simtime_t maximumLinkEstimateAge,
             Hz centerFrequency, Hz bandwidth, simtime_t txopLimit, simtime_t requestedDuration,
             double sensitivityDbm, double targetRssiMarginDb,
-            int estimatedRaContenders, double collisionRate, double idleRate);
+            int estimatedRaContenders, double collisionRate, double idleRate,
+            const std::function<bool(const MacAddress&)>& isUlMuDisabled = {});
     uint32_t allocateTriggerId();
     void noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
     int selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount);

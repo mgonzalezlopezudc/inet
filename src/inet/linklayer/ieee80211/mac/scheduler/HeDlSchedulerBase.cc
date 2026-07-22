@@ -133,7 +133,7 @@ double HeDlSchedulerBase::estimateSnrDb(const ScheduleContext& context, const Ca
         const Ieee80211HeRu& ru) const
 {
     if (!candidate.hasFreshPathLoss || std::isnan(context.totalTransmitPower.get()) ||
-            context.totalTransmitPower.get() <= 0)
+            context.totalTransmitPower.get() <= 0 || !std::isfinite(context.noiseFigureDb))
         return NaN;
     // Per-RU SNR calculation (approximation):
     // Scale total transmit power down to the RU bandwidth assuming uniform power
@@ -167,14 +167,15 @@ int HeDlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
     IIeee80211HeRateControl::Constraints constraints;
     constraints.ldpc = context.coding == HE_CODING_LDPC;
     constraints.maxMcs = context.coding == HE_CODING_BCC ? 9 : 11;
-    if (candidate.negotiatedHeCapabilities != nullptr &&
-            candidate.negotiatedHeCapabilities->localTxPeerRx.valid) {
-        int peerMaxMcs = candidate.negotiatedHeCapabilities->localTxPeerRx.mcsNss.maxMcsPerNss[0];
+    if (candidate.hasNegotiatedHeCapabilities &&
+            candidate.negotiatedHeCapabilities.localTxPeerRx.valid) {
+        int peerMaxMcs = candidate.negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[0];
         if (peerMaxMcs >= 0)
             constraints.maxMcs = std::min(constraints.maxMcs, peerMaxMcs);
     }
-    if (candidate.hasFreshPathLoss && !std::isnan(context.totalTransmitPower.get()))
-        heRateControl->reportHeRxSnir(candidate.staAddress, estimateSnrDb(context, candidate, ru));
+    auto estimatedSnrDb = estimateSnrDb(context, candidate, ru);
+    if (std::isfinite(estimatedSnrDb))
+        heRateControl->reportHeRxSnir(candidate.staAddress, estimatedSnrDb);
     auto selection = heRateControl->selectHeMode(candidate.staAddress, context.channelBandwidth,
             ru.toneSize, HE_MU_DOWNLINK, maxNss, constraints);
     return selection.mode == nullptr ? fallbackMcs : selection.mcs;
@@ -297,7 +298,8 @@ std::vector<IIeee80211HeDlScheduler::RuAllocation> HeDlSchedulerBase::fitRequest
         allocations.clear();
         allocations.reserve(candidates.size());
         for (size_t i = 0; i < candidates.size(); ++i) {
-            const auto *negotiated = candidates[i].negotiatedHeCapabilities;
+            const auto *negotiated = candidates[i].hasNegotiatedHeCapabilities ?
+                    &candidates[i].negotiatedHeCapabilities : nullptr;
             if (negotiated != nullptr &&
                     (!negotiated->localTxPeerRx.valid ||
                      !negotiated->localTxPeerRx.ofdma ||

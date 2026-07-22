@@ -29,7 +29,6 @@
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
-#include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -73,6 +72,97 @@
 namespace inet {
 namespace ieee80211 {
 
+namespace {
+
+/** The sole projection point from concrete IEEE 802.11 radio/MIB state. */
+class Ieee80211HeLinkPhyContext : public IIeee80211HeLinkPhyContext
+{
+  private:
+    HeHcf *owner;
+    Ieee80211Mac *mac;
+
+  public:
+    Ieee80211HeLinkPhyContext(HeHcf *owner, Ieee80211Mac *mac) :
+        owner(owner),
+        mac(mac)
+    {
+    }
+
+    virtual Ieee80211HeLinkPhySnapshot getSnapshot() const override
+    {
+        auto nic = getContainingNicModule(owner);
+        auto radio = check_and_cast<const physicallayer::IRadio *>(nic->getSubmodule("radio"));
+        auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
+        auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
+        auto channel = transmitter->getChannel();
+        auto activeMode = transmitter->getMode();
+        if (channel == nullptr || activeMode == nullptr)
+            throw cRuntimeError("HE planning requires an active IEEE 802.11 channel and mode");
+        auto bandwidth = activeMode->getDataMode()->getBandwidth();
+        auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(activeMode);
+        if (heMode == nullptr) {
+            auto modeSet = transmitter->getModeSet();
+            auto matchingMode = modeSet == nullptr ? nullptr :
+                    modeSet->findHeMode(0, 1, bandwidth, bandwidth > MHz(20));
+            heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(matchingMode);
+        }
+        if (heMode == nullptr)
+            throw cRuntimeError("HE planning requires an HE mode matching the active channel bandwidth");
+
+        physicallayer::Ieee80211HeGuardInterval guardInterval;
+        switch (heMode->getDataMode()->getGuardIntervalType()) {
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
+                guardInterval = physicallayer::HE_GI_0_8_US;
+                break;
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
+                guardInterval = physicallayer::HE_GI_1_6_US;
+                break;
+            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
+                guardInterval = physicallayer::HE_GI_3_2_US;
+                break;
+            default:
+                throw cRuntimeError("Unsupported active HE guard interval");
+        }
+        auto puncturedSubchannels = resolveHePreamblePuncturing(owner, bandwidth);
+        uint8_t puncturedSubchannelMask = 0;
+        for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
+            if (puncturedSubchannels[i])
+                puncturedSubchannelMask |= 1U << i;
+        auto mib = mac->getMib();
+        if (mib == nullptr)
+            throw cRuntimeError("HE planning requires an initialized IEEE 802.11 MIB");
+        return Ieee80211HeLinkPhySnapshot(channel->getChannelNumber(), channel->getCenterFrequency(),
+                bandwidth, transmitter->getPower(), transmitter->getMaxPower(), receiver->getSensitivity(),
+                owner->par("receiverNoiseFigure").doubleValue(), radio->getAntenna()->getNumAntennas(),
+                guardInterval, physicallayer::getHeDefaultLtfType(guardInterval),
+                mib->heOperation.defaultPeDurationUs, puncturedSubchannels,
+                puncturedSubchannelMask, mib->localHeCapabilities);
+    }
+
+    virtual Ieee80211HePeerLinkSnapshot getPeerSnapshot(const MacAddress& address,
+            simtime_t maximumLinkEstimateAge) const override
+    {
+        auto mib = mac->getMib();
+        if (mib == nullptr)
+            throw cRuntimeError("HE peer projection requires an initialized IEEE 802.11 MIB");
+        auto advertisement = mib->bssAccessPointData.advertisedHeCapabilities.find(address);
+        auto negotiated = mib->findNegotiatedHeCapabilities(address);
+        auto link = mib->findStationLink(address);
+        auto pathLossDb = link == nullptr ? NaN : link->pathLossDb;
+        auto hasFreshPathLoss = link != nullptr && link->valid &&
+                simTime() - link->lastUpdate <= maximumLinkEstimateAge;
+        return Ieee80211HePeerLinkSnapshot(
+                advertisement != mib->bssAccessPointData.advertisedHeCapabilities.end(),
+                advertisement == mib->bssAccessPointData.advertisedHeCapabilities.end() ?
+                        Ieee80211HeCapabilities() : advertisement->second,
+                negotiated != nullptr,
+                negotiated == nullptr ? Ieee80211NegotiatedHeCapabilities() : *negotiated,
+                pathLossDb, hasFreshPathLoss);
+    }
+};
+
+} // namespace
+
 Define_Module(HeHcf);
 
 HeHcf::~HeHcf()
@@ -92,6 +182,7 @@ void HeHcf::initialize(int stage)
         dlScheduler = check_and_cast<IIeee80211HeDlScheduler *>(getSubmodule("dlScheduler"));
         ulCoordinator = check_and_cast<HeUlCoordinator *>(getSubmodule("ulCoordinator"));
         ulTriggerTimer = new cMessage("heUlTriggerTimer");
+        linkPhyContext = std::make_unique<Ieee80211HeLinkPhyContext>(this, mac);
         delete frameSequenceHandler;
         frameSequenceHandler = new HeFrameSequenceHandler();
 
@@ -123,6 +214,13 @@ void HeHcf::initialize(int stage)
         if (ulCoordinator->isEnabled())
             scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
     }
+}
+
+const IIeee80211HeLinkPhyContext& HeHcf::getLinkPhyContext() const
+{
+    if (linkPhyContext == nullptr)
+        throw cRuntimeError("HE link/PHY context is not initialized");
+    return *linkPhyContext;
 }
 
 

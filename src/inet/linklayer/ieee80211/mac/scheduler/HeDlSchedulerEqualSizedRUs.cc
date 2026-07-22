@@ -5,14 +5,12 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/scheduler/HeDlSchedulerEqualSizedRUs.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 
 #include <algorithm>
 #include <cmath>
 #include <utility>
 
-#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
-#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
 namespace inet {
@@ -29,7 +27,8 @@ bool isCompatibleEqualRuAllocation(const IIeee80211HeDlScheduler::ScheduleContex
 {
     if (context.coding == HE_CODING_BCC && ru.toneSize >= 484)
         return false;
-    const auto *negotiated = candidate.negotiatedHeCapabilities;
+    const auto *negotiated = candidate.hasNegotiatedHeCapabilities ?
+            &candidate.negotiatedHeCapabilities : nullptr;
     if (negotiated == nullptr)
         return true;
     const auto& capabilities = negotiated->localTxPeerRx;
@@ -63,29 +62,27 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         return {};
     }
 
-    auto hcf = dynamic_cast<HeHcf *>(getParentModule());
-    auto mac = hcf != nullptr ? dynamic_cast<Ieee80211Mac *>(hcf->getParentModule()) : nullptr;
-    auto mib = mac != nullptr ? mac->getMib() : nullptr;
-    bool enableDlMuMimo = hcf != nullptr ? hcf->par("enableDlMuMimo").boolValue() : false;
-    bool isApBeamformer = mib != nullptr ? (bool)mib->localHeCapabilities.dlMuMimoBeamformer : false;
+    bool enableDlMuMimo = context.enableDlMuMimo;
+    bool isApBeamformer = context.localHeCapabilities.dlMuMimoBeamformer;
 
     EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: " << context.candidates.size()
              << " candidates, schedulingFunction = " << schedulingFunction
              << ", enableDlMuMimo = " << (enableDlMuMimo ? "true" : "false") << "\n";
 
-    if (enableDlMuMimo && isApBeamformer && mib != nullptr && context.csiManager != nullptr) {
+    if (enableDlMuMimo && isApBeamformer && context.csiManager != nullptr) {
         EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: attempting DL MU-MIMO group selection\n";
         // Collect MU-MIMO eligible candidates who have fresh CSI
         std::vector<CandidateInfo> eligibleCandidates;
         for (const auto& candidate : context.candidates) {
-            auto negotiated = candidate.negotiatedHeCapabilities;
+            auto negotiated = candidate.hasNegotiatedHeCapabilities ?
+                    &candidate.negotiatedHeCapabilities : nullptr;
             if (negotiated == nullptr || !negotiated->localTxPeerRx.valid)
                 continue;
-            auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(candidate.staAddress);
-            const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
+            const Ieee80211HeCapabilities *staCapabilities = candidate.hasAdvertisedHeCapabilities ?
+                    &candidate.advertisedHeCapabilities : nullptr;
             if (staCapabilities == nullptr)
                 continue;
-            if (isDlMuMimoEligible(mib->localHeCapabilities, *staCapabilities, *negotiated, context.channelBandwidth, context.numApAntennas) &&
+            if (isDlMuMimoEligible(context.localHeCapabilities, *staCapabilities, *negotiated, context.channelBandwidth, context.numApAntennas) &&
                 context.csiManager->hasFreshCsi(candidate.staAddress, context.channelBandwidth)) {
                 eligibleCandidates.push_back(candidate);
             }
@@ -94,184 +91,143 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         if (eligibleCandidates.size() >= 2) {
             EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: " << eligibleCandidates.size()
                      << " backlogged candidates are MU-MIMO eligible\n";
-            // Retrieve stable list of all associated MU-MIMO eligible STAs
-            std::vector<MacAddress> allEligibleStas;
-            for (const auto& station : mib->bssAccessPointData.stations) {
-                if (station.second == Ieee80211Mib::ASSOCIATED) {
-                    auto negotiated = mib->findNegotiatedHeCapabilities(station.first);
-                    auto it = mib->bssAccessPointData.advertisedHeCapabilities.find(station.first);
-                    const Ieee80211HeCapabilities *staCapabilities = it != mib->bssAccessPointData.advertisedHeCapabilities.end() ? &it->second : nullptr;
-                    if (negotiated != nullptr && negotiated->localTxPeerRx.valid && staCapabilities != nullptr) {
-                        if (isDlMuMimoEligible(mib->localHeCapabilities, *staCapabilities, *negotiated, context.channelBandwidth, context.numApAntennas)) {
-                            allEligibleStas.push_back(station.first);
+            std::sort(eligibleCandidates.begin(), eligibleCandidates.end(),
+                    [](const CandidateInfo& left, const CandidateInfo& right) {
+                        return left.staAddress < right.staAddress;
+                    });
+            auto anchor = eligibleCandidates.begin();
+            if (hasLastMuMimoAnchor) {
+                anchor = std::upper_bound(eligibleCandidates.begin(), eligibleCandidates.end(), lastMuMimoAnchor,
+                        [](const MacAddress& address, const CandidateInfo& candidate) {
+                            return address < candidate.staAddress;
+                        });
+                if (anchor == eligibleCandidates.end())
+                    anchor = eligibleCandidates.begin();
+            }
+            const MacAddress anchorAddress = anchor->staAddress;
+            lastMuMimoAnchor = anchorAddress;
+            hasLastMuMimoAnchor = true;
+            EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: selected anchor " << anchorAddress << "\n";
+
+            // Rotate the instantaneous eligible set after the persistent MAC-key cursor.
+            std::vector<CandidateInfo> orderedMuCandidates;
+            orderedMuCandidates.insert(orderedMuCandidates.end(), anchor, eligibleCandidates.end());
+            orderedMuCandidates.insert(orderedMuCandidates.end(), eligibleCandidates.begin(), anchor);
+
+            // Get full channel RU
+            auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, 1);
+            Ieee80211HeRu fullChannelRu = rus[0];
+            if (context.coding == HE_CODING_BCC && fullChannelRu.toneSize >= 484) {
+                EV_DEBUG << "DL EqualSizedRUs scheduler: skipping MU-MIMO full-channel RU because BCC is not legal for "
+                         << fullChannelRu.toneSize << "-tone RUs\n";
+                recordSchedule(context, eligibleCandidates, {}, true, "MU-MIMO full-channel RU rejected by BCC coding");
+                return {};
+            }
+            int maxGroupNsts = std::min(8, context.numApAntennas);
+
+            // Build MU-MIMO group greedily
+            std::vector<CandidateInfo> groupCandidates;
+            std::vector<int> finalNss;
+            std::vector<double> finalSnirDb;
+
+            for (const auto& candidate : orderedMuCandidates) {
+                auto tempGroup = groupCandidates;
+                tempGroup.push_back(candidate);
+
+                // Check total group size limit
+                if ((int)tempGroup.size() > maxGroupNsts || (int)tempGroup.size() > 8)
+                    continue;
+
+                // Apportion streams: start with 1 stream per user, then round-robin distribute up to 4 per user and 8 total
+                std::vector<int> tempNss(tempGroup.size(), 1);
+                int totalAllocated = tempGroup.size();
+                std::vector<int> limitNss(tempGroup.size());
+                for (size_t i = 0; i < tempGroup.size(); ++i) {
+                    int maxRxNss = getMaxNss(tempGroup[i].negotiatedHeCapabilities.localTxPeerRx.mcsNss);
+                    if (tempGroup[i].operatingModeRxNss > 0)
+                        maxRxNss = std::min(maxRxNss, tempGroup[i].operatingModeRxNss);
+                    limitNss[i] = std::min(maxRxNss, 4);
+                }
+
+                bool progress = true;
+                while (totalAllocated < maxGroupNsts && progress) {
+                    progress = false;
+                    for (size_t i = 0; i < tempGroup.size(); ++i) {
+                        if (totalAllocated < maxGroupNsts && tempNss[i] < limitNss[i]) {
+                            tempNss[i]++;
+                            totalAllocated++;
+                            progress = true;
                         }
                     }
                 }
-            }
-            std::sort(allEligibleStas.begin(), allEligibleStas.end());
 
-            // Select the anchor STA circularly from nextAnchorIndex
-            int selectedAnchorIdx = -1;
-            MacAddress anchorAddress;
-            if (!allEligibleStas.empty()) {
-                for (size_t i = 0; i < allEligibleStas.size(); ++i) {
-                    int idx = (nextAnchorIndex + i) % allEligibleStas.size();
-                    MacAddress addr = allEligibleStas[idx];
-                    bool isBacklogged = false;
-                    for (const auto& candidate : eligibleCandidates) {
-                        if (candidate.staAddress == addr) {
-                            isBacklogged = true;
-                            break;
-                        }
-                    }
-                    if (isBacklogged) {
-                        selectedAnchorIdx = idx;
-                        anchorAddress = addr;
+                // Check compatibility and calculate SINRs
+                std::vector<double> tempSnirDb;
+                bool compatible = true;
+                for (size_t i = 0; i < tempGroup.size(); ++i) {
+                    double snrDb = estimateSnrDb(context, tempGroup[i], fullChannelRu);
+                    if (std::isnan(snrDb)) {
+                        compatible = false;
                         break;
                     }
+                    double snr = std::pow(10.0, snrDb / 10.0);
+                    double leakageSum = 0.0;
+                    for (size_t j = 0; j < tempGroup.size(); ++j) {
+                        if (i == j)
+                            continue;
+                        leakageSum += context.csiManager->getLeakage(tempGroup[i].staAddress, tempGroup[j].staAddress, context.channelBandwidth);
+                    }
+                    double snir = (snr * tempNss[i] / totalAllocated) / (1.0 + snr * leakageSum / totalAllocated);
+                    if (snir <= 0) {
+                        compatible = false;
+                        break;
+                    }
+                    double snirDb = 10.0 * std::log10(snir);
+                    if (snirDb < mcsSnrThresholds[0]) {
+                        compatible = false;
+                        break;
+                    }
+                    tempSnirDb.push_back(snirDb);
+                }
+
+                if (compatible) {
+                    groupCandidates = tempGroup;
+                    finalNss = tempNss;
+                    finalSnirDb = tempSnirDb;
+                    EV_DEBUG << "DL EqualSizedRUs scheduler: expanded MU-MIMO group to "
+                             << groupCandidates.size() << " STTas\n";
                 }
             }
 
-            if (selectedAnchorIdx != -1) {
-                EV_DEBUG << "HeDlSchedulerEqualSizedRUs::schedule: selected anchor " << anchorAddress
-                         << " (index " << selectedAnchorIdx << " in eligible list)\n";
-                nextAnchorIndex = (selectedAnchorIdx + 1) % allEligibleStas.size();
-
-                // Order candidate list in stable round-robin sequence starting from anchor
-                std::vector<CandidateInfo> orderedMuCandidates;
-                for (size_t i = 0; i < allEligibleStas.size(); ++i) {
-                    int idx = (selectedAnchorIdx + i) % allEligibleStas.size();
-                    MacAddress addr = allEligibleStas[idx];
-                    for (const auto& candidate : eligibleCandidates) {
-                        if (candidate.staAddress == addr) {
-                            orderedMuCandidates.push_back(candidate);
-                            break;
-                        }
+            if (groupCandidates.size() >= 2) {
+                std::vector<RuAllocation> result;
+                for (size_t i = 0; i < groupCandidates.size(); ++i) {
+                    RuAllocation alloc;
+                    alloc.staAddress = groupCandidates[i].staAddress;
+                    alloc.ru = fullChannelRu;
+                    alloc.numberOfSpatialStreams = finalNss[i];
+                    alloc.estimatedSnrDb = finalSnirDb[i];
+                    alloc.mcs = selectMcs(context, groupCandidates[i], alloc.ru,
+                            selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss),
+                            finalNss[i]);
+                    if (context.coding == HE_CODING_BCC)
+                        alloc.mcs = std::min(alloc.mcs, 9);
+                    int maxMcs = groupCandidates[i].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[finalNss[i] - 1];
+                    if (maxMcs >= 0) {
+                        alloc.mcs = std::min(alloc.mcs, maxMcs);
                     }
+                    alloc.estimatedDuration = estimateHeMuUserDuration(
+                            B(std::max<int64_t>({groupCandidates[i].backlogBytes,
+                                    groupCandidates[i].holPacketBytes, 1})),
+                            fullChannelRu.toneSize, alloc.mcs, finalNss[i], false, context.guardInterval);
+                    result.push_back(alloc);
                 }
-
-                // Get full channel RU
-                auto rus = getHeEqualRuLayout(context.channelCenterFrequency, context.channelBandwidth, 1);
-                Ieee80211HeRu fullChannelRu = rus[0];
-                if (context.coding == HE_CODING_BCC && fullChannelRu.toneSize >= 484) {
-                    EV_DEBUG << "DL EqualSizedRUs scheduler: skipping MU-MIMO full-channel RU because BCC is not legal for "
-                             << fullChannelRu.toneSize << "-tone RUs\n";
-                    recordSchedule(context, eligibleCandidates, {}, true, "MU-MIMO full-channel RU rejected by BCC coding");
-                    return {};
-                }
-                int maxGroupNsts = std::min(8, context.numApAntennas);
-
-                // Build MU-MIMO group greedily
-                std::vector<CandidateInfo> groupCandidates;
-                std::vector<int> finalNss;
-                std::vector<double> finalSnirDb;
-
-                for (const auto& candidate : orderedMuCandidates) {
-                    auto tempGroup = groupCandidates;
-                    tempGroup.push_back(candidate);
-
-                    // Check total group size limit
-                    if ((int)tempGroup.size() > maxGroupNsts || (int)tempGroup.size() > 8)
-                        continue;
-
-                    // Apportion streams: start with 1 stream per user, then round-robin distribute up to 4 per user and 8 total
-                    std::vector<int> tempNss(tempGroup.size(), 1);
-                    int totalAllocated = tempGroup.size();
-                    std::vector<int> limitNss(tempGroup.size());
-                    for (size_t i = 0; i < tempGroup.size(); ++i) {
-                        int maxRxNss = getMaxNss(tempGroup[i].negotiatedHeCapabilities->localTxPeerRx.mcsNss);
-                        if (hcf != nullptr) {
-                            Ieee80211HeOperatingMode peerMode;
-                            if (hcf->getPeerOperatingMode(tempGroup[i].staAddress, peerMode)) {
-                                maxRxNss = std::min(maxRxNss, (int)peerMode.rxNss);
-                            }
-                        }
-                        limitNss[i] = std::min(maxRxNss, 4);
-                    }
-
-                    bool progress = true;
-                    while (totalAllocated < maxGroupNsts && progress) {
-                        progress = false;
-                        for (size_t i = 0; i < tempGroup.size(); ++i) {
-                            if (totalAllocated < maxGroupNsts && tempNss[i] < limitNss[i]) {
-                                tempNss[i]++;
-                                totalAllocated++;
-                                progress = true;
-                            }
-                        }
-                    }
-
-                    // Check compatibility and calculate SINRs
-                    std::vector<double> tempSnirDb;
-                    bool compatible = true;
-                    for (size_t i = 0; i < tempGroup.size(); ++i) {
-                        double snrDb = estimateSnrDb(context, tempGroup[i], fullChannelRu);
-                        if (std::isnan(snrDb)) {
-                            compatible = false;
-                            break;
-                        }
-                        double snr = std::pow(10.0, snrDb / 10.0);
-                        double leakageSum = 0.0;
-                        for (size_t j = 0; j < tempGroup.size(); ++j) {
-                            if (i == j)
-                                continue;
-                            leakageSum += context.csiManager->getLeakage(tempGroup[i].staAddress, tempGroup[j].staAddress, context.channelBandwidth);
-                        }
-                        double snir = (snr * tempNss[i] / totalAllocated) / (1.0 + snr * leakageSum / totalAllocated);
-                        if (snir <= 0) {
-                            compatible = false;
-                            break;
-                        }
-                        double snirDb = 10.0 * std::log10(snir);
-                        if (snirDb < mcsSnrThresholds[0]) {
-                            compatible = false;
-                            break;
-                        }
-                        tempSnirDb.push_back(snirDb);
-                    }
-
-                    if (compatible) {
-                        groupCandidates = tempGroup;
-                        finalNss = tempNss;
-                        finalSnirDb = tempSnirDb;
-                        EV_DEBUG << "DL EqualSizedRUs scheduler: expanded MU-MIMO group to "
-                                 << groupCandidates.size() << " STTas\n";
-                    }
-                }
-
-                if (groupCandidates.size() >= 2) {
-                    std::vector<RuAllocation> result;
-                    for (size_t i = 0; i < groupCandidates.size(); ++i) {
-                        RuAllocation alloc;
-                        alloc.staAddress = groupCandidates[i].staAddress;
-                        alloc.ru = fullChannelRu;
-                        alloc.numberOfSpatialStreams = finalNss[i];
-                        alloc.estimatedSnrDb = finalSnirDb[i];
-                        alloc.mcs = selectMcs(context, groupCandidates[i], alloc.ru,
-                                selectMcs(alloc.estimatedSnrDb, groupCandidates[i].hasFreshPathLoss),
-                                finalNss[i]);
-                        if (context.coding == HE_CODING_BCC)
-                            alloc.mcs = std::min(alloc.mcs, 9);
-                        int maxMcs = groupCandidates[i].negotiatedHeCapabilities->localTxPeerRx.mcsNss.maxMcsPerNss[finalNss[i] - 1];
-                        if (maxMcs >= 0) {
-                            alloc.mcs = std::min(alloc.mcs, maxMcs);
-                        }
-                        alloc.estimatedDuration = estimateHeMuUserDuration(
-                                B(std::max<int64_t>({groupCandidates[i].backlogBytes,
-                                        groupCandidates[i].holPacketBytes, 1})),
-                                fullChannelRu.toneSize, alloc.mcs, finalNss[i], false, context.guardInterval);
-                        result.push_back(alloc);
-                    }
-                    EV_INFO << "DL EqualSizedRUs scheduler: selected DL MU-MIMO group of "
-                            << result.size() << " STAs on full-channel RU\n";
-                    recordSchedule(context, groupCandidates, result, true, "DL MU-MIMO group");
-                    return result;
-                }
-                EV_DEBUG << "DL EqualSizedRUs scheduler: no compatible MU-MIMO group found\n";
+                EV_INFO << "DL EqualSizedRUs scheduler: selected DL MU-MIMO group of "
+                        << result.size() << " STAs on full-channel RU\n";
+                recordSchedule(context, groupCandidates, result, true, "DL MU-MIMO group");
+                return result;
             }
-            else {
-                EV_DEBUG << "DL EqualSizedRUs scheduler: no backlogged anchor STA found for MU-MIMO\n";
-            }
+            EV_DEBUG << "DL EqualSizedRUs scheduler: no compatible MU-MIMO group found\n";
         }
         else {
             EV_DEBUG << "DL EqualSizedRUs scheduler: fewer than two MU-MIMO eligible candidates\n";
@@ -359,8 +315,8 @@ HeDlSchedulerEqualSizedRUs::schedule(const ScheduleContext& context)
         if (context.coding == HE_CODING_BCC)
             alloc.mcs = std::min(alloc.mcs, 9);
         int maxMcs = -1;
-        if (selectedCandidates[i].negotiatedHeCapabilities != nullptr) {
-            maxMcs = selectedCandidates[i].negotiatedHeCapabilities->localTxPeerRx.mcsNss.maxMcsPerNss[0];
+        if (selectedCandidates[i].hasNegotiatedHeCapabilities) {
+            maxMcs = selectedCandidates[i].negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[0];
         }
         if (maxMcs >= 0) {
             alloc.mcs = std::min(alloc.mcs, maxMcs);

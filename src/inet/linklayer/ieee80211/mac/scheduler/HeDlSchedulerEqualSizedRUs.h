@@ -21,7 +21,8 @@ class INET_API HeDlSchedulerEqualSizedRUs : public HeDlSchedulerBase
 {
   protected:
     std::string schedulingFunction;
-    int nextAnchorIndex = 0;
+    bool hasLastMuMimoAnchor = false;
+    MacAddress lastMuMimoAnchor;
 
   protected:
     virtual void initialize(int stage) override;

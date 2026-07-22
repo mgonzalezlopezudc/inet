@@ -228,10 +228,20 @@ pendingQueue->enqueuePacket(p3);
 
 auto modeSet = physicallayer::Ieee80211ModeSet::getModeSet("ax");
 std::vector<MacAddress> candidates = {sta1, sta2, sta3};
+IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
+scheduleContext.channelCenterFrequency = Hz(5.18e9);
+scheduleContext.channelBandwidth = MHz(20);
+for (size_t i = 0; i < candidates.size(); ++i) {
+    IIeee80211HeDlScheduler::CandidateInfo candidate;
+    candidate.staAddress = candidates[i];
+    candidate.anchor = i == 0;
+    scheduleContext.candidates.push_back(candidate);
+}
+scheduleContext.anchorSta = candidates.front();
 auto scheduler = new MockScheduler(candidates);
 auto ackHandler = new MockAckHandler();
 
-HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, candidates, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, ackHandler, mockHcf);
+HeDlMuTxOpFs *fs = new HeDlMuTxOpFs(scheduler, scheduleContext, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, ackHandler, mockHcf);
 
 MockInProgressFrames *inProgress = new MockInProgressFrames();
 MockOriginatorBlockAckAgreementHandler baHandler;
@@ -407,6 +417,8 @@ pendingQueue->enqueuePacket(makeDataPacket("handler-sta1", sta1, tid, true));
 pendingQueue->enqueuePacket(makeDataPacket("handler-sta2", sta2, tid, true));
 
 auto handlerScheduler = new MockScheduler({sta1, sta2});
+auto handlerScheduleContext = scheduleContext;
+handlerScheduleContext.candidates.resize(2);
 auto handlerAckHandler = new MockAckHandler();
 auto handlerInProgress = new MockInProgressFrames();
 MockOriginatorBlockAckAgreementHandler handlerBaHandler;
@@ -416,7 +428,7 @@ auto handlerQosContext = new QoSContext(nullptr, nullptr, &handlerBaHandler, nul
 auto handlerContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), handlerInProgress, nullptr, nullptr, nullptr, handlerQosContext);
 HeFrameSequenceHandler handler;
 handler.startFrameSequence(
-        new HeDlMuTxOpFs(handlerScheduler, {sta1, sta2}, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, handlerAckHandler, mockHcf),
+        new HeDlMuTxOpFs(handlerScheduler, handlerScheduleContext, const_cast<physicallayer::Ieee80211ModeSet*>(modeSet), pendingQueue, handlerAckHandler, mockHcf),
         handlerContext, mockHcf);
 
 handler.transmissionComplete();

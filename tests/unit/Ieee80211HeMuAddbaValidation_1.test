@@ -273,6 +273,8 @@ static FirstTransmitStepResult runFirstTransmitStep(queueing::IPacketQueue *pend
     auto qosContext = new QoSContext(nullptr, nullptr, baHandler, nullptr);
     auto context = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), const_cast<physicallayer::Ieee80211ModeSet *>(modeSet), inProgress, nullptr, nullptr, nullptr, qosContext);
     IIeee80211HeDlScheduler::ScheduleContext scheduleContext;
+    scheduleContext.channelCenterFrequency = Hz(5.18e9);
+    scheduleContext.channelBandwidth = MHz(20);
     for (size_t i = 0; i < scheduledStations.size(); ++i) {
         IIeee80211HeDlScheduler::CandidateInfo candidate;
         candidate.staAddress = scheduledStations[i];

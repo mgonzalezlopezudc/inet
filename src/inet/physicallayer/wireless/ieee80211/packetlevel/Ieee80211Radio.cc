@@ -819,6 +819,8 @@ void Ieee80211Radio::encapsulate(Packet *packet) const
                 static_cast<Ieee80211HeLtfType>(suErRequest->getLtfType()) :
                 ppduFormat == HE_TRIGGER_BASED_UPLINK && request != nullptr ?
                 static_cast<Ieee80211HeLtfType>(request->getLtfType()) :
+                commonRequest != nullptr && commonRequest->getLtfType() != 0 ?
+                static_cast<Ieee80211HeLtfType>(commonRequest->getLtfType()) :
                 getHeDefaultLtfType(guardInterval);
         canonicalRequest.packetExtensionDurationUs = hePhyHeader->getPacketExtensionDurationUs();
         if (soundingNdp) {

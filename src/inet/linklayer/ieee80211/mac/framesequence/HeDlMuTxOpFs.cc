@@ -43,7 +43,6 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/GenericFrameSequences.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPackingPlanner.h"
-#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
@@ -596,37 +595,6 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
         throw cRuntimeError("maxHeMuPpduDuration must be positive");
 }
 
-HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
-                             const std::vector<MacAddress>& candidates,
-                             Ieee80211ModeSet *modeSet,
-                             queueing::IPacketQueue *pendingQueue,
-                             IAckHandler *ackHandler,
-                             IFrameSequenceHandler::ICallback *callback)
-    : HeDlMuTxOpFs(dlScheduler, [&] {
-          IIeee80211HeDlScheduler::ScheduleContext context;
-          for (size_t i = 0; i < candidates.size(); ++i) {
-              IIeee80211HeDlScheduler::CandidateInfo candidate;
-              candidate.staAddress = candidates[i];
-              candidate.anchor = i == 0;
-              context.candidates.push_back(candidate);
-          }
-          if (!candidates.empty())
-              context.anchorSta = candidates.front();
-          if (modeSet != nullptr && modeSet->getNumModes() > 0) {
-              auto firstMode = modeSet->findHeMode(0, 1, MHz(20), false);
-              if (firstMode == nullptr)
-                  throw cRuntimeError("The configured mode profile has no baseline HE MCS 0 mode");
-              context.channelBandwidth = firstMode->getDataMode()->getBandwidth();
-              if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(firstMode))
-                  context.channelCenterFrequency = heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.412e9) :
-                          heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_6GHZ ? Hz(5.955e9) : Hz(5.18e9);
-          }
-          return context;
-      }(), modeSet, pendingQueue, ackHandler, callback, 16, 6500631,
-      SimTime(5.484, SIMTIME_MS), AckMethod::EXPLICIT_SEQUENTIAL_BAR)
-{
-}
-
 void HeDlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
     ASSERT(context != nullptr);
@@ -671,20 +639,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     EV_INFO << "HE DL MU scheduling " << scheduleContext.candidates.size()
              << " candidates, ackMethod = "
              << (ackMethod == AckMethod::MU_BAR_TRIGGER ? "MU-BAR trigger" : "sequential BAR") << "\n";
-    if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
-            std::isnan(scheduleContext.channelBandwidth.get())) {
-        if (hcf != nullptr)
-            throw cRuntimeError("Scheduler context is missing active radio channel geometry");
-        if (modeSet != nullptr && modeSet->getNumModes() > 0) {
-            auto firstMode = modeSet->findHeMode(0, 1, MHz(20), false);
-            if (firstMode == nullptr)
-                throw cRuntimeError("The configured mode profile has no baseline HE MCS 0 mode");
-            scheduleContext.channelBandwidth = firstMode->getDataMode()->getBandwidth();
-            if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(firstMode))
-                scheduleContext.channelCenterFrequency = heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.412e9) :
-                        heMode->getCenterFrequencyMode() == Ieee80211HeMode::BAND_6GHZ ? Hz(5.955e9) : Hz(5.18e9);
-        }
-    }
     if (std::isnan(scheduleContext.channelCenterFrequency.get()) ||
             std::isnan(scheduleContext.channelBandwidth.get()))
         throw cRuntimeError("Scheduler context is missing channel geometry");
@@ -1076,6 +1030,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     // preamble puncturing state (26.11 and 27.3.11.13).
     auto commonRequest = container->addTagIfAbsent<Ieee80211HeMuCommonReq>();
     commonRequest->setGuardInterval(scheduleContext.guardInterval);
+    commonRequest->setLtfType(scheduleContext.ltfType);
     commonRequest->setCoding(scheduleContext.coding);
     commonRequest->setPacketExtensionDurationUs(scheduleContext.packetExtensionDurationUs);
     commonRequest->setPuncturedSubchannelMask(scheduleContext.puncturedSubchannelMask);

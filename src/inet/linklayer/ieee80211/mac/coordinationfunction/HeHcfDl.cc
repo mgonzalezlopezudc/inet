@@ -29,13 +29,9 @@
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
-#include "inet/physicallayer/wireless/common/base/packetlevel/FlatReceiverBase.h"
-#include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
-#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HePreamblePuncturing.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTwtGating.h"
@@ -84,47 +80,25 @@ bool hasEligibleExistingFrame(InProgressFrames *inProgress, IAckHandler *ackHand
 IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCategory ac) const
 {
     IIeee80211HeDlScheduler::ScheduleContext context;
-    auto nic = getContainingNicModule(this);
-    ASSERT(nic != nullptr);
-    auto radio = check_and_cast<physicallayer::IRadio *>(nic->getSubmodule("radio"));
-    ASSERT(radio != nullptr);
-    auto transmitter = check_and_cast<const physicallayer::Ieee80211Transmitter *>(radio->getTransmitter());
-    ASSERT(transmitter != nullptr);
-    auto receiver = check_and_cast<const physicallayer::FlatReceiverBase *>(radio->getReceiver());
-    ASSERT(receiver != nullptr);
-    auto channel = transmitter->getChannel();
-    auto activeMode = transmitter->getMode();
-    if (channel == nullptr || activeMode == nullptr)
-        throw cRuntimeError("HE DL scheduling requires an active IEEE 802.11 channel and mode");
-    context.channelNumber = channel->getChannelNumber();
-    context.channelCenterFrequency = channel->getCenterFrequency();
-    context.channelBandwidth = activeMode->getDataMode()->getBandwidth();
+    const auto phy = getLinkPhyContext().getSnapshot();
+    context.channelNumber = phy.getChannelNumber();
+    context.channelCenterFrequency = phy.getChannelCenterFrequency();
+    context.channelBandwidth = phy.getChannelBandwidth();
     EV_INFO << "HE DL schedule context: AC " << ac
              << ", channel " << context.channelNumber
              << ", centerFreq " << context.channelCenterFrequency
              << ", bandwidth " << context.channelBandwidth << "\n";
-    context.totalTransmitPower = transmitter->getPower();
-    context.receiverSensitivity = receiver->getSensitivity();
-    context.noiseFigureDb = par("receiverNoiseFigure");
+    context.totalTransmitPower = phy.getEffectiveTransmitPower();
+    context.receiverSensitivity = phy.getReceiveSensitivity();
+    context.noiseFigureDb = phy.getNoiseFigureDb();
     context.maxAmpduMpduCount = par("maxAmpduMpduCount");
-    context.packetExtensionDurationUs = mac->getMib()->heOperation.defaultPeDurationUs;
-    context.puncturedSubchannels = resolveHePreamblePuncturing(this, context.channelBandwidth);
-    for (size_t i = 0; i < context.puncturedSubchannels.size(); ++i)
-        if (context.puncturedSubchannels[i])
-            context.puncturedSubchannelMask |= 1U << i;
-    if (auto heMode = dynamic_cast<const physicallayer::Ieee80211HeMode *>(activeMode)) {
-        switch (heMode->getDataMode()->getGuardIntervalType()) {
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT:
-                context.guardInterval = physicallayer::HE_GI_0_8_US;
-                break;
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM:
-                context.guardInterval = physicallayer::HE_GI_1_6_US;
-                break;
-            case physicallayer::Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG:
-                context.guardInterval = physicallayer::HE_GI_3_2_US;
-                break;
-        }
-    }
+    context.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
+    context.puncturedSubchannels = phy.getPuncturedSubchannels();
+    context.puncturedSubchannelMask = phy.getPuncturedSubchannelMask();
+    context.guardInterval = phy.getGuardInterval();
+    context.ltfType = phy.getLtfType();
+    context.localHeCapabilities = phy.getLocalHeCapabilities();
+    context.enableDlMuMimo = enableDlMuMimo;
     auto edcaf = edca->getEdcaf(ac);
     auto txopProcedure = edcaf == nullptr ? nullptr : edcaf->getTxopProcedure();
     if (txopProcedure != nullptr && txopProcedure->getLimit() > SIMTIME_ZERO)
@@ -177,7 +151,8 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                          << " — sequence number not eligible for retransmission\n";
                 continue;
             }
-            auto negotiated = mib->findNegotiatedHeCapabilities(dest);
+            const auto peer = getLinkPhyContext().getPeerSnapshot(dest, SimTime(par("linkEstimateMaxAge")));
+            const auto negotiated = peer.getHasNegotiatedCapabilities() ? &peer.getNegotiatedCapabilities() : nullptr;
             if (negotiated != nullptr &&
                     (!negotiated->localTxPeerRx.valid ||
                      !negotiated->localTxPeerRx.ofdma ||
@@ -229,7 +204,15 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             candidate.holEnqueueTime = enqueueTimeTag == nullptr ? pkt->getArrivalTime() : enqueueTimeTag->getEnqueueTime();
             candidate.holDelay = simTime() - candidate.holEnqueueTime;
             candidate.sourceQueue = queue;
-            candidate.negotiatedHeCapabilities = negotiated;
+            candidate.hasAdvertisedHeCapabilities = peer.getHasAdvertisement();
+            if (candidate.hasAdvertisedHeCapabilities)
+                candidate.advertisedHeCapabilities = peer.getAdvertisement();
+            candidate.hasNegotiatedHeCapabilities = peer.getHasNegotiatedCapabilities();
+            if (candidate.hasNegotiatedHeCapabilities)
+                candidate.negotiatedHeCapabilities = peer.getNegotiatedCapabilities();
+            Ieee80211HeOperatingMode peerOperatingMode;
+            if (getPeerOperatingMode(dest, peerOperatingMode))
+                candidate.operatingModeRxNss = peerOperatingMode.rxNss;
             int eligiblePackets = 0;
             for (auto backlogQueue : queues) {
                 for (int j = 0; j < backlogQueue->getNumPackets(); ++j) {
@@ -252,11 +235,8 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
                     }
                 }
             }
-            if (auto link = mib->findStationLink(dest)) {
-                candidate.pathLossDb = link->pathLossDb;
-                candidate.hasFreshPathLoss = link->valid &&
-                        simTime() - link->lastUpdate <= SimTime(par("linkEstimateMaxAge"));
-            }
+            candidate.pathLossDb = peer.getPathLossDb();
+            candidate.hasFreshPathLoss = peer.getHasFreshPathLoss();
             context.candidates.push_back(candidate);
         }
     }
@@ -274,11 +254,11 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
             << (context.candidates.empty() ? "" : ", anchor = " + context.anchorSta.str()) << "\n";
     context.coding = mac->getMib()->localHeCapabilities.ldpc &&
             std::all_of(context.candidates.begin(), context.candidates.end(), [] (const auto& candidate) {
-                return candidate.negotiatedHeCapabilities != nullptr &&
-                        candidate.negotiatedHeCapabilities->localTxPeerRx.valid && candidate.negotiatedHeCapabilities->mutual.ldpc;
+                return candidate.hasNegotiatedHeCapabilities &&
+                        candidate.negotiatedHeCapabilities.localTxPeerRx.valid && candidate.negotiatedHeCapabilities.mutual.ldpc;
             }) ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
     context.csiManager = &csiManager;
-    context.numApAntennas = radio->getAntenna()->getNumAntennas();
+    context.numApAntennas = phy.getAntennaCount();
     return context;
 }
 

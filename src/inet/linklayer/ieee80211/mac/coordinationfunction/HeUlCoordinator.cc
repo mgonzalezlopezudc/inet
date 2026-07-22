@@ -180,9 +180,11 @@ AccessCategory HeUlCoordinator::getPreferredAccessCategory() const
 }
 
 IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee80211Mib *mib,
+        const IIeee80211HeLinkPhyContext& linkPhyContext, simtime_t maximumLinkEstimateAge,
         Hz centerFrequency, Hz bandwidth, simtime_t txopLimit, simtime_t requestedDuration,
         double sensitivityDbm, double targetRssiMarginDb,
-        int estimatedRaContenders, double collisionRate, double idleRate)
+        int estimatedRaContenders, double collisionRate, double idleRate,
+        const std::function<bool(const MacAddress&)>& isUlMuDisabled)
 {
     ASSERT(mib != nullptr);
     ASSERT(scheduler != nullptr);
@@ -226,10 +228,10 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
                 candidate.selectedTid = status->second.tid[ac];
                 break;
             }
-        if (auto link = mib->findStationLink(station.first)) {
-            candidate.pathLossDb = link->pathLossDb;
-            candidate.hasFreshPathLoss = link->valid;
-        }
+        const auto peer = linkPhyContext.getPeerSnapshot(station.first, maximumLinkEstimateAge);
+        candidate.pathLossDb = peer.getPathLossDb();
+        candidate.hasFreshPathLoss = peer.getHasFreshPathLoss();
+        candidate.ulMuDisabled = isUlMuDisabled && isUlMuDisabled(station.first);
         context.candidates.push_back(candidate);
     }
     if (!context.candidates.empty()) {
