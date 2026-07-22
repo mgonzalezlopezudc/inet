@@ -129,10 +129,14 @@ const HeLtfGiPair heLtfGiPairs[] = {
     {HE_LTF_2X, HE_GI_0_8_US}, {HE_LTF_2X, HE_GI_1_6_US},
     {HE_LTF_4X, HE_GI_0_8_US}, {HE_LTF_4X, HE_GI_3_2_US}
 };
-auto tableRu = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 0, 106, 0);
+auto tableRu = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
 Ieee80211HeUserPhyParameters tableUser;
 tableUser.ru = tableRu;
 tableUser.psduLength = B(100);
+auto erTableUser = tableUser;
+auto tableCatalog = getHeRuAllocationCatalog(Hz(5.18e9), MHz(20));
+erTableUser.ru = *std::find_if(tableCatalog.begin(), tableCatalog.end(),
+        [] (const Ieee80211HeRu& ru) { return ru.toneSize == 106 && ru.toneOffset == 136; });
 auto checkHeLtfGiRow = [&] (Ieee80211HePpduFormat format,
         const std::vector<Ieee80211HeUserPhyParameters>& users,
         const bool expected[6]) {
@@ -150,7 +154,7 @@ const bool tbDataCombinations[] = {false, false, false, true, false, true};
 const bool tbFeedbackNdpCombinations[] = {false, false, false, false, false, true};
 const bool fullBandwidthUlMuMimoCombinations[] = {false, true, false, true, false, true};
 checkHeLtfGiRow(HE_SINGLE_USER, {tableUser}, suCombinations);
-checkHeLtfGiRow(HE_EXTENDED_RANGE_SU, {tableUser}, suCombinations);
+checkHeLtfGiRow(HE_EXTENDED_RANGE_SU, {erTableUser}, suCombinations);
 checkHeLtfGiRow(HE_MU_DOWNLINK, {tableUser}, muCombinations);
 checkHeLtfGiRow(HE_TRIGGER_BASED_UPLINK, {tableUser}, tbDataCombinations);
 auto feedbackNdpUser = tableUser;

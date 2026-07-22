@@ -295,10 +295,52 @@ inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeUserPhyParame
     return os;
 }
 
-/** Result returned by the non-throwing HE PPDU validation/calculation API. */
+/** Stable error codes returned by HE PHY validation factories and calculators. */
+enum class Ieee80211HeValidationErrorCode {
+    NONE = 0,
+    INVALID_PPDU_FORMAT = 1,
+    INVALID_CHANNEL_BANDWIDTH = 2,
+    INVALID_CENTER_FREQUENCY = 3,
+    INVALID_GUARD_INTERVAL = 4,
+    INVALID_LTF_TYPE = 5,
+    INVALID_GI_LTF_COMBINATION = 6,
+    INVALID_PACKET_EXTENSION = 7,
+    EMPTY_USER_LIST = 8,
+    INVALID_USER_COUNT = 9,
+    INVALID_RU_LAYOUT = 10,
+    INVALID_MCS = 11,
+    INVALID_SPATIAL_STREAMS = 12,
+    INVALID_STREAM_MAPPING = 13,
+    INVALID_STA_ID = 14,
+    INVALID_CODING = 15,
+    INVALID_PSDU_LENGTH = 16,
+    INVALID_FEC_COMBINATION = 17,
+    INVALID_DCM_COMBINATION = 18,
+    INVALID_MCS_NSS_COMBINATION = 19,
+    INVALID_DATA_RATE = 20,
+    PPDU_DURATION_EXCEEDED = 21,
+    INTERNAL_ERROR = 22,
+};
+
+/** Machine-readable location and human-readable detail for an HE validation error. */
+struct Ieee80211HeValidationContext
+{
+    std::optional<size_t> userIndex;
+    std::optional<size_t> physicalRuIndex;
+    std::string fieldName;
+    std::string detail;
+};
+
+/**
+ * HE PPDU validation/calculation result. Ordinary malformed inputs are reported
+ * as diagnostics; allocation failures are not covered by that guarantee.
+ */
 struct Ieee80211HePhyValidationResult
 {
     bool valid = false;
+    Ieee80211HeValidationErrorCode errorCode = Ieee80211HeValidationErrorCode::NONE;
+    Ieee80211HeValidationContext context;
+    // Compatibility diagnostic; new callers should use errorCode and context.
     std::string error;
     Ieee80211HePpduParameters parameters;
 

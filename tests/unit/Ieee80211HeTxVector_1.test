@@ -1,0 +1,325 @@
+%description:
+Test immutable, factory-created IEEE 802.11 HE TXVECTOR and PPDU timing values.
+
+%includes:
+#include <limits>
+#include <type_traits>
+#include <utility>
+#include <vector>
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
+
+%global:
+using namespace inet;
+using namespace inet::physicallayer;
+
+static Ieee80211HeUserTxVectorRequest makeUserRequest(const Ieee80211HeRu& ru,
+        uint16_t staId = 1, int streamStartIndex = 0, int numberOfSpatialStreams = 1)
+{
+    Ieee80211HeUserTxVectorRequest user;
+    user.ru = ru;
+    user.mcs = 0;
+    user.numberOfSpatialStreams = numberOfSpatialStreams;
+    user.streamStartIndex = streamStartIndex;
+    user.staId = staId;
+    user.psduLength = B(100);
+    return user;
+}
+
+static Ieee80211HeTxVectorRequest makeRequest(Hz centerFrequency, Hz channelBandwidth,
+        std::vector<Ieee80211HeUserTxVectorRequest> users)
+{
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = centerFrequency;
+    request.channelBandwidth = channelBandwidth;
+    request.users = std::move(users);
+    return request;
+}
+
+static std::vector<Ieee80211HeUserPhyParameters> makeCalculatorUsers(
+        const std::vector<Ieee80211HeUserTxVectorRequest>& inputs)
+{
+    std::vector<Ieee80211HeUserPhyParameters> users;
+    for (const auto& input : inputs) {
+        Ieee80211HeUserPhyParameters user;
+        user.ru = input.ru;
+        user.mcs = input.mcs;
+        user.numberOfSpatialStreams = input.numberOfSpatialStreams;
+        user.streamStartIndex = input.streamStartIndex;
+        user.dcm = input.dcm;
+        user.coding = input.coding;
+        user.psduLength = input.psduLength;
+        user.staId = input.staId;
+        users.push_back(user);
+    }
+    return users;
+}
+
+static void assertInvalid(const Ieee80211HeTxVectorValidationResult& result,
+        Ieee80211HeValidationErrorCode errorCode, const char *fieldName)
+{
+    ASSERT(!result);
+    ASSERT(result.getErrorCode() == errorCode);
+    ASSERT(result.getContext().fieldName == fieldName);
+    ASSERT(!result.getContext().detail.empty());
+    ASSERT(!result.getTxVector());
+    ASSERT(!result.getTimingLayout());
+}
+
+using TxVectorPointer = std::remove_cv_t<std::remove_reference_t<
+        decltype(std::declval<const Ieee80211HeTxVectorValidationResult&>().getTxVector())>>;
+using FactoryMethod = decltype(&Ieee80211HeTxVectorFactory::create);
+static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::NONE) == 0);
+static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT) == 10);
+static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INVALID_STA_ID) == 14);
+static_assert(static_cast<int>(Ieee80211HeValidationErrorCode::INTERNAL_ERROR) == 22);
+static_assert(std::is_aggregate_v<Ieee80211HeUserTxVectorRequest>);
+static_assert(std::is_aggregate_v<Ieee80211HeTxVectorRequest>);
+static_assert(std::is_const_v<typename TxVectorPointer::element_type>);
+static_assert(!std::is_default_constructible_v<Ieee80211HeCommonTxVector>);
+static_assert(!std::is_default_constructible_v<Ieee80211HeUserTxVector>);
+static_assert(!std::is_default_constructible_v<Ieee80211HeTxVector>);
+static_assert(!std::is_default_constructible_v<Ieee80211HePpduTimingLayout>);
+static_assert(!std::is_constructible_v<Ieee80211HeCommonTxVector, Hz,
+        const Ieee80211HeCommonPhyParameters&>);
+static_assert(!std::is_constructible_v<Ieee80211HeUserTxVector,
+        const Ieee80211HeUserPhyParameters&>);
+static_assert(!std::is_constructible_v<Ieee80211HeTxVector,
+        Ieee80211HeCommonTxVector, std::vector<Ieee80211HeUserTxVector>>);
+static_assert(!std::is_constructible_v<Ieee80211HePpduTimingLayout,
+        const Ieee80211HePpduParameters&>);
+static_assert(!std::is_invocable_v<FactoryMethod,
+        const std::vector<Ieee80211HeUserPhyParameters>&, Hz>);
+static_assert(!std::is_copy_assignable_v<Ieee80211HeCommonTxVector>);
+static_assert(!std::is_copy_assignable_v<Ieee80211HeUserTxVector>);
+static_assert(!std::is_copy_assignable_v<Ieee80211HeTxVector>);
+static_assert(!std::is_copy_assignable_v<Ieee80211HePpduTimingLayout>);
+
+%activity:
+const Hz centerFrequency = Hz(5.18e9);
+const Hz bandwidth = MHz(20);
+auto baseRu = getHeEqualRuLayout(centerFrequency, bandwidth, 1).front();
+auto baseUser = makeUserRequest(baseRu);
+auto baseRequest = makeRequest(centerFrequency, bandwidth, {baseUser});
+
+auto malformedRequest = baseRequest;
+malformedRequest.ppduFormat = static_cast<Ieee80211HePpduFormat>(99);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PPDU_FORMAT, "ppduFormat");
+malformedRequest = baseRequest;
+malformedRequest.centerFrequency = Hz(NaN);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_CENTER_FREQUENCY, "centerFrequency");
+malformedRequest = baseRequest;
+malformedRequest.channelBandwidth = MHz(21);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_CHANNEL_BANDWIDTH, "channelBandwidth");
+malformedRequest = baseRequest;
+malformedRequest.guardInterval = static_cast<Ieee80211HeGuardInterval>(99);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_GUARD_INTERVAL, "guardInterval");
+malformedRequest = baseRequest;
+malformedRequest.ltfType = static_cast<Ieee80211HeLtfType>(3);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_LTF_TYPE, "ltfType");
+malformedRequest = baseRequest;
+malformedRequest.ltfType = HE_LTF_1X;
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_GI_LTF_COMBINATION, "guardInterval/ltfType");
+malformedRequest = baseRequest;
+malformedRequest.packetExtensionDurationUs = 1;
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION, "packetExtensionDurationUs");
+
+malformedRequest = baseRequest;
+malformedRequest.users[0].mcs = 12;
+auto invalidMcsFirst = Ieee80211HeTxVectorFactory::create(malformedRequest);
+auto invalidMcsSecond = Ieee80211HeTxVectorFactory::create(malformedRequest);
+assertInvalid(invalidMcsFirst, Ieee80211HeValidationErrorCode::INVALID_MCS, "mcs");
+assertInvalid(invalidMcsSecond, Ieee80211HeValidationErrorCode::INVALID_MCS, "mcs");
+ASSERT(invalidMcsFirst.getContext().userIndex == invalidMcsSecond.getContext().userIndex);
+ASSERT(invalidMcsFirst.getContext().fieldName == invalidMcsSecond.getContext().fieldName);
+ASSERT(invalidMcsFirst.getContext().detail == invalidMcsSecond.getContext().detail);
+malformedRequest = baseRequest;
+malformedRequest.users[0].staId = 2048;
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_STA_ID, "staId");
+malformedRequest = baseRequest;
+malformedRequest.users[0].coding = static_cast<Ieee80211HeCoding>(99);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_CODING, "coding");
+malformedRequest = baseRequest;
+malformedRequest.users[0].mcs = 11;
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION, "coding");
+malformedRequest = baseRequest;
+malformedRequest.users[0].psduLength = B(-1);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH, "psduLength");
+malformedRequest = baseRequest;
+malformedRequest.users[0].psduLength = B(std::numeric_limits<int64_t>::max());
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH, "psduLength");
+auto hugeCalculatorUsers = makeCalculatorUsers(malformedRequest.users);
+auto hugeCalculation = computeHePpduParameters(hugeCalculatorUsers, bandwidth);
+ASSERT(!hugeCalculation);
+ASSERT(hugeCalculation.errorCode == Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH);
+ASSERT(hugeCalculation.context.fieldName == "psduLength");
+malformedRequest.users[0].psduLength = B((std::numeric_limits<int64_t>::max() - 22) / 8);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH, "psduLength");
+malformedRequest = baseRequest;
+malformedRequest.users[0].psduLength = B(100000);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::PPDU_DURATION_EXCEEDED, "duration");
+
+auto duplicateUser = baseUser;
+duplicateUser.staId = 2;
+malformedRequest = makeRequest(centerFrequency, bandwidth, {baseUser, duplicateUser});
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING, "streamStartIndex");
+
+auto catalog = getHeRuAllocationCatalog(centerFrequency, bandwidth);
+auto findRu = [&] (int toneSize, int toneOffset) {
+    return *std::find_if(catalog.begin(), catalog.end(),
+            [&] (const Ieee80211HeRu& ru) {
+                return ru.toneSize == toneSize && ru.toneOffset == toneOffset;
+            });
+};
+auto overlappingUser = makeUserRequest(findRu(106, 0), 2);
+malformedRequest = makeRequest(centerFrequency, bandwidth, {baseUser, overlappingUser});
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT, "users[].ru");
+malformedRequest = makeRequest(centerFrequency, bandwidth, {makeUserRequest(findRu(26, 0))});
+malformedRequest.users[0].ru.toneOffset++;
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT, "ru");
+malformedRequest = makeRequest(centerFrequency, bandwidth, {makeUserRequest(findRu(26, 0))});
+malformedRequest.users[0].ru.toneOffset = getHeChannelToneCount(bandwidth);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT, "ru");
+auto first26User = makeUserRequest(findRu(26, 0), 1);
+auto second26User = makeUserRequest(findRu(26, 26), 2);
+second26User.ru.index = first26User.ru.index;
+malformedRequest = makeRequest(centerFrequency, bandwidth, {first26User, second26User});
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT, "ru");
+malformedRequest = baseRequest;
+malformedRequest.users[0].ru.centerFrequency += Hz(1);
+assertInvalid(Ieee80211HeTxVectorFactory::create(malformedRequest),
+        Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT, "ru.centerFrequency");
+
+auto su20Request = baseRequest;
+su20Request.ppduFormat = HE_SINGLE_USER;
+auto su20Result = Ieee80211HeTxVectorFactory::create(su20Request);
+ASSERT(su20Result);
+const Hz bandwidth40 = MHz(40);
+auto su40Ru = getHeEqualRuLayout(centerFrequency, bandwidth40, 1).front();
+auto su40Request = makeRequest(centerFrequency, bandwidth40, {makeUserRequest(su40Ru)});
+su40Request.ppduFormat = HE_SINGLE_USER;
+su40Request.users[0].coding = HE_CODING_LDPC;
+ASSERT(Ieee80211HeTxVectorFactory::create(su40Request));
+auto su26Request = makeRequest(centerFrequency, bandwidth,
+        {makeUserRequest(findRu(26, 0))});
+su26Request.ppduFormat = HE_SINGLE_USER;
+assertInvalid(Ieee80211HeTxVectorFactory::create(su26Request),
+        Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT, "ru");
+
+auto er242Request = baseRequest;
+er242Request.ppduFormat = HE_EXTENDED_RANGE_SU;
+er242Request.users[0].mcs = 2;
+ASSERT(Ieee80211HeTxVectorFactory::create(er242Request));
+auto erUpper106Request = makeRequest(centerFrequency, bandwidth,
+        {makeUserRequest(findRu(106, 136))});
+erUpper106Request.ppduFormat = HE_EXTENDED_RANGE_SU;
+ASSERT(Ieee80211HeTxVectorFactory::create(erUpper106Request));
+auto erWideRequest = su40Request;
+erWideRequest.ppduFormat = HE_EXTENDED_RANGE_SU;
+assertInvalid(Ieee80211HeTxVectorFactory::create(erWideRequest),
+        Ieee80211HeValidationErrorCode::INVALID_CHANNEL_BANDWIDTH, "channelBandwidth");
+auto erLower106Request = makeRequest(centerFrequency, bandwidth,
+        {makeUserRequest(findRu(106, 0))});
+erLower106Request.ppduFormat = HE_EXTENDED_RANGE_SU;
+assertInvalid(Ieee80211HeTxVectorFactory::create(erLower106Request),
+        Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT, "ru");
+auto er242Mcs3Request = er242Request;
+er242Mcs3Request.users[0].mcs = 3;
+assertInvalid(Ieee80211HeTxVectorFactory::create(er242Mcs3Request),
+        Ieee80211HeValidationErrorCode::INVALID_MCS, "mcs");
+auto erUpper106Mcs1Request = erUpper106Request;
+erUpper106Mcs1Request.users[0].mcs = 1;
+assertInvalid(Ieee80211HeTxVectorFactory::create(erUpper106Mcs1Request),
+        Ieee80211HeValidationErrorCode::INVALID_MCS, "mcs");
+
+std::vector<Ieee80211HeUserTxVectorRequest> nineRuUsers;
+auto nineRuAllocation = getHeEqualRuLayout(centerFrequency, bandwidth, 9);
+for (size_t i = 0; i < nineRuAllocation.size(); i++)
+    nineRuUsers.push_back(makeUserRequest(nineRuAllocation[i], i + 1));
+auto nineRuRequest = makeRequest(centerFrequency, bandwidth, nineRuUsers);
+nineRuRequest.packetExtensionDurationUs = 4;
+auto nineRuResult = Ieee80211HeTxVectorFactory::create(nineRuRequest);
+ASSERT(nineRuResult);
+ASSERT(nineRuResult.getErrorCode() == Ieee80211HeValidationErrorCode::NONE);
+ASSERT(nineRuResult.getTxVector()->getCommon().getCenterFrequency() == centerFrequency);
+ASSERT(nineRuResult.getTxVector()->getUsers().size() == 9);
+ASSERT(nineRuResult.getTimingLayout()->getPpduFormat() == HE_MU_DOWNLINK);
+ASSERT(nineRuResult.getTimingLayout()->getChannelBandwidth() == bandwidth);
+ASSERT(nineRuResult.getTimingLayout()->getGuardInterval() == HE_GI_3_2_US);
+ASSERT(nineRuResult.getTimingLayout()->getLtfType() == HE_LTF_4X);
+ASSERT(nineRuResult.getTimingLayout()->getNumberOfHeLtfSymbols() == 1);
+ASSERT(nineRuResult.getTimingLayout()->getPacketExtensionDurationUs() == 4);
+ASSERT(nineRuResult.getTimingLayout()->getHeSigBDuration() == SimTime(40, SIMTIME_US));
+ASSERT(nineRuResult.getTimingLayout()->getCommonNumberOfDataSymbols() > 0);
+
+auto calculatorUsers = makeCalculatorUsers(nineRuRequest.users);
+auto calculation = computeHePpduParameters(calculatorUsers, bandwidth,
+        nineRuRequest.ppduFormat, nineRuRequest.guardInterval, nineRuRequest.ltfType,
+        nineRuRequest.packetExtensionDurationUs, nineRuRequest.enforceDurationLimit);
+ASSERT(calculation);
+ASSERT(nineRuResult.getTimingLayout()->matches(calculation.parameters));
+ASSERT(nineRuResult.getTimingLayout()->getDuration() == calculation.parameters.duration);
+for (size_t i = 0; i < calculation.parameters.users.size(); i++)
+    ASSERT(areIeee80211HeUserParametersEqual(
+            nineRuResult.getTxVector()->getUsers()[i].getParameters(), calculation.parameters.users[i]));
+auto repeatedResult = Ieee80211HeTxVectorFactory::create(nineRuRequest);
+ASSERT(repeatedResult);
+ASSERT(*nineRuResult.getTxVector() == *repeatedResult.getTxVector());
+ASSERT(*nineRuResult.getTimingLayout() == *repeatedResult.getTimingLayout());
+
+auto suNineRuRequest = nineRuRequest;
+suNineRuRequest.ppduFormat = HE_SINGLE_USER;
+assertInvalid(Ieee80211HeTxVectorFactory::create(suNineRuRequest),
+        Ieee80211HeValidationErrorCode::INVALID_USER_COUNT, "users");
+suNineRuRequest.ppduFormat = HE_EXTENDED_RANGE_SU;
+assertInvalid(Ieee80211HeTxVectorFactory::create(suNineRuRequest),
+        Ieee80211HeValidationErrorCode::INVALID_USER_COUNT, "users");
+
+auto noncanonicalFields = baseUser;
+noncanonicalFields.ru.centerFrequency = Hz(NaN);
+noncanonicalFields.ru.dataSubcarriers = 1;
+noncanonicalFields.ru.pilotSubcarriers = 1;
+noncanonicalFields.ru.bandwidth = Hz(1);
+auto canonicalizedResult = Ieee80211HeTxVectorFactory::create(
+        makeRequest(centerFrequency, bandwidth, {noncanonicalFields}));
+ASSERT(canonicalizedResult);
+ASSERT(areIeee80211HeRuParametersEqual(
+        canonicalizedResult.getTxVector()->getUsers()[0].getParameters().ru, baseRu));
+
+auto sharedRu = getHeEqualRuLayout(centerFrequency, bandwidth, 1).front();
+auto firstFourStreams = makeUserRequest(sharedRu, 10, 0, 4);
+firstFourStreams.coding = HE_CODING_LDPC;
+auto secondFourStreams = makeUserRequest(sharedRu, 11, 4, 4);
+secondFourStreams.coding = HE_CODING_LDPC;
+auto eightStreamResult = Ieee80211HeTxVectorFactory::create(
+        makeRequest(centerFrequency, bandwidth, {firstFourStreams, secondFourStreams}));
+ASSERT(eightStreamResult);
+ASSERT(eightStreamResult.getTimingLayout()->getNumberOfHeLtfSymbols() == 8);
+ASSERT(eightStreamResult.getTimingLayout()->getUsers().size() == 2);
+
+EV << "Invalid HE TXVECTOR inputs returned stable malformed-input diagnostics.\n";
+EV << "Canonical nine-RU and eight-stream timing layouts matched calculator results.\n";
+EV << ".\n";
+
+%contains: stdout
+Invalid HE TXVECTOR inputs returned stable malformed-input diagnostics.
+Canonical nine-RU and eight-stream timing layouts matched calculator results.
+.

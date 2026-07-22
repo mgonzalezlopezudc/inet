@@ -7,6 +7,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
 #include <algorithm>
+#include <limits>
 #include <set>
 #include <stdexcept>
 
@@ -35,6 +36,20 @@ namespace {
 constexpr int HE_SIG_B_DATA_BITS_PER_SYMBOL = 26;
 constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
 constexpr int HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK = 10;
+
+void setHePhyValidationError(Ieee80211HePhyValidationResult& result,
+        Ieee80211HeValidationErrorCode errorCode, const char *fieldName,
+        const std::string& detail, std::optional<size_t> userIndex = {},
+        std::optional<size_t> physicalRuIndex = {})
+{
+    result.valid = false;
+    result.errorCode = errorCode;
+    result.context.userIndex = userIndex;
+    result.context.physicalRuIndex = physicalRuIndex;
+    result.context.fieldName = fieldName;
+    result.context.detail = detail;
+    result.error = detail;
+}
 
 template<typename Result>
 bool setHeSignalingError(Result& result, Ieee80211HeSigCodecErrorCode errorCode, const char *error)
@@ -379,67 +394,126 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     Ieee80211HePhyValidationResult result;
     if (ppduFormat != HE_MU_DOWNLINK && ppduFormat != HE_TRIGGER_BASED_UPLINK &&
             ppduFormat != HE_SINGLE_USER && ppduFormat != HE_EXTENDED_RANGE_SU) {
-        result.error = "invalid HE PPDU format";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PPDU_FORMAT,
+                "ppduFormat", "invalid HE PPDU format");
         return result;
     }
     if (channelBandwidth != MHz(20) && channelBandwidth != MHz(40) &&
             channelBandwidth != MHz(80) && channelBandwidth != MHz(160)) {
-        result.error = "unsupported HE channel bandwidth";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_CHANNEL_BANDWIDTH,
+                "channelBandwidth", "unsupported HE channel bandwidth");
         return result;
     }
     if (guardInterval != HE_GI_0_8_US && guardInterval != HE_GI_1_6_US &&
             guardInterval != HE_GI_3_2_US) {
-        result.error = "invalid HE guard interval";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_GUARD_INTERVAL,
+                "guardInterval", "invalid HE guard interval");
         return result;
     }
     if (ltfType != HE_LTF_1X && ltfType != HE_LTF_2X && ltfType != HE_LTF_4X) {
-        result.error = "invalid HE-LTF type";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_LTF_TYPE,
+                "ltfType", "invalid HE-LTF type");
         return result;
     }
     try {
         getHeLtfSymbolDuration(ltfType, guardInterval);
     }
     catch (const omnetpp::cRuntimeError& error) {
-        result.error = error.what();
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_GI_LTF_COMBINATION,
+                "guardInterval/ltfType", error.what());
         return result;
     }
     if (packetExtensionDurationUs != 0 && packetExtensionDurationUs != 4 &&
             packetExtensionDurationUs != 8 && packetExtensionDurationUs != 12 && packetExtensionDurationUs != 16) {
-        result.error = "invalid HE packet extension duration";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PACKET_EXTENSION,
+                "packetExtensionDurationUs", "invalid HE packet extension duration");
         return result;
     }
     if (requestedUsers.empty()) {
-        result.error = "HE PPDU has no users";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::EMPTY_USER_LIST,
+                "users", "HE PPDU has no users");
+        return result;
+    }
+    if ((ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU) &&
+            requestedUsers.size() != 1) {
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_USER_COUNT,
+                "users", "HE SU and HE ER SU PPDUs require exactly one user");
         return result;
     }
 
     // Validate all externally supplied scalar values before calling the
     // throwing calculation helpers below. This API is also used as a public
-    // feasibility check by schedulers, so malformed input must be reported in
-    // the result in both release and debug builds.
-    for (const auto& requested : requestedUsers) {
+    // feasibility check by schedulers, so ordinary malformed input must be
+    // reported in the result in both release and debug builds. Allocation
+    // failures are not part of that malformed-input guarantee.
+    for (size_t userIndex = 0; userIndex < requestedUsers.size(); userIndex++) {
+        const auto& requested = requestedUsers[userIndex];
         if (requested.mcs < 0 || requested.mcs > 11) {
-            result.error = "invalid HE MCS";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_MCS,
+                    "mcs", "invalid HE MCS", userIndex);
             return result;
         }
         if (requested.ru.toneSize != 26 && requested.ru.toneSize != 52 &&
                 requested.ru.toneSize != 106 && requested.ru.toneSize != 242 &&
                 requested.ru.toneSize != 484 && requested.ru.toneSize != 996 &&
                 requested.ru.toneSize != 1992) {
-            result.error = "unsupported HE RU tone size";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
+                    "ru.toneSize", "unsupported HE RU tone size", userIndex);
             return result;
         }
         if (requested.numberOfSpatialStreams < 1 || requested.numberOfSpatialStreams > 8) {
-            result.error = "invalid HE number of spatial streams";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_SPATIAL_STREAMS,
+                    "numberOfSpatialStreams", "invalid HE number of spatial streams", userIndex);
             return result;
         }
         if (requested.streamStartIndex < 0 ||
                 requested.streamStartIndex > 8 - requested.numberOfSpatialStreams) {
-            result.error = "HE RU spatial stream range exceeds 8 streams";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,
+                    "streamStartIndex", "HE RU spatial stream range exceeds 8 streams", userIndex);
+            return result;
+        }
+        if (requested.staId > 2047) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_STA_ID,
+                    "staId", "HE STA ID exceeds the 11-bit field width", userIndex);
             return result;
         }
         if (requested.coding != HE_CODING_BCC && requested.coding != HE_CODING_LDPC) {
-            result.error = "invalid HE coding type";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_CODING,
+                    "coding", "invalid HE coding type", userIndex);
+            return result;
+        }
+        if (requested.psduLength < B(0)) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                    "psduLength", "negative HE PSDU length", userIndex);
+            return result;
+        }
+    }
+
+    const auto& singleUser = requestedUsers.front();
+    if (ppduFormat == HE_SINGLE_USER &&
+            (singleUser.ru.toneSize != getHeChannelToneCount(channelBandwidth) ||
+             singleUser.ru.toneOffset != 0)) {
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
+                "ru", "HE SU requires the full-channel RU allocation", 0);
+        return result;
+    }
+    if (ppduFormat == HE_EXTENDED_RANGE_SU) {
+        if (channelBandwidth != MHz(20)) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_CHANNEL_BANDWIDTH,
+                    "channelBandwidth", "HE ER SU is modeled only for 20 MHz channels");
+            return result;
+        }
+        const bool primary242Tone = singleUser.ru.toneSize == 242 && singleUser.ru.toneOffset == 0;
+        const bool primaryUpper106Tone = singleUser.ru.toneSize == 106 && singleUser.ru.toneOffset == 136;
+        if (!primary242Tone && !primaryUpper106Tone) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
+                    "ru", "HE ER SU requires the primary 242-tone or primary upper 106-tone RU", 0);
+            return result;
+        }
+        if ((primary242Tone && singleUser.mcs > 2) ||
+                (primaryUpper106Tone && singleUser.mcs != 0)) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_MCS,
+                    "mcs", "HE ER SU MCS is not valid for the selected RU mode", 0);
             return result;
         }
     }
@@ -465,31 +539,39 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             group->second.push_back(requested);
     }
     int maximumSpaceTimeStreamsPerRu = 0;
-    for (const auto& pair : ruGroups) {
-        const auto& group = pair.second;
+    for (size_t physicalRuIndex = 0; physicalRuIndex < ruGroups.size(); physicalRuIndex++) {
+        const auto& group = ruGroups[physicalRuIndex].second;
         int groupTotalNsts = 0;
         for (const auto& user : group)
             groupTotalNsts += user.numberOfSpatialStreams;
         if (groupTotalNsts > 8) {
-            result.error = "HE MU-MIMO group total spatial streams exceeds 8";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,
+                    "numberOfSpatialStreams", "HE MU-MIMO group total spatial streams exceeds 8",
+                    {}, physicalRuIndex);
             return result;
         }
         maximumSpaceTimeStreamsPerRu = std::max(maximumSpaceTimeStreamsPerRu, groupTotalNsts);
         if (group.size() > 1) {
             if (group.size() > 8) {
-                result.error = "HE MU-MIMO group has too many users (max 8)";
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,
+                        "users", "HE MU-MIMO group has too many users (max 8)",
+                        {}, physicalRuIndex);
                 return result;
             }
             std::set<uint16_t> staIds;
             std::vector<std::pair<int, int>> streams; // {startIndex, nss}
             for (const auto& user : group) {
                 if (staIds.count(user.staId) > 0) {
-                    result.error = "HE MU-MIMO group contains duplicate STA IDs";
+                    setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,
+                            "staId", "HE MU-MIMO group contains duplicate STA IDs",
+                            {}, physicalRuIndex);
                     return result;
                 }
                 staIds.insert(user.staId);
                 if (user.numberOfSpatialStreams > 4) {
-                    result.error = "HE MU-MIMO user cannot have more than 4 spatial streams";
+                    setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_SPATIAL_STREAMS,
+                            "numberOfSpatialStreams", "HE MU-MIMO user cannot have more than 4 spatial streams",
+                            {}, physicalRuIndex);
                     return result;
                 }
                 streams.push_back({user.streamStartIndex, user.numberOfSpatialStreams});
@@ -498,7 +580,9 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             int expectedStart = 0;
             for (const auto& stream : streams) {
                 if (stream.first != expectedStart) {
-                    result.error = "HE MU-MIMO spatial streams are not contiguous or have gaps/overlaps";
+                    setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,
+                            "streamStartIndex", "HE MU-MIMO spatial streams are not contiguous or have gaps/overlaps",
+                            {}, physicalRuIndex);
                     return result;
                 }
                 expectedStart += stream.second;
@@ -518,7 +602,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     // 1x HE-LTF with 1.6 us GI only for full-bandwidth UL MU-MIMO.
     if (!isHeLtfGiCombinationAllowed(ppduFormat, ltfType, guardInterval,
             isFeedbackNdp, isFullBandwidthUlMuMimo)) {
-        result.error = "HE-LTF/GI combination is not supported for the HE PPDU format";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_GI_LTF_COMBINATION,
+                "guardInterval/ltfType", "HE-LTF/GI combination is not supported for the HE PPDU format");
         return result;
     }
 
@@ -575,7 +660,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             parameters.common.heLtfDuration;
 
     auto symbolDuration = SimTime(12800, SIMTIME_NS) + getHeGuardIntervalDuration(guardInterval);
-    for (const auto& requested : requestedUsers) {
+    for (size_t userIndex = 0; userIndex < requestedUsers.size(); userIndex++) {
+        const auto& requested = requestedUsers[userIndex];
         auto user = requested;
         // IEEE Std 802.11-2024 Clause 27.3.12.5 ("Coding"):
         // "LDPC is the only FEC coding scheme in the HE PPDU Data field for a 484-, 996-, and 2x996-tone RU."
@@ -583,28 +669,35 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         // "Support for BCC coding is limited to less than or equal to four spatial streams..."
         if (user.coding == HE_CODING_BCC) {
             if (user.mcs == 10 || user.mcs == 11) {
-                result.error = "HE BCC coding is not supported for MCS 10 or 11";
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION,
+                        "coding", "HE BCC coding is not supported for MCS 10 or 11", userIndex);
                 return result;
             }
             if (user.ru.toneSize >= 484) {
-                result.error = "HE BCC coding is not supported for 484-tone RUs or larger";
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION,
+                        "coding", "HE BCC coding is not supported for 484-tone RUs or larger", userIndex);
                 return result;
             }
             if (user.numberOfSpatialStreams > 4) {
-                result.error = "HE BCC coding is limited to less than or equal to 4 spatial streams";
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION,
+                        "coding", "HE BCC coding is limited to less than or equal to 4 spatial streams", userIndex);
                 return result;
             }
         }
         if (user.dcm && !isHeDcmCombinationSupported(user.mcs, user.numberOfSpatialStreams)) {
-            result.error = "unsupported HE DCM combination";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_DCM_COMBINATION,
+                    "dcm", "unsupported HE DCM combination", userIndex);
             return result;
         }
         // IEEE 802.11-2024 Tables 27-62..27-117: reject N/A (MCS, Nss, RU) triples.
         if (!isHeValidMcsNssCombination(user.mcs, user.numberOfSpatialStreams, user.ru.toneSize)) {
-            result.error = std::string("HE MCS ") + std::to_string(user.mcs)
-                    + ", Nss=" + std::to_string(user.numberOfSpatialStreams)
-                    + ", RU=" + std::to_string(user.ru.toneSize)
-                    + "-tone is N/A per IEEE 802.11-2024 Tables 27-62..27-117";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_MCS_NSS_COMBINATION,
+                    "mcs/numberOfSpatialStreams",
+                    std::string("HE MCS ") + std::to_string(user.mcs)
+                            + ", Nss=" + std::to_string(user.numberOfSpatialStreams)
+                            + ", RU=" + std::to_string(user.ru.toneSize)
+                            + "-tone is N/A per IEEE 802.11-2024 Tables 27-62..27-117",
+                    userIndex);
             return result;
         }
         int dataSubcarriers = user.ru.dataSubcarriers > 0 ? user.ru.dataSubcarriers :
@@ -631,7 +724,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             continue;
         }
         if (user.dataBitsPerSymbol <= 0) {
-            result.error = "HE user has no data bits per symbol";
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_DATA_RATE,
+                    "dataBitsPerSymbol", "HE user has no data bits per symbol", userIndex);
             return result;
         }
         // IEEE Std 802.11-2024 Clause 27.3.12.5.1 ("BCC coding and puncturing"):
@@ -642,7 +736,15 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             user.numberOfEncoders = std::max(1, (user.dataBitsPerSymbol + 647) / 648);
         }
         user.tailBits = user.coding == HE_CODING_LDPC ? 0 : 6 * user.numberOfEncoders;
-        int64_t uncodedBits = user.serviceBits + user.psduLength.get<B>() * 8 + user.tailBits;
+        const int64_t psduBytes = user.psduLength.get<B>();
+        const int64_t fixedBits = (int64_t)user.serviceBits + user.tailBits;
+        if (user.serviceBits < 0 ||
+                psduBytes > (std::numeric_limits<int64_t>::max() - fixedBits) / 8) {
+            setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                    "psduLength", "HE PSDU length overflows packet-level bit accounting", userIndex);
+            return result;
+        }
+        const int64_t uncodedBits = fixedBits + psduBytes * 8;
         if (user.coding == HE_CODING_LDPC) {
             // 802.11 LDPC uses 648/1296/1944-bit codewords. At packet level
             // we model codeword selection, shortening and repetition while
@@ -662,19 +764,40 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                 }
             }
             int informationBitsPerCodeword = user.ldpcCodewordLength * codeRateNumerator / codeRateDenominator;
-            user.ldpcCodewordCount = std::max<int64_t>(1,
-                    (uncodedBits + informationBitsPerCodeword - 1) / informationBitsPerCodeword);
+            int64_t ldpcCodewordCount = uncodedBits / informationBitsPerCodeword +
+                    (uncodedBits % informationBitsPerCodeword != 0);
+            if (ldpcCodewordCount > std::numeric_limits<int>::max()) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                        "psduLength", "HE PSDU requires more LDPC codewords than the model can represent",
+                        userIndex);
+                return result;
+            }
+            user.ldpcCodewordCount = std::max<int64_t>(1, ldpcCodewordCount);
             int64_t ldpcInformationCapacity = (int64_t)user.ldpcCodewordCount * informationBitsPerCodeword;
             user.ldpcShorteningBits = std::max<int64_t>(0, ldpcInformationCapacity - uncodedBits);
             int64_t codedBits = (int64_t)user.ldpcCodewordCount * user.ldpcCodewordLength;
-            user.numberOfDataSymbols = std::max<int64_t>(1,
-                    (codedBits + user.codedBitsPerSymbol - 1) / user.codedBitsPerSymbol);
+            int64_t numberOfDataSymbols = codedBits / user.codedBitsPerSymbol +
+                    (codedBits % user.codedBitsPerSymbol != 0);
+            if (numberOfDataSymbols > std::numeric_limits<int>::max()) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                        "psduLength", "HE PSDU requires more data symbols than the model can represent",
+                        userIndex);
+                return result;
+            }
+            user.numberOfDataSymbols = std::max<int64_t>(1, numberOfDataSymbols);
             int64_t symbolCapacity = (int64_t)user.numberOfDataSymbols * user.codedBitsPerSymbol;
             user.ldpcRepetitionBits = std::max<int64_t>(0, symbolCapacity - codedBits);
         }
         else {
-            user.numberOfDataSymbols = std::max<int64_t>(1,
-                    (uncodedBits + user.dataBitsPerSymbol - 1) / user.dataBitsPerSymbol);
+            int64_t numberOfDataSymbols = uncodedBits / user.dataBitsPerSymbol +
+                    (uncodedBits % user.dataBitsPerSymbol != 0);
+            if (numberOfDataSymbols > std::numeric_limits<int>::max()) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_PSDU_LENGTH,
+                        "psduLength", "HE PSDU requires more data symbols than the model can represent",
+                        userIndex);
+                return result;
+            }
+            user.numberOfDataSymbols = std::max<int64_t>(1, numberOfDataSymbols);
         }
         int64_t bitsInLastSymbol = uncodedBits -
                 (int64_t)(user.numberOfDataSymbols - 1) * user.dataBitsPerSymbol;
@@ -696,7 +819,8 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
     // IEEE 802.11-2024 Table 27-61 defines aPPDUMaxTime = 5.484 ms; Clause 10.12
     // forbids transmitting an HE PPDU whose PLME-TXTIME exceeds that limit.
     if (enforceDurationLimit && parameters.duration > SimTime(5.484, SIMTIME_MS)) {
-        result.error = "HE PPDU exceeds the 5.484 ms duration limit";
+        setHePhyValidationError(result, Ieee80211HeValidationErrorCode::PPDU_DURATION_EXCEEDED,
+                "duration", "HE PPDU exceeds the 5.484 ms duration limit");
         return result;
     }
     for (auto& user : parameters.users) {
@@ -706,6 +830,9 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
         user.duration = parameters.duration;
     }
     result.valid = true;
+    result.errorCode = Ieee80211HeValidationErrorCode::NONE;
+    result.context = {};
+    result.error.clear();
     return result;
 }
 
