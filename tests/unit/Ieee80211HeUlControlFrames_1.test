@@ -7,6 +7,7 @@ Test Trigger, BSR, and Multi-STA Block Ack serialization.
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuTxOpFs.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -23,12 +24,33 @@ using namespace inet::units::values;
 class TestHeHcfScheduleFinalizer : public HeHcf
 {
   public:
+    std::map<MacAddress, uint16_t> associationIds;
+    int deliveredTriggeredFrames = 0;
+
     static HeUlScheduleFinalizationResult finalize(
             const IIeee80211HeUlScheduler::Schedule& schedule,
             Hz centerFrequency, Hz channelBandwidth,
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
     {
         return finalizeUlSchedule(schedule, centerFrequency, channelBandwidth, triggerType);
+    }
+
+    static Packet *aggregateHeTbMpdus(const std::vector<Packet *>& mpdus)
+    {
+        return buildHeTbAmpdu(mpdus);
+    }
+
+    virtual uint16_t getAssociationId(const MacAddress& address) const override
+    {
+        auto it = associationIds.find(address);
+        return it == associationIds.end() ? 0 : it->second;
+    }
+
+    virtual void processTriggeredUlFrame(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>&, uint16_t) override
+    {
+        deliveredTriggeredFrames++;
+        delete packet;
     }
 };
 
@@ -38,6 +60,8 @@ class TestHeUlMuTxOpFs : public HeUlMuTxOpFs
     using HeUlMuTxOpFs::HeUlMuTxOpFs;
     Packet *buildTriggerPacketForTest() const { return buildTriggerPacket(); }
     IReceiveStep *buildReceiveCollectionStepForTest() const { return buildReceiveCollectionStep(); }
+    void processResponsesForTest(FrameSequenceContext *context) { processResponses(context); }
+    const std::vector<Ieee80211MultiStaBlockAckRecord>& getAckRecordsForTest() const { return ackRecords; }
 };
 
 static IIeee80211HeUlScheduler::Schedule makeUlSchedule(
@@ -68,6 +92,54 @@ static IIeee80211HeUlScheduler::Schedule makeUlSchedule(
     else
         schedule.allocations.push_back(allocation);
     return schedule;
+}
+
+static Packet *makeHeTbAmpduResponse(
+        const IIeee80211HeUlScheduler::RuAllocation& allocation,
+        const MacAddress& transmitter,
+        const std::vector<Ieee80211MpduReceiveStatus>& statuses,
+        bool insertZeroLengthDelimiter = false, int headerTid = -1)
+{
+    auto packet = new Packet("he-tb-response");
+    auto indication = packet->addTag<Ieee80211MpduReceiveInd>();
+    auto rx = packet->addTag<Ieee80211HeMuRxTag>();
+    rx->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    rx->setRuIndex(allocation.ru.index);
+    Ieee80211HeMuRxAllocationInfo canonical;
+    canonical.ruIndex = allocation.ru.index;
+    canonical.staId = allocation.associationId;
+    rx->appendAllocations(canonical);
+    for (size_t i = 0; i < statuses.size(); ++i) {
+        if (insertZeroLengthDelimiter && i == 1) {
+            auto paddingDelimiter = makeShared<Ieee80211MpduSubframeHeader>();
+            paddingDelimiter->setLength(0);
+            packet->insertAtBack(paddingDelimiter);
+        }
+        auto mpdu = new Packet("he-tb-mpdu");
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(MacAddress("10:00:00:00:00:00"));
+        header->setTransmitterAddress(transmitter);
+        header->setTid(headerTid < 0 ? allocation.tid : headerTid);
+        header->setSequenceNumber(SequenceNumberCyclic(100 + i));
+        header->setChunkLength(B(26));
+        mpdu->insertAtBack(header);
+        mpdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setLength(mpdu->getByteLength());
+        delimiter->setEof(i + 1 == statuses.size());
+        packet->insertAtBack(delimiter);
+        packet->insertAtBack(mpdu->peekAll());
+        Ieee80211MpduReceiveResult outcome;
+        outcome.sequenceNumber = 100 + i;
+        outcome.fragmentNumber = 0;
+        outcome.tid = header->getTid();
+        outcome.length = B(mpdu->getByteLength());
+        outcome.status = statuses[i];
+        indication->appendResults(outcome);
+        delete mpdu;
+    }
+    return packet;
 }
 
 static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
@@ -488,6 +560,13 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     REQUIRE(decoded->getBufferStatusAc() == AC_VO);
     // BSR queue sizes are rounded up to the 256-byte scaling unit on wire.
     REQUIRE(decoded->getBufferStatusQueueSize() == 12544);
+    packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    auto ampdu = TestHeHcfScheduleFinalizer::aggregateHeTbMpdus({packet});
+    auto delimiter = ampdu->popAtFront<Ieee80211MpduSubframeHeader>();
+    REQUIRE(delimiter->getLength() == packet->getByteLength());
+    REQUIRE(delimiter->getEof());
+    REQUIRE(ampdu->peekAtFront<Ieee80211DataHeader>()->getType() == ST_QOS_NULL);
+    delete ampdu;
     delete packet;
     delete received;
     EV << "QoS Null BSR round trip passed.\n";
@@ -532,6 +611,182 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     delete received;
     EV << "Multi-STA Block Ack round trip passed.\n";
 }
+
+{
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US), IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    schedule.allocations.front().associationId = 7;
+    schedule.allocations.front().tid = 5;
+    auto transmitter = MacAddress("20:00:00:00:00:07");
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    callback->associationIds[transmitter] = 7;
+    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            MacAddress("10:00:00:00:00:00"));
+    FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            nullptr, nullptr, nullptr, nullptr, nullptr);
+    auto collection = new ReceiveCollectionStep();
+    collection->setFrameToReceive(makeHeTbAmpduResponse(schedule.allocations.front(),
+            transmitter, {MPDU_FCS_ERROR}));
+    context.addStep(collection);
+    sequence.processResponsesForTest(&context);
+    const auto& records = sequence.getAckRecordsForTest();
+    REQUIRE(records.size() == 1);
+    REQUIRE(records.front().aid == 7);
+    REQUIRE(records.front().responseReceived);
+    REQUIRE(records.front().startingSequenceNumber == 100);
+    REQUIRE(records.front().bitmap == 0);
+    REQUIRE(callback->deliveredTriggeredFrames == 0);
+    delete callback;
+    delete coordinator;
+    EV << "Single-subframe HE-TB FCS failure reaches a zero-bit Multi-STA Block Ack record.\n";
+}
+
+{
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US), IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    schedule.allocations.front().associationId = 7;
+    schedule.allocations.front().tid = 5;
+    auto wrongTransmitter = MacAddress("20:00:00:00:00:08");
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    callback->associationIds[wrongTransmitter] = 8;
+    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            MacAddress("10:00:00:00:00:00"));
+    FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            nullptr, nullptr, nullptr, nullptr, nullptr);
+    auto collection = new ReceiveCollectionStep();
+    collection->setFrameToReceive(makeHeTbAmpduResponse(schedule.allocations.front(),
+            wrongTransmitter, {MPDU_SUCCESS}));
+    context.addStep(collection);
+    sequence.processResponsesForTest(&context);
+    const auto& records = sequence.getAckRecordsForTest();
+    REQUIRE(records.size() == 1);
+    REQUIRE(records.front().aid == 7);
+    REQUIRE(!records.front().responseReceived);
+    REQUIRE(records.front().bitmap == 0);
+    REQUIRE(callback->deliveredTriggeredFrames == 0);
+    delete callback;
+    delete coordinator;
+    EV << "Scheduled HE-TB identity mismatch cannot acknowledge another STA's MPDU.\n";
+}
+
+{
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US), IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    schedule.allocations.front().associationId = 7;
+    schedule.allocations.front().tid = 5;
+    auto transmitter = MacAddress("20:00:00:00:00:07");
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    callback->associationIds[transmitter] = 7;
+    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            MacAddress("10:00:00:00:00:00"));
+    FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            nullptr, nullptr, nullptr, nullptr, nullptr);
+    auto collection = new ReceiveCollectionStep();
+    collection->setFrameToReceive(makeHeTbAmpduResponse(schedule.allocations.front(),
+            transmitter, {MPDU_SUCCESS}, false, 6));
+    context.addStep(collection);
+    sequence.processResponsesForTest(&context);
+    const auto& records = sequence.getAckRecordsForTest();
+    REQUIRE(records.size() == 1);
+    REQUIRE(records.front().aid == 7);
+    REQUIRE(!records.front().responseReceived);
+    REQUIRE(records.front().bitmap == 0);
+    REQUIRE(callback->deliveredTriggeredFrames == 0);
+    delete callback;
+    delete coordinator;
+    EV << "Single-TID HE-TB identity rejects a decoded MPDU from another TID.\n";
+}
+
+{
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US), IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    schedule.allocations.front().associationId = 7;
+    schedule.allocations.front().tid = 5;
+    auto transmitter = MacAddress("20:00:00:00:00:07");
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    callback->associationIds[transmitter] = 7;
+    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            MacAddress("10:00:00:00:00:00"));
+    FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            nullptr, nullptr, nullptr, nullptr, nullptr);
+    auto collection = new ReceiveCollectionStep();
+    collection->setFrameToReceive(makeHeTbAmpduResponse(schedule.allocations.front(),
+            transmitter, {MPDU_SUCCESS, MPDU_FCS_ERROR}, true));
+    context.addStep(collection);
+    sequence.processResponsesForTest(&context);
+    const auto& records = sequence.getAckRecordsForTest();
+    REQUIRE(records.size() == 1);
+    REQUIRE(records.front().responseReceived);
+    REQUIRE(records.front().startingSequenceNumber == 100);
+    REQUIRE(records.front().bitmap == UINT64_C(0x1));
+    REQUIRE(callback->deliveredTriggeredFrames == 1);
+    delete callback;
+    delete coordinator;
+    EV << "Interspersed zero-length delimiters do not shift HE-TB MPDU outcomes.\n";
+}
+
+{
+    auto outcome = [] (int sequenceNumber, Ieee80211MpduReceiveStatus status,
+            uint8_t tid = 5) {
+        Ieee80211MpduReceiveResult result;
+        result.sequenceNumber = sequenceNumber;
+        result.fragmentNumber = 0;
+        result.tid = tid;
+        result.length = B(100);
+        result.status = status;
+        return result;
+    };
+    auto record101 = buildHeUlMultiStaBlockAckRecord(7, 5, {
+        outcome(100, MPDU_SUCCESS),
+        outcome(101, MPDU_FCS_ERROR),
+        outcome(102, MPDU_SUCCESS),
+    });
+    REQUIRE(record101.responseReceived);
+    REQUIRE(record101.startingSequenceNumber == 100);
+    REQUIRE(record101.bitmap == UINT64_C(0x5));
+
+    auto record110 = buildHeUlMultiStaBlockAckRecord(7, 5, {
+        outcome(200, MPDU_FCS_ERROR),
+        outcome(201, MPDU_SUCCESS),
+        outcome(202, MPDU_SUCCESS),
+    });
+    REQUIRE(record110.startingSequenceNumber == 200);
+    REQUIRE(record110.bitmap == UINT64_C(0x6));
+
+    auto record000 = buildHeUlMultiStaBlockAckRecord(7, 5, {
+        outcome(300, MPDU_FCS_ERROR),
+        outcome(301, MPDU_FCS_ERROR),
+        outcome(302, MPDU_FCS_ERROR),
+    });
+    REQUIRE(record000.responseReceived);
+    REQUIRE(record000.startingSequenceNumber == 300);
+    REQUIRE(record000.bitmap == 0);
+
+    auto structuralPrefix = buildHeUlMultiStaBlockAckRecord(7, 5, {
+        outcome(399, MPDU_DELIMITER_ERROR),
+        outcome(400, MPDU_SUCCESS),
+        outcome(401, MPDU_SUCCESS, 6),
+    });
+    REQUIRE(structuralPrefix.startingSequenceNumber == 400);
+    REQUIRE(structuralPrefix.bitmap == UINT64_C(0x1));
+    EV << "Multi-STA Block Ack preserves 101/110/all-failed sequence bases.\n";
+}
 EV << ".\n";
 
 %contains: stdout
@@ -546,4 +801,13 @@ NFRP AID range and tone-set/STS mapping passed for all HE bandwidths.
 BE/BK BSR ACI wire mappings passed.
 QoS Null BSR round trip passed.
 Multi-STA Block Ack round trip passed.
+HE UL response processing: received=1, block-ack records=1
+Single-subframe HE-TB FCS failure reaches a zero-bit Multi-STA Block Ack record.
+HE UL response processing: received=0, block-ack records=1
+Scheduled HE-TB identity mismatch cannot acknowledge another STA's MPDU.
+HE UL response processing: received=0, block-ack records=1
+Single-TID HE-TB identity rejects a decoded MPDU from another TID.
+HE UL response processing: received=1, block-ack records=1
+Interspersed zero-length delimiters do not shift HE-TB MPDU outcomes.
+Multi-STA Block Ack preserves 101/110/all-failed sequence bases.
 .

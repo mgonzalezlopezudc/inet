@@ -125,6 +125,7 @@ class INET_API HeHcf : public Hcf
             const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
             Hz centerFrequency, Hz channelBandwidth,
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
+    static Packet *buildHeTbAmpdu(const std::vector<Packet *>& mpdus);
     virtual void retryPendingTriggeredUlExchanges();
     virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
     virtual Packet *buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
@@ -171,10 +172,10 @@ class INET_API HeHcf : public Hcf
     virtual void originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac) override;
     virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
-    uint16_t getAssociationId(const MacAddress& address) const;
+    virtual uint16_t getAssociationId(const MacAddress& address) const;
     virtual bool getPeerOperatingMode(const MacAddress& address, Ieee80211HeOperatingMode& mode) const;
     void handleDlMuPlanningFailure(AccessCategory ac);
-    void processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid);
+    virtual void processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid);
 };
 
 } // namespace ieee80211

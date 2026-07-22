@@ -1062,11 +1062,15 @@ void Ieee80211Radio::decapsulate(Packet *packet) const
         }
     }
     if (auto indication = packet->findTagForUpdate<Ieee80211MpduReceiveInd>()) {
-        bool failed = packet->hasBitError();
         for (unsigned int i = 0; i < indication->getResultsArraySize(); ++i) {
             auto result = indication->getResults(i);
-            if (result.status == MPDU_NOT_EVALUATED)
-                result.status = failed ? MPDU_FCS_ERROR : MPDU_SUCCESS;
+            // A common/header/physical packet failure does not establish any
+            // individual MPDU's FCS result. Preserve NOT_EVALUATED in that
+            // case; only a structurally decoded packet may use the legacy
+            // all-success fallback. HE MU/TB reception normally resolves all
+            // valid MPDUs explicitly before reaching this boundary.
+            if (result.status == MPDU_NOT_EVALUATED && !packet->hasBitError())
+                result.status = MPDU_SUCCESS;
             indication->setResults(i, result);
         }
     }

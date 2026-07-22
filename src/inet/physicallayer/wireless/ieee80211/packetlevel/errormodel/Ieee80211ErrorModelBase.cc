@@ -7,6 +7,8 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211ErrorModelBase.h"
 
+#include <cmath>
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
@@ -24,6 +26,112 @@ namespace physicallayer {
 
 Ieee80211ErrorModelBase::Ieee80211ErrorModelBase()
 {
+}
+
+Ieee80211HeMpduErrorRateResult Ieee80211ErrorModelBase::computeHeDataErrorRate(
+        const ISnir *snir, size_t userIndex,
+        const Ieee80211HeUserPhyParameters& parameters,
+        unsigned int bitLength) const noexcept
+{
+    Ieee80211HeMpduErrorRateResult result;
+    try {
+        if (snir == nullptr || snir->getReception() == nullptr) {
+            result.error = "missing SNIR reception context";
+            return result;
+        }
+        auto transmission = dynamic_cast<const Ieee80211Transmission *>(
+                snir->getReception()->getTransmission());
+        if (transmission == nullptr || transmission->getHePpduLayout() == nullptr) {
+            result.error = "missing canonical HE PPDU layout";
+            return result;
+        }
+        const auto& users = transmission->getHePpduLayout()->getUsers();
+        if (userIndex >= users.size()) {
+            result.error = "canonical HE user index is out of range";
+            return result;
+        }
+        auto phyHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(
+                Ieee80211Radio::peekIeee80211PhyHeaderAtFront(transmission->getPacket()));
+        if (phyHeader == nullptr) {
+            result.error = "missing HE PHY header";
+            return result;
+        }
+        const Ieee80211HeMuUserInfo *headerUser = nullptr;
+        for (unsigned int i = 0; i < phyHeader->getUsersArraySize(); ++i) {
+            const auto& candidate = phyHeader->getUsers(i);
+            if (candidate.staId == parameters.staId &&
+                    candidate.ruToneSize == parameters.ru.toneSize &&
+                    candidate.ruToneOffset == parameters.ru.toneOffset) {
+                if (headerUser != nullptr) {
+                    result.error = "ambiguous HE PHY user mapping";
+                    return result;
+                }
+                headerUser = &candidate;
+            }
+        }
+        if (headerUser == nullptr) {
+            result.error = "canonical HE user is absent from the PHY header";
+            return result;
+        }
+
+        double userSnir = getScalarSnir(snir);
+        auto dimensionalSnir = dynamic_cast<const DimensionalSnir *>(snir);
+        bool channelMatrixLmmse = dimensionalSnir != nullptr && dimensionalSnir->isChannelMatrixLmmse();
+        if (phyHeader->getMuMimo() && phyHeader->getTotalNsts() > 0 && !channelMatrixLmmse) {
+            double signalShare = parameters.numberOfSpatialStreams /
+                    static_cast<double>(phyHeader->getTotalNsts());
+            double interferenceShare = headerUser->leakageSum /
+                    static_cast<double>(phyHeader->getTotalNsts());
+            userSnir = (userSnir * signalShare) /
+                    (1.0 + userSnir * interferenceShare);
+        }
+        if (parameters.dcm)
+            userSnir *= 2.0;
+        double successRate = getHeDataSuccessRate(parameters, bitLength, snir, userSnir);
+        if (!std::isfinite(successRate) || successRate < 0 || successRate > 1) {
+            result.error = "HE error model returned an invalid success rate";
+            return result;
+        }
+        result.valid = true;
+        result.packetErrorRate = 1.0 - successRate;
+        return result;
+    }
+    catch (const std::exception& exception) {
+        result.error = exception.what();
+        return result;
+    }
+    catch (...) {
+        result.error = "unknown HE error-model failure";
+        return result;
+    }
+}
+
+Ieee80211HeMpduErrorRateResult Ieee80211ErrorModelBase::computeHeMpduErrorRate(
+        const ISnir *snir, size_t userIndex, unsigned int bitLength) const noexcept
+{
+    Ieee80211HeMpduErrorRateResult result;
+    if (bitLength == 0 || bitLength % 8 != 0) {
+        result.error = "HE MPDU bit length is zero or not byte aligned";
+        return result;
+    }
+    if (snir == nullptr || snir->getReception() == nullptr) {
+        result.error = "missing SNIR reception context";
+        return result;
+    }
+    auto transmission = dynamic_cast<const Ieee80211Transmission *>(
+            snir->getReception()->getTransmission());
+    if (transmission == nullptr || transmission->getHePpduLayout() == nullptr ||
+            userIndex >= transmission->getHePpduLayout()->getUsers().size()) {
+        result.error = "missing canonical HE MPDU user";
+        return result;
+    }
+    // The delimiter MPDU Length covers the MAC header, frame body and the
+    // four-octet FCS. It excludes the delimiter and A-MPDU padding. Some
+    // derived models (notably RBIR) consult psduLength, so make this per-MPDU
+    // copy authoritative as well as passing the exact bit length.
+    auto parameters = transmission->getHePpduLayout()->getUsers()[userIndex];
+    parameters.psduLength = B(bitLength / 8);
+    return computeHeDataErrorRate(snir, userIndex, parameters, bitLength);
 }
 
 double Ieee80211ErrorModelBase::getDataSuccessRate(const IIeee80211Mode *mode,
@@ -81,6 +189,7 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
              dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr) ? hePhyHeader : nullptr;
     if (allocationPhyHeader != nullptr) {
         const Ieee80211HeMuUserInfo *selectedUser = nullptr;
+        size_t selectedUserIndex = 0;
         if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(phyHeader) != nullptr &&
                 allocationPhyHeader->getUsersArraySize() == 1)
             selectedUser = &allocationPhyHeader->getUsers(0);
@@ -98,33 +207,29 @@ double Ieee80211ErrorModelBase::computePacketErrorRate(const ISnir *snir, IRadio
         if (selectedUser == nullptr)
             dataSuccessRate = 0;
         else {
-            Ieee80211HeRu ru;
-            ru.index = selectedUser->ruIndex;
-            ru.toneSize = std::max<int>(selectedUser->ruToneSize, 26);
-            ru.toneOffset = selectedUser->ruToneOffset;
-            ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
-            ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
-            ru.bandwidth = Hz(ru.toneSize * 78125.0);
-            auto parameters = computeHeUserPhyParameters(selectedUser->psduLength, ru,
-                    selectedUser->mcs, selectedUser->numberOfSpatialStreams,
-                    selectedUser->dcm,
-                    static_cast<Ieee80211HeGuardInterval>(allocationPhyHeader->getGuardInterval()),
-                    static_cast<Ieee80211HeCoding>(allocationPhyHeader->getCoding()));
-            dataLength = 16 + selectedUser->psduLength.get<B>() * 8 + 6;
-            double userSnir = snr;
-            auto dimensionalSnir = dynamic_cast<const DimensionalSnir *>(snir);
-            bool channelMatrixLmmse = dimensionalSnir != nullptr && dimensionalSnir->isChannelMatrixLmmse();
-            if (allocationPhyHeader->getMuMimo() && allocationPhyHeader->getTotalNsts() > 0 &&
-                    !channelMatrixLmmse) {
-                double desiredNsts = selectedUser->numberOfSpatialStreams;
-                double totalNsts = allocationPhyHeader->getTotalNsts();
-                double signalShare = desiredNsts / totalNsts;
-                double interferenceShare = selectedUser->leakageSum / totalNsts;
-                userSnir = (snr * signalShare) / (1.0 + snr * interferenceShare);
+            const auto& canonicalUsers = transmission->getHePpduLayout()->getUsers();
+            bool foundCanonicalUser = false;
+            for (size_t i = 0; i < canonicalUsers.size(); ++i)
+                if (canonicalUsers[i].staId == selectedUser->staId &&
+                        canonicalUsers[i].ru.toneSize == selectedUser->ruToneSize &&
+                        canonicalUsers[i].ru.toneOffset == selectedUser->ruToneOffset) {
+                    if (foundCanonicalUser) {
+                        foundCanonicalUser = false;
+                        break;
+                    }
+                    selectedUserIndex = i;
+                    foundCanonicalUser = true;
+                }
+            if (foundCanonicalUser) {
+                const auto& parameters = canonicalUsers[selectedUserIndex];
+                dataLength = parameters.serviceBits +
+                        parameters.psduLength.get<B>() * 8 + parameters.tailBits;
             }
-            if (selectedUser->dcm)
-                userSnir *= 2.0;
-            dataSuccessRate = getHeDataSuccessRate(parameters, dataLength, snir, userSnir);
+            auto mpduError = foundCanonicalUser ?
+                    computeHeDataErrorRate(snir, selectedUserIndex,
+                            canonicalUsers[selectedUserIndex], dataLength) :
+                    Ieee80211HeMpduErrorRateResult();
+            dataSuccessRate = mpduError ? 1.0 - mpduError.packetErrorRate : 0;
         }
     }
     else

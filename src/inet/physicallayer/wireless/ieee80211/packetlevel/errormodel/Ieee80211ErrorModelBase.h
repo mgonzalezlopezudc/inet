@@ -8,6 +8,8 @@
 #ifndef __INET_IEEE80211ERRORMODELBASE_H
 #define __INET_IEEE80211ERRORMODELBASE_H
 
+#include <string>
+
 #include "inet/physicallayer/wireless/common/base/packetlevel/ErrorModelBase.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -15,6 +17,15 @@
 namespace inet {
 
 namespace physicallayer {
+
+struct INET_API Ieee80211HeMpduErrorRateResult
+{
+    bool valid = false;
+    double packetErrorRate = NaN;
+    std::string error;
+
+    explicit operator bool() const { return valid; }
+};
 
 class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
 {
@@ -33,6 +44,9 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
             unsigned int bitLength, double snir) const;
     virtual double getHeDataSuccessRate(const Ieee80211HeUserPhyParameters& parameters,
             unsigned int bitLength, const ISnir *snir, double scalarSnir) const;
+    Ieee80211HeMpduErrorRateResult computeHeDataErrorRate(const ISnir *snir,
+            size_t userIndex, const Ieee80211HeUserPhyParameters& parameters,
+            unsigned int bitLength) const noexcept;
 
     virtual Packet *computeCorruptedPacket(const Packet *packet, double ber) const override;
 
@@ -43,6 +57,15 @@ class INET_API Ieee80211ErrorModelBase : public ErrorModelBase
 
   public:
     Ieee80211ErrorModelBase();
+
+    /**
+     * Computes one HE MPDU's packet error rate without drawing from an RNG.
+     * The user index addresses the immutable canonical PPDU layout carried by
+     * the reception's transmission. Invalid or unsupported inputs are reported
+     * in the result instead of throwing.
+     */
+    virtual Ieee80211HeMpduErrorRateResult computeHeMpduErrorRate(const ISnir *snir,
+            size_t userIndex, unsigned int bitLength) const noexcept;
 
     virtual double computePacketErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;
     virtual double computeBitErrorRate(const ISnir *snir, IRadioSignal::SignalPart part) const override;

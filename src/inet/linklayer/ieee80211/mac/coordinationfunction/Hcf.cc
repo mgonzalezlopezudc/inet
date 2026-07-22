@@ -255,12 +255,23 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     auto edcaf = edca->getChannelOwner();
     if (header == nullptr) {
         auto heMuRx = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
+        const bool outcomeAmpdu = packet->findTag<physicallayer::Ieee80211MpduReceiveInd>() != nullptr &&
+                packet->getDataLength() > b(0) &&
+                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
         const bool nfrpFeedbackNdp = heMuRx != nullptr &&
                 heMuRx->getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK &&
                 heMuRx->getAllocationsArraySize() == 1 &&
                 heMuRx->getAllocations(0).ndpFeedbackReport;
         auto receiveStep = edcaf && frameSequenceHandler->isSequenceRunning() ?
                 dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep()) : nullptr;
+        if (outcomeAmpdu && receiveStep != nullptr) {
+            frameSequenceHandler->processResponse(packet);
+            return;
+        }
+        if (outcomeAmpdu) {
+            recipientProcessReceivedFrame(packet, header);
+            return;
+        }
         if (nfrpFeedbackNdp && receiveStep != nullptr && receiveStep->acceptsHeaderlessFrame(packet)) {
             // A feedback NDP has no MAC header and therefore cannot pass the
             // ordinary receiver-address test. Only the active NFRP collection
@@ -459,10 +470,14 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr) {
             auto delimiter = packet->popAtFront<Ieee80211MpduSubframeHeader>(
                     b(-1), parsingFlags);
+            auto mpduLength = B(delimiter->getLength());
+            if (mpduLength == B(0))
+                // EOF/null delimiters carry no MPDU outcome and therefore do
+                // not advance the ordered receive-result index.
+                continue;
             auto status = delimiter->isIncorrect() ? MPDU_DELIMITER_ERROR : MPDU_SUCCESS;
             if (receiveInd != nullptr && resultIndex < receiveInd->getResultsArraySize())
                 status = receiveInd->getResults(resultIndex).status;
-            auto mpduLength = B(delimiter->getLength());
             if (mpduLength > packet->getDataLength())
                 status = MPDU_PAYLOAD_ERROR;
             else {

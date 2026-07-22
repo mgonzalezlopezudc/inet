@@ -109,6 +109,8 @@ class INET_API Ieee80211Receiver : public FlatReceiverBase
     virtual bool computeIsReceptionAttempted(const IListening *listening, const IReception *reception,
             IRadioSignal::SignalPart part, const IInterference *interference) const override;
     virtual const IListeningDecision *computeListeningDecision(const IListening *listening, const IInterference *interference) const override;
+    virtual bool computeIsReceptionSuccessful(const IListening *listening, const IReception *reception,
+            IRadioSignal::SignalPart part, const IInterference *interference, const ISnir *snir) const override;
 
     virtual const IReceptionResult *computeReceptionResult(const IListening *listening, const IReception *reception, const IInterference *interference, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const override;
 

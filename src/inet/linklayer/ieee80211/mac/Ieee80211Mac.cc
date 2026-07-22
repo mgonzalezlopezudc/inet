@@ -218,7 +218,8 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
 {
     if (packet->getDataLength() > b(0)) {
         const auto& frontChunk = packet->peekAtFront();
-        if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frontChunk) != nullptr) {
+        if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frontChunk) != nullptr &&
+                packet->findTag<Ieee80211MpduReceiveInd>() == nullptr) {
             MpduDeaggregation deaggregation;
             auto frames = deaggregation.deaggregateFrame(packet);
             for (auto frame : *frames)
@@ -236,6 +237,16 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
         return;
     }
     if (rx->lowerFrameReceived(packet)) {
+        if (packet->getDataLength() > b(0) &&
+                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr &&
+                packet->findTag<Ieee80211MpduReceiveInd>() != nullptr) {
+            // HE packet-level reception has already produced ordered
+            // delimiter/MPDU outcomes. Keep the A-MPDU intact until HCF so an
+            // active UL collection and ordinary recipient processing consume
+            // the same status ledger; generic deaggregation would discard it.
+            processLowerFrame(packet, nullptr);
+            return;
+        }
         if (packet->getDataLength() == b(0)) {
             auto heMuRx = packet->findTag<Ieee80211HeMuRxTag>();
             const bool nfrpFeedbackNdp = heMuRx != nullptr &&

@@ -25,9 +25,9 @@
 //   - Clause 26.11: HE spatial reuse.
 //
 // Approximations / simplifications:
-//   - Per-MPDU failure injection inside an unsuccessful HE MU payload is
-//     randomized (one random MPDU is marked failed) rather than modeling the
-//     exact FCS/delimiter decoding outcome of each subframe.
+//   - FEC decoding and individual corrupt bits are not modeled. The HE error
+//     model instead provides an analytical PER for every structurally valid
+//     MPDU, and the receiver records one deterministic RNG outcome per MPDU.
 //   - Concurrent HE TB reception is admitted only when the transmissions share
 //     the same Trigger ID.  Real multi-user UL depends on tight timing/frequency
 //     synchronization, which is not modeled here.
@@ -41,6 +41,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211ErrorModelBase.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -161,8 +162,10 @@ static bool isReceptionSuccessful(const std::vector<const IReceptionDecision *> 
     return successful;
 }
 
-static bool applyHeMuMpduReceiveOutcomes(Packet *packet,
-        const std::vector<const IReceptionDecision *> *decisions, cRNG *rng)
+static bool applyHeMpduReceiveOutcomes(Packet *packet,
+        const std::vector<const IReceptionDecision *> *decisions,
+        const Ieee80211ErrorModelBase *errorModel, const ISnir *snir,
+        size_t userIndex, cRNG *rng)
 {
     bool commonSuccessful = true;
     bool dataSuccessful = true;
@@ -185,36 +188,35 @@ static bool applyHeMuMpduReceiveOutcomes(Packet *packet,
     auto indication = packet->findTagForUpdate<Ieee80211MpduReceiveInd>();
     if (!commonSuccessful || indication == nullptr)
         return commonSuccessful && dataSuccessful;
-    if (dataSuccessful)
-        return true;
 
-    int64_t totalBytes = 0;
-    for (unsigned int i = 0; i < indication->getResultsArraySize(); ++i) {
-        const auto& result = indication->getResults(i);
-        if (result.status == MPDU_NOT_EVALUATED)
-            totalBytes += std::max<int64_t>(1, result.length.get<B>());
-    }
-    if (totalBytes == 0)
-        return false;
-
-    int64_t failedByte = std::min<int64_t>(totalBytes - 1,
-            static_cast<int64_t>(rng->doubleRand() * totalBytes));
-    int64_t cumulativeBytes = 0;
-    bool failureAssigned = false;
+    unsigned int structurallyValidMpdus = 0;
     for (unsigned int i = 0; i < indication->getResultsArraySize(); ++i) {
         auto result = indication->getResults(i);
         if (result.status == MPDU_NOT_EVALUATED) {
-            cumulativeBytes += std::max<int64_t>(1, result.length.get<B>());
-            if (!failureAssigned && failedByte < cumulativeBytes) {
+            structurallyValidMpdus++;
+            if (!dataSuccessful)
                 result.status = MPDU_FCS_ERROR;
-                failureAssigned = true;
-            }
-            else
+            else if (errorModel == nullptr)
                 result.status = MPDU_SUCCESS;
+            else {
+                auto errorRate = errorModel->computeHeMpduErrorRate(snir, userIndex,
+                        result.length.get<B>() * 8);
+                if (!errorRate)
+                    throw cRuntimeError("Cannot evaluate HE MPDU error rate: %s",
+                            errorRate.error.c_str());
+                // Draw order is a reproducibility contract: one draw for each
+                // structurally valid delimiter, including PER endpoints.
+                double outcome = rng->doubleRand();
+                result.status = outcome < errorRate.packetErrorRate ?
+                        MPDU_FCS_ERROR : MPDU_SUCCESS;
+            }
             indication->setResults(i, result);
         }
     }
-    return true;
+    // Physical DATA failure and wholly malformed data remain packet failures.
+    // Analytical FCS outcomes remain per MPDU even when every draw fails.
+    return dataSuccessful && (structurallyValidMpdus != 0 ||
+            indication->getResultsArraySize() == 0);
 }
 
 static const Ieee80211HeModelPsduBitRange *findHePsduRange(
@@ -265,19 +267,34 @@ static Packet *extractHeMuMpdu(const Ieee80211Transmission *transmission,
                     parser->peekAtFront(b(-1), parsingFlags)) != nullptr) {
         auto delimiter = parser->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>(
                 b(-1), parsingFlags);
+        // Table 9-659 uses MPDU Length=0 for EOF/null delimiters and A-MPDU
+        // padding. It represents no MPDU, so it has no FCS outcome and
+        // consumes no RNG draw. NDP remains a separate PPDU-layout property.
+        if (delimiter->getLength() == 0) {
+            mpduOffset += B(4);
+            continue;
+        }
         Ieee80211MpduReceiveResult receiveResult;
         receiveResult.offset = mpduOffset;
         receiveResult.length = B(delimiter->getLength());
+        // The packet-level model can honor a delimiter already marked
+        // incorrect but does not synthesize or decode delimiter CRC bits.
         receiveResult.status = delimiter->isIncorrect() ?
                 MPDU_DELIMITER_ERROR : MPDU_NOT_EVALUATED;
         if (parser->getDataLength() >= receiveResult.length) {
-            auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(
+            auto macHeader = dynamicPtrCast<const ieee80211::Ieee80211MacHeader>(
                     parser->peekAtFront(b(-1), parsingFlags));
-            if (macHeader != nullptr) {
-                receiveResult.sequenceNumber = macHeader->getSequenceNumber().get();
-                receiveResult.fragmentNumber = macHeader->getFragmentNumber();
-                receiveResult.tid = macHeader->getTid();
+            if (macHeader != nullptr && !macHeader->isIncorrect() &&
+                    !macHeader->isIncomplete() && !macHeader->isImproperlyRepresented()) {
+                if (auto dataOrMgmtHeader = dynamicPtrCast<const ieee80211::Ieee80211DataOrMgmtHeader>(macHeader)) {
+                    receiveResult.sequenceNumber = dataOrMgmtHeader->getSequenceNumber().get();
+                    receiveResult.fragmentNumber = dataOrMgmtHeader->getFragmentNumber();
+                }
+                if (auto dataHeader = dynamicPtrCast<const ieee80211::Ieee80211DataHeader>(macHeader))
+                    receiveResult.tid = dataHeader->getTid();
             }
+            else if (receiveResult.status == MPDU_NOT_EVALUATED)
+                receiveResult.status = MPDU_HEADER_ERROR;
             parser->popAtFront(receiveResult.length, parsingFlags);
         }
         else {
@@ -580,6 +597,27 @@ const IListeningDecision *Ieee80211Receiver::computeListeningDecision(const ILis
     return FlatReceiverBase::computeListeningDecision(listening, &ccaInterference);
 }
 
+bool Ieee80211Receiver::computeIsReceptionSuccessful(const IListening *listening,
+        const IReception *reception, IRadioSignal::SignalPart part,
+        const IInterference *interference, const ISnir *snir) const
+{
+    auto transmission = dynamic_cast<const Ieee80211Transmission *>(
+            reception == nullptr ? nullptr : reception->getTransmission());
+    auto layout = transmission == nullptr ? nullptr : transmission->getHePpduLayout();
+    if (part == IRadioSignal::SIGNAL_PART_DATA &&
+            peekHeMuOrTbPhyHeader(reception->getTransmission()) != nullptr &&
+            layout != nullptr && !layout->isNdp() &&
+            dynamic_cast<const Ieee80211ErrorModelBase *>(errorModel) != nullptr)
+        // The common receiver still applies the deterministic physical SNIR
+        // gate. Analytical HE data errors are resolved once per MPDU later,
+        // avoiding an aggregate packet-error draw followed by post-hoc failure
+        // placement.
+        return SnirReceiverBase::computeIsReceptionSuccessful(
+                listening, reception, part, interference, snir);
+    return FlatReceiverBase::computeIsReceptionSuccessful(
+            listening, reception, part, interference, snir);
+}
+
 bool Ieee80211Receiver::shouldIgnoreReceptionDueToHeSpatialReuse(const IListening *listening, const IReception *reception, bool logDecision) const
 {
     auto spatialReuseDecision = computeHeSpatialReuseDecision(listening, reception);
@@ -720,19 +758,36 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
 
     auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
     if (allocationPhyHeader != nullptr) {
+        auto layout = transmission->getHePpduLayout();
+        auto heErrorModel = dynamic_cast<const Ieee80211ErrorModelBase *>(errorModel);
+        if (layout != nullptr && !layout->isNdp() && errorModel != nullptr && heErrorModel == nullptr)
+            throw cRuntimeError("Configured IEEE 802.11 error model does not support per-MPDU HE outcomes");
         if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr) {
             lastHeRuAssigned = true;
-            auto packet = transmittedPacket->dup();
-            packet->clearTags();
-            packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
-            if (!isReceptionSuccessful(decisions))
+            if (!layout || layout->getUsers().size() != 1)
+                throw cRuntimeError("Packet-level HE TB reception requires exactly one canonical user");
+            size_t selectedUserIndex = 0;
+            auto packet = layout->isNdp() ? transmittedPacket->dup() :
+                    buildHeMuPhyPacket(transmission, allocationPhyHeader,
+                            layout->getUsers().front().staId, selectedUserIndex);
+            bool decodedPsdu = packet != nullptr;
+            if (packet == nullptr) {
+                packet = transmittedPacket->dup();
+                packet->clearTags();
+                packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+            }
+            else if (layout->isNdp()) {
+                packet->clearTags();
+                packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+            }
+            bool successful = !decodedPsdu ? false : layout->isNdp() ? isReceptionSuccessful(decisions) :
+                    applyHeMpduReceiveOutcomes(packet, decisions, heErrorModel, snir,
+                            selectedUserIndex, getRNG(0));
+            if (!successful)
                 packet->setBitError(true);
             addReceptionIndications(packet, reception, interference, snir);
             packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
             packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
-            auto layout = transmission->getHePpduLayout();
-            if (!layout || layout->getUsers().size() != 1)
-                throw cRuntimeError("Packet-level HE TB reception requires exactly one canonical user");
             attachHeRxVector(packet, transmission, 0, layout->getUsers().front().staId,
                     getObservedHePsduLength(packet));
             auto recipientParameters = std::shared_ptr<const Ieee80211HeUserPhyParameters>(
@@ -757,7 +812,8 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         if (decodedPsdu)
             attachHeRxVector(packet, transmission, selectedUserIndex, myStaId,
                     getObservedHePsduLength(packet));
-        if (!applyHeMuMpduReceiveOutcomes(packet, decisions, getRNG(0)))
+        if (!applyHeMpduReceiveOutcomes(packet, decisions, heErrorModel, snir,
+                selectedUserIndex, getRNG(0)))
             packet->setBitError(true);
         addReceptionIndications(packet, reception, interference, snir);
         packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());

@@ -14,6 +14,8 @@ only the legacy-visible duration indication.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211NistErrorModel.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211BerTableErrorModel.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/ISnir.h"
@@ -32,12 +34,19 @@ import inet.networklayer.common.InterfaceTable;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
+import inet.physicallayer.wireless.ieee80211.packetlevel.errormodel.Ieee80211NistErrorModel;
 import inet.mobility.static.StationaryMobility;
 
 module DummyReceiverModule extends Ieee80211Receiver
 {
     parameters:
         @class(DummyReceiverModule);
+}
+
+module TestHeErrorModel extends Ieee80211NistErrorModel
+{
+    parameters:
+        @class(TestHeErrorModel);
 }
 
 module MockNic
@@ -47,6 +56,7 @@ module MockNic
     submodules:
         radio: Ieee80211ScalarRadio {
             receiver.typename = "DummyReceiverModule";
+            receiver.errorModel.typename = "TestHeErrorModel";
         }
     connections allowunconnected:
         radio.upperLayerOut --> radio.upperLayerIn;
@@ -92,6 +102,27 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestHeErrorModel : public Ieee80211NistErrorModel
+{
+  public:
+    mutable std::vector<unsigned int> evaluatedBitLengths;
+    unsigned int failedBitLength = 0;
+
+    virtual Ieee80211HeMpduErrorRateResult computeHeMpduErrorRate(const ISnir *snir,
+            size_t userIndex, unsigned int bitLength) const noexcept override
+    {
+        evaluatedBitLengths.push_back(bitLength);
+        Ieee80211HeMpduErrorRateResult result;
+        result.valid = true;
+        result.packetErrorRate = bitLength == failedBitLength ? 1 : 0;
+        return result;
+    }
+};
+
+Define_Module(TestHeErrorModel);
+
 static Ieee80211HeTxVectorValidationResult makeCanonicalPair(
         const Packet *packet,
         const std::vector<Ieee80211HeUserPhyParameters>& users,
@@ -103,13 +134,17 @@ static Ieee80211HeTxVectorValidationResult makeCanonicalPair(
     request.channelBandwidth = MHz(20);
     request.ppduFormat = getIeee80211HePpduFormat(*phyHeader);
     if (request.ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+        request.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
         if (ppdu.common.ndp) {
             request.lSigLength = 34;
             request.requestedTxTime = SimTime(72, SIMTIME_US);
             request.requestedTxTimeExact = true;
         }
-        else
-            request.lSigLength = 742;
+        else {
+            request.lSigLength = 130;
+            request.preFecPaddingFactor = 4;
+            request.numberOfHeLtfSymbols = 1;
+        }
     }
     request.ndp = ppdu.common.ndp;
     request.bssColor = phyHeader->getBssColor();
@@ -188,6 +223,7 @@ class DummyReceiverModule : public Ieee80211Receiver {
     const IReceptionResult *computeTestReceptionResult(const IReception *reception, const ISnir *snir, const std::vector<const IReceptionDecision *> *decisions) const {
         return computeReceptionResult(nullptr, reception, nullptr, snir, decisions);
     }
+    void setTestErrorModel(const IErrorModel *model) { errorModel = model; }
 };
 
 class DummySnir : public ISnir {
@@ -243,7 +279,8 @@ static Packet *makeHeMuPacket(const char *name, const std::vector<std::pair<Ieee
 static Packet *receiveHeMuPacket(DummyReceiverModule *receiver, const IRadio *radio,
         Packet *packet, const IIeee80211Mode *mode, const Ieee80211Channel *channel,
         const std::vector<Ieee80211HeUserPhyParameters>& heUsers = {},
-        const Ieee80211HePpduParameters& hePpdu = {})
+        const Ieee80211HePpduParameters& hePpdu = {},
+        bool commonSuccessful = true, bool dataSuccessful = true)
 {
     auto transmission = new MockIeee80211Transmission(radio, packet, mode, channel, heUsers, hePpdu);
     const auto& layout = transmission->getHePpduLayout();
@@ -254,13 +291,34 @@ static Packet *receiveHeMuPacket(DummyReceiverModule *receiver, const IRadio *ra
             Hz(5.18e9), Hz(20e6), mW(1));
     auto reception = new Reception(radio, transmission, SIMTIME_ZERO,
             layout->getDuration(), Coord(), Coord(), Quaternion(), Quaternion(), analogModel);
-    auto decision = new ReceptionDecision(reception, IRadioSignal::SIGNAL_PART_WHOLE, true, true, true);
-    auto decisions = new std::vector<const IReceptionDecision *> { decision };
+    auto decisions = new std::vector<const IReceptionDecision *>;
+    if (commonSuccessful && dataSuccessful)
+        decisions->push_back(new ReceptionDecision(reception,
+                IRadioSignal::SIGNAL_PART_WHOLE, true, true, true));
+    else {
+        decisions->push_back(new ReceptionDecision(reception,
+                IRadioSignal::SIGNAL_PART_HEADER, true, true, commonSuccessful));
+        decisions->push_back(new ReceptionDecision(reception,
+                IRadioSignal::SIGNAL_PART_DATA, true, true, dataSuccessful));
+    }
     DummySnir snir(reception);
-    auto result = receiver->computeTestReceptionResult(reception, &snir, decisions);
+    auto decisionsToDelete = *decisions;
+    const IReceptionResult *result = nullptr;
+    try {
+        result = receiver->computeTestReceptionResult(reception, &snir, decisions);
+    }
+    catch (...) {
+        for (auto decision : decisionsToDelete)
+            delete decision;
+        delete decisions;
+        delete reception;
+        delete transmission;
+        throw;
+    }
     auto receivedPacket = result->getPacket()->dup();
     delete result;
-    delete decision;
+    for (auto decision : decisionsToDelete)
+        delete decision;
     delete reception;
     delete transmission;
     return receivedPacket;
@@ -332,13 +390,13 @@ static Ieee80211HePpduParameters makeHeModelPpdu(
     return ppdu;
 }
 
-static Packet *makeSizedMpdu(const MacAddress& receiver, int payloadLength)
+static Packet *makeSizedMpdu(const MacAddress& receiver, int payloadLength, int sequenceNumber = 0)
 {
     auto mpdu = new Packet("sentinel-mpdu");
     auto header = makeShared<Ieee80211DataHeader>();
     header->setType(ST_DATA_WITH_QOS);
     header->setReceiverAddress(receiver);
-    header->setSequenceNumber(SequenceNumberCyclic(0));
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
     header->setChunkLength(b(288));
     mpdu->insertAtBack(header);
     auto payload = makeShared<ByteCountChunk>(B(payloadLength));
@@ -704,6 +762,276 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     delete packet;
 }
 
+// --- Test 11: explicit MPDU PER endpoints consume one RNG draw per valid delimiter ---
+{
+    auto recipient = MacAddress("00:11:22:33:44:55");
+    auto aggregateRu = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
+    auto packet = new Packet("he-mu-explicit-mpdu-outcomes");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = aggregateRu.index;
+    user.ruToneSize = aggregateRu.toneSize;
+    user.ruToneOffset = aggregateRu.toneOffset;
+    user.staId = computeHeMuStaId(recipient);
+    phyHeader->appendUsers(user);
+    phyHeader->setChunkLength(B(14));
+    packet->insertAtBack(phyHeader);
+    std::vector<unsigned int> expectedBitLengths;
+    for (int i = 0; i < 3; ++i) {
+        auto mpdu = makeSizedMpdu(recipient, 5 + 2 * i, 10 + i);
+        B length(mpdu->getByteLength());
+        expectedBitLengths.push_back(length.get<B>() * 8);
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setLength(length.get<B>());
+        packet->insertAtBack(delimiter);
+        packet->insertAtBack(mpdu->peekAll());
+        delete mpdu;
+        int padding = (4 - (B(4) + length).get<B>() % 4) % 4;
+        if (i != 2 && padding != 0)
+            packet->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
+    }
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    auto psduLength = B(packet->getByteLength() - phyHeader->getChunkLength().get<B>());
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(aggregateRu, recipient, psduLength)
+    };
+    auto modelPpdu = makeHeModelPpdu(modelUsers, false);
+    auto testErrorModel = check_and_cast<TestHeErrorModel *>(rxModule1->getSubmodule("errorModel"));
+    testErrorModel->evaluatedBitLengths.clear();
+    testErrorModel->failedBitLength = expectedBitLengths[1];
+    auto rng = rxModule1->getRNG(0);
+    auto drawsBefore = rng->getNumbersDrawn();
+    auto received = receiveHeMuPacket(rxModule1, radio1, packet,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            modelUsers, modelPpdu);
+    auto drawsAfter = rng->getNumbersDrawn();
+    auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
+    REQUIRE(outcomes->getResultsArraySize() == 3);
+    REQUIRE(outcomes->getResults(0).status == MPDU_SUCCESS);
+    REQUIRE(outcomes->getResults(1).status == MPDU_FCS_ERROR);
+    REQUIRE(outcomes->getResults(2).status == MPDU_SUCCESS);
+    REQUIRE(!received->hasBitError());
+    REQUIRE(drawsAfter - drawsBefore == 3);
+    REQUIRE(testErrorModel->evaluatedBitLengths == expectedBitLengths);
+
+    testErrorModel->evaluatedBitLengths.clear();
+    drawsBefore = rng->getNumbersDrawn();
+    auto commonFailed = receiveHeMuPacket(rxModule1, radio1, packet,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            modelUsers, modelPpdu, false, true);
+    REQUIRE(commonFailed->hasBitError());
+    auto unevaluated = commonFailed->getTag<Ieee80211MpduReceiveInd>();
+    REQUIRE(unevaluated->getResultsArraySize() == 3);
+    for (unsigned int i = 0; i < unevaluated->getResultsArraySize(); ++i)
+        REQUIRE(unevaluated->getResults(i).status == MPDU_NOT_EVALUATED);
+    REQUIRE(rng->getNumbersDrawn() == drawsBefore);
+    REQUIRE(testErrorModel->evaluatedBitLengths.empty());
+    delete commonFailed;
+
+    drawsBefore = rng->getNumbersDrawn();
+    auto physicalDataFailed = receiveHeMuPacket(rxModule1, radio1, packet,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            modelUsers, modelPpdu, true, false);
+    REQUIRE(physicalDataFailed->hasBitError());
+    auto physicalFailures = physicalDataFailed->getTag<Ieee80211MpduReceiveInd>();
+    REQUIRE(physicalFailures->getResultsArraySize() == 3);
+    for (unsigned int i = 0; i < physicalFailures->getResultsArraySize(); ++i)
+        REQUIRE(physicalFailures->getResults(i).status == MPDU_FCS_ERROR);
+    REQUIRE(rng->getNumbersDrawn() == drawsBefore);
+    delete physicalDataFailed;
+    std::cout << "Explicit MPDU outcomes preserve 101 and consume three ordered RNG draws: PASS\n";
+    delete received;
+    delete packet;
+}
+
+// --- Test 12: zero-length delimiters are padding, not MPDUs or NDP ---
+{
+    auto recipient = MacAddress("00:11:22:33:44:55");
+    auto paddingRu = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
+    auto packet = new Packet("he-mu-all-padding-non-ndp");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = paddingRu.index;
+    user.ruToneSize = paddingRu.toneSize;
+    user.ruToneOffset = paddingRu.toneOffset;
+    user.staId = computeHeMuStaId(recipient);
+    phyHeader->appendUsers(user);
+    phyHeader->setChunkLength(B(14));
+    packet->insertAtBack(phyHeader);
+    for (int i = 0; i < 2; ++i) {
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setEof(true);
+        delimiter->setLength(0);
+        packet->insertAtBack(delimiter);
+    }
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(paddingRu, recipient, B(8))
+    };
+    auto testErrorModel = check_and_cast<TestHeErrorModel *>(rxModule1->getSubmodule("errorModel"));
+    testErrorModel->evaluatedBitLengths.clear();
+    auto rng = rxModule1->getRNG(0);
+    auto drawsBefore = rng->getNumbersDrawn();
+    auto received = receiveHeMuPacket(rxModule1, radio1, packet,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            modelUsers, makeHeModelPpdu(modelUsers, false));
+    REQUIRE(received->hasTag<Ieee80211MpduReceiveInd>());
+    REQUIRE(received->getTag<Ieee80211MpduReceiveInd>()->getResultsArraySize() == 0);
+    REQUIRE(received->getTag<Ieee80211HeRxVectorInd>()->getRxVector()->getUser().getPsduLength() == B(8));
+    REQUIRE(rxModule1->getRNG(0)->getNumbersDrawn() == drawsBefore);
+    REQUIRE(testErrorModel->evaluatedBitLengths.empty());
+    std::cout << "All-padding zero-length delimiters remain non-NDP and consume no RNG: PASS\n";
+    delete received;
+    delete packet;
+}
+
+// --- Test 13: an unsupported configured error model is rejected for HE MPDUs ---
+{
+    auto recipient = MacAddress("00:11:22:33:44:55");
+    auto ru = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
+    auto packet = new Packet("he-mu-unsupported-error-model");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ru.index;
+    user.ruToneSize = ru.toneSize;
+    user.ruToneOffset = ru.toneOffset;
+    user.staId = computeHeMuStaId(recipient);
+    phyHeader->appendUsers(user);
+    phyHeader->setChunkLength(B(14));
+    packet->insertAtBack(phyHeader);
+    auto mpdu = makeSizedMpdu(recipient, 7, 77);
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(mpdu->getByteLength());
+    packet->insertAtBack(delimiter);
+    packet->insertAtBack(mpdu->peekAll());
+    delete mpdu;
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(ru, recipient, B(packet->getByteLength() - phyHeader->getChunkLength().get<B>()))
+    };
+    Ieee80211BerTableErrorModel unsupportedErrorModel;
+    auto configuredErrorModel = rxModule1->getErrorModel();
+    rxModule1->setTestErrorModel(&unsupportedErrorModel);
+    bool rejected = false;
+    try {
+        delete receiveHeMuPacket(rxModule1, radio1, packet,
+                const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+                modelUsers, makeHeModelPpdu(modelUsers, false));
+    }
+    catch (cRuntimeError&) {
+        rejected = true;
+    }
+    rxModule1->setTestErrorModel(configuredErrorModel);
+    REQUIRE(rejected);
+    std::cout << "Unsupported HE per-MPDU error model is rejected explicitly: PASS\n";
+    delete packet;
+}
+
+// --- Test 14: a one-subframe HE TB A-MPDU gets one explicit FCS outcome ---
+{
+    auto recipient = MacAddress("00:11:22:33:44:55");
+    auto ru = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
+    auto packet = new Packet("he-tb-single-subframe");
+    auto phyHeader = makeShared<Ieee80211HeTbPhyHeader>();
+    Ieee80211HeTbSignalingFields signaling;
+    signaling.signalingValid = true;
+    signaling.lSigLength = 130;
+    signaling.bandwidth = 0;
+    signaling.txop = 127;
+    phyHeader->setSignaling(signaling);
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ru.index;
+    user.ruToneSize = ru.toneSize;
+    user.ruToneOffset = ru.toneOffset;
+    user.staId = computeHeMuStaId(recipient);
+    phyHeader->appendUsers(user);
+    phyHeader->setChunkLength(b(100));
+    packet->insertAtBack(roundTripHeTbPhyHeader(phyHeader));
+    auto mpdu = makeSizedMpdu(recipient, 11, 100);
+    B mpduLength(mpdu->getByteLength());
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(mpduLength.get<B>());
+    delimiter->setEof(true);
+    packet->insertAtBack(delimiter);
+    packet->insertAtBack(mpdu->peekAll());
+    delete mpdu;
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(ru, recipient, B(4) + mpduLength)
+    };
+    auto testErrorModel = check_and_cast<TestHeErrorModel *>(rxModule1->getSubmodule("errorModel"));
+    testErrorModel->evaluatedBitLengths.clear();
+    testErrorModel->failedBitLength = mpduLength.get<B>() * 8;
+    auto rng = rxModule1->getRNG(0);
+    auto drawsBefore = rng->getNumbersDrawn();
+    auto received = receiveHeMuPacket(rxModule1, radio1, packet,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            modelUsers, makeHeModelPpdu(modelUsers, false, HE_TRIGGER_BASED_UPLINK));
+    auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
+    REQUIRE(outcomes->getResultsArraySize() == 1);
+    REQUIRE(outcomes->getResults(0).sequenceNumber == 100);
+    REQUIRE(outcomes->getResults(0).status == MPDU_FCS_ERROR);
+    REQUIRE(!received->hasBitError());
+    REQUIRE(rng->getNumbersDrawn() - drawsBefore == 1);
+    REQUIRE(testErrorModel->evaluatedBitLengths == std::vector<unsigned int> {
+            static_cast<unsigned int>(mpduLength.get<B>() * 8)});
+    std::cout << "Single-subframe HE TB receives one explicit FCS outcome and RNG draw: PASS\n";
+    delete received;
+    delete packet;
+}
+
+// --- Test 15: a delimited non-data MPDU is structurally valid HE content ---
+{
+    auto recipient = MacAddress("00:11:22:33:44:55");
+    auto ru = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
+    auto packet = new Packet("he-mu-block-ack-subframe");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    Ieee80211HeMuUserInfo user;
+    user.ruIndex = ru.index;
+    user.ruToneSize = ru.toneSize;
+    user.ruToneOffset = ru.toneOffset;
+    user.staId = computeHeMuStaId(recipient);
+    phyHeader->appendUsers(user);
+    phyHeader->setChunkLength(B(14));
+    packet->insertAtBack(phyHeader);
+    auto mpdu = new Packet("basic-block-ack-mpdu");
+    auto blockAck = makeShared<Ieee80211BasicBlockAck>();
+    blockAck->setReceiverAddress(recipient);
+    blockAck->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
+    mpdu->insertAtBack(blockAck);
+    mpdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    B mpduLength(mpdu->getByteLength());
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(mpduLength.get<B>());
+    delimiter->setEof(true);
+    packet->insertAtBack(delimiter);
+    packet->insertAtBack(mpdu->peekAll());
+    delete mpdu;
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(ru, recipient, B(4) + mpduLength)
+    };
+    auto testErrorModel = check_and_cast<TestHeErrorModel *>(rxModule1->getSubmodule("errorModel"));
+    testErrorModel->evaluatedBitLengths.clear();
+    testErrorModel->failedBitLength = 0;
+    auto rng = rxModule1->getRNG(0);
+    auto drawsBefore = rng->getNumbersDrawn();
+    auto received = receiveHeMuPacket(rxModule1, radio1, packet,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"))->getMode(0), channel,
+            modelUsers, makeHeModelPpdu(modelUsers, false));
+    auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
+    REQUIRE(outcomes->getResultsArraySize() == 1);
+    REQUIRE(outcomes->getResults(0).status == MPDU_SUCCESS);
+    REQUIRE(outcomes->getResults(0).sequenceNumber == -1);
+    REQUIRE(outcomes->getResults(0).tid == -1);
+    REQUIRE(rng->getNumbersDrawn() - drawsBefore == 1);
+    REQUIRE(testErrorModel->evaluatedBitLengths == std::vector<unsigned int> {
+            static_cast<unsigned int>(mpduLength.get<B>() * 8)});
+    std::cout << "Delimited HE Block Ack MPDU remains structurally valid: PASS\n";
+    delete received;
+    delete packet;
+}
+
 // Cleanup Channel
 delete channel;
 
@@ -728,4 +1056,9 @@ TX allocation tag absent after reception: PASS
 Format-consistent HE TB feedback NDP reconstructs zero-PSDU RXVECTOR: PASS
 Zero-length HE MU remains DATA with zero-PSDU RXVECTOR: PASS
 Oversized model PSDU span rejects leading MPDU: PASS
+Explicit MPDU outcomes preserve 101 and consume three ordered RNG draws: PASS
+All-padding zero-length delimiters remain non-NDP and consume no RNG: PASS
+Unsupported HE per-MPDU error model is rejected explicitly: PASS
+Single-subframe HE TB receives one explicit FCS outcome and RNG draw: PASS
+Delimited HE Block Ack MPDU remains structurally valid: PASS
 .

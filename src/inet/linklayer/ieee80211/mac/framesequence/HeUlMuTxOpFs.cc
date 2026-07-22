@@ -41,6 +41,31 @@
 namespace inet {
 namespace ieee80211 {
 
+Ieee80211MultiStaBlockAckRecord buildHeUlMultiStaBlockAckRecord(
+        uint16_t aid, uint8_t tid,
+        const std::vector<physicallayer::Ieee80211MpduReceiveResult>& outcomes)
+{
+    Ieee80211MultiStaBlockAckRecord record;
+    record.aid = aid;
+    record.tid = tid;
+    record.responseReceived = true;
+    bool startingSequenceKnown = false;
+    for (const auto& outcome : outcomes) {
+        bool structurallyValid = outcome.status == physicallayer::MPDU_SUCCESS ||
+                outcome.status == physicallayer::MPDU_FCS_ERROR;
+        if (!structurallyValid || outcome.sequenceNumber < 0 || outcome.tid != tid)
+            continue;
+        if (!startingSequenceKnown) {
+            record.startingSequenceNumber = outcome.sequenceNumber;
+            startingSequenceKnown = true;
+        }
+        int offset = (outcome.sequenceNumber - record.startingSequenceNumber + 4096) % 4096;
+        if (outcome.status == physicallayer::MPDU_SUCCESS && offset < 64)
+            record.bitmap |= UINT64_C(1) << offset;
+    }
+    return record;
+}
+
 namespace {
 
 static uint8_t accessCategoryToAci(AccessCategory ac)
@@ -65,21 +90,9 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
     int nfrpToneSetsPerSpatialStream = 0;
     int nfrpScheduledStaCount = 0;
     std::set<uint16_t> receivedAids;
+    std::set<int> receivedRandomAccessRus;
     simtime_t firstResponseTime;
     simtime_t lastResponseTime;
-
-    const Ieee80211DataHeader *findDataHeader(const Packet *packet) const
-    {
-        constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE |
-                Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
-        if (auto header = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>()))
-            return header.get();
-        if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) == nullptr)
-            return nullptr;
-        auto header = dynamicPtrCast<const Ieee80211DataHeader>(
-                packet->peekDataAt(B(4), b(-1), parsingFlags));
-        return header == nullptr ? nullptr : header.get();
-    }
 
   public:
     HeUlReceiveCollectionStep(uint32_t triggerId, HeHcf *callback,
@@ -114,8 +127,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
     virtual void setFrameToReceive(Packet *frame) override
     {
         auto tag = frame->findTag<physicallayer::Ieee80211HeMuRxTag>();
-        auto header = nfrp ? nullptr : findDataHeader(frame);
-        if (tag == nullptr || (!nfrp && header == nullptr) || tag->getPpduFormat() != physicallayer::HE_TRIGGER_BASED_UPLINK ||
+        if (tag == nullptr || tag->getPpduFormat() != physicallayer::HE_TRIGGER_BASED_UPLINK ||
                 tag->getTriggerId() != triggerId || simTime() < firstResponseTime || simTime() > lastResponseTime) {
             // This collection window is intentionally strict: accepting a late
             // or foreign HE-TB PPDU could acknowledge a different Trigger.
@@ -153,36 +165,42 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
                     << ", toneSet=" << (int)report.ndpRuToneSetIndex
                     << ", startingSts=" << (int)report.ndpStartingStsNumber << "\n";
         }
-        for (const auto& allocation : allocations)
-            if (!nfrp && ((!allocation.randomAccess && allocation.staAddress == header->getTransmitterAddress()) ||
-                    (allocation.randomAccess && tag->getRuIndex() == allocation.ru.index))) {
-                aid = allocation.associationId;
-                if (allocation.randomAccess)
-                    aid = callback->getAssociationId(header->getTransmitterAddress());
-                bool ruMatches = tag->getRuIndex() == allocation.ru.index;
-                if (!allocation.randomAccess && !ruMatches) {
-                    EV_INFO << "Discarding scheduled HE UL response with unexpected RU "
-                             << tag->getRuIndex() << " for AID " << aid << "\n";
-                    delete frame;
-                    return;
-                }
-                if (allocation.randomAccess && !ruMatches) {
-                    EV_INFO << "Discarding random-access HE UL response with unexpected RU "
-                             << tag->getRuIndex() << "\n";
-                    delete frame;
-                    return;
-                }
-                break;
+        bool randomAccess = false;
+        if (!nfrp) {
+            if (tag->getAllocationsArraySize() != 1 ||
+                    tag->getAllocations(0).ndpFeedbackReport) {
+                EV_INFO << "Discarding HE UL response without one canonical TB allocation\n";
+                delete frame;
+                return;
             }
-        if (aid == 0 || receivedAids.count(aid) != 0) {
+            const auto& canonical = tag->getAllocations(0);
+            for (const auto& allocation : allocations) {
+                if (tag->getRuIndex() != allocation.ru.index ||
+                        canonical.ruIndex != allocation.ru.index)
+                    continue;
+                if (!allocation.randomAccess &&
+                        canonical.staId == allocation.associationId)
+                    aid = allocation.associationId;
+                else if (allocation.randomAccess)
+                    randomAccess = true;
+                if (aid != 0 || randomAccess)
+                    break;
+            }
+        }
+        if ((!nfrp && aid == 0 && !randomAccess) ||
+                (aid != 0 && receivedAids.count(aid) != 0) ||
+                (randomAccess && receivedRandomAccessRus.count(tag->getRuIndex()) != 0)) {
             EV_INFO << "Discarding " << (aid == 0 ? "unallocated" : "duplicate")
                      << " HE UL response for Trigger " << triggerId << "\n";
             delete frame;
             return;
         }
-        receivedAids.insert(aid);
+        if (aid != 0)
+            receivedAids.insert(aid);
+        if (randomAccess)
+            receivedRandomAccessRus.insert(tag->getRuIndex());
         EV_INFO << "Collected HE UL response: trigger=" << triggerId
-                 << ", aid=" << aid << ", RU=" << tag->getRuIndex() << "\n";
+                 << ", aid=" << (randomAccess ? 0 : aid) << ", RU=" << tag->getRuIndex() << "\n";
         ReceiveCollectionStep::setFrameToReceive(frame);
     }
 };
@@ -350,64 +368,62 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     }
 
     auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
-    std::map<uint16_t, std::vector<int>> successfulSequences;
+    std::map<uint16_t, std::vector<physicallayer::Ieee80211MpduReceiveResult>> receivedOutcomes;
+    std::map<uint16_t, uint8_t> receivedTids;
     std::set<uint16_t> responders;
-    auto processMpdu = [&] (Packet *mpdu, physicallayer::Ieee80211MpduReceiveStatus status) {
-        auto header = dynamicPtrCast<const Ieee80211DataHeader>(mpdu->peekAtFront<Ieee80211MacHeader>());
-        if (header == nullptr || status != physicallayer::MPDU_SUCCESS)
-            return;
-        auto aid = callback->getAssociationId(header->getTransmitterAddress());
-        if (aid == 0)
-            return;
-        auto record = std::find_if(ackRecords.begin(), ackRecords.end(),
-                [aid] (const auto& value) { return value.aid == aid; });
-        if (record == ackRecords.end()) {
-            // 9.3.1.22 Table 9-52 allows AID12=0 RA-RUs for associated STAs.
-            // The collection step already checked that this response selected a
-            // usable RA allocation; only then may an unscheduled sender gain a
-            // Multi-STA BA record.
-            Ieee80211MultiStaBlockAckRecord value;
-            value.aid = aid;
-            value.tid = header->getTid();
-            ackRecords.push_back(value);
-            record = std::prev(ackRecords.end());
-        }
-        if (record->tid != header->getTid())
-            return;
-        responders.insert(aid);
-        record->responseReceived = true;
-        if (header->getType() != ST_QOS_NULL) {
-            successfulSequences[aid].push_back(header->getSequenceNumber().get());
-            callback->processTriggeredUlFrame(mpdu->dup(), header, aid);
-        }
-        else
-            callback->processTriggeredUlFrame(mpdu->dup(), header, aid);
-    };
-
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE |
             Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
     for (auto packet : collection->getReceivedFrames()) {
-        if (dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>()) != nullptr) {
-            processMpdu(packet, physicallayer::MPDU_SUCCESS);
+        auto rxTag = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
+        if (rxTag == nullptr || rxTag->getAllocationsArraySize() != 1)
+            continue;
+        const auto& canonical = rxTag->getAllocations(0);
+        const IIeee80211HeUlScheduler::RuAllocation *matchedAllocation = nullptr;
+        for (const auto& allocation : schedule.allocations)
+            if (allocation.ru.index == canonical.ruIndex &&
+                    (allocation.randomAccess || allocation.associationId == canonical.staId)) {
+                matchedAllocation = &allocation;
+                break;
+            }
+        if (matchedAllocation == nullptr)
+            continue;
+
+        uint16_t aid = matchedAllocation->randomAccess ? 0 : matchedAllocation->associationId;
+        uint8_t tid = matchedAllocation->tid;
+        bool responseIdentityKnown = aid != 0;
+        std::vector<std::pair<Packet *, physicallayer::Ieee80211MpduReceiveResult>> decodedMpdus;
+
+        if (dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront()) != nullptr) {
+            EV_WARN << "Ignoring data-bearing HE TB response without an A-MPDU delimiter\n";
             continue;
         }
+
         auto parser = packet->dup();
         auto receiveInd = packet->findTag<physicallayer::Ieee80211MpduReceiveInd>();
         unsigned int resultIndex = 0;
         while (parser->getDataLength() > b(0) &&
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(parser->peekAtFront()) != nullptr) {
             auto delimiter = parser->popAtFront<Ieee80211MpduSubframeHeader>(b(-1), parsingFlags);
-            auto status = delimiter->isIncorrect() ? physicallayer::MPDU_DELIMITER_ERROR : physicallayer::MPDU_SUCCESS;
-            if (receiveInd != nullptr && resultIndex < receiveInd->getResultsArraySize())
-                status = receiveInd->getResults(resultIndex).status;
             B length(delimiter->getLength());
+            if (length == B(0))
+                continue;
+            physicallayer::Ieee80211MpduReceiveResult outcome;
+            outcome.length = length;
+            outcome.status = delimiter->isIncorrect() ?
+                    physicallayer::MPDU_DELIMITER_ERROR : physicallayer::MPDU_NOT_EVALUATED;
+            if (receiveInd != nullptr && resultIndex < receiveInd->getResultsArraySize())
+                outcome = receiveInd->getResults(resultIndex);
             if (length > parser->getDataLength())
-                status = physicallayer::MPDU_PAYLOAD_ERROR;
+                outcome.status = physicallayer::MPDU_PAYLOAD_ERROR;
             else {
                 auto mpdu = new Packet(parser->getName());
                 mpdu->insertAtBack(parser->popAtFront(length, parsingFlags));
-                processMpdu(mpdu, status);
-                delete mpdu;
+                auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                        mpdu->peekAtFront<Ieee80211MacHeader>());
+                if (header == nullptr && (outcome.status == physicallayer::MPDU_SUCCESS ||
+                        outcome.status == physicallayer::MPDU_FCS_ERROR))
+                    outcome.status = physicallayer::MPDU_HEADER_ERROR;
+                decodedMpdus.emplace_back(mpdu, outcome);
             }
             int padding = (4 - (B(4) + length).get<B>() % 4) % 4;
             if (padding != 0 && parser->getDataLength() >= B(padding))
@@ -415,17 +431,60 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
             resultIndex++;
         }
         delete parser;
-    }
-    for (auto& record : ackRecords) {
-        auto it = successfulSequences.find(record.aid);
-        if (it == successfulSequences.end() || it->second.empty())
-            continue;
-        record.startingSequenceNumber = it->second.front();
-        for (int sequenceNumber : it->second) {
-            int offset = (sequenceNumber - record.startingSequenceNumber + 4096) % 4096;
-            if (offset < 64)
-                record.bitmap |= UINT64_C(1) << offset;
+
+        // Scheduled allocation identity is supplied by the Trigger/RXVECTOR
+        // even when every MPDU fails its FCS. An AID12=0 random-access RU has
+        // no such identity: resolve it only from a successful associated MPDU.
+        bool identityConflict = false;
+        for (const auto& decoded : decodedMpdus) {
+            auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                    decoded.first->peekAtFront<Ieee80211MacHeader>());
+            if (decoded.second.status != physicallayer::MPDU_SUCCESS || header == nullptr)
+                continue;
+            auto decodedAid = callback->getAssociationId(header->getTransmitterAddress());
+            if (decodedAid == 0) {
+                identityConflict = true;
+                break;
+            }
+            if (matchedAllocation->randomAccess && !responseIdentityKnown) {
+                aid = decodedAid;
+                tid = header->getTid();
+                responseIdentityKnown = true;
+            }
+            else if (responseIdentityKnown &&
+                    (decodedAid != aid || header->getTid() != tid)) {
+                identityConflict = true;
+                break;
+            }
         }
+        if (responseIdentityKnown && !identityConflict) {
+            responders.insert(aid);
+            receivedTids[aid] = tid;
+            for (auto& decoded : decodedMpdus) {
+                auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                        decoded.first->peekAtFront<Ieee80211MacHeader>());
+                auto outcome = decoded.second;
+                if (outcome.tid == tid)
+                    receivedOutcomes[aid].push_back(outcome);
+                if (outcome.status == physicallayer::MPDU_SUCCESS && header != nullptr &&
+                        callback->getAssociationId(header->getTransmitterAddress()) == aid)
+                    callback->processTriggeredUlFrame(decoded.first->dup(), header, aid);
+            }
+        }
+        for (auto& decoded : decodedMpdus)
+            delete decoded.first;
+    }
+
+    for (auto& record : ackRecords)
+        if (responders.count(record.aid) != 0)
+            record = buildHeUlMultiStaBlockAckRecord(record.aid, record.tid,
+                    receivedOutcomes[record.aid]);
+    for (auto aid : responders) {
+        auto record = std::find_if(ackRecords.begin(), ackRecords.end(),
+                [aid] (const auto& value) { return value.aid == aid; });
+        if (record == ackRecords.end())
+            ackRecords.push_back(buildHeUlMultiStaBlockAckRecord(aid,
+                    receivedTids[aid], receivedOutcomes[aid]));
     }
     EV_INFO << "HE UL response processing: received=" << responders.size()
              << ", block-ack records=" << ackRecords.size() << "\n";

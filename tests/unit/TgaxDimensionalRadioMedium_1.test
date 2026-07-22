@@ -211,6 +211,7 @@ class DeterministicTgaxChannelModel : public TgaxChannelModel
 class TestRbirErrorModel : public Ieee80211RbirErrorModel
 {
   public:
+    mutable int lastPacketLength = -1;
     virtual int numInitStages() const override { return 1; }
     virtual void initialize(int stage) override {
         snirMode = SnirMode::SM_MEAN;
@@ -233,6 +234,15 @@ class TestRbirErrorModel : public Ieee80211RbirErrorModel
     double evaluate(const ISnir *snir, const Ieee80211HeRu& ru, double scalarSnir) const {
         return computeHeSuccessRate(0, Ieee80211RbirCalibration::Coding::BCC,
                 1, false, 100, ru.toneSize, ru.toneOffset, snir, scalarSnir);
+    }
+
+    virtual double computeHeSuccessRate(int mcs, Ieee80211RbirCalibration::Coding coding,
+            int numberOfSpatialStreams, bool dcm, int packetLength,
+            int toneSize, int toneOffset, const ISnir *snir, double scalarSnir) const override {
+        lastPacketLength = packetLength;
+        return Ieee80211RbirErrorModel::computeHeSuccessRate(mcs, coding,
+                numberOfSpatialStreams, dcm, packetLength, toneSize, toneOffset,
+                snir, scalarSnir);
     }
 };
 
@@ -583,6 +593,13 @@ ASSERT(*std::max_element(toneSnirDb.begin(), toneSnirDb.end()) >
         *std::min_element(toneSnirDb.begin(), toneSnirDb.end()));
 double triggerSuccessRate = rbir->evaluate(triggerSnir, rus[0]);
 ASSERT(0 <= triggerSuccessRate && triggerSuccessRate <= 1);
+auto perMpduError = rbir->computeHeMpduErrorRate(triggerSnir, 0, 376);
+REQUIRE(perMpduError);
+REQUIRE(0 <= perMpduError.packetErrorRate && perMpduError.packetErrorRate <= 1);
+REQUIRE(rbir->lastPacketLength == 47);
+REQUIRE(!rbir->computeHeMpduErrorRate(triggerSnir, 0, 0));
+REQUIRE(!rbir->computeHeMpduErrorRate(triggerSnir, 0, 377));
+REQUIRE(!rbir->computeHeMpduErrorRate(triggerSnir, 99, 376));
 medium->testRemoveTransmission(triggerTransmission);
 
 auto sameTriggerNfrp = createTransmission("same-trigger-NFRP-1", true, false,

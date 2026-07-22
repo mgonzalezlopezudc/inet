@@ -34,6 +34,8 @@ network = TestNetwork
 using namespace inet;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 class TestNistErrorModel : public Ieee80211NistErrorModel
 {
   public:
@@ -83,36 +85,39 @@ for (auto *model : {static_cast<TestNistErrorModel *>(nist)}) {
     auto fast = computeHeUserPhyParameters(B(1000), largeRu, 5, 1, false, HE_GI_3_2_US);
     double robustSuccess = evaluatePayload(model, robust, testBitLength, testSnir);
     double fastSuccess = evaluatePayload(model, fast, testBitLength, testSnir);
-    ASSERT(robustSuccess > fastSuccess);
+    REQUIRE(robustSuccess > fastSuccess);
 
     auto dcm = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, true, HE_GI_3_2_US);
     double dcmSuccess = evaluatePayload(model, dcm, testBitLength, testSnir);
-    ASSERT(dcmSuccess > robustSuccess);
+    REQUIRE(dcmSuccess > robustSuccess);
 
     auto twoStreams = computeHeUserPhyParameters(B(1000), largeRu, 0, 2, false, HE_GI_3_2_US);
     double twoStreamSuccess = evaluatePayload(model, twoStreams, testBitLength, testSnir);
-    ASSERT(twoStreamSuccess != robustSuccess);
+    REQUIRE(twoStreamSuccess != robustSuccess);
 
     auto shortGi = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_0_8_US);
-    ASSERT(evaluatePayload(model, shortGi, testBitLength, testSnir) == robustSuccess);
+    REQUIRE(evaluatePayload(model, shortGi, testBitLength, testSnir) == robustSuccess);
+    REQUIRE(evaluatePayload(model, robust, 800, testSnir) > robustSuccess);
 }
 
 {
     auto robust = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_3_2_US);
     auto fast = computeHeUserPhyParameters(B(1000), largeRu, 5, 1, false, HE_GI_3_2_US);
-    ASSERT(evaluatePayload(yans, robust, testBitLength, testSnir) >
+    REQUIRE(evaluatePayload(yans, robust, testBitLength, testSnir) >
             evaluatePayload(yans, fast, testBitLength, testSnir));
 
     auto dcm = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, true, HE_GI_3_2_US);
-    ASSERT(evaluatePayload(yans, dcm, testBitLength, testSnir) >
+    REQUIRE(evaluatePayload(yans, dcm, testBitLength, testSnir) >
             evaluatePayload(yans, robust, testBitLength, testSnir));
 
     auto shortGi = computeHeUserPhyParameters(B(1000), largeRu, 0, 1, false, HE_GI_0_8_US);
-    ASSERT(evaluatePayload(yans, shortGi, testBitLength, testSnir) !=
+    REQUIRE(evaluatePayload(yans, shortGi, testBitLength, testSnir) !=
             evaluatePayload(yans, robust, testBitLength, testSnir));
 
     auto small = computeHeUserPhyParameters(B(1000), smallRu, 0, 1, false, HE_GI_3_2_US);
-    ASSERT(evaluatePayload(yans, small, testBitLength, testSnir) !=
+    REQUIRE(evaluatePayload(yans, small, testBitLength, testSnir) !=
+            evaluatePayload(yans, robust, testBitLength, testSnir));
+    REQUIRE(evaluatePayload(yans, robust, 800, testSnir) >
             evaluatePayload(yans, robust, testBitLength, testSnir));
 }
 

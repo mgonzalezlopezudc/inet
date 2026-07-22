@@ -15,9 +15,14 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/IIeee80211HeUlTriggerPolicy.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeUlScheduler.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
 namespace ieee80211 {
+
+INET_API Ieee80211MultiStaBlockAckRecord buildHeUlMultiStaBlockAckRecord(
+        uint16_t aid, uint8_t tid,
+        const std::vector<physicallayer::Ieee80211MpduReceiveResult>& outcomes);
 
 class HeHcf;
 class HeUlCoordinator;

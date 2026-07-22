@@ -559,6 +559,26 @@ void HeHcf::retryPendingTriggeredUlExchanges()
     triggeredUlExchanges.clear();
 }
 
+Packet *HeHcf::buildHeTbAmpdu(const std::vector<Packet *>& mpdus)
+{
+    ASSERT(!mpdus.empty());
+    auto ampdu = new Packet("HE-TB-A-MPDU");
+    // 9.7.1 A-MPDU subframes are carried behind MPDU delimiters and padded
+    // to 4-octet boundaries. 26.5.2.4 applies this to both QoS Data and QoS
+    // Null MPDUs carried in HE TB responses, including a single subframe.
+    for (size_t i = 0; i < mpdus.size(); ++i) {
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setLength(mpdus[i]->getByteLength());
+        delimiter->setEof(i + 1 == mpdus.size());
+        ampdu->insertAtBack(delimiter);
+        ampdu->insertAtBack(mpdus[i]->peekAll());
+        int padding = (4 - (B(4) + B(mpdus[i]->getByteLength())).get<B>() % 4) % 4;
+        if (i + 1 != mpdus.size() && padding != 0)
+            ampdu->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
+    }
+    return ampdu;
+}
+
 Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
         AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
         const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
@@ -683,31 +703,23 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                 trailer->setFcs(computeEthernetFcs(mpdu, fcsMode));
             mpdu->insertAtBack(trailer);
         }
-        if (exchange.packets.size() > 1) {
-            delete responsePacket;
-            responsePacket = new Packet("HE-TB-A-MPDU");
-            // 9.7.1 A-MPDU subframes are carried behind MPDU delimiters and
-            // padded to 4-octet boundaries; 26.5.2.4 and 26.6.2.3 apply that
-            // construction to A-MPDUs in HE TB PPDUs.
-            for (size_t i = 0; i < exchange.packets.size(); ++i) {
-                auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
-                delimiter->setLength(exchange.packets[i]->getByteLength());
-                delimiter->setEof(i + 1 == exchange.packets.size());
-                responsePacket->insertAtBack(delimiter);
-                responsePacket->insertAtBack(exchange.packets[i]->peekAll());
-                int padding = (4 - (B(4) + B(exchange.packets[i]->getByteLength())).get<B>() % 4) % 4;
-                if (i + 1 != exchange.packets.size() && padding != 0)
-                    responsePacket->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
-            }
-        }
-        else {
-            delete responsePacket;
-            responsePacket = exchange.packets.front()->dup();
-        }
+        delete responsePacket;
+        responsePacket = buildHeTbAmpdu(exchange.packets);
         for (auto pkt : exchange.packets) {
             exchange.sourceQueue->removePacket(pkt);
             take(pkt);
         }
+    }
+    else {
+        auto nullMpdu = responsePacket;
+        auto trailer = nullMpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
+        auto fcsMode = mac->getFcsMode();
+        trailer->setFcsMode(fcsMode);
+        if (fcsMode == FCS_COMPUTED)
+            trailer->setFcs(computeEthernetFcs(nullMpdu, fcsMode));
+        nullMpdu->insertAtBack(trailer);
+        responsePacket = buildHeTbAmpdu({nullMpdu});
+        delete nullMpdu;
     }
     return responsePacket;
 }
@@ -949,6 +961,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     exchange.expectedResponseTime = simTime() + modeSet->getSifsTime();
     Packet *responsePacket;
     Ptr<const Ieee80211MacHeader> responseHeader;
+    size_t responsePacketCount = 0;
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         // IEEE 802.11ax 27.3.11.11: the NFRP response is a preamble-only NDP with no PSDU.
         // Create a truly empty packet so the PCAP recorder writes only a Radiotap header
@@ -969,13 +982,14 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     else {
         responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
                 selectedTid, queueBytes, availableSlots, selected, trigger, exchange);
-        responseHeader = exchange.packets.empty() ?
-                responsePacket->peekAtFront<Ieee80211MacHeader>() :
-                exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
+        if (exchange.packets.empty())
+            responseHeader = responsePacket->peekAt<Ieee80211DataHeader>(B(4));
+        else
+            responseHeader = exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
+        responsePacketCount = exchange.packets.empty() ? 1 : exchange.packets.size();
         if (!exchange.packets.empty() || exchange.randomAccess)
             triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
     }
-    auto responsePacketCount = exchange.packets.size();
 
     auto radio = check_and_cast<physicallayer::IRadio *>(getContainingNicModule(this)->getSubmodule("radio"));
     auto transmitter = check_and_cast<const physicallayer::FlatTransmitterBase *>(radio->getTransmitter());

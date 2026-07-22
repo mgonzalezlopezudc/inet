@@ -7,6 +7,8 @@
 
 #include "inet/linklayer/ieee80211/mac/Rx.h"
 
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/checksum/Checksum.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
@@ -121,7 +123,10 @@ bool Rx::lowerFrameReceived(Packet *packet)
     bool isFrameOk = isFcsOk(packet) && !selfInterference;
     if (isFrameOk) {
         EV_INFO << "Received frame from PHY: " << packet << endl;
-        if (packet->getDataLength() > b(0)) {
+        const bool outcomeAmpdu = packet->getDataLength() > b(0) &&
+                packet->findTag<Ieee80211MpduReceiveInd>() != nullptr &&
+                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
+        if (packet->getDataLength() > b(0) && !outcomeAmpdu) {
             const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
             if (header->getReceiverAddress() != address)
                 setOrExtendNav(header->getDurationField(), isIntraBssFrame(header));
@@ -168,6 +173,16 @@ bool Rx::isFcsOk(Packet *packet) const
 {
     if (packet->getDataLength() == b(0))
         return !packet->hasBitError();
+    if (packet->findTag<Ieee80211MpduReceiveInd>() != nullptr &&
+            dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr)
+        // The aggregate has no single MAC FCS. Common/physical failure is
+        // still carried by bitError; delimiter and MPDU FCS outcomes are
+        // applied individually by HCF from Ieee80211MpduReceiveInd.
+        // Packet::hasBitError() also reflects an incorrect delimiter/header
+        // chunk. Those errors are already represented per MPDU in the ordered
+        // outcome ledger; only the explicit cPacket bit-error flag denotes a
+        // common/physical aggregate failure at this boundary.
+        return !packet->cPacket::hasBitError();
     if (packet->hasBitError() || !packet->peekData()->isCorrect())
         return false;
     else {
