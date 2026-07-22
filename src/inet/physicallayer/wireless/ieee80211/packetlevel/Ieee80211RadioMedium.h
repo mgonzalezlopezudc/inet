@@ -16,6 +16,7 @@ namespace physicallayer {
 class INET_API Ieee80211RadioMedium : public RadioMedium
 {
   protected:
+    static bool areSpatiallyOrthogonalHeTbUsers(const ITransmission *desired, const ITransmission *other);
     virtual bool findHeMuRuForReceiver(const IRadio *receiver, const ITransmission *transmission, Ieee80211HeRu& ru) const;
     virtual const IReception *computeHeMuRuReception(const IRadio *receiver, const ITransmission *transmission, const Ieee80211HeRu& ru) const;
     virtual const IInterference *computeInterference(const IRadio *receiver, const IListening *listening,

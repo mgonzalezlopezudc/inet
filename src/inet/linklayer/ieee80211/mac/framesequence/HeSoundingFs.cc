@@ -17,6 +17,7 @@
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/common/packet/chunk/SequenceChunk.h"
@@ -219,6 +220,7 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     header->setTriggerId(triggerId);
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);
+    header->setChannelBandwidthMhz(std::lround(bandwidth.get() / 1e6));
     header->setUsersArraySize(targets.size());
 
     int count = targets.size();
@@ -247,6 +249,7 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
         user.ruToneSize = ruLayout[i].toneSize;
         user.ruToneOffset = ruLayout[i].toneOffset;
         user.mcs = 0;
+        user.coding = requiresLdpc ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
         user.targetRssiDbm = -60;
         header->setUsers(i, user);
 
@@ -255,7 +258,30 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
                 physicallayer::estimateHeMuUserDuration(B(34), ruLayout[i].toneSize, 0));
     }
     ASSERT(commonDuration > SIMTIME_ZERO);
+    auto heMode = modeSet != nullptr && modeSet->getNumModes() > 0 ?
+            dynamic_cast<const physicallayer::Ieee80211HeMode *>(modeSet->getMode(0)) : nullptr;
+    if (heMode == nullptr)
+        throw cRuntimeError("Cannot select HE BFRP signal extension without an HE operating band");
+    header->setNoSignalExtension(false);
+    const auto signalExtensionNs = physicallayer::getIeee80211HeSignalExtensionNs(
+            heMode->getCenterFrequencyMode() == physicallayer::Ieee80211HeMode::BAND_2_4GHZ ?
+                    physicallayer::Ieee80211HeOperatingBand::BAND_2_4_GHZ :
+                    physicallayer::Ieee80211HeOperatingBand::BAND_5_GHZ,
+            header->getNoSignalExtension());
+    commonDuration += SimTime(signalExtensionNs, SIMTIME_NS);
+    auto ulLength = physicallayer::buildIeee80211HeTriggerUlLength(commonDuration,
+            signalExtensionNs);
+    if (!ulLength)
+        throw cRuntimeError("Cannot encode BFRP Trigger UL Length: %s", ulLength.error.c_str());
+    header->setUlLength(ulLength.value.length);
+    auto durationEnvelope = physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
+            header->getUlLength(), signalExtensionNs);
+    if (!durationEnvelope)
+        throw cRuntimeError("Cannot resolve BFRP Trigger duration envelope: %s",
+                durationEnvelope.error.c_str());
+    commonDuration = durationEnvelope.txTime;
     header->setCommonDuration(commonDuration);
+    header->setCommonDurationExact(false);
     header->setDurationField(modeSet->getSifsTime() + commonDuration);
     header->setChunkLength(B(24 + 6 * targets.size()));
 

@@ -10,6 +10,8 @@ only the legacy-visible duration indication.
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
@@ -100,6 +102,15 @@ static Ieee80211HeTxVectorValidationResult makeCanonicalPair(
     request.centerFrequency = Hz(5.18e9);
     request.channelBandwidth = MHz(20);
     request.ppduFormat = getIeee80211HePpduFormat(*phyHeader);
+    if (request.ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+        if (ppdu.common.ndp) {
+            request.lSigLength = 34;
+            request.requestedTxTime = SimTime(72, SIMTIME_US);
+            request.requestedTxTimeExact = true;
+        }
+        else
+            request.lSigLength = 742;
+    }
     request.ndp = ppdu.common.ndp;
     request.bssColor = phyHeader->getBssColor();
     request.uplink = request.ppduFormat == HE_TRIGGER_BASED_UPLINK;
@@ -128,6 +139,10 @@ static Ieee80211HeTxVectorValidationResult makeCanonicalPair(
             user.numberOfSpatialStreams = modelUser.numberOfSpatialStreams;
             user.streamStartIndex = modelUser.streamStartIndex;
             user.dcm = modelUser.dcm;
+            user.ndpFeedbackReport = modelUser.ndpFeedbackReport;
+            user.ndpFeedbackStatus = modelUser.ndpFeedbackStatus;
+            user.ndpRuToneSetIndex = modelUser.ndpRuToneSetIndex;
+            user.ndpStartingStsNumber = modelUser.ndpStartingStsNumber;
             user.coding = modelUser.coding;
             user.psduLength = modelUser.psduLength;
             user.staId = modelUser.staId;
@@ -253,6 +268,27 @@ static Packet *receiveHeMuPacket(DummyReceiverModule *receiver, const IRadio *ra
 
 static Ptr<const Ieee80211HeMuPhyHeader> roundTripHeMuPhyHeader(const Ptr<Ieee80211HeMuPhyHeader>& header)
 {
+    if (!header->getSignaling().signalingValid) {
+        std::vector<Ieee80211HeRu> rus;
+        for (size_t i = 0; i < header->getUsersArraySize(); ++i) {
+            Ieee80211HeRu ru;
+            ru.toneSize = header->getUsers(i).ruToneSize;
+            ru.toneOffset = header->getUsers(i).ruToneOffset;
+            rus.push_back(ru);
+        }
+        auto common = encodeHeSigBCommonField(rus, MHz(20));
+        if (!common)
+            throw cRuntimeError("Cannot build test HE-SIG-B plan: %s", common.error.c_str());
+        Ieee80211HeMuSignalingFields signaling;
+        signaling.signalingValid = true;
+        signaling.lSigLength = 59;
+        signaling.numberOfHeSigBSymbols = getHeSigBSymbolCount(common.commonField, MHz(20));
+        signaling.giLtfSize = 3;
+        signaling.txop = 127;
+        signaling.numberOfHeLtfSymbols = 1;
+        header->setSignaling(signaling);
+        header->setChunkLength(b(100 + signaling.numberOfHeSigBSymbols * 26));
+    }
     Packet serializedPacket("serialized-he-mu-header");
     serializedPacket.insertAtFront(header);
     auto bytes = serializedPacket.peekDataAsBytes();
@@ -548,6 +584,12 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto packet = new Packet("he-tb-feedback-ndp");
     auto phyHeader = makeShared<Ieee80211HeTbPhyHeader>();
     phyHeader->setNdp(true);
+    Ieee80211HeTbSignalingFields signaling;
+    signaling.signalingValid = true;
+    signaling.lSigLength = 58;
+    signaling.bandwidth = 0;
+    signaling.txop = 127;
+    phyHeader->setSignaling(signaling);
     auto ndpRu = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
     Ieee80211HeMuUserInfo user;
     user.ruIndex = ndpRu.index;
@@ -559,7 +601,11 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     std::vector<Ieee80211HeUserPhyParameters> modelUsers {
         makeHeModelUser(ndpRu, MacAddress("66:77:88:99:AA:BB"), B(0))
     };
-    phyHeader->setChunkLength(B(8));
+    modelUsers[0].ndpFeedbackReport = true;
+    modelUsers[0].ndpFeedbackStatus = 1;
+    modelUsers[0].ndpRuToneSetIndex = 18;
+    modelUsers[0].ndpStartingStsNumber = 0;
+    phyHeader->setChunkLength(b(100));
     auto decodedHeader = roundTripHeTbPhyHeader(phyHeader);
     bool runtimeNdpDiscarded = !decodedHeader->getNdp();
     packet->insertAtFront(decodedHeader);
@@ -571,7 +617,10 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
     bool modelNdp = runtimeNdpDiscarded &&
             rxVector->getCommon().getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
-            rxVector->getUser().getPsduLength() == B(0);
+            rxVector->getUser().getPsduLength() == B(0) &&
+            rxVector->getUser().getNdpFeedbackStatus() == std::optional<uint8_t>(1) &&
+            rxVector->getUser().getNdpRuToneSetIndex() == std::optional<uint8_t>(18) &&
+            rxVector->getUser().getNdpStartingStsNumber() == std::optional<uint8_t>(0);
     std::cout << "Format-consistent HE TB feedback NDP reconstructs zero-PSDU RXVECTOR: " <<
             (modelNdp ? "PASS" : "FAIL") << "\n";
     delete received;

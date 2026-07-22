@@ -129,6 +129,8 @@ seed-set = 314159
 using namespace inet;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 class TgaxInspectableDimensionalRadioMedium : public Ieee80211RadioMedium
 {
   public:
@@ -138,6 +140,7 @@ class TgaxInspectableDimensionalRadioMedium : public Ieee80211RadioMedium
     const INoise *testComputeNoise(const IListening *listening, const IInterference *interference) const { return analogModel->computeNoise(listening, interference); }
     bool testIsInCommunicationRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInCommunicationRange(transmission, startPosition, endPosition); }
     bool testIsInInterferenceRange(const ITransmission *transmission, const Coord& startPosition, const Coord& endPosition) const { return isInInterferenceRange(transmission, startPosition, endPosition); }
+    bool testAreSpatiallyOrthogonalHeTbUsers(const ITransmission *desired, const ITransmission *other) const { return areSpatiallyOrthogonalHeTbUsers(desired, other); }
 };
 
 class TgaxInspectableDimensionalMediumAnalogModel : public DimensionalMediumAnalogModel
@@ -289,7 +292,9 @@ auto rus = calculateHeRus(centerFrequency, channelBandwidth, 4);
 
 auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = false,
         bool muMimo = false, int triggerId = 0, int streamStartIndex = 0,
-        const IRadio *sourceRadio = nullptr, int ruPosition = 0) {
+        const IRadio *sourceRadio = nullptr, int ruPosition = 0,
+        bool ndpFeedbackReport = false, int ndpRuToneSetIndex = 0,
+        int ndpStartingStsNumber = 0) {
     if (sourceRadio == nullptr)
         sourceRadio = txRadio;
     const auto& assignedRu = rus.at(ruPosition);
@@ -307,7 +312,11 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
     user.numberOfSpatialStreams = 1;
     user.streamStartIndex = streamStartIndex;
     user.leakageSum = muMimo ? 1 : 0;
+    user.ndpFeedbackReport = ndpFeedbackReport;
+    user.ndpRuToneSetIndex = ndpRuToneSetIndex;
+    user.ndpStartingStsNumber = ndpStartingStsNumber;
     phyHeader->appendUsers(user);
+    phyHeader->setNdp(ndpFeedbackReport);
     phyHeader->setChunkLength(b(16 + 73));
     packet->insertAtFront(phyHeader);
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
@@ -318,6 +327,8 @@ auto createTransmission = [&](const char *packetName, bool triggerBasedUplink = 
     canonicalRequest.centerFrequency = centerFrequency;
     canonicalRequest.channelBandwidth = channelBandwidth;
     canonicalRequest.ppduFormat = triggerBasedUplink ? HE_TRIGGER_BASED_UPLINK : HE_MU_DOWNLINK;
+    if (triggerBasedUplink)
+        canonicalRequest.lSigLength = 742;
     Ieee80211HeUserTxVectorRequest canonicalUser;
     canonicalUser.ru = assignedRu;
     canonicalUser.psduLength = B(100);
@@ -570,6 +581,29 @@ double triggerSuccessRate = rbir->evaluate(triggerSnir, rus[0]);
 ASSERT(0 <= triggerSuccessRate && triggerSuccessRate <= 1);
 medium->testRemoveTransmission(triggerTransmission);
 
+auto sameTriggerNfrp = createTransmission("same-trigger-NFRP-1", true, false,
+        7001, 0, txRadio, 0, true, 1, 0);
+auto sameTriggerOtherTone = createTransmission("same-trigger-NFRP-2", true, false,
+        7001, 0, interfererTxRadio, 0, true, 2, 0);
+auto differentTriggerNfrp = createTransmission("different-trigger-NFRP", true, false,
+        7002, 0, interfererTxRadio, 0, true, 2, 0);
+auto duplicateResourceNfrp = createTransmission("duplicate-resource-NFRP", true, false,
+        7001, 0, interfererTxRadio, 0, true, 1, 0);
+auto unknownTriggerNfrp = createTransmission("unknown-trigger-NFRP-1", true, false,
+        0, 0, txRadio, 0, true, 1, 0);
+auto unknownTriggerOtherTone = createTransmission("unknown-trigger-NFRP-2", true, false,
+        0, 0, interfererTxRadio, 0, true, 2, 0);
+REQUIRE(medium->testAreSpatiallyOrthogonalHeTbUsers(sameTriggerNfrp, sameTriggerOtherTone));
+REQUIRE(!medium->testAreSpatiallyOrthogonalHeTbUsers(sameTriggerNfrp, differentTriggerNfrp));
+REQUIRE(!medium->testAreSpatiallyOrthogonalHeTbUsers(sameTriggerNfrp, duplicateResourceNfrp));
+REQUIRE(!medium->testAreSpatiallyOrthogonalHeTbUsers(unknownTriggerNfrp, unknownTriggerOtherTone));
+delete sameTriggerNfrp;
+delete sameTriggerOtherTone;
+delete differentTriggerNfrp;
+delete duplicateResourceNfrp;
+delete unknownTriggerNfrp;
+delete unknownTriggerOtherTone;
+
 deterministicChannelModel->enableSpatialChannel(centerFrequency);
 auto idealDesiredTbTransmission = createTransmission(
         "ideal-spatially-orthogonal-HE-TB-desired", true, true, 1234, 0);
@@ -669,6 +703,7 @@ EV << "TGax frequency-selective fading persisted across two HE MU packets.\n";
 EV << "TGax analytic 2x1 matrix produced exact MRC power gain 169.\n";
 EV << "RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.\n";
 EV << "L-MMSE retained same-RU HE-TB spatial interference for covariance-aware RBIR sampling.\n";
+EV << "NFRP orthogonality requires one shared nonzero Trigger identifier.\n";
 EV << ".\n";
 
 %contains: stdout
@@ -676,4 +711,5 @@ TGax frequency-selective fading persisted across two HE MU packets.
 TGax analytic 2x1 matrix produced exact MRC power gain 169.
 RBIR sampled a narrow HE trigger-based RU using the full 20 MHz channel metadata.
 L-MMSE retained same-RU HE-TB spatial interference for covariance-aware RBIR sampling.
+NFRP orthogonality requires one shared nonzero Trigger identifier.
 .

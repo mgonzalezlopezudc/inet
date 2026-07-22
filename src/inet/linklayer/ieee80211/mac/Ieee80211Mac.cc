@@ -237,6 +237,19 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
     }
     if (rx->lowerFrameReceived(packet)) {
         if (packet->getDataLength() == b(0)) {
+            auto heMuRx = packet->findTag<Ieee80211HeMuRxTag>();
+            const bool nfrpFeedbackNdp = heMuRx != nullptr &&
+                    heMuRx->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
+                    heMuRx->getAllocationsArraySize() == 1 &&
+                    heMuRx->getAllocations(0).ndpFeedbackReport;
+            if (nfrpFeedbackNdp && mib->qos) {
+                // NFRP feedback is intentionally headerless: its responder
+                // identity and status are carried by RXVECTOR metadata. Route
+                // it to the active HCF receive collection before the generic
+                // empty-packet discard path.
+                processLowerFrame(packet, nullptr);
+                return;
+            }
             take(packet);
             delete packet;
             return;

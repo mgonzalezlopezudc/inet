@@ -4,19 +4,171 @@ Test Trigger, BSR, and Multi-STA Block Ack serialization.
 %includes:
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuTxOpFs.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+using namespace inet::units::values;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestHeHcfScheduleFinalizer : public HeHcf
+{
+  public:
+    static HeUlScheduleFinalizationResult finalize(
+            const IIeee80211HeUlScheduler::Schedule& schedule,
+            Hz centerFrequency, Hz channelBandwidth,
+            IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+    {
+        return finalizeUlSchedule(schedule, centerFrequency, channelBandwidth, triggerType);
+    }
+};
+
+class TestHeUlMuTxOpFs : public HeUlMuTxOpFs
+{
+  public:
+    using HeUlMuTxOpFs::HeUlMuTxOpFs;
+    Packet *buildTriggerPacketForTest() const { return buildTriggerPacket(); }
+    IReceiveStep *buildReceiveCollectionStepForTest() const { return buildReceiveCollectionStep(); }
+};
+
+static IIeee80211HeUlScheduler::Schedule makeUlSchedule(
+        Hz centerFrequency, Hz channelBandwidth, simtime_t duration,
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+{
+    IIeee80211HeUlScheduler::Schedule schedule;
+    schedule.commonDuration = duration;
+    schedule.guardInterval = HE_GI_3_2_US;
+    schedule.coding = HE_CODING_BCC;
+    schedule.packetExtensionDurationUs = 0;
+    schedule.apTxPowerDbm = 17;
+    IIeee80211HeUlScheduler::RuAllocation allocation;
+    allocation.staAddress = MacAddress("02:00:00:00:00:01");
+    allocation.associationId = 1;
+    allocation.ru = getHeEqualRuLayout(centerFrequency, channelBandwidth,
+            getHeMaxRuCount(channelBandwidth)).front();
+    allocation.mcs = 0;
+    allocation.numberOfSpatialStreams = 1;
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        schedule.guardInterval = HE_GI_3_2_US;
+        schedule.nfrpStartingAid = 37;
+        schedule.nfrpFeedbackType = 0;
+        schedule.nfrpTargetRssiDbm = -65;
+        schedule.nfrpMultiplexingFlag = true;
+    }
+    else
+        schedule.allocations.push_back(allocation);
+    return schedule;
+}
+
+static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
+        const IIeee80211HeUlScheduler::Schedule& schedule,
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+{
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
+    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule, triggerType,
+            modeSet, MacAddress("10:00:00:00:00:00"));
+    auto packet = sequence.buildTriggerPacketForTest();
+    packet->popAtBack<Ieee80211MacTrailer>(B(4));
+    auto trailer = makeShared<Ieee80211MacTrailer>();
+    trailer->setFcsMode(FCS_COMPUTED);
+    trailer->setFcs(0);
+    packet->insertAtBack(trailer);
+    auto bytes = packet->peekDataAsBytes();
+    auto received = new Packet("runtime-trigger-rx", bytes);
+    auto decoded = received->popAtFront<Ieee80211TriggerFrame>(
+            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
+                    B(30) : B(24 + 5 * schedule.allocations.size()));
+    delete packet;
+    delete received;
+    delete callback;
+    delete coordinator;
+    return decoded;
+}
 
 %activity:
+{
+    auto firstProducer = new HeUlCoordinator();
+    auto secondProducer = new HeUlCoordinator();
+    auto firstId = firstProducer->allocateTriggerId();
+    auto secondId = secondProducer->allocateTriggerId();
+    auto sharedProducerId = allocateIeee80211HeTriggerId();
+    REQUIRE(firstId != 0);
+    REQUIRE(secondId == firstId + 1);
+    REQUIRE(sharedProducerId == secondId + 1);
+    delete firstProducer;
+    delete secondProducer;
+    EV << "Simulation-scoped HE Trigger identifiers are unique across producers.\n";
+}
+
+{
+    ReceiveStep ordinaryReceiveStep;
+    auto ordinaryHeaderless = new Packet("ordinary-headerless");
+    REQUIRE(!ordinaryReceiveStep.acceptsHeaderlessFrame(ordinaryHeaderless));
+    delete ordinaryHeaderless;
+
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(72, SIMTIME_US), IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER);
+    schedule.channelBandwidth = MHz(20);
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
+            IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            MacAddress("10:00:00:00:00:00"));
+    std::unique_ptr<IReceiveStep> nfrpReceiveStep(sequence.buildReceiveCollectionStepForTest());
+    auto nfrpNdp = new Packet("valid-headerless-nfrp");
+    auto rx = nfrpNdp->addTag<Ieee80211HeMuRxTag>();
+    rx->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    rx->setAllocationsArraySize(1);
+    Ieee80211HeMuRxAllocationInfo allocation;
+    allocation.ndpFeedbackReport = true;
+    rx->setAllocations(0, allocation);
+    REQUIRE(nfrpReceiveStep->acceptsHeaderlessFrame(nfrpNdp));
+    delete nfrpNdp;
+    delete callback;
+    delete coordinator;
+    EV << "Only an NFRP receive collection admits a valid headerless feedback NDP.\n";
+}
+
+{
+    // The Trigger advertises a 20 MHz UL response, but the triggering PPDU
+    // itself was received over 80 MHz. Power precorrection uses the latter.
+    const int apTxPowerDbm20Mhz = 17;
+    const auto triggeringPpduBandwidth = MHz(80);
+    const auto triggerUlBandwidth = MHz(20);
+    // Four equal 20 MHz portions, each received at -63 dBm, produce the
+    // total SignalPowerInd reported for this 80 MHz triggering PPDU.
+    const W receivedPower = mW(4 * math::dBmW2mW(-63));
+    const double pathLossDb = computeIeee80211HeTriggerPathLossDb(
+            apTxPowerDbm20Mhz, receivedPower, triggeringPpduBandwidth);
+    REQUIRE(std::abs(pathLossDb - 80) < 1e-12);
+    REQUIRE(triggerUlBandwidth != triggeringPpduBandwidth);
+    const auto maximumPower = mW(20);
+    const auto requestedPower = computeIeee80211HeTbTransmitPower(
+            maximumPower, -70, pathLossDb, false);
+    REQUIRE(std::abs(requestedPower.get<mW>() - 10) < 1e-12);
+    REQUIRE(computeIeee80211HeTbTransmitPower(maximumPower, -70, pathLossDb, true) == maximumPower);
+    EV << "Trigger-derived path loss controls exact HE-TB power and preserves maximum-power encoding.\n";
+}
+
 {
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     trigger->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
     trigger->setTriggerType(0);
     trigger->setTriggerId(42);
+    trigger->setUlLength(58);
+    trigger->setChannelBandwidthMhz(20);
     trigger->setCommonDuration(SimTime(800, SIMTIME_US));
     trigger->setGuardInterval(0);
     trigger->setCoding(1);
@@ -27,6 +179,7 @@ using namespace inet::ieee80211;
     scheduled.ruToneSize = 106;
     scheduled.ruToneOffset = 0;
     scheduled.mcs = 3;
+    scheduled.coding = 1;
     scheduled.tid = 5;
     scheduled.targetRssiDbm = -70;
     trigger->setUsers(0, scheduled);
@@ -44,15 +197,133 @@ using namespace inet::ieee80211;
     auto received = new Packet("trigger-rx", bytes);
     auto decoded = received->popAtFront<Ieee80211TriggerFrame>();
     // triggerId is local correlation metadata, not an on-wire Trigger field.
-    ASSERT(decoded->getTriggerId() == 0);
-    ASSERT(decoded->getGuardInterval() == 0);
-    ASSERT(decoded->getCoding() == 1);
-    ASSERT(decoded->getUsersArraySize() == 2);
-    ASSERT(decoded->getUsers(0).aid == 7);
-    ASSERT(decoded->getUsers(1).randomAccess);
+    REQUIRE(decoded->getTriggerId() == 0);
+    REQUIRE(decoded->getUlLength() == 58);
+    REQUIRE(decoded->getCommonDuration() == SimTime(104, SIMTIME_US));
+    REQUIRE(decoded->getGuardInterval() == 0);
+    REQUIRE(decoded->getCoding() == 1);
+    REQUIRE(decoded->getUsersArraySize() == 2);
+    REQUIRE(decoded->getUsers(0).aid == 7);
+    REQUIRE(decoded->getUsers(1).randomAccess);
     delete packet;
     delete received;
     EV << "Trigger frame round trip passed.\n";
+}
+
+{
+    const auto centerFrequency = Hz(5.18e9);
+    const auto channelBandwidth = MHz(20);
+    for (auto triggerType : {IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER,
+            IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER}) {
+        auto proposed = makeUlSchedule(centerFrequency, channelBandwidth,
+                SimTime(1, SIMTIME_MS), triggerType);
+        auto finalized = TestHeHcfScheduleFinalizer::finalize(proposed,
+                centerFrequency, channelBandwidth, triggerType);
+        REQUIRE(finalized);
+        REQUIRE(finalized.schedule.channelBandwidth == channelBandwidth);
+        REQUIRE(finalized.schedule.ulLength % 3 == 1);
+        REQUIRE(!finalized.schedule.commonDurationExact);
+        auto decoded = buildSerializeAndDecodeTrigger(finalized.schedule, triggerType);
+        REQUIRE(decoded->getTriggerType() == triggerType);
+        REQUIRE(decoded->getChannelBandwidthMhz() == 20);
+        REQUIRE(decoded->getUlLength() % 3 == 1);
+        REQUIRE(decoded->getUlLength() == finalized.schedule.ulLength);
+        REQUIRE(decoded->getApTxPowerDbm() == 17);
+        if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+            REQUIRE(decoded->getUsersArraySize() == 0);
+            REQUIRE(decoded->getNfrpStartingAid() == 37);
+            REQUIRE(decoded->getNfrpFeedbackType() == 0);
+            REQUIRE(decoded->getNfrpTargetRssiDbm() == -65);
+            REQUIRE(decoded->getNfrpMultiplexingFlag());
+        }
+    }
+    EV << "HCF-finalized BSRP/NFRP Trigger build and wire round trips passed.\n";
+}
+
+{
+    for (auto bandwidth : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
+        const int toneSets = IIeee80211HeUlScheduler::getNfrpToneSetsPerSpatialStream(bandwidth);
+        for (bool multiplexingFlag : {false, true}) {
+            const int nsta = IIeee80211HeUlScheduler::getNfrpScheduledStaCount(
+                    bandwidth, multiplexingFlag);
+            REQUIRE(nsta == toneSets * (multiplexingFlag ? 2 : 1));
+            auto first = IIeee80211HeUlScheduler::getNfrpResponseResource(
+                    100, 100, bandwidth, multiplexingFlag);
+            auto last = IIeee80211HeUlScheduler::getNfrpResponseResource(
+                    100, 100 + nsta - 1, bandwidth, multiplexingFlag);
+            auto outside = IIeee80211HeUlScheduler::getNfrpResponseResource(
+                    100, 100 + nsta, bandwidth, multiplexingFlag);
+            REQUIRE(first.scheduled && first.toneSetIndex == 1 && first.startingStsNumber == 0);
+            REQUIRE(last.scheduled && last.toneSetIndex == toneSets &&
+                    last.startingStsNumber == (multiplexingFlag ? 1 : 0));
+            REQUIRE(!outside.scheduled);
+            if (multiplexingFlag) {
+                auto wrapped = IIeee80211HeUlScheduler::getNfrpResponseResource(
+                        100, 100 + toneSets, bandwidth, true);
+                REQUIRE(wrapped.scheduled && wrapped.toneSetIndex == 1 &&
+                        wrapped.startingStsNumber == 1);
+            }
+        }
+    }
+    EV << "NFRP AID range and tone-set/STS mapping passed for all HE bandwidths.\n";
+}
+
+{
+    const auto centerFrequency = Hz(2.412e9);
+    const auto channelBandwidth = MHz(20);
+    auto proposed = makeUlSchedule(centerFrequency, channelBandwidth,
+            SimTime(5.484, SIMTIME_MS), IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+    auto finalized = TestHeHcfScheduleFinalizer::finalize(proposed,
+            centerFrequency, channelBandwidth, IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+    REQUIRE(finalized);
+    auto capUlLength = buildIeee80211HeTriggerUlLength(
+            SimTime(5.484, SIMTIME_MS), 6000);
+    REQUIRE(capUlLength);
+    REQUIRE(capUlLength.value.length != finalized.schedule.ulLength);
+    REQUIRE(getIeee80211HeTriggerTxTimeUpperBound(
+            capUlLength.value.length, 6000).txTime > SimTime(5.484, SIMTIME_MS));
+    REQUIRE(finalized.schedule.commonDuration <= SimTime(5.484, SIMTIME_MS));
+    REQUIRE(finalized.resolvedTxTime <= SimTime(5.484, SIMTIME_MS));
+    REQUIRE(finalized.schedule.commonDuration == SimTime(5.470, SIMTIME_MS));
+    REQUIRE(finalized.resolvedTxTime == SimTime(5.470, SIMTIME_MS));
+    REQUIRE(finalized.schedule.ulLength % 3 == 1);
+    auto decoded = buildSerializeAndDecodeTrigger(finalized.schedule,
+            IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = centerFrequency;
+    request.channelBandwidth = MHz(decoded->getChannelBandwidthMhz());
+    request.ppduFormat = HE_TRIGGER_BASED_UPLINK;
+    request.lSigLength = decoded->getUlLength();
+    request.noSignalExtension = decoded->getNoSignalExtension();
+    request.requestedTxTime = decoded->getCommonDuration();
+    request.requestedTxTimeExact = decoded->getCommonDurationExact();
+    request.guardInterval = static_cast<Ieee80211HeGuardInterval>(decoded->getGuardInterval());
+    request.ltfType = getHeDefaultLtfType(request.guardInterval);
+    request.packetExtensionDurationUs = decoded->getPacketExtensionDurationUs();
+    Ieee80211HeUserTxVectorRequest user;
+    user.ru = proposed.allocations.front().ru;
+    user.staId = decoded->getUsers(0).aid;
+    user.mcs = decoded->getUsers(0).mcs;
+    user.numberOfSpatialStreams = decoded->getUsers(0).numberOfSpatialStreams;
+    user.streamStartIndex = decoded->getUsers(0).streamStartIndex;
+    user.coding = static_cast<Ieee80211HeCoding>(decoded->getUsers(0).coding);
+    user.psduLength = B(1);
+    request.users.push_back(user);
+    auto txVector = Ieee80211HeTxVectorFactory::create(request);
+    if (!txVector)
+        throw cRuntimeError("finalized HE UL schedule was rejected at TXVECTOR boundary: %s",
+                txVector.getContext().detail.c_str());
+    REQUIRE(txVector.getPpduLayout()->getDuration() == finalized.resolvedTxTime);
+    REQUIRE(txVector.getPpduLayout()->getDuration() <= SimTime(5.484, SIMTIME_MS));
+    REQUIRE(txVector.getTxVector()->getCommon().getParameters().lSigLength ==
+            finalized.schedule.ulLength);
+    proposed.commonDuration = SimTime(50, SIMTIME_US);
+    auto impossible = TestHeHcfScheduleFinalizer::finalize(proposed,
+            centerFrequency, channelBandwidth, IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+    REQUIRE(!impossible);
+    REQUIRE(!impossible.error.empty());
+    EV << "2.4 GHz maximum HE-TB schedule crossed the TXVECTOR boundary legally.\n";
 }
 
 {
@@ -76,16 +347,16 @@ using namespace inet::ieee80211;
         header->setChunkLength(B(30));
         auto packet = new Packet("zero-queue-bsr", header);
         auto bytes = packet->peekDataAsBytes();
-        ASSERT(bytes->getByte(26) == (testCase.packed & 0xFF));
-        ASSERT(bytes->getByte(27) == ((testCase.packed >> 8) & 0xFF));
-        ASSERT(bytes->getByte(28) == ((testCase.packed >> 16) & 0xFF));
-        ASSERT(bytes->getByte(29) == ((testCase.packed >> 24) & 0xFF));
+        REQUIRE(bytes->getByte(26) == (testCase.packed & 0xFF));
+        REQUIRE(bytes->getByte(27) == ((testCase.packed >> 8) & 0xFF));
+        REQUIRE(bytes->getByte(28) == ((testCase.packed >> 16) & 0xFF));
+        REQUIRE(bytes->getByte(29) == ((testCase.packed >> 24) & 0xFF));
         auto received = new Packet("zero-queue-bsr-rx", bytes);
         auto decoded = received->popAtFront<Ieee80211DataHeader>();
-        ASSERT(decoded->getBufferStatusPresent());
-        ASSERT(decoded->getBufferStatusTid() == testCase.tid);
-        ASSERT(decoded->getBufferStatusAc() == testCase.accessCategory);
-        ASSERT(decoded->getBufferStatusQueueSize() == 0);
+        REQUIRE(decoded->getBufferStatusPresent());
+        REQUIRE(decoded->getBufferStatusTid() == testCase.tid);
+        REQUIRE(decoded->getBufferStatusAc() == testCase.accessCategory);
+        REQUIRE(decoded->getBufferStatusQueueSize() == 0);
         delete packet;
         delete received;
     }
@@ -109,13 +380,13 @@ using namespace inet::ieee80211;
     auto bytes = packet->peekDataAsBytes();
     auto received = new Packet("bsr-rx", bytes);
     auto decoded = received->popAtFront<Ieee80211DataHeader>();
-    ASSERT(decoded->getBufferStatusPresent());
+    REQUIRE(decoded->getBufferStatusPresent());
     // BSR carries AC/represented-count information, not an exact TID. The
     // legacy field is populated with the deterministic AC_VO representative.
-    ASSERT(decoded->getBufferStatusTid() == 6);
-    ASSERT(decoded->getBufferStatusAc() == AC_VO);
+    REQUIRE(decoded->getBufferStatusTid() == 6);
+    REQUIRE(decoded->getBufferStatusAc() == AC_VO);
     // BSR queue sizes are rounded up to the 256-byte scaling unit on wire.
-    ASSERT(decoded->getBufferStatusQueueSize() == 12544);
+    REQUIRE(decoded->getBufferStatusQueueSize() == 12544);
     delete packet;
     delete received;
     EV << "QoS Null BSR round trip passed.\n";
@@ -141,21 +412,21 @@ using namespace inet::ieee80211;
     blockAck->setChunkLength(B(18 + 12 * 2));
     auto packet = new Packet("multi-sta-ba", blockAck);
     auto bytes = packet->peekDataAsBytes();
-    ASSERT(bytes->getChunkLength() == B(42));
+    REQUIRE(bytes->getChunkLength() == B(42));
     // IEEE Std 802.11-2024 Figures 9-58..9-60: BA Information starts
     // immediately after BA Control. There is no record-count octet, and
     // bitmap bit 0 is carried in the least significant bit of the first
     // bitmap octet.
-    ASSERT(bytes->getByte(18) == 0x07 && bytes->getByte(19) == 0x50);
-    ASSERT(bytes->getByte(20) == 0xC0 && bytes->getByte(21) == 0x00);
-    ASSERT(bytes->getByte(22) == 0x03 && bytes->getByte(23) == 0x00);
-    ASSERT(bytes->getByte(30) == 0x08 && bytes->getByte(31) == 0x00);
+    REQUIRE(bytes->getByte(18) == 0x07 && bytes->getByte(19) == 0x50);
+    REQUIRE(bytes->getByte(20) == 0xC0 && bytes->getByte(21) == 0x00);
+    REQUIRE(bytes->getByte(22) == 0x03 && bytes->getByte(23) == 0x00);
+    REQUIRE(bytes->getByte(30) == 0x08 && bytes->getByte(31) == 0x00);
     auto received = new Packet("multi-sta-ba-rx", bytes);
     auto decoded = received->popAtFront<Ieee80211MultiStaBlockAck>(bytes->getChunkLength());
-    ASSERT(decoded->getRecordsArraySize() == 2);
-    ASSERT(decoded->getRecords(0).bitmap == 3);
-    ASSERT(decoded->getRecords(0).responseReceived);
-    ASSERT(decoded->getRecords(1).bitmap == 0);
+    REQUIRE(decoded->getRecordsArraySize() == 2);
+    REQUIRE(decoded->getRecords(0).bitmap == 3);
+    REQUIRE(decoded->getRecords(0).responseReceived);
+    REQUIRE(decoded->getRecords(1).bitmap == 0);
     delete packet;
     delete received;
     EV << "Multi-STA Block Ack round trip passed.\n";
@@ -163,7 +434,13 @@ using namespace inet::ieee80211;
 EV << ".\n";
 
 %contains: stdout
+Simulation-scoped HE Trigger identifiers are unique across producers.
+Only an NFRP receive collection admits a valid headerless feedback NDP.
+Trigger-derived path loss controls exact HE-TB power and preserves maximum-power encoding.
 Trigger frame round trip passed.
+HCF-finalized BSRP/NFRP Trigger build and wire round trips passed.
+NFRP AID range and tone-set/STS mapping passed for all HE bandwidths.
+2.4 GHz maximum HE-TB schedule crossed the TXVECTOR boundary legally.
 BE/BK BSR ACI wire mappings passed.
 QoS Null BSR round trip passed.
 Multi-STA Block Ack round trip passed.

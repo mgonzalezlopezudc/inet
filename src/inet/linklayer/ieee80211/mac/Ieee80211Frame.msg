@@ -250,6 +250,7 @@ struct Ieee80211HeTriggerUserInfo
     uint16_t ruToneSize;
     uint16_t ruToneOffset;
     uint8_t mcs = 0;
+    uint8_t coding = 0; // B20 UL FEC Coding Type: 0 BCC, 1 LDPC
     uint8_t numberOfSpatialStreams = 1;
     uint8_t streamStartIndex = 0;
     bool muMimo = false;
@@ -260,6 +261,7 @@ struct Ieee80211HeTriggerUserInfo
     // Runtime scheduler metadata; this is not a Basic Trigger wire field.
     uint8_t tid = 0;
     int8_t targetRssiDbm = -60;
+    bool useMaximumTransmitPower = false; // UL Target Receive Power encoding 127
     bool randomAccess = false;
     uint8_t bfrpFeedbackSegmentRetransmissionBitmap = 0;
     bool muBarBarAckPolicy = false;
@@ -280,9 +282,17 @@ class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
     // INET model correlation identifier. It is used to group simulated HE-TB
     // responses and is intentionally not serialized as an 802.11 Trigger field.
     uint32_t triggerId;
+    // Table 9-47 UL Length: the solicited HE TB L-SIG LENGTH field. This is
+    // wire data and is distinct from INET's resolved common airtime metadata.
+    uint16_t ulLength = 0;
     simtime_t commonDuration;
+    bool commonDurationExact = false; // true only for explicitly resolved TXTIME; raw decode yields an upper envelope
+    uint16_t channelBandwidthMhz = 20; // decoded Trigger Common Info UL BW
+    bool noSignalExtension = false; // ordinary HE-TB TXVECTOR policy; not carried by Trigger Common Info
     uint8_t guardInterval = 2;
-    uint8_t coding = 0;
+    uint8_t coding = 0; // compatibility summary; each User Info carries its own FEC coding
+    bool ldpcExtraSymbolSegment = false; // Trigger Common Info B27
+    int8_t apTxPowerDbm = 0; // Trigger Common Info B28-B33, normalized to 20 MHz
     // INET PHY request metadata copied to the HE-TB PPDU model. These fields
     // summarize behavior that would be carried by several Trigger/HE-SIG
     // subfields in a full bit-level implementation.
@@ -290,6 +300,13 @@ class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
     uint8_t puncturedSubchannelMask = 0;
     uint8_t ocwMin = 7;
     uint8_t ocwMax = 31;
+    // Figure 9-101 NFRP User Info. Trigger type 7 carries exactly one of
+    // these special 48-bit records instead of ordinary per-STA users[].
+    uint16_t nfrpStartingAid = 0;
+    uint8_t nfrpFeedbackType = 0;
+    int8_t nfrpTargetRssiDbm = -60;
+    bool nfrpUseMaximumTransmitPower = false; // UL Target Receive Power encoding 127
+    bool nfrpMultiplexingFlag = false;
     Ieee80211HeTriggerUserInfo users[];
 }
 

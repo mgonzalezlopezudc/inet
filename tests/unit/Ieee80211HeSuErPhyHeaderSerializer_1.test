@@ -15,6 +15,8 @@ Validate exact 100-bit HE SU/ER SU L-SIG, RL-SIG, and HE-SIG-A serialization.
 using namespace inet;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 static std::vector<bool> wireBits(std::initializer_list<uint8_t> bytes, size_t bitCount)
 {
     std::vector<bool> bits;
@@ -77,45 +79,43 @@ static Ptr<const BitsChunk> serializeWithPayload(const Ptr<Ieee80211HePhyHeader>
 
 static void assertPayloadBoundary(const Ptr<const BitsChunk>& bits)
 {
-    ASSERT(bits->getChunkLength() == b(108));
+    REQUIRE(bits->getChunkLength() == b(108));
     std::vector<bool> payload(bits->getBits().begin() + 100, bits->getBits().end());
-    ASSERT(payload == wireBits({0xAB}, 8));
+    REQUIRE(payload == wireBits({0xAB}, 8));
 }
 
 %activity:
 auto suHeader = makeShared<Ieee80211HeSuPhyHeader>();
 suHeader->setSignaling(makeSuFields());
 auto suBits = serializeWithPayload(suHeader);
-ASSERT(std::vector<bool>(suBits->getBits().begin(), suBits->getBits().begin() + 100) ==
+REQUIRE(std::vector<bool>(suBits->getBits().begin(), suBits->getBits().begin() + 100) ==
         wireBits({0xD2, 0xE0, 0x40, 0xD2, 0xE0, 0x40, 0xD4, 0xA7, 0x6B, 0x59, 0x6B, 0xB4, 0x00}, 100));
 assertPayloadBoundary(suBits);
 
 Packet suReceived("exact-he-su-received");
 suReceived.insertAtFront(suBits);
-auto decodedSu = suReceived.popAtFront<Ieee80211HePhyHeader>();
-auto concreteSu = dynamicPtrCast<const Ieee80211HeSuPhyHeader>(decodedSu);
-ASSERT(concreteSu != nullptr && concreteSu->getChunkLength() == b(100));
-ASSERT(concreteSu->getSignaling().signalingValid && concreteSu->getSignaling().lSigLength == 58);
-ASSERT(concreteSu->getSignaling().mcs == 5 && concreteSu->getSignaling().bssColor == 37);
-ASSERT(concreteSu->getSignaling().numberOfSpaceTimeStreams == 6);
-ASSERT(suReceived.getDataLength() == b(8));
+auto concreteSu = suReceived.popAtFront<Ieee80211HeSuPhyHeader>();
+REQUIRE(concreteSu != nullptr && concreteSu->getChunkLength() == b(100));
+REQUIRE(concreteSu->getSignaling().signalingValid && concreteSu->getSignaling().lSigLength == 58);
+REQUIRE(concreteSu->getSignaling().mcs == 5 && concreteSu->getSignaling().bssColor == 37);
+REQUIRE(concreteSu->getSignaling().numberOfSpaceTimeStreams == 6);
+REQUIRE(suReceived.getDataLength() == b(8));
 
 auto erSuHeader = makeShared<Ieee80211HeErSuPhyHeader>();
 erSuHeader->setSignaling(makeErSuFields());
 auto erSuBits = serializeWithPayload(erSuHeader);
-ASSERT(std::vector<bool>(erSuBits->getBits().begin(), erSuBits->getBits().begin() + 100) ==
+REQUIRE(std::vector<bool>(erSuBits->getBits().begin(), erSuBits->getBits().begin() + 100) ==
         wireBits({0xD6, 0xE0, 0x00, 0xD6, 0xE0, 0x00, 0xA8, 0x6A, 0xE7, 0x0B, 0x56, 0x8C, 0x00}, 100));
 assertPayloadBoundary(erSuBits);
 
 Packet erSuReceived("exact-he-er-su-received");
 erSuReceived.insertAtFront(erSuBits);
-auto decodedErSu = erSuReceived.popAtFront<Ieee80211HePhyHeader>();
-auto concreteErSu = dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(decodedErSu);
-ASSERT(concreteErSu != nullptr && concreteErSu->getChunkLength() == b(100));
-ASSERT(concreteErSu->getSignaling().signalingValid && concreteErSu->getSignaling().lSigLength == 59);
-ASSERT(concreteErSu->getSignaling().uplink && concreteErSu->getSignaling().mcs == 2);
-ASSERT(concreteErSu->getSignaling().stbc && concreteErSu->getSignaling().numberOfSpaceTimeStreams == 2);
-ASSERT(erSuReceived.getDataLength() == b(8));
+auto concreteErSu = erSuReceived.popAtFront<Ieee80211HeErSuPhyHeader>();
+REQUIRE(concreteErSu != nullptr && concreteErSu->getChunkLength() == b(100));
+REQUIRE(concreteErSu->getSignaling().signalingValid && concreteErSu->getSignaling().lSigLength == 59);
+REQUIRE(concreteErSu->getSignaling().uplink && concreteErSu->getSignaling().mcs == 2);
+REQUIRE(concreteErSu->getSignaling().stbc && concreteErSu->getSignaling().numberOfSpaceTimeStreams == 2);
+REQUIRE(erSuReceived.getDataLength() == b(8));
 
 auto malformedRlSig = suBits->getBits();
 malformedRlSig[24 + 5] = !malformedRlSig[24 + 5];
@@ -123,12 +123,12 @@ Packet badRlSigPacket("bad-rl-sig");
 badRlSigPacket.insertAtFront(makeShared<BitsChunk>(malformedRlSig));
 bool rlSigRejected = false;
 try {
-    badRlSigPacket.popAtFront<Ieee80211HePhyHeader>();
+    badRlSigPacket.popAtFront<Ieee80211HeSuPhyHeader>();
 }
 catch (const cRuntimeError&) {
     rlSigRejected = true;
 }
-ASSERT(rlSigRejected);
+REQUIRE(rlSigRejected);
 
 auto malformedSigACrc = suBits->getBits();
 malformedSigACrc[48 + 42] = !malformedSigACrc[48 + 42];
@@ -136,12 +136,12 @@ Packet badSigACrcPacket("bad-he-sig-a-crc");
 badSigACrcPacket.insertAtFront(makeShared<BitsChunk>(malformedSigACrc));
 bool sigACrcRejected = false;
 try {
-    badSigACrcPacket.popAtFront<Ieee80211HePhyHeader>();
+    badSigACrcPacket.popAtFront<Ieee80211HeSuPhyHeader>();
 }
 catch (const cRuntimeError&) {
     sigACrcRejected = true;
 }
-ASSERT(sigACrcRejected);
+REQUIRE(sigACrcRejected);
 
 Packet concreteMismatchPacket("exact-he-su-as-er-su");
 concreteMismatchPacket.insertAtFront(suBits);
@@ -152,7 +152,7 @@ try {
 catch (const cRuntimeError&) {
     concreteMismatchRejected = true;
 }
-ASSERT(concreteMismatchRejected);
+REQUIRE(concreteMismatchRejected);
 
 EV << "Exact HE SU/ER SU 100-bit golden vectors, payload boundary, decode, and malformed rejection passed.\n";
 EV << ".\n";

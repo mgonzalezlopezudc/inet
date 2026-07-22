@@ -24,6 +24,10 @@ struct Ieee80211HeMuRxAllocationInfo
     uint8_t mcs = 0;
     uint8_t numberOfSpatialStreams = 1;
     bool dcm = false;
+    bool ndpFeedbackReport = false;
+    uint8_t ndpFeedbackStatus = 0;
+    uint8_t ndpRuToneSetIndex = 0;
+    uint8_t ndpStartingStsNumber = 0;
     simtime_t duration;
 }
 
@@ -41,6 +45,10 @@ struct Ieee80211HeMuTxAllocationInfo
     uint8_t mcs = 0;
     uint8_t numberOfSpatialStreams = 1;
     bool dcm = false;
+    bool ndpFeedbackReport = false;
+    uint8_t ndpFeedbackStatus = 0;
+    uint8_t ndpRuToneSetIndex = 0;
+    uint8_t ndpStartingStsNumber = 0;
     B psduLength;
     bool muMimo = false;
     uint8_t spatialConfiguration = 0;
@@ -82,6 +90,9 @@ class Ieee80211HeMuReq extends TagBase
 {
     uint8_t ppduFormat = 0;
     uint32_t triggerId = 0;
+    uint16_t lSigLength = 0; // Trigger Common Info UL Length for HE TB
+    uint16_t channelBandwidthMhz = 20; // authoritative Trigger Common Info UL BW
+    bool noSignalExtension = false; // explicit HE-TB TXVECTOR NO_SIG_EXTN
     int ruIndex = -1;
     uint16_t ruToneSize;
     uint16_t ruToneOffset;
@@ -92,16 +103,26 @@ class Ieee80211HeMuReq extends TagBase
     uint8_t totalNsts = 1;
     bool muMimo = false;
     bool dcm = false;
+    bool ndpFeedbackReport = false;
+    uint8_t ndpFeedbackStatus = 0;
+    uint8_t ndpRuToneSetIndex = 0;
+    uint8_t ndpStartingStsNumber = 0;
     uint8_t guardInterval = 2;
     uint8_t coding = 0;
+    bool ldpcExtraSymbolSegment = false; // Trigger Common Info B27 for HE TB
     uint8_t packetExtensionDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
     uint8_t spatialReuse = 0;
+    bool txopUnspecified = true;
+    uint16_t txopDurationUs = 0;
+    bool doppler = false; // HE MU wire field; HE TB Trigger-derived context
+    uint8_t midamblePeriodicity = 0;
     bool nonSrgObssPdDisallowed = false;
     bool srgObssPdDisallowed = false;
     bool psrDisallowed = false;
     B psduLength = B(-1);
     simtime_t commonDuration;
+    bool commonDurationExact = false;
     W transmitPower = W(NaN);
 }
 
@@ -130,6 +151,10 @@ class Ieee80211HeMuCommonReq extends TagBase
     uint8_t packetExtensionDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
     uint8_t spatialReuse = 0;
+    bool txopUnspecified = true;
+    uint16_t txopDurationUs = 0;
+    bool doppler = false;
+    uint8_t midamblePeriodicity = 0;
     bool nonSrgObssPdDisallowed = false;
     bool srgObssPdDisallowed = false;
     bool psrDisallowed = false;
@@ -189,6 +214,7 @@ class Ieee80211HeMuRxTag extends TagBase
     uint8_t coding = 0;
     uint8_t packetExtensionDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0;
+    bool puncturedSubchannelMaskKnown = true;
     Ieee80211HeMuRxAllocationInfo allocations[];
 }
 

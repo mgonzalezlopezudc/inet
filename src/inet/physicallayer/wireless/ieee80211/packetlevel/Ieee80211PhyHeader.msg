@@ -181,10 +181,57 @@ struct Ieee80211HeMuUserInfo
     uint8_t mcs = 0;
     uint8_t numberOfSpatialStreams = 1;
     bool dcm = false;
+    bool ndpFeedbackReport = false;
+    uint8_t ndpFeedbackStatus = 0;
+    uint8_t ndpRuToneSetIndex = 0;
+    uint8_t ndpStartingStsNumber = 0;
+    bool muMimo = false;
+    uint8_t spatialConfiguration = 0;
     B psduLength;
     simtime_t duration;
     int streamStartIndex = 0;
     double leakageSum = 0;
+}
+
+// Validated logical L-SIG and HE-SIG-A values for an HE MU PPDU. HE-SIG-B
+// Common/User blocks are derived from these fields and the ordered users[]
+// allocation by the logical codec; model-only PSDU ranges are not serialized.
+struct Ieee80211HeMuSignalingFields
+{
+    bool signalingValid = false;
+    uint16_t lSigLength = 0;
+    uint8_t heSigBMcs = 0;
+    bool heSigBDcm = false;
+    uint8_t bandwidth = 0;
+    bool heSigBCompression = false;
+    uint8_t numberOfHeSigBSymbols = 0;
+    bool numberOfHeSigBSymbolsIsSaturated = false;
+    uint8_t numberOfMuMimoUsers = 0;
+    uint8_t giLtfSize = 0;
+    bool doppler = false;
+    uint8_t midamblePeriodicity = 0;
+    uint8_t txop = 127;
+    uint8_t numberOfHeLtfSymbols = 1;
+    bool ldpcExtraSymbolSegment = false;
+    bool stbc = false;
+    uint8_t preFecPaddingFactor = 0;
+    bool peDisambiguity = false;
+}
+
+// Validated logical L-SIG and HE-SIG-A values for an HE TB PPDU. RU, MCS,
+// FEC, DCM, NSTS, and Doppler remain Trigger-derived context and are not
+// invented as HE-SIG-A fields.
+struct Ieee80211HeTbSignalingFields
+{
+    bool signalingValid = false;
+    uint16_t lSigLength = 0;
+    uint8_t spatialReuse1 = 0;
+    uint8_t spatialReuse2 = 0;
+    uint8_t spatialReuse3 = 0;
+    uint8_t spatialReuse4 = 0;
+    uint8_t bandwidth = 0;
+    uint8_t txop = 127;
+    uint16_t triggerReserved = 511;
 }
 
 //
@@ -235,6 +282,7 @@ class Ieee80211HePhyHeader extends Ieee80211PhyHeader
     uint8_t coding = 0; // 0: BCC, 1: LDPC
     uint8_t packetExtensionDurationUs = 0;
     uint8_t puncturedSubchannelMask = 0; // 20 MHz subchannels, LSB is primary
+    bool puncturedSubchannelMaskKnown = true; // false when wire bandwidth code/common allocation is ambiguous
     uint32_t triggerId = 0;
     simtime_t commonDuration;
     bool ndp = false; // runtime-only: an NDP has no Data field
@@ -256,10 +304,12 @@ class Ieee80211HeErSuPhyHeader extends Ieee80211HePhyHeader
 
 class Ieee80211HeMuPhyHeader extends Ieee80211HePhyHeader
 {
+    Ieee80211HeMuSignalingFields signaling;
 }
 
 class Ieee80211HeTbPhyHeader extends Ieee80211HePhyHeader
 {
+    Ieee80211HeTbSignalingFields signaling;
 }
 
 //

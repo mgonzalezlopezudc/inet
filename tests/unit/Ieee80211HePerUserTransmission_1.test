@@ -211,6 +211,21 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     request->setDcm(true);
     request->setGuardInterval(HE_GI_1_6_US);
     request->setCoding(HE_CODING_BCC);
+    Ieee80211HeUserPhyParameters requested;
+    requested.ru = rus[2];
+    requested.mcs = 3;
+    requested.numberOfSpatialStreams = 2;
+    requested.dcm = true;
+    requested.coding = HE_CODING_BCC;
+    requested.psduLength = B(700);
+    auto expected = computeHePpduParameters({requested}, Hz(20e6),
+            HE_TRIGGER_BASED_UPLINK, HE_GI_1_6_US, getHeDefaultLtfType(HE_GI_1_6_US));
+    ASSERT(expected);
+    auto ulLength = buildIeee80211HeTriggerUlLength(expected.parameters.duration);
+    ASSERT(ulLength);
+    request->setLSigLength(ulLength.value.length);
+    request->setCommonDuration(expected.parameters.duration);
+    request->setCommonDurationExact(true);
 
     radio->testEncapsulate(packet);
     auto canonicalHandoff = packet->getTag<Ieee80211HeTxVectorReq>();
@@ -218,16 +233,7 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     ASSERT(phyHeader->getTriggerId() == 42);
     ASSERT(phyHeader->getUsersArraySize() == 1);
     const auto& user = phyHeader->getUsers(0);
-    Ieee80211HeUserPhyParameters requested;
-    requested.ru = rus[2];
-    requested.mcs = 3;
-    requested.numberOfSpatialStreams = 2;
-    requested.dcm = true;
-    requested.coding = HE_CODING_BCC;
-    requested.psduLength = user.psduLength;
-    auto expected = computeHePpduParameters({requested}, Hz(20e6),
-            HE_TRIGGER_BASED_UPLINK, HE_GI_1_6_US, getHeDefaultLtfType(HE_GI_1_6_US));
-    ASSERT(expected);
+    ASSERT(user.psduLength == requested.psduLength);
     ASSERT(user.duration == expected.parameters.duration);
     ASSERT(phyHeader->getCommonDuration() == expected.parameters.duration);
 

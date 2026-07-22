@@ -1,335 +1,359 @@
 %description:
-Test serialization and deserialization of Ieee80211HeMuPhyHeader.
+Validate exact HE MU/TB logical signaling serialization, content-channel ordering, and malformed rejection.
 
 %includes:
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
-#include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include <initializer_list>
+#include <iomanip>
+#include <sstream>
+#include <vector>
+
 #include "inet/common/packet/Packet.h"
-#include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
+#include "inet/common/packet/chunk/BitsChunk.h"
+#include "inet/common/ProtocolTag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 %global:
-
 using namespace inet;
 using namespace inet::physicallayer;
 
-%activity:
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
-// Create original HeMuPhyHeader
-auto origHeader = makeShared<Ieee80211HeMuPhyHeader>();
-auto headerRus = getHeEqualRuLayout(Hz(0), Hz(20e6), 2);
-origHeader->setBssColor(17);
-origHeader->setSpatialReuse(9);
-
-Ieee80211HeMuUserInfo user1;
-user1.ruIndex = 1001; // catalog-local indexes are not physical RU identity
-user1.ruToneSize = headerRus[0].toneSize;
-user1.ruToneOffset = headerRus[0].toneOffset;
-user1.staId = 0x155;
-user1.mcs = 4;
-user1.numberOfSpatialStreams = 1;
-origHeader->appendUsers(user1);
-
-Ieee80211HeMuUserInfo user2;
-user2.ruIndex = 2002;
-user2.ruToneSize = headerRus[1].toneSize;
-user2.ruToneOffset = headerRus[1].toneOffset;
-user2.staId = 0x2aa;
-user2.mcs = 5;
-user2.numberOfSpatialStreams = 2;
-origHeader->appendUsers(user2);
-
-// The compact fixture encoding is 8 bytes of common fields plus two 3-byte
-// user records, for an intentional emitted length of 112 bits.
-origHeader->setChunkLength(b(112));
-
-EV << "Original Header:\n";
-EV << "users count = " << origHeader->getUsersArraySize() << "\n";
-for (unsigned int i = 0; i < origHeader->getUsersArraySize(); ++i) {
-    EV << "  user[" << i << "]: staId=" << origHeader->getUsers(i).staId
-       << ", mcs=" << (int)origHeader->getUsers(i).mcs
-       << ", nss=" << (int)origHeader->getUsers(i).numberOfSpatialStreams << "\n";
+static std::vector<bool> getPuncturing(uint8_t mask, Hz bandwidth)
+{
+    std::vector<bool> result(std::lround(bandwidth.get() / 20e6), false);
+    for (size_t i = 0; i < result.size(); i++)
+        result[i] = mask & (uint8_t(1) << i);
+    return result;
 }
 
-// Put in a packet
-auto pk = new Packet("test-packet");
-pk->insertAtFront(origHeader);
-
-// Serialize packet to raw bytes
-auto bytes = pk->peekDataAsBytes();
-ASSERT(bytes->getChunkLength() == B(14));
-ASSERT(bytes->getBytes() == std::vector<uint8_t>({2, 50, 5, 191, 192, 0, 10, 92, 96, 42, 168, 5, 84, 162}));
-EV << "Serialized to " << bytes->getChunkLength().get<B>() << " bytes\n";
-
-// Put bytes back in a new packet
-auto pk2 = new Packet("recv-packet");
-pk2->insertAtFront(bytes);
-
-// Deserialize header
-auto recvHeader = pk2->popAtFront<Ieee80211HePhyHeader>();
-ASSERT(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(recvHeader) != nullptr);
-
-EV << "Deserialized Header:\n";
-EV << "users count = " << recvHeader->getUsersArraySize() << "\n";
-ASSERT(recvHeader->getBssColor() == 17);
-ASSERT(recvHeader->getSpatialReuse() == 9);
-for (unsigned int i = 0; i < recvHeader->getUsersArraySize(); ++i) {
-    EV << "  user[" << i << "]: staId=" << recvHeader->getUsers(i).staId
-       << ", mcs=" << (int)recvHeader->getUsers(i).mcs
-       << ", nss=" << (int)recvHeader->getUsers(i).numberOfSpatialStreams << "\n";
+static Ieee80211HeMuSignalingFields makeMuSignaling(Hz bandwidth, uint8_t puncturedMask,
+        bool compression, int userCount, int numberOfSymbols)
+{
+    auto encodedBandwidth = encodeHeMuBandwidth(bandwidth,
+            getPuncturing(puncturedMask, bandwidth), compression);
+    if (!encodedBandwidth)
+        throw cRuntimeError("invalid HE MU test bandwidth: %s", encodedBandwidth.error.c_str());
+    Ieee80211HeMuSignalingFields fields;
+    fields.signalingValid = true;
+    fields.lSigLength = 59;
+    fields.heSigBMcs = 0;
+    fields.bandwidth = encodedBandwidth.value;
+    fields.heSigBCompression = compression;
+    fields.numberOfHeSigBSymbols = compression ? 0 : numberOfSymbols;
+    fields.numberOfHeSigBSymbolsIsSaturated = !compression && numberOfSymbols == 16;
+    fields.numberOfMuMimoUsers = compression ? userCount : 0;
+    fields.giLtfSize = 3;
+    fields.txop = 127;
+    fields.numberOfHeLtfSymbols = 1;
+    return fields;
 }
-ASSERT(recvHeader->getUsers(0).ruToneSize == headerRus[0].toneSize);
-ASSERT(recvHeader->getUsers(1).ruToneSize == headerRus[1].toneSize);
-ASSERT(recvHeader->getUsers(0).ruIndex == headerRus[0].index);
-ASSERT(recvHeader->getUsers(1).ruIndex == headerRus[1].index);
-EV << "Noncanonical RU indexes decoded to canonical catalog indexes.\n";
 
-auto muMimoHeader = makeShared<Ieee80211HeMuPhyHeader>();
-auto fullBandwidthRu = getHeEqualRuLayout(Hz(0), Hz(20e6), 1).front();
-for (int i = 0; i < 2; ++i) {
+static Ieee80211HeMuUserInfo makeUser(const Ieee80211HeRu& ru, uint16_t staId,
+        uint8_t mcs, uint8_t nss = 1)
+{
     Ieee80211HeMuUserInfo user;
-    user.ruIndex = 3000 + i;
-    user.ruToneSize = fullBandwidthRu.toneSize;
-    user.ruToneOffset = fullBandwidthRu.toneOffset;
-    user.staId = 0x300 + i;
-    muMimoHeader->appendUsers(user);
+    user.ruIndex = ru.index + 1000; // wire identity is canonical geometry, not catalog-local index
+    user.ruToneSize = ru.toneSize;
+    user.ruToneOffset = ru.toneOffset;
+    user.staId = staId;
+    user.mcs = mcs;
+    user.numberOfSpatialStreams = nss;
+    return user;
 }
-muMimoHeader->setChunkLength(B(14));
-Packet muMimoPacket("mu-mimo-header");
-muMimoPacket.insertAtFront(muMimoHeader);
-auto muMimoBytes = muMimoPacket.peekDataAsBytes();
-Packet decodedMuMimoPacket("decoded-mu-mimo-header");
-decodedMuMimoPacket.insertAtFront(muMimoBytes);
-auto decodedMuMimoHeader = decodedMuMimoPacket.popAtFront<Ieee80211HeMuPhyHeader>();
-ASSERT(decodedMuMimoHeader->getUsersArraySize() == 2);
-ASSERT(decodedMuMimoHeader->getUsers(0).ruIndex == fullBandwidthRu.index);
-ASSERT(decodedMuMimoHeader->getUsers(1).ruIndex == fullBandwidthRu.index);
-ASSERT(decodedMuMimoHeader->getUsers(0).staId == 0x300);
-ASSERT(decodedMuMimoHeader->getUsers(1).staId == 0x301);
-EV << "MU-MIMO users sharing one physical RU round trip with canonical indexes.\n";
 
-auto testFullBandwidth80RoundTrip = [](int userCount) {
-    auto fullBandwidthRu = getHeEqualRuLayout(Hz(0), Hz(80e6), 1).front();
-    auto header = makeShared<Ieee80211HeMuPhyHeader>();
-    for (int i = 0; i < userCount; ++i) {
-        Ieee80211HeMuUserInfo user;
-        user.ruIndex = 5000 + i;
-        user.ruToneSize = fullBandwidthRu.toneSize;
-        user.ruToneOffset = fullBandwidthRu.toneOffset;
-        user.staId = 0x410 + i;
-        header->appendUsers(user);
-    }
-    auto serializedLength = b(64 + 4 * 8 + 2 + userCount * 20);
-    header->setChunkLength(serializedLength);
-    Packet packet("80mhz-full-bandwidth-header");
-    packet.insertAtFront(header);
-    auto bits = packet.peekDataAsBits();
-    ASSERT(bits->getChunkLength() == serializedLength);
-    Packet decodedPacket("decoded-80mhz-full-bandwidth-header");
-    decodedPacket.insertAtFront(bits);
-    auto decodedHeader = decodedPacket.popAtFront<Ieee80211HeMuPhyHeader>();
-    ASSERT(decodedHeader->getUsersArraySize() == (unsigned int)userCount);
-    for (int i = 0; i < userCount; ++i) {
-        ASSERT(decodedHeader->getUsers(i).staId == 0x410 + i);
-        ASSERT(decodedHeader->getUsers(i).ruToneSize == fullBandwidthRu.toneSize);
-        ASSERT(decodedHeader->getUsers(i).ruToneOffset == fullBandwidthRu.toneOffset);
-        ASSERT(decodedHeader->getUsers(i).ruIndex == fullBandwidthRu.index);
-    }
-};
-
-testFullBandwidth80RoundTrip(1);
-testFullBandwidth80RoundTrip(2);
-EV << "80 MHz 996-tone single-user and shared-RU MU-MIMO headers round trip exactly once per content channel.\n";
-
-const char *compressedHeSigBError = "2x996-tone RU requires compressed HE-SIG-B and is unsupported by this uncompressed Common-field encoder";
-auto fullBandwidth160Ru = getHeEqualRuLayout(Hz(0), Hz(160e6), 1).front();
-ASSERT(fullBandwidth160Ru.toneSize == 1992);
-fullBandwidth160Ru.index = 6000;
-auto rejectedCodec = encodeHeSigBCommonField({fullBandwidth160Ru}, Hz(160e6));
-ASSERT(!rejectedCodec);
-ASSERT(rejectedCodec.error == compressedHeSigBError);
-
-auto testFullBandwidth160Rejection = [compressedHeSigBError, fullBandwidth160Ru](int userCount) {
-    auto header = makeShared<Ieee80211HeMuPhyHeader>();
-    for (int i = 0; i < userCount; ++i) {
-        Ieee80211HeMuUserInfo user;
-        user.ruIndex = 7000 + i;
-        user.ruToneSize = fullBandwidth160Ru.toneSize;
-        user.ruToneOffset = fullBandwidth160Ru.toneOffset;
-        user.staId = 0x510 + i;
-        header->appendUsers(user);
-    }
-    header->setChunkLength(b(64 + 8 * 8 + 2 + userCount * 20));
-    Packet packet("160mhz-full-bandwidth-header");
-    packet.insertAtFront(header);
-    bool serializationRejected = false;
-    try {
-        packet.peekDataAsBits();
-    }
-    catch (const cRuntimeError& error) {
-        serializationRejected = std::string(error.what()).find(compressedHeSigBError) != std::string::npos;
-    }
-    ASSERT(serializationRejected);
-};
-
-testFullBandwidth160Rejection(1);
-testFullBandwidth160Rejection(2);
-EV << "160 MHz 2x996-tone single-user and shared-RU headers reject uncompressed HE-SIG-B without decoded downgrade.\n";
-
-auto testFormatRoundTrip = [](Ieee80211HePpduFormat ppduFormat, b headerLength,
-        const std::vector<uint8_t>& expectedHeaderBytes) {
-    auto header = createIeee80211HePhyHeader(ppduFormat);
-    header->setChunkLength(headerLength);
-    auto packet = new Packet("he-single-user-round-trip");
-    packet->insertAtBack(makeShared<ByteCountChunk>(B(5)));
+static Ptr<const BitsChunk> serializeWithPayload(const Ptr<Ieee80211HePhyHeader>& header)
+{
+    auto packet = new Packet("exact-he-mu-tb");
+    packet->insertAtBack(makeShared<BitsChunk>(std::vector<bool>{true, false, true, false, true, false, true, false}));
     packet->insertAtFront(header);
-    auto bytes = packet->peekDataAsBytes();
-    ASSERT(bytes->getChunkLength() == headerLength + B(5));
-    ASSERT(std::equal(expectedHeaderBytes.begin(), expectedHeaderBytes.end(), bytes->getBytes().begin()));
-
-    auto received = new Packet("he-single-user-received");
-    received->insertAtFront(bytes);
-    auto decoded = received->popAtFront<Ieee80211HePhyHeader>();
-    ASSERT(getIeee80211HePpduFormat(*decoded) == ppduFormat);
-    switch (ppduFormat) {
-        case HE_MU_DOWNLINK:
-            ASSERT(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(decoded) != nullptr);
-            break;
-        case HE_TRIGGER_BASED_UPLINK:
-            ASSERT(dynamicPtrCast<const Ieee80211HeTbPhyHeader>(decoded) != nullptr);
-            break;
-        case HE_SINGLE_USER:
-            ASSERT(dynamicPtrCast<const Ieee80211HeSuPhyHeader>(decoded) != nullptr);
-            break;
-        case HE_EXTENDED_RANGE_SU:
-            ASSERT(dynamicPtrCast<const Ieee80211HeErSuPhyHeader>(decoded) != nullptr);
-            break;
-    }
-    ASSERT(decoded->getUsersArraySize() == 0);
-    ASSERT(decoded->getChunkLength() == headerLength);
-    ASSERT(received->getDataLength() == B(5));
-
+    auto bits = packet->peekDataAsBits();
     delete packet;
-    delete received;
-};
-
-testFormatRoundTrip(HE_TRIGGER_BASED_UPLINK, b(64), {128, 0, 1, 191, 192, 0, 10, 93});
-testFormatRoundTrip(HE_SINGLE_USER, b(64), {0, 0, 1, 191, 192, 0, 10, 94});
-testFormatRoundTrip(HE_EXTENDED_RANGE_SU, b(128),
-        {0, 0, 1, 191, 192, 0, 10, 95, 0, 0, 1, 191, 192, 0, 10, 95});
-EV << "HE TB, SU, and ER SU exact bytes, concrete identity, and payload boundary round trips passed.\n";
-
-auto suHeader = createIeee80211HePhyHeader(HE_SINGLE_USER);
-suHeader->setChunkLength(b(64));
-Packet suPacket("he-su-concrete-mismatch");
-suPacket.insertAtFront(suHeader);
-auto suBytes = suPacket.peekDataAsBytes();
-Packet mismatchedPacket("he-su-as-mu");
-mismatchedPacket.insertAtFront(suBytes);
-bool concreteMismatchRejected = false;
-try {
-    mismatchedPacket.popAtFront<Ieee80211HeMuPhyHeader>();
+    return bits;
 }
-catch (const cRuntimeError& error) {
-    concreteMismatchRejected = std::string(error.what()).find(
-            "Packet-level HE PPDU format marker does not match requested header type") != std::string::npos;
-}
-ASSERT(concreteMismatchRejected);
-EV << "Concrete HE header decoding rejects a mismatched packet-level format marker.\n";
 
-bool invalidFactoryFormatRejected = false;
-try {
-    createIeee80211HePhyHeader(static_cast<Ieee80211HePpduFormat>(255));
+static std::string packBitsMsbFirst(const std::vector<bool>& bits, size_t bitCount)
+{
+    std::ostringstream stream;
+    for (size_t offset = 0; offset < bitCount; offset += 8) {
+        uint8_t byte = 0;
+        for (size_t i = 0; i < 8 && offset + i < bitCount; i++)
+            byte |= bits[offset + i] << (7 - i);
+        stream << std::hex << std::setfill('0') << std::setw(2) << static_cast<int>(byte);
+    }
+    return stream.str();
 }
-catch (const cRuntimeError& error) {
-    invalidFactoryFormatRejected = std::string(error.what()).find(
-            "Unknown IEEE 802.11 HE PPDU format") != std::string::npos;
-}
-ASSERT(invalidFactoryFormatRejected);
 
-bool rawBaseFormatQueryRejected = false;
-try {
-    getIeee80211HePpduFormat(*makeShared<Ieee80211HePhyHeader>());
+static void appendLogicalBits(std::vector<bool>& target, const std::vector<bool>& source)
+{
+    target.insert(target.end(), source.begin(), source.end());
 }
-catch (const cRuntimeError& error) {
-    rawBaseFormatQueryRejected = std::string(error.what()).find(
-            "Unknown concrete IEEE 802.11 HE PHY header type") != std::string::npos;
+
+%activity:
+// 20 MHz, two 106-tone OFDMA users. Common (18 bits) plus one two-user
+// User block (52 bits) requires three HE-SIG-B symbols at MCS 0.
+auto rus20 = getHeEqualRuLayout(Hz(0), MHz(20), 2);
+auto mu20 = makeShared<Ieee80211HeMuPhyHeader>();
+mu20->setBssColor(17);
+mu20->setSpatialReuse(13);
+mu20->appendUsers(makeUser(rus20[0], 0x155, 4, 1));
+mu20->appendUsers(makeUser(rus20[1], 0x2aa, 5, 2));
+mu20->setSignaling(makeMuSignaling(MHz(20), 0, false, 2, 3));
+mu20->setChunkLength(b(178));
+auto mu20Bits = serializeWithPayload(mu20);
+REQUIRE(packBitsMsbFirst(mu20Bits->getBits(), 178) ==
+        "d6e000d6e000045611bfc008006102aa010aaa28b00000");
+REQUIRE(mu20Bits->getChunkLength() == b(186));
+REQUIRE(std::vector<bool>(mu20Bits->getBits().begin() + 178, mu20Bits->getBits().end()) ==
+        std::vector<bool>({true, false, true, false, true, false, true, false}));
+
+Packet mu20Received("exact-he-mu-20-received");
+mu20Received.insertAtFront(mu20Bits);
+auto decodedMu20 = mu20Received.popAtFront<Ieee80211HeMuPhyHeader>();
+REQUIRE(decodedMu20->getChunkLength() == b(178));
+REQUIRE(decodedMu20->getBssColor() == 17 && decodedMu20->getSpatialReuse() == 13);
+REQUIRE(decodedMu20->getSignaling().lSigLength == 59);
+REQUIRE(decodedMu20->getSignaling().numberOfHeSigBSymbols == 3);
+REQUIRE(decodedMu20->getUsersArraySize() == 2);
+REQUIRE(decodedMu20->getUsers(0).staId == 0x155 && decodedMu20->getUsers(1).staId == 0x2aa);
+REQUIRE(decodedMu20->getUsers(0).ruIndex == rus20[0].index);
+REQUIRE(decodedMu20->getUsers(1).ruIndex == rus20[1].index);
+REQUIRE(mu20Received.getDataLength() == b(8));
+
+// HE-SIG-B Common and User block CRC errors are independently rejected.
+auto badCommonBits = mu20Bits->getBits();
+badCommonBits[108] = !badCommonBits[108];
+Packet badCommonPacket("bad-he-sig-b-common-crc");
+badCommonPacket.insertAtFront(makeShared<BitsChunk>(badCommonBits));
+bool badCommonRejected = false;
+try { badCommonPacket.popAtFront<Ieee80211HeMuPhyHeader>(); }
+catch (const cRuntimeError&) { badCommonRejected = true; }
+REQUIRE(badCommonRejected);
+
+auto badUserBits = mu20Bits->getBits();
+badUserBits[160] = !badUserBits[160];
+Packet badUserPacket("bad-he-sig-b-user-crc");
+badUserPacket.insertAtFront(makeShared<BitsChunk>(badUserBits));
+bool badUserRejected = false;
+try { badUserPacket.popAtFront<Ieee80211HeMuPhyHeader>(); }
+catch (const cRuntimeError&) { badUserRejected = true; }
+REQUIRE(badUserRejected);
+
+// An 80 MHz punctured layout uses the HE-SIG-A puncturing bandwidth code and
+// keeps deterministic two-content-channel HE-SIG-B ordering.
+auto rus80 = getHeEqualRuLayout(Hz(0), MHz(80), 4);
+auto mu80 = makeShared<Ieee80211HeMuPhyHeader>();
+mu80->setPuncturedSubchannelMask(0x02);
+mu80->appendUsers(makeUser(rus80[0], 101, 0));
+mu80->appendUsers(makeUser(rus80[2], 102, 1));
+mu80->appendUsers(makeUser(rus80[3], 103, 2));
+mu80->setSignaling(makeMuSignaling(MHz(80), 0x02, false, 3, 4));
+mu80->setChunkLength(b(308));
+auto mu80Bits = serializeWithPayload(mu80);
+Packet mu80Received("exact-he-mu-80-punctured-received");
+mu80Received.insertAtFront(mu80Bits);
+auto decodedMu80 = mu80Received.popAtFront<Ieee80211HeMuPhyHeader>();
+REQUIRE(decodedMu80->getUsersArraySize() == 3);
+REQUIRE(decodedMu80->getSignaling().bandwidth == mu80->getSignaling().bandwidth);
+REQUIRE(decodedMu80->getPuncturedSubchannelMask() == 0x02);
+REQUIRE(decodedMu80->getPuncturedSubchannelMaskKnown());
+REQUIRE(decodedMu80->getUsers(0).staId == 101);
+REQUIRE(decodedMu80->getUsers(1).staId == 102);
+REQUIRE(decodedMu80->getUsers(2).staId == 103);
+
+// With only one populated 20 MHz allocation, the puncturing bandwidth code
+// and empty Common allocations admit more than one mask. Preserve that
+// ambiguity instead of manufacturing an exact zero mask.
+std::vector<Ieee80211HeRu> sparse80Rus = {rus80[0]};
+auto sparse80Common = encodeHeSigBCommonField(sparse80Rus, MHz(80),
+        getPuncturing(0x04, MHz(80)));
+REQUIRE(sparse80Common);
+int sparse80Symbols = getHeSigBSymbolCount(sparse80Common.commonField, MHz(80));
+auto sparse80 = makeShared<Ieee80211HeMuPhyHeader>();
+sparse80->setPuncturedSubchannelMask(0x04);
+sparse80->appendUsers(makeUser(rus80[0], 104, 0));
+sparse80->setSignaling(makeMuSignaling(MHz(80), 0x04, false, 1, sparse80Symbols));
+sparse80->setChunkLength(b(100 + 2 * sparse80Symbols * 26));
+auto sparse80Bits = serializeWithPayload(sparse80);
+Packet sparse80Received("ambiguous-he-mu-80-puncturing-received");
+sparse80Received.insertAtFront(sparse80Bits);
+auto decodedSparse80 = sparse80Received.popAtFront<Ieee80211HeMuPhyHeader>();
+REQUIRE(!decodedSparse80->getPuncturedSubchannelMaskKnown());
+REQUIRE(decodedSparse80->getPuncturedSubchannelMask() == 0);
+
+// Compressed HE-SIG-B for a full-bandwidth 2x996-tone RU splits an equitable
+// number of MU-MIMO users across the two content channels.
+auto full160 = getHeEqualRuLayout(Hz(0), MHz(160), 1).front();
+REQUIRE(full160.toneSize == 1992);
+auto compressed160 = makeShared<Ieee80211HeMuPhyHeader>();
+auto compressedUser0 = makeUser(full160, 0x510, 3);
+auto compressedUser1 = makeUser(full160, 0x511, 4);
+compressedUser0.muMimo = compressedUser1.muMimo = true;
+compressedUser0.spatialConfiguration = compressedUser1.spatialConfiguration =
+        encodeHeMuSpatialConfiguration({1, 1});
+compressed160->appendUsers(compressedUser0);
+compressed160->appendUsers(compressedUser1);
+compressed160->setSignaling(makeMuSignaling(MHz(160), 0, true, 2, 0));
+int compressedSymbols = getHeSigBSymbolCount(MHz(160), 2, true, 0, false);
+compressed160->setChunkLength(b(100 + 2 * compressedSymbols * 26));
+auto compressedBits = serializeWithPayload(compressed160);
+Packet compressedReceived("compressed-he-sig-b-received");
+compressedReceived.insertAtFront(compressedBits);
+auto decodedCompressed = compressedReceived.popAtFront<Ieee80211HeMuPhyHeader>();
+REQUIRE(decodedCompressed->getUsersArraySize() == 2);
+REQUIRE(decodedCompressed->getSignaling().heSigBCompression);
+REQUIRE(decodedCompressed->getUsers(0).staId == 0x510);
+REQUIRE(decodedCompressed->getUsers(1).staId == 0x511);
+REQUIRE(decodedCompressed->getUsers(0).muMimo && decodedCompressed->getUsers(1).muMimo);
+REQUIRE(decodedCompressed->getUsers(0).ruToneSize == 1992);
+REQUIRE(decodedCompressed->getUsers(1).ruToneSize == 1992);
+
+// A sparse allocation carries the complete Table 27-27 partition. The
+// unallocated RUs are represented by STA-ID 2046 User fields on the wire and
+// are not exposed as scheduled users after decoding.
+auto all26 = getHeEqualRuLayout(Hz(0), MHz(20), 9);
+std::vector<Ieee80211HeRu> sparseRus = {all26.front()};
+auto sparseCommon = encodeHeSigBCommonField(sparseRus, MHz(20));
+REQUIRE(sparseCommon);
+REQUIRE(sparseCommon.commonField.contentChannels[0].plannedUsers.size() > 1);
+int sparseSymbols = getHeSigBSymbolCount(sparseCommon.commonField, MHz(20));
+auto sparse = makeShared<Ieee80211HeMuPhyHeader>();
+sparse->appendUsers(makeUser(all26.front(), 0x321, 2));
+sparse->setSignaling(makeMuSignaling(MHz(20), 0, false, 1, sparseSymbols));
+sparse->setChunkLength(b(100 + sparseSymbols * 26));
+auto sparseBits = serializeWithPayload(sparse);
+Packet sparseReceived("sparse-he-sig-b-received");
+sparseReceived.insertAtFront(sparseBits);
+auto decodedSparse = sparseReceived.popAtFront<Ieee80211HeMuPhyHeader>();
+REQUIRE(decodedSparse->getUsersArraySize() == 1);
+REQUIRE(decodedSparse->getUsers(0).staId == 0x321);
+
+// The normal radio byte-backed path uses RXVECTOR metadata to select the
+// concrete HE-MU serializer instead of attempting the ambiguous base header.
+Packet radioReceived("radio-byte-backed-he-mu");
+radioReceived.insertAtFront(makeShared<BitsChunk>(sparseBits->getBits()));
+radioReceived.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+radioReceived.addTag<Ieee80211HeMuReq>()->setPpduFormat(HE_MU_DOWNLINK);
+auto radioHeader = Ieee80211Radio::popIeee80211PhyHeaderAtFront(&radioReceived);
+REQUIRE(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(radioHeader) != nullptr);
+REQUIRE(radioReceived.getDataLength() == b(8));
+
+// Every unused HE-SIG-B bit is required to be zero.
+auto badPaddingBits = sparseBits->getBits();
+badPaddingBits[sparse->getChunkLength().get<b>() - 1] = true;
+Packet badPaddingPacket("nonzero-he-sig-b-padding");
+badPaddingPacket.insertAtFront(makeShared<BitsChunk>(badPaddingBits));
+bool badPaddingRejected = false;
+try { badPaddingPacket.popAtFront<Ieee80211HeMuPhyHeader>(); }
+catch (const cRuntimeError&) { badPaddingRejected = true; }
+REQUIRE(badPaddingRejected);
+
+// Exact symbol planning uses the maximum content-channel load, not an
+// equitable split. Exercise the asymmetric case at both wide bandwidths.
+for (auto bandwidth : {MHz(80), MHz(160)}) {
+    auto wideRus = getHeEqualRuLayout(Hz(0), bandwidth,
+            bandwidth == MHz(80) ? 4 : 8);
+    std::vector<Ieee80211HeRu> asymmetricRus(7, wideRus[0]);
+    asymmetricRus.push_back(wideRus[1]);
+    auto asymmetricCommon = encodeHeSigBCommonField(asymmetricRus, bandwidth);
+    REQUIRE(asymmetricCommon);
+    REQUIRE(getHeSigBSymbolCount(asymmetricCommon.commonField, bandwidth) >
+            getHeSigBSymbolCount(bandwidth, 8));
 }
-ASSERT(rawBaseFormatQueryRejected);
-EV << "Invalid HE format construction and raw-base format queries are rejected.\n";
 
-auto rus = getHeEqualRuLayout(Hz(5.18e9), Hz(80e6), 4);
-for (size_t i = 0; i < rus.size(); ++i)
-    rus[i].index = 4000 + i;
-auto encoded = encodeHeSigBRuAllocation(rus, Hz(80e6));
-ASSERT(encoded);
-for (size_t i = 0; i < rus.size(); ++i)
-    ASSERT(encoded.allocation.rus[i].index != rus[i].index);
-auto decoded = decodeHeSigBRuAllocation(encoded.allocation.allocationCodes,
-        Hz(5.18e9), Hz(80e6));
-ASSERT(decoded);
-ASSERT(decoded.allocation.rus.size() == rus.size());
-for (size_t i = 0; i < rus.size(); ++i) {
-    ASSERT(decoded.allocation.rus[i].toneSize == rus[i].toneSize);
-    ASSERT(decoded.allocation.rus[i].toneOffset == rus[i].toneOffset);
-}
-auto duplicateUsers = rus;
-duplicateUsers.push_back(rus.front());
-ASSERT(encodeHeSigBRuAllocation(duplicateUsers, Hz(80e6)));
-auto overlapping = rus;
-auto catalog = getHeRuAllocationCatalog(Hz(5.18e9), Hz(80e6));
-auto overlappingRu = std::find_if(catalog.begin(), catalog.end(), [](const Ieee80211HeRu& ru) {
-    return ru.toneSize == 484 && ru.toneOffset == 0;
-});
-ASSERT(overlappingRu != catalog.end());
-overlapping.push_back(*overlappingRu);
-ASSERT(!encodeHeSigBRuAllocation(overlapping, Hz(80e6)));
-auto unknownGeometry = rus;
-unknownGeometry.front().toneOffset++;
-ASSERT(!encodeHeSigBRuAllocation(unknownGeometry, Hz(80e6)));
-EV << "HE-SIG-B geometry canonicalization, duplicate-user, and overlap validation passed.\n";
+// A wider puncturing code is reconstructed exactly when the Common field
+// identifies the only empty 20 MHz subchannel.
+auto rus160 = getHeEqualRuLayout(Hz(0), MHz(160), 8);
+std::vector<Ieee80211HeRu> active160;
+for (size_t i = 0; i < rus160.size(); i++)
+    if (i != 1)
+        active160.push_back(rus160[i]);
+auto common160 = encodeHeSigBCommonField(active160, MHz(160), getPuncturing(0x02, MHz(160)));
+REQUIRE(common160);
+int symbols160 = getHeSigBSymbolCount(common160.commonField, MHz(160));
+auto punctured160 = makeShared<Ieee80211HeMuPhyHeader>();
+punctured160->setPuncturedSubchannelMask(0x02);
+for (size_t i = 0; i < active160.size(); i++)
+    punctured160->appendUsers(makeUser(active160[i], 700 + i, i % 3));
+punctured160->setSignaling(makeMuSignaling(MHz(160), 0x02, false,
+        active160.size(), symbols160));
+punctured160->setChunkLength(b(100 + 2 * symbols160 * 26));
+auto punctured160Bits = serializeWithPayload(punctured160);
+Packet punctured160Received("exact-he-mu-160-punctured-received");
+punctured160Received.insertAtFront(punctured160Bits);
+auto decodedPunctured160 = punctured160Received.popAtFront<Ieee80211HeMuPhyHeader>();
+REQUIRE(decodedPunctured160->getPuncturedSubchannelMaskKnown());
+REQUIRE(decodedPunctured160->getPuncturedSubchannelMask() == 0x02);
 
-auto delimiter = makeShared<ieee80211::Ieee80211MpduSubframeHeader>();
-delimiter->setEof(true);
-delimiter->setLength(1234);
-auto delimiterPacket = new Packet("delimiter");
-delimiterPacket->insertAtFront(delimiter);
-auto delimiterBytes = delimiterPacket->peekDataAsBytes();
-auto parsedDelimiterPacket = new Packet("parsed-delimiter");
-parsedDelimiterPacket->insertAtFront(delimiterBytes);
-auto parsedDelimiter = parsedDelimiterPacket->popAtFront<ieee80211::Ieee80211MpduSubframeHeader>();
-ASSERT(parsedDelimiter->getEof());
-ASSERT(parsedDelimiter->getReserved() == 0);
-ASSERT(parsedDelimiter->getLength() == 1234);
-ASSERT(parsedDelimiter->getSignature() == 0x4E);
-ASSERT(!parsedDelimiter->isIncorrect());
-delete delimiterPacket;
-delete parsedDelimiterPacket;
-EV << "A-MPDU delimiter EOF, length, CRC, and signature round-trip passed.\n";
+// The 4-bit symbol field's all-ones value is saturated. Raw decoding cannot
+// infer the actual HE-SIG-B length without resolved RXVECTOR metadata.
+Ieee80211HeLSig saturatedLSig;
+saturatedLSig.length = 59;
+Ieee80211HeMuSigA saturatedSigA;
+saturatedSigA.bandwidth = 0;
+saturatedSigA.numberOfHeSigBSymbols = 16;
+saturatedSigA.numberOfHeSigBSymbolsIsSaturated = true;
+saturatedSigA.giLtfSize = 3;
+auto saturatedLBits = encodeHeLSig(saturatedLSig, Ieee80211HeSigFormat::MU);
+auto saturatedRlBits = encodeHeRlSig(saturatedLSig, Ieee80211HeSigFormat::MU);
+auto saturatedABits = encodeHeMuSigA(saturatedSigA);
+REQUIRE(saturatedLBits && saturatedRlBits && saturatedABits);
+std::vector<bool> saturatedBits;
+appendLogicalBits(saturatedBits, saturatedLBits.bits);
+appendLogicalBits(saturatedBits, saturatedRlBits.bits);
+appendLogicalBits(saturatedBits, saturatedABits.bits);
+Packet saturatedPacket("saturated-he-sig-b-count");
+saturatedPacket.insertAtFront(makeShared<BitsChunk>(saturatedBits));
+bool saturatedRejected = false;
+try { saturatedPacket.popAtFront<Ieee80211HeMuPhyHeader>(); }
+catch (const cRuntimeError&) { saturatedRejected = true; }
+REQUIRE(saturatedRejected);
 
-delete pk;
-delete pk2;
+// HE TB carries Trigger-derived L_LENGTH verbatim; the serializer does not
+// infer it from duration or payload.
+auto tb = makeShared<Ieee80211HeTbPhyHeader>();
+tb->setBssColor(23);
+Ieee80211HeTbSignalingFields tbFields;
+tbFields.signalingValid = true;
+tbFields.lSigLength = 58;
+tbFields.spatialReuse1 = 1;
+tbFields.spatialReuse2 = 2;
+tbFields.spatialReuse3 = 3;
+tbFields.spatialReuse4 = 4;
+tbFields.bandwidth = 2;
+tbFields.txop = 51;
+tb->setSignaling(tbFields);
+tb->setChunkLength(b(100));
+auto tbBits = serializeWithPayload(tb);
+REQUIRE(packBitsMsbFirst(tbBits->getBits(), 100) == "d2e040d2e040750985737ffc00");
+Packet tbReceived("exact-he-tb-received");
+tbReceived.insertAtFront(tbBits);
+auto decodedTb = tbReceived.popAtFront<Ieee80211HeTbPhyHeader>();
+REQUIRE(decodedTb->getChunkLength() == b(100));
+REQUIRE(decodedTb->getSignaling().lSigLength == 58);
+REQUIRE(decodedTb->getSignaling().spatialReuse1 == 1);
+REQUIRE(decodedTb->getSignaling().spatialReuse4 == 4);
+REQUIRE(decodedTb->getSignaling().bandwidth == 2);
+REQUIRE(decodedTb->getSignaling().txop == 51);
+REQUIRE(tbReceived.getDataLength() == b(8));
+
+auto inconsistent = makeShared<Ieee80211HeMuPhyHeader>(*mu20);
+auto inconsistentFields = inconsistent->getSignaling();
+inconsistentFields.numberOfHeSigBSymbols = 2;
+inconsistent->setSignaling(inconsistentFields);
+Packet inconsistentPacket("inconsistent-he-sig-b-symbol-count");
+inconsistentPacket.insertAtFront(inconsistent);
+bool inconsistentRejected = false;
+try { inconsistentPacket.peekDataAsBits(); }
+catch (const cRuntimeError&) { inconsistentRejected = true; }
+REQUIRE(inconsistentRejected);
+
+EV << "Exact HE MU/TB signaling, puncturing, compressed content-channel split, payload boundary, and CRC rejection passed.\n";
 EV << ".\n";
 
 %contains: stdout
-Original Header:
-users count = 2
-  user[0]: staId=341, mcs=4, nss=1
-  user[1]: staId=682, mcs=5, nss=2
-Serialized to 14 bytes
-Deserialized Header:
-users count = 2
-  user[0]: staId=341, mcs=4, nss=1
-  user[1]: staId=682, mcs=5, nss=2
-Noncanonical RU indexes decoded to canonical catalog indexes.
-MU-MIMO users sharing one physical RU round trip with canonical indexes.
-80 MHz 996-tone single-user and shared-RU MU-MIMO headers round trip exactly once per content channel.
-160 MHz 2x996-tone single-user and shared-RU headers reject uncompressed HE-SIG-B without decoded downgrade.
-HE TB, SU, and ER SU exact bytes, concrete identity, and payload boundary round trips passed.
-Concrete HE header decoding rejects a mismatched packet-level format marker.
-Invalid HE format construction and raw-base format queries are rejected.
-HE-SIG-B geometry canonicalization, duplicate-user, and overlap validation passed.
-A-MPDU delimiter EOF, length, CRC, and signature round-trip passed.
+Exact HE MU/TB signaling, puncturing, compressed content-channel split, payload boundary, and CRC rejection passed.
 .

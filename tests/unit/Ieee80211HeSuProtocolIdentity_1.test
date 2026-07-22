@@ -102,6 +102,7 @@ class InspectableRadio : public Ieee80211Radio
   public:
     void testEncapsulate(Packet *packet) const { encapsulate(packet); }
     void testDecapsulate(Packet *packet) const { decapsulate(packet); }
+    bool testSupportsParallelReception(const ITransmission *transmission) const { return supportsParallelReception(transmission); }
 };
 
 class InspectableReceiver : public Ieee80211Receiver
@@ -239,6 +240,8 @@ static void testSingleUserMode(InspectableRadio *radio,
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, startTime));
+    if (radio->testSupportsParallelReception(transmission))
+        throw cRuntimeError("HE SU/ER transmission was misclassified as parallel HE TB reception");
     const auto& canonicalLayout = transmission->getHePpduLayout();
     ASSERT(canonicalLayout != nullptr);
     ASSERT(transmission->getDuration() == txTime);
@@ -288,6 +291,18 @@ static void testSingleUserMode(InspectableRadio *radio,
     ASSERT(decapsulatedPacket->getTag<Ieee80211HeMuRxTag>()->getPpduFormat() == expectedFormat);
     ASSERT(decapsulatedPacket->getTag<Ieee80211HeRxVectorInd>()->getRxVector() == rxVector);
     delete decapsulatedPacket;
+    if (expectedFormat == HE_SINGLE_USER) {
+        auto ambiguousPacket = receivedPacket->dup();
+        auto decodedHeader = ambiguousPacket->popAtFront<Ieee80211HeSuPhyHeader>();
+        auto ambiguousHeader = makeShared<Ieee80211HeSuPhyHeader>(*decodedHeader);
+        ambiguousHeader->setPuncturedSubchannelMask(0);
+        ambiguousHeader->setPuncturedSubchannelMaskKnown(false);
+        ambiguousPacket->insertAtFront(ambiguousHeader);
+        check_and_cast<const InspectableRadio *>(receiverRadio)->testDecapsulate(ambiguousPacket);
+        ASSERT(!ambiguousPacket->getTag<Ieee80211HeMuRxTag>()->getPuncturedSubchannelMaskKnown());
+        ASSERT(ambiguousPacket->getTag<Ieee80211HeMuRxTag>()->getPuncturedSubchannelMask() == 0);
+        delete ambiguousPacket;
+    }
     medium->testRemoveTransmission(transmission);
 
     delete packet;
@@ -306,7 +321,7 @@ static void testUntaggedCompatibility(InspectableRadio *radio,
     auto header = packet->peekAtFront<Ieee80211HeSuPhyHeader>();
     ASSERT(!header->getSignaling().signalingValid);
     ASSERT(header->getCommonDuration() == canonicalHandoff->getPpduLayout()->getDuration());
-    ASSERT(header->getChunkLength() == b(64));
+    ASSERT(header->getChunkLength() == b(100));
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, SIMTIME_ZERO));
     ASSERT(transmission->getHeTxVector() == canonicalHandoff->getTxVector());
@@ -360,7 +375,19 @@ static void testTransitionalSoundingNdp(InspectableRadio *radio, const Ieee80211
     ASSERT(handoff->getPpduLayout()->getUsers().size() == 1);
     ASSERT(handoff->getPpduLayout()->getUsers().front().psduLength == B(0));
     ASSERT(handoff->getPpduLayout()->getUsers().front().numberOfSpatialStreams == 4);
-    Packet wirePacket("transitional-he-sounding-ndp-wire", header);
+    auto wireHeader = makeShared<Ieee80211HeSuPhyHeader>(*header);
+    Ieee80211HeSuErSignalingFields signaling;
+    signaling.signalingValid = true;
+    signaling.lSigLength = 58;
+    signaling.bssColor = header->getBssColor();
+    signaling.spatialReuse = header->getSpatialReuse();
+    signaling.bandwidth = 0;
+    signaling.giLtfSize = 3;
+    signaling.numberOfSpaceTimeStreams = 4;
+    signaling.txop = 127;
+    wireHeader->setSignaling(signaling);
+    wireHeader->setChunkLength(b(100));
+    Packet wirePacket("transitional-he-sounding-ndp-wire", wireHeader);
     auto bytes = wirePacket.peekDataAsBytes();
     Packet decodedPacket("transitional-he-sounding-ndp-decoded", bytes);
     auto decodedHeader = decodedPacket.popAtFront<Ieee80211HeSuPhyHeader>();
@@ -411,6 +438,8 @@ static void testTriggerBasedRecipientContext(InspectableRadio *radio,
     packet->addTag<Ieee80211ModeReq>()->setMode(mode);
     auto request = packet->addTag<Ieee80211HeMuReq>();
     request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    request->setLSigLength(742);
+    request->setCommonDurationExact(false);
     request->setTriggerId(4242);
     request->setRuIndex(ru.index);
     request->setRuToneSize(ru.toneSize);
@@ -426,6 +455,8 @@ static void testTriggerBasedRecipientContext(InspectableRadio *radio,
 
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
             transmitter->createTransmission(radio, packet, startTime));
+    if (!radio->testSupportsParallelReception(transmission))
+        throw cRuntimeError("HE TB transmission was not classified for parallel reception");
     medium->testAddTransmission(radio, transmission);
     auto listening = medium->getListening(receiverRadio, transmission);
     auto receptionResult = medium->getReceptionResult(receiverRadio, listening, transmission);
@@ -458,6 +489,38 @@ static void testTriggerBasedRecipientContext(InspectableRadio *radio,
     ASSERT(!allocation.dcm);
     delete decapsulatedPacket;
     medium->testRemoveTransmission(transmission);
+    delete packet;
+}
+
+static void testTriggerBandwidthOverridesLocalMode(InspectableRadio *radio,
+        const Ieee80211Transmitter *transmitter, const Ieee80211HeMode *local20MhzMode)
+{
+    auto channel = transmitter->getChannel();
+    ASSERT(channel != nullptr);
+    auto ru80 = getHeEqualRuLayout(channel->getCenterFrequency(), MHz(80), 1).front();
+    auto packet = new Packet("he-trigger-80mhz-with-local-20mhz-mode");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    packet->addTag<Ieee80211ModeReq>()->setMode(local20MhzMode);
+    auto request = packet->addTag<Ieee80211HeMuReq>();
+    request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    request->setLSigLength(742);
+    request->setChannelBandwidthMhz(80);
+    request->setCommonDurationExact(false);
+    request->setRuIndex(ru80.index);
+    request->setRuToneSize(ru80.toneSize);
+    request->setRuToneOffset(ru80.toneOffset);
+    request->setStaId(37);
+    request->setMcs(0);
+    request->setNumberOfSpatialStreams(1);
+    request->setGuardInterval(HE_GI_3_2_US);
+    request->setCoding(HE_CODING_LDPC);
+    request->setPsduLength(B(100));
+    radio->testEncapsulate(packet);
+    auto handoff = packet->getTag<Ieee80211HeTxVectorReq>();
+    ASSERT(local20MhzMode->getDataMode()->getBandwidth() == MHz(20));
+    ASSERT(handoff->getPpduLayout()->getChannelBandwidth() == MHz(80));
+    ASSERT(handoff->getPpduLayout()->getUsers().front().ru.toneSize == 996);
+    ASSERT(handoff->getPpduLayout()->getUsers().front().ru.toneOffset == ru80.toneOffset);
     delete packet;
 }
 
@@ -548,6 +611,7 @@ testSingleUserMode(radio, receiverRadio, receiver, medium, transmitter, heErSuMo
         b(100), B(100), SimTime(188, SIMTIME_US), 122, SimTime(2, SIMTIME_S));
 testTriggerBasedRecipientContext(radio, receiverRadio, medium, transmitter, heSuMode,
         SimTime(3, SIMTIME_S));
+testTriggerBandwidthOverridesLocalMode(radio, transmitter, heSuMode);
 testUntaggedCompatibility(radio, transmitter, heSuMode, B(100));
 testTransitionalSoundingNdp(radio, heSuMode);
 testRejectedCanonicalHeaderMutation(radio, transmitter, heSuMode, false);

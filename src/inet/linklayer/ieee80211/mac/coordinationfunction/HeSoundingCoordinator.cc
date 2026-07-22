@@ -5,6 +5,7 @@
 //
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeSoundingCoordinator.h"
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211Defs.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeSoundingFs.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -31,7 +32,6 @@ void HeSoundingCoordinator::initialize(int stage)
         WATCH(ndpReceived);
         WATCH(soundingDialogToken);
         WATCH(nextSoundingDialogToken);
-        WATCH(nextTriggerId);
         WATCH_VECTOR(soundingTargets);
         WATCH_EXPR("soundingTargetCount", soundingTargets.size());
         WATCH_EXPR("soundingState", ndpAnnouncementReceived ? (ndpReceived ? "NDP received" : "NDPA received") : "idle");
@@ -92,7 +92,7 @@ bool HeSoundingCoordinator::tryStartSoundingSequence(AccessCategory ac,
         EV_INFO << "At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << std::endl;
         auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
                                                  &csiManager, scheduleContext.channelBandwidth,
-                                                 nextSoundingDialogToken++, nextTriggerId++);
+                                                 nextSoundingDialogToken++, allocateIeee80211HeTriggerId());
         frameSequenceHandler->startFrameSequence(soundingSequence, context, hcf);
         hcf->emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
         return true;
@@ -208,20 +208,7 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                     response->insertAtBack(makeShared<Ieee80211MacTrailer>());
 
                     auto request = response->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
-                    request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
-                    request->setTriggerId(trigger->getTriggerId());
-                    request->setRuIndex(selected->ruIndex);
-                    request->setRuToneSize(selected->ruToneSize);
-                    request->setRuToneOffset(selected->ruToneOffset);
-                    request->setStaId(myAid);
-                    request->setMcs(selected->mcs);
-                    request->setNumberOfSpatialStreams(selected->numberOfSpatialStreams);
-                    request->setStreamStartIndex(selected->streamStartIndex);
-                    request->setGuardInterval(trigger->getGuardInterval());
-                    request->setCoding(trigger->getCoding());
-                    request->setPacketExtensionDurationUs(trigger->getPacketExtensionDurationUs());
-                    request->setPuncturedSubchannelMask(trigger->getPuncturedSubchannelMask());
-                    request->setCommonDuration(trigger->getCommonDuration());
+                    populateHeTbRequestFromTrigger(request.get(), *trigger, *selected, myAid);
 
                     tx->transmitFrame(response, responseHeader, modeSet->getSifsTime(), callback);
                     delete response;

@@ -60,6 +60,10 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
     uint32_t triggerId;
     HeHcf *callback;
     std::vector<IIeee80211HeUlScheduler::RuAllocation> allocations;
+    bool nfrp = false;
+    uint16_t nfrpStartingAid = 0;
+    int nfrpToneSetsPerSpatialStream = 0;
+    int nfrpScheduledStaCount = 0;
     std::set<uint16_t> receivedAids;
     simtime_t firstResponseTime;
     simtime_t lastResponseTime;
@@ -79,22 +83,39 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
 
   public:
     HeUlReceiveCollectionStep(uint32_t triggerId, HeHcf *callback,
-            const std::vector<IIeee80211HeUlScheduler::RuAllocation>& allocations,
+            const IIeee80211HeUlScheduler::Schedule& schedule,
+            IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
             simtime_t timeout, simtime_t commonDuration, simtime_t phyRxStartDelay) :
-        ReceiveCollectionStep(timeout), triggerId(triggerId), callback(callback), allocations(allocations)
+        ReceiveCollectionStep(timeout), triggerId(triggerId), callback(callback), allocations(schedule.allocations),
+        nfrp(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER),
+        nfrpStartingAid(schedule.nfrpStartingAid)
     {
         ASSERT(callback != nullptr);
-        ASSERT(!allocations.empty());
+        ASSERT(nfrp || !allocations.empty());
         ASSERT(commonDuration > SIMTIME_ZERO);
+        if (nfrp) {
+            nfrpToneSetsPerSpatialStream = IIeee80211HeUlScheduler::getNfrpToneSetsPerSpatialStream(
+                    schedule.channelBandwidth);
+            nfrpScheduledStaCount = IIeee80211HeUlScheduler::getNfrpScheduledStaCount(
+                    schedule.channelBandwidth, schedule.nfrpMultiplexingFlag);
+        }
         firstResponseTime = simTime();
         lastResponseTime = firstResponseTime + commonDuration + timeout + phyRxStartDelay;
+    }
+
+    virtual bool acceptsHeaderlessFrame(const Packet *frame) const override
+    {
+        auto tag = frame == nullptr ? nullptr : frame->findTag<physicallayer::Ieee80211HeMuRxTag>();
+        return nfrp && frame != nullptr && frame->getDataLength() == b(0) && tag != nullptr &&
+                tag->getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK &&
+                tag->getAllocationsArraySize() == 1 && tag->getAllocations(0).ndpFeedbackReport;
     }
 
     virtual void setFrameToReceive(Packet *frame) override
     {
         auto tag = frame->findTag<physicallayer::Ieee80211HeMuRxTag>();
-        auto header = findDataHeader(frame);
-        if (tag == nullptr || header == nullptr || tag->getPpduFormat() != physicallayer::HE_TRIGGER_BASED_UPLINK ||
+        auto header = nfrp ? nullptr : findDataHeader(frame);
+        if (tag == nullptr || (!nfrp && header == nullptr) || tag->getPpduFormat() != physicallayer::HE_TRIGGER_BASED_UPLINK ||
                 tag->getTriggerId() != triggerId || simTime() < firstResponseTime || simTime() > lastResponseTime) {
             // This collection window is intentionally strict: accepting a late
             // or foreign HE-TB PPDU could acknowledge a different Trigger.
@@ -104,9 +125,37 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
             return;
         }
         uint16_t aid = 0;
+        if (nfrp) {
+            if (frame->getDataLength() != b(0) || tag->getAllocationsArraySize() != 1) {
+                EV_INFO << "Discarding malformed NFRP feedback response for Trigger " << triggerId << "\n";
+                delete frame;
+                return;
+            }
+            const auto& report = tag->getAllocations(0);
+            if (!report.ndpFeedbackReport || report.ndpFeedbackStatus > 1 ||
+                    report.ndpRuToneSetIndex < 1 ||
+                    report.ndpRuToneSetIndex > nfrpToneSetsPerSpatialStream ||
+                    report.ndpStartingStsNumber > 1) {
+                EV_INFO << "Discarding invalid NFRP report metadata for Trigger " << triggerId << "\n";
+                delete frame;
+                return;
+            }
+            const int offset = report.ndpStartingStsNumber * nfrpToneSetsPerSpatialStream +
+                    report.ndpRuToneSetIndex - 1;
+            if (offset >= nfrpScheduledStaCount || nfrpStartingAid + offset > 4095) {
+                EV_INFO << "Discarding out-of-range NFRP report for Trigger " << triggerId << "\n";
+                delete frame;
+                return;
+            }
+            aid = nfrpStartingAid + offset;
+            EV_INFO << "Collected NFRP feedback report: trigger=" << triggerId
+                    << ", aid=" << aid << ", status=" << (int)report.ndpFeedbackStatus
+                    << ", toneSet=" << (int)report.ndpRuToneSetIndex
+                    << ", startingSts=" << (int)report.ndpStartingStsNumber << "\n";
+        }
         for (const auto& allocation : allocations)
-            if ((!allocation.randomAccess && allocation.staAddress == header->getTransmitterAddress()) ||
-                    (allocation.randomAccess && tag->getRuIndex() == allocation.ru.index)) {
+            if (!nfrp && ((!allocation.randomAccess && allocation.staAddress == header->getTransmitterAddress()) ||
+                    (allocation.randomAccess && tag->getRuIndex() == allocation.ru.index))) {
                 aid = allocation.associationId;
                 if (allocation.randomAccess)
                     aid = callback->getAssociationId(header->getTransmitterAddress());
@@ -167,9 +216,7 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
                                           }),
                                new StepFs("HE-TB-PPDU",
                                           [this](StepFs *, FrameSequenceContext *context) {
-                                              return new HeUlReceiveCollectionStep(this->triggerId, this->callback, this->schedule.allocations,
-                                                      this->modeSet->getSifsTime() + this->schedule.commonDuration + this->modeSet->getSlotTime(),
-                                                      this->schedule.commonDuration, this->modeSet->getPhyRxStartDelay());
+                                              return this->buildReceiveCollectionStep();
                                           },
                                           [this](StepFs *, FrameSequenceContext *context) {
                                               processResponses(context);
@@ -185,12 +232,19 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
     ASSERT(coordinator != nullptr);
     ASSERT(callback != nullptr);
     ASSERT(modeSet != nullptr);
-    ASSERT(!schedule.allocations.empty());
+    ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER || !schedule.allocations.empty());
     ASSERT(schedule.commonDuration > SIMTIME_ZERO);
     ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ||
             triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
             triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER);
     triggerId = coordinator->allocateTriggerId();
+}
+
+IReceiveStep *HeUlMuTxOpFs::buildReceiveCollectionStep() const
+{
+    return new HeUlReceiveCollectionStep(triggerId, callback, schedule, triggerType,
+            modeSet->getSifsTime() + schedule.commonDuration + modeSet->getSlotTime(),
+            schedule.commonDuration, modeSet->getPhyRxStartDelay());
 }
 
 Packet *HeUlMuTxOpFs::buildTriggerPacket() const
@@ -199,19 +253,30 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     // Trigger Type, UL Length/common duration, RU Allocation, UL HE-MCS, coding,
     // and UL Target Receive Power.  26.5.2.2 allows the AP to solicit one or
     // more HE TB PPDU responses by addressing User Info fields by AID or RA-RU.
-    ASSERT(!schedule.allocations.empty());
+    ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER || !schedule.allocations.empty());
     ASSERT(schedule.commonDuration > SIMTIME_ZERO);
     auto header = makeShared<Ieee80211TriggerFrame>();
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);
     header->setTriggerType(triggerType);
     header->setTriggerId(triggerId);
+    header->setUlLength(schedule.ulLength);
     header->setCommonDuration(schedule.commonDuration);
+    header->setCommonDurationExact(schedule.commonDurationExact);
+    header->setChannelBandwidthMhz(std::lround(schedule.channelBandwidth.get() / 1e6));
+    header->setNoSignalExtension(schedule.noSignalExtension);
     header->setGuardInterval(schedule.guardInterval);
     header->setCoding(schedule.coding);
+    header->setLdpcExtraSymbolSegment(schedule.ldpcExtraSymbolSegment);
+    header->setApTxPowerDbm(schedule.apTxPowerDbm);
     header->setPacketExtensionDurationUs(schedule.packetExtensionDurationUs);
     header->setPuncturedSubchannelMask(schedule.puncturedSubchannelMask);
-    header->setUsersArraySize(schedule.allocations.size());
+    header->setNfrpStartingAid(schedule.nfrpStartingAid);
+    header->setNfrpFeedbackType(schedule.nfrpFeedbackType);
+    header->setNfrpTargetRssiDbm(schedule.nfrpTargetRssiDbm);
+    header->setNfrpUseMaximumTransmitPower(schedule.nfrpUseMaximumTransmitPower);
+    header->setNfrpMultiplexingFlag(schedule.nfrpMultiplexingFlag);
+    header->setUsersArraySize(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? 0 : schedule.allocations.size());
     for (size_t i = 0; i < schedule.allocations.size(); i++) {
         const auto& allocation = schedule.allocations[i];
         Ieee80211HeTriggerUserInfo user;
@@ -220,6 +285,7 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.ruToneSize = allocation.ru.toneSize;
         user.ruToneOffset = allocation.ru.toneOffset;
         user.mcs = allocation.mcs;
+        user.coding = schedule.coding;
         user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
         user.streamStartIndex = allocation.streamStartIndex;
         user.muMimo = allocation.muMimo;
@@ -227,8 +293,10 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.tidAggregationLimit = 1; // single-TID HE TB A-MPDU model
         user.preferredAc = accessCategoryToAci(allocation.accessCategory);
         user.targetRssiDbm = allocation.targetRssiDbm;
+        user.useMaximumTransmitPower = allocation.useMaximumTransmitPower;
         user.randomAccess = allocation.randomAccess;
-        header->setUsers(i, user);
+        if (triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+            header->setUsers(i, user);
     }
     // 9.3.1.22 says the Trigger Duration field follows 9.2.5.  Here it covers
     // the SIFS-delayed HE TB response and the AP's following SIFS response.
@@ -237,12 +305,16 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     // the Multi-STA BlockAck airtime, their NAV expired exactly when the AP
     // began transmitting the BlockAck and an EDCA frame could arrive while
     // the frame-sequence state was still in its transmit step.
-    auto maxBlockAckLength = B(18 + 12 * schedule.allocations.size() + 4);
-    auto blockAckDuration = modeSet->getSlowestMandatoryMode()->getDuration(maxBlockAckLength);
-    header->setDurationField(responseDuration + modeSet->getSifsTime() + blockAckDuration);
-    int userInfoSize = (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
-            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) ? 5 : 6;
-    header->setChunkLength(B(24 + userInfoSize * schedule.allocations.size()));
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+        header->setDurationField(responseDuration);
+    else {
+        auto maxBlockAckLength = B(18 + 12 * schedule.allocations.size() + 4);
+        auto blockAckDuration = modeSet->getSlowestMandatoryMode()->getDuration(maxBlockAckLength);
+        header->setDurationField(responseDuration + modeSet->getSifsTime() + blockAckDuration);
+    }
+    const int userInfoSize = triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? 5 : 6;
+    header->setChunkLength(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
+            B(30) : B(24 + userInfoSize * schedule.allocations.size()));
     auto packet = new Packet(triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "HE-BSRP-Trigger" :
             triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? "HE-NFRP-Trigger" : "HE-Basic-Trigger", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
@@ -257,6 +329,12 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     // standard RU/AID matching rules.
     ASSERT(context != nullptr);
     ackRecords.clear();
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
+        EV_INFO << "HE UL NFRP response processing: reports="
+                << collection->getReceivedFrames().size() << ", no acknowledgment scheduled\n";
+        return;
+    }
     for (const auto& allocation : schedule.allocations) {
         if (allocation.randomAccess)
             continue;

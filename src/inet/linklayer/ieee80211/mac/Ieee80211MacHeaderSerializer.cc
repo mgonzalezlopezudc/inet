@@ -427,26 +427,34 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
             auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(chunk);
             if (trigger->getUsersArraySize() > 255)
                 throw cRuntimeError("Too many Trigger frame users");
+            const bool nfrp = trigger->getTriggerType() == 7;
+            if (nfrp && trigger->getUsersArraySize() != 0)
+                throw cRuntimeError("NFRP Trigger must not contain ordinary User Info records");
 
             // Duration and MAC addresses (standard MAC header fields)
             stream.writeUint16Le(trigger->getDurationField().inUnit(SIMTIME_US));
             stream.writeMacAddress(trigger->getReceiverAddress());
             stream.writeMacAddress(trigger->getTransmitterAddress());
 
-            uint32_t ulLength = static_cast<uint32_t>(trigger->getCommonDuration().inUnit(SIMTIME_US));
-            uint32_t maxToneIndex = 0;
-            for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
-                const auto& u = trigger->getUsers(i);
-                maxToneIndex = std::max(maxToneIndex, (uint32_t)(u.ruToneOffset + u.ruToneSize));
+            uint32_t ulLength = trigger->getUlLength();
+            if (ulLength > 4095)
+                throw cRuntimeError("Trigger UL Length exceeds its 12-bit field");
+            if (ulLength % 3 != 1)
+                throw cRuntimeError("Trigger UL Length has the wrong modulo-3 value for an HE TB PPDU");
+            uint8_t ulBw;
+            switch (trigger->getChannelBandwidthMhz()) {
+                case 20: ulBw = 0; break;
+                case 40: ulBw = 1; break;
+                case 80: ulBw = 2; break;
+                case 160: ulBw = 3; break;
+                default: throw cRuntimeError("Unsupported Trigger UL bandwidth %u MHz",
+                            trigger->getChannelBandwidthMhz());
             }
-            uint8_t ulBw = 0;
-            if (maxToneIndex > 996)
-                ulBw = 3;
-            else if (maxToneIndex > 484)
-                ulBw = 2;
-            else if (maxToneIndex > 242)
-                ulBw = 1;
-            uint8_t giAndHeLtf = (trigger->getGuardInterval() <= 2) ? trigger->getGuardInterval() : 2;
+            uint8_t giAndHeLtf = nfrp ? 2 :
+                    ((trigger->getGuardInterval() <= 2) ? trigger->getGuardInterval() : 2);
+            if (trigger->getApTxPowerDbm() < -20 || trigger->getApTxPowerDbm() > 40)
+                throw cRuntimeError("Trigger AP Tx Power is outside the encodable -20..40 dBm/20 MHz range");
+            const uint8_t apTxPower = trigger->getApTxPowerDbm() + 20;
 
             // --- Common Info Field (8 octets = 64 bits) ---
             uint64_t commonInfo =
@@ -455,11 +463,32 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                     (1ULL << 17) |                                    // B17: CS Required
                     ((static_cast<uint64_t>(ulBw) & 0x3) << 18) |     // B18-B19: UL BW
                     ((static_cast<uint64_t>(giAndHeLtf) & 0x3) << 20) | // B20-B21: GI And HE-LTF Type
-                    ((static_cast<uint64_t>(trigger->getCoding() & 1)) << 27) | // B27: LDPC Extra Symbol Segment
-                    (3ULL << 54);                                     // B54-B55: Reserved set to 1 for HE Trigger variant
+                    (nfrp ? (1ULL << 23) : 0) |                       // B23-B25: NFRP Number Of HE-LTF Symbols = 1
+                    (nfrp ? 0 : (static_cast<uint64_t>(trigger->getLdpcExtraSymbolSegment()) << 27)) | // B27
+                    ((static_cast<uint64_t>(apTxPower) & 0x3F) << 28) | // B28-B33: AP Tx Power + 20 dBm/20 MHz
+                    (0x1FFULL << 54);                                 // B54-B62: HE variant reserved bits are all ones
             writeLeBits(stream, commonInfo, 64);
 
             // --- User Info List ---
+            if (nfrp) {
+                if (trigger->getNfrpStartingAid() > 4095)
+                    throw cRuntimeError("NFRP Starting AID exceeds its 12-bit field");
+                if (trigger->getNfrpFeedbackType() != 0)
+                    throw cRuntimeError("NFRP Feedback Type values 1-15 are reserved");
+                int targetPower = trigger->getNfrpUseMaximumTransmitPower() ? 127 :
+                        trigger->getNfrpTargetRssiDbm() + 110;
+                if (targetPower < 0 || (targetPower > 90 && targetPower != 127))
+                    throw cRuntimeError("NFRP UL Target Receive Power uses a reserved or out-of-range encoding");
+                // Figure 9-101 is a special 48-bit record. The extracted
+                // figure leaves B32-B39 unnamed; emit them as zero together
+                // with the explicitly reserved B12-B20 and B25-B31 ranges.
+                uint64_t userInfo =
+                        (trigger->getNfrpStartingAid() & 0xFFFULL) |
+                        ((static_cast<uint64_t>(trigger->getNfrpFeedbackType()) & 0xF) << 21) |
+                        ((static_cast<uint64_t>(targetPower) & 0x7F) << 40) |
+                        (static_cast<uint64_t>(trigger->getNfrpMultiplexingFlag()) << 47);
+                writeLeBits(stream, userInfo, 48);
+            }
             for (unsigned int i = 0; i < trigger->getUsersArraySize(); i++) {
                 const auto& user = trigger->getUsers(i);
 
@@ -548,9 +577,9 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                     }
                 }
                 ruAllocation = (b7_b1 << 1) | b0;
-                int fval = user.targetRssiDbm + 110;
-                if (fval < 0) fval = 0;
-                if (fval > 127) fval = 127;
+                int fval = user.useMaximumTransmitPower ? 127 : user.targetRssiDbm + 110;
+                if (fval < 0 || (fval > 90 && fval != 127))
+                    throw cRuntimeError("Trigger UL Target Receive Power uses a reserved or out-of-range encoding");
                 if (user.numberOfSpatialStreams < 1 || user.numberOfSpatialStreams > 8)
                     throw cRuntimeError("Invalid Trigger User Info spatial-stream count %u",
                             user.numberOfSpatialStreams);
@@ -561,7 +590,7 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 uint64_t userInfo =
                         (user.aid & 0xFFFULL) |                         // B0-B11: AID12
                         ((static_cast<uint64_t>(ruAllocation) & 0xFF) << 12) | // B12-B19: RU Allocation
-                        ((static_cast<uint64_t>(trigger->getCoding() & 1)) << 20) | // B20: UL FEC Coding Type
+                        ((static_cast<uint64_t>(user.coding & 1)) << 20) | // B20: UL FEC Coding Type
                         ((static_cast<uint64_t>(user.mcs) & 0xF) << 21) | // B21-B24: UL HE-MCS
                         ((static_cast<uint64_t>(user.streamStartIndex) & 0x7) << 26) | // B26-B28: Starting Spatial Stream
                         ((static_cast<uint64_t>(user.numberOfSpatialStreams - 1) & 0x7) << 29) | // B29-B31: Number Of Spatial Streams minus 1
@@ -1008,19 +1037,68 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             trigger->setTriggerType(triggerType);
 
             auto ulLength = (commonInfo >> 4) & 0xFFF;
-            trigger->setCommonDuration(SimTime(ulLength, SIMTIME_US));
+            trigger->setUlLength(ulLength);
+            if (ulLength % 3 != 1)
+                throw cRuntimeError("Trigger UL Length has the wrong modulo-3 value for an HE TB PPDU");
+            // Equation 27-11 with m=2 maps UL Length to a 4 us legacy-duration
+            // boundary. The original HE-symbol-aligned TXTIME may be below this
+            // boundary, but this is the authoritative usable duration budget
+            // recoverable from the Trigger wire image.
+            trigger->setCommonDuration(SimTime(20000 + ((ulLength + 5) / 3) * 4000, SIMTIME_NS));
+            trigger->setCommonDurationExact(false);
 
             auto ulBw = (commonInfo >> 18) & 0x3;
+            trigger->setChannelBandwidthMhz(20U << ulBw);
             auto giAndHeLtf = (commonInfo >> 20) & 0x3;
             trigger->setGuardInterval(giAndHeLtf);
 
-            auto coding = (commonInfo >> 27) & 0x1;
-            trigger->setCoding(coding);
+            trigger->setLdpcExtraSymbolSegment((commonInfo >> 27) & 0x1);
+            auto apTxPower = (commonInfo >> 28) & 0x3F;
+            if (apTxPower > 60)
+                throw cRuntimeError("Trigger AP Tx Power uses a reserved encoding");
+            trigger->setApTxPowerDbm(static_cast<int8_t>(apTxPower) - 20);
+            if (((commonInfo >> 54) & 0x1FF) != 0x1FF)
+                throw cRuntimeError("HE Trigger Common Info B54-B62 reserved bits are not all ones");
+            if ((commonInfo >> 63) != 0)
+                throw cRuntimeError("HE Trigger Common Info B63 reserved bit is not zero");
             trigger->setTriggerId(0);
 
             // Determine users from remaining chunk length. MU-BAR has variable-size
             // BAR Information, so parse user records sequentially.
             int remainingBytes = stream.getRemainingLength().get<B>();
+
+            if (triggerType == 7) {
+                constexpr uint64_t nfrpReservedCommonMask =
+                        (1ULL << 26) | (1ULL << 27) | (0x3ULL << 34) |
+                        (1ULL << 36) | (0x1FFFFULL << 37);
+                if (giAndHeLtf != 2 || ((commonInfo >> 23) & 0x7) != 1)
+                    throw cRuntimeError("NFRP Trigger Common Info has invalid GI/HE-LTF fields");
+                if ((commonInfo & nfrpReservedCommonMask) != 0)
+                    throw cRuntimeError("NFRP Trigger Common Info reserved fields are not zero");
+                if (remainingBytes != 6)
+                    throw cRuntimeError("NFRP Trigger must contain exactly one 6-byte User Info field");
+                auto userInfo = readLeBits(stream, 48);
+                constexpr uint64_t nfrpReservedUserMask =
+                        (0x1FFULL << 12) | (0x7FULL << 25) | (0xFFULL << 32);
+                if ((userInfo & nfrpReservedUserMask) != 0)
+                    throw cRuntimeError("NFRP Trigger User Info reserved fields are not zero");
+                if (((userInfo >> 21) & 0xF) != 0)
+                    throw cRuntimeError("NFRP Feedback Type values 1-15 are reserved");
+                trigger->setNfrpStartingAid(userInfo & 0xFFF);
+                trigger->setNfrpFeedbackType((userInfo >> 21) & 0xF);
+                auto targetPower = (userInfo >> 40) & 0x7F;
+                if (targetPower > 90 && targetPower != 127)
+                    throw cRuntimeError("NFRP UL Target Receive Power uses a reserved encoding");
+                trigger->setNfrpUseMaximumTransmitPower(targetPower == 127);
+                trigger->setNfrpTargetRssiDbm(targetPower == 127 ? -110 :
+                        static_cast<int8_t>(targetPower - 110));
+                trigger->setNfrpMultiplexingFlag((userInfo >> 47) & 0x1);
+                trigger->setUsersArraySize(0);
+                trigger->setCoding(0);
+                trigger->setLdpcExtraSymbolSegment(false);
+                trigger->setChunkLength(B(stream.getPosition().get<B>()));
+                return trigger;
+            }
 
             std::vector<Ieee80211HeTriggerUserInfo> users;
             int consumedBytes = 0;
@@ -1097,11 +1175,16 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     }
                 }
 
+                user.coding = (userInfo >> 20) & 0x1;
                 user.mcs = (userInfo >> 21) & 0xF;
                 user.streamStartIndex = (userInfo >> 26) & 0x7;
                 user.numberOfSpatialStreams = ((userInfo >> 29) & 0x7) + 1;
                 auto targetRssiVal = (userInfo >> 32) & 0x7F;
-                user.targetRssiDbm = static_cast<int8_t>(targetRssiVal - 110);
+                if (targetRssiVal > 90 && targetRssiVal != 127)
+                    throw cRuntimeError("Trigger UL Target Receive Power uses a reserved encoding");
+                user.useMaximumTransmitPower = targetRssiVal == 127;
+                user.targetRssiDbm = targetRssiVal == 127 ? -110 :
+                        static_cast<int8_t>(targetRssiVal - 110);
                 user.randomAccess = (user.aid == 0 || user.aid == 2045);
 
                 if (triggerType == 0) { // Basic Trigger
@@ -1183,6 +1266,7 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             trigger->setUsersArraySize(users.size());
             for (unsigned int i = 0; i < users.size(); i++)
                 trigger->setUsers(i, users[i]);
+            trigger->setCoding(users.empty() ? 0 : users.front().coding);
             trigger->setChunkLength(B(stream.getPosition().get<B>()));
             return trigger;
         }

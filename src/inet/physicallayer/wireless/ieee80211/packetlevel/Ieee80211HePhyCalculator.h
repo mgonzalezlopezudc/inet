@@ -183,9 +183,26 @@ struct Ieee80211HeErSuSignalingResult : Ieee80211HeSigCodecStatus
     Ieee80211HeErSuSignaling value;
 };
 
+/** Upper TXTIME boundary represented by an HE L-SIG LENGTH bucket. */
+struct Ieee80211HeTxTimeResult : Ieee80211HeSigCodecStatus
+{
+    simtime_t txTime = SIMTIME_ZERO;
+};
+
 /** Builds validated logical signaling without changing or recalculating PPDU airtime. */
 INET_API Ieee80211HeSuSignalingResult buildIeee80211HeSuSignaling(const Ieee80211HeSuSignalingRequest& request);
 INET_API Ieee80211HeErSuSignalingResult buildIeee80211HeErSuSignaling(const Ieee80211HeErSuSignalingRequest& request);
+
+/** Selects the explicit Trigger Common Info UL Length for a solicited HE TB TXTIME. */
+INET_API Ieee80211HeLSigResult buildIeee80211HeTriggerUlLength(simtime_t txTime,
+        uint32_t signalExtensionNs = 0);
+INET_API Ieee80211HeTxTimeResult getIeee80211HeTriggerTxTimeUpperBound(
+        uint16_t lLength, uint32_t signalExtensionNs = 0);
+/** Table 27-61 signal extension selected by operating band and NO_SIG_EXTN. */
+INET_API uint32_t getIeee80211HeSignalExtensionNs(Ieee80211HeOperatingBand operatingBand,
+        bool noSignalExtension);
+INET_API uint32_t getIeee80211HeSignalExtensionNs(Hz centerFrequency,
+        bool noSignalExtension);
 
 /**
  * HE-SIG-A fields shared by every user in the PPDU.
@@ -200,6 +217,7 @@ struct Ieee80211HeSigAFields
     bool txopUnspecified = true;
     int txopDurationUs = 0;         // Decoded, wire-quantized remaining TXOP duration
     bool doppler = false;
+    uint8_t midamblePeriodicity = 0;
     bool stbc = false;              // Space-Time Block Coding indicator
 };
 
@@ -223,6 +241,10 @@ struct Ieee80211HeCommonPhyParameters
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
     bool ndp = false; // model-only: an NDP has no Data field
     Hz channelBandwidth = Hz(NaN);
+    uint8_t puncturedSubchannelMask = 0;
+    uint16_t lSigLength = 0;
+    bool noSignalExtension = false;
+    uint32_t signalExtensionNs = 0;
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US;
     Ieee80211HeLtfType ltfType = HE_LTF_4X;
     int numberOfHeLtfSymbols = 1;
@@ -246,6 +268,10 @@ struct Ieee80211HeUserPhyParameters
     int mcs = 0;
     int numberOfSpatialStreams = 1;
     bool dcm = false;                                      // Dual Carrier Modulation
+    bool ndpFeedbackReport = false;
+    uint8_t ndpFeedbackStatus = 0;
+    uint8_t ndpRuToneSetIndex = 0;
+    uint8_t ndpStartingStsNumber = 0;
     Ieee80211HeGuardInterval guardInterval = HE_GI_3_2_US; // compatibility
     Ieee80211HeCoding coding = HE_CODING_BCC;
     B psduLength = B(0);
@@ -328,6 +354,8 @@ enum class Ieee80211HeValidationErrorCode {
     INTERNAL_ERROR = 22,
     INVALID_BSS_COLOR = 23,
     INVALID_TXOP_DURATION = 24,
+    INVALID_L_SIG_LENGTH = 25,
+    UNSUPPORTED_DOPPLER_TIMING = 26,
 };
 
 /** Machine-readable location and human-readable detail for an HE validation error. */
@@ -517,7 +545,12 @@ inline int getHeSigBContentChannelCount(Hz channelBandwidth)
  * Block, but is intentionally not a general normative HE-SIG-B API: MCS, DCM,
  * compression, and the actual RU-to-content-channel distribution are absent.
  */
-int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers);
+int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers,
+        bool compression = false, int mcs = 0, bool dcm = false);
+
+/** Exact symbol count from the complete per-content-channel logical plan. */
+int getHeSigBSymbolCount(const Ieee80211HeSigBCommonField& commonField,
+        Hz channelBandwidth, int mcs = 0, bool dcm = false);
 
 /**
  * Validates and calculates a common-duration HE MU or trigger-based PPDU.

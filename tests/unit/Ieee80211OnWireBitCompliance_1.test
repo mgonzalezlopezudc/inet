@@ -16,14 +16,39 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+static std::vector<uint8_t> packTransmitOrderBits(const std::vector<bool>& bits)
+{
+    std::vector<uint8_t> bytes((bits.size() + 7) / 8, 0);
+    for (size_t i = 0; i < bits.size(); i++)
+        if (bits[i])
+            bytes[i / 8] |= uint8_t(1) << (i % 8);
+    return bytes;
+}
+
 %activity:
 {
     // IEEE Std 802.11-2024 Annex Z, Table Z-4, HE-SIG-B example 2.
-    // Retained as a future oracle for full HE-SIG-B field encoding.
     const std::vector<uint8_t> contentChannel1 = {0xa9, 0x0d, 0x53, 0xb5, 0x71, 0x32, 0x00};
     const std::vector<uint8_t> contentChannel2 = {0xab, 0x0d, 0x54, 0x01, 0x00, 0x00, 0x00};
-    (void)contentChannel1;
-    (void)contentChannel2;
+    Ieee80211HeSigBMuMimoUser sta1449{1449, 1, 6, false, true};
+    Ieee80211HeSigBMuMimoUser sta1450{1450, 1, 7, false, true};
+    Ieee80211HeSigBMuMimoUser sta1451{1451, 1, 8, false, true};
+    auto encoded1449 = encodeHeSigBMuMimoUser(sta1449);
+    auto encoded1450 = encodeHeSigBMuMimoUser(sta1450);
+    auto encoded1451 = encodeHeSigBMuMimoUser(sta1451);
+    if (!encoded1449 || !encoded1450 || !encoded1451)
+        throw cRuntimeError("Annex Z HE-SIG-B User fixture is not encodable");
+    auto channel1 = encodeHeSigBUserBlock({encoded1449.bits, encoded1450.bits});
+    auto channel2 = encodeHeSigBUserBlock({encoded1451.bits});
+    if (!channel1 || !channel2)
+        throw cRuntimeError("Annex Z HE-SIG-B User blocks are not encodable");
+    channel1.bits.resize(56, false);
+    channel2.bits.resize(56, false);
+    REQUIRE(packTransmitOrderBits(channel1.bits) == contentChannel1);
+    REQUIRE(packTransmitOrderBits(channel2.bits) == contentChannel2);
+    EV << "HE-SIG-B MU-MIMO User blocks match IEEE Annex Z Table Z-4 content channels.\n";
 
     // Independent IEEE 802.11-2024 Table 27-27 fixture: one user on a
     // 242-tone RU is allocation bits 11000000 (code 192).
@@ -31,12 +56,16 @@ using namespace inet::physicallayer;
     auto ru = std::find_if(catalog.begin(), catalog.end(), [](const auto& candidate) {
         return candidate.toneSize == 242 && candidate.toneOffset == 0;
     });
-    ASSERT(ru != catalog.end());
+    REQUIRE(ru != catalog.end());
+    if (ru == catalog.end())
+        throw cRuntimeError("Table 27-27 242-tone fixture is missing from the RU catalog");
     auto encoded = encodeHeSigBCommonField({*ru}, Hz(20e6));
-    ASSERT(encoded);
-    ASSERT(encoded.commonField.contentChannels.size() == 1);
-    ASSERT(encoded.commonField.contentChannels[0].ruAllocationSubfields.size() == 1);
-    ASSERT(encoded.commonField.contentChannels[0].ruAllocationSubfields[0] == 0xC0);
+    REQUIRE(encoded);
+    if (!encoded)
+        throw cRuntimeError("Table 27-27 fixture is not encodable: %s", encoded.error.c_str());
+    REQUIRE(encoded.commonField.contentChannels.size() == 1);
+    REQUIRE(encoded.commonField.contentChannels[0].ruAllocationSubfields.size() == 1);
+    REQUIRE(encoded.commonField.contentChannels[0].ruAllocationSubfields[0] == 0xC0);
     EV << "HE-SIG-B codec matches the Table 27-27 single-user 242-tone allocation code.\n";
 }
 
@@ -103,11 +132,11 @@ using namespace inet::physicallayer;
 
     auto packet = new Packet("dsss", header);
     auto bytes = packet->peekDataAsBytes();
-    ASSERT(bytes->getChunkLength() == B(6));
-    ASSERT(bytes->getByte(0) == 0x0A);
-    ASSERT(bytes->getByte(1) == 0x04);
-    ASSERT(bytes->getByte(2) == 0x34 && bytes->getByte(3) == 0x12);
-    ASSERT(bytes->getByte(4) == 0xCD && bytes->getByte(5) == 0xAB);
+    REQUIRE(bytes->getChunkLength() == B(6));
+    REQUIRE(bytes->getByte(0) == 0x0A);
+    REQUIRE(bytes->getByte(1) == 0x04);
+    REQUIRE(bytes->getByte(2) == 0x34 && bytes->getByte(3) == 0x12);
+    REQUIRE(bytes->getByte(4) == 0xCD && bytes->getByte(5) == 0xAB);
     delete packet;
     EV << "DSSS PHY header is byte-exact.\n";
 }
@@ -123,9 +152,9 @@ using namespace inet::physicallayer;
 
     auto packet = new Packet("ofdm", header);
     auto bytes = packet->peekDataAsBytes();
-    ASSERT(bytes->getChunkLength() == B(5));
-    ASSERT(bytes->getByte(0) == 0x7B && bytes->getByte(1) == 0x24 && bytes->getByte(2) == 0xAA);
-    ASSERT(bytes->getByte(3) == 0xEF && bytes->getByte(4) == 0xBE);
+    REQUIRE(bytes->getChunkLength() == B(5));
+    REQUIRE(bytes->getByte(0) == 0x7B && bytes->getByte(1) == 0x24 && bytes->getByte(2) == 0xAA);
+    REQUIRE(bytes->getByte(3) == 0xEF && bytes->getByte(4) == 0xBE);
     delete packet;
     EV << "OFDM PHY SIGNAL and SERVICE fields are byte-exact.\n";
 }
@@ -135,6 +164,7 @@ EV << ".\n";
 %contains: stdout
 Data MAC Sequence Control is byte-exact.
 IEEE 802.11-2024 Annex Z HE-SIG-B example 2 golden octets are recorded.
+HE-SIG-B MU-MIMO User blocks match IEEE Annex Z Table Z-4 content channels.
 HE-SIG-B codec matches the Table 27-27 single-user 242-tone allocation code.
 QoS data MAC bitfields are byte-exact.
 DSSS PHY header is byte-exact.

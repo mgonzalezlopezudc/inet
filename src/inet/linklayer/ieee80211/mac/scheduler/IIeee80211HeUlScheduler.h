@@ -8,6 +8,7 @@
 #define __INET_IIEE80211HEULSCHEDULER_H
 
 #include <array>
+#include <cmath>
 #include <ostream>
 #include <vector>
 
@@ -31,6 +32,39 @@ using namespace inet::units::values;
 class INET_API IIeee80211HeUlScheduler
 {
   public:
+    struct NfrpResponseResource {
+        bool scheduled = false;
+        uint8_t toneSetIndex = 0;
+        uint8_t startingStsNumber = 0;
+    };
+
+    static int getNfrpToneSetsPerSpatialStream(Hz channelBandwidth)
+    {
+        if (channelBandwidth != MHz(20) && channelBandwidth != MHz(40) &&
+                channelBandwidth != MHz(80) && channelBandwidth != MHz(160))
+            throw cRuntimeError("Unsupported NFRP channel bandwidth");
+        return 18 * std::lround(channelBandwidth.get() / 20e6);
+    }
+
+    static int getNfrpScheduledStaCount(Hz channelBandwidth, bool multiplexingFlag)
+    {
+        return getNfrpToneSetsPerSpatialStream(channelBandwidth) * (multiplexingFlag ? 2 : 1);
+    }
+
+    static NfrpResponseResource getNfrpResponseResource(uint16_t startingAid,
+            uint16_t aid, Hz channelBandwidth, bool multiplexingFlag)
+    {
+        NfrpResponseResource resource;
+        const int toneSets = getNfrpToneSetsPerSpatialStream(channelBandwidth);
+        const int offset = aid - startingAid;
+        if (offset < 0 || offset >= getNfrpScheduledStaCount(channelBandwidth, multiplexingFlag))
+            return resource;
+        resource.scheduled = true;
+        resource.toneSetIndex = 1 + offset % toneSets;
+        resource.startingStsNumber = offset / toneSets;
+        return resource;
+    }
+
     /** Latest AP-side traffic and link information for one associated STA. */
     struct CandidateInfo {
         MacAddress staAddress;
@@ -76,15 +110,29 @@ class INET_API IIeee80211HeUlScheduler
         int streamStartIndex = 0;
         bool muMimo = false;
         int targetRssiDbm = -75;
+        bool useMaximumTransmitPower = false;
         simtime_t estimatedDuration = SIMTIME_ZERO;
     };
 
     /** Complete Trigger allocation plus PHY parameters common to all HE-TB users. */
     struct Schedule {
         std::vector<RuAllocation> allocations;
+        // NFRP Trigger type 7 uses one range User Info record, not the
+        // ordinary per-STA RU allocations above.
+        uint16_t nfrpStartingAid = 0;
+        uint8_t nfrpFeedbackType = 0;
+        int nfrpTargetRssiDbm = -75;
+        bool nfrpUseMaximumTransmitPower = false;
+        bool nfrpMultiplexingFlag = false;
+        Hz channelBandwidth = Hz(NaN);
+        uint16_t ulLength = 0;
         simtime_t commonDuration = SIMTIME_ZERO;
+        bool commonDurationExact = false;
+        bool noSignalExtension = false;
         physicallayer::Ieee80211HeGuardInterval guardInterval = physicallayer::HE_GI_3_2_US;
         physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
+        bool ldpcExtraSymbolSegment = false;
+        int apTxPowerDbm = 0;
         int packetExtensionDurationUs = 0;
         uint8_t puncturedSubchannelMask = 0;
     };

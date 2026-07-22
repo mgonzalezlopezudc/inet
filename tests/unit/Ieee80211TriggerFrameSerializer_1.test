@@ -2,7 +2,11 @@
 Test serialization and deserialization of IEEE 802.11 Trigger-frame fields modeled by INET.
 
 %includes:
+#include <vector>
+
+#include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/common/packet/Packet.h"
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
@@ -11,9 +15,11 @@ Test serialization and deserialization of IEEE 802.11 Trigger-frame fields model
 using namespace inet;
 using namespace inet::ieee80211;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 %activity:
 auto canonical26ToneRus = physicallayer::getHeEqualRuLayout(Hz(0), Hz(20e6), 9);
-ASSERT(canonical26ToneRus.size() >= 2);
+REQUIRE(canonical26ToneRus.size() >= 2);
 
 {
     // Create Basic Trigger Frame (Trigger Type = 0).
@@ -23,7 +29,10 @@ ASSERT(canonical26ToneRus.size() >= 2);
     trigger->setTriggerType(0);
     trigger->setTriggerId(0x12345678);
     trigger->setDurationField(SimTime(800, SIMTIME_US)); // Explicitly set duration field
-    trigger->setCommonDuration(SimTime(800, SIMTIME_US)); // 800 us -> ulLength = 800
+    trigger->setCommonDuration(SimTime(800, SIMTIME_US));
+    trigger->setUlLength(799); // Valid HE TB modulo-3 Trigger UL Length
+    trigger->setChannelBandwidthMhz(20);
+    trigger->setApTxPowerDbm(-20);
     trigger->setGuardInterval(2); // GI = 2
     trigger->setCoding(1); // LDPC = 1
     trigger->setUsersArraySize(1);
@@ -34,6 +43,7 @@ ASSERT(canonical26ToneRus.size() >= 2);
     user.ruToneSize = 106;
     user.ruToneOffset = 0;
     user.mcs = 3;
+    user.coding = 1;
     user.numberOfSpatialStreams = 3;
     user.streamStartIndex = 2;
     user.tid = 5;
@@ -55,30 +65,48 @@ ASSERT(canonical26ToneRus.size() >= 2);
         hexStr += buf;
     }
     EV << "Basic Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24002003FFFFFFFFFFFF100000000000003222080000C00007A0764828C6");
+    REQUIRE(hexStr == "24002003FFFFFFFFFFFF100000000000F03122000000C07F07A0764828C6");
+    uint64_t commonInfo = 0;
+    for (int i = 0; i < 8; i++)
+        commonInfo |= uint64_t(bytes->getByte(16 + i)) << (8 * i);
+    REQUIRE(((commonInfo >> 54) & 0x1FF) == 0x1FF);
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet", bytes);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
-    ASSERT(recvTrigger->getTriggerType() == 0);
-    ASSERT(recvTrigger->getTriggerId() == 0);
-    ASSERT(recvTrigger->getDurationField() == SimTime(800, SIMTIME_US));
-    ASSERT(recvTrigger->getCommonDuration() == SimTime(800, SIMTIME_US));
-    ASSERT(recvTrigger->getGuardInterval() == 2);
-    ASSERT(recvTrigger->getCoding() == 1);
-    ASSERT(recvTrigger->getUsersArraySize() == 1);
-    ASSERT(recvTrigger->getUsers(0).aid == 7);
-    ASSERT(recvTrigger->getUsers(0).ruToneSize == 106);
-    ASSERT(recvTrigger->getUsers(0).ruToneOffset == 0);
-    ASSERT(recvTrigger->getUsers(0).mcs == 3);
-    ASSERT(recvTrigger->getUsers(0).numberOfSpatialStreams == 3);
-    ASSERT(recvTrigger->getUsers(0).streamStartIndex == 2);
-    ASSERT(recvTrigger->getUsers(0).tid == 0);
-    ASSERT(recvTrigger->getUsers(0).mpduMuSpacingFactor == 2);
-    ASSERT(recvTrigger->getUsers(0).tidAggregationLimit == 1);
-    ASSERT(recvTrigger->getUsers(0).preferredAc == 3);
-    ASSERT(recvTrigger->getUsers(0).targetRssiDbm == -70);
+    REQUIRE(recvTrigger->getTriggerType() == 0);
+    REQUIRE(recvTrigger->getTriggerId() == 0);
+    REQUIRE(recvTrigger->getDurationField() == SimTime(800, SIMTIME_US));
+    REQUIRE(recvTrigger->getCommonDuration() == SimTime(1092, SIMTIME_US));
+    REQUIRE(!recvTrigger->getCommonDurationExact());
+    REQUIRE(recvTrigger->getUlLength() == 799);
+    REQUIRE(recvTrigger->getGuardInterval() == 2);
+    REQUIRE(recvTrigger->getCoding() == 1);
+    REQUIRE(recvTrigger->getUsersArraySize() == 1);
+    REQUIRE(recvTrigger->getUsers(0).aid == 7);
+    REQUIRE(recvTrigger->getUsers(0).ruToneSize == 106);
+    REQUIRE(recvTrigger->getUsers(0).ruToneOffset == 0);
+    REQUIRE(recvTrigger->getUsers(0).mcs == 3);
+    REQUIRE(recvTrigger->getUsers(0).coding == 1);
+    REQUIRE(recvTrigger->getUsers(0).numberOfSpatialStreams == 3);
+    REQUIRE(recvTrigger->getUsers(0).streamStartIndex == 2);
+    REQUIRE(recvTrigger->getUsers(0).tid == 0);
+    REQUIRE(recvTrigger->getUsers(0).mpduMuSpacingFactor == 2);
+    REQUIRE(recvTrigger->getUsers(0).tidAggregationLimit == 1);
+    REQUIRE(recvTrigger->getUsers(0).preferredAc == 3);
+    REQUIRE(recvTrigger->getUsers(0).targetRssiDbm == -70);
+
+    physicallayer::Ieee80211HeMuReq selectedRequest;
+    populateHeTbRequestFromTrigger(&selectedRequest, *recvTrigger, recvTrigger->getUsers(0), 7);
+    REQUIRE(selectedRequest.getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK);
+    REQUIRE(selectedRequest.getLSigLength() == 799);
+    REQUIRE(selectedRequest.getChannelBandwidthMhz() == 20);
+    REQUIRE(!selectedRequest.getNoSignalExtension());
+    REQUIRE(selectedRequest.getCoding() == 1);
+    REQUIRE(!selectedRequest.getLdpcExtraSymbolSegment());
+    REQUIRE(selectedRequest.getCommonDuration() == SimTime(1092, SIMTIME_US));
+    REQUIRE(!selectedRequest.getCommonDurationExact());
 
     delete pk;
     delete pk2;
@@ -93,7 +121,11 @@ ASSERT(canonical26ToneRus.size() >= 2);
     trigger->setTriggerType(4);
     trigger->setTriggerId(0xABCDEF01);
     trigger->setDurationField(SimTime(400, SIMTIME_US)); // Explicitly set duration field
-    trigger->setCommonDuration(SimTime(400, SIMTIME_US)); // 400 us
+    trigger->setCommonDuration(SimTime(400, SIMTIME_US));
+    trigger->setUlLength(400);
+    trigger->setChannelBandwidthMhz(20);
+    trigger->setApTxPowerDbm(-20);
+    trigger->setLdpcExtraSymbolSegment(true);
     trigger->setGuardInterval(1);
     trigger->setCoding(0); // BCC = 0
     trigger->setUsersArraySize(2);
@@ -113,6 +145,7 @@ ASSERT(canonical26ToneRus.size() >= 2);
     user2.ruToneSize = canonical26ToneRus[1].toneSize;
     user2.ruToneOffset = canonical26ToneRus[1].toneOffset;
     user2.mcs = 6;
+    user2.coding = 1;
     user2.targetRssiDbm = -65; // -65 + 110 = 45
     trigger->setUsers(1, user2);
 
@@ -130,29 +163,37 @@ ASSERT(canonical26ToneRus.size() >= 2);
     EV << "BSRP Trigger Serialized hex: " << hexStr << "\n";
     // Catalog position 1 encodes B7..B1=1 and B0=0, hence RU Allocation
     // 0x02 at User Info B12-B19; independently this changes byte 1 by 0x20.
-    ASSERT(hexStr == "24009001020000000001020000000002041912000000C0006400E00032C820C0002D");
+    REQUIRE(hexStr == "24009001020000000001020000000002041912080000C07F6400E00032C820D0002D");
 
     // Deserialize and check
     auto pk2 = new Packet("recv-packet-bsrp", bytes);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
-    ASSERT(recvTrigger->getTriggerType() == 4);
-    ASSERT(recvTrigger->getTriggerId() == 0);
-    ASSERT(recvTrigger->getDurationField() == SimTime(400, SIMTIME_US));
-    ASSERT(recvTrigger->getCommonDuration() == SimTime(400, SIMTIME_US));
-    ASSERT(recvTrigger->getGuardInterval() == 1);
-    ASSERT(recvTrigger->getCoding() == 0);
-    ASSERT(recvTrigger->getUsersArraySize() == 2);
-    ASSERT(recvTrigger->getUsers(0).aid == 100);
-    ASSERT(recvTrigger->getUsers(0).ruToneSize == 26);
-    ASSERT(recvTrigger->getUsers(0).ruToneOffset == 0);
-    ASSERT(recvTrigger->getUsers(0).mcs == 7);
-    ASSERT(recvTrigger->getUsers(0).targetRssiDbm == -60);
-    ASSERT(recvTrigger->getUsers(1).aid == 200);
-    ASSERT(recvTrigger->getUsers(1).ruToneSize == 26);
-    ASSERT(recvTrigger->getUsers(1).ruToneOffset == canonical26ToneRus[1].toneOffset);
-    ASSERT(recvTrigger->getUsers(1).mcs == 6);
-    ASSERT(recvTrigger->getUsers(1).targetRssiDbm == -65);
+    REQUIRE(recvTrigger->getTriggerType() == 4);
+    REQUIRE(recvTrigger->getTriggerId() == 0);
+    REQUIRE(recvTrigger->getDurationField() == SimTime(400, SIMTIME_US));
+    REQUIRE(recvTrigger->getCommonDuration() == SimTime(560, SIMTIME_US));
+    REQUIRE(recvTrigger->getUlLength() == 400);
+    REQUIRE(recvTrigger->getGuardInterval() == 1);
+    REQUIRE(recvTrigger->getCoding() == 0);
+    REQUIRE(recvTrigger->getUsersArraySize() == 2);
+    REQUIRE(recvTrigger->getUsers(0).aid == 100);
+    REQUIRE(recvTrigger->getUsers(0).ruToneSize == 26);
+    REQUIRE(recvTrigger->getUsers(0).ruToneOffset == 0);
+    REQUIRE(recvTrigger->getUsers(0).mcs == 7);
+    REQUIRE(recvTrigger->getUsers(0).targetRssiDbm == -60);
+    REQUIRE(recvTrigger->getUsers(1).aid == 200);
+    REQUIRE(recvTrigger->getUsers(1).ruToneSize == 26);
+    REQUIRE(recvTrigger->getUsers(1).ruToneOffset == canonical26ToneRus[1].toneOffset);
+    REQUIRE(recvTrigger->getUsers(1).mcs == 6);
+    REQUIRE(recvTrigger->getUsers(1).coding == 1);
+    REQUIRE(recvTrigger->getLdpcExtraSymbolSegment());
+    REQUIRE(recvTrigger->getUsers(1).targetRssiDbm == -65);
+    physicallayer::Ieee80211HeMuReq secondUserRequest;
+    populateHeTbRequestFromTrigger(&secondUserRequest, *recvTrigger,
+            recvTrigger->getUsers(1), 200);
+    REQUIRE(secondUserRequest.getCoding() == physicallayer::HE_CODING_LDPC);
+    REQUIRE(secondUserRequest.getCoding() != recvTrigger->getUsers(0).coding);
 
     delete pk;
     delete pk2;
@@ -168,6 +209,9 @@ ASSERT(canonical26ToneRus.size() >= 2);
     trigger->setTriggerId(0x10203040);
     trigger->setDurationField(SimTime(600, SIMTIME_US));
     trigger->setCommonDuration(SimTime(600, SIMTIME_US));
+    trigger->setUlLength(601);
+    trigger->setChannelBandwidthMhz(20);
+    trigger->setApTxPowerDbm(-20);
     trigger->setGuardInterval(2);
     trigger->setCoding(0);
     trigger->setUsersArraySize(2);
@@ -211,43 +255,206 @@ ASSERT(canonical26ToneRus.size() >= 2);
         hexStr += buf;
     }
     EV << "MU-BAR Trigger Serialized hex: " << hexStr << "\n";
-    ASSERT(hexStr == "24005802FFFFFFFFFFFF020000000003822522000000C0000B00000037043030120C2020003406100010604500709078");
+    REQUIRE(hexStr == "24005802FFFFFFFFFFFF020000000003922522000000C07F0B00000037043030120C2020003406100010604500709078");
 
     auto pk2 = new Packet("recv-packet-mu-bar", bytes);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
-    ASSERT(recvTrigger->getTriggerType() == 2);
-    ASSERT(recvTrigger->getTriggerId() == 0);
-    ASSERT(recvTrigger->getDurationField() == SimTime(600, SIMTIME_US));
-    ASSERT(recvTrigger->getCommonDuration() == SimTime(600, SIMTIME_US));
-    ASSERT(recvTrigger->getUsersArraySize() == 2);
-    ASSERT(recvTrigger->getUsers(0).aid == 11);
-    ASSERT(recvTrigger->getUsers(0).tid == 3);
-    ASSERT(!recvTrigger->getUsers(0).muBarMultiTid);
-    ASSERT(recvTrigger->getUsers(0).muBarCompressedBitmap);
-    ASSERT(recvTrigger->getUsers(0).muBarTidInfo == 3);
-    ASSERT(recvTrigger->getUsers(0).muBarStartingSequenceNumber == 0x123);
-    ASSERT(recvTrigger->getUsers(1).aid == 12);
-    ASSERT(recvTrigger->getUsers(1).muBarMultiTid);
-    ASSERT(recvTrigger->getUsers(1).muBarCompressedBitmap);
-    ASSERT(recvTrigger->getUsers(1).muBarRecordCount == 2);
-    ASSERT(recvTrigger->getUsers(1).muBarRecords[0].tid == 1);
-    ASSERT(recvTrigger->getUsers(1).muBarRecords[0].startingSequenceNumber == 0x456);
-    ASSERT(recvTrigger->getUsers(1).muBarRecords[1].tid == 7);
-    ASSERT(recvTrigger->getUsers(1).muBarRecords[1].startingSequenceNumber == 0x789);
+    REQUIRE(recvTrigger->getTriggerType() == 2);
+    REQUIRE(recvTrigger->getTriggerId() == 0);
+    REQUIRE(recvTrigger->getDurationField() == SimTime(600, SIMTIME_US));
+    REQUIRE(recvTrigger->getCommonDuration() == SimTime(828, SIMTIME_US));
+    REQUIRE(recvTrigger->getUlLength() == 601);
+    REQUIRE(recvTrigger->getUsersArraySize() == 2);
+    REQUIRE(recvTrigger->getUsers(0).aid == 11);
+    REQUIRE(recvTrigger->getUsers(0).tid == 3);
+    REQUIRE(!recvTrigger->getUsers(0).muBarMultiTid);
+    REQUIRE(recvTrigger->getUsers(0).muBarCompressedBitmap);
+    REQUIRE(recvTrigger->getUsers(0).muBarTidInfo == 3);
+    REQUIRE(recvTrigger->getUsers(0).muBarStartingSequenceNumber == 0x123);
+    REQUIRE(recvTrigger->getUsers(1).aid == 12);
+    REQUIRE(recvTrigger->getUsers(1).muBarMultiTid);
+    REQUIRE(recvTrigger->getUsers(1).muBarCompressedBitmap);
+    REQUIRE(recvTrigger->getUsers(1).muBarRecordCount == 2);
+    REQUIRE(recvTrigger->getUsers(1).muBarRecords[0].tid == 1);
+    REQUIRE(recvTrigger->getUsers(1).muBarRecords[0].startingSequenceNumber == 0x456);
+    REQUIRE(recvTrigger->getUsers(1).muBarRecords[1].tid == 7);
+    REQUIRE(recvTrigger->getUsers(1).muBarRecords[1].startingSequenceNumber == 0x789);
 
     delete pk;
     delete pk2;
     EV << "MU-BAR Trigger Frame round-trip verified successfully.\n";
 }
 
+{
+    // NFRP Trigger type 7 carries one special Figure 9-101 record, not an
+    // ordinary AID12/RU/MCS/FEC User Info entry.
+    auto trigger = makeShared<Ieee80211TriggerFrame>();
+    trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:07"));
+    trigger->setTriggerType(7);
+    trigger->setUlLength(58);
+    trigger->setChannelBandwidthMhz(80);
+    trigger->setApTxPowerDbm(17);
+    trigger->setNfrpStartingAid(100);
+    trigger->setNfrpFeedbackType(0);
+    trigger->setNfrpTargetRssiDbm(-60);
+    trigger->setNfrpMultiplexingFlag(true);
+    trigger->setUsersArraySize(0);
+    trigger->setChunkLength(B(30));
+    Packet wirePacket("nfrp-trigger", trigger);
+    auto bytes = wirePacket.peekDataAsBytes();
+    REQUIRE(bytes->getChunkLength() == B(30));
+    std::string userInfoHex;
+    for (int i = 24; i < 30; i++) {
+        char byteHex[3];
+        sprintf(byteHex, "%02X", bytes->getByte(i));
+        userInfoHex += byteHex;
+    }
+    REQUIRE(userInfoHex == "6400000000B2");
+    uint64_t commonInfo = 0;
+    for (int i = 0; i < 8; i++)
+        commonInfo |= uint64_t(bytes->getByte(16 + i)) << (8 * i);
+    REQUIRE(((commonInfo >> 20) & 0x3) == 2);
+    REQUIRE(((commonInfo >> 23) & 0x7) == 1);
+    REQUIRE(((commonInfo >> 28) & 0x3F) == 37);
+    REQUIRE((commonInfo & ((1ULL << 26) | (1ULL << 27) |
+            (0x3ULL << 34) | (1ULL << 36) | (0x1FFFFULL << 37))) == 0);
+    Packet decodedPacket("decoded-nfrp-trigger", bytes);
+    auto decoded = decodedPacket.popAtFront<Ieee80211TriggerFrame>();
+    REQUIRE(decoded->getUsersArraySize() == 0);
+    REQUIRE(decoded->getNfrpStartingAid() == 100);
+    REQUIRE(decoded->getNfrpFeedbackType() == 0);
+    REQUIRE(decoded->getNfrpTargetRssiDbm() == -60);
+    REQUIRE(decoded->getNfrpMultiplexingFlag());
+    REQUIRE(decoded->getApTxPowerDbm() == 17);
+
+    std::vector<uint8_t> malformedFeedbackType(30);
+    for (int i = 0; i < 30; i++)
+        malformedFeedbackType[i] = bytes->getByte(i);
+    malformedFeedbackType[26] |= 0x20; // User Info B21: reserved Feedback Type 1
+    Packet badFeedbackType("nfrp-bad-feedback-type", makeShared<BytesChunk>(malformedFeedbackType));
+    bool feedbackTypeRejected = false;
+    try { badFeedbackType.popAtFront<Ieee80211TriggerFrame>(); }
+    catch (const cRuntimeError&) { feedbackTypeRejected = true; }
+    REQUIRE(feedbackTypeRejected);
+
+    std::vector<uint8_t> malformedTargetPower(30);
+    for (int i = 0; i < 30; i++)
+        malformedTargetPower[i] = bytes->getByte(i);
+    malformedTargetPower[29] = (malformedTargetPower[29] & 0x80) | 91;
+    Packet badTargetPower("nfrp-bad-target-power", makeShared<BytesChunk>(malformedTargetPower));
+    bool targetPowerRejected = false;
+    try { badTargetPower.popAtFront<Ieee80211TriggerFrame>(); }
+    catch (const cRuntimeError&) { targetPowerRejected = true; }
+    REQUIRE(targetPowerRejected);
+
+    std::vector<uint8_t> malformedApPower(30);
+    for (int i = 0; i < 30; i++)
+        malformedApPower[i] = bytes->getByte(i);
+    malformedApPower[19] = (malformedApPower[19] & 0x0F) | 0xD0; // Common B28-B33 = 61
+    malformedApPower[20] = (malformedApPower[20] & 0xFC) | 0x03;
+    Packet badApPower("nfrp-bad-ap-power", makeShared<BytesChunk>(malformedApPower));
+    bool apPowerRejected = false;
+    try { badApPower.popAtFront<Ieee80211TriggerFrame>(); }
+    catch (const cRuntimeError&) { apPowerRejected = true; }
+    REQUIRE(apPowerRejected);
+
+    auto invalidFeedbackType = makeShared<Ieee80211TriggerFrame>(*trigger);
+    invalidFeedbackType->setNfrpFeedbackType(1);
+    bool feedbackTypeSerializeRejected = false;
+    try {
+        Packet bad("nfrp-invalid-feedback-type", invalidFeedbackType);
+        bad.peekDataAsBytes();
+    }
+    catch (const cRuntimeError&) { feedbackTypeSerializeRejected = true; }
+    REQUIRE(feedbackTypeSerializeRejected);
+
+    auto invalidTargetPower = makeShared<Ieee80211TriggerFrame>(*trigger);
+    invalidTargetPower->setNfrpTargetRssiDbm(-19);
+    bool targetPowerSerializeRejected = false;
+    try {
+        Packet bad("nfrp-invalid-target-power", invalidTargetPower);
+        bad.peekDataAsBytes();
+    }
+    catch (const cRuntimeError&) { targetPowerSerializeRejected = true; }
+    REQUIRE(targetPowerSerializeRejected);
+
+    auto invalidApPower = makeShared<Ieee80211TriggerFrame>(*trigger);
+    invalidApPower->setApTxPowerDbm(41);
+    bool apPowerSerializeRejected = false;
+    try {
+        Packet bad("nfrp-invalid-ap-power", invalidApPower);
+        bad.peekDataAsBytes();
+    }
+    catch (const cRuntimeError&) { apPowerSerializeRejected = true; }
+    REQUIRE(apPowerSerializeRejected);
+
+    std::vector<uint8_t> malformedCommon(30);
+    for (int i = 0; i < 30; i++)
+        malformedCommon[i] = bytes->getByte(i);
+    malformedCommon[19] |= 0x04; // Common Info B26: NFRP-reserved UL STBC
+    Packet badCommon("nfrp-bad-common-reserved", makeShared<BytesChunk>(malformedCommon));
+    bool commonRejected = false;
+    try { badCommon.popAtFront<Ieee80211TriggerFrame>(); }
+    catch (const cRuntimeError&) { commonRejected = true; }
+    REQUIRE(commonRejected);
+
+    std::vector<uint8_t> malformedUser(30);
+    for (int i = 0; i < 30; i++)
+        malformedUser[i] = bytes->getByte(i);
+    malformedUser[28] |= 0x01; // Figure 9-101 unnamed B32-B39 gap
+    Packet badUser("nfrp-bad-user-reserved", makeShared<BytesChunk>(malformedUser));
+    bool userRejected = false;
+    try { badUser.popAtFront<Ieee80211TriggerFrame>(); }
+    catch (const cRuntimeError&) { userRejected = true; }
+    REQUIRE(userRejected);
+    EV << "NFRP golden User Info and reserved-bit rejection verified successfully.\n";
+}
+
+{
+    // A byte-backed 80 MHz Trigger must remain authoritative even when the
+    // responding station's selected local data mode is only 20 MHz.
+    auto ru80 = physicallayer::getHeEqualRuLayout(Hz(0), MHz(80), 1).front();
+    auto trigger = makeShared<Ieee80211TriggerFrame>();
+    trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:04"));
+    trigger->setTriggerType(0);
+    trigger->setUlLength(742);
+    trigger->setChannelBandwidthMhz(80);
+    trigger->setGuardInterval(2);
+    trigger->setUsersArraySize(1);
+    Ieee80211HeTriggerUserInfo user;
+    user.aid = 37;
+    user.ruIndex = ru80.index;
+    user.ruToneSize = ru80.toneSize;
+    user.ruToneOffset = ru80.toneOffset;
+    trigger->setUsers(0, user);
+    trigger->setChunkLength(B(30));
+    Packet wirePacket("80mhz-trigger", trigger);
+    auto bytes = wirePacket.peekDataAsBytes();
+    Packet decodedPacket("decoded-80mhz-trigger", bytes);
+    auto decoded = decodedPacket.popAtFront<Ieee80211TriggerFrame>();
+    REQUIRE(decoded->getChannelBandwidthMhz() == 80);
+    REQUIRE(decoded->getUsers(0).ruToneSize == 996);
+    REQUIRE(!decoded->getCommonDurationExact());
+    physicallayer::Ieee80211HeMuReq request;
+    populateHeTbRequestFromTrigger(&request, *decoded, decoded->getUsers(0), 37);
+    REQUIRE(request.getChannelBandwidthMhz() == 80);
+    REQUIRE(request.getRuToneSize() == 996);
+    REQUIRE(!request.getCommonDurationExact());
+    EV << "Byte-backed 80 MHz Trigger request verified successfully.\n";
+}
+
 EV << ".\n";
 
 %contains: stdout
-Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000003222080000C00007A0764828C6
+Basic Trigger Serialized hex: 24002003FFFFFFFFFFFF100000000000F03122000000C07F07A0764828C6
 Basic Trigger Frame round-trip verified successfully.
-BSRP Trigger Serialized hex: 24009001020000000001020000000002041912000000C0006400E00032C820C0002D
+BSRP Trigger Serialized hex: 24009001020000000001020000000002041912080000C07F6400E00032C820D0002D
 BSRP Trigger Frame round-trip verified successfully.
-MU-BAR Trigger Serialized hex: 24005802FFFFFFFFFFFF020000000003822522000000C0000B00000037043030120C2020003406100010604500709078
+MU-BAR Trigger Serialized hex: 24005802FFFFFFFFFFFF020000000003922522000000C07F0B00000037043030120C2020003406100010604500709078
 MU-BAR Trigger Frame round-trip verified successfully.
+NFRP golden User Info and reserved-bit rejection verified successfully.
+Byte-backed 80 MHz Trigger request verified successfully.
 .

@@ -71,6 +71,7 @@ const char *triggerTypeName(uint8_t triggerType)
         case 1: return "BFRP";
         case 2: return "MU-BAR";
         case 4: return "BSRP";
+        case 7: return "NFRP";
         default: return "Trigger";
     }
 }
@@ -119,7 +120,14 @@ void printTriggerInfo(std::ostream& stream, const Ieee80211TriggerFrame& trigger
     auto usersCount = trigger.getUsersArraySize();
     stream << " triggerType=" << triggerTypeName(trigger.getTriggerType())
            << " id=" << trigger.getTriggerId()
-           << " users=" << usersCount;
+           << " users=" << usersCount
+           << " apTxPower=" << static_cast<int>(trigger.getApTxPowerDbm()) << "dBm/20MHz";
+    if (trigger.getTriggerType() == 7)
+        stream << " startingAID=" << trigger.getNfrpStartingAid()
+               << " feedbackType=" << static_cast<int>(trigger.getNfrpFeedbackType())
+               << " target=" << (trigger.getNfrpUseMaximumTransmitPower() ?
+                       std::string("maximum") : std::to_string(trigger.getNfrpTargetRssiDbm()) + "dBm")
+               << " multiplexing=" << (trigger.getNfrpMultiplexingFlag() ? 2 : 1);
     if (usersCount > 0)
         stream << " [";
     auto shownUsers = std::min(maxPrintedUsers, usersCount);

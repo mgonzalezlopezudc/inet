@@ -120,6 +120,7 @@ HeMuMimoCsiManager csiManager;
     user.aid = 5;
     user.ruIndex = 1;
     user.ruToneSize = 484;
+    user.coding = physicallayer::HE_CODING_LDPC;
     trigger->setUsers(0, user);
     trigger->setTransmitterAddress(MacAddress("66:77:88:99:AA:BB"));
 

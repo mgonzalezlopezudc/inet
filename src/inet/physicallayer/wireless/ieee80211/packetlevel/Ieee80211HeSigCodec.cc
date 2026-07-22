@@ -7,6 +7,8 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
 
 #include <algorithm>
+#include <cmath>
+#include <limits>
 #include <map>
 
 namespace inet {
@@ -29,6 +31,79 @@ void setValid(Result& result)
     result.valid = true;
     result.errorCode = Ieee80211HeSigCodecErrorCode::NONE;
     result.error.clear();
+}
+
+Ieee80211HeMuBandwidthResult encodeHeMuBandwidthImpl(Hz channelBandwidth,
+        const std::vector<bool>& puncturedSubchannels, bool heSigBCompression)
+{
+    Ieee80211HeMuBandwidthResult result;
+    int subchannelCount = std::lround(channelBandwidth.get() / 20e6);
+    if (subchannelCount != 1 && subchannelCount != 2 && subchannelCount != 4 && subchannelCount != 8) {
+        setError(result, Ieee80211HeSigCodecErrorCode::FIELD_OUT_OF_RANGE,
+                "HE MU bandwidth must be 20, 40, 80, or 160 MHz");
+        return result;
+    }
+    if (!puncturedSubchannels.empty() && (int)puncturedSubchannels.size() != subchannelCount) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_BIT_COUNT,
+                "HE MU puncturing vector must contain one entry per 20 MHz subchannel");
+        return result;
+    }
+    uint8_t mask = 0;
+    for (int i = 0; i < subchannelCount; ++i)
+        if (!puncturedSubchannels.empty() && puncturedSubchannels[i])
+            mask |= uint8_t(1) << i;
+    if (mask & 1) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "HE MU primary 20 MHz subchannel cannot be punctured");
+        return result;
+    }
+    if (heSigBCompression && mask != 0) {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "compressed HE-SIG-B does not permit punctured bandwidth codes");
+        return result;
+    }
+    if (mask == 0)
+        result.value = subchannelCount == 1 ? 0 : subchannelCount == 2 ? 1 : subchannelCount == 4 ? 2 : 3;
+    else if (subchannelCount == 4 && mask == 0x02)
+        result.value = 4;
+    else if (subchannelCount == 4 && (mask == 0x04 || mask == 0x08))
+        result.value = 5;
+    else if (subchannelCount == 8) {
+        auto validSecondary80 = [] (uint8_t secondary80) {
+            return secondary80 == 0 || secondary80 == 0x10 || secondary80 == 0x20 ||
+                    secondary80 == 0x40 || secondary80 == 0x80 ||
+                    secondary80 == 0x30 || secondary80 == 0xC0;
+        };
+        uint8_t secondary80 = mask & 0xF0;
+        uint8_t secondary40 = mask & 0x0C;
+        if (!validSecondary80(secondary80)) {
+            setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                    "illegal HE MU secondary-80 puncturing pattern");
+            return result;
+        }
+        if ((mask & 0x02) && secondary40 == 0)
+            result.value = 6;
+        else if (!(mask & 0x02) && (secondary40 != 0 || secondary80 != 0))
+            result.value = 7;
+        else {
+            setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                    "illegal HE MU 160 MHz puncturing pattern");
+            return result;
+        }
+        for (int i = 0; i < 6; ++i)
+            if ((mask & (uint8_t(7) << i)) == (uint8_t(7) << i)) {
+                setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                        "HE MU puncturing cannot contain three adjacent 20 MHz subchannels");
+                return result;
+            }
+    }
+    else {
+        setError(result, Ieee80211HeSigCodecErrorCode::INVALID_FIELD_COMBINATION,
+                "illegal HE MU puncturing pattern for the channel bandwidth");
+        return result;
+    }
+    setValid(result);
+    return result;
 }
 
 template<typename Target, typename Source>
@@ -323,6 +398,12 @@ bool validateTbSpatialReuse(Result& result, const Ieee80211HeTbSigA& value)
 }
 
 } // namespace
+
+Ieee80211HeMuBandwidthResult encodeHeMuBandwidth(Hz channelBandwidth,
+        const std::vector<bool>& puncturedSubchannels, bool heSigBCompression)
+{
+    return encodeHeMuBandwidthImpl(channelBandwidth, puncturedSubchannels, heSigBCompression);
+}
 
 Ieee80211HeLSigResult buildHeLSig(Ieee80211HeSigFormat format, uint64_t txTimeNs, uint32_t signalExtensionNs)
 {
@@ -754,6 +835,27 @@ Ieee80211HeSigBNonMuMimoUserResult decodeHeSigBNonMuMimoUser(const std::vector<b
     return result;
 }
 
+uint8_t encodeHeMuSpatialConfiguration(const std::vector<int>& nsts)
+{
+    static const std::vector<std::vector<std::vector<int>>> configurations = {
+        {}, {},
+        {{1,1},{2,1},{3,1},{4,1},{2,2},{3,2},{4,2},{3,3},{4,3},{4,4}},
+        {{1,1,1},{2,1,1},{3,1,1},{4,1,1},{2,2,1},{3,2,1},{4,2,1},{3,3,1},{4,3,1},{2,2,2},{3,2,2},{4,2,2},{3,3,2}},
+        {{1,1,1,1},{2,1,1,1},{3,1,1,1},{4,1,1,1},{2,2,1,1},{3,2,1,1},{4,2,1,1},{3,3,1,1},{2,2,2,1},{3,2,2,1},{2,2,2,2}},
+        {{1,1,1,1,1},{2,1,1,1,1},{3,1,1,1,1},{4,1,1,1,1},{2,2,1,1,1},{3,2,1,1,1},{2,2,2,1,1}},
+        {{1,1,1,1,1,1},{2,1,1,1,1,1},{3,1,1,1,1,1},{2,2,1,1,1,1}},
+        {{1,1,1,1,1,1,1},{2,1,1,1,1,1,1}},
+        {{1,1,1,1,1,1,1,1}}
+    };
+    if (nsts.size() < 2 || nsts.size() > 8)
+        throw cRuntimeError("HE MU spatial configuration requires 2 to 8 users");
+    const auto& rows = configurations[nsts.size()];
+    auto it = std::find(rows.begin(), rows.end(), nsts);
+    if (it == rows.end())
+        throw cRuntimeError("HE MU spatial stream allocation has no Table 27-31 encoding");
+    return std::distance(rows.begin(), it);
+}
+
 Ieee80211HeSigBBitsResult encodeHeSigBMuMimoUser(const Ieee80211HeSigBMuMimoUser& value)
 {
     Ieee80211HeSigBBitsResult result;
@@ -1034,7 +1136,11 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
         const std::vector<bool>& puncturedSubchannels)
 {
     Ieee80211HeSigBCommonFieldResult result;
-    (void)puncturedSubchannels;
+    auto bandwidth = encodeHeMuBandwidth(channelBandwidth, puncturedSubchannels, false);
+    if (!bandwidth) {
+        result.error = bandwidth.error;
+        return result;
+    }
     auto catalog = getHeRuAllocationCatalog(Hz(0), channelBandwidth);
     std::vector<Ieee80211HeRu> canonicalRUs;
     std::vector<Ieee80211HeRu> uniqueRUs;
@@ -1067,6 +1173,22 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
     std::sort(subchannelRUs.begin(), subchannelRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
         return a.toneOffset < b.toneOffset;
     });
+
+    if (!puncturedSubchannels.empty()) {
+        for (size_t subchannel = 0; subchannel < subchannelRUs.size(); ++subchannel) {
+            if (!puncturedSubchannels[subchannel])
+                continue;
+            const auto& punctured = subchannelRUs[subchannel];
+            for (const auto& ru : uniqueRUs) {
+                const bool overlaps = ru.toneOffset < punctured.toneOffset + punctured.toneSize &&
+                        punctured.toneOffset < ru.toneOffset + ru.toneSize;
+                if (overlaps) {
+                    result.error = "HE RU overlaps a punctured 20 MHz subchannel";
+                    return result;
+                }
+            }
+        }
+    }
 
     int K = subchannelRUs.size();
     int numContentChannels = (channelBandwidth > Hz(20e6)) ? 2 : 1;
@@ -1130,6 +1252,8 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
                 code = isFirst ? (n_c == 0 ? 115 : 208 + (n_c - 1)) : 115;
             }
             cc.ruAllocationSubfields.push_back(code);
+            for (int user = 0; user < n_c; ++user)
+                cc.plannedUsers.push_back({wideRU, false});
         }
         else {
             std::sort(partitionKeys.begin(), partitionKeys.end(),
@@ -1145,39 +1269,69 @@ Ieee80211HeSigBCommonFieldResult encodeHeSigBCommonField(
             }
 
             uint8_t selectedCode = 113;
-            bool found = false;
+            int minimumPlaceholderUsers = std::numeric_limits<int>::max();
+            std::vector<std::pair<int, int>> selectedRUs;
+            std::vector<int> selectedUsers;
             for (int code = 0; code <= 215; ++code) {
                 std::vector<std::pair<int, int>> candidateRUs;
                 std::vector<int> candidateUsers;
-                if (decodeTable27_27(code, candidateRUs, candidateUsers) &&
-                        candidateRUs.size() == partitionKeys.size()) {
-                    bool match = true;
-                    for (size_t i = 0; i < candidateRUs.size(); ++i) {
-                        if (candidateRUs[i].first != partitionKeys[i].first ||
-                            candidateRUs[i].second != partitionKeys[i].second ||
-                            candidateUsers[i] != partitionUsers[i]) {
-                            match = false;
-                            break;
-                        }
-                    }
-                    if (match) {
-                        selectedCode = code;
-                        found = true;
+                if (!decodeTable27_27(code, candidateRUs, candidateUsers))
+                    continue;
+                bool coversActualRus = true;
+                for (size_t i = 0; i < partitionKeys.size(); ++i) {
+                    auto candidate = std::find(candidateRUs.begin(), candidateRUs.end(), partitionKeys[i]);
+                    if (candidate == candidateRUs.end() ||
+                            candidateUsers[candidate - candidateRUs.begin()] != partitionUsers[i]) {
+                        coversActualRus = false;
                         break;
                     }
                 }
+                if (!coversActualRus)
+                    continue;
+                int placeholderUsers = 0;
+                for (size_t i = 0; i < candidateRUs.size(); ++i) {
+                    auto actual = std::find(partitionKeys.begin(), partitionKeys.end(), candidateRUs[i]);
+                    if (actual == partitionKeys.end())
+                        placeholderUsers += candidateUsers[i];
+                }
+                if (placeholderUsers < minimumPlaceholderUsers) {
+                    minimumPlaceholderUsers = placeholderUsers;
+                    selectedCode = code;
+                    selectedRUs = candidateRUs;
+                    selectedUsers = candidateUsers;
+                }
             }
-            if (!found && partitionKeys.empty()) {
-                selectedCode = 113;
-                found = true;
-            }
-            if (!found) {
+            if (minimumPlaceholderUsers == std::numeric_limits<int>::max()) {
                 result.error = "No valid standard HE-SIG-B RU allocation code found for the partition";
                 return result;
             }
             cc.ruAllocationSubfields.push_back(selectedCode);
+            for (size_t i = 0; i < selectedRUs.size(); ++i) {
+                auto geometry = std::make_pair(selectedRUs[i].first,
+                        selectedRUs[i].second + subchannelRUs[s].toneOffset);
+                auto actual = userCountsByGeometry.find(geometry);
+                bool unallocated = actual == userCountsByGeometry.end() || actual->second == 0;
+                auto ru = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& value) {
+                    return value.toneSize == geometry.first && value.toneOffset == geometry.second;
+                });
+                if (ru == catalog.end()) {
+                    result.error = "Table 27-27 partition RU is absent from the channel catalog";
+                    return result;
+                }
+                for (int user = 0; user < selectedUsers[i]; ++user)
+                    cc.plannedUsers.push_back({*ru, unallocated});
+            }
         }
     }
+
+    // The center 26-tone RU User field is carried only in content channel 1.
+    for (const auto& ru : canonicalRUs)
+        if ((ru.toneOffset == 485 || ru.toneOffset == 1481) &&
+                ru.toneSize == 26) {
+            int channel = ru.toneOffset == 485 ? 0 : 1;
+            if (channel < numContentChannels)
+                result.commonField.contentChannels[channel].plannedUsers.push_back({ru, false});
+        }
 
     result.commonField.rus = canonicalRUs;
     result.valid = true;

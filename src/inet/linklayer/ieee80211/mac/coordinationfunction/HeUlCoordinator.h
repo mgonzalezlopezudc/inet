@@ -48,7 +48,6 @@ class INET_API HeUlCoordinator : public SimpleModule
     int ocwMax = 31;
     std::array<int, 4> ofdmaContentionWindows = {};
     std::array<int, 4> ofdmaBackoffs = {};
-    uint32_t nextTriggerId = 1;
     simtime_t lastTriggerTime = SIMTIME_ZERO;
     bool hasSentTrigger = false;
     std::map<uint16_t, BufferStatus> bufferStatusByAid;

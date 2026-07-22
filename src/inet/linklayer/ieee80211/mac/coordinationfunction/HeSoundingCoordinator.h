@@ -44,7 +44,6 @@ class INET_API HeSoundingCoordinator : public omnetpp::cSimpleModule
     std::vector<SoundingTarget> soundingTargets;
 
     uint8_t nextSoundingDialogToken = 1;
-    uint32_t nextTriggerId = 1;
 
   public:
     HeSoundingCoordinator() {}

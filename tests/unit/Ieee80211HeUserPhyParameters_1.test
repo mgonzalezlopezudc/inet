@@ -265,8 +265,10 @@ ASSERT(!computeHePpduParameters({fourStreamUser, secondFourStreamUser, ninthStre
 // Model-local RU indices are not physical identity. Identical indices on two
 // channel segments remain separate OFDMA groups, while copies of one physical
 // RU with different indices form one MU-MIMO group and are stream-validated.
-auto segmentRu0 = makeHeRu(Hz(5.18e9), getHeChannelToneCount(MHz(20)), 77, 26, 0);
-auto segmentRu1 = makeHeRu(Hz(5.26e9), getHeChannelToneCount(MHz(20)), 77, 26, 0);
+auto segmentRus = getHeEqualRuLayout(Hz(5.22e9), MHz(160), 8);
+auto segmentRu0 = segmentRus[0];
+auto segmentRu1 = segmentRus[4];
+segmentRu0.index = segmentRu1.index = 77;
 Ieee80211HeUserPhyParameters segmentUser0;
 segmentUser0.ru = segmentRu0;
 segmentUser0.staId = 20;

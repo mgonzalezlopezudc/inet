@@ -7,8 +7,9 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 
 #include <algorithm>
-#include <atomic>
 #include <map>
+
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211Defs.h"
 
 // HE DL MU TXOP frame sequence.
 //
@@ -348,6 +349,7 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         header->setTransmitterAddress(mac->getAddress());
         header->setTriggerType(2); // MU-BAR Trigger
         header->setTriggerId(owner->ackTriggerId);
+        header->setChannelBandwidthMhz(std::lround(owner->scheduleContext.channelBandwidth.get() / 1e6));
         header->setGuardInterval(owner->scheduleContext.guardInterval);
         header->setCoding(owner->scheduleContext.coding);
         header->setPacketExtensionDurationUs(owner->scheduleContext.packetExtensionDurationUs);
@@ -362,6 +364,7 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             user.ruToneSize = allocation.ru.toneSize;
             user.ruToneOffset = allocation.ru.toneOffset;
             user.mcs = 0;
+            user.coding = owner->scheduleContext.coding;
             user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
             user.streamStartIndex = allocation.streamStartIndex;
             user.muMimo = allocation.muMimo;
@@ -400,6 +403,23 @@ class HeDlMuBarBlockAckFs : public OptionalFs
                     estimateTriggeredBlockAckDuration(allocation.ru.toneSize,
                             owner->scheduleContext.guardInterval, owner->scheduleContext.coding));
         }
+        header->setCommonDurationExact(false);
+        header->setNoSignalExtension(false);
+        const auto signalExtensionNs = physicallayer::getIeee80211HeSignalExtensionNs(
+                owner->scheduleContext.channelCenterFrequency,
+                header->getNoSignalExtension());
+        commonDuration += SimTime(signalExtensionNs, SIMTIME_NS);
+        auto ulLength = physicallayer::buildIeee80211HeTriggerUlLength(commonDuration,
+                signalExtensionNs);
+        if (!ulLength)
+            throw cRuntimeError("Cannot encode MU-BAR Trigger UL Length: %s", ulLength.error.c_str());
+        header->setUlLength(ulLength.value.length);
+        auto durationEnvelope = physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
+                header->getUlLength(), signalExtensionNs);
+        if (!durationEnvelope)
+            throw cRuntimeError("Cannot resolve MU-BAR Trigger duration envelope: %s",
+                    durationEnvelope.error.c_str());
+        commonDuration = durationEnvelope.txTime;
         header->setCommonDuration(commonDuration);
         header->setDurationField(owner->modeSet->getSifsTime() + commonDuration);
         header->setChunkLength(getMuBarTriggerHeaderLength(owner->activeAllocations.size()));
@@ -550,8 +570,7 @@ HeDlMuTxOpFs::HeDlMuTxOpFs(IIeee80211HeDlScheduler *dlScheduler,
     ASSERT(pendingQueue != nullptr);
     ASSERT(ackHandler != nullptr);
     ASSERT(callback != nullptr);
-    static std::atomic<uint32_t> nextTriggerId{1};
-    ackTriggerId = nextTriggerId++;
+    ackTriggerId = allocateIeee80211HeTriggerId();
     if (maxAmpduMpduCount <= 0)
         throw cRuntimeError("maxAmpduMpduCount must be positive");
     if (maxHeMuPsduLength <= 0)

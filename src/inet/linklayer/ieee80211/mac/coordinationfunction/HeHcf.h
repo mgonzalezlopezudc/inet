@@ -19,6 +19,7 @@
 #include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeOmi.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -27,6 +28,30 @@ namespace ieee80211 {
 INET_API Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
         const Ieee80211HeTriggerUserInfo& user, RecipientBlockAckAgreement *agreement,
         const MacAddress& receiverAddress, const MacAddress& transmitterAddress);
+
+/** Projects the selected wire-decoded Trigger context into an HE-TB request. */
+INET_API void populateHeTbRequestFromTrigger(physicallayer::Ieee80211HeMuReq *request,
+        const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& user,
+        uint16_t staId);
+
+/** Computes DL path loss from Trigger AP power and total received PPDU power. */
+INET_API double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
+        W receivedPower, Hz receivedBandwidth);
+
+/** Applies HE-TB target-receive-power control and the local maximum-power cap. */
+INET_API W computeIeee80211HeTbTransmitPower(W maximumPower, int targetReceivePowerDbm,
+        double pathLossDb, bool useMaximumTransmitPower);
+
+/** Validated result of resolving a scheduler policy into Trigger wire timing. */
+struct INET_API HeUlScheduleFinalizationResult
+{
+    bool valid = false;
+    IIeee80211HeUlScheduler::Schedule schedule;
+    simtime_t resolvedTxTime = SIMTIME_ZERO;
+    std::string error;
+
+    explicit operator bool() const { return valid; }
+};
 
 /**
  * Extends Hcf to support IEEE 802.11ax Downlink OFDMA multi-user scheduling.
@@ -96,6 +121,10 @@ class INET_API HeHcf : public Hcf
     virtual AccessCategory mapTidToAccessCategory(Tid tid) const;
     virtual bool allAssociatedStationsSupportPreamblePuncturing() const;
     virtual bool supportsPreamblePuncturing(const IIeee80211HeUlScheduler::RuAllocation& allocation) const;
+    static HeUlScheduleFinalizationResult finalizeUlSchedule(
+            const IIeee80211HeUlScheduler::Schedule& proposedSchedule,
+            Hz centerFrequency, Hz channelBandwidth,
+            IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
     virtual void retryPendingTriggeredUlExchanges();
     virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
     virtual Packet *buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,

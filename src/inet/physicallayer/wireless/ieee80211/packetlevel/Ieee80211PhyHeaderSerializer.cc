@@ -7,7 +7,11 @@
 
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeaderSerializer.h"
 
+#include <algorithm>
+#include <map>
+#include <numeric>
 #include <set>
+#include <tuple>
 
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211OfdmSignalField.h"
@@ -16,8 +20,8 @@
 //
 // This file serializes/deserializes the logical L-SIG, RL-SIG, HE-SIG-A, and
 // HE-SIG-B fields used by the packet-level model. Validated HE SU and HE ER SU
-// headers use their exact 100 logical signaling bits. The represented legacy
-// HE MU and HE TB bit layouts follow
+// headers use their exact 100 logical signaling bits. The represented HE MU
+// and HE TB bit layouts follow
 // IEEE 802.11-2024 Tables 27-21 (HE MU HE-SIG-A), 27-22 (HE TB HE-SIG-A) and
 // Clause 27.3.11.8 (HE-SIG-B).
 //
@@ -30,6 +34,10 @@
 //   - HE-SIG-B user-specific fields are encoded with a simplified fixed-length
 //     representation; the full User field format of Tables 27-29 and 27-30 is
 //     approximated.
+
+// This is a logical-field representation, not a BCC/interleaver/modulation
+// bitstream. CRC/tail and deterministic logical padding are represented.
+
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyHeader.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
@@ -69,16 +77,6 @@ class Ieee80211HeTbPhyHeaderSerializer : public Ieee80211HePhyHeaderSerializer
     Ieee80211HeTbPhyHeaderSerializer() : Ieee80211HePhyHeaderSerializer(HE_TRIGGER_BASED_UPLINK) {}
 };
 
-// IEEE Std 802.11-2024 Figure 27-72 distinguishes HE SU/TB/MU using L-SIG
-// LENGTH and HE-SIG-A constellation information. This serializer does not yet
-// represent those pre-HE signaling details, and it uses a simplified common
-// HE-SIG-A layout for every HE format. Preserve packet-level format identity in
-// the synthetic 12-bit pad that already completes this logical 64-bit block.
-// This temporary INET dispatch-compatibility marker is not an IEEE on-wire field.
-constexpr uint16_t HE_PACKET_LEVEL_FORMAT_PREFIX = 0xA5C;
-constexpr uint16_t HE_PACKET_LEVEL_FORMAT_MASK = 0xFFC;
-constexpr uint16_t HE_PACKET_LEVEL_FORMAT_VALUE_MASK = 0x003;
-
 std::vector<bool> readLogicalBits(MemoryInputStream& stream, size_t count)
 {
     std::vector<bool> bits;
@@ -86,6 +84,368 @@ std::vector<bool> readLogicalBits(MemoryInputStream& stream, size_t count)
     for (size_t i = 0; i < count; ++i)
         bits.push_back(stream.readBit());
     return bits;
+}
+
+Hz getHeBandwidth(uint8_t bandwidth)
+{
+    if (bandwidth == 0) return MHz(20);
+    if (bandwidth == 1) return MHz(40);
+    if (bandwidth == 2 || bandwidth == 4 || bandwidth == 5) return MHz(80);
+    if (bandwidth == 3 || bandwidth == 6 || bandwidth == 7) return MHz(160);
+    throw cRuntimeError("Reserved HE MU bandwidth field");
+}
+
+int getHeSigBDataBitsPerSymbol(uint8_t mcs, bool dcm)
+{
+    static const int noDcm[] = {26, 52, 78, 104, 156, 208};
+    static const int withDcm[] = {13, 26, 0, 52, 78, 0};
+    if (mcs > 5 || (dcm && withDcm[mcs] == 0))
+        throw cRuntimeError("Reserved HE-SIG-B MCS/DCM combination");
+    return dcm ? withDcm[mcs] : noDcm[mcs];
+}
+
+std::pair<uint8_t, bool> decodeHeMuPuncturing(uint8_t bandwidthCode,
+        const Ieee80211HeSigBCommonField& commonField, Hz channelBandwidth)
+{
+    int subchannelCount = std::lround(channelBandwidth.get() / 20e6);
+    std::vector<uint8_t> candidates;
+    for (int mask = 0; mask < (1 << subchannelCount); ++mask) {
+        std::vector<bool> punctured(subchannelCount, false);
+        for (int subchannel = 0; subchannel < subchannelCount; ++subchannel)
+            punctured[subchannel] = mask & (1 << subchannel);
+        auto encoded = encodeHeMuBandwidth(channelBandwidth, punctured, false);
+        if (!encoded || encoded.value != bandwidthCode)
+            continue;
+        bool commonCompatible = true;
+        for (int subchannel = 0; subchannel < subchannelCount; ++subchannel) {
+            if (!punctured[subchannel])
+                continue;
+            int channel = subchannel % 2;
+            int field = subchannel / 2;
+            uint8_t allocation = commonField.contentChannels[channel].ruAllocationSubfields[field];
+            if (allocation != 113 && allocation != 114) {
+                commonCompatible = false;
+                break;
+            }
+        }
+        if (commonCompatible)
+            candidates.push_back(mask);
+    }
+    if (candidates.empty())
+        throw cRuntimeError("HE MU bandwidth code and Common allocation have no legal puncturing interpretation");
+    return candidates.size() == 1 ? std::make_pair(candidates.front(), true) :
+            std::make_pair(uint8_t(0), false);
+}
+
+template<typename T>
+void appendBits(std::vector<bool>& target, const T& source)
+{
+    target.insert(target.end(), source.begin(), source.end());
+}
+
+std::vector<std::vector<Ieee80211HeMuUserInfo>> orderHeSigBUsers(
+        const Ieee80211HePhyHeader& header, const Ieee80211HeSigBCommonField *commonField,
+        Hz channelBandwidth, bool compression)
+{
+    int channelCount = channelBandwidth == MHz(20) ? 1 : 2;
+    std::vector<std::vector<Ieee80211HeMuUserInfo>> channels(channelCount);
+    std::map<std::pair<int, int>, std::vector<Ieee80211HeMuUserInfo>> usersByRu;
+    for (unsigned int i = 0; i < header.getUsersArraySize(); ++i)
+        usersByRu[{header.getUsers(i).ruToneSize, header.getUsers(i).ruToneOffset}].push_back(header.getUsers(i));
+    for (auto& entry : usersByRu)
+        std::sort(entry.second.begin(), entry.second.end(), [] (const auto& left, const auto& right) {
+            return left.streamStartIndex < right.streamStartIndex;
+        });
+    if (compression) {
+        if (channelBandwidth != MHz(160) || usersByRu.size() != 1 ||
+                usersByRu.begin()->first.first != 1992)
+            throw cRuntimeError("Compressed HE-SIG-B requires one full-bandwidth 2x996-tone RU");
+        const auto& users = usersByRu.begin()->second;
+        size_t channel1Count = (users.size() + 1) / 2;
+        channels[0].insert(channels[0].end(), users.begin(), users.begin() + channel1Count);
+        if (channelCount == 2)
+            channels[1].insert(channels[1].end(), users.begin() + channel1Count, users.end());
+        return channels;
+    }
+
+    auto subchannels = getHeRuAllocationCatalog(Hz(0), channelBandwidth);
+    subchannels.erase(std::remove_if(subchannels.begin(), subchannels.end(),
+            [] (const auto& ru) { return ru.toneSize != 242; }), subchannels.end());
+    std::sort(subchannels.begin(), subchannels.end(), [] (const auto& left, const auto& right) {
+        return left.toneOffset < right.toneOffset;
+    });
+    std::set<std::pair<int, int>> emittedWide[2];
+    for (size_t s = 0; s < subchannels.size(); ++s) {
+        int channel = s % 2;
+        std::vector<Ieee80211HeRu> local;
+        for (const auto& ru : commonField->rus) {
+            bool belongs = ru.toneSize > 242 ?
+                    ru.toneOffset <= subchannels[s].toneOffset &&
+                    ru.toneOffset + ru.toneSize >= subchannels[s].toneOffset + 242 :
+                    ru.toneOffset >= subchannels[s].toneOffset &&
+                    ru.toneOffset + ru.toneSize <= subchannels[s].toneOffset + 242;
+            if (belongs && std::none_of(local.begin(), local.end(), [&] (const auto& value) {
+                    return value.toneSize == ru.toneSize && value.toneOffset == ru.toneOffset;
+                }))
+                local.push_back(ru);
+        }
+        std::sort(local.begin(), local.end(), [] (const auto& left, const auto& right) {
+            return left.toneOffset < right.toneOffset;
+        });
+        for (const auto& ru : local) {
+            const auto& users = usersByRu[{ru.toneSize, ru.toneOffset}];
+            if (ru.toneSize > 242) {
+                auto geometry = std::make_pair(ru.toneSize, ru.toneOffset);
+                if (!emittedWide[channel].insert(geometry).second)
+                    continue;
+                size_t channel1Count = (users.size() + 1) / 2;
+                auto first = channel == 0 ? users.begin() : users.begin() + channel1Count;
+                auto last = channel == 0 ? users.begin() + channel1Count : users.end();
+                channels[channel].insert(channels[channel].end(), first, last);
+            }
+            else
+                channels[channel].insert(channels[channel].end(), users.begin(), users.end());
+        }
+    }
+    for (const auto& entry : usersByRu) {
+        if (entry.first == std::make_pair(26, 485))
+            channels[0].insert(channels[0].end(), entry.second.begin(), entry.second.end());
+        else if (entry.first == std::make_pair(26, 1481))
+            channels[1].insert(channels[1].end(), entry.second.begin(), entry.second.end());
+    }
+    return channels;
+}
+
+struct HeSigBLogicalField
+{
+    std::vector<std::vector<bool>> channels;
+    int numberOfSymbols = 0;
+};
+
+HeSigBLogicalField buildHeSigBLogicalField(const Ieee80211HePhyHeader& header,
+        const Ieee80211HeMuSignalingFields& signaling)
+{
+    HeSigBLogicalField result;
+    Hz channelBandwidth = getHeBandwidth(signaling.bandwidth);
+    int channelCount = channelBandwidth == MHz(20) ? 1 : 2;
+    result.channels.resize(channelCount);
+    std::vector<Ieee80211HeRu> rus;
+    for (unsigned int i = 0; i < header.getUsersArraySize(); ++i) {
+        Ieee80211HeRu ru;
+        ru.toneSize = header.getUsers(i).ruToneSize;
+        ru.toneOffset = header.getUsers(i).ruToneOffset;
+        rus.push_back(ru);
+    }
+    std::vector<bool> punctured(std::lround(channelBandwidth.get() / 20e6), false);
+    for (size_t i = 0; i < punctured.size(); ++i)
+        punctured[i] = header.getPuncturedSubchannelMask() & (uint8_t(1) << i);
+    auto bandwidth = encodeHeMuBandwidth(channelBandwidth, punctured, signaling.heSigBCompression);
+    if (!bandwidth || bandwidth.value != signaling.bandwidth)
+        throw cRuntimeError("HE MU bandwidth/puncturing signaling is inconsistent");
+    Ieee80211HeSigBCommonFieldResult common;
+    if (!signaling.heSigBCompression) {
+        common = encodeHeSigBCommonField(rus, channelBandwidth, punctured);
+        if (!common)
+            throw cRuntimeError("Cannot serialize HE-SIG-B RU allocation: %s", common.error.c_str());
+        for (int channel = 0; channel < channelCount; ++channel) {
+            Ieee80211HeSigBCommonBlock block;
+            block.ruAllocationSubfields = common.commonField.contentChannels[channel].ruAllocationSubfields;
+            block.center26ToneRuBitPresent = channelBandwidth > MHz(40);
+            block.hasCenter26ToneRu = common.commonField.contentChannels[channel].hasCenterRu;
+            auto encoded = encodeHeSigBCommonBlock(block);
+            if (!encoded)
+                throw cRuntimeError("Cannot serialize HE-SIG-B Common block: %s", encoded.error.c_str());
+            appendBits(result.channels[channel], encoded.bits);
+        }
+    }
+    auto orderedUsers = orderHeSigBUsers(header,
+            signaling.heSigBCompression ? nullptr : &common.commonField,
+            channelBandwidth, signaling.heSigBCompression);
+    if (!signaling.heSigBCompression) {
+        std::map<std::pair<int, int>, std::vector<Ieee80211HeMuUserInfo>> usersByRu;
+        std::map<std::pair<int, int>, size_t> nextUser;
+        for (unsigned int i = 0; i < header.getUsersArraySize(); ++i)
+            usersByRu[{header.getUsers(i).ruToneSize, header.getUsers(i).ruToneOffset}].push_back(header.getUsers(i));
+        for (auto& entry : usersByRu)
+            std::sort(entry.second.begin(), entry.second.end(), [] (const auto& left, const auto& right) {
+                return left.streamStartIndex < right.streamStartIndex;
+            });
+        orderedUsers.assign(channelCount, {});
+        for (int channel = 0; channel < channelCount; ++channel) {
+            for (const auto& planned : common.commonField.contentChannels[channel].plannedUsers) {
+                auto geometry = std::make_pair(planned.ru.toneSize, planned.ru.toneOffset);
+                if (planned.unallocated) {
+                    Ieee80211HeMuUserInfo placeholder;
+                    placeholder.ruIndex = planned.ru.index;
+                    placeholder.ruToneSize = planned.ru.toneSize;
+                    placeholder.ruToneOffset = planned.ru.toneOffset;
+                    placeholder.staId = 2046;
+                    orderedUsers[channel].push_back(placeholder);
+                }
+                else {
+                    auto users = usersByRu.find(geometry);
+                    if (users == usersByRu.end() || nextUser[geometry] >= users->second.size())
+                        throw cRuntimeError("HE-SIG-B plan has no canonical user for an allocated RU");
+                    orderedUsers[channel].push_back(users->second[nextUser[geometry]++]);
+                }
+            }
+        }
+        for (const auto& entry : usersByRu)
+            if (nextUser[entry.first] != entry.second.size())
+                throw cRuntimeError("HE-SIG-B plan did not consume every canonical scheduled user");
+    }
+    for (int channel = 0; channel < channelCount; ++channel) {
+        std::vector<std::vector<bool>> pending;
+        for (const auto& user : orderedUsers[channel]) {
+            Ieee80211HeSigBBitsResult encoded;
+            if (user.muMimo || (signaling.heSigBCompression && header.getUsersArraySize() > 1)) {
+                Ieee80211HeSigBMuMimoUser value;
+                value.staId = user.staId;
+                value.spatialConfiguration = user.spatialConfiguration;
+                value.mcs = user.mcs;
+                value.ldpcCoding = header.getCoding() == HE_CODING_LDPC;
+                encoded = encodeHeSigBMuMimoUser(value);
+            }
+            else {
+                Ieee80211HeSigBNonMuMimoUser value;
+                value.staId = user.staId;
+                value.numberOfSpaceTimeStreams = user.numberOfSpatialStreams;
+                value.mcs = user.mcs;
+                value.dcm = user.dcm;
+                value.ldpcCoding = header.getCoding() == HE_CODING_LDPC;
+                encoded = encodeHeSigBNonMuMimoUser(value);
+            }
+            if (!encoded)
+                throw cRuntimeError("Cannot serialize HE-SIG-B User field: %s", encoded.error.c_str());
+            pending.push_back(encoded.bits);
+            if (pending.size() == 2) {
+                auto block = encodeHeSigBUserBlock(pending);
+                appendBits(result.channels[channel], block.bits);
+                pending.clear();
+            }
+        }
+        if (!pending.empty()) {
+            auto block = encodeHeSigBUserBlock(pending);
+            appendBits(result.channels[channel], block.bits);
+        }
+    }
+    int dataBitsPerSymbol = getHeSigBDataBitsPerSymbol(signaling.heSigBMcs, signaling.heSigBDcm);
+    size_t maximumBits = 0;
+    for (const auto& channel : result.channels)
+        maximumBits = std::max(maximumBits, channel.size());
+    result.numberOfSymbols = std::max<int>(1, (maximumBits + dataBitsPerSymbol - 1) / dataBitsPerSymbol);
+    if (!signaling.heSigBCompression &&
+            (signaling.numberOfHeSigBSymbols != result.numberOfSymbols ||
+             signaling.numberOfHeSigBSymbolsIsSaturated != (result.numberOfSymbols == 16)))
+        throw cRuntimeError("HE-SIG-A HE-SIG-B symbol count disagrees with represented logical blocks");
+    if (signaling.heSigBCompression && signaling.numberOfMuMimoUsers != header.getUsersArraySize())
+        throw cRuntimeError("Compressed HE-SIG-A user count disagrees with HE-SIG-B User fields");
+    for (auto& channel : result.channels)
+        channel.resize(result.numberOfSymbols * dataBitsPerSymbol, false);
+    return result;
+}
+
+struct HeSigBAllocation
+{
+    Ieee80211HeRu ru;
+    int userCount = 0;
+};
+
+std::vector<std::vector<HeSigBAllocation>> decodeHeSigBAllocations(
+        const Ieee80211HeSigBCommonField& commonField,
+        const Ieee80211HeSigBCommonField& decodedField, Hz channelBandwidth)
+{
+    std::vector<std::vector<HeSigBAllocation>> channels(channelBandwidth == MHz(20) ? 1 : 2);
+    auto subchannels = getHeRuAllocationCatalog(Hz(0), channelBandwidth);
+    subchannels.erase(std::remove_if(subchannels.begin(), subchannels.end(),
+            [] (const auto& ru) { return ru.toneSize != 242; }), subchannels.end());
+    std::sort(subchannels.begin(), subchannels.end(), [] (const auto& left, const auto& right) {
+        return left.toneOffset < right.toneOffset;
+    });
+    std::map<std::pair<int, int>, int> wideCounts;
+    std::set<std::pair<int, int>> countedWide[2];
+    for (size_t s = 0; s < subchannels.size(); ++s) {
+        int channel = s % 2;
+        int field = s / 2;
+        uint8_t code = commonField.contentChannels[channel].ruAllocationSubfields[field];
+        if (code == 115)
+            continue;
+        std::vector<std::pair<int, int>> localRus;
+        std::vector<int> counts;
+        if (!decodeTable27_27(code, localRus, counts))
+            throw cRuntimeError("Reserved HE-SIG-B RU allocation code");
+        for (size_t i = 0; i < localRus.size(); ++i) {
+            if (localRus[i].first <= 242)
+                continue;
+            auto ru = std::find_if(decodedField.rus.begin(), decodedField.rus.end(), [&] (const auto& value) {
+                return value.toneSize == localRus[i].first &&
+                        value.toneOffset <= subchannels[s].toneOffset &&
+                        value.toneOffset + value.toneSize >= subchannels[s].toneOffset + 242;
+            });
+            if (ru != decodedField.rus.end() && countedWide[channel].insert({ru->toneSize, ru->toneOffset}).second)
+                wideCounts[{ru->toneSize, ru->toneOffset}] += counts[i];
+        }
+    }
+    std::set<std::pair<int, int>> emittedWide[2];
+    for (size_t s = 0; s < subchannels.size(); ++s) {
+        int channel = s % 2;
+        std::vector<Ieee80211HeRu> local;
+        for (const auto& ru : decodedField.rus) {
+            bool belongs = ru.toneSize > 242 ?
+                    ru.toneOffset <= subchannels[s].toneOffset &&
+                    ru.toneOffset + ru.toneSize >= subchannels[s].toneOffset + 242 :
+                    ru.toneOffset >= subchannels[s].toneOffset &&
+                    ru.toneOffset + ru.toneSize <= subchannels[s].toneOffset + 242;
+            if (belongs && std::none_of(local.begin(), local.end(), [&] (const auto& value) {
+                    return value.toneSize == ru.toneSize && value.toneOffset == ru.toneOffset;
+                }))
+                local.push_back(ru);
+        }
+        std::sort(local.begin(), local.end(), [] (const auto& left, const auto& right) {
+            return left.toneOffset < right.toneOffset;
+        });
+        for (const auto& ru : local) {
+            if (ru.toneSize > 242) {
+                auto geometry = std::make_pair(ru.toneSize, ru.toneOffset);
+                if (!emittedWide[channel].insert(geometry).second)
+                    continue;
+                int total = wideCounts[geometry];
+                int count = channel == 0 ? (total + 1) / 2 : total / 2;
+                if (count)
+                    channels[channel].push_back({ru, count});
+            }
+            else {
+                int count = std::count_if(decodedField.rus.begin(), decodedField.rus.end(), [&] (const auto& value) {
+                    return value.toneSize == ru.toneSize && value.toneOffset == ru.toneOffset;
+                });
+                channels[channel].push_back({ru, count});
+            }
+        }
+    }
+    for (const auto& ru : decodedField.rus) {
+        if (ru.toneSize == 26 && ru.toneOffset == 485)
+            channels[0].push_back({ru, 1});
+        else if (ru.toneSize == 26 && ru.toneOffset == 1481)
+            channels[1].push_back({ru, 1});
+    }
+    return channels;
+}
+
+std::vector<int> decodeHeMuSpatialConfiguration(int userCount, uint8_t code)
+{
+    static const std::vector<std::vector<std::vector<int>>> configurations = {
+        {}, {},
+        {{1,1},{2,1},{3,1},{4,1},{2,2},{3,2},{4,2},{3,3},{4,3},{4,4}},
+        {{1,1,1},{2,1,1},{3,1,1},{4,1,1},{2,2,1},{3,2,1},{4,2,1},{3,3,1},{4,3,1},{2,2,2},{3,2,2},{4,2,2},{3,3,2}},
+        {{1,1,1,1},{2,1,1,1},{3,1,1,1},{4,1,1,1},{2,2,1,1},{3,2,1,1},{4,2,1,1},{3,3,1,1},{2,2,2,1},{3,2,2,1},{2,2,2,2}},
+        {{1,1,1,1,1},{2,1,1,1,1},{3,1,1,1,1},{4,1,1,1,1},{2,2,1,1,1},{3,2,1,1,1},{2,2,2,1,1}},
+        {{1,1,1,1,1,1},{2,1,1,1,1,1},{3,1,1,1,1,1},{2,2,1,1,1,1}},
+        {{1,1,1,1,1,1,1},{2,1,1,1,1,1,1}},
+        {{1,1,1,1,1,1,1,1}}
+    };
+    if (userCount < 2 || userCount > 8 || code >= configurations[userCount].size())
+        throw cRuntimeError("Reserved HE-SIG-B MU-MIMO spatial configuration");
+    return configurations[userCount][code];
 }
 
 template<typename SigA>
@@ -463,396 +823,265 @@ const Ptr<Chunk> Ieee80211VhtPhyHeaderSerializer::deserialize(MemoryInputStream&
 void Ieee80211HePhyHeaderSerializer::serialize(MemoryOutputStream& stream, const Ptr<const Chunk>& chunk) const
 {
     auto hePhyHeader = dynamicPtrCast<const Ieee80211HePhyHeader>(chunk);
-    unsigned int numUsers = hePhyHeader->getUsersArraySize();
-    if (numUsers > 255)
-        throw cRuntimeError("Too many HE MU users: %u", numUsers);
-
-    // Packet-level HE signaling model. The serialized bytes cover the HE-SIG
-    // fields currently consumed by INET's HE MU PHY/MAC path; runtime-only
-    // metadata remains in the chunk object. This is not a complete bit-level
-    // PPDU preamble encoder.
-
-    const uint8_t ppduFormat = getIeee80211HePpduFormat(*hePhyHeader);
-    const bool extendedRangeSu = ppduFormat == HE_EXTENDED_RANGE_SU;
-
-    if (serializeExactHeSuEr(stream, hePhyHeader, static_cast<Ieee80211HePpduFormat>(ppduFormat)))
+    auto ppduFormat = getIeee80211HePpduFormat(*hePhyHeader);
+    if (serializeExactHeSuEr(stream, hePhyHeader, ppduFormat))
         return;
-
-    uint32_t maxToneIndex = 0;
-    for (unsigned int i = 0; i < numUsers; ++i) {
-        const auto& u = hePhyHeader->getUsers(i);
-        maxToneIndex = std::max(maxToneIndex, (uint32_t)(u.ruToneOffset + u.ruToneSize));
-    }
-    uint8_t bwField = 0;
-    if (maxToneIndex > 996) bwField = 3;
-    else if (maxToneIndex > 484) bwField = 2;
-    else if (maxToneIndex > 242) bwField = 1;
-
-    uint8_t numUsersField = (numUsers > 0) ? (numUsers - 1) & 0xF : 0;
-    uint8_t giLtf = 2;
-    if (hePhyHeader->getGuardInterval() == 0) giLtf = 1;
-    else if (hePhyHeader->getGuardInterval() == 1) giLtf = 2;
-    else if (hePhyHeader->getGuardInterval() == 2) giLtf = 3;
-
-    auto writeHeSigA = [&]() {
-        // --- HE-SIG-A (8 bytes = 64 bits) - IEEE Std 802.11-2024 Table 27-21 ---
-        // HE-SIG-A1 (26 bits):
-        stream.writeBit(ppduFormat == HE_TRIGGER_BASED_UPLINK); // B0: UL/DL
-        stream.writeNBitsOfUint64Be(0, 3); // B1-B3: HE-SIG-B MCS
-        stream.writeBit(false); // B4: HE-SIG-B DCM
-        stream.writeNBitsOfUint64Be(hePhyHeader->getBssColor() & 0x3F, 6); // B5-B10: BSS Color
-        stream.writeNBitsOfUint64Be(hePhyHeader->getSpatialReuse() & 0xF, 4); // B11-B14: Spatial Reuse
-        stream.writeNBitsOfUint64Be(bwField, 3); // B15-B17: Bandwidth
-        stream.writeNBitsOfUint64Be(numUsersField, 4); // B18-B21: Number of HE-SIG-B Symbols or MU-MIMO Users
-        stream.writeBit(false); // B22: HE-SIG-B Compression
-        stream.writeNBitsOfUint64Be(giLtf, 2); // B23-B24: GI+HE-LTF Size
-        stream.writeBit(false); // B25: Doppler
-
-        // HE-SIG-A2 (26 bits):
-        stream.writeNBitsOfUint64Be(127, 7); // B0-B6: TXOP
-        stream.writeBit(true); // B7: Reserved
-        stream.writeNBitsOfUint64Be(0, 3); // B8-B10: Number of HE-LTF Symbols and Midamble Periodicity
-        stream.writeBit(hePhyHeader->getCoding() & 1); // B11: LDPC Extra Symbol Segment
-        stream.writeBit(false); // B12: STBC
-        stream.writeNBitsOfUint64Be(0, 2); // B13-B14: Pre-FEC Padding Factor
-        stream.writeBit(false); // B15: PE Disambiguity
-        stream.writeNBitsOfUint64Be(0, 4); // B16-B19: CRC
-        stream.writeNBitsOfUint64Be(0, 6); // B20-B25: Tail
-        stream.writeNBitsOfUint64Be(HE_PACKET_LEVEL_FORMAT_PREFIX | ppduFormat, 12);
-    };
-
-    writeHeSigA();
-    if (extendedRangeSu)
-        writeHeSigA();
-
-    // --- 2. HE-SIG-B (only if ppduFormat == 0, i.e. DL MU) ---
+    Ieee80211HeLSig lSig;
+    Ieee80211HeSigABitsResult sigA;
+    HeSigBLogicalField sigB;
     if (ppduFormat == HE_MU_DOWNLINK) {
-        Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
-        std::vector<Ieee80211HeRu> rus;
-        for (unsigned int i = 0; i < numUsers; ++i) {
-            const auto& user = hePhyHeader->getUsers(i);
-            Ieee80211HeRu ru;
-            ru.toneSize = user.ruToneSize;
-            ru.toneOffset = user.ruToneOffset;
-            rus.push_back(ru);
-        }
-        auto codecResult = encodeHeSigBCommonField(rus, channelBw);
-        if (!codecResult)
-            throw cRuntimeError("Cannot serialize HE-SIG-B RU allocation: %s", codecResult.error.c_str());
-        
-        for (const auto& cc : codecResult.commonField.contentChannels) {
-            for (uint8_t code : cc.ruAllocationSubfields) {
-                stream.writeByte(code);
-            }
-        }
-        if (channelBw > Hz(40e6)) {
-            stream.writeBit(codecResult.commonField.contentChannels[0].hasCenterRu);
-            stream.writeBit(codecResult.commonField.contentChannels[1].hasCenterRu);
-        }
-
-        std::vector<Ieee80211HeMuUserInfo> cc1Users;
-        std::vector<Ieee80211HeMuUserInfo> cc2Users;
-
-        std::map<std::pair<int, int>, std::vector<Ieee80211HeMuUserInfo>> usersByRuGeometry;
-        for (unsigned int i = 0; i < numUsers; ++i) {
-            const auto& user = hePhyHeader->getUsers(i);
-            usersByRuGeometry[{user.ruToneSize, user.ruToneOffset}].push_back(user);
-        }
-
-        auto subchannelRUs = getHeRuAllocationCatalog(Hz(0), channelBw);
-        subchannelRUs.erase(std::remove_if(subchannelRUs.begin(), subchannelRUs.end(),
-            [](const Ieee80211HeRu& ru) { return ru.toneSize != 242; }), subchannelRUs.end());
-        std::sort(subchannelRUs.begin(), subchannelRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
-            return a.toneOffset < b.toneOffset;
-        });
-
-        int K = subchannelRUs.size();
-        std::set<std::pair<int, int>> serializedWideRuGeometries[2];
-        for (int s = 0; s < K; ++s) {
-            int c = s % 2;
-            auto& ccUsers = (c == 0) ? cc1Users : cc2Users;
-
-            std::vector<Ieee80211HeRu> localRUs;
-            for (const auto& ru : codecResult.commonField.rus) {
-                if (ru.toneSize > 242) {
-                    if (ru.toneOffset <= subchannelRUs[s].toneOffset &&
-                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242 &&
-                        std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
-                            return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
-                        }) == localRUs.end())
-                        localRUs.push_back(ru);
-                } else if (ru.toneOffset >= subchannelRUs[s].toneOffset &&
-                           ru.toneOffset + ru.toneSize <= subchannelRUs[s].toneOffset + 242) {
-                    if (std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
-                        return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
-                    }) == localRUs.end()) {
-                        localRUs.push_back(ru);
-                    }
-                }
-            }
-            std::sort(localRUs.begin(), localRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
-                return a.toneOffset < b.toneOffset;
-            });
-
-            for (const auto& ru : localRUs) {
-                const auto& ruUsers = usersByRuGeometry[{ru.toneSize, ru.toneOffset}];
-                if (ru.toneSize > 242) {
-                    auto geometry = std::make_pair(ru.toneSize, ru.toneOffset);
-                    if (!serializedWideRuGeometries[c].insert(geometry).second)
-                        continue;
-                    int total = ruUsers.size();
-                    int n1 = (total + 1) / 2;
-                    if (c == 0) {
-                        for (int i = 0; i < n1; ++i) ccUsers.push_back(ruUsers[i]);
-                    } else {
-                        for (int i = n1; i < total; ++i) ccUsers.push_back(ruUsers[i]);
-                    }
-                } else {
-                    for (const auto& u : ruUsers) {
-                        ccUsers.push_back(u);
-                    }
-                }
-            }
-        }
-
-        for (const auto& entry : usersByRuGeometry) {
-            if (entry.first.first == 26 && entry.first.second == 485) {
-                for (const auto& user : entry.second) cc1Users.push_back(user);
-            }
-            else if (entry.first.first == 26 && entry.first.second == 1481) {
-                for (const auto& user : entry.second) cc2Users.push_back(user);
-            }
-        }
-
-        auto writeUser = [&](const Ieee80211HeMuUserInfo& user) {
-            stream.writeNBitsOfUint64Be(user.staId, 11);
-            stream.writeNBitsOfUint64Be(user.mcs, 4);
-            stream.writeBit(hePhyHeader->getCoding() & 1);
-            uint8_t nssField = (user.numberOfSpatialStreams > 0) ? (user.numberOfSpatialStreams - 1) & 0x7 : 0;
-            stream.writeNBitsOfUint64Be(nssField, 3);
-            stream.writeBit(user.dcm);
-        };
-
-        for (const auto& u : cc1Users) writeUser(u);
-        for (const auto& u : cc2Users) writeUser(u);
+        const auto& fields = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(hePhyHeader)->getSignaling();
+        if (!fields.signalingValid)
+            throw cRuntimeError("HE MU serialization requires validated logical signaling fields");
+        lSig.length = fields.lSigLength;
+        Ieee80211HeMuSigA value;
+        value.heSigBMcs = fields.heSigBMcs;
+        value.heSigBDcm = fields.heSigBDcm;
+        value.bssColor = hePhyHeader->getBssColor();
+        value.spatialReuse = hePhyHeader->getSpatialReuse();
+        value.bandwidth = fields.bandwidth;
+        value.heSigBCompression = fields.heSigBCompression;
+        value.numberOfHeSigBSymbols = fields.numberOfHeSigBSymbols;
+        value.numberOfHeSigBSymbolsIsSaturated = fields.numberOfHeSigBSymbolsIsSaturated;
+        value.numberOfMuMimoUsers = fields.numberOfMuMimoUsers;
+        value.giLtfSize = fields.giLtfSize;
+        value.doppler = fields.doppler;
+        value.txop = fields.txop;
+        value.numberOfHeLtfSymbols = fields.numberOfHeLtfSymbols;
+        value.midamblePeriodicity = fields.midamblePeriodicity;
+        value.ldpcExtraSymbolSegment = fields.ldpcExtraSymbolSegment;
+        value.stbc = fields.stbc;
+        value.preFecPaddingFactor = fields.preFecPaddingFactor;
+        value.peDisambiguity = fields.peDisambiguity;
+        sigA = encodeHeMuSigA(value);
+        sigB = buildHeSigBLogicalField(*hePhyHeader, fields);
     }
-
-    // Runtime-only fields such as triggerId, commonDuration, PSDU length and
-    // per-user resolved duration remain in the packet-level chunk object; they
-    // are not HE PHY signaling bits and are intentionally not serialized here.
+    else if (ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+        const auto& fields = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader)->getSignaling();
+        if (!fields.signalingValid)
+            throw cRuntimeError("HE TB serialization requires Trigger-derived logical signaling fields");
+        lSig.length = fields.lSigLength;
+        Ieee80211HeTbSigA value;
+        value.bssColor = hePhyHeader->getBssColor();
+        value.spatialReuse = {{fields.spatialReuse1, fields.spatialReuse2,
+                fields.spatialReuse3, fields.spatialReuse4}};
+        value.bandwidth = fields.bandwidth;
+        value.txop = fields.txop;
+        value.triggerReserved = fields.triggerReserved;
+        sigA = encodeHeTbSigA(value);
+    }
+    else
+        throw cRuntimeError("HE serializer received an unsupported concrete header");
+    auto sigFormat = ppduFormat == HE_MU_DOWNLINK ? Ieee80211HeSigFormat::MU : Ieee80211HeSigFormat::TB;
+    auto lSigBits = encodeHeLSig(lSig, sigFormat);
+    auto rlSigBits = encodeHeRlSig(lSig, sigFormat);
+    if (!lSigBits)
+        throw cRuntimeError("Cannot serialize HE MU/TB L-SIG: %s", lSigBits.error.c_str());
+    if (!rlSigBits)
+        throw cRuntimeError("Cannot serialize HE MU/TB RL-SIG: %s", rlSigBits.error.c_str());
+    if (!sigA)
+        throw cRuntimeError("Cannot serialize HE MU/TB HE-SIG-A: %s", sigA.error.c_str());
+    stream.writeBits(lSigBits.bits);
+    stream.writeBits(rlSigBits.bits);
+    stream.writeBits(sigA.bits);
+    for (const auto& channel : sigB.channels)
+        stream.writeBits(channel);
 }
 
 const Ptr<Chunk> Ieee80211HePhyHeaderSerializer::deserialize(MemoryInputStream& stream) const
 {
-    if (auto heSuErHeader = deserializeExactHeSuEr(stream, expectedPpduFormat))
-        return heSuErHeader;
+    if (!expectedPpduFormat)
+        throw cRuntimeError("Raw HE PHY decoding requires a concrete header type because HE-SIG-A constellation metadata is not represented");
+    auto ppduFormat = *expectedPpduFormat;
+    if (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU) {
+        auto header = deserializeExactHeSuEr(stream, expectedPpduFormat);
+        if (!header)
+            throw cRuntimeError("Raw HE SU/ER signaling does not match the requested concrete header type");
+        return header;
+    }
+    auto lSigBits = readLogicalBits(stream, 24);
+    auto rlSigBits = readLogicalBits(stream, 24);
+    auto sigABits = readLogicalBits(stream, 52);
+    auto sigFormat = ppduFormat == HE_MU_DOWNLINK ? Ieee80211HeSigFormat::MU : Ieee80211HeSigFormat::TB;
+    auto lSig = decodeHeLSig(lSigBits, sigFormat);
+    auto rlSig = decodeHeRlSigRepeat(lSigBits, rlSigBits, sigFormat);
+    if (!lSig || !rlSig)
+        throw cRuntimeError("Malformed HE MU/TB L-SIG or RL-SIG");
 
-    // --- 1. HE-SIG-A (8 bytes = 64 bits) ---
-    auto uplink = stream.readBit();
-    stream.readNBitsToUint64Be(3); // HE-SIG-B MCS
-    stream.readBit(); // HE-SIG-B DCM
-    auto bssColor = stream.readNBitsToUint64Be(6);
-    auto spatialReuse = stream.readNBitsToUint64Be(4);
-    auto bwField = stream.readNBitsToUint64Be(3);
-    stream.readNBitsToUint64Be(4); // Number of HE-SIG-B Symbols or MU-MIMO Users
-    stream.readBit(); // HE-SIG-B Compression
-    auto giLtf = stream.readNBitsToUint64Be(2);
-    uint8_t gi = 2;
-    if (giLtf == 1) gi = 0;
-    else if (giLtf == 2) gi = 1;
-    else if (giLtf == 3) gi = 2;
-    stream.readBit(); // Doppler
+    if (ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+        auto sigA = decodeHeTbSigA(sigABits);
+        if (!sigA)
+            throw cRuntimeError("Cannot deserialize HE TB HE-SIG-A: %s", sigA.error.c_str());
+        auto header = makeShared<Ieee80211HeTbPhyHeader>();
+        Ieee80211HeTbSignalingFields fields;
+        fields.signalingValid = true;
+        fields.lSigLength = lSig.value.length;
+        fields.spatialReuse1 = sigA.value.spatialReuse[0];
+        fields.spatialReuse2 = sigA.value.spatialReuse[1];
+        fields.spatialReuse3 = sigA.value.spatialReuse[2];
+        fields.spatialReuse4 = sigA.value.spatialReuse[3];
+        fields.bandwidth = sigA.value.bandwidth;
+        fields.txop = sigA.value.txop;
+        fields.triggerReserved = sigA.value.triggerReserved;
+        header->setSignaling(fields);
+        header->setBssColor(sigA.value.bssColor);
+        header->setSpatialReuse(sigA.value.spatialReuse[0]);
+        header->setChunkLength(b(100));
+        return header;
+    }
+    auto sigA = decodeHeMuSigA(sigABits);
+    if (!sigA)
+        throw cRuntimeError("Cannot deserialize HE MU HE-SIG-A: %s", sigA.error.c_str());
+    if (!sigA.value.heSigBCompression && sigA.value.numberOfHeSigBSymbolsIsSaturated)
+        throw cRuntimeError("Cannot deserialize saturated HE-SIG-B symbol count without resolved RXVECTOR length");
+    Hz channelBandwidth = getHeBandwidth(sigA.value.bandwidth);
+    int channelCount = channelBandwidth == MHz(20) ? 1 : 2;
+    int bitsPerChannel = getHeSigBDataBitsPerSymbol(sigA.value.heSigBMcs,
+            sigA.value.heSigBDcm) * (sigA.value.heSigBCompression ?
+            getHeSigBSymbolCount(channelBandwidth, sigA.value.numberOfMuMimoUsers, true,
+                    sigA.value.heSigBMcs, sigA.value.heSigBDcm) : sigA.value.numberOfHeSigBSymbols);
+    std::vector<std::vector<bool>> channels;
+    for (int channel = 0; channel < channelCount; ++channel)
+        channels.push_back(readLogicalBits(stream, bitsPerChannel));
 
-    stream.readNBitsToUint64Be(7); // TXOP
-    stream.readBit(); // Reserved B7
-    stream.readNBitsToUint64Be(3); // Number of HE-LTF Symbols
-    auto coding = stream.readBit();
-    stream.readBit(); // STBC
-    stream.readNBitsToUint64Be(2); // Pre-FEC Padding Factor
-    stream.readBit(); // PE Disambiguity
-    stream.readNBitsToUint64Be(4); // CRC
-    stream.readNBitsToUint64Be(6); // Tail
-    auto formatMarker = stream.readNBitsToUint64Be(12);
-    if ((formatMarker & HE_PACKET_LEVEL_FORMAT_MASK) != HE_PACKET_LEVEL_FORMAT_PREFIX)
-        throw cRuntimeError("Invalid INET packet-level HE PPDU format marker");
-    auto ppduFormat = static_cast<Ieee80211HePpduFormat>(formatMarker & HE_PACKET_LEVEL_FORMAT_VALUE_MASK);
-    if (uplink != (ppduFormat == HE_TRIGGER_BASED_UPLINK))
-        throw cRuntimeError("Inconsistent packet-level HE PPDU format marker");
-    if (expectedPpduFormat.has_value() && ppduFormat != *expectedPpduFormat)
-        throw cRuntimeError("Packet-level HE PPDU format marker does not match requested header type");
-    auto hePhyHeader = createIeee80211HePhyHeader(ppduFormat);
-    hePhyHeader->setBssColor(bssColor);
-    hePhyHeader->setSpatialReuse(spatialReuse);
-    hePhyHeader->setGuardInterval(gi);
-    hePhyHeader->setCoding(coding);
-    if (ppduFormat == HE_EXTENDED_RANGE_SU)
-        stream.readNBitsToUint64Be(64); // duplicated HE-SIG-A
-
-    // --- 2. HE-SIG-B (only if ppduFormat == 0) ---
-    if (ppduFormat == HE_MU_DOWNLINK) {
-        Hz channelBw = (bwField == 3) ? Hz(160e6) : ((bwField == 2) ? Hz(80e6) : ((bwField == 1) ? Hz(40e6) : Hz(20e6)));
-        int numContentChannels = (channelBw > Hz(20e6)) ? 2 : 1;
-        int N = (channelBw >= Hz(160e6)) ? 4 : (channelBw >= Hz(80e6)) ? 2 : 1;
-
-        Ieee80211HeSigBCommonField commonField;
-        commonField.contentChannels.resize(numContentChannels);
-        for (int c = 0; c < numContentChannels; ++c) {
-            for (int f = 0; f < N; ++f) {
-                commonField.contentChannels[c].ruAllocationSubfields.push_back(stream.readByte());
-            }
+    Ieee80211HeSigBCommonField commonField;
+    std::vector<std::vector<HeSigBAllocation>> allocations(channelCount);
+    size_t commonBits = 0;
+    uint8_t puncturedSubchannelMask = 0;
+    bool puncturedSubchannelMaskKnown = true;
+    if (sigA.value.heSigBCompression) {
+        auto fullRu = getHeEqualRuLayout(Hz(0), channelBandwidth, 1).front();
+        if (fullRu.toneSize != 1992)
+            throw cRuntimeError("This packet-level compressed HE-SIG-B contract requires a 2x996-tone RU");
+        int count1 = (sigA.value.numberOfMuMimoUsers + 1) / 2;
+        allocations[0].push_back({fullRu, count1});
+        if (channelCount == 2 && sigA.value.numberOfMuMimoUsers > count1)
+            allocations[1].push_back({fullRu, sigA.value.numberOfMuMimoUsers - count1});
+    }
+    else {
+        int allocationCount = channelBandwidth >= MHz(160) ? 4 : channelBandwidth >= MHz(80) ? 2 : 1;
+        commonBits = allocationCount * 8 + (channelBandwidth > MHz(40) ? 1 : 0) + 10;
+        commonField.contentChannels.resize(channelCount);
+        for (int channel = 0; channel < channelCount; ++channel) {
+            auto block = decodeHeSigBCommonBlock(std::vector<bool>(channels[channel].begin(),
+                    channels[channel].begin() + commonBits));
+            if (!block)
+                throw cRuntimeError("Cannot deserialize HE-SIG-B Common block: %s", block.error.c_str());
+            commonField.contentChannels[channel].ruAllocationSubfields = block.value.ruAllocationSubfields;
+            commonField.contentChannels[channel].hasCenterRu = block.value.hasCenter26ToneRu;
         }
-        if (channelBw > Hz(40e6)) {
-            commonField.contentChannels[0].hasCenterRu = stream.readBit();
-            commonField.contentChannels[1].hasCenterRu = stream.readBit();
-        }
-
-        auto decoded = decodeHeSigBCommonField(commonField, Hz(0), channelBw);
+        auto decoded = decodeHeSigBCommonField(commonField, Hz(0), channelBandwidth);
         if (!decoded)
             throw cRuntimeError("Cannot deserialize HE-SIG-B RU allocation: %s", decoded.error.c_str());
-
-        std::vector<std::pair<Ieee80211HeRu, int>> cc1Allocations;
-        std::vector<std::pair<Ieee80211HeRu, int>> cc2Allocations;
-
-        auto subchannelRUs = getHeRuAllocationCatalog(Hz(0), channelBw);
-        subchannelRUs.erase(std::remove_if(subchannelRUs.begin(), subchannelRUs.end(),
-            [](const Ieee80211HeRu& ru) { return ru.toneSize != 242; }), subchannelRUs.end());
-        std::sort(subchannelRUs.begin(), subchannelRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
-            return a.toneOffset < b.toneOffset;
-        });
-
-        std::map<std::pair<int, int>, int> wideRuTotalUsers;
-        std::set<std::pair<int, int>> countedWideRuGeometries[2];
-        for (int s = 0; s < (int)subchannelRUs.size(); ++s) {
-            int c = s % 2;
-            int f = s / 2;
-            uint8_t code = commonField.contentChannels[c].ruAllocationSubfields[f];
-            if (code == 115) continue;
-            std::vector<std::pair<int, int>> decodedRUs;
-            std::vector<int> decodedUserCounts;
-            decodeTable27_27(code, decodedRUs, decodedUserCounts);
-            for (size_t i = 0; i < decodedRUs.size(); ++i) {
-                if (decodedRUs[i].first > 242) {
-                    auto it = std::find_if(decoded.commonField.rus.begin(), decoded.commonField.rus.end(), [&](const Ieee80211HeRu& r) {
-                        return r.toneSize == decodedRUs[i].first && r.toneOffset <= subchannelRUs[s].toneOffset &&
-                               r.toneOffset + r.toneSize >= subchannelRUs[s].toneOffset + 242;
-                    });
-                    if (it != decoded.commonField.rus.end()) {
-                        auto geometry = std::make_pair(it->toneSize, it->toneOffset);
-                        if (countedWideRuGeometries[c].insert(geometry).second)
-                            wideRuTotalUsers[geometry] += decodedUserCounts[i];
-                    }
-                }
-            }
-        }
-
-        std::set<std::pair<int, int>> allocatedWideRuGeometries[2];
-        for (int s = 0; s < (int)subchannelRUs.size(); ++s) {
-            int c = s % 2;
-            auto& ccAllocations = (c == 0) ? cc1Allocations : cc2Allocations;
-
-            std::vector<Ieee80211HeRu> localRUs;
-            for (const auto& ru : decoded.commonField.rus) {
-                if (ru.toneSize > 242) {
-                    if (ru.toneOffset <= subchannelRUs[s].toneOffset &&
-                        ru.toneOffset + ru.toneSize >= subchannelRUs[s].toneOffset + 242 &&
-                        std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
-                            return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
-                        }) == localRUs.end())
-                        localRUs.push_back(ru);
-                } else if (ru.toneOffset >= subchannelRUs[s].toneOffset &&
-                           ru.toneOffset + ru.toneSize <= subchannelRUs[s].toneOffset + 242) {
-                    if (std::find_if(localRUs.begin(), localRUs.end(), [&](const Ieee80211HeRu& r) {
-                        return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
-                    }) == localRUs.end()) {
-                        localRUs.push_back(ru);
-                    }
-                }
-            }
-            std::sort(localRUs.begin(), localRUs.end(), [](const Ieee80211HeRu& a, const Ieee80211HeRu& b) {
-                return a.toneOffset < b.toneOffset;
-            });
-
-            for (const auto& ru : localRUs) {
-                if (ru.toneSize > 242) {
-                    auto geometry = std::make_pair(ru.toneSize, ru.toneOffset);
-                    if (!allocatedWideRuGeometries[c].insert(geometry).second)
-                        continue;
-                    int total = wideRuTotalUsers[geometry];
-                    int n1 = (total + 1) / 2;
-                    int n2 = total / 2;
-                    int count = (c == 0) ? n1 : n2;
-                    if (count > 0) {
-                        ccAllocations.push_back({ru, count});
-                    }
-                } else {
-                    int count = std::count_if(decoded.commonField.rus.begin(), decoded.commonField.rus.end(), [&](const Ieee80211HeRu& r) {
-                        return r.toneSize == ru.toneSize && r.toneOffset == ru.toneOffset;
-                    });
-                    ccAllocations.push_back({ru, count});
-                }
-            }
-        }
-
-        for (const auto& ru : decoded.commonField.rus) {
-            if (ru.toneSize == 26) {
-                if (ru.toneOffset == 485) {
-                    cc1Allocations.push_back({ru, 1});
-                } else if (ru.toneOffset == 1481) {
-                    cc2Allocations.push_back({ru, 1});
-                }
-            }
-        }
-
-        int numUsersCC1 = 0;
-        for (const auto& alloc : cc1Allocations) numUsersCC1 += alloc.second;
-        int numUsersCC2 = 0;
-        for (const auto& alloc : cc2Allocations) numUsersCC2 += alloc.second;
-        int totalUsersToRead = numUsersCC1 + numUsersCC2;
-
-        std::vector<Ieee80211HeMuUserInfo> cc1Users;
-        std::vector<Ieee80211HeMuUserInfo> cc2Users;
-
-        auto readUser = [&]() {
-            Ieee80211HeMuUserInfo info;
-            info.staId = stream.readNBitsToUint64Be(11);
-            info.mcs = stream.readNBitsToUint64Be(4);
-            auto userCoding = stream.readBit();
-            if (userCoding != coding)
-                throw cRuntimeError("HE-SIG-B user coding does not match HE-SIG-A coding");
-            info.numberOfSpatialStreams = stream.readNBitsToUint64Be(3) + 1;
-            info.dcm = stream.readBit();
-            return info;
-        };
-
-        for (int i = 0; i < numUsersCC1; ++i) cc1Users.push_back(readUser());
-        for (int i = 0; i < numUsersCC2; ++i) cc2Users.push_back(readUser());
-
-        hePhyHeader->setUsersArraySize(totalUsersToRead);
-        int userIdx = 0;
-
-        int cc1Idx = 0;
-        for (const auto& alloc : cc1Allocations) {
-            for (int u = 0; u < alloc.second; ++u) {
-                auto info = cc1Users[cc1Idx++];
-                info.ruIndex = alloc.first.index;
-                info.ruToneSize = alloc.first.toneSize;
-                info.ruToneOffset = alloc.first.toneOffset;
-                hePhyHeader->setUsers(userIdx++, info);
-            }
-        }
-        int cc2Idx = 0;
-        for (const auto& alloc : cc2Allocations) {
-            for (int u = 0; u < alloc.second; ++u) {
-                auto info = cc2Users[cc2Idx++];
-                info.ruIndex = alloc.first.index;
-                info.ruToneSize = alloc.first.toneSize;
-                info.ruToneOffset = alloc.first.toneOffset;
-                hePhyHeader->setUsers(userIdx++, info);
-            }
-        }
+        allocations = decodeHeSigBAllocations(commonField, decoded.commonField, channelBandwidth);
+        std::tie(puncturedSubchannelMask, puncturedSubchannelMaskKnown) =
+                decodeHeMuPuncturing(sigA.value.bandwidth, commonField, channelBandwidth);
     }
 
-    return hePhyHeader;
+    std::map<std::pair<int, int>, int> totalUsers;
+    for (const auto& channel : allocations)
+        for (const auto& allocation : channel)
+            totalUsers[{allocation.ru.toneSize, allocation.ru.toneOffset}] += allocation.userCount;
+    std::map<std::pair<int, int>, int> decodedUsers;
+    std::map<std::pair<int, int>, uint8_t> spatialConfigurations;
+    bool codingInitialized = false;
+    bool commonCoding = false;
+    auto header = makeShared<Ieee80211HeMuPhyHeader>();
+    for (int channel = 0; channel < channelCount; ++channel) {
+        std::vector<Ieee80211HeRu> expanded;
+        for (const auto& allocation : allocations[channel])
+            for (int i = 0; i < allocation.userCount; ++i)
+                expanded.push_back(allocation.ru);
+        size_t bitOffset = commonBits;
+        size_t userOffset = 0;
+        while (userOffset < expanded.size()) {
+            size_t blockUsers = std::min<size_t>(2, expanded.size() - userOffset);
+            size_t blockBits = blockUsers * 21 + 10;
+            if (bitOffset + blockBits > channels[channel].size())
+                throw cRuntimeError("HE-SIG-B User blocks exceed the signaled symbol count");
+            auto block = decodeHeSigBUserBlock(std::vector<bool>(channels[channel].begin() + bitOffset,
+                    channels[channel].begin() + bitOffset + blockBits));
+            if (!block)
+                throw cRuntimeError("Cannot deserialize HE-SIG-B User block: %s", block.error.c_str());
+            for (size_t i = 0; i < blockUsers; ++i) {
+                const auto& ru = expanded[userOffset + i];
+                auto geometry = std::make_pair(ru.toneSize, ru.toneOffset);
+                int groupSize = totalUsers[geometry];
+                Ieee80211HeMuUserInfo user;
+                bool userCoding;
+                if (groupSize > 1) {
+                    auto decoded = decodeHeSigBMuMimoUser(block.userFields[i]);
+                    if (!decoded)
+                        throw cRuntimeError("Cannot deserialize HE-SIG-B MU-MIMO User field: %s", decoded.error.c_str());
+                    auto nsts = decodeHeMuSpatialConfiguration(groupSize, decoded.value.spatialConfiguration);
+                    int position = decodedUsers[geometry]++;
+                    user.staId = decoded.value.staId;
+                    user.mcs = decoded.value.mcs;
+                    user.numberOfSpatialStreams = nsts[position];
+                    user.streamStartIndex = std::accumulate(nsts.begin(), nsts.begin() + position, 0);
+                    user.muMimo = true;
+                    user.spatialConfiguration = decoded.value.spatialConfiguration;
+                    userCoding = decoded.value.ldpcCoding;
+                    auto previous = spatialConfigurations.find(geometry);
+                    if (previous != spatialConfigurations.end() && previous->second != decoded.value.spatialConfiguration)
+                        throw cRuntimeError("HE-SIG-B MU-MIMO users disagree on spatial configuration");
+                    spatialConfigurations[geometry] = decoded.value.spatialConfiguration;
+                }
+                else {
+                    auto decoded = decodeHeSigBNonMuMimoUser(block.userFields[i]);
+                    if (!decoded)
+                        throw cRuntimeError("Cannot deserialize HE-SIG-B User field: %s", decoded.error.c_str());
+                    user.staId = decoded.value.staId;
+                    user.mcs = decoded.value.mcs;
+                    user.numberOfSpatialStreams = decoded.value.numberOfSpaceTimeStreams;
+                    user.dcm = decoded.value.dcm;
+                    userCoding = decoded.value.ldpcCoding;
+                }
+                if (user.staId == 2046)
+                    continue;
+                if (codingInitialized && commonCoding != userCoding)
+                    throw cRuntimeError("Packet-level HE header cannot represent mixed per-user FEC coding");
+                codingInitialized = true;
+                commonCoding = userCoding;
+                user.ruIndex = ru.index;
+                user.ruToneSize = ru.toneSize;
+                user.ruToneOffset = ru.toneOffset;
+                header->appendUsers(user);
+            }
+            userOffset += blockUsers;
+            bitOffset += blockBits;
+        }
+        if (std::any_of(channels[channel].begin() + bitOffset, channels[channel].end(),
+                [] (bool bit) { return bit; }))
+            throw cRuntimeError("HE-SIG-B padding bits must be zero");
+    }
+    Ieee80211HeMuSignalingFields fields;
+    fields.signalingValid = true;
+    fields.lSigLength = lSig.value.length;
+    fields.heSigBMcs = sigA.value.heSigBMcs;
+    fields.heSigBDcm = sigA.value.heSigBDcm;
+    fields.bandwidth = sigA.value.bandwidth;
+    fields.heSigBCompression = sigA.value.heSigBCompression;
+    fields.numberOfHeSigBSymbols = sigA.value.numberOfHeSigBSymbols;
+    fields.numberOfHeSigBSymbolsIsSaturated = sigA.value.numberOfHeSigBSymbolsIsSaturated;
+    fields.numberOfMuMimoUsers = sigA.value.numberOfMuMimoUsers;
+    fields.giLtfSize = sigA.value.giLtfSize;
+    fields.doppler = sigA.value.doppler;
+    fields.midamblePeriodicity = sigA.value.midamblePeriodicity;
+    fields.txop = sigA.value.txop;
+    fields.numberOfHeLtfSymbols = sigA.value.numberOfHeLtfSymbols;
+    fields.ldpcExtraSymbolSegment = sigA.value.ldpcExtraSymbolSegment;
+    fields.stbc = sigA.value.stbc;
+    fields.preFecPaddingFactor = sigA.value.preFecPaddingFactor;
+    fields.peDisambiguity = sigA.value.peDisambiguity;
+    header->setSignaling(fields);
+    header->setBssColor(sigA.value.bssColor);
+    header->setSpatialReuse(sigA.value.spatialReuse);
+    header->setCoding(commonCoding ? HE_CODING_LDPC : HE_CODING_BCC);
+    header->setPuncturedSubchannelMask(puncturedSubchannelMask);
+    header->setPuncturedSubchannelMaskKnown(puncturedSubchannelMaskKnown);
+    header->setChunkLength(b(100 + channelCount * bitsPerChannel));
+    return header;
 }
 
 /**

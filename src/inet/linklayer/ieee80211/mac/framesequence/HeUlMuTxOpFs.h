@@ -44,6 +44,7 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
 
   protected:
     Packet *buildTriggerPacket() const;
+    IReceiveStep *buildReceiveCollectionStep() const;
     Packet *buildMultiStaBlockAckPacket() const;
     void processResponses(FrameSequenceContext *context);
 

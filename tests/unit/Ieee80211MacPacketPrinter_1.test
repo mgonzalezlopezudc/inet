@@ -13,6 +13,8 @@ undissected body bytes, such as HE Trigger frames.
 using namespace inet;
 using namespace inet::ieee80211;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 %activity:
 
 Packet packet("he-trigger-with-body");
@@ -30,6 +32,25 @@ ASSERT(text.find("Condition") == std::string::npos);
 ASSERT(text.find("Trigger") != std::string::npos);
 std::cout << text;
 std::cout << "Packet printer accepted trigger body.\n";
+
+auto nfrpHeader = makeShared<Ieee80211TriggerFrame>();
+nfrpHeader->setTriggerType(7);
+nfrpHeader->setNfrpStartingAid(100);
+nfrpHeader->setNfrpFeedbackType(0);
+nfrpHeader->setNfrpTargetRssiDbm(-60);
+nfrpHeader->setNfrpMultiplexingFlag(true);
+nfrpHeader->setApTxPowerDbm(17);
+Ieee80211MacProtocolPrinter nfrpPrinter;
+ProtocolPrinter::Context nfrpContext;
+nfrpPrinter.print(nfrpHeader, &Protocol::ieee80211Mac, nullptr, nfrpContext);
+auto nfrpText = nfrpContext.typeColumn.str() + " " + nfrpContext.infoColumn.str();
+REQUIRE(nfrpText.find("NFRP") != std::string::npos);
+REQUIRE(nfrpText.find("startingAID=100") != std::string::npos);
+REQUIRE(nfrpText.find("feedbackType=0") != std::string::npos);
+REQUIRE(nfrpText.find("target=-60dBm") != std::string::npos);
+REQUIRE(nfrpText.find("multiplexing=2") != std::string::npos);
+REQUIRE(nfrpText.find("apTxPower=17dBm/20MHz") != std::string::npos);
+std::cout << "Packet printer exposed NFRP fields.\n";
 
 Packet qosNullPacket("he-qos-null");
 auto qosNullHeader = makeShared<Ieee80211DataHeader>();

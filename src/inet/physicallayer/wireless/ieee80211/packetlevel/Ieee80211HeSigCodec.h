@@ -61,6 +61,15 @@ struct Ieee80211HeSigCodecStatus
     explicit operator bool() const { return valid; }
 };
 
+struct Ieee80211HeMuBandwidthResult : Ieee80211HeSigCodecStatus
+{
+    uint8_t value = 0;
+};
+
+/** Table 27-21 Bandwidth field, including the legal preamble-puncturing patterns. */
+INET_API Ieee80211HeMuBandwidthResult encodeHeMuBandwidth(Hz channelBandwidth,
+        const std::vector<bool>& puncturedSubchannels, bool heSigBCompression);
+
 /** Validated logical L-SIG value. RATE, reserved, parity, and tail are derived. */
 struct Ieee80211HeLSig
 {
@@ -273,6 +282,9 @@ struct Ieee80211HeSigBMuMimoUserResult : Ieee80211HeSigCodecStatus
     Ieee80211HeSigBMuMimoUser value;
 };
 
+/** Table 27-31 row index for the ordered per-user NSTS allocation. */
+INET_API uint8_t encodeHeMuSpatialConfiguration(const std::vector<int>& nsts);
+
 struct Ieee80211HeSigBUserBlockResult : Ieee80211HeSigCodecStatus
 {
     std::vector<std::vector<bool>> userFields; // one or two 21-bit User fields
@@ -291,10 +303,17 @@ INET_API Ieee80211HeSigBMuMimoUserResult decodeHeSigBMuMimoUser(const std::vecto
 INET_API Ieee80211HeSigBBitsResult encodeHeSigBUserBlock(const std::vector<std::vector<bool>>& userFields);
 INET_API Ieee80211HeSigBUserBlockResult decodeHeSigBUserBlock(const std::vector<bool>& bits);
 
-/** One content channel's allocation subfields. */
+/** One HE-SIG-B User field required by the selected Table 27-27 partition. */
+struct Ieee80211HeSigBPlannedUser {
+    Ieee80211HeRu ru;
+    bool unallocated = false; // encoded with STA-ID 2046 and discarded by receivers
+};
+
+/** One content channel's allocation subfields and exact User-field plan. */
 struct Ieee80211HeSigBContentChannel {
     std::vector<uint8_t> ruAllocationSubfields; // Table 27-27 B7..B0 values
     bool hasCenterRu = false;                   // Center 26-tone RU present
+    std::vector<Ieee80211HeSigBPlannedUser> plannedUsers;
 };
 
 /** Wire-level HE-SIG-B Common field layout. */

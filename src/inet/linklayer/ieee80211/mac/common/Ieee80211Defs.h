@@ -17,6 +17,20 @@ typedef int8_t FragmentNumber;
 typedef int8_t Tid;
 typedef int16_t SequenceNumber;
 
+/**
+ * Allocates a nonzero simulation-scoped correlation identifier for an HE
+ * Trigger exchange. The identifier is model metadata and is not serialized.
+ */
+inline uint32_t allocateIeee80211HeTriggerId()
+{
+    static int handle = cSimulationOrSharedDataManager::registerSharedCounterName(
+            "inet::ieee80211::nextHeTriggerId");
+    uint64_t& nextTriggerId = getSimulationOrSharedDataManager()->getSharedCounter(handle, 1);
+    if (nextTriggerId == 0 || nextTriggerId > UINT32_MAX)
+        throw cRuntimeError("IEEE 802.11 HE Trigger correlation identifier space exhausted");
+    return static_cast<uint32_t>(nextTriggerId++);
+}
+
 struct SequenceNumberCyclic
 {
   private:

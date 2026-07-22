@@ -10,6 +10,8 @@
 #include <set>
 #include <sstream>
 
+#include "inet/linklayer/ieee80211/mac/common/Ieee80211Defs.h"
+
 // HE UL coordinator.
 //
 // Implements the AP-side state-keeping and scheduling support for UL OFDMA:
@@ -54,7 +56,6 @@ void HeUlCoordinator::initialize(int stage)
         randomAccessAttemptSignal = registerSignal("heUlRandomAccessAttempt");
         randomAccessSuccessSignal = registerSignal("heUlRandomAccessSuccess");
 
-        WATCH(nextTriggerId);
         WATCH_EXPR("lastTriggerTime", lastTriggerTime.str());
         WATCH(hasSentTrigger);
         WATCH_MAP(bufferStatusByAid);
@@ -294,9 +295,7 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
 
 uint32_t HeUlCoordinator::allocateTriggerId()
 {
-    if (nextTriggerId == 0)
-        nextTriggerId = 1;
-    return nextTriggerId++;
+    return allocateIeee80211HeTriggerId();
 }
 
 void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType)

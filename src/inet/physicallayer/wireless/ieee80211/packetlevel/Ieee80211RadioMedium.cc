@@ -65,24 +65,33 @@ static Ptr<const Ieee80211HePhyHeader> peekHeMuOrTbPhyHeader(const ITransmission
             dynamicPtrCast<const Ieee80211HeTbPhyHeader>(hePhyHeader) != nullptr ? hePhyHeader : nullptr;
 }
 
-static const Ieee80211HeTbPhyHeader *peekHeTbMuMimoHeader(const ITransmission *transmission)
+static const Ieee80211HeTbPhyHeader *peekOrthogonalHeTbHeader(const ITransmission *transmission)
 {
     auto allocationPhyHeader = peekHeMuOrTbPhyHeader(transmission);
     auto header = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader);
-    return header != nullptr && header->getMuMimo() &&
-            header->getUsersArraySize() == 1 ? header.get() : nullptr;
+    return header != nullptr && header->getUsersArraySize() == 1 &&
+            (header->getMuMimo() || header->getUsers(0).ndpFeedbackReport) ? header.get() : nullptr;
 }
 
-static bool areSpatiallyOrthogonalHeTbUsers(const ITransmission *desired, const ITransmission *other)
+bool Ieee80211RadioMedium::areSpatiallyOrthogonalHeTbUsers(const ITransmission *desired, const ITransmission *other)
 {
-    auto desiredHeader = peekHeTbMuMimoHeader(desired);
-    auto otherHeader = peekHeTbMuMimoHeader(other);
+    auto desiredHeader = peekOrthogonalHeTbHeader(desired);
+    auto otherHeader = peekOrthogonalHeTbHeader(other);
     if (desiredHeader == nullptr || otherHeader == nullptr ||
+            desiredHeader->getTriggerId() == 0 ||
             desiredHeader->getTriggerId() != otherHeader->getTriggerId())
         return false;
 
     const auto& desiredUser = desiredHeader->getUsers(0);
     const auto& otherUser = otherHeader->getUsers(0);
+    // 27.3.18 maps simultaneous NFRP feedback NDPs onto orthogonal tone-set
+    // and (when multiplexing is enabled) starting-STS resources even though
+    // every response reports the maximum RU for the Trigger bandwidth. The
+    // packet-level scalar model represents that standard separation exactly;
+    // a duplicate tuple remains interference and is rejected by collection.
+    if (desiredUser.ndpFeedbackReport && otherUser.ndpFeedbackReport)
+        return desiredUser.ndpRuToneSetIndex != otherUser.ndpRuToneSetIndex ||
+                desiredUser.ndpStartingStsNumber != otherUser.ndpStartingStsNumber;
     if (desiredUser.ruToneSize != otherUser.ruToneSize ||
             desiredUser.ruToneOffset != otherUser.ruToneOffset)
         return false;

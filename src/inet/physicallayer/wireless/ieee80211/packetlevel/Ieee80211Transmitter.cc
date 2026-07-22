@@ -26,8 +26,6 @@
 // Approximations / simplifications:
 //   - HE-LTF type is hardcoded to 4x for all HE MU/HE TB PPDUs.  The standard
 //     permits 1x/2x/4x HE-LTF modes; only 4x is currently supported.
-//   - The HE MU PHY header length is estimated as HE-SIG-A + HE-SIG-B common +
-//     20 bits per user, not a bit-exact serialization of Tables 27-21..27-24.
 //   - MU-MIMO grouping is detected only by checking whether multiple users
 //     share the same RU index.  Full standard MU-MIMO grouping constraints are
 //     enforced later in Ieee80211HePhyCalculator.
@@ -64,6 +62,19 @@ static uint8_t encodeCanonicalHeTxopDuration(const Ieee80211HeCommonPhyParameter
     return common.sigA.txopDurationUs < 512 ?
             (common.sigA.txopDurationUs / 8) << 1 :
             1 | ((common.sigA.txopDurationUs - 512) / 128) << 1;
+}
+
+static uint8_t encodeCanonicalHeGiLtfSize(const Ieee80211HeCommonPhyParameters& common)
+{
+    if (common.guardInterval == HE_GI_0_8_US && common.ltfType == HE_LTF_4X)
+        return 0;
+    if (common.guardInterval == HE_GI_0_8_US && common.ltfType == HE_LTF_2X)
+        return 1;
+    if (common.guardInterval == HE_GI_1_6_US && common.ltfType == HE_LTF_2X)
+        return 2;
+    if (common.guardInterval == HE_GI_3_2_US && common.ltfType == HE_LTF_4X)
+        return 3;
+    throw cRuntimeError("Canonical HE GI/LTF combination is not encodable in HE-SIG-A");
 }
 
 Define_Module(Ieee80211Transmitter);
@@ -339,6 +350,40 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
                  signaling->txop != encodeCanonicalHeTxopDuration(canonicalCommon)))
             throw cRuntimeError("HE SU/ER signaling disagrees with the canonical TXVECTOR");
         const auto& canonicalUsers = hePpduLayout->getUsers();
+        if (ppduFormat == HE_MU_DOWNLINK) {
+            const auto& muSignaling = dynamicPtrCast<const Ieee80211HeMuPhyHeader>(heMuHeader)->getSignaling();
+            std::vector<bool> punctured(std::lround(canonicalCommon.channelBandwidth.get() / 20e6), false);
+            for (size_t i = 0; i < punctured.size(); i++)
+                punctured[i] = canonicalCommon.puncturedSubchannelMask & (uint8_t(1) << i);
+            auto bandwidth = encodeHeMuBandwidth(canonicalCommon.channelBandwidth, punctured,
+                    canonicalCommon.sigB.compression);
+            if (!muSignaling.signalingValid || !bandwidth ||
+                    muSignaling.lSigLength != canonicalCommon.lSigLength ||
+                    muSignaling.bandwidth != bandwidth.value ||
+                    muSignaling.heSigBCompression != canonicalCommon.sigB.compression ||
+                    muSignaling.heSigBMcs != canonicalCommon.sigB.mcs ||
+                    muSignaling.numberOfHeSigBSymbols != (canonicalCommon.sigB.compression ? 0 : canonicalCommon.sigB.numberOfSymbols) ||
+                    muSignaling.numberOfMuMimoUsers != (canonicalCommon.sigB.compression ? canonicalUsers.size() : 0) ||
+                    muSignaling.giLtfSize != encodeCanonicalHeGiLtfSize(canonicalCommon) ||
+                    muSignaling.doppler != canonicalCommon.sigA.doppler ||
+                    muSignaling.midamblePeriodicity != canonicalCommon.sigA.midamblePeriodicity ||
+                    muSignaling.txop != encodeCanonicalHeTxopDuration(canonicalCommon) ||
+                    muSignaling.numberOfHeLtfSymbols != canonicalCommon.numberOfHeLtfSymbols ||
+                    muSignaling.ldpcExtraSymbolSegment != canonicalCommon.ldpcExtraSymbol ||
+                    muSignaling.stbc != canonicalCommon.sigA.stbc)
+                throw cRuntimeError("HE MU signaling disagrees with the canonical TXVECTOR");
+        }
+        else if (ppduFormat == HE_TRIGGER_BASED_UPLINK) {
+            const auto& tbSignaling = dynamicPtrCast<const Ieee80211HeTbPhyHeader>(heMuHeader)->getSignaling();
+            uint8_t bandwidth = canonicalCommon.channelBandwidth == MHz(20) ? 0 :
+                    canonicalCommon.channelBandwidth == MHz(40) ? 1 :
+                    canonicalCommon.channelBandwidth == MHz(80) ? 2 : 3;
+            if (!tbSignaling.signalingValid ||
+                    tbSignaling.lSigLength != canonicalCommon.lSigLength ||
+                    tbSignaling.bandwidth != bandwidth ||
+                    tbSignaling.txop != encodeCanonicalHeTxopDuration(canonicalCommon))
+                throw cRuntimeError("HE TB signaling disagrees with the canonical TXVECTOR");
+        }
         if (ppduFormat == HE_SINGLE_USER || ppduFormat == HE_EXTENDED_RANGE_SU) {
             if (heMuHeader->getUsersArraySize() != 0)
                 throw cRuntimeError("HE SU/ER PHY header must not contain a per-user array");
@@ -349,6 +394,19 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             for (size_t i = 0; i < canonicalUsers.size(); i++) {
                 const auto& projected = heMuHeader->getUsers(i);
                 const auto& canonical = canonicalUsers[i];
+                std::vector<const Ieee80211HeUserPhyParameters *> ruUsers;
+                for (const auto& candidate : canonicalUsers)
+                    if (candidate.ru.toneSize == canonical.ru.toneSize &&
+                            candidate.ru.toneOffset == canonical.ru.toneOffset)
+                        ruUsers.push_back(&candidate);
+                std::sort(ruUsers.begin(), ruUsers.end(), [] (const auto *left, const auto *right) {
+                    return left->streamStartIndex < right->streamStartIndex;
+                });
+                std::vector<int> nsts;
+                for (const auto *candidate : ruUsers)
+                    nsts.push_back(candidate->numberOfSpatialStreams);
+                const bool muMimo = ruUsers.size() > 1;
+                const uint8_t spatialConfiguration = muMimo ? encodeHeMuSpatialConfiguration(nsts) : 0;
                 if (projected.ruIndex != canonical.ru.index ||
                         projected.ruToneSize != canonical.ru.toneSize ||
                         projected.ruToneOffset != canonical.ru.toneOffset ||
@@ -357,6 +415,8 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
                         projected.dcm != canonical.dcm || projected.psduLength != canonical.psduLength ||
                         projected.duration != hePpduLayout->getDuration() ||
                         projected.streamStartIndex != canonical.streamStartIndex ||
+                        projected.muMimo != muMimo ||
+                        projected.spatialConfiguration != spatialConfiguration ||
                         heMuHeader->getCoding() != canonical.coding)
                     throw cRuntimeError("HE MU/TB PHY header user %zu disagrees with the canonical PPDU layout", i);
             }

@@ -253,6 +253,26 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     take(packet);
     EV_INFO << "Processing lower frame: " << packet->getName() << endl;
     auto edcaf = edca->getChannelOwner();
+    if (header == nullptr) {
+        auto heMuRx = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
+        const bool nfrpFeedbackNdp = heMuRx != nullptr &&
+                heMuRx->getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK &&
+                heMuRx->getAllocationsArraySize() == 1 &&
+                heMuRx->getAllocations(0).ndpFeedbackReport;
+        auto receiveStep = edcaf && frameSequenceHandler->isSequenceRunning() ?
+                dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep()) : nullptr;
+        if (nfrpFeedbackNdp && receiveStep != nullptr && receiveStep->acceptsHeaderlessFrame(packet)) {
+            // A feedback NDP has no MAC header and therefore cannot pass the
+            // ordinary receiver-address test. Only the active NFRP collection
+            // may opt into this path; it validates Trigger ID, timing,
+            // tone-set, STS, and duplicate AID.
+            frameSequenceHandler->processResponse(packet);
+            return;
+        }
+        EV_INFO << "Discarding headerless PHY indication outside an active NFRP collection" << endl;
+        delete packet;
+        return;
+    }
     if (edcaf && frameSequenceHandler->isSequenceRunning()) {
         // IEEE Std 802.11-2024, 10.23.2.2 plus 10.3.2.9/10.3.2.11:
         // EDCA treats the MPDU exchange as failed unless the timeout sees a

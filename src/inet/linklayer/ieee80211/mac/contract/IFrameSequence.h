@@ -70,6 +70,7 @@ class INET_API IReceiveStep : public IFrameSequenceStep
     virtual TimeoutHandling getTimeoutHandling() const { return completesOnReception() ? TimeoutHandling::ABORT_SEQUENCE : TimeoutHandling::COMPLETE_STEP; }
     virtual Completion getTimeoutCompletion() const { return Completion::EXPIRED; }
     virtual bool isExpectedResponse(Packet *frame, FrameSequenceContext *context) const { return true; }
+    virtual bool acceptsHeaderlessFrame(const Packet *frame) const { return false; }
     virtual UnexpectedResponseHandling getUnexpectedResponseHandling() const { return UnexpectedResponseHandling::REJECT_STEP; }
 };
 

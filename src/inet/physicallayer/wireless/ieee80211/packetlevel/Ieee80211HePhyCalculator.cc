@@ -33,7 +33,6 @@ namespace physicallayer {
 
 namespace {
 
-constexpr int HE_SIG_B_DATA_BITS_PER_SYMBOL = 26;
 constexpr int HE_SIG_B_USER_FIELD_BITS_PER_USER = 21;
 constexpr int HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK = 10;
 
@@ -336,6 +335,74 @@ Ieee80211HeErSuSignalingResult buildIeee80211HeErSuSignaling(const Ieee80211HeEr
     return result;
 }
 
+Ieee80211HeLSigResult buildIeee80211HeTriggerUlLength(simtime_t txTime, uint32_t signalExtensionNs)
+{
+    if (txTime <= SIMTIME_ZERO) {
+        Ieee80211HeLSigResult result;
+        result.errorCode = Ieee80211HeSigCodecErrorCode::INVALID_TXTIME;
+        result.error = "HE Trigger UL Length requires a positive solicited HE TB TXTIME";
+        return result;
+    }
+    auto txTimeNs = txTime.inUnit(SIMTIME_NS);
+    if (SimTime(txTimeNs, SIMTIME_NS) != txTime) {
+        Ieee80211HeLSigResult result;
+        result.errorCode = Ieee80211HeSigCodecErrorCode::INVALID_TXTIME;
+        result.error = "HE Trigger UL Length TXTIME is not an exact integer number of nanoseconds";
+        return result;
+    }
+    // Equation 27-11 uses m=2 for the solicited HE TB duration projection.
+    // Once selected, the resulting integral value is carried independently as
+    // Trigger UL Length and TXVECTOR L_LENGTH; serializers never infer it from
+    // runtime duration metadata.
+    return buildHeLSig(Ieee80211HeSigFormat::SU, txTimeNs, signalExtensionNs);
+}
+
+Ieee80211HeTxTimeResult getIeee80211HeTriggerTxTimeUpperBound(
+        uint16_t lLength, uint32_t signalExtensionNs)
+{
+    Ieee80211HeTxTimeResult result;
+    if (signalExtensionNs != 0 && signalExtensionNs != 6000) {
+        setHeSignalingError(result, Ieee80211HeSigCodecErrorCode::INVALID_SIGNAL_EXTENSION,
+                "HE Trigger signal extension must be 0 us or 6 us");
+        return result;
+    }
+    auto lSig = buildHeTbLSig(lLength);
+    if (!lSig) {
+        setHeSignalingError(result, lSig.errorCode, lSig.error.c_str());
+        return result;
+    }
+    uint64_t q = (lLength + 5) / 3;
+    result.txTime = SimTime(20000 + 4000 * q + signalExtensionNs, SIMTIME_NS);
+    result.valid = true;
+    result.errorCode = Ieee80211HeSigCodecErrorCode::NONE;
+    return result;
+}
+
+uint32_t getIeee80211HeSignalExtensionNs(Ieee80211HeOperatingBand operatingBand,
+        bool noSignalExtension)
+{
+    switch (operatingBand) {
+        case Ieee80211HeOperatingBand::BAND_2_4_GHZ:
+            return noSignalExtension ? 0 : 6000;
+        case Ieee80211HeOperatingBand::BAND_5_GHZ:
+        case Ieee80211HeOperatingBand::BAND_6_GHZ:
+            return 0;
+        default:
+            throw cRuntimeError("HE signal-extension selection requires a known operating band");
+    }
+}
+
+uint32_t getIeee80211HeSignalExtensionNs(Hz centerFrequency, bool noSignalExtension)
+{
+    if (!std::isfinite(centerFrequency.get()) || centerFrequency <= Hz(0))
+        throw cRuntimeError("HE signal-extension selection requires a positive finite center frequency");
+    // HE operation below 3 GHz is the 2.4 GHz operating band. Table 27-61
+    // applies the 6 us signal extension there unless TXVECTOR NO_SIG_EXTN is set.
+    return getIeee80211HeSignalExtensionNs(centerFrequency < Hz(3e9) ?
+            Ieee80211HeOperatingBand::BAND_2_4_GHZ :
+            Ieee80211HeOperatingBand::BAND_5_GHZ, noSignalExtension);
+}
+
 int getHeRuDataSubcarrierCount(int toneSize)
 {
     switch (toneSize) {
@@ -364,22 +431,47 @@ int getHeRuPilotSubcarrierCount(int toneSize)
     }
 }
 
-int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers)
+static int getHeSigBDataBitsPerSymbol(int mcs, bool dcm)
 {
-    // This constrained estimate assumes uncompressed HE-SIG-B MCS 0 without
-    // DCM. Each content channel therefore carries 26 information bits per
-    // symbol. Tables 27-28 through 27-30 define 21-bit User fields and a 4-bit
-    // CRC plus 6-bit tail for every block of one or two User fields.
+    static const int noDcm[] = {26, 52, 78, 104, 156, 208};
+    static const int withDcm[] = {13, 26, 0, 52, 78, 0};
+    if (mcs < 0 || mcs > 5 || (dcm && withDcm[mcs] == 0))
+        throw cRuntimeError("Invalid HE-SIG-B MCS/DCM combination");
+    return dcm ? withDcm[mcs] : noDcm[mcs];
+}
+
+int getHeSigBSymbolCount(Hz channelBandwidth, int numberOfUsers,
+        bool compression, int mcs, bool dcm)
+{
     int widthMhz = std::lround(channelBandwidth.get() / 1e6);
     int contentChannels = getHeSigBContentChannelCount(channelBandwidth);
     int twentyMhzChannels = widthMhz / 20;
-    int commonBitsPerContentChannel = 8 * ((twentyMhzChannels + contentChannels - 1) / contentChannels)
-            + HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+    int commonBitsPerContentChannel = compression ? 0 :
+            8 * ((twentyMhzChannels + contentChannels - 1) / contentChannels) +
+            (channelBandwidth > MHz(40) ? 1 : 0) + HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
     int usersPerContentChannel = (numberOfUsers + contentChannels - 1) / contentChannels;
     int userBitsPerContentChannel = usersPerContentChannel * HE_SIG_B_USER_FIELD_BITS_PER_USER
             + getHeSigBUserBlockCount(usersPerContentChannel) * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+    int dataBitsPerSymbol = getHeSigBDataBitsPerSymbol(mcs, dcm);
     return std::max(1, (commonBitsPerContentChannel + userBitsPerContentChannel
-            + HE_SIG_B_DATA_BITS_PER_SYMBOL - 1) / HE_SIG_B_DATA_BITS_PER_SYMBOL);
+            + dataBitsPerSymbol - 1) / dataBitsPerSymbol);
+}
+
+int getHeSigBSymbolCount(const Ieee80211HeSigBCommonField& commonField,
+        Hz channelBandwidth, int mcs, bool dcm)
+{
+    int dataBitsPerSymbol = getHeSigBDataBitsPerSymbol(mcs, dcm);
+    size_t maximumBits = 0;
+    for (const auto& channel : commonField.contentChannels) {
+        size_t commonBits = channel.ruAllocationSubfields.size() * 8 +
+                (channelBandwidth > MHz(40) ? 1 : 0) +
+                HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+        size_t users = channel.plannedUsers.size();
+        size_t userBits = users * HE_SIG_B_USER_FIELD_BITS_PER_USER +
+                getHeSigBUserBlockCount(users) * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+        maximumBits = std::max(maximumBits, commonBits + userBits);
+    }
+    return std::max<int>(1, (maximumBits + dataBitsPerSymbol - 1) / dataBitsPerSymbol);
 }
 
 Ieee80211HePhyValidationResult computeHePpduParameters(
@@ -617,21 +709,48 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
             SimTime(16, SIMTIME_US) : SimTime(8, SIMTIME_US);
     parameters.common.sigA.ppduFormat = ppduFormat;
     parameters.common.sigA.uplink = ppduFormat == HE_TRIGGER_BASED_UPLINK;
-    parameters.common.sigB.numberOfSymbols = ppduFormat == HE_MU_DOWNLINK ?
-            getHeSigBSymbolCount(channelBandwidth, requestedUsers.size()) : 0;
+    parameters.common.sigB.compression = ppduFormat == HE_MU_DOWNLINK &&
+            ruGroups.size() == 1 && ruGroups.front().first.toneSize == 1992;
+    parameters.common.sigB.numberOfSymbols = 0;
     if (ppduFormat == HE_MU_DOWNLINK) {
         int contentChannels = getHeSigBContentChannelCount(channelBandwidth);
         int numberOfUsers = requestedUsers.size();
-        parameters.common.sigB.commonFieldBits = 8 * std::lround(channelBandwidth.get() / 20e6) +
-                contentChannels * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
-        parameters.common.sigB.userFieldBits =
-                HE_SIG_B_USER_FIELD_BITS_PER_USER * numberOfUsers;
-        int usersPerContentChannel = numberOfUsers / contentChannels;
-        int channelsWithExtraUser = numberOfUsers % contentChannels;
-        for (int channel = 0; channel < contentChannels; channel++) {
-            int channelUsers = usersPerContentChannel + (channel < channelsWithExtraUser ? 1 : 0);
-            parameters.common.sigB.userFieldBits +=
-                    getHeSigBUserBlockCount(channelUsers) * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+        if (parameters.common.sigB.compression) {
+            parameters.common.sigB.numberOfSymbols = getHeSigBSymbolCount(channelBandwidth,
+                    numberOfUsers, true, parameters.common.sigB.mcs, false);
+            parameters.common.sigB.commonFieldBits = 0;
+            parameters.common.sigB.userFieldBits =
+                    HE_SIG_B_USER_FIELD_BITS_PER_USER * numberOfUsers;
+            int usersPerContentChannel = numberOfUsers / contentChannels;
+            int channelsWithExtraUser = numberOfUsers % contentChannels;
+            for (int channel = 0; channel < contentChannels; channel++) {
+                int channelUsers = usersPerContentChannel + (channel < channelsWithExtraUser ? 1 : 0);
+                parameters.common.sigB.userFieldBits +=
+                        getHeSigBUserBlockCount(channelUsers) * HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+            }
+        }
+        else {
+            std::vector<Ieee80211HeRu> rus;
+            for (const auto& user : requestedUsers)
+                rus.push_back(user.ru);
+            auto commonField = encodeHeSigBCommonField(rus, channelBandwidth);
+            if (!commonField) {
+                setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT,
+                        "users[].ru", commonField.error);
+                return result;
+            }
+            parameters.common.sigB.numberOfSymbols = getHeSigBSymbolCount(
+                    commonField.commonField, channelBandwidth, parameters.common.sigB.mcs, false);
+            parameters.common.sigB.commonFieldBits = 0;
+            parameters.common.sigB.userFieldBits = 0;
+            for (const auto& channel : commonField.commonField.contentChannels) {
+                parameters.common.sigB.commonFieldBits += channel.ruAllocationSubfields.size() * 8 +
+                        (channelBandwidth > MHz(40) ? 1 : 0) + HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+                parameters.common.sigB.userFieldBits +=
+                        channel.plannedUsers.size() * HE_SIG_B_USER_FIELD_BITS_PER_USER +
+                        getHeSigBUserBlockCount(channel.plannedUsers.size()) *
+                                HE_SIG_B_CRC_AND_TAIL_BITS_PER_BLOCK;
+            }
         }
     }
     parameters.common.heSigBDuration =
@@ -673,7 +792,10 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
                         "coding", "HE BCC coding is not supported for MCS 10 or 11", userIndex);
                 return result;
             }
-            if (user.ru.toneSize >= 484) {
+            // The LDPC-only rule applies to the HE PPDU Data field. An HE TB
+            // feedback NDP has APEP_LENGTH=0 and no Data field; 26.5.7.2
+            // explicitly requires BCC while assigning the maximum RU.
+            if (user.ru.toneSize >= 484 && user.psduLength != B(0)) {
                 setHePhyValidationError(result, Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION,
                         "coding", "HE BCC coding is not supported for 484-tone RUs or larger", userIndex);
                 return result;
