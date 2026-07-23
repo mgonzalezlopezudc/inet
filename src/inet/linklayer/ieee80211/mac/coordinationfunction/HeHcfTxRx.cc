@@ -163,42 +163,13 @@ void HeHcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastT
 {
     Enter_Method("originatorProcessReceivedFrame");
     auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
-    // IEEE 802.11-2024 26.4.2 Multi-STA BlockAck support:
-    // The standard says the originator examines the Per AID TID Info field
-    // matching its AID/TID and processes the Block Ack bitmap according to
-    // 10.25.6.  INET's base HCF understands BasicBlockAck, so this bridge
-    // converts the matching record into an equivalent BasicBlockAck bitmap.
+    // Triggered UL has its own packet ledger and exact Trigger correlation.
+    // Do not project a Multi-STA BA into the legacy single-frame originator
+    // state machine: that would bypass the transaction that owns the MPDUs.
     if (auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(receivedHeader)) {
-        auto edcaf = edca->getChannelOwner();
-        if (edcaf) {
-            auto myAid = mac->getMib()->bssStationData.associationId;
-            const Ieee80211MultiStaBlockAckRecord *myRecord = nullptr;
-            for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); ++i) {
-                if (multiStaBlockAck->getRecords(i).aid == myAid) {
-                    myRecord = &multiStaBlockAck->getRecords(i);
-                    break;
-                }
-            }
-            if (myRecord && myRecord->responseReceived) {
-                auto dummyBlockAck = makeShared<Ieee80211BasicBlockAck>();
-                dummyBlockAck->setReceiverAddress(multiStaBlockAck->getReceiverAddress());
-                dummyBlockAck->setTransmitterAddress(multiStaBlockAck->getTransmitterAddress());
-                dummyBlockAck->setTidInfo(myRecord->tid);
-                dummyBlockAck->setStartingSequenceNumber(SequenceNumberCyclic(myRecord->startingSequenceNumber));
-                
-                // 26.4.3 allows a 64-bit Multi-STA BA bitmap for buffer sizes
-                // up to 64.  Map it to the BasicBlockAck fragment-0 bitmap so
-                // the existing originator BA handler applies the same sequence
-                // acknowledgments.
-                for (int seqOffset = 0; seqOffset < 64; ++seqOffset) {
-                    bool acked = ((myRecord->bitmap >> seqOffset) & 1ULL) == 1ULL;
-                    auto& bitmap = dummyBlockAck->getBlockAckBitmapForUpdate(seqOffset);
-                    bitmap.setBit(0, acked);
-                }
-                EV_INFO << "MultiStaBlockAck matching our AID " << myAid << " converted to dummy BasicBlockAck" << std::endl;
-                originatorProcessReceivedControlFrame(receivedPacket, dummyBlockAck, lastTransmittedPacket, lastTransmittedPacket->peekAtFront<Ieee80211MacHeader>(), edcaf->getAccessCategory());
-            }
-        }
+        // FrameSequenceHandler owns the received frame on the originator path;
+        // the transaction processor consumes its argument.
+        processReceivedMultiStaBlockAck(receivedPacket->dup(), multiStaBlockAck);
         return;
     }
     Hcf::originatorProcessReceivedFrame(receivedPacket, lastTransmittedPacket);

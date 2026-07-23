@@ -1,0 +1,96 @@
+%description:
+
+Verifies the effective standards-oriented HE topology after all NED and INI
+inheritance has been applied: QoS MACs use HeHcf, radios use the ax profile,
+the AP and stations share the HE scalar medium, and simplified management has
+installed deterministic association identifiers.
+
+%file: ContractObserver.cc
+
+#include "inet/common/InitStages.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+
+namespace Ieee80211HeConfigurationContract_1 {
+
+#define REQUIRE_CONTRACT(condition, message) \
+    do { if (!(condition)) throw cRuntimeError("HE configuration contract: %s", message); } while (false)
+
+class ContractObserver : public cSimpleModule
+{
+  protected:
+    virtual int numInitStages() const override { return NUM_INIT_STAGES; }
+    virtual void initialize(int stage) override
+    {
+        if (stage != INITSTAGE_LAST)
+            return;
+        auto system = getSimulation()->getSystemModule();
+        auto apHcf = system->getModuleByPath("ap.wlan[0].mac.hcf");
+        auto staHcf = system->getModuleByPath("host[0].wlan[0].mac.hcf");
+        REQUIRE_CONTRACT(dynamic_cast<HeHcf *>(apHcf) != nullptr,
+                "AP HCF is not HeHcf");
+        REQUIRE_CONTRACT(dynamic_cast<HeHcf *>(staHcf) != nullptr,
+                "station HCF is not HeHcf");
+        REQUIRE_CONTRACT(apHcf->getParentModule()->par("qosStation").boolValue(),
+                "AP MAC is not QoS-enabled");
+        REQUIRE_CONTRACT(staHcf->getParentModule()->par("qosStation").boolValue(),
+                "station MAC is not QoS-enabled");
+        auto apRadio = system->getModuleByPath("ap.wlan[0].radio");
+        auto staRadio = system->getModuleByPath("host[0].wlan[0].radio");
+        REQUIRE_CONTRACT(!strcmp(apRadio->par("opMode").stringValue(), "ax"),
+                "AP radio does not select ax");
+        REQUIRE_CONTRACT(!strcmp(staRadio->par("opMode").stringValue(), "ax"),
+                "station radio does not select ax");
+        auto staMib = check_and_cast<Ieee80211Mib *>(
+                system->getModuleByPath("host[0].wlan[0].mib"));
+        REQUIRE_CONTRACT(staMib->bssStationData.stationType == Ieee80211Mib::STATION,
+                "station MIB role is not STATION");
+        REQUIRE_CONTRACT(staMib->bssStationData.associationId > 0,
+                "station association identifier was not installed");
+        auto medium = system->getModuleByPath("radioMedium");
+        REQUIRE_CONTRACT(strstr(medium->getNedTypeName(), "Ieee80211ScalarRadioMedium"),
+                "unexpected HE radio medium type");
+        EV_INFO << "HE configuration contract: PASS"
+                << " aid=" << staMib->bssStationData.associationId << EV_ENDL;
+    }
+};
+
+Define_Module(ContractObserver);
+
+} // namespace Ieee80211HeConfigurationContract_1
+
+%file: TestNetwork.ned
+
+import inet.examples.ieee80211ax.dl_ofdma.Lan80211AxDlOfdma;
+
+simple ContractObserver
+{
+}
+
+network TestNetwork extends Lan80211AxDlOfdma
+{
+    submodules:
+        observer: ContractObserver;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+ned-path = .;../../../../src;../../../../examples
+network = TestNetwork
+sim-time-limit = 1us
+warmup-period = 0s
+seed-set = 1
+record-vector-results = false
+cmdenv-express-mode = false
+cmdenv-event-banners = false
+*.visualizer.typename = ""
+**.numLoInterfaces = 0
+
+include ../../../../examples/ieee80211ax/dl_ofdma/omnetpp.ini
+
+%contains-regex: stdout
+HE configuration contract: PASS aid=[1-9][0-9]*

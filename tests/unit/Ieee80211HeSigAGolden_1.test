@@ -1,5 +1,6 @@
 %description:
-Validate IEEE 802.11-2024 logical L-SIG, RL-SIG, CRC-4, and HE-SIG-A codecs.
+Validate independent IEEE 802.11-2024 golden vectors for logical L-SIG,
+RL-SIG, CRC-4, and HE-SIG-A codecs.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"

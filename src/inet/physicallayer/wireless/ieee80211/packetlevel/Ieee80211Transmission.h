@@ -25,9 +25,10 @@ class INET_API Ieee80211Transmission : public TransmissionBase
     const Ieee80211Channel *channel;
     const std::shared_ptr<const Ieee80211HeTxVector> heTxVector;
     const std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout;
+    const uint32_t heTriggerCorrelationId;
 
   public:
-    Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, std::shared_ptr<const Ieee80211HeTxVector> heTxVector = {}, std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout = {});
+    Ieee80211Transmission(const IRadio *transmitter, const Packet *packet, const simtime_t startTime, const simtime_t endTime, const simtime_t preambleDuration, const simtime_t headerDuration, const simtime_t dataDuration, const Coord startPosition, const Coord endPosition, const Quaternion startOrientation, const Quaternion endOrientation, const ITransmissionPacketModel *packetModel, const ITransmissionBitModel *bitModel, const ITransmissionSymbolModel *symbolModel, const ITransmissionSampleModel *sampleModel, const ITransmissionAnalogModel *analogModel, const IIeee80211Mode *mode, const Ieee80211Channel *channel, std::shared_ptr<const Ieee80211HeTxVector> heTxVector = {}, std::shared_ptr<const Ieee80211HePpduLayout> hePpduLayout = {}, uint32_t heTriggerCorrelationId = 0);
 
     virtual std::ostream& printToStream(std::ostream& stream, int level, int evFlags = 0) const override;
 
@@ -35,6 +36,7 @@ class INET_API Ieee80211Transmission : public TransmissionBase
     virtual const Ieee80211Channel *getChannel() const { return channel; }
     virtual const std::shared_ptr<const Ieee80211HeTxVector>& getHeTxVector() const { return heTxVector; }
     virtual const std::shared_ptr<const Ieee80211HePpduLayout>& getHePpduLayout() const { return hePpduLayout; }
+    virtual uint32_t getHeTriggerCorrelationId() const { return heTriggerCorrelationId; }
 };
 
 } // namespace physicallayer

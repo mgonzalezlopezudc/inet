@@ -1,0 +1,129 @@
+%description:
+
+Deterministic packet-level HE downlink MU exchange proof. The fixed three-STA
+topology establishes Block Ack agreements, commits one canonical DL MU PPDU,
+and completes the MU-BAR / HE-TB Block Ack response sequence. A late scripted
+radio outage removes one recipient from a subsequent response window so the
+same run also proves partial-response accounting and timeout handling.
+
+%file: DlMuFaultController.cc
+
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IRadio.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+namespace Ieee80211HeDlMuExchange_1 {
+
+#define REQUIRE_DL(condition, message) \
+    do { if (!(condition)) throw cRuntimeError("HE DL MU module contract: %s", message); } while (false)
+
+class DlMuFaultController : public cSimpleModule
+{
+  protected:
+    cMessage *faultTimer = nullptr;
+    cMessage *restoreTimer = nullptr;
+    IRadio *faultedRadio = nullptr;
+
+    virtual void initialize() override
+    {
+        faultTimer = new cMessage("inject-dl-mu-partial-response");
+        restoreTimer = new cMessage("restore-dl-mu-recipient");
+        scheduleAt(SimTime(330, SIMTIME_MS), faultTimer);
+        scheduleAt(SimTime(339, SIMTIME_MS), restoreTimer);
+    }
+
+    virtual void handleMessage(cMessage *message) override
+    {
+        auto system = getSimulation()->getSystemModule();
+        if (message == faultTimer) {
+            for (int i = 0; i < 3; ++i) {
+                auto path = std::string("host[") + std::to_string(i) + "].wlan[0].mib";
+                auto mib = check_and_cast<Ieee80211Mib *>(system->getModuleByPath(path.c_str()));
+                REQUIRE_DL(mib->bssStationData.associationId > 0,
+                        "scripted loss started before association completed");
+            }
+            faultedRadio = check_and_cast<IRadio *>(
+                    system->getModuleByPath("host[2].wlan[0].radio"));
+            faultedRadio->setRadioMode(IRadio::RADIO_MODE_OFF);
+            EV_INFO << "HE DL MU fault: one associated recipient disabled for partial BA timeout" << EV_ENDL;
+        }
+        else if (message == restoreTimer) {
+            REQUIRE_DL(faultedRadio != nullptr, "recipient restore preceded fault injection");
+            faultedRadio->setRadioMode(IRadio::RADIO_MODE_RECEIVER);
+            EV_INFO << "HE DL MU fault: recipient restored after timeout window" << EV_ENDL;
+        }
+    }
+
+    virtual ~DlMuFaultController()
+    {
+        cancelAndDelete(faultTimer);
+        cancelAndDelete(restoreTimer);
+    }
+};
+
+Define_Module(DlMuFaultController);
+
+} // namespace Ieee80211HeDlMuExchange_1
+
+%file: TestNetwork.ned
+
+import inet.examples.ieee80211ax.dl_ofdma.Lan80211AxDlOfdma;
+
+simple DlMuFaultController
+{
+}
+
+network TestNetwork extends Lan80211AxDlOfdma
+{
+    submodules:
+        faultController: DlMuFaultController;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+ned-path = .;../../../../src;../../../../examples
+network = TestNetwork
+sim-time-limit = 340ms
+warmup-period = 0s
+seed-set = 1
+record-vector-results = false
+cmdenv-express-mode = false
+cmdenv-event-banners = false
+**.mac.hcf.cmdenv-log-level = TRACE
+**.mac.hcf.dlExchange.cmdenv-log-level = TRACE
+**.mac.hcf.dlScheduler.cmdenv-log-level = TRACE
+*.visualizer.typename = ""
+**.numLoInterfaces = 0
+
+include ../../../../examples/ieee80211ax/dl_ofdma/omnetpp.ini
+
+%subst: /\x1B\[[0-9;]*m//
+
+%contains-regex: stdout
+Addba Request has been accepted\. Creating a new Block Ack Agreement\.
+
+%contains-regex: stdout
+Assembled HE MU PPDU with [2-9][0-9]* RU allocations\.
+
+%contains-regex: stdout
+HE DL MU-BAR FS: built MU-BAR trigger for [2-9][0-9]* STAs, triggerId = [1-9][0-9]*
+
+%contains-regex: stdout
+HE DL MU-BAR FS: accepted BlockAck from
+
+%contains-regex: stdout
+HE DL MU fault: one associated recipient disabled for partial BA timeout\.
+
+%contains-regex: stdout
+HE DL MU-BAR FS: MU-BAR response timeout for STA
+
+%contains-regex: stdout
+HE DL MU fault: recipient restored after timeout window\.
+
+%postrun-command: grep "undisposed object:" test.out > test_undisposed.out || true
+%not-contains: test_undisposed.out
+undisposed object: (

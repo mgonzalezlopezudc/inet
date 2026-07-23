@@ -501,7 +501,9 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         lastHeTransmitPower = transmissionPower;
         lastHeUserPhyParameters.clear();
     }
-    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heTxVector, hePpduLayout);
+    auto triggerCorrelation = packet->findTag<Ieee80211HeTriggerCorrelationTag>();
+    auto triggerCorrelationId = triggerCorrelation == nullptr ? 0 : triggerCorrelation->getTriggerId();
+    return new Ieee80211Transmission(transmitter, packet, startTime, endTime, preambleDuration, headerDuration, dataDuration, startPosition, endPosition, startOrientation, endOrientation, nullptr, nullptr, nullptr, nullptr, analogModel, transmissionMode, transmissionChannel, heTxVector, hePpduLayout, triggerCorrelationId);
 }
 
 } // namespace physicallayer

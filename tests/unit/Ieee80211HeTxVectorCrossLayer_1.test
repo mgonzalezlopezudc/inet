@@ -1,6 +1,7 @@
 %description:
-Test authoritative HE per-user parameters from packed DL-MU and UL-TB metadata
-through PHY encapsulation and transmission creation.
+Test authoritative HE TXVECTOR/layout identity and per-user parameters from
+packed DL-MU and UL-TB metadata through PHY encapsulation and transmission
+creation.
 
 %includes:
 #include "inet/common/ProtocolTag_m.h"

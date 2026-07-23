@@ -4,15 +4,20 @@ while computing assigned receiver reception on the selected RU.
 
 %includes:
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211RadioMedium.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Receiver.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211Band.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/common/base/packetlevel/FlatTransmitterBase.h"
+#include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarTransmissionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IScalarSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/contract/packetlevel/IReceptionResult.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/ReceptionDecision.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/common/ProtocolTag_m.h"
@@ -22,6 +27,7 @@ while computing assigned receiver reception on the selected RU.
 %file: TestNetwork.ned
 import inet.networklayer.common.InterfaceTable;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
 import inet.mobility.static.StationaryMobility;
 
@@ -29,6 +35,12 @@ module InspectableRadioMedium extends Ieee80211RadioMedium
 {
     parameters:
         @class(InspectableRadioMedium);
+}
+
+module InspectableReceiver extends Ieee80211Receiver
+{
+    parameters:
+        @class(InspectableReceiver);
 }
 
 module MockNic
@@ -39,6 +51,7 @@ module MockNic
         radio: Ieee80211ScalarRadio {
             parameters:
                 transmitter.power = 20mW;
+                receiver.typename = "InspectableReceiver";
         }
     connections allowunconnected:
         radio.upperLayerOut --> radio.upperLayerIn;
@@ -89,6 +102,19 @@ class InspectableRadioMedium : public Ieee80211RadioMedium
     const IReception *testComputeReception(const IRadio *receiver, const ITransmission *transmission) const { return computeReception(receiver, transmission); }
 };
 
+class InspectableReceiver : public Ieee80211Receiver
+{
+  public:
+    const IReceptionResult *testComputeReceptionResult(const IReception *reception,
+            const IInterference *interference, const ISnir *snir,
+            const std::vector<const IReceptionDecision *> *decisions) const
+    {
+        return computeReceptionResult(nullptr, reception, interference, snir, decisions);
+    }
+
+    void disableTestErrorModel() { errorModel = nullptr; }
+};
+
 class MockNicModule : public NetworkInterface
 {
   protected:
@@ -102,6 +128,7 @@ class MockNicModule : public NetworkInterface
 };
 
 Define_Module(InspectableRadioMedium);
+Define_Module(InspectableReceiver);
 Define_Module(MockNicModule);
 
 static Packet *makeDataPacket(const char *name, const MacAddress& receiver)
@@ -113,6 +140,7 @@ static Packet *makeDataPacket(const char *name, const MacAddress& receiver)
     header->setTransmitterAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
     header->setAckPolicy(BLOCK_ACK);
     header->setTid(5);
+    header->setSequenceNumber(SequenceNumberCyclic(0));
     header->setChunkLength(b(288));
     packet->insertAtFront(header);
     packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
@@ -139,9 +167,23 @@ auto rxNetIface = check_and_cast<MockNicModule *>(rxNic);
 rxNetIface->setMacAddress(MacAddress("00:11:22:33:44:55"));
 rxNic->callInitialize();
 
+cModule *rxNic2 = nicType->create("rxNic2", getSystemModule());
+rxNic2->buildInside();
+auto rxNetIface2 = check_and_cast<MockNicModule *>(rxNic2);
+rxNetIface2->setMacAddress(MacAddress("66:77:88:99:AA:BB"));
+rxNic2->callInitialize();
+
+cModule *interfererNic = nicType->create("interfererNic", getSystemModule());
+interfererNic->buildInside();
+auto interfererNetIface = check_and_cast<MockNicModule *>(interfererNic);
+interfererNetIface->setMacAddress(MacAddress("02:00:00:00:00:99"));
+interfererNic->callInitialize();
+
 auto medium = check_and_cast<InspectableRadioMedium *>(getParentModule()->getSubmodule("radioMedium"));
 auto txRadio = check_and_cast<IRadio *>(txNic->getSubmodule("radio"));
 auto rxRadio = check_and_cast<IRadio *>(rxNic->getSubmodule("radio"));
+auto rxRadio2 = check_and_cast<IRadio *>(rxNic2->getSubmodule("radio"));
+auto interfererRadio = check_and_cast<IRadio *>(interfererNic->getSubmodule("radio"));
 
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");
 auto mode = modeSet->findHeMode(0, 1, MHz(20), false);
@@ -244,16 +286,91 @@ ASSERT(ruReceptionNarrowbandAnalog->getBandwidth() == rus[0].bandwidth);
 ASSERT(ruReceptionAnalog->getPower() < aggregateAnalog->getPower());
 
 delete reception;
+
+// Add a strong signal only on RU 0 and only during the HE MU data field.
+// The real medium must retain it for STA1 while excluding it from STA2's RU.
+auto interfererPacket = new Packet("ru0-data-interferer");
+interfererPacket->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+auto legacyMode = const_cast<Ieee80211ModeSet *>(
+        Ieee80211ModeSet::getModeSet("g(erp)"))->getMode(0);
+auto interfererAnalog = new ScalarTransmissionAnalogModel(
+        SIMTIME_ZERO, SIMTIME_ZERO, duration - preambleDuration,
+        rus[0].centerFrequency, rus[0].bandwidth, W(0.2));
+auto interferer = new Ieee80211Transmission(
+        interfererRadio,
+        interfererPacket,
+        preambleDuration,
+        duration,
+        SIMTIME_ZERO,
+        SIMTIME_ZERO,
+        duration - preambleDuration,
+        Coord(), Coord(),
+        Quaternion(), Quaternion(),
+        nullptr, nullptr, nullptr, nullptr,
+        interfererAnalog,
+        legacyMode,
+        channel);
+medium->testAddTransmission(interfererRadio, interferer);
+
+auto ru0Interference = medium->getInterference(rxRadio, transmission);
+auto ru1Interference = medium->getInterference(rxRadio2, transmission);
+auto ru0Snir = medium->getSNIR(rxRadio, transmission);
+auto ru1Snir = medium->getSNIR(rxRadio2, transmission);
+EV << "RU-specific SNIR: ru0=" << ru0Snir->getMin()
+        << " ru1=" << ru1Snir->getMin()
+        << " interferers=" << ru0Interference->getInterferingReceptions()->size()
+        << "/" << ru1Interference->getInterferingReceptions()->size() << "\n";
+ASSERT(ru0Snir->getMin() < 1);
+ASSERT(ru1Snir->getMin() > 100 || std::isinf(ru1Snir->getMin()));
+
+auto computeOutcome = [&] (const IRadio *receiverRadio, bool dataSuccessful,
+        int expectedSequenceNumber, int expectedRuIndex) {
+    auto receiver = check_and_cast<InspectableReceiver *>(
+            check_and_cast<const cModule *>(receiverRadio)->getSubmodule("receiver"));
+    receiver->disableTestErrorModel();
+    auto selectedReception = medium->getReception(receiverRadio, transmission);
+    auto selectedInterference = medium->getInterference(receiverRadio, transmission);
+    auto selectedSnir = medium->getSNIR(receiverRadio, transmission);
+    auto headerDecision = new ReceptionDecision(selectedReception,
+            IRadioSignal::SIGNAL_PART_HEADER, true, true, true);
+    auto dataDecision = new ReceptionDecision(selectedReception,
+            IRadioSignal::SIGNAL_PART_DATA, true, true, dataSuccessful);
+    auto decisions = new std::vector<const IReceptionDecision *> {
+        headerDecision, dataDecision};
+    auto result = receiver->testComputeReceptionResult(selectedReception,
+            selectedInterference, selectedSnir, decisions);
+    auto received = result->getPacket();
+    auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
+    ASSERT(outcomes->getResultsArraySize() == 1);
+    ASSERT(outcomes->getResults(0).sequenceNumber == expectedSequenceNumber);
+    ASSERT(outcomes->getResults(0).status ==
+            (dataSuccessful ? MPDU_SUCCESS : MPDU_FCS_ERROR));
+    ASSERT(received->hasBitError() != dataSuccessful);
+    auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
+    ASSERT(rxVector->getUser().getRuAllocation());
+    ASSERT(rxVector->getUser().getRuAllocation()->index == expectedRuIndex);
+    delete result;
+    delete headerDecision;
+    delete dataDecision;
+};
+computeOutcome(rxRadio, false, 0, rus[0].index);
+computeOutcome(rxRadio2, true, 0, rus[1].index);
+
+medium->testRemoveTransmission(interferer);
 medium->testRemoveTransmission(transmission);
 delete channel;
 txNic->deleteModule();
 rxNic->deleteModule();
+rxNic2->deleteModule();
+interfererNic->deleteModule();
 
 EV << "Ieee80211RadioMedium kept HE MU OFDMA as one PPDU transmission.\n";
 EV << "Assigned receiver reception used the selected RU center frequency and bandwidth.\n";
+EV << "RU-local interference produced FCS failure only on the overlapping RU.\n";
 EV << ".\n";
 
 %contains: stdout
 Ieee80211RadioMedium kept HE MU OFDMA as one PPDU transmission.
 Assigned receiver reception used the selected RU center frequency and bandwidth.
+RU-local interference produced FCS failure only on the overlapping RU.
 .

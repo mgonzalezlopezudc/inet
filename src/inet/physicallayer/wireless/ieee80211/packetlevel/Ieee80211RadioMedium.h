@@ -27,6 +27,7 @@ class INET_API Ieee80211RadioMedium : public RadioMedium
     virtual const IReception *computeReception(const IRadio *receiver, const ITransmission *transmission) const override;
 
   public:
+    virtual const INoise *getNoise(const IRadio *receiver, const ITransmission *transmission) const override;
 };
 
 } // namespace physicallayer

@@ -172,6 +172,17 @@ class Ieee80211HeMuCommonReq extends TagBase
 }
 
 //
+// Model-only correlation between a Trigger exchange and its terminal
+// Multi-STA Block Ack. This is deliberately not serialized as an 802.11
+// field; it prevents a delayed or foreign response from owning another
+// Trigger's packet ledger.
+//
+class Ieee80211HeTriggerCorrelationTag extends TagBase
+{
+    uint32_t triggerId;
+}
+
+//
 // Complete transmitter-side policy and calculated outcomes that are missing
 // from the ordinary HE SU/ER mode objects. complete=true attests that the
 // producer calculated the DATA-field outcomes and total TXTIME according to

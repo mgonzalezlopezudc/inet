@@ -1,5 +1,6 @@
 %description:
-Test HeDlMuTxOpFs TXOP trimming, compressed MU-BAR Block Ack timing, BA-window exhaustion, per-user packing, and fallback below two users.
+Test the DL MU transaction across planning, commit/rollback, packet
+conservation, TXVECTOR handoff, response timing, and fallback paths.
 
 %includes:
 #include <map>

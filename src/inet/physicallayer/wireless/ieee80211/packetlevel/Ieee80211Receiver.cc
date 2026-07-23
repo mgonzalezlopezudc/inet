@@ -806,6 +806,9 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
             addReceptionIndications(packet, reception, interference, snir);
             packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
             packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+            if (transmission->getHeTriggerCorrelationId() != 0)
+                packet->addTag<Ieee80211HeTriggerCorrelationTag>()->
+                        setTriggerId(transmission->getHeTriggerCorrelationId());
             attachHeRxVector(packet, transmission, selectedUserIndex, activeUser.staId,
                     getObservedHePsduLength(packet));
             auto recipientParameters = std::shared_ptr<const Ieee80211HeUserPhyParameters>(
@@ -836,6 +839,9 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
         addReceptionIndications(packet, reception, interference, snir);
         packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
         packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+        if (transmission->getHeTriggerCorrelationId() != 0)
+            packet->addTag<Ieee80211HeTriggerCorrelationTag>()->
+                    setTriggerId(transmission->getHeTriggerCorrelationId());
         return new ReceptionResult(reception, decisions, packet);
     }
 
@@ -847,6 +853,9 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
     auto packet = const_cast<Packet *>(receptionResult->getPacket());
     packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
     packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
+    if (transmission->getHeTriggerCorrelationId() != 0)
+        packet->addTag<Ieee80211HeTriggerCorrelationTag>()->
+                setTriggerId(transmission->getHeTriggerCorrelationId());
     if (hePhyHeader != nullptr)
         attachHeRxVector(packet, transmission, {}, {}, getObservedHePsduLength(packet));
     return receptionResult;

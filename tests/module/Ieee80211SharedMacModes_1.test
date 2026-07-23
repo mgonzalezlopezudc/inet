@@ -1,0 +1,126 @@
+%description:
+
+Module-level shared-path contract for legacy DCF/HCF, HT, VHT, HE, and EHT.
+It verifies that every operational profile retains its PHY family and that the
+shared HE TXOP coordinator deterministically falls back to SU when MU planning
+is rejected, without offering MU work to non-HE or forced-SU paths.
+
+%file: SharedModesObserver.cc
+
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ErpOfdmMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211VhtMode.h"
+
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+namespace Ieee80211SharedMacModes_1 {
+
+#define REQUIRE_SHARED(condition, message) \
+    do { if (!(condition)) throw cRuntimeError("shared MAC mode contract: %s", message); } while (false)
+
+template<typename T>
+static bool containsModeType(const Ieee80211ModeSet *modeSet)
+{
+    for (int i = 0; i < modeSet->getNumModes(); ++i)
+        if (dynamic_cast<const T *>(modeSet->getMode(i)) != nullptr)
+            return true;
+    return false;
+}
+
+class SharedModesObserver : public cSimpleModule
+{
+  protected:
+    virtual void initialize() override
+    {
+        REQUIRE_SHARED(cModuleType::find(
+                "inet.linklayer.ieee80211.mac.coordinationfunction.Dcf") != nullptr,
+                "DCF NED type is missing");
+        REQUIRE_SHARED(cModuleType::find(
+                "inet.linklayer.ieee80211.mac.coordinationfunction.Hcf") != nullptr,
+                "HCF NED type is missing");
+        REQUIRE_SHARED(cModuleType::find(
+                "inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf") != nullptr,
+                "HeHcf NED type is missing");
+
+        REQUIRE_SHARED(containsModeType<Ieee80211ErpOfdmMode>(
+                Ieee80211ModeSet::getModeSet("g(mixed)")), "legacy ERP/DCF profile regressed");
+        REQUIRE_SHARED(containsModeType<Ieee80211HtMode>(
+                Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)")), "HT profile regressed");
+        REQUIRE_SHARED(containsModeType<Ieee80211VhtMode>(
+                Ieee80211ModeSet::getModeSet("ac")), "VHT profile regressed");
+        REQUIRE_SHARED(containsModeType<Ieee80211HeMode>(
+                Ieee80211ModeSet::getModeSet("ax")), "HE profile regressed");
+        REQUIRE_SHARED(containsModeType<Ieee80211EhtMode>(
+                Ieee80211ModeSet::getModeSet("be")), "EHT profile no longer reuses shared MAC paths");
+
+        HeTxopCoordinatorService coordinator;
+        int ulCalls = 0;
+        int dlCalls = 0;
+        int suCalls = 0;
+        int releaseCalls = 0;
+        HeTxopCoordinatorService::Actions rejectedMu {
+            [&] { ulCalls++; return false; },
+            [&] { dlCalls++; return false; },
+            [&] { releaseCalls++; return false; },
+            [&] { suCalls++; }
+        };
+        auto outcome = coordinator.start(true, false, rejectedMu);
+        REQUIRE_SHARED(outcome == HeTxopCoordinatorService::SU_STARTED,
+                "rejected HE MU plan did not fall back to SU");
+        REQUIRE_SHARED(ulCalls == 1 && dlCalls == 1 && suCalls == 1 &&
+                releaseCalls == 1, "HE fallback action order changed");
+
+        ulCalls = dlCalls = suCalls = releaseCalls = 0;
+        outcome = coordinator.start(false, false, rejectedMu);
+        REQUIRE_SHARED(outcome == HeTxopCoordinatorService::SU_STARTED,
+                "legacy shared path did not start SU");
+        REQUIRE_SHARED(ulCalls == 0 && dlCalls == 0 && suCalls == 1 &&
+                releaseCalls == 1, "legacy path attempted HE MU work");
+
+        ulCalls = dlCalls = suCalls = releaseCalls = 0;
+        outcome = coordinator.start(true, true, rejectedMu);
+        REQUIRE_SHARED(outcome == HeTxopCoordinatorService::SU_STARTED,
+                "forced HE SU path did not start SU");
+        REQUIRE_SHARED(ulCalls == 0 && dlCalls == 0 && suCalls == 1 &&
+                releaseCalls == 0, "forced-SU path attempted MU work or channel release");
+
+        EV_INFO << "DCF/HCF/HT/VHT/HE/EHT shared MAC modes: PASS" << EV_ENDL;
+        EV_INFO << "Rejected HE MU plan used deterministic SU fallback: PASS" << EV_ENDL;
+    }
+};
+
+Define_Module(SharedModesObserver);
+
+} // namespace Ieee80211SharedMacModes_1
+
+%file: TestNetwork.ned
+
+simple SharedModesObserver
+{
+}
+
+network TestNetwork
+{
+    submodules:
+        observer: SharedModesObserver;
+}
+
+%inifile: omnetpp.ini
+
+[General]
+network = TestNetwork
+ned-path = .;../../../../src
+sim-time-limit = 1us
+record-vector-results = false
+cmdenv-express-mode = false
+cmdenv-event-banners = false
+
+%contains: stdout
+DCF/HCF/HT/VHT/HE/EHT shared MAC modes: PASS.
+Rejected HE MU plan used deterministic SU fallback: PASS.

@@ -107,6 +107,60 @@ void populateHeTbRequestFromTrigger(physicallayer::Ieee80211HeMuReq *request,
         request->setCompanionUsers(i, companionUsers[i]);
 }
 
+static physicallayer::Ieee80211HeTxVectorValidationResult createHeTbTxVector(
+        const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& selected,
+        Hz centerFrequency, uint16_t staId, B psduLength)
+{
+    physicallayer::Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = centerFrequency;
+    request.channelBandwidth = Hz(trigger.getChannelBandwidthMhz() * 1e6);
+    request.ppduFormat = physicallayer::HE_TRIGGER_BASED_UPLINK;
+    request.puncturedSubchannelMask = trigger.getPuncturedSubchannelMask();
+    request.lSigLength = trigger.getUlLength();
+    request.noSignalExtension = trigger.getNoSignalExtension();
+    request.requestedTxTime = trigger.getCommonDuration();
+    request.requestedTxTimeExact = trigger.getCommonDurationExact();
+    request.triggerMethod = physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    request.preFecPaddingFactor = trigger.getPreFecPaddingFactor();
+    request.ldpcExtraSymbolSegment = trigger.getLdpcExtraSymbolSegment();
+    request.peDisambiguity = trigger.getPeDisambiguity();
+    request.numberOfHeLtfSymbols = trigger.getNumberOfHeLtfSymbols();
+    request.guardInterval =
+            static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger.getGuardInterval());
+    request.ltfType =
+            static_cast<physicallayer::Ieee80211HeLtfType>(trigger.getLtfType());
+    request.packetExtensionDurationUs = trigger.getPacketExtensionDurationUs();
+
+    auto appendUser = [&] (const Ieee80211HeTriggerUserInfo& triggerUser,
+            uint16_t userStaId, B userPsduLength) {
+        physicallayer::Ieee80211HeUserTxVectorRequest user;
+        user.ru.index = triggerUser.ruIndex;
+        user.ru.toneSize = triggerUser.ruToneSize;
+        user.ru.toneOffset = triggerUser.ruToneOffset;
+        user.staId = userStaId;
+        user.mcs = triggerUser.mcs;
+        user.numberOfSpatialStreams = triggerUser.numberOfSpatialStreams;
+        user.streamStartIndex = triggerUser.streamStartIndex;
+        user.coding =
+                static_cast<physicallayer::Ieee80211HeCoding>(triggerUser.coding);
+        user.psduLength = userPsduLength;
+        request.users.push_back(user);
+    };
+
+    appendUser(selected, staId, psduLength);
+    if (selected.muMimo) {
+        for (unsigned int i = 0; i < trigger.getUsersArraySize(); ++i) {
+            const auto& peer = trigger.getUsers(i);
+            if (&peer == &selected || !peer.muMimo ||
+                    peer.ruToneSize != selected.ruToneSize ||
+                    peer.ruToneOffset != selected.ruToneOffset)
+                continue;
+            appendUser(peer, peer.aid, B(0));
+        }
+    }
+    return physicallayer::Ieee80211HeTxVectorFactory::create(request);
+}
+
 double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
         W receivedPower, Hz receivedBandwidth)
 {
@@ -814,6 +868,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     committed = false;
     if (sourceQueue == nullptr || selected == nullptr || trigger == nullptr)
         throw cRuntimeError("Cannot prepare an HE-TB response without queue and Trigger context");
+    const auto phy = getLinkPhyContext().getSnapshot();
     auto qosDataService = check_and_cast<OriginatorQosMacDataService *>(originatorDataService);
     auto preparedSequenceNumberState = qosDataService->cloneSequenceNumberState();
     std::vector<Packet *> originalPackets;
@@ -826,15 +881,10 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         auto sourceHeader = sourcePacket->peekAtFront<Ieee80211DataHeader>();
         B psduLength = B(4 + sourcePacket->getByteLength()) +
                 (sourceHeader->getBufferStatusPresent() ? B(0) : B(4));
-        auto ru = exchange.ru;
-        ru.dataSubcarriers = physicallayer::getHeRuDataSubcarrierCount(ru.toneSize);
-        ru.pilotSubcarriers = physicallayer::getHeRuPilotSubcarrierCount(ru.toneSize);
-        ru.bandwidth = Hz(ru.toneSize * 78125.0);
-        auto duration = physicallayer::computeHeUserPhyParameters(psduLength, ru, selected->mcs,
-                selected->numberOfSpatialStreams, false,
-                static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger->getGuardInterval()),
-                static_cast<physicallayer::Ieee80211HeCoding>(selected->coding)).duration;
-        if (duration > trigger->getCommonDuration())
+        auto prospective = createHeTbTxVector(*trigger, *selected,
+                phy.getChannelCenterFrequency(),
+                mac->getMib()->bssStationData.associationId, psduLength);
+        if (!prospective)
             sourcePacket = nullptr;
     }
     if (sourcePacket != nullptr) {
@@ -877,6 +927,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         nullHeader->setBufferStatusAc(selectedAc);
         nullHeader->setBufferStatusQueueSize(queueBytes);
         nullHeader->setChunkLength(B(30));
+        preparedSequenceNumberState->assignSequenceNumber(nullHeader);
         responsePacket = std::make_unique<Packet>("HE-TB-QoS-Null", nullHeader);
         responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
     }
@@ -905,14 +956,10 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             for (auto packet : exchange.packets)
                 psduLength += B(4 + packet->getByteLength());
             psduLength += B(4 + candidate->getByteLength());
-            physicallayer::Ieee80211HeRu ru = exchange.ru;
-            ru.dataSubcarriers = physicallayer::getHeRuDataSubcarrierCount(ru.toneSize);
-            ru.pilotSubcarriers = physicallayer::getHeRuPilotSubcarrierCount(ru.toneSize);
-            ru.bandwidth = Hz(ru.toneSize * 78125.0);
-            if (physicallayer::computeHeUserPhyParameters(psduLength, ru, selected->mcs,
-                    selected->numberOfSpatialStreams, false,
-                    static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger->getGuardInterval()),
-                    static_cast<physicallayer::Ieee80211HeCoding>(selected->coding)).duration > trigger->getCommonDuration())
+            auto prospective = createHeTbTxVector(*trigger, *selected,
+                    phy.getChannelCenterFrequency(),
+                    mac->getMib()->bssStationData.associationId, psduLength);
+            if (!prospective)
                 break;
             auto originalCandidate = candidate;
             preparedPacketOwners.emplace_back(candidate->dup());
@@ -961,71 +1008,10 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     populateHeTbRequestFromTrigger(request.get(), *trigger, *selected,
             mac->getMib()->bssStationData.associationId);
     request->setTransmitPower(transmitPower);
-    const auto phy = getLinkPhyContext().getSnapshot();
-    physicallayer::Ieee80211HeTxVectorRequest txVectorRequest;
-    txVectorRequest.centerFrequency = phy.getChannelCenterFrequency();
-    txVectorRequest.channelBandwidth = Hz(trigger->getChannelBandwidthMhz() * 1e6);
-    txVectorRequest.ppduFormat = physicallayer::HE_TRIGGER_BASED_UPLINK;
-    txVectorRequest.lSigLength = trigger->getUlLength();
-    txVectorRequest.noSignalExtension = trigger->getNoSignalExtension();
-    txVectorRequest.requestedTxTime = trigger->getCommonDuration();
-    txVectorRequest.requestedTxTimeExact = trigger->getCommonDurationExact();
-    txVectorRequest.triggerMethod = physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME;
-    txVectorRequest.preFecPaddingFactor = trigger->getPreFecPaddingFactor();
-    txVectorRequest.ldpcExtraSymbolSegment = trigger->getLdpcExtraSymbolSegment();
-    txVectorRequest.peDisambiguity = trigger->getPeDisambiguity();
-    txVectorRequest.numberOfHeLtfSymbols = trigger->getNumberOfHeLtfSymbols();
-    txVectorRequest.guardInterval =
-            static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger->getGuardInterval());
-    txVectorRequest.ltfType =
-            static_cast<physicallayer::Ieee80211HeLtfType>(trigger->getLtfType());
-    txVectorRequest.packetExtensionDurationUs = trigger->getPacketExtensionDurationUs();
-    auto catalog = physicallayer::getHeRuAllocationCatalog(
-            txVectorRequest.centerFrequency, txVectorRequest.channelBandwidth);
-    auto canonicalRu = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
-        return ru.index == selected->ruIndex && ru.toneSize == selected->ruToneSize &&
-                ru.toneOffset == selected->ruToneOffset;
-    });
-    if (canonicalRu == catalog.end())
-        throw cRuntimeError("Selected Trigger RU is not canonical for the HE-TB response channel");
-    physicallayer::Ieee80211HeUserTxVectorRequest txVectorUser;
-    txVectorUser.ru = *canonicalRu;
-    txVectorUser.staId = mac->getMib()->bssStationData.associationId;
-    txVectorUser.mcs = selected->mcs;
-    txVectorUser.numberOfSpatialStreams = selected->numberOfSpatialStreams;
-    txVectorUser.streamStartIndex = selected->streamStartIndex;
-    txVectorUser.coding = static_cast<physicallayer::Ieee80211HeCoding>(selected->coding);
-    txVectorUser.psduLength = B((responsePacket->getDataLength().get<b>() + 7) / 8);
-    txVectorRequest.users.push_back(txVectorUser);
-    if (selected->muMimo) {
-        for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
-            const auto& peer = trigger->getUsers(i);
-            if (&peer == selected || !peer.muMimo ||
-                    peer.ruToneSize != selected->ruToneSize ||
-                    peer.ruToneOffset != selected->ruToneOffset)
-                continue;
-            auto peerRu = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
-                return ru.index == peer.ruIndex && ru.toneSize == peer.ruToneSize &&
-                        ru.toneOffset == peer.ruToneOffset;
-            });
-            if (peerRu == catalog.end())
-                throw cRuntimeError("Peer Trigger RU is not canonical for the HE-TB response channel");
-            physicallayer::Ieee80211HeUserTxVectorRequest peerUser;
-            peerUser.ru = *peerRu;
-            peerUser.staId = peer.aid;
-            peerUser.mcs = peer.mcs;
-            peerUser.numberOfSpatialStreams = peer.numberOfSpatialStreams;
-            peerUser.streamStartIndex = peer.streamStartIndex;
-            peerUser.coding = static_cast<physicallayer::Ieee80211HeCoding>(peer.coding);
-            // The local station does not know another station's PSDU length.
-            // A one-byte model placeholder is sufficient to preserve the
-            // complete shared-RU stream geometry while local TXTIME remains
-            // bounded by the Trigger common duration.
-            peerUser.psduLength = B(0);
-            txVectorRequest.users.push_back(peerUser);
-        }
-    }
-    auto txVector = physicallayer::Ieee80211HeTxVectorFactory::create(txVectorRequest);
+    auto txVector = createHeTbTxVector(*trigger, *selected,
+            phy.getChannelCenterFrequency(),
+            mac->getMib()->bssStationData.associationId,
+            B((responsePacket->getDataLength().get<b>() + 7) / 8));
     if (!txVector)
         throw cRuntimeError("Prepared HE-TB response is invalid: %s (%s)",
                 txVector.getContext().fieldName.c_str(),
@@ -1041,12 +1027,15 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         }
         for (size_t i = 0; i < originalPackets.size(); ++i)
             beforeTriggeredUlPacketCommit(i);
+    }
 
-        // Explicit commit boundary. Post-boundary failures are invariant
-        // violations and deliberately fail loudly instead of faking queue
-        // rollback after observer-visible removals.
-        committed = true;
-        qosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+    // Explicit commit boundary. QoS Null responses also consume a sequence
+    // number even though they retain no queued MPDU. Post-boundary failures
+    // are invariant violations and deliberately fail loudly instead of
+    // faking rollback after observer-visible state changes.
+    committed = true;
+    qosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+    if (!originalPackets.empty()) {
         for (size_t i = 0; i < originalPackets.size(); ++i) {
             auto original = originalPackets[i];
             auto prepared = preparedPacketOwners[i].get();
@@ -1349,6 +1338,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     exchange.ru.toneSize = selected->ruToneSize;
     exchange.ru.toneOffset = selected->ruToneOffset;
     auto maximumBlockAckLength = B(18 + 12 * trigger->getUsersArraySize() + 4);
+    // 10.3.2.11 and 10.23.2.2 permit RXSTART within SIFS plus one slot; the
+    // maximum Block Ack airtime below carries that start deadline through to
+    // the packet's RXEND delivery point.
     exchange.expectedResponseTime = simTime() + modeSet->getSifsTime() +
             trigger->getCommonDuration() + modeSet->getSifsTime() +
             modeSet->getSlowestMandatoryMode()->getDuration(maximumBlockAckLength) +
@@ -1397,12 +1389,16 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         else
             responseHeader = exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
         responsePacketCount = exchange.packets.empty() ? 1 : exchange.packets.size();
-        if (!exchange.packets.empty() || exchange.randomAccess) {
-            auto inserted = triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
-            if (!inserted.second)
-                throw cRuntimeError("Duplicate HE-TB Trigger ID reached the post-commit exchange ledger");
-            scheduleTriggeredUlResponseTimeout();
-        }
+        // Every solicited HE-TB response owns a terminal Multi-STA BA window,
+        // including scheduled QoS Null/BSR responses with no retained MPDU.
+        auto inserted = triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
+        if (!inserted.second)
+            throw cRuntimeError("Duplicate HE-TB Trigger ID reached the post-commit exchange ledger");
+        EV_INFO << "Committed HE-TB exchange ledger: trigger="
+                << trigger->getTriggerId() << ", packets="
+                << inserted.first->second.packets.size() << ", deadline="
+                << inserted.first->second.expectedResponseTime << "\n";
+        scheduleTriggeredUlResponseTimeout();
     }
 
     // 26.5.2.3.3 and 27.3.11.12: the HE TB TXVECTOR is derived from the
@@ -1442,58 +1438,82 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
         delete packet;
         return;
     }
+    auto correlation = packet->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>();
+    if (correlation == nullptr) {
+        EV_WARN << "Discarding Multi-STA Block Ack without Trigger correlation\n";
+        delete packet;
+        return;
+    }
+    auto exchangeIt = triggeredUlExchanges.find(correlation->getTriggerId());
+    if (exchangeIt == triggeredUlExchanges.end()) {
+        EV_WARN << "Discarding foreign Multi-STA Block Ack for Trigger "
+                << correlation->getTriggerId() << "\n";
+        delete packet;
+        return;
+    }
+    if (simTime() > exchangeIt->second.expectedResponseTime) {
+        EV_WARN << "Discarding late Multi-STA Block Ack for Trigger "
+                << correlation->getTriggerId() << ", deadline="
+                << exchangeIt->second.expectedResponseTime << "\n";
+        delete packet;
+        return;
+    }
     auto myAid = mac->getMib()->bssStationData.associationId;
-    bool success = false;
-    for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {
-        const auto& record = multiStaBlockAck->getRecords(i);
-        if (record.aid == myAid) {
-            success = record.responseReceived && (record.bitmap & 1);
-            break;
+    auto& exchange = exchangeIt->second;
+    const Ieee80211MultiStaBlockAckRecord *record = nullptr;
+    int matchingRecordCount = 0;
+    for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); ++i)
+        if (multiStaBlockAck->getRecords(i).aid == myAid &&
+                multiStaBlockAck->getRecords(i).tid == exchange.tid) {
+            record = &multiStaBlockAck->getRecords(i);
+            matchingRecordCount++;
         }
+    if (matchingRecordCount > 1) {
+        EV_WARN << "Discarding ambiguous Multi-STA Block Ack for Trigger "
+                << correlation->getTriggerId() << "\n";
+        delete packet;
+        return;
     }
-    for (auto& entry : triggeredUlExchanges) {
-        auto& exchange = entry.second;
-        const Ieee80211MultiStaBlockAckRecord *record = nullptr;
-        for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); ++i)
-            if (multiStaBlockAck->getRecords(i).aid == myAid && multiStaBlockAck->getRecords(i).tid == exchange.tid) {
-                record = &multiStaBlockAck->getRecords(i);
-                break;
-            }
-        // A UORA response to a BSRP Trigger is a QoS Null carrying buffer
-        // status, so there is no queued data MPDU or bitmap bit to retire. A
-        // positive per-AID response record is nevertheless a successful UORA
-        // attempt and must reset OCW and be counted.
-        bool exchangeSuccess = exchange.randomAccess && exchange.packets.empty() &&
-                record != nullptr && record->responseReceived;
+    // A UORA response to a BSRP Trigger is a QoS Null carrying buffer
+    // status, so there is no queued data MPDU or bitmap bit to retire. A
+    // positive per-AID response record is nevertheless a successful UORA
+    // attempt and must reset OCW and be counted.
+    bool exchangeSuccess = exchange.packets.empty() &&
+            record != nullptr && record->responseReceived;
+    if (record != nullptr && record->responseReceived) {
+        AccessCategory ac = edca->mapTidToAc(exchange.tid);
+        if (ac >= 0 && ac < 4)
+            edca->getEdcaf(ac)->startMuEdcaTimer();
+    }
+    for (size_t i = 0; i < exchange.packets.size(); ++i) {
+        bool acknowledged = false;
         if (record != nullptr && record->responseReceived) {
-            AccessCategory ac = edca->mapTidToAc(exchange.tid);
-            if (ac >= 0 && ac < 4) {
-                edca->getEdcaf(ac)->startMuEdcaTimer();
-            }
+            int offset = (exchange.sequenceNumbers[i] -
+                    record->startingSequenceNumber + 4096) % 4096;
+            acknowledged = offset < 64 &&
+                    (record->bitmap & (UINT64_C(1) << offset));
         }
-        for (size_t i = 0; i < exchange.packets.size(); ++i) {
-            bool acknowledged = false;
-            if (record != nullptr && record->responseReceived) {
-                int offset = (exchange.sequenceNumbers[i] - record->startingSequenceNumber + 4096) % 4096;
-                acknowledged = offset < 64 && (record->bitmap & (UINT64_C(1) << offset));
-            }
-            if (acknowledged) {
-                delete exchange.packets[i];
-                exchangeSuccess = true;
-            }
-            else {
-                auto writableHeader = exchange.packets[i]->removeAtFront<Ieee80211DataHeader>();
-                writableHeader->setRetry(true);
-                exchange.packets[i]->insertAtFront(writableHeader);
-                exchange.sourceQueue->pushPacket(exchange.packets[i], nullptr);
-            }
+        if (acknowledged) {
+            delete exchange.packets[i];
+            exchangeSuccess = true;
         }
-        if (exchange.randomAccess)
-            ulCoordinator->reportRandomAccessResult(exchangeSuccess);
-        success = success || exchangeSuccess;
+        else {
+            auto writableHeader = exchange.packets[i]->
+                    removeAtFront<Ieee80211DataHeader>();
+            writableHeader->setRetry(true);
+            exchange.packets[i]->insertAtFront(writableHeader);
+            exchange.sourceQueue->pushPacket(exchange.packets[i], nullptr);
+        }
     }
-    triggeredUlExchanges.clear();
-    cancelEvent(triggeredUlResponseTimer);
+    if (exchange.randomAccess)
+        ulCoordinator->reportRandomAccessResult(exchangeSuccess);
+    EV_INFO << "Applied correlated Multi-STA Block Ack: trigger="
+            << correlation->getTriggerId() << ", AID=" << myAid
+            << ", TID=" << (int)exchange.tid
+            << ", packets=" << exchange.packets.size()
+            << ", success=" << exchangeSuccess << "\n";
+    triggeredUlExchanges.erase(exchangeIt);
+    scheduleTriggeredUlResponseTimeout();
     delete packet;
     return;
 }

@@ -23,14 +23,17 @@ only the legacy-visible duration indication.
 #include "inet/physicallayer/wireless/common/radio/packetlevel/ReceptionDecision.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/IReceptionResult.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/common/Protocol.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/common/packet/chunk/BytesChunk.h"
 
 %file: TestNetwork.ned
 
 import inet.networklayer.common.InterfaceTable;
+import inet.linklayer.ieee80211.mib.Ieee80211Mib;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211Receiver;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
@@ -54,6 +57,20 @@ module MockNic
     parameters:
         @class(MockNicModule);
     submodules:
+        radio: Ieee80211ScalarRadio {
+            receiver.typename = "DummyReceiverModule";
+            receiver.errorModel.typename = "TestHeErrorModel";
+        }
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
+
+module AidMockNic
+{
+    parameters:
+        @class(MockNicModule);
+    submodules:
+        mib: Ieee80211Mib;
         radio: Ieee80211ScalarRadio {
             receiver.typename = "DummyReceiverModule";
             receiver.errorModel.typename = "TestHeErrorModel";
@@ -231,6 +248,11 @@ class DummyReceiverModule : public Ieee80211Receiver {
         return computeReceptionResult(nullptr, reception, nullptr, snir, decisions);
     }
     void setTestErrorModel(const IErrorModel *model) { errorModel = model; }
+    std::optional<uint16_t> resolveTestStaId() const {
+        auto networkInterface = getContainingNicModule(this);
+        return resolveHeMuStaIdForReception(networkInterface,
+                networkInterface->getMacAddress());
+    }
 };
 
 class DummySnir : public ISnir {
@@ -418,6 +440,24 @@ static Packet *makeSizedMpdu(const MacAddress& receiver, int payloadLength, int 
     return mpdu;
 }
 
+static Packet *makeSentinelMpdu(const MacAddress& receiver,
+        const std::vector<uint8_t>& bytes, int sequenceNumber)
+{
+    auto mpdu = new Packet("byte-sentinel-mpdu");
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setChunkLength(b(288));
+    mpdu->insertAtBack(header);
+    mpdu->insertAtBack(makeShared<BytesChunk>(bytes));
+    auto trailer = makeShared<Ieee80211MacTrailer>();
+    trailer->setFcsMode(FCS_COMPUTED);
+    trailer->setFcs(0);
+    mpdu->insertAtBack(trailer);
+    return mpdu;
+}
+
 %activity:
 
 // Get dynamic module type for MockNic
@@ -444,6 +484,21 @@ auto rxModule1 = check_and_cast<DummyReceiverModule *>(nic1->getSubmodule("radio
 auto rxModule2 = check_and_cast<DummyReceiverModule *>(nic2->getSubmodule("radio")->getSubmodule("receiver"));
 
 auto radio1 = check_and_cast<IRadio *>(nic1->getSubmodule("radio"));
+
+cModuleType *aidNicType = cModuleType::find("AidMockNic");
+REQUIRE(aidNicType != nullptr);
+cModule *aidNic = aidNicType->create("aidNic", getSystemModule());
+aidNic->buildInside();
+auto aidInterface = check_and_cast<MockNicModule *>(aidNic);
+aidInterface->setMacAddress(MacAddress("02:00:00:00:00:37"));
+aidNic->callInitialize();
+auto aidMib = check_and_cast<Ieee80211Mib *>(aidNic->getSubmodule("mib"));
+aidMib->bssStationData.stationType = Ieee80211Mib::STATION;
+aidMib->bssStationData.associationId = 37;
+auto aidReceiver = check_and_cast<DummyReceiverModule *>(
+        aidNic->getSubmodule("radio")->getSubmodule("receiver"));
+aidReceiver->setModeSet(Ieee80211ModeSet::getModeSet("ax"));
+auto aidRadio = check_and_cast<IRadio *>(aidNic->getSubmodule("radio"));
 
 // Retrieve mode and channel for mock transmissions
 auto modeSet = Ieee80211ModeSet::getModeSet("ax");
@@ -1094,6 +1149,107 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     delete packet;
 }
 
+// --- Test 17: MIB AID selects the exact BytesChunk PSDU; wrong/unknown AIDs get no data ---
+{
+    const std::vector<uint8_t> aid38Bytes {0x22, 0x38, 0xc3, 0x3c};
+    const std::vector<uint8_t> aid37Bytes {0x11, 0x37, 0xa5, 0x5a};
+    auto recipient37 = aidInterface->getMacAddress();
+    auto recipient38 = MacAddress("02:00:00:00:00:38");
+    auto selectionRus = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 2);
+    auto mpdu38 = makeSentinelMpdu(recipient38, aid38Bytes, 380);
+    auto mpdu37 = makeSentinelMpdu(recipient37, aid37Bytes, 370);
+    B psdu38Length = B(4) + B(mpdu38->getByteLength());
+    B psdu37Length = B(4) + B(mpdu37->getByteLength());
+    auto packet = new Packet("aid-byte-sentinel-he-mu");
+    auto phyHeader = makeShared<Ieee80211HeMuPhyHeader>();
+    Ieee80211HeMuUserInfo user37;
+    user37.ruIndex = selectionRus[0].index;
+    user37.ruToneSize = selectionRus[0].toneSize;
+    user37.ruToneOffset = selectionRus[0].toneOffset;
+    user37.staId = 37;
+    user37.psduLength = psdu37Length;
+    phyHeader->appendUsers(user37);
+    Ieee80211HeMuUserInfo user38;
+    user38.ruIndex = selectionRus[1].index;
+    user38.ruToneSize = selectionRus[1].toneSize;
+    user38.ruToneOffset = selectionRus[1].toneOffset;
+    user38.staId = 38;
+    user38.psduLength = psdu38Length;
+    phyHeader->appendUsers(user38);
+    phyHeader->setChunkLength(B(14));
+    packet->insertAtBack(phyHeader);
+    for (auto mpdu : {mpdu37, mpdu38}) {
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setLength(mpdu->getByteLength());
+        delimiter->setEof(true);
+        packet->insertAtBack(delimiter);
+        packet->insertAtBack(mpdu->peekAll());
+    }
+    delete mpdu38;
+    delete mpdu37;
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(selectionRus[0], recipient37, psdu37Length),
+        makeHeModelUser(selectionRus[1], recipient38, psdu38Length)
+    };
+    modelUsers[0].staId = 37;
+    modelUsers[1].staId = 38;
+    REQUIRE(aidReceiver->resolveTestStaId() == 37);
+    auto sentinelCanonical = makeCanonicalPair(packet, modelUsers,
+            makeHeModelPpdu(modelUsers, false));
+    REQUIRE(sentinelCanonical.getPpduLayout()->getPsduBitRanges().size() == 2);
+    REQUIRE(sentinelCanonical.getPpduLayout()->getPsduBitRanges()[0].getStaId() == 37);
+    auto sentinelData = packet->dup();
+    sentinelData->popAtFront<Ieee80211HePhyHeader>(b(-1),
+            Chunk::PF_ALLOW_REINTERPRETATION);
+    REQUIRE(sentinelData->getDataLength() ==
+            sentinelCanonical.getPpduLayout()->getPsduBitRanges().back().
+                    getEndBitOffset());
+    delete sentinelData;
+    auto sentinelTransmission = new MockIeee80211Transmission(
+            aidRadio, packet, mode, channel, sentinelCanonical);
+    REQUIRE(aidReceiver->checkAssigned(sentinelTransmission));
+    delete sentinelTransmission;
+    auto received = receiveHeMuPacket(aidReceiver, aidRadio, packet,
+            mode, channel, modelUsers, makeHeModelPpdu(modelUsers, false));
+    if (!received->hasTag<Ieee80211MpduReceiveInd>())
+        throw cRuntimeError("AID 37 sentinel selection failed: legacy=%d rxvector=%d length=%s",
+                received->hasTag<Ieee80211HeMuLegacyPreambleInd>(),
+                received->hasTag<Ieee80211HeRxVectorInd>(),
+                received->getDataLength().str().c_str());
+    auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
+    REQUIRE(outcomes->getResultsArraySize() == 1);
+    REQUIRE(outcomes->getResults(0).sequenceNumber == 370);
+    REQUIRE(outcomes->getResults(0).status == MPDU_SUCCESS);
+    REQUIRE(received->getTag<Ieee80211HeRxVectorInd>()->
+            getRxVector()->getUser().getStaId() == 37);
+    auto parsed = received->dup();
+    parsed->popAtFront<Ieee80211HeMuPhyHeader>();
+    parsed->popAtFront<Ieee80211MpduSubframeHeader>();
+    parsed->popAtFront<Ieee80211DataHeader>();
+    REQUIRE(parsed->peekAtFront<BytesChunk>(B(aid37Bytes.size()))->getBytes() ==
+            aid37Bytes);
+    delete parsed;
+    delete received;
+
+    for (int invalidAid : {39, -1}) {
+        aidMib->bssStationData.associationId = invalidAid;
+        auto rejected = receiveHeMuPacket(aidReceiver, aidRadio, packet,
+                mode, channel, modelUsers, makeHeModelPpdu(modelUsers, false));
+        REQUIRE(rejected->hasTag<Ieee80211HeMuLegacyPreambleInd>());
+        REQUIRE(!rejected->hasTag<Ieee80211MpduReceiveInd>());
+        REQUIRE(!rejected->hasTag<Ieee80211HeRxVectorInd>());
+        auto stripped = rejected->dup();
+        stripped->popAtFront<Ieee80211HeMuPhyHeader>();
+        REQUIRE(stripped->getDataLength() == b(0));
+        delete stripped;
+        delete rejected;
+    }
+    aidMib->bssStationData.associationId = 37;
+    std::cout << "MIB AID selects exact sentinel bytes and rejects wrong or unknown AIDs: PASS\n";
+    delete packet;
+}
+
 // Cleanup Channel
 delete channel;
 
@@ -1124,4 +1280,5 @@ Unsupported HE per-MPDU error model is rejected explicitly: PASS
 Single-subframe HE TB receives one explicit FCS outcome and RNG draw: PASS
 HE TB MU-MIMO reception selects the active PSDU user: PASS
 Delimited HE Block Ack MPDU remains structurally valid: PASS
+MIB AID selects exact sentinel bytes and rejects wrong or unknown AIDs: PASS
 .

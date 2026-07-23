@@ -44,6 +44,7 @@
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarMediumAnalogModel.h"
 #include "inet/physicallayer/wireless/common/analogmodel/scalar/ScalarReceptionAnalogModel.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
+#include "inet/physicallayer/wireless/common/radio/packetlevel/BandListening.h"
 #include "inet/physicallayer/wireless/common/signal/Interference.h"
 #include "inet/physicallayer/wireless/common/signal/PowerFunctions.h"
 #include "inet/physicallayer/wireless/common/radio/packetlevel/Reception.h"
@@ -277,6 +278,35 @@ const IInterference *Ieee80211RadioMedium::computeInterference(const IRadio *rec
     delete allInterferingReceptions;
     auto noise = backgroundNoise ? backgroundNoise->computeNoise(listening) : nullptr;
     return new Interference(noise, overlappingReceptions);
+}
+
+const INoise *Ieee80211RadioMedium::getNoise(const IRadio *receiver, const ITransmission *transmission) const
+{
+    Ieee80211HeRu desiredRu;
+    if (!findHeMuRuForReceiver(receiver, transmission, desiredRu))
+        return RadioMedium::getNoise(receiver, transmission);
+
+    cacheNoiseGetCount++;
+    auto noise = communicationCache->getCachedNoise(receiver, transmission);
+    if (noise != nullptr) {
+        cacheNoiseHitCount++;
+        return noise;
+    }
+
+    auto listening = communicationCache->getCachedListening(receiver, transmission);
+    BandListening ruListening(receiver, listening->getStartTime(), listening->getEndTime(),
+            listening->getStartPosition(), listening->getEndPosition(),
+            desiredRu.centerFrequency, desiredRu.bandwidth);
+    // Background-noise modules are generally configured for the receiver's
+    // aggregate channel and may require that listening bandwidth. Keep that
+    // listening for interference construction, then project the resulting
+    // signals onto the recipient RU during scalar/dimensional noise
+    // integration below.
+    auto interference = computeInterference(receiver, listening, transmission);
+    noise = analogModel->computeNoise(&ruListening, interference);
+    delete interference;
+    communicationCache->setCachedNoise(receiver, transmission, noise);
+    return noise;
 }
 
 } // namespace physicallayer

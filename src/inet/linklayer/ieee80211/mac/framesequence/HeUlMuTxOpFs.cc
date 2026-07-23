@@ -504,6 +504,8 @@ Packet *HeUlMuTxOpFs::buildMultiStaBlockAckPacket() const
     header->setChunkLength(B(18 + 12 * ackRecords.size()));
     auto packet = new Packet("HE-Multi-STA-BlockAck", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    packet->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
+            setTriggerId(triggerId);
     return packet;
 }
 

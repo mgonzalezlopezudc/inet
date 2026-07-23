@@ -1,0 +1,429 @@
+%description:
+Validate HE triggered-uplink prepare/commit and terminal packet ownership by exact identity.
+
+%includes:
+#include <algorithm>
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf;
+import inet.node.wireless.AccessPoint;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+
+module TestHeHcf extends HeHcf
+{
+    parameters:
+        @class(TestHeHcf);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        radioMedium: Ieee80211ScalarRadioMedium;
+        sta: AccessPoint;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+sim-time-limit = 0s
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.opMode = "ax"
+**.bandName = "5 GHz (80 MHz)"
+**.channelNumber = 2
+**.wlan[*].bitrate = 61.25Mbps
+**.wlan[*].mac.qosStation = true
+**.wlan[*].mac.hcf.typename = "TestHeHcf"
+**.wlan[*].radio.transmitter.power = 20mW
+**.wlan[*].radio.transmitter.maxPower = 100mW
+**.wlan[*].radio.receiver.sensitivity = -85dBm
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+using namespace inet::physicallayer;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestHeHcf : public HeHcf
+{
+  public:
+    struct CommittedExchange {
+        std::vector<Packet *> packets;
+        std::vector<int> sequenceNumbers;
+    };
+
+    int failingCommitIndex = -1;
+
+    virtual void beforeTriggeredUlPacketCommit(int packetIndex) override
+    {
+        if (packetIndex == failingCommitIndex)
+            throw cRuntimeError("injected pre-commit failure");
+    }
+
+    queueing::IPacketQueue *getSourceQueue() const
+    {
+        return edca->getEdcaf(AC_BE)->getPendingQueue();
+    }
+
+    void configureAssociation(const MacAddress& ap, uint16_t aid)
+    {
+        mac->getMib()->bssData.bssid = ap;
+        mac->getMib()->bssStationData.associationId = aid;
+    }
+
+    Packet *makeQueuedPacket(const char *name, const MacAddress& ap, int payloadByte)
+    {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(ap);
+        header->setTransmitterAddress(mac->getAddress());
+        header->setAddress3(ap);
+        header->setToDS(true);
+        header->setTid(0);
+        header->setAckPolicy(NORMAL_ACK);
+        auto packet = new Packet(name, header);
+        packet->insertAtBack(makeShared<BytesChunk>(
+                std::vector<uint8_t>{static_cast<uint8_t>(payloadByte)}));
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        getSourceQueue()->enqueuePacket(packet);
+        return packet;
+    }
+
+    Ptr<Ieee80211TriggerFrame> makeTrigger(
+            uint32_t triggerId, const MacAddress& ap,
+            Ieee80211HeTriggerUserInfo& user,
+            int requestedToneSize = 0, int requestedToneOffset = 0) const
+    {
+        auto phy = getLinkPhyContext().getSnapshot();
+        auto ru = getHeEqualRuLayout(phy.getChannelCenterFrequency(),
+                phy.getChannelBandwidth(), 1).front();
+        if (requestedToneSize != 0) {
+            auto catalog = getHeRuAllocationCatalog(phy.getChannelCenterFrequency(),
+                    phy.getChannelBandwidth());
+            auto selected = std::find_if(catalog.begin(), catalog.end(),
+                    [&] (const auto& candidate) {
+                        return candidate.toneSize == requestedToneSize &&
+                                candidate.toneOffset == requestedToneOffset;
+                    });
+            REQUIRE(selected != catalog.end());
+            ru = *selected;
+        }
+        Ieee80211HeUserPhyParameters phyUser;
+        phyUser.ru = ru;
+        phyUser.mcs = 0;
+        phyUser.numberOfSpatialStreams = 1;
+        auto coding = ru.toneSize >= 484 ? HE_CODING_LDPC : HE_CODING_BCC;
+        phyUser.coding = coding;
+        phyUser.psduLength = B(512);
+        phyUser.staId = mac->getMib()->bssStationData.associationId;
+        Ieee80211HeTriggerResponseFinalizationRequest request;
+        request.users = {phyUser};
+        request.centerFrequency = phy.getChannelCenterFrequency();
+        request.channelBandwidth = phy.getChannelBandwidth();
+        request.guardInterval = HE_GI_3_2_US;
+        request.ltfType = HE_LTF_4X;
+        request.durationBudget = SimTime(2, SIMTIME_MS);
+        auto finalized = finalizeHeTriggerResponse(request);
+        REQUIRE(finalized);
+
+        auto trigger = makeShared<Ieee80211TriggerFrame>();
+        trigger->setTriggerType(IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+        trigger->setTriggerId(triggerId);
+        trigger->setTransmitterAddress(ap);
+        trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+        trigger->setUlLength(finalized.ulLength);
+        trigger->setCommonDuration(finalized.commonDuration);
+        trigger->setCommonDurationExact(finalized.commonDurationExact);
+        trigger->setChannelBandwidthMhz(
+                std::lround(phy.getChannelBandwidth().get() / 1e6));
+        trigger->setGuardInterval(HE_GI_3_2_US);
+        trigger->setLtfType(HE_LTF_4X);
+        trigger->setCoding(coding);
+        trigger->setLdpcExtraSymbolSegment(
+                finalized.parameters.common.ldpcExtraSymbol);
+        trigger->setPreFecPaddingFactor(
+                finalized.parameters.common.preFecPaddingFactor);
+        trigger->setPeDisambiguity(finalized.peDisambiguity);
+        trigger->setNumberOfHeLtfSymbols(
+                finalized.parameters.common.numberOfHeLtfSymbols);
+        trigger->setPacketExtensionDurationUs(
+                finalized.parameters.common.packetExtensionDurationUs);
+        trigger->setUsersArraySize(1);
+        user.aid = mac->getMib()->bssStationData.associationId;
+        user.ruIndex = ru.index;
+        user.ruToneSize = ru.toneSize;
+        user.ruToneOffset = ru.toneOffset;
+        user.mcs = 0;
+        user.numberOfSpatialStreams = 1;
+        user.streamStartIndex = 0;
+        user.coding = coding;
+        user.tidAggregationLimit = 1;
+        trigger->setUsers(0, user);
+        return trigger;
+    }
+
+    bool prepareAndCommit(uint32_t triggerId, const MacAddress& ap,
+            int failAt, CommittedExchange& result,
+            int requestedToneSize = 0, int requestedToneOffset = 0)
+    {
+        auto queue = getSourceQueue();
+        REQUIRE(queue->getNumPackets() >= 1);
+        Ieee80211HeTriggerUserInfo user;
+        auto trigger = makeTrigger(triggerId, ap, user,
+                requestedToneSize, requestedToneOffset);
+        TriggeredUlExchange exchange;
+        exchange.tid = 0;
+        exchange.sourceQueue = queue;
+        exchange.ru.index = user.ruIndex;
+        exchange.ru.toneSize = user.ruToneSize;
+        exchange.ru.toneOffset = user.ruToneOffset;
+        exchange.expectedResponseTime = SimTime(1, SIMTIME_S);
+        int64_t queueBytes = 0;
+        for (int i = 0; i < queue->getNumPackets(); ++i)
+            queueBytes += queue->getPacket(i)->getByteLength();
+        bool committed = false;
+        failingCommitIndex = failAt;
+        Packet *response = nullptr;
+        try {
+            response = buildTriggeredUlResponsePacket(queue->getPacket(0), queue,
+                    AC_BE, 0, queueBytes, 64, &user, trigger,
+                    getLinkPhyContext().getSnapshot().getMaximumTransmitPower(),
+                    exchange, committed);
+        }
+        catch (...) {
+            failingCommitIndex = -1;
+            REQUIRE(!committed);
+            throw;
+        }
+        failingCommitIndex = -1;
+        REQUIRE(committed);
+        delete response;
+        result.packets = exchange.packets;
+        result.sequenceNumbers = exchange.sequenceNumbers;
+        auto inserted = triggeredUlExchanges.emplace(triggerId, std::move(exchange));
+        REQUIRE(inserted.second);
+        return committed;
+    }
+
+    int getExchangeCount() const { return triggeredUlExchanges.size(); }
+
+    void setExchangeDeadline(uint32_t triggerId, simtime_t deadline)
+    {
+        auto it = triggeredUlExchanges.find(triggerId);
+        REQUIRE(it != triggeredUlExchanges.end());
+        it->second.expectedResponseTime = deadline;
+    }
+
+    void expireExchange(uint32_t triggerId)
+    {
+        auto it = triggeredUlExchanges.find(triggerId);
+        REQUIRE(it != triggeredUlExchanges.end());
+        it->second.expectedResponseTime = simTime();
+        handleTriggeredUlResponseTimeout();
+    }
+
+    void receiveBlockAck(uint32_t triggerId, const MacAddress& ap,
+            const std::vector<Ieee80211MultiStaBlockAckRecord>& records)
+    {
+        auto header = makeShared<Ieee80211MultiStaBlockAck>();
+        header->setTransmitterAddress(ap);
+        header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+        header->setRecordsArraySize(records.size());
+        for (size_t i = 0; i < records.size(); ++i)
+            header->setRecords(i, records[i]);
+        auto packet = new Packet("multi-sta-ba", header);
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        packet->addTag<Ieee80211HeTriggerCorrelationTag>()->
+                setTriggerId(triggerId);
+        processReceivedMultiStaBlockAck(packet, header);
+    }
+
+    void clearState()
+    {
+        retryPendingTriggeredUlExchanges();
+        auto queue = getSourceQueue();
+        while (queue->getNumPackets() > 0) {
+            auto packet = queue->getPacket(0);
+            queue->removePacket(packet);
+            delete packet;
+        }
+    }
+};
+
+Define_Module(TestHeHcf);
+
+%activity:
+auto sta = getParentModule()->getSubmodule("sta");
+auto wlan = sta->getSubmodule("wlan", 0);
+auto mac = wlan->getSubmodule("mac");
+auto hcf = check_and_cast<TestHeHcf *>(mac->getSubmodule("hcf"));
+MacAddress ap("10:00:00:00:00:00");
+hcf->configureAssociation(ap, 21);
+
+auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
+    auto queue = hcf->getSourceQueue();
+    REQUIRE(queue->getNumPackets() == (int)expected.size());
+    for (size_t i = 0; i < expected.size(); ++i)
+        REQUIRE(queue->getPacket(i) == expected[i]);
+};
+
+// An injected failure before the commit boundary must leave exact queue
+// identities and every header field untouched.
+{
+    auto p0 = hcf->makeQueuedPacket("prepare-p0", ap, 0x10);
+    auto p1 = hcf->makeQueuedPacket("prepare-p1", ap, 0x11);
+    auto h0 = p0->peekAtFront<Ieee80211DataHeader>();
+    auto h1 = p1->peekAtFront<Ieee80211DataHeader>();
+    TestHeHcf::CommittedExchange ignored;
+    bool failed = false;
+    try {
+        hcf->prepareAndCommit(40, ap, 0, ignored);
+    }
+    catch (const cRuntimeError&) {
+        failed = true;
+    }
+    REQUIRE(failed);
+    requireQueueIdentities({p0, p1});
+    REQUIRE(hcf->getExchangeCount() == 0);
+    REQUIRE(!h0->getSequenceNumber().isValid());
+    REQUIRE(!h1->getSequenceNumber().isValid());
+    REQUIRE(!p0->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber().isValid());
+    REQUIRE(!p1->peekAtFront<Ieee80211DataHeader>()->getSequenceNumber().isValid());
+    REQUIRE(!p0->peekAtFront<Ieee80211DataHeader>()->getRetry());
+    REQUIRE(!p0->peekAtFront<Ieee80211DataHeader>()->getOrder());
+    REQUIRE(!p0->peekAtFront<Ieee80211DataHeader>()->getBufferStatusPresent());
+    hcf->clearState();
+}
+
+// Commit moves the exact originals into the Trigger ledger. A partial BA
+// retires only p0 and requeues exact p1 with Retry set.
+{
+    auto p0 = hcf->makeQueuedPacket("partial-p0", ap, 0x20);
+    auto p1 = hcf->makeQueuedPacket("partial-p1", ap, 0x21);
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(41, ap, -1, committed);
+    REQUIRE(committed.packets == (std::vector<Packet *>{p0, p1}));
+    requireQueueIdentities({});
+    Ieee80211MultiStaBlockAckRecord record;
+    record.aid = 21;
+    record.tid = 0;
+    record.responseReceived = true;
+    record.startingSequenceNumber = committed.sequenceNumbers[0];
+    record.bitmap = 1;
+    hcf->receiveBlockAck(41, ap, {record});
+    REQUIRE(hcf->getExchangeCount() == 0);
+    requireQueueIdentities({p1});
+    REQUIRE(p1->peekAtFront<Ieee80211DataHeader>()->getRetry());
+    hcf->clearState();
+}
+
+// A missing per-AID/TID record is terminal but conserves both exact MPDUs.
+{
+    auto p0 = hcf->makeQueuedPacket("missing-p0", ap, 0x30);
+    auto p1 = hcf->makeQueuedPacket("missing-p1", ap, 0x31);
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(42, ap, -1, committed);
+    Ieee80211MultiStaBlockAckRecord unrelated;
+    unrelated.aid = 99;
+    unrelated.tid = 0;
+    unrelated.responseReceived = true;
+    hcf->receiveBlockAck(42, ap, {unrelated});
+    REQUIRE(hcf->getExchangeCount() == 0);
+    requireQueueIdentities({p0, p1});
+    REQUIRE(p0->peekAtFront<Ieee80211DataHeader>()->getRetry());
+    REQUIRE(p1->peekAtFront<Ieee80211DataHeader>()->getRetry());
+    hcf->clearState();
+}
+
+// Timeout owns the ledger once; a late BA cannot mutate the requeued identities.
+{
+    auto p0 = hcf->makeQueuedPacket("timeout-p0", ap, 0x40);
+    auto p1 = hcf->makeQueuedPacket("timeout-p1", ap, 0x41);
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(43, ap, -1, committed);
+    hcf->expireExchange(43);
+    requireQueueIdentities({p0, p1});
+    Ieee80211MultiStaBlockAckRecord record;
+    record.aid = 21;
+    record.tid = 0;
+    record.responseReceived = true;
+    record.startingSequenceNumber = committed.sequenceNumbers[0];
+    record.bitmap = 3;
+    hcf->receiveBlockAck(43, ap, {record});
+    requireQueueIdentities({p0, p1});
+    hcf->clearState();
+}
+
+// Foreign Trigger correlation and duplicate matching records are both
+// non-terminal and leave the active exact-identity ledger untouched.
+{
+    auto p0 = hcf->makeQueuedPacket("foreign-p0", ap, 0x50);
+    auto p1 = hcf->makeQueuedPacket("foreign-p1", ap, 0x51);
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(44, ap, -1, committed);
+    Ieee80211MultiStaBlockAckRecord record;
+    record.aid = 21;
+    record.tid = 0;
+    record.responseReceived = true;
+    record.startingSequenceNumber = committed.sequenceNumbers[0];
+    record.bitmap = 3;
+    hcf->receiveBlockAck(45, ap, {record});
+    REQUIRE(hcf->getExchangeCount() == 1);
+    requireQueueIdentities({});
+    hcf->receiveBlockAck(44, ap, {record, record});
+    REQUIRE(hcf->getExchangeCount() == 1);
+    requireQueueIdentities({});
+    hcf->expireExchange(44);
+    requireQueueIdentities({p0, p1});
+    hcf->clearState();
+}
+
+// A positive BA delivered after the one-slot terminal deadline must not
+// acknowledge or retire the Trigger-owned MPDU.
+{
+    auto p0 = hcf->makeQueuedPacket("late-window-p0", ap, 0x58);
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(45, ap, -1, committed);
+    hcf->setExchangeDeadline(45, simTime() - SimTime(1, SIMTIME_PS));
+    Ieee80211MultiStaBlockAckRecord record;
+    record.aid = 21;
+    record.tid = 0;
+    record.responseReceived = true;
+    record.startingSequenceNumber = committed.sequenceNumbers[0];
+    record.bitmap = 1;
+    hcf->receiveBlockAck(45, ap, {record});
+    REQUIRE(hcf->getExchangeCount() == 1);
+    requireQueueIdentities({});
+    hcf->expireExchange(45);
+    requireQueueIdentities({p0});
+    hcf->clearState();
+}
+
+// A secondary 106-tone RU in an 80 MHz channel must retain its authoritative
+// channel-relative offset throughout prospective sizing and final validation.
+{
+    auto p0 = hcf->makeQueuedPacket("secondary-ru-p0", ap, 0x60);
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(46, ap, -1, committed, 106, 512);
+    REQUIRE(committed.packets == (std::vector<Packet *>{p0}));
+    hcf->expireExchange(46);
+    requireQueueIdentities({p0});
+    hcf->clearState();
+}
+
+EV << "HE UL prepare/commit and terminal response ownership conserved exact MPDU identities.\n";
+
+%contains: stdout
+HE UL prepare/commit and terminal response ownership conserved exact MPDU identities.

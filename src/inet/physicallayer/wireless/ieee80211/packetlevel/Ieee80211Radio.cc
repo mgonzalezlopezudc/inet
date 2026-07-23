@@ -118,17 +118,6 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
         user.ndpRuToneSetIndex = request->getNdpRuToneSetIndex();
         user.ndpStartingStsNumber = request->getNdpStartingStsNumber();
         user.psduLength = request->getPsduLength() != B(-1) ? request->getPsduLength() : B(packet->getDataLength());
-        Ieee80211HeRu ru;
-        ru.index = user.ruIndex;
-        ru.toneSize = std::max<int>(user.ruToneSize, 26);
-        ru.toneOffset = user.ruToneOffset;
-        ru.dataSubcarriers = getHeRuDataSubcarrierCount(ru.toneSize);
-        ru.pilotSubcarriers = getHeRuPilotSubcarrierCount(ru.toneSize);
-        ru.bandwidth = Hz(ru.toneSize * 78125.0);
-        user.duration = computeHeUserPhyParameters(user.psduLength, ru, user.mcs,
-                user.numberOfSpatialStreams, user.dcm,
-                static_cast<Ieee80211HeGuardInterval>(request->getGuardInterval()),
-                static_cast<Ieee80211HeCoding>(request->getCoding())).duration;
         users.push_back(user);
         for (unsigned int i = 0; i < request->getCompanionUsersArraySize(); ++i) {
             const auto& companion = request->getCompanionUsers(i);
@@ -142,17 +131,6 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
             peer.streamStartIndex = companion.streamStartIndex;
             peer.dcm = companion.dcm;
             peer.psduLength = companion.psduLength;
-            Ieee80211HeRu peerRu;
-            peerRu.index = peer.ruIndex;
-            peerRu.toneSize = std::max<int>(peer.ruToneSize, 26);
-            peerRu.toneOffset = peer.ruToneOffset;
-            peerRu.dataSubcarriers = getHeRuDataSubcarrierCount(peerRu.toneSize);
-            peerRu.pilotSubcarriers = getHeRuPilotSubcarrierCount(peerRu.toneSize);
-            peerRu.bandwidth = Hz(peerRu.toneSize * 78125.0);
-            peer.duration = computeHeUserPhyParameters(peer.psduLength, peerRu, peer.mcs,
-                    peer.numberOfSpatialStreams, peer.dcm,
-                    static_cast<Ieee80211HeGuardInterval>(request->getGuardInterval()),
-                    static_cast<Ieee80211HeCoding>(request->getCoding())).duration;
             users.push_back(peer);
         }
         return users;
@@ -177,8 +155,7 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
             user.psduLength = allocation.psduLength;
             user.streamStartIndex = allocation.streamStartIndex;
             user.leakageSum = allocation.leakageSum;
-        user.duration = estimateHeMuUserDuration(user.psduLength, user.ruToneSize, user.mcs);
-        users.push_back(user);
+            users.push_back(user);
         }
     }
     return users;
