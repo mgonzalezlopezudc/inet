@@ -24,6 +24,8 @@ class INET_API IAckHandler
     virtual bool isOutstandingFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& header) = 0;
     virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) = 0;
     virtual void frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) = 0;
+    /** Removes all acknowledgment state associated with this retired frame. */
+    virtual void retireFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) {}
     virtual std::set<int> getOccupiedBlockAckSequenceNumbers(
             const MacAddress& receiverAddress, Tid tid) const { return {}; }
 };

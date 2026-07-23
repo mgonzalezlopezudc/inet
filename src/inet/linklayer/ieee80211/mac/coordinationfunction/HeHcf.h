@@ -10,11 +10,13 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <vector>
 #include <ostream>
 
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeLinkPhyContext.h"
 #include "inet/linklayer/ieee80211/mac/queue/StationQueueBankManager.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeDlScheduler.h"
@@ -79,6 +81,7 @@ class INET_API HeHcf : public Hcf
   protected:
     IIeee80211HeDlScheduler *dlScheduler = nullptr;
     HeUlCoordinator *ulCoordinator = nullptr;
+    HeTxopCoordinatorService txopCoordinator;
     std::unique_ptr<StationQueueBankManager> queueBankManager;
     std::unique_ptr<IIeee80211HeLinkPhyContext> linkPhyContext;
     cMessage *ulTriggerTimer = nullptr;
@@ -109,6 +112,10 @@ class INET_API HeHcf : public Hcf
     std::map<uint32_t, TriggeredUlExchange> triggeredUlExchanges;
     bool forceNextSingleUser[4] = {};
     std::map<MacAddress, Ieee80211HeOperatingMode> peerOperatingModes;
+    // Packet identities captured while a frame sequence is active. A peer may
+    // reassociate before that sequence finishes, so deferring by MAC address
+    // would incorrectly retire packets from the new association epoch.
+    std::map<Packet *, MacAddress> packetsPendingRetirement;
 
     HeMuMimoCsiManager csiManager;
     bool enableDlMuMimo = false;
@@ -136,6 +143,11 @@ class INET_API HeHcf : public Hcf
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
     static Packet *buildHeTbAmpdu(const std::vector<Packet *>& mpdus);
     virtual void retryPendingTriggeredUlExchanges();
+    virtual int retireQueuedPacketsForPeer(const MacAddress& peer);
+    virtual int retireInProgressPacketsForPeer(const MacAddress& peer);
+    virtual bool retireQueuedPacket(Packet *packet, const MacAddress& peer);
+    virtual bool retireInProgressPacket(Packet *packet);
+    virtual void retireDeferredPackets();
     virtual void scheduleTriggeredUlResponseTimeout();
     virtual void handleTriggeredUlResponseTimeout();
     virtual void beforeTriggeredUlPacketCommit(int packetIndex) {}
@@ -174,6 +186,7 @@ class INET_API HeHcf : public Hcf
     virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
     virtual void transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header) override;
     virtual void transmitFrame(Packet *packet, simtime_t ifs) override;
+    virtual void frameSequenceFinished() override;
 
   public:
     virtual ~HeHcf();

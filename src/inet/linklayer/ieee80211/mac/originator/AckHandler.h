@@ -50,6 +50,7 @@ class INET_API AckHandler : public SimpleModule, public IAckHandler
     virtual bool isRetransmission(const Ptr<const Ieee80211DataOrMgmtHeader>& header) override;
     virtual void processFailedFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader);
     virtual void dropFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader);
+    virtual void retireFrame(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader) override { dropFrame(dataOrMgmtHeader); }
 
     static std::string getStatusString(Status status);
 };

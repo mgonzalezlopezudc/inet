@@ -21,12 +21,36 @@ Test HeDlMuTxOpFs TXOP trimming, compressed MU-BAR Block Ack timing, BA-window e
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/networklayer/common/NetworkInterface.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmitter.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
 %file: TestNetwork.ned
+import inet.mobility.static.StationaryMobility;
+import inet.networklayer.common.InterfaceTable;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
 import inet.queueing.queue.PacketQueue;
+
+module InspectableDlRadio extends Ieee80211ScalarRadio
+{
+    parameters:
+        @class(InspectableDlRadio);
+}
+
+module MockDlNic
+{
+    parameters:
+        @class(MockDlNicModule);
+    submodules:
+        radio: InspectableDlRadio;
+    connections allowunconnected:
+        radio.upperLayerOut --> radio.upperLayerIn;
+}
 
 simple MockDlMuRateSelection
 {
@@ -44,22 +68,63 @@ module MockDlMuCallback
 
 network TestNetwork
 {
+    parameters:
+        @networkNode;
     submodules:
         test: Test;
         mockHcf: MockDlMuCallback;
         pendingQueue: PacketQueue;
+        interfaceTable: InterfaceTable;
+        radioMedium: Ieee80211RadioMedium;
+        mobility: StationaryMobility;
 }
 
 %inifile: omnetpp.ini
 [General]
 network = TestNetwork
 allow-object-stealing-on-deletion = true
+**.nic.interfaceTableModule = "^.interfaceTable"
+**.mobilityModule = "^.^.^.mobility"
+**.mobility.subjectModule = ""
+**.radio.opMode = "ax"
+**.radio.bandName = "5 GHz"
+**.radio.channelNumber = 36
+**.radio.transmitter.bitrate = 7.3125Mbps
+**.radio.transmitter.power = 20mW
+**.radio.antenna.numAntennas = 8
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
 
 %global:
 using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 using namespace inet::units::values;
+
+class InspectableDlRadio : public Ieee80211Radio
+{
+  public:
+    void testEncapsulate(Packet *packet) const { encapsulate(packet); }
+};
+
+class MockDlNicModule : public NetworkInterface
+{
+  protected:
+    virtual void initialize(int stage) override {
+        if (stage == INITSTAGE_LOCAL) {
+            state = UP;
+            carrier = true;
+        }
+    }
+    virtual int numInitStages() const override { return 1; }
+};
+
+Define_Module(InspectableDlRadio);
+Define_Module(MockDlNicModule);
 
 class MockDlMuRateSelection : public cSimpleModule, public IQosRateSelection
 {
@@ -150,6 +215,7 @@ class TestHeDlMuTxOpFs : public HeDlMuTxOpFs
   public:
     using HeDlMuTxOpFs::HeDlMuTxOpFs;
     void setFailBeforePacket(int packetIndex) { failBeforePacket = packetIndex; }
+    const HeDlMuPlan& getDlPlanForTest() const { return dlPlan; }
 };
 
 class MockDlMuInProgressFrames : public InProgressFrames
@@ -316,6 +382,16 @@ static int countTid(const std::vector<Packet *>& packets, Tid tid)
 }
 
 %activity:
+cModuleType *nicType = cModuleType::find("MockDlNic");
+ASSERT(nicType != nullptr);
+cModule *nic = nicType->create("nic", getSystemModule());
+nic->buildInside();
+auto networkInterface = check_and_cast<MockDlNicModule *>(nic);
+networkInterface->setMacAddress(MacAddress("AA:BB:CC:DD:EE:FF"));
+nic->callInitialize();
+auto radio = check_and_cast<InspectableDlRadio *>(nic->getSubmodule("radio"));
+auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransmitter());
+
 auto callback = check_and_cast<MockDlMuCallback *>(getParentModule()->getSubmodule("mockHcf"));
 auto pendingQueue = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("pendingQueue"));
 auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
@@ -523,7 +599,17 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     }
     for (int i = 0; i < 2; i++)
         pendingQueue->enqueuePacket(makeDataPacket(("pack-sta2-" + std::to_string(i)).c_str(), sta2, tid, i, 200));
-    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
+    auto radioCatalog = getHeRuAllocationCatalog(
+            transmitter->getChannel()->getCenterFrequency(), MHz(20));
+    std::vector<Ieee80211HeRu> radioRus;
+    std::copy_if(radioCatalog.begin(), radioCatalog.end(), std::back_inserter(radioRus),
+            [] (const auto& ru) { return ru.toneSize == 106; });
+    requireTrue(radioRus.size() >= 2, "radio channel must provide two canonical 106-tone RUs");
+    auto radioAllocation1 = makeAllocation(sta1, 0, 106);
+    auto radioAllocation2 = makeAllocation(sta2, 1, 106);
+    radioAllocation1.ru = radioRus[0];
+    radioAllocation2.ru = radioRus[1];
+    MockDlMuScheduler scheduler({radioAllocation1, radioAllocation2});
     MockDlMuAckHandler ackHandler;
     MockDlMuInProgressFrames inProgress;
     MockDlMuOriginatorBlockAckAgreementHandler baHandler;
@@ -531,7 +617,14 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     baHandler.addAgreement(sta2, tid);
     auto qosContext = new QoSContext(nullptr, nullptr, &baHandler, nullptr);
     auto fsContext = new FrameSequenceContext(MacAddress("AA:BB:CC:DD:EE:FF"), modeSet, &inProgress, nullptr, nullptr, nullptr, qosContext);
-    HeDlMuTxOpFs fs(makeDlPlan(scheduler, makeScheduleContext({sta1, sta2}), pendingQueue),
+    auto dlScheduleContext = makeScheduleContext({sta1, sta2});
+    dlScheduleContext.channelCenterFrequency =
+            transmitter->getChannel()->getCenterFrequency();
+    dlScheduleContext.guardInterval = HE_GI_1_6_US;
+    dlScheduleContext.ltfType = HE_LTF_2X;
+    dlScheduleContext.packetExtensionDurationUs = 4;
+    auto dlPlan = makeDlPlan(scheduler, dlScheduleContext, pendingQueue);
+    TestHeDlMuTxOpFs fs(dlPlan,
             modeSet, pendingQueue, &ackHandler, callback, 8);
     fs.startSequence(fsContext, 0);
     auto step = fs.prepareStep(fsContext);
@@ -545,7 +638,68 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
             metadataPacket->getBackOffset() == metadataPacket->getTotalLength() - B(3) &&
             metadataPacket->findRegionTag<CreationTimeTag>(b(0), metadataPacket->getTotalLength()) != nullptr,
             "commit should preserve data-region offsets and region tags");
+    auto container = check_and_cast<ITransmitStep *>(step)->getFrameToTransmit();
+    auto txTag = container->getTag<Ieee80211HeMuTxTag>();
+    requireTrue(txTag->getAllocationsArraySize() == fs.getActiveAllocations().size(),
+            "DL frame-sequence tag and active plan must have the same allocation count");
+    radio->testEncapsulate(container);
+    auto handoff = container->getTag<Ieee80211HeTxVectorReq>();
+    auto transmission = check_and_cast<const Ieee80211Transmission *>(
+            transmitter->createTransmission(radio, container, SimTime(1, SIMTIME_S)));
+    requireTrue(transmission->getHeTxVector() == handoff->getTxVector() &&
+            transmission->getHePpduLayout() == handoff->getPpduLayout(),
+            "DL frame-sequence container must retain the canonical radio/transmitter handoff");
+    requireTrue(transmission->getHeTxVector()->getUsers().size() ==
+            fs.getActiveAllocations().size(),
+            "DL frame-sequence plan and canonical TXVECTOR must have the same user count");
+    const auto& actualCommon = transmission->getHeTxVector()->getCommon();
+    const auto& actualCommonParameters = actualCommon.getParameters();
+    requireTrue(actualCommon.getCenterFrequency() == dlScheduleContext.channelCenterFrequency &&
+            actualCommonParameters.ppduFormat == HE_MU_DOWNLINK &&
+            actualCommonParameters.channelBandwidth == dlScheduleContext.channelBandwidth &&
+            actualCommonParameters.guardInterval == dlScheduleContext.guardInterval &&
+            actualCommonParameters.ltfType == dlScheduleContext.ltfType &&
+            actualCommonParameters.packetExtensionDurationUs ==
+                    dlScheduleContext.packetExtensionDurationUs &&
+            actualCommonParameters.puncturedSubchannelMask ==
+                    dlScheduleContext.puncturedSubchannelMask,
+            "validated DL common plan fields drifted before the canonical PHY handoff");
+    requireTrue(transmission->getHePpduLayout()->matches(*transmission->getHeTxVector()),
+            "DL canonical layout must match the complete canonical TXVECTOR");
+    requireTrue(transmission->getHePpduLayout()->getPsduBitRanges().size() ==
+            fs.getActiveAllocations().size(),
+            "DL canonical layout must retain one PSDU range per planned user");
+    for (size_t index = 0; index < fs.getActiveAllocations().size(); ++index) {
+        const auto& planned = fs.getDlPlanForTest().getAllocations()[index];
+        const auto& actual = transmission->getHeTxVector()->getUsers()[index].getParameters();
+        const auto& tagged = txTag->getAllocations(index);
+        const auto& layoutUser = transmission->getHePpduLayout()->getUsers()[index];
+        const auto& psduRange = transmission->getHePpduLayout()->getPsduBitRanges()[index];
+        if (!(actual.ru == planned.ru &&
+                actual.mcs == planned.mcs &&
+                actual.numberOfSpatialStreams == planned.numberOfSpatialStreams &&
+                actual.streamStartIndex == fs.getActiveAllocations()[index].streamStartIndex &&
+                actual.dcm == planned.dcm &&
+                actual.coding == dlScheduleContext.coding &&
+                actual.staId == tagged.staId &&
+                actual.psduLength == tagged.psduLength &&
+                areIeee80211HeUserParametersEqual(actual, layoutUser) &&
+                psduRange.getUserIndex() == index &&
+                psduRange.getStaId() == actual.staId &&
+                psduRange.getBitLength() == b(actual.psduLength.get<B>() * 8)))
+            throw cRuntimeError("validated DL allocation %zu drifted: RU %d/%d/%d/%g/%g -> %d/%d/%d/%g/%g, MCS %d -> %d, NSS %d -> %d, stream %d -> %d, DCM %d -> %d",
+                    index, planned.ru.index, planned.ru.toneSize, planned.ru.toneOffset,
+                    planned.ru.centerFrequency.get(), planned.ru.bandwidth.get(),
+                    actual.ru.index, actual.ru.toneSize, actual.ru.toneOffset,
+                    actual.ru.centerFrequency.get(), actual.ru.bandwidth.get(),
+                    planned.mcs, actual.mcs, planned.numberOfSpatialStreams,
+                    actual.numberOfSpatialStreams,
+                    fs.getActiveAllocations()[index].streamStartIndex,
+                    actual.streamStartIndex, planned.dcm, actual.dcm);
+    }
+    delete transmission;
     EV << "Per-user packet packing admitted multiple MPDUs per scheduled STA.\n";
+    EV << "Validated DL frame-sequence allocations matched the canonical PHY handoff.\n";
     delete step;
     delete fsContext;
 }
@@ -806,6 +960,9 @@ DL MU transaction preserved queue order, age, headers, and ACK ownership after i
 
 %contains: stdout
 Per-user packet packing admitted multiple MPDUs per scheduled STA.
+
+%contains: stdout
+Validated DL frame-sequence allocations matched the canonical PHY handoff.
 
 %contains: stdout
 BA-window exhaustion rejected a user before queue mutation and fell back.

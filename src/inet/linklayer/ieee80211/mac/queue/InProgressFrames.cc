@@ -196,6 +196,39 @@ void InProgressFrames::removeInProgressFrame(Packet *packet)
     }
 }
 
+int InProgressFrames::retireFramesForPeer(const MacAddress& peer)
+{
+    int retired = 0;
+    for (auto it = inProgressFrames.begin(); it != inProgressFrames.end(); ) {
+        auto frame = *it;
+        auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
+                frame->peekAtFront<Ieee80211MacHeader>());
+        if (header != nullptr && header->getReceiverAddress() == peer) {
+            ackHandler->retireFrame(header);
+            it = inProgressFrames.erase(it);
+            emit(packetDequeuedSignal, frame);
+            delete frame;
+            retired++;
+        }
+        else
+            ++it;
+    }
+    return retired;
+}
+
+bool InProgressFrames::retireFrame(Packet *packet)
+{
+    auto it = std::find(inProgressFrames.begin(), inProgressFrames.end(), packet);
+    if (it == inProgressFrames.end())
+        return false;
+    auto header = packet->peekAtFront<Ieee80211DataOrMgmtHeader>();
+    ackHandler->retireFrame(header);
+    inProgressFrames.erase(it);
+    emit(packetDequeuedSignal, packet);
+    delete packet;
+    return true;
+}
+
 
 void InProgressFrames::dropFrames(std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> seqAndFragNums)
 {

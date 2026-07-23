@@ -52,6 +52,10 @@ class INET_API InProgressFrames : public SimpleModule
     virtual void dropFrames(std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> seqAndFragNums);
     virtual void addInProgressFrame(Packet *packet);
     virtual void removeInProgressFrame(Packet *packet);
+    /** Retires and deletes every in-progress frame addressed to one peer. */
+    virtual int retireFramesForPeer(const MacAddress& peer);
+    /** Retires and deletes one exact in-progress packet identity, if present. */
+    virtual bool retireFrame(Packet *packet);
 
     virtual bool hasInProgressFrames() { ensureHasFrameToTransmit(); return hasEligibleFrameToTransmit(); }
     virtual std::vector<Packet *> getOutstandingFrames();

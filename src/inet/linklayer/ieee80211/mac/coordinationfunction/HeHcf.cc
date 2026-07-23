@@ -366,6 +366,118 @@ void HeHcf::destroyStationQueueBank(const MacAddress& staAddr)
     queueBankManager->destroyQueueBank(staAddr);
 }
 
+int HeHcf::retireQueuedPacketsForPeer(const MacAddress& peer)
+{
+    std::vector<Packet *> packets;
+    if (queueBankManager != nullptr) {
+        auto bank = queueBankManager->getQueueBank(peer);
+        if (bank != nullptr) {
+            for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac) {
+                auto queue = bank->getQueue(static_cast<StationQueueBank::AccessCategory>(ac));
+                for (int index = 0; index < queue->getNumPackets(); ++index)
+                    packets.push_back(queue->getPacket(index));
+            }
+        }
+    }
+    if (edca != nullptr) {
+        for (int ac = AC_BK; ac <= AC_VO; ++ac) {
+            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
+            for (int index = 0; index < queue->getNumPackets(); ++index) {
+                auto packet = queue->getPacket(index);
+                auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
+                        packet->peekAtFront<Ieee80211MacHeader>());
+                if (header != nullptr && header->getReceiverAddress() == peer)
+                    packets.push_back(packet);
+            }
+        }
+    }
+    int retired = 0;
+    for (auto packet : packets)
+        if (retireQueuedPacket(packet, peer))
+            retired++;
+    return retired;
+}
+
+int HeHcf::retireInProgressPacketsForPeer(const MacAddress& peer)
+{
+    int retired = 0;
+    for (int ac = AC_BK; ac <= AC_VO; ++ac)
+        retired += edca->getEdcaf(static_cast<AccessCategory>(ac))->
+                getInProgressFrames()->retireFramesForPeer(peer);
+    return retired;
+}
+
+bool HeHcf::retireQueuedPacket(Packet *packet, const MacAddress& peer)
+{
+    if (queueBankManager != nullptr) {
+        auto bank = queueBankManager->getQueueBank(peer);
+        if (bank != nullptr) {
+            for (int ac = StationQueueBank::AC_BK; ac <= StationQueueBank::AC_VO; ++ac) {
+                auto queue = bank->getQueue(static_cast<StationQueueBank::AccessCategory>(ac));
+                for (int index = 0; index < queue->getNumPackets(); ++index) {
+                    if (queue->getPacket(index) == packet) {
+                        if (edca != nullptr) {
+                            auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
+                                    packet->peekAtFront<Ieee80211MacHeader>());
+                            if (header != nullptr)
+                                edca->getEdcaf(static_cast<AccessCategory>(ac))->
+                                        getAckHandler()->retireFrame(header);
+                        }
+                        queue->removePacket(packet);
+                        delete packet;
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    if (edca != nullptr) {
+        for (int ac = AC_BK; ac <= AC_VO; ++ac) {
+            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
+            for (int index = 0; index < queue->getNumPackets(); ++index) {
+                if (queue->getPacket(index) == packet) {
+                    auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
+                            packet->peekAtFront<Ieee80211MacHeader>());
+                    if (header != nullptr)
+                        edca->getEdcaf(static_cast<AccessCategory>(ac))->
+                                getAckHandler()->retireFrame(header);
+                    queue->removePacket(packet);
+                    delete packet;
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+bool HeHcf::retireInProgressPacket(Packet *packet)
+{
+    if (edca == nullptr)
+        return false;
+    for (int ac = AC_BK; ac <= AC_VO; ++ac)
+        if (edca->getEdcaf(static_cast<AccessCategory>(ac))->
+                getInProgressFrames()->retireFrame(packet))
+            return true;
+    return false;
+}
+
+void HeHcf::retireDeferredPackets()
+{
+    for (const auto& entry : packetsPendingRetirement) {
+        auto packet = entry.first;
+        if (!retireQueuedPacket(packet, entry.second))
+            retireInProgressPacket(packet);
+    }
+    packetsPendingRetirement.clear();
+}
+
+void HeHcf::frameSequenceFinished()
+{
+    retireDeferredPackets();
+    Hcf::frameSequenceFinished();
+}
+
 StationQueueBank *HeHcf::getStationQueueBank(const MacAddress& staAddr) const
 {
     return queueBankManager == nullptr ? nullptr : queueBankManager->getQueueBank(staAddr);
@@ -374,6 +486,21 @@ StationQueueBank *HeHcf::getStationQueueBank(const MacAddress& staAddr) const
 void HeHcf::invalidatePeerDerivedState(const MacAddress& peer)
 {
     Hcf::invalidatePeerDerivedState(peer);
+    retireQueuedPacketsForPeer(peer);
+    if (frameSequenceHandler != nullptr && frameSequenceHandler->isSequenceRunning()) {
+        for (int ac = AC_BK; ac <= AC_VO; ++ac) {
+            auto inProgress = edca->getEdcaf(static_cast<AccessCategory>(ac))->getInProgressFrames();
+            for (int index = 0; index < inProgress->getLength(); ++index) {
+                auto packet = inProgress->getFrames(index);
+                auto header = dynamicPtrCast<const Ieee80211DataOrMgmtHeader>(
+                        packet->peekAtFront<Ieee80211MacHeader>());
+                if (header != nullptr && header->getReceiverAddress() == peer)
+                    packetsPendingRetirement[packet] = peer;
+            }
+        }
+    }
+    else if (edca != nullptr)
+        retireInProgressPacketsForPeer(peer);
     if (dlScheduler != nullptr)
         dlScheduler->invalidatePeer(peer);
     if (ulCoordinator != nullptr)
@@ -399,30 +526,22 @@ bool HeHcf::releaseChannelIfNoFallbackFrame(AccessCategory ac)
 
 void HeHcf::startFrameSequence(AccessCategory ac)
 {
-    if (forceNextSingleUser[ac]) {
+    const bool forceSingleUser = forceNextSingleUser[ac];
+    if (forceSingleUser) {
         EV_INFO << "Start FS: forced single-user TXOP for AC " << ac << "\n";
         forceNextSingleUser[ac] = false;
-        Hcf::startFrameSequence(ac);
-        return;
     }
 
     ASSERT(modeSet != nullptr);
     bool isHeMode = strcmp(modeSet->getName(), "ax") == 0;
-    if (isHeMode) {
-        // HE additions are TXOP-local frame exchange choices layered on top of
-        // HCF: first honor any pending UL Trigger opportunity (26.5.2), then
-        // try DL MU (26.5.1), otherwise fall back to the legacy HCF sequence.
-        if (tryStartUlMuFrameSequence(ac))
-            return;
-        if (tryStartDlMuFrameSequence(ac))
-            return;
-    }
-    else
+    if (!isHeMode)
         EV_INFO << "Non-HE mode, falling back to SU\n";
-
-    if (releaseChannelIfNoFallbackFrame(ac))
-        return;
-    Hcf::startFrameSequence(ac);
+    HeTxopCoordinatorService::Actions actions;
+    actions.tryStartUlMu = [this, ac] () { return tryStartUlMuFrameSequence(ac); };
+    actions.tryStartDlMu = [this, ac] () { return tryStartDlMuFrameSequence(ac); };
+    actions.releaseChannelIfNoSu = [this, ac] () { return releaseChannelIfNoFallbackFrame(ac); };
+    actions.startSu = [this, ac] () { Hcf::startFrameSequence(ac); };
+    txopCoordinator.start(isHeMode, forceSingleUser, actions);
 }
 
 void HeHcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)

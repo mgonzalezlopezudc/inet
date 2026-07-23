@@ -5,6 +5,11 @@ through PHY encapsulation and transmission creation.
 %includes:
 #include "inet/common/ProtocolTag_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuPlan.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuTxOpFs.h"
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/INarrowbandSignalAnalogModel.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
@@ -19,6 +24,7 @@ import inet.networklayer.common.InterfaceTable;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211RadioMedium;
 import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadio;
 import inet.mobility.static.StationaryMobility;
+import inet.queueing.queue.DropTailQueue;
 
 module InspectableRadio extends Ieee80211ScalarRadio
 {
@@ -45,6 +51,8 @@ network TestNetwork
         interfaceTable: InterfaceTable;
         radioMedium: Ieee80211RadioMedium;
         mobility: StationaryMobility;
+        queue1: DropTailQueue;
+        queue2: DropTailQueue;
 }
 
 %inifile: omnetpp.ini
@@ -94,6 +102,17 @@ class MockNicModule : public NetworkInterface
 Define_Module(InspectableRadio);
 Define_Module(MockNicModule);
 
+class TestUlPlanFrameSequence : public HeUlMuTxOpFs
+{
+  public:
+    using HeUlMuTxOpFs::HeUlMuTxOpFs;
+    Packet *buildTriggerPacketForTest() const { return buildTriggerPacket(); }
+};
+
+class TestUlPlanCallback : public HeHcf
+{
+};
+
 static void appendDlUser(Packet *packet, const Ieee80211HeRu& ru, uint16_t staId,
         int mcs, int nss, bool dcm, int payloadBytes)
 {
@@ -124,13 +143,72 @@ auto transmitter = check_and_cast<const Ieee80211Transmitter *>(radio->getTransm
 auto channel = transmitter->getChannel();
 ASSERT(channel != nullptr);
 auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
+auto queue1 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("queue1"));
+auto queue2 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSubmodule("queue2"));
 
 // DL-MU: two users with different MCS/lengths get distinct durations. The
 // common PPDU and actual transmission end at the longest user's duration.
 {
+    Ieee80211HeUserPhyParameters requested0;
+    requested0.ru = rus[0];
+    requested0.mcs = 0;
+    requested0.psduLength = B(600);
+    Ieee80211HeUserPhyParameters requested1;
+    requested1.ru = rus[1];
+    requested1.mcs = 7;
+    requested1.psduLength = B(300);
+    auto expected = computeHePpduParameters({requested0, requested1}, Hz(20e6),
+            HE_MU_DOWNLINK, HE_GI_1_6_US, getHeDefaultLtfType(HE_GI_1_6_US));
+    REQUIRE(expected);
+
+    Ieee80211HeCapabilities localCapabilities;
+    Ieee80211HeCapabilities peerCapabilities;
+    localCapabilities.supportedChannelWidths = {MHz(20)};
+    peerCapabilities.supportedChannelWidths = {MHz(20)};
+    localCapabilities.supportedRuToneSizes = {rus[0].toneSize, rus[1].toneSize};
+    peerCapabilities.supportedRuToneSizes = localCapabilities.supportedRuToneSizes;
+    localCapabilities.txMcsNss.maxMcsPerNss[0] = 11;
+    localCapabilities.rxMcsNss.maxMcsPerNss[0] = 11;
+    peerCapabilities.txMcsNss.maxMcsPerNss[0] = 11;
+    peerCapabilities.rxMcsNss.maxMcsPerNss[0] = 11;
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = MHz(20);
+    auto negotiated = negotiateHeCapabilities(localCapabilities, peerCapabilities, operation, true);
+    REQUIRE(negotiated.localTxPeerRx.valid);
+    IIeee80211HeDlScheduler::ScheduleContext planContext;
+    planContext.channelCenterFrequency = channel->getCenterFrequency();
+    planContext.channelBandwidth = MHz(20);
+    planContext.guardInterval = HE_GI_1_6_US;
+    planContext.ltfType = getHeDefaultLtfType(HE_GI_1_6_US);
+    for (int i = 0; i < 2; ++i) {
+        IIeee80211HeDlScheduler::CandidateInfo candidate;
+        candidate.staAddress = MacAddress(i == 0 ? "02:00:00:00:00:11" : "02:00:00:00:00:12");
+        candidate.sourceQueue = i == 0 ? queue1 : queue2;
+        candidate.hasNegotiatedHeCapabilities = true;
+        candidate.negotiatedHeCapabilities = negotiated;
+        planContext.candidates.push_back(candidate);
+    }
+    std::vector<IIeee80211HeDlScheduler::RuAllocation> proposed(2);
+    proposed[0].staAddress = planContext.candidates[0].staAddress;
+    proposed[0].ru = rus[0];
+    proposed[0].mcs = 0;
+    proposed[0].numberOfSpatialStreams = 1;
+    proposed[0].estimatedDuration = expected.parameters.duration;
+    proposed[1].staAddress = planContext.candidates[1].staAddress;
+    proposed[1].ru = rus[1];
+    proposed[1].mcs = 7;
+    proposed[1].numberOfSpatialStreams = 1;
+    proposed[1].estimatedDuration = expected.parameters.duration;
+    HeMuPlanDiagnostic diagnostic;
+    auto plan = HeDlMuPlan::create(planContext, proposed, diagnostic);
+    REQUIRE(plan);
+
     auto packet = new Packet("dl-he-mu");
-    appendDlUser(packet, rus[0], 1, 0, 1, false, 600);
-    appendDlUser(packet, rus[1], 2, 7, 1, false, 300);
+    const auto& planned = plan->getAllocations();
+    appendDlUser(packet, planned[0].ru, 1, planned[0].mcs,
+            planned[0].numberOfSpatialStreams, planned[0].dcm, 600);
+    appendDlUser(packet, planned[1].ru, 2, planned[1].mcs,
+            planned[1].numberOfSpatialStreams, planned[1].dcm, 300);
     auto common = packet->addTag<Ieee80211HeMuCommonReq>();
     common->setGuardInterval(HE_GI_1_6_US);
     common->setCoding(HE_CODING_BCC);
@@ -142,17 +220,6 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     ASSERT(phyHeader->getUsersArraySize() == 2);
     const auto& user0 = phyHeader->getUsers(0);
     const auto& user1 = phyHeader->getUsers(1);
-    Ieee80211HeUserPhyParameters requested0;
-    requested0.ru = rus[0];
-    requested0.mcs = 0;
-    requested0.psduLength = B(600);
-    Ieee80211HeUserPhyParameters requested1;
-    requested1.ru = rus[1];
-    requested1.mcs = 7;
-    requested1.psduLength = B(300);
-    auto expected = computeHePpduParameters({requested0, requested1}, Hz(20e6),
-            HE_MU_DOWNLINK, HE_GI_1_6_US, getHeDefaultLtfType(HE_GI_1_6_US));
-    ASSERT(expected);
     ASSERT(user0.duration == expected.parameters.duration);
     ASSERT(user1.duration == expected.parameters.duration);
     ASSERT(phyHeader->getCommonDuration() == expected.parameters.duration);
@@ -161,6 +228,14 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
             transmitter->createTransmission(radio, packet, SimTime(1, SIMTIME_S)));
     ASSERT(transmission->getHeTxVector() == canonicalHandoff->getTxVector());
     ASSERT(transmission->getHePpduLayout() == canonicalHandoff->getPpduLayout());
+    REQUIRE(transmission->getHeTxVector()->getUsers().size() == planned.size());
+    for (size_t i = 0; i < planned.size(); ++i) {
+        const auto& actual = transmission->getHeTxVector()->getUsers()[i].getParameters();
+        REQUIRE(actual.ru == planned[i].ru);
+        REQUIRE(actual.mcs == planned[i].mcs);
+        REQUIRE(actual.numberOfSpatialStreams == planned[i].numberOfSpatialStreams);
+        REQUIRE(actual.dcm == planned[i].dcm);
+    }
     ASSERT(transmission->getDuration() == phyHeader->getCommonDuration());
     ASSERT(transmission->getEndTime() ==
             transmission->getStartTime() + phyHeader->getCommonDuration());
@@ -263,6 +338,212 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
 
     delete transmission;
     delete packet;
+}
+
+// A validated UL scheduler plan is projected field-for-field through the
+// actual radio canonicalization and transmission handoff.
+{
+    MacAddress sta("02:00:00:00:00:21");
+    auto ru = rus[2];
+    Ieee80211HeUserPhyParameters user;
+    user.ru = ru;
+    user.mcs = 2;
+    user.numberOfSpatialStreams = 1;
+    user.coding = HE_CODING_BCC;
+    user.psduLength = B(1);
+    user.staId = 21;
+    Ieee80211HeTriggerResponseFinalizationRequest finalizationRequest;
+    finalizationRequest.users = {user};
+    finalizationRequest.centerFrequency = channel->getCenterFrequency();
+    finalizationRequest.channelBandwidth = MHz(20);
+    finalizationRequest.guardInterval = HE_GI_1_6_US;
+    finalizationRequest.ltfType = HE_LTF_2X;
+    finalizationRequest.packetExtensionDurationUs = 4;
+    finalizationRequest.noSignalExtension = true;
+    Ieee80211HeTriggerResponseFinalizationResult finalized;
+    for (int budgetUs = 1000; budgetUs >= 100 && !finalized; --budgetUs) {
+        finalizationRequest.durationBudget = SimTime(budgetUs, SIMTIME_US);
+        auto candidate = finalizeHeTriggerResponse(finalizationRequest);
+        if (!candidate || candidate.parameters.common.packetExtensionDurationUs != 4)
+            continue;
+        finalizationRequest.durationBudget = candidate.commonDuration;
+        auto replayed = finalizeHeTriggerResponse(finalizationRequest);
+        if (replayed && replayed.ulLength == candidate.ulLength &&
+                replayed.commonDuration == candidate.commonDuration &&
+                replayed.parameters.common.packetExtensionDurationUs == 4)
+            finalized = replayed;
+    }
+    REQUIRE(finalized);
+
+    IIeee80211HeUlScheduler::Schedule proposed;
+    proposed.channelBandwidth = MHz(20);
+    proposed.ulLength = finalized.ulLength;
+    proposed.commonDuration = finalized.commonDuration;
+    proposed.commonDurationExact = finalized.commonDurationExact;
+    proposed.noSignalExtension = finalizationRequest.noSignalExtension;
+    proposed.guardInterval = HE_GI_1_6_US;
+    proposed.ltfType = HE_LTF_2X;
+    proposed.coding = HE_CODING_BCC;
+    proposed.ldpcExtraSymbolSegment = finalized.parameters.common.ldpcExtraSymbol;
+    proposed.preFecPaddingFactor = finalized.parameters.common.preFecPaddingFactor;
+    proposed.peDisambiguity = finalized.peDisambiguity;
+    proposed.numberOfHeLtfSymbols = finalized.parameters.common.numberOfHeLtfSymbols;
+    proposed.packetExtensionDurationUs = finalized.parameters.common.packetExtensionDurationUs;
+    proposed.puncturedSubchannelMask = 0;
+    proposed.apTxPowerDbm = 0;
+    IIeee80211HeUlScheduler::RuAllocation allocation;
+    allocation.staAddress = sta;
+    allocation.associationId = 21;
+    allocation.ru = ru;
+    allocation.mcs = 2;
+    allocation.numberOfSpatialStreams = 1;
+    allocation.targetRssiDbm = -75;
+    allocation.estimatedDuration = finalized.commonDuration;
+    proposed.allocations = {allocation};
+    auto replayRequest = finalizationRequest;
+    replayRequest.durationBudget = proposed.commonDuration;
+    auto replayed = finalizeHeTriggerResponse(replayRequest);
+    if (!replayed ||
+            replayed.ulLength != proposed.ulLength ||
+            replayed.commonDuration != proposed.commonDuration ||
+            replayed.commonDurationExact != proposed.commonDurationExact ||
+            replayed.parameters.common.numberOfHeLtfSymbols != proposed.numberOfHeLtfSymbols ||
+            replayed.parameters.common.preFecPaddingFactor != proposed.preFecPaddingFactor ||
+            replayed.parameters.common.ldpcExtraSymbol != proposed.ldpcExtraSymbolSegment ||
+            replayed.peDisambiguity != proposed.peDisambiguity ||
+            replayed.parameters.common.packetExtensionDurationUs != proposed.packetExtensionDurationUs)
+        throw cRuntimeError("test Trigger finalization is not stable: UL %u/%u, duration %s/%s, exact %d/%d, LTF %d/%d, pre-FEC %d/%d, LDPC %d/%d, PE-disambig %d/%d, PE %d/%d",
+                proposed.ulLength, replayed.ulLength,
+                proposed.commonDuration.str().c_str(), replayed.commonDuration.str().c_str(),
+                proposed.commonDurationExact, replayed.commonDurationExact,
+                proposed.numberOfHeLtfSymbols, replayed.parameters.common.numberOfHeLtfSymbols,
+                proposed.preFecPaddingFactor, replayed.parameters.common.preFecPaddingFactor,
+                proposed.ldpcExtraSymbolSegment, replayed.parameters.common.ldpcExtraSymbol,
+                proposed.peDisambiguity, replayed.peDisambiguity,
+                proposed.packetExtensionDurationUs,
+                replayed.parameters.common.packetExtensionDurationUs);
+
+    Ieee80211HeCapabilities apCapabilities;
+    Ieee80211HeCapabilities staCapabilities;
+    apCapabilities.rxMcsNss.maxMcsPerNss[0] = 11;
+    staCapabilities.txMcsNss.maxMcsPerNss[0] = 11;
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = MHz(20);
+    auto negotiated = negotiateHeCapabilities(apCapabilities, staCapabilities, operation, true);
+    HeUlMuPlan::ValidationContext validationContext;
+    validationContext.centerFrequency = channel->getCenterFrequency();
+    HeUlMuPlan::StationContract station;
+    station.station = sta;
+    station.associationId = 21;
+    station.schedulerCandidate = true;
+    station.capabilities = negotiated;
+    validationContext.stations = {station};
+    validationContext.requireSchedulerCandidate = true;
+    HeUlMuPlanDiagnostic diagnostic;
+    auto plan = HeUlMuPlan::create(validationContext, proposed,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, diagnostic);
+    if (!plan)
+        throw cRuntimeError("UL production-handoff plan rejected: code=%d allocation=%d detail=%s",
+                (int)diagnostic.code, diagnostic.allocationIndex, diagnostic.detail.c_str());
+    const auto& plannedSchedule = plan->getSchedule();
+    const auto& plannedAllocation = plannedSchedule.allocations.front();
+
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestUlPlanCallback();
+    TestUlPlanFrameSequence sequence(coordinator, callback, *plan,
+            const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
+            MacAddress("02:00:00:00:00:01"));
+    std::unique_ptr<Packet> triggerPacket(sequence.buildTriggerPacketForTest());
+    auto trigger = triggerPacket->peekAtFront<Ieee80211TriggerFrame>();
+    REQUIRE(trigger->getUsersArraySize() == 1);
+    REQUIRE(trigger->getUlLength() == plannedSchedule.ulLength);
+    REQUIRE(trigger->getCommonDuration() == plannedSchedule.commonDuration);
+    REQUIRE(trigger->getCommonDurationExact() == plannedSchedule.commonDurationExact);
+    REQUIRE(trigger->getChannelBandwidthMhz() ==
+            std::lround(plannedSchedule.channelBandwidth.get() / 1e6));
+    REQUIRE(trigger->getNoSignalExtension() == plannedSchedule.noSignalExtension);
+    REQUIRE(trigger->getGuardInterval() == plannedSchedule.guardInterval);
+    REQUIRE(trigger->getLtfType() == plannedSchedule.ltfType);
+    REQUIRE(trigger->getCoding() == plannedSchedule.coding);
+    REQUIRE(trigger->getLdpcExtraSymbolSegment() == plannedSchedule.ldpcExtraSymbolSegment);
+    REQUIRE(trigger->getPreFecPaddingFactor() == plannedSchedule.preFecPaddingFactor);
+    REQUIRE(trigger->getPeDisambiguity() == plannedSchedule.peDisambiguity);
+    REQUIRE(trigger->getNumberOfHeLtfSymbols() == plannedSchedule.numberOfHeLtfSymbols);
+    REQUIRE(trigger->getPacketExtensionDurationUs() ==
+            plannedSchedule.packetExtensionDurationUs);
+    REQUIRE(trigger->getPuncturedSubchannelMask() ==
+            plannedSchedule.puncturedSubchannelMask);
+    const auto& triggerUser = trigger->getUsers(0);
+    REQUIRE(triggerUser.aid == plannedAllocation.associationId);
+    REQUIRE(triggerUser.ruIndex == plannedAllocation.ru.index);
+    REQUIRE(triggerUser.ruToneSize == plannedAllocation.ru.toneSize);
+    REQUIRE(triggerUser.ruToneOffset == plannedAllocation.ru.toneOffset);
+    REQUIRE(triggerUser.mcs == plannedAllocation.mcs);
+    REQUIRE(triggerUser.numberOfSpatialStreams == plannedAllocation.numberOfSpatialStreams);
+    REQUIRE(triggerUser.streamStartIndex == plannedAllocation.streamStartIndex);
+
+    auto packet = new Packet("ul-he-tb-plan");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(1)));
+    auto request = packet->addTag<Ieee80211HeMuReq>();
+    populateHeTbRequestFromTrigger(request.get(), *trigger, triggerUser,
+            plannedAllocation.associationId);
+    REQUIRE(request->getLSigLength() == plannedSchedule.ulLength);
+    REQUIRE(request->getChannelBandwidthMhz() == trigger->getChannelBandwidthMhz());
+    REQUIRE(request->getNoSignalExtension() == plannedSchedule.noSignalExtension);
+    REQUIRE(request->getGuardInterval() == plannedSchedule.guardInterval);
+    REQUIRE(request->getLtfType() == plannedSchedule.ltfType);
+    REQUIRE(request->getCoding() == plannedSchedule.coding);
+    REQUIRE(request->getLdpcExtraSymbolSegment() == plannedSchedule.ldpcExtraSymbolSegment);
+    REQUIRE(request->getPreFecPaddingFactor() == plannedSchedule.preFecPaddingFactor);
+    REQUIRE(request->getPeDisambiguity() == plannedSchedule.peDisambiguity);
+    REQUIRE(request->getNumberOfHeLtfSymbols() == plannedSchedule.numberOfHeLtfSymbols);
+    REQUIRE(request->getPacketExtensionDurationUs() ==
+            plannedSchedule.packetExtensionDurationUs);
+    REQUIRE(request->getPuncturedSubchannelMask() ==
+            plannedSchedule.puncturedSubchannelMask);
+    REQUIRE(request->getCommonDuration() == plannedSchedule.commonDuration);
+    REQUIRE(request->getCommonDurationExact() == plannedSchedule.commonDurationExact);
+
+    auto plannedPsduLength = packet->getDataLength();
+    radio->testEncapsulate(packet);
+    auto handoff = packet->getTag<Ieee80211HeTxVectorReq>();
+    auto transmission = check_and_cast<const Ieee80211Transmission *>(
+            transmitter->createTransmission(radio, packet, SimTime(3, SIMTIME_S)));
+    REQUIRE(transmission->getHeTxVector() == handoff->getTxVector());
+    REQUIRE(transmission->getHePpduLayout() == handoff->getPpduLayout());
+    const auto& actual = transmission->getHeTxVector()->getUsers().front().getParameters();
+    REQUIRE(actual.ru == plannedAllocation.ru);
+    REQUIRE(actual.mcs == plannedAllocation.mcs);
+    REQUIRE(actual.numberOfSpatialStreams == plannedAllocation.numberOfSpatialStreams);
+    REQUIRE(actual.streamStartIndex == plannedAllocation.streamStartIndex);
+    REQUIRE(actual.coding == plannedSchedule.coding);
+    REQUIRE(b(actual.psduLength.get<B>() * 8) == plannedPsduLength);
+    const auto& actualCommon = transmission->getHeTxVector()->getCommon().getParameters();
+    REQUIRE(actualCommon.ppduFormat == HE_TRIGGER_BASED_UPLINK);
+    REQUIRE(actualCommon.channelBandwidth == plannedSchedule.channelBandwidth);
+    REQUIRE(actualCommon.puncturedSubchannelMask == plannedSchedule.puncturedSubchannelMask);
+    REQUIRE(actualCommon.guardInterval == plannedSchedule.guardInterval);
+    REQUIRE(actualCommon.ltfType == plannedSchedule.ltfType);
+    REQUIRE(actualCommon.lSigLength == plannedSchedule.ulLength);
+    REQUIRE(actualCommon.noSignalExtension == plannedSchedule.noSignalExtension);
+    REQUIRE(actualCommon.ldpcExtraSymbol == plannedSchedule.ldpcExtraSymbolSegment);
+    REQUIRE(actualCommon.preFecPaddingFactor == plannedSchedule.preFecPaddingFactor);
+    REQUIRE(actualCommon.numberOfHeLtfSymbols == plannedSchedule.numberOfHeLtfSymbols);
+    REQUIRE(actualCommon.packetExtensionDurationUs ==
+            plannedSchedule.packetExtensionDurationUs);
+    REQUIRE(transmission->getHePpduLayout()->matches(*transmission->getHeTxVector()));
+    REQUIRE(transmission->getHePpduLayout()->getPsduBitRanges().size() == 1);
+    REQUIRE(transmission->getHePpduLayout()->getPsduBitRanges().front().getStaId() ==
+            plannedAllocation.associationId);
+    REQUIRE(transmission->getHePpduLayout()->getPsduBitRanges().front().getBitLength() ==
+            b(actual.psduLength.get<B>() * 8));
+    REQUIRE(transmission->getDuration() <= plannedSchedule.commonDuration);
+    REQUIRE(!plannedSchedule.commonDurationExact ||
+            transmission->getDuration() == plannedSchedule.commonDuration);
+    delete transmission;
+    delete packet;
+    delete callback;
+    delete coordinator;
 }
 
 // Full-bandwidth UL MU-MIMO keeps companion stream geometry through radio

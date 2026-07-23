@@ -1,0 +1,89 @@
+%description:
+Test deterministic HE TXOP service ordering, gating, SU fallback, and channel release with fake exchange services.
+
+%includes:
+#include <string>
+#include <vector>
+
+#include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/HeTxopCoordinatorService.h"
+
+%activity:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+HeTxopCoordinatorService coordinator;
+std::vector<std::string> calls;
+bool ulStarts = false;
+bool dlStarts = false;
+bool releases = false;
+auto suPacket = new Packet("su-fallback-identity");
+Packet *queuedSuPacket = suPacket;
+Packet *inProgressSuPacket = nullptr;
+int suStarts = 0;
+HeTxopCoordinatorService::Actions actions;
+actions.tryStartUlMu = [&] () { calls.push_back("ul"); return ulStarts; };
+actions.tryStartDlMu = [&] () { calls.push_back("dl"); return dlStarts; };
+actions.releaseChannelIfNoSu = [&] () { calls.push_back("release"); return releases; };
+actions.startSu = [&] () {
+    calls.push_back("su");
+    REQUIRE(queuedSuPacket == suPacket);
+    REQUIRE(inProgressSuPacket == nullptr);
+    inProgressSuPacket = queuedSuPacket;
+    queuedSuPacket = nullptr;
+    suStarts++;
+};
+
+ulStarts = true;
+REQUIRE(coordinator.start(true, false, actions) == HeTxopCoordinatorService::UL_MU_STARTED);
+REQUIRE(calls == std::vector<std::string>({"ul"}));
+
+calls.clear();
+ulStarts = false;
+dlStarts = true;
+REQUIRE(coordinator.start(true, false, actions) == HeTxopCoordinatorService::DL_MU_STARTED);
+REQUIRE(calls == std::vector<std::string>({"ul", "dl"}));
+
+calls.clear();
+dlStarts = false;
+REQUIRE(coordinator.start(true, false, actions) == HeTxopCoordinatorService::SU_STARTED);
+REQUIRE(calls == std::vector<std::string>({"ul", "dl", "release", "su"}));
+REQUIRE(inProgressSuPacket == suPacket);
+REQUIRE(suStarts == 1);
+
+calls.clear();
+releases = true;
+queuedSuPacket = inProgressSuPacket;
+inProgressSuPacket = nullptr;
+REQUIRE(coordinator.start(true, false, actions) == HeTxopCoordinatorService::CHANNEL_RELEASED);
+REQUIRE(calls == std::vector<std::string>({"ul", "dl", "release"}));
+REQUIRE(queuedSuPacket == suPacket);
+REQUIRE(inProgressSuPacket == nullptr);
+REQUIRE(suStarts == 1);
+
+calls.clear();
+releases = false;
+REQUIRE(coordinator.start(false, false, actions) == HeTxopCoordinatorService::SU_STARTED);
+REQUIRE(calls == std::vector<std::string>({"release", "su"}));
+REQUIRE(inProgressSuPacket == suPacket);
+REQUIRE(suStarts == 2);
+
+calls.clear();
+queuedSuPacket = inProgressSuPacket;
+inProgressSuPacket = nullptr;
+REQUIRE(coordinator.start(true, true, actions) == HeTxopCoordinatorService::SU_STARTED);
+REQUIRE(calls == std::vector<std::string>({"su"}));
+REQUIRE(inProgressSuPacket == suPacket);
+REQUIRE(suStarts == 3);
+
+EV << "HE TXOP coordinator preserved UL, DL, SU, and release ordering.\n";
+EV << "SU fallback transferred the exact packet identity once per admitted TXOP.\n";
+delete inProgressSuPacket;
+
+%contains: stdout
+HE TXOP coordinator preserved UL, DL, SU, and release ordering.
+
+%contains: stdout
+SU fallback transferred the exact packet identity once per admitted TXOP.
