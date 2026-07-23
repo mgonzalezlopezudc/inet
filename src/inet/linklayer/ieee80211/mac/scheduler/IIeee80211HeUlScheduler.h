@@ -15,6 +15,7 @@
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 
@@ -78,6 +79,8 @@ class INET_API IIeee80211HeUlScheduler
         bool anchor = false;
         double pathLossDb = NaN;
         bool hasFreshPathLoss = false;
+        bool hasNegotiatedHeCapabilities = false;
+        Ieee80211NegotiatedHeCapabilities negotiatedHeCapabilities;
         bool ulMuDisabled = false;
         simtime_t lastService = SIMTIME_ZERO;
 
@@ -148,6 +151,12 @@ class INET_API IIeee80211HeUlScheduler
 
     virtual ~IIeee80211HeUlScheduler() {}
     virtual Schedule schedule(const ScheduleContext& context) = 0;
+
+    /**
+     * Discards scheduler-owned state derived from a peer association epoch.
+     * Stateless extension schedulers may retain the default no-op.
+     */
+    virtual void invalidatePeer(const MacAddress& peer) {}
 };
 
 inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeUlScheduler::CandidateInfo& candidate)

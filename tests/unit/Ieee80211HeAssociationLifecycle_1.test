@@ -2,6 +2,7 @@
 Test release-effective STA reassociation preservation and local peer-cache teardown.
 
 %includes:
+#include <set>
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtSta.h"
 
 %file: TestNetwork.ned
@@ -49,6 +50,7 @@ class TestMgmtSta : public Ieee80211MgmtSta
     bool lastConfirmWasReassociation = false;
     Ieee80211PrimResultCode lastConfirmResult = static_cast<Ieee80211PrimResultCode>(-1);
     MacAddress lastConfirmAddress;
+    std::set<MacAddress> invalidatedPeers;
 
   protected:
     virtual void initialize(int stage) override
@@ -66,6 +68,10 @@ class TestMgmtSta : public Ieee80211MgmtSta
     virtual bool isHeManagementSupported() override { return false; }
     virtual void changeChannel(int channelNum) override { lastChannel = channelNum; }
     virtual void handleMessageWhenDown(cMessage *message) override { delete message; }
+    virtual void invalidatePeerDerivedState(const MacAddress& peer) override
+    {
+        invalidatedPeers.insert(peer);
+    }
 
     virtual void sendManagementFrame(const char *, const Ptr<Ieee80211MgmtFrame>& body,
             int subtype, const MacAddress&) override
@@ -141,6 +147,19 @@ class TestMgmtSta : public Ieee80211MgmtSta
         handleReassociationResponseFrame(packet, header);
     }
 
+    void acceptReassociation(const MacAddress& address)
+    {
+        Enter_Method("acceptReassociation");
+        auto response = makeShared<Ieee80211ReassociationResponseFrame>();
+        response->setStatusCode(SC_SUCCESSFUL);
+        response->setAid(9);
+        response->setChunkLength(B(6));
+        auto packet = new Packet("ReassocResp-success", response);
+        auto header = makeShared<Ieee80211MgmtHeader>();
+        header->setTransmitterAddress(address);
+        handleReassociationResponseFrame(packet, header);
+    }
+
     void locallyDeauthenticate(const MacAddress& address)
     {
         Enter_Method("locallyDeauthenticate");
@@ -181,6 +200,11 @@ class TestMgmtSta : public Ieee80211MgmtSta
     const AssociatedApInfo& getAssociatedApForTest() const { return assocAP; }
     Ptr<Ieee80211MgmtFrame> getLastFrame() const { return lastFrame; }
     bool hasPendingAssociationTransition() const { return assocTimeoutMsg != nullptr; }
+    bool wasPeerInvalidated(const MacAddress& peer) const
+    {
+        return invalidatedPeers.count(peer) != 0;
+    }
+    void clearInvalidatedPeers() { invalidatedPeers.clear(); }
 };
 
 Define_Module(TestMgmtSta);
@@ -228,6 +252,10 @@ requireLifecycle(mgmt->hasPendingAssociationTransition() &&
         mib->bssStationData.isAssociated && mgmt->getAssociatedApForTest().address == oldAp,
         "response from the wrong AP must not cancel the pending reassociation");
 requireAllCapabilities(mib, targetAp, true);
+requireLifecycle(!mgmt->wasPeerInvalidated(oldAp) &&
+        !mgmt->wasPeerInvalidated(targetAp) &&
+        !mgmt->wasPeerInvalidated(wrongAp),
+        "an unrelated reassociation response must not invalidate peer state");
 
 mgmt->refuseReassociation(targetAp);
 requireLifecycle(mib->bssStationData.isAssociated &&
@@ -241,8 +269,12 @@ requireLifecycle(mgmt->getLastConfirmWasReassociation() &&
         mgmt->getLastConfirmResult() == PRC_REFUSED &&
         mgmt->getLastConfirmAddress() == targetAp,
         "refused reassociation must emit the typed reassociation confirmation");
+requireLifecycle(mgmt->wasPeerInvalidated(targetAp) &&
+        !mgmt->wasPeerInvalidated(oldAp),
+        "refused reassociation must invalidate only the rejected target");
 
 cacheAllCapabilities(mib, targetAp);
+mgmt->clearInvalidatedPeers();
 mgmt->beginReassociation(targetAp);
 mgmt->locallyDisassociate(targetAp);
 requireLifecycle(!mgmt->hasPendingAssociationTransition() &&
@@ -250,24 +282,52 @@ requireLifecycle(!mgmt->hasPendingAssociationTransition() &&
         mgmt->getLastChannel() == 1,
         "canceling the target reassociation must preserve and retune to the old AP");
 requireAllCapabilities(mib, targetAp, false);
+requireLifecycle(mgmt->wasPeerInvalidated(targetAp) &&
+        !mgmt->wasPeerInvalidated(oldAp),
+        "canceling reassociation must invalidate the target and preserve the live peer");
 
 mgmt->forceNotAssociated();
 cacheAllCapabilities(mib, targetAp);
+mgmt->clearInvalidatedPeers();
 mgmt->locallyDeauthenticate(targetAp);
 requireAllCapabilities(mib, targetAp, false);
+requireLifecycle(mgmt->wasPeerInvalidated(targetAp),
+        "deauthentication must invalidate peer-derived state");
 
 cacheAllCapabilities(mib, targetAp);
+mgmt->clearInvalidatedPeers();
 mgmt->locallyDisassociate(targetAp);
 requireAllCapabilities(mib, targetAp, false);
+requireLifecycle(mgmt->wasPeerInvalidated(targetAp),
+        "disassociation must invalidate peer-derived state");
+
+mgmt->setAuthenticated(targetAp, true);
+mgmt->associateWith(oldAp);
+cacheAllCapabilities(mib, oldAp);
+cacheAllCapabilities(mib, targetAp);
+mgmt->clearInvalidatedPeers();
+mgmt->beginReassociation(targetAp);
+mgmt->acceptReassociation(targetAp);
+requireLifecycle(mib->bssStationData.isAssociated &&
+        mgmt->getAssociatedApForTest().address == targetAp,
+        "successful reassociation must install the target association");
+requireLifecycle(mgmt->wasPeerInvalidated(oldAp) &&
+        mgmt->wasPeerInvalidated(targetAp),
+        "successful reassociation must invalidate old and replacement peer epochs");
+mgmt->locallyDisassociate(targetAp);
 
 mgmt->setAuthenticated(targetAp, true);
 mgmt->associateWith(oldAp);
 cacheAllCapabilities(mib, oldAp);
 mgmt->beginReassociation(targetAp);
+mgmt->clearInvalidatedPeers();
 mgmt->startPassiveScan();
 requireLifecycle(!mgmt->hasPendingAssociationTransition(),
         "scan must cancel reassociation before clearing the AP list");
 requireAllCapabilities(mib, oldAp, false);
+requireLifecycle(mgmt->wasPeerInvalidated(oldAp) &&
+        mgmt->wasPeerInvalidated(targetAp),
+        "scan cancellation must invalidate both live and pending peer epochs");
 
 EV << "Reassociation target validation, cancellation safety, and cache invalidation passed.\n";
 

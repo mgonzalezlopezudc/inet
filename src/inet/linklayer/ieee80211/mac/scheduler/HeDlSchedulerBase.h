@@ -75,6 +75,7 @@ class INET_API HeDlSchedulerBase : public IIeee80211HeDlScheduler, public Simple
     virtual std::vector<RuAllocation> schedule(const std::vector<MacAddress>& candidates,
             Hz channelCenterFrequency, Hz channelBandwidth) override;
     virtual std::vector<RuAllocation> schedule(const ScheduleContext& context) override = 0;
+    virtual void invalidatePeer(const MacAddress& peer) override;
 };
 
 } // namespace ieee80211

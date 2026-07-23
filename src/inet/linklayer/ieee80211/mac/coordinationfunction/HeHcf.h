@@ -180,6 +180,7 @@ class INET_API HeHcf : public Hcf
     virtual StationQueueBank *createStationQueueBank(const MacAddress& staAddr) override;
     virtual void destroyStationQueueBank(const MacAddress& staAddr) override;
     virtual StationQueueBank *getStationQueueBank(const MacAddress& staAddr) const override;
+    virtual void invalidatePeerDerivedState(const MacAddress& peer) override;
     virtual void originatorProcessTransmittedFrame(Packet *packet) override;
     virtual void originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211MacHeader>& controlHeader, AccessCategory ac) override;
     virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override;

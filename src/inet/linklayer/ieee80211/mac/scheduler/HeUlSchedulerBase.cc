@@ -58,6 +58,12 @@ void HeUlSchedulerBase::initialize(int stage)
     }
 }
 
+void HeUlSchedulerBase::invalidatePeer(const MacAddress& peer)
+{
+    if (heRateControl != nullptr)
+        heRateControl->invalidatePeer(peer);
+}
+
 int HeUlSchedulerBase::computeRandomAccessRuCount(const ScheduleContext& context, int availableRus) const
 {
     ASSERT(availableRus >= 0);
@@ -89,6 +95,10 @@ int HeUlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
         return defaultMcs;
     IIeee80211HeRateControl::Constraints constraints;
     constraints.maxMcs = 9; // keep HE-TB robust unless LDPC/user constraints explicitly widen later
+    if (candidate.hasNegotiatedHeCapabilities &&
+            candidate.negotiatedHeCapabilities.localRxPeerTx.valid)
+        constraints.directionalCapabilities =
+                candidate.negotiatedHeCapabilities.localRxPeerTx;
     if (candidate.hasFreshPathLoss)
         heRateControl->reportHeRxSnir(candidate.staAddress,
                 context.targetRssiMarginDb + context.apSensitivityDbm - context.apSensitivityDbm);

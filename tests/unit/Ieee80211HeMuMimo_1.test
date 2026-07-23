@@ -107,17 +107,22 @@ class TestHeSoundingFs : public HeSoundingFs
     ASSERT(!csi.hasFreshCsi(addr1, Hz(20e6)));
 
     csi.updateCsi(addr1, Hz(20e6), stas, getAid);
+    csi.updateCsi(addr2, Hz(20e6), stas, getAid);
     ASSERT(csi.hasFreshCsi(addr1, Hz(20e6)));
+    ASSERT(csi.hasFreshCsi(addr2, Hz(20e6)));
 
     // Leakage override 1-2 is 0.01
     ASSERT(std::abs(csi.getLeakage(addr1, addr2, Hz(20e6)) - 0.01) < 1e-6);
     // Leakage default for 1-3 is 0.1
     ASSERT(std::abs(csi.getLeakage(addr1, addr3, Hz(20e6)) - 0.1) < 1e-6);
 
-    csi.invalidateCsi(addr1, Hz(20e6));
-    ASSERT(!csi.hasFreshCsi(addr1, Hz(20e6)));
+    csi.invalidatePeer(addr1);
+    if (csi.hasFreshCsi(addr1, Hz(20e6)) ||
+            !csi.hasFreshCsi(addr2, Hz(20e6)) ||
+            std::abs(csi.getLeakage(addr2, addr1, Hz(20e6)) - 0.1) >= 1e-6)
+        throw cRuntimeError("CSI peer invalidation did not remove owned and cross-peer derived state");
 
-    EV << "CSI Manager & Leakage Overrides checks passed.\n";
+    EV << "CSI Manager, leakage overrides, and peer invalidation checks passed.\n";
 }
 
 // 3. Serialization Round Trip
@@ -237,7 +242,7 @@ EV << ".\n";
 
 %contains: stdout
 MU-MIMO Capability Gating checks passed.
-CSI Manager & Leakage Overrides checks passed.
+CSI Manager, leakage overrides, and peer invalidation checks passed.
 Feedback frame serialization round trip passed.
 
 %contains: stdout

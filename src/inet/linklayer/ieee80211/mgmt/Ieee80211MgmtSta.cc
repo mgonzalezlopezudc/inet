@@ -15,6 +15,7 @@
 #include "inet/common/Simsignals.h"
 #include "inet/common/packet/Message.h"
 #include "inet/linklayer/common/MacAddressTag_m.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211SubtypeTag_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211HeMgmtElements.h"
 #include "inet/networklayer/common/NetworkInterface.h"
@@ -133,6 +134,8 @@ void Ieee80211MgmtSta::handleTimer(cMessage *msg)
         // send back failure report to agent
         assocTimeoutMsg = nullptr;
         pendingReassociation = false;
+        if (!mib->bssStationData.isAssociated || assocAP.address != ap->address)
+            invalidatePeerDerivedState(ap->address);
         if (reassociation) {
             if (mib->bssStationData.isAssociated)
                 changeChannel(assocAP.channel);
@@ -474,11 +477,14 @@ void Ieee80211MgmtSta::cancelAssociationTransition(bool restorePreviousChannel)
 {
     if (assocTimeoutMsg == nullptr)
         return;
+    auto pendingAddress = getPendingAssociationAddress();
     bool restoreChannel = restorePreviousChannel && pendingReassociation &&
             mib->bssStationData.isAssociated;
     cancelAndDelete(assocTimeoutMsg);
     assocTimeoutMsg = nullptr;
     pendingReassociation = false;
+    if (!mib->bssStationData.isAssociated || assocAP.address != pendingAddress)
+        invalidatePeerDerivedState(pendingAddress);
     if (restoreChannel)
         changeChannel(assocAP.channel);
 }
@@ -626,6 +632,8 @@ void Ieee80211MgmtSta::processDeauthenticateCommand(Ieee80211Prim_Deauthenticate
 
     if (mib->bssStationData.isAssociated && assocAP.address == address)
         disassociate();
+    else
+        invalidatePeerDerivedState(address);
 
     if (ap->isAuthenticated)
         ap->isAuthenticated = false;
@@ -671,6 +679,8 @@ void Ieee80211MgmtSta::processDisassociateCommand(Ieee80211Prim_DisassociateRequ
         cancelAssociationTransition(true);
     if (mib->bssStationData.isAssociated && address == assocAP.address)
         disassociate();
+    else
+        invalidatePeerDerivedState(address);
     mib->removePeerCapabilities(address);
 
     // create and send disassociation request
@@ -683,6 +693,7 @@ void Ieee80211MgmtSta::disassociate()
 {
     EV << "Disassociating from AP address=" << assocAP.address << "\n";
     ASSERT(mib->bssStationData.isAssociated);
+    invalidatePeerDerivedState(assocAP.address);
     mib->removePeerCapabilities(assocAP.address);
     mib->heOperation.bssColor = 0;
     mib->bssStationData.isAssociated = false;
@@ -690,6 +701,19 @@ void Ieee80211MgmtSta::disassociate()
     cancelAndDelete(assocAP.beaconTimeoutMsg);
     assocAP.beaconTimeoutMsg = nullptr;
     assocAP = AssociatedApInfo(); // clear it
+}
+
+void Ieee80211MgmtSta::invalidatePeerDerivedState(const MacAddress& peer)
+{
+    try {
+        auto macModule = getModuleFromPar<cModule>(par("macModule"), this);
+        if (macModule != nullptr)
+            check_and_cast<Ieee80211Mac *>(macModule)->invalidatePeerDerivedState(peer);
+    }
+    catch (const cException& error) {
+        EV_DEBUG << "Could not invalidate IEEE 802.11 peer-derived state: "
+                << error.what() << "\n";
+    }
 }
 
 void Ieee80211MgmtSta::sendAuthenticationConfirm(ApInfo *ap, Ieee80211PrimResultCode resultCode)
@@ -826,8 +850,10 @@ void Ieee80211MgmtSta::handleDeauthenticationFrame(Packet *packet, const Ptr<con
         cancelAssociationTransition(true);
     if (mib->bssStationData.isAssociated && address == assocAP.address)
         disassociate();
-    else
+    else {
         mib->removePeerCapabilities(address);
+        invalidatePeerDerivedState(address);
+    }
     delete packet;
 }
 
@@ -888,8 +914,10 @@ void Ieee80211MgmtSta::handleAssociationResponse(Packet *packet,
            << " failed with AP address=" << ap->address << "\n";
         if (reassociation && mib->bssStationData.isAssociated)
             changeChannel(assocAP.channel);
-        if (!mib->bssStationData.isAssociated || ap->address != assocAP.address)
+        if (!mib->bssStationData.isAssociated || ap->address != assocAP.address) {
             mib->removePeerCapabilities(ap->address);
+            invalidatePeerDerivedState(ap->address);
+        }
     }
     else {
         EV << (reassociation ? "Reassociation" : "Association")
@@ -900,7 +928,9 @@ void Ieee80211MgmtSta::handleAssociationResponse(Packet *packet,
             cancelAndDelete(assocAP.beaconTimeoutMsg);
             assocAP.beaconTimeoutMsg = nullptr;
             mib->removePeerCapabilities(oldApAddress);
+            invalidatePeerDerivedState(oldApAddress);
         }
+        invalidatePeerDerivedState(ap->address);
 
         // change our state to "associated"
         mib->bssData.ssid = ap->ssid;
@@ -962,19 +992,12 @@ void Ieee80211MgmtSta::handleDisassociationFrame(Packet *packet, const Ptr<const
     if (!mib->bssStationData.isAssociated || address != assocAP.address) {
         EV << "Not associated with that AP -- ignoring frame\n";
         mib->removePeerCapabilities(address);
+        invalidatePeerDerivedState(address);
         delete packet;
         return;
     }
 
-    EV << "Setting isAssociated flag to false\n";
-    mib->removePeerCapabilities(address);
-    mib->heOperation.bssColor = 0;
-    mib->bssStationData.isAssociated = false;
-    mib->bssStationData.associationId = -1;
-    cancelAndDelete(assocAP.beaconTimeoutMsg);
-    assocAP.beaconTimeoutMsg = nullptr;
-    EV_INFO << "Beacon timeout timer canceled for AP address=" << assocAP.address << "\n";
-    assocAP = AssociatedApInfo();
+    disassociate();
     delete packet;
 }
 

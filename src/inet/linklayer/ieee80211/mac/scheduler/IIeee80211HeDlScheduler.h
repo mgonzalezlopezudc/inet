@@ -109,6 +109,12 @@ class INET_API IIeee80211HeDlScheduler
             candidates.push_back(candidate.staAddress);
         return schedule(candidates, context.channelCenterFrequency, context.channelBandwidth);
     }
+
+    /**
+     * Discards scheduler-owned state derived from a peer association epoch.
+     * Stateless extension schedulers may retain the default no-op.
+     */
+    virtual void invalidatePeer(const MacAddress& peer) {}
 };
 
 inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeDlScheduler::CandidateInfo& candidate)

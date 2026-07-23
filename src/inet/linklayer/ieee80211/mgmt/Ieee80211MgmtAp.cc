@@ -473,8 +473,12 @@ void Ieee80211MgmtAp::handleAssociationRequestFrame(Packet *packet, const Ptr<co
         cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
         if (macModule) {
             Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-            if (mac->isApInAxMode() && !mac->getStationQueueBank(sta->address))
-                mac->createStationQueueBank(sta->address);
+            if (mac->isApInAxMode()) {
+                if (mac->getStationQueueBank(sta->address) == nullptr)
+                    mac->createStationQueueBank(sta->address);
+                else
+                    mac->invalidatePeerDerivedState(sta->address);
+            }
         }
     }
     catch (const cException &e) {
@@ -524,8 +528,12 @@ void Ieee80211MgmtAp::handleReassociationRequestFrame(Packet *packet, const Ptr<
         cModule *macModule = getModuleFromPar<cModule>(par("macModule"), this);
         if (macModule) {
             Ieee80211Mac *mac = check_and_cast<Ieee80211Mac *>(macModule);
-            if (mac->isApInAxMode() && !mac->getStationQueueBank(sta->address))
-                mac->createStationQueueBank(sta->address);
+            if (mac->isApInAxMode()) {
+                if (mac->getStationQueueBank(sta->address) == nullptr)
+                    mac->createStationQueueBank(sta->address);
+                else
+                    mac->invalidatePeerDerivedState(sta->address);
+            }
         }
     }
     catch (const cException &e) {

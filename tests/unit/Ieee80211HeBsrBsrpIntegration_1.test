@@ -2,6 +2,8 @@
 Test HE BSR/BSRP coordinator integration for fresh, stale, implicit reports, trigger selection, and scheduler allocations.
 
 %includes:
+#include <algorithm>
+
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlDefaultTriggerPolicy.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeUlScheduler.h"
@@ -147,8 +149,8 @@ auto aid3 = mib->getAssociationId(sta3);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
 EV << "Missing fresh reports selected a BSRP Trigger.\n";
 
-coordinator->updateBufferStatus(aid1, AC_BE, 0, 1200, false);
-coordinator->updateBufferStatus(aid2, AC_VI, 5, 0, true);
+coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 1200, false);
+coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, 0, true);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
 ASSERT(coordinator->getPreferredAccessCategory() == AC_VI);
 EV << "Fresh backlogged and retry reports selected a Basic Trigger.\n";
@@ -169,11 +171,11 @@ coordinator->commitSchedule(freshSchedule);
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 1200);
 EV << "Fresh reports reached the UL scheduler and produced allocations.\n";
 
-coordinator->updateBufferStatus(aid2, AC_BE, 0, 0, false);
+coordinator->updateBufferStatus(aid2, sta2, AC_BE, 0, 0, false);
 ASSERT(coordinator->getBufferStatus().at(aid2).retryPending[AC_VI]);
 ASSERT(!coordinator->getBufferStatus().at(aid2).retryPending[AC_BE]);
 ASSERT(coordinator->getPreferredAccessCategory() == AC_VI);
-coordinator->updateBufferStatus(aid2, AC_VI, 5, 0, false);
+coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, 0, false);
 ASSERT(!coordinator->getBufferStatus().at(aid2).retryPending[AC_VI]);
 ASSERT(coordinator->getPreferredAccessCategory() == AC_BE);
 EV << "Per-AC retry state survived an unrelated report and cleared independently.\n";
@@ -190,7 +192,7 @@ coordinator->commitSchedule(staleSchedule);
 REQUIRE(staleReportCounter.count == staleReportsBeforePreparation + 3);
 EV << "Stale reports were excluded and selected BSRP polling.\n";
 
-coordinator->updateBufferStatus(aid3, AC_VO, 6, 800, false);
+coordinator->updateBufferStatus(aid3, sta3, AC_VO, 6, 800, false);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
 auto implicitSchedule = coordinator->prepareSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
         SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
@@ -203,6 +205,28 @@ ASSERT(coordinator->getBufferStatus().at(aid3).scheduledBytes[AC_VO] == 0);
 coordinator->commitSchedule(implicitSchedule);
 ASSERT(coordinator->getBufferStatus().at(aid3).scheduledBytes[AC_VO] == 800);
 EV << "Implicit BSR refresh drove Basic Trigger scheduling for the reporting STA.\n";
+
+coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 900, false);
+coordinator->clearStation(sta1);
+REQUIRE(coordinator->getBufferStatus().count(aid1) == 0);
+EV << "Peer lifecycle invalidation removed the station's cached BSR state.\n";
+
+coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 900, false);
+mib->releaseAssociationId(sta1);
+mib->bssAccessPointData.stations[sta1] = Ieee80211Mib::AUTHENTICATED;
+MacAddress replacement("02:00:00:00:10:04");
+associate(mib, replacement);
+REQUIRE(mib->getAssociationId(replacement) == aid1);
+auto replacementSchedule = coordinator->prepareSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S),
+        Hz(5.18e9), Hz(20e6), SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US),
+        -85, 10, 0, 0, 0);
+REQUIRE(std::none_of(scheduler->lastContext.candidates.begin(),
+        scheduler->lastContext.candidates.end(),
+        [&](const auto& candidate) { return candidate.staAddress == replacement; }));
+REQUIRE(std::none_of(replacementSchedule.allocations.begin(),
+        replacementSchedule.allocations.end(),
+        [&](const auto& allocation) { return allocation.staAddress == replacement; }));
+EV << "A reused AID could not inherit the previous peer's BSR epoch.\n";
 
 EV << ".\n";
 
@@ -223,6 +247,12 @@ Stale reports were excluded and selected BSRP polling.
 
 %contains: stdout
 Implicit BSR refresh drove Basic Trigger scheduling for the reporting STA.
+
+%contains: stdout
+Peer lifecycle invalidation removed the station's cached BSR state.
+
+%contains: stdout
+A reused AID could not inherit the previous peer's BSR epoch.
 
 %contains: stdout
 .

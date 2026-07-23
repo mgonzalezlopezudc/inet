@@ -33,6 +33,14 @@ network TestNetwork
                 ewmaWeight = 0.75;
                 seedFromSnir = true;
         }
+        fresh: TestableHeMinstrelRateControl {
+            parameters:
+                maxNss = 2;
+                lookaroundRatio = 0;
+                ewmaWeight = 0;
+                seedFromSnir = true;
+                updateInterval = 100ms;
+        }
 }
 
 %inifile: omnetpp.ini
@@ -44,6 +52,8 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 using namespace inet::units::values;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
 class TestableHeMinstrelRateControl : public HeMinstrelRateControl
 {
@@ -72,6 +82,12 @@ class TestableHeMinstrelRateControl : public HeMinstrelRateControl
 
   public:
     void setTestModeSet(Ieee80211ModeSet *testModeSet) { modeSet = testModeSet; }
+    bool hasPeer(const MacAddress& peer) const { return peers.count(peer) != 0; }
+    size_t getRateCount(const MacAddress& peer) const
+    {
+        auto it = peers.find(peer);
+        return it == peers.end() ? 0 : it->second.rates.size();
+    }
 };
 
 Define_Module(TestableHeMinstrelRateControl);
@@ -79,37 +95,53 @@ Define_Module(TestableHeMinstrelRateControl);
 static const Ieee80211HeMode *asHeMode(const IIeee80211Mode *mode)
 {
     auto heMode = dynamic_cast<const Ieee80211HeMode *>(mode);
-    ASSERT(heMode != nullptr);
+    REQUIRE(heMode != nullptr);
     return heMode;
+}
+
+static Ieee80211HeDirectionalCapabilities makeDirectionalCapabilities(
+        int maxMcs, std::set<int> ruToneSizes, int secondNssMaxMcs = -1)
+{
+    Ieee80211HeDirectionalCapabilities capabilities;
+    capabilities.valid = true;
+    capabilities.ofdma = true;
+    capabilities.supportedChannelWidths = {MHz(20)};
+    capabilities.supportedRuToneSizes = std::move(ruToneSizes);
+    capabilities.mcsNss.maxMcsPerNss.fill(-1);
+    capabilities.mcsNss.maxMcsPerNss[0] = maxMcs;
+    capabilities.mcsNss.maxMcsPerNss[1] = secondNssMaxMcs;
+    return capabilities;
 }
 
 %activity:
 auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
-ASSERT(modeSet != nullptr);
+REQUIRE(modeSet != nullptr);
 auto normal = check_and_cast<TestableHeMinstrelRateControl *>(getParentModule()->getSubmodule("normal"));
 auto probe = check_and_cast<TestableHeMinstrelRateControl *>(getParentModule()->getSubmodule("probe"));
+auto fresh = check_and_cast<TestableHeMinstrelRateControl *>(getParentModule()->getSubmodule("fresh"));
 normal->setTestModeSet(modeSet);
 probe->setTestModeSet(modeSet);
+fresh->setTestModeSet(modeSet);
 
 IIeee80211HeRateControl::Constraints constraints;
 constraints.minMcs = 3;
 constraints.maxMcs = 4;
 auto filtered = normal->selectHeMode(MacAddress("02:00:00:00:00:01"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 2, constraints);
-ASSERT(filtered.mode != nullptr);
-ASSERT(filtered.mcs == 4);
+REQUIRE(filtered.mode != nullptr);
+REQUIRE(filtered.mcs == 4);
 EV << "Candidate MCS min/max filtering selected MCS " << filtered.mcs << ".\n";
 
 constraints = {};
 constraints.maxMcs = 1;
 auto ewmaPeer = MacAddress("02:00:00:00:00:02");
 auto beforeFailures = normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(beforeFailures.mcs == 1);
+REQUIRE(beforeFailures.mcs == 1);
 for (int i = 0; i < 8; i++)
     normal->reportHeTxResult(ewmaPeer, 1, 1, 242, 0, false, 0);
 normal->reportHeTxResult(ewmaPeer, 0, 1, 242, 0, true, 1200);
 auto afterFailures = normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(afterFailures.mcs == 0);
+REQUIRE(afterFailures.mcs == 0);
 EV << "EWMA TX-result update demoted repeatedly failing MCS 1.\n";
 
 for (int i = 0; i < 8; i++) {
@@ -117,20 +149,20 @@ for (int i = 0; i < 8; i++) {
     normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
 }
 auto afterSnir = normal->selectHeMode(ewmaPeer, Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(afterSnir.mcs == 1);
+REQUIRE(afterSnir.mcs == 1);
 EV << "SNIR seeding restored the higher MCS after high-SNIR observations.\n";
 
 auto probing = probe->selectHeMode(MacAddress("02:00:00:00:00:03"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(probing.mode != nullptr);
-ASSERT(probing.probing);
+REQUIRE(probing.mode != nullptr);
+REQUIRE(probing.probing);
 EV << "Lookaround probing path marked the selection as a probe.\n";
 
 constraints = {};
 auto smallRu = normal->selectHeMode(MacAddress("02:00:00:00:00:04"),
         Hz(20e6), 52, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(smallRu.mode != nullptr);
-ASSERT(smallRu.mcs <= 9);
+REQUIRE(smallRu.mode != nullptr);
+REQUIRE(smallRu.mcs <= 9);
 EV << "Small-RU filtering excluded MCS 10/11.\n";
 
 constraints = {};
@@ -138,10 +170,10 @@ constraints.extendedRangeSu = true;
 constraints.maxMcs = 11;
 auto erSu = normal->selectHeMode(MacAddress("02:00:00:00:00:05"),
         Hz(20e6), 242, HE_EXTENDED_RANGE_SU, 2, constraints);
-ASSERT(erSu.mode != nullptr);
-ASSERT(erSu.mcs <= 2);
-ASSERT(erSu.numberOfSpatialStreams == 1);
-ASSERT(asHeMode(erSu.mode)->getPreambleMode()->getPreambleFormat() ==
+REQUIRE(erSu.mode != nullptr);
+REQUIRE(erSu.mcs <= 2);
+REQUIRE(erSu.numberOfSpatialStreams == 1);
+REQUIRE(asHeMode(erSu.mode)->getPreambleMode()->getPreambleFormat() ==
         Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU);
 EV << "ER SU constrained MCS and NSS and selected an ER SU preamble.\n";
 
@@ -149,13 +181,13 @@ constraints = {};
 constraints.ldpc = true;
 auto ldpc = normal->selectHeMode(MacAddress("02:00:00:00:00:06"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(ldpc.mode != nullptr);
-ASSERT(asHeMode(ldpc.mode)->getDataMode()->isLdpc());
+REQUIRE(ldpc.mode != nullptr);
+REQUIRE(asHeMode(ldpc.mode)->getDataMode()->isLdpc());
 constraints.ldpc = false;
 auto bcc = normal->selectHeMode(MacAddress("02:00:00:00:00:07"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(bcc.mode != nullptr);
-ASSERT(!asHeMode(bcc.mode)->getDataMode()->isLdpc());
+REQUIRE(bcc.mode != nullptr);
+REQUIRE(!asHeMode(bcc.mode)->getDataMode()->isLdpc());
 EV << "LDPC and BCC coding constraints selected matching HE modes.\n";
 
 constraints = {};
@@ -164,29 +196,29 @@ constraints.extendedRangeSu = true;
 constraints.maxMcs = 2;
 auto ldpcErSu = normal->selectHeMode(MacAddress("02:00:00:00:00:0B"),
         Hz(20e6), 242, HE_EXTENDED_RANGE_SU, 1, constraints);
-ASSERT(ldpcErSu.mode != nullptr);
-ASSERT(asHeMode(ldpcErSu.mode)->getDataMode()->isLdpc());
-ASSERT(asHeMode(ldpcErSu.mode)->getPreambleMode()->getPreambleFormat() ==
+REQUIRE(ldpcErSu.mode != nullptr);
+REQUIRE(asHeMode(ldpcErSu.mode)->getDataMode()->isLdpc());
+REQUIRE(asHeMode(ldpcErSu.mode)->getPreambleMode()->getPreambleFormat() ==
         Ieee80211HePreambleMode::HE_PREAMBLE_ER_SU);
-ASSERT(asHeMode(ldpcErSu.mode)->getDataMode()->getGuardIntervalType() ==
+REQUIRE(asHeMode(ldpcErSu.mode)->getDataMode()->getGuardIntervalType() ==
         Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG);
 
 constraints = {};
 constraints.ldpc = true;
 auto narrowRuLdpc = normal->selectHeMode(MacAddress("02:00:00:00:00:0C"),
         Hz(20e6), 52, HE_MU_DOWNLINK, 1, constraints);
-ASSERT(narrowRuLdpc.mode != nullptr);
-ASSERT(asHeMode(narrowRuLdpc.mode)->getDataMode()->isLdpc());
-ASSERT(narrowRuLdpc.mcs <= 9);
+REQUIRE(narrowRuLdpc.mode != nullptr);
+REQUIRE(asHeMode(narrowRuLdpc.mode)->getDataMode()->isLdpc());
+REQUIRE(narrowRuLdpc.mcs <= 9);
 EV << "LDPC synthesis preserved ER-SU and narrow-RU constraints.\n";
 
 constraints = {};
 constraints.dcm = true;
 auto dcm = normal->selectHeMode(MacAddress("02:00:00:00:00:08"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 2, constraints);
-ASSERT(dcm.mode != nullptr);
-ASSERT(dcm.dcm);
-ASSERT(dcm.mcs <= 4);
+REQUIRE(dcm.mode != nullptr);
+REQUIRE(dcm.dcm);
+REQUIRE(dcm.mcs <= 4);
 EV << "DCM constraint capped the selected MCS.\n";
 
 constraints = {};
@@ -194,9 +226,101 @@ auto nss1 = normal->selectHeMode(MacAddress("02:00:00:00:00:09"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 1, constraints);
 auto nss2 = normal->selectHeMode(MacAddress("02:00:00:00:00:0A"),
         Hz(20e6), 242, HE_MU_DOWNLINK, 2, constraints);
-ASSERT(nss1.numberOfSpatialStreams == 1);
-ASSERT(nss2.numberOfSpatialStreams == 2);
+REQUIRE(nss1.numberOfSpatialStreams == 1);
+REQUIRE(nss2.numberOfSpatialStreams == 2);
 EV << "Requested NSS caps limited and enabled spatial-stream selection.\n";
+
+constraints = {};
+auto unseededPeer = MacAddress("02:00:00:00:00:20");
+auto unseeded = fresh->selectHeMode(unseededPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(unseeded.mode != nullptr);
+REQUIRE(unseeded.mcs >= 4);
+auto firstSnirPeer = MacAddress("02:00:00:00:00:21");
+fresh->reportHeRxSnir(firstSnirPeer, 4);
+auto firstSnir = fresh->selectHeMode(firstSnirPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(firstSnir.mode != nullptr);
+REQUIRE(firstSnir.mcs < unseeded.mcs);
+auto repeatedFresh = fresh->selectHeMode(firstSnirPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(repeatedFresh.mcs == firstSnir.mcs);
+EV << "Fresh pre-table SNIR seeded the first HE rate selection.\n";
+
+constraints = {};
+constraints.directionalCapabilities =
+        makeDirectionalCapabilities(4, {52, 242});
+auto dlDirectionPeer = MacAddress("02:00:00:00:00:22");
+fresh->reportHeRxSnir(dlDirectionPeer, 60);
+auto dlDirection = fresh->selectHeMode(dlDirectionPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 2, constraints);
+REQUIRE(dlDirection.mode != nullptr);
+REQUIRE(dlDirection.mcs == 4);
+REQUIRE(dlDirection.numberOfSpatialStreams == 1);
+
+constraints.directionalCapabilities =
+        makeDirectionalCapabilities(2, {242}, 5);
+auto asymmetricNssPeer = MacAddress("02:00:00:00:00:29");
+fresh->reportHeRxSnir(asymmetricNssPeer, 60);
+auto asymmetricNss = fresh->selectHeMode(asymmetricNssPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 2, constraints);
+REQUIRE(asymmetricNss.mode != nullptr);
+REQUIRE(asymmetricNss.mcs == 5);
+REQUIRE(asymmetricNss.numberOfSpatialStreams == 2);
+
+constraints.directionalCapabilities =
+        makeDirectionalCapabilities(3, {52, 242});
+auto ulDirectionPeer = MacAddress("02:00:00:00:00:23");
+fresh->reportHeRxSnir(ulDirectionPeer, 60);
+auto ulDirection = fresh->selectHeMode(ulDirectionPeer,
+        MHz(20), 242, HE_TRIGGER_BASED_UPLINK, 2, constraints);
+REQUIRE(ulDirection.mode != nullptr);
+REQUIRE(ulDirection.mcs == 3);
+REQUIRE(ulDirection.numberOfSpatialStreams == 1);
+
+constraints.directionalCapabilities =
+        makeDirectionalCapabilities(11, {242});
+auto unsupportedRu = fresh->selectHeMode(MacAddress("02:00:00:00:00:24"),
+        MHz(20), 52, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(unsupportedRu.mode == nullptr);
+constraints.directionalCapabilities =
+        makeDirectionalCapabilities(11, {52, 242});
+auto smallRuPeer = MacAddress("02:00:00:00:00:25");
+fresh->reportHeRxSnir(smallRuPeer, 60);
+auto constrainedSmallRu = fresh->selectHeMode(smallRuPeer,
+        MHz(20), 52, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(constrainedSmallRu.mode != nullptr);
+REQUIRE(constrainedSmallRu.mcs == 9);
+EV << "Directional DL/UL contracts and RU support constrained fresh-SNIR selections.\n";
+
+constraints = {};
+auto invalidatedPeer = MacAddress("02:00:00:00:00:26");
+fresh->reportHeRxSnir(invalidatedPeer, 4);
+fresh->selectHeMode(invalidatedPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+fresh->reportHeTxResult(invalidatedPeer, 0, 1, 242, 0, true, 1200);
+REQUIRE(fresh->hasPeer(invalidatedPeer));
+REQUIRE(fresh->getRateCount(invalidatedPeer) != 0);
+fresh->invalidatePeer(invalidatedPeer);
+REQUIRE(!fresh->hasPeer(invalidatedPeer));
+auto afterInvalidation = fresh->selectHeMode(invalidatedPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(afterInvalidation.mcs == unseeded.mcs);
+EV << "Peer invalidation discarded SNIR, EWMA, and candidate history.\n";
+
+auto boundaryPeer = MacAddress("02:00:00:00:00:27");
+auto stalePeer = MacAddress("02:00:00:00:00:28");
+fresh->reportHeRxSnir(boundaryPeer, 4);
+fresh->reportHeRxSnir(stalePeer, 4);
+wait(0.1);
+auto boundarySelection = fresh->selectHeMode(boundaryPeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(boundarySelection.mcs < unseeded.mcs);
+wait(SimTime(1, SIMTIME_NS));
+auto staleSelection = fresh->selectHeMode(stalePeer,
+        MHz(20), 242, HE_MU_DOWNLINK, 1, constraints);
+REQUIRE(staleSelection.mcs == unseeded.mcs);
+EV << "SNIR max-age accepted the exact boundary and rejected a one-nanosecond stale sample.\n";
 
 EV << ".\n";
 
@@ -229,6 +353,18 @@ DCM constraint capped the selected MCS.
 
 %contains: stdout
 Requested NSS caps limited and enabled spatial-stream selection.
+
+%contains: stdout
+Fresh pre-table SNIR seeded the first HE rate selection.
+
+%contains: stdout
+Directional DL/UL contracts and RU support constrained fresh-SNIR selections.
+
+%contains: stdout
+Peer invalidation discarded SNIR, EWMA, and candidate history.
+
+%contains: stdout
+SNIR max-age accepted the exact boundary and rejected a one-nanosecond stale sample.
 
 %contains: stdout
 .

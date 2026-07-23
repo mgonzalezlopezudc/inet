@@ -646,7 +646,7 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 {
     emit(packetReceivedFromPeerSignal, packet);
     if (header->getBufferStatusPresent())
-        ulCoordinator->updateBufferStatus(aid,
+        ulCoordinator->updateBufferStatus(aid, header->getTransmitterAddress(),
                 static_cast<AccessCategory>(header->getBufferStatusAc()),
                 header->getBufferStatusTid(), header->getBufferStatusQueueSize(), header->getRetry());
     if (header->getType() == ST_QOS_NULL) {

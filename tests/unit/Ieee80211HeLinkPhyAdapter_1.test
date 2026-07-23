@@ -63,6 +63,24 @@ class TestHeHcf : public HeHcf
 {
   public:
     Ieee80211HeLinkPhySnapshot projectLinkPhySnapshot() const { return getLinkPhyContext().getSnapshot(); }
+    void seedPeerDerivedState(const MacAddress& peer, Hz bandwidth)
+    {
+        Ieee80211HeOperatingMode mode;
+        mode.rxNss = 1;
+        peerOperatingModes[peer] = mode;
+        csiManager.updateCsi(peer, bandwidth, {peer},
+                [] (const MacAddress&) { return 1; });
+    }
+    bool hasPeerDerivedState(const MacAddress& peer, Hz bandwidth) const
+    {
+        Ieee80211HeOperatingMode mode;
+        return getPeerOperatingMode(peer, mode) ||
+                csiManager.hasFreshCsi(peer, bandwidth);
+    }
+    void invalidatePeerForTest(const MacAddress& peer)
+    {
+        invalidatePeerDerivedState(peer);
+    }
 };
 
 Define_Module(TestHeHcf);
@@ -88,7 +106,20 @@ if (scalar.getChannelNumber() != dimensional.getChannelNumber() ||
         scalar.getLtfType() != dimensional.getLtfType())
     throw cRuntimeError("scalar and dimensional HeHcf link/PHY projections differ");
 
+auto scalarHcf = getHcf("scalarAp");
+MacAddress peer("02:00:00:00:80:01");
+scalarHcf->seedPeerDerivedState(peer, MHz(80));
+if (!scalarHcf->hasPeerDerivedState(peer, MHz(80)))
+    throw cRuntimeError("test failed to seed HeHcf peer-derived state");
+scalarHcf->invalidatePeerForTest(peer);
+if (scalarHcf->hasPeerDerivedState(peer, MHz(80)))
+    throw cRuntimeError("HeHcf peer lifecycle did not clear operating-mode and CSI state");
+
 EV << "Real scalar and dimensional HeHcf link/PHY projections matched.\n";
+EV << "HeHcf peer lifecycle cleared operating-mode and CSI state.\n";
 
 %contains: stdout
 Real scalar and dimensional HeHcf link/PHY projections matched.
+
+%contains: stdout
+HeHcf peer lifecycle cleared operating-mode and CSI state.

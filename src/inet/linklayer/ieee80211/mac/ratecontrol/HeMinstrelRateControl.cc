@@ -39,6 +39,8 @@ void HeMinstrelRateControl::initialize(int stage)
             throw cRuntimeError("Invalid HE Minstrel MCS range");
         if (maxNss < 1 || maxNss > 8)
             throw cRuntimeError("Invalid HE Minstrel maxNss");
+        if (updateInterval <= SIMTIME_ZERO)
+            throw cRuntimeError("HE Minstrel updateInterval must be positive");
         if (ewmaWeight < 0 || ewmaWeight > 1 || lookaroundRatio < 0 || lookaroundRatio > 1)
             throw cRuntimeError("Invalid HE Minstrel EWMA/lookaround parameters");
         selectedMcsSignal = registerSignal("heRateSelectedMcs");
@@ -133,9 +135,25 @@ IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const Mac
         const Constraints& constraints)
 {
     Enter_Method("selectHeMode");
-    if (modeSet == nullptr)
+    if (modeSet == nullptr || requestedMaxNss < 1 || ruToneSize < 0 ||
+            constraints.minMcs < 0 || constraints.maxMcs > 11 ||
+            constraints.minMcs > constraints.maxMcs)
         return {};
     requestedMaxNss = std::clamp(requestedMaxNss, 1, maxNss);
+    if (constraints.directionalCapabilities) {
+        const auto& directional = *constraints.directionalCapabilities;
+        if (!directional.valid ||
+                (!std::isnan(bandwidth.get()) &&
+                 directional.supportedChannelWidths.count(bandwidth) == 0) ||
+                (ruToneSize > 0 &&
+                 directional.supportedRuToneSizes.count(ruToneSize) == 0) ||
+                ((ppduFormat == HE_MU_DOWNLINK ||
+                  ppduFormat == HE_TRIGGER_BASED_UPLINK) && !directional.ofdma))
+            return {};
+        requestedMaxNss = std::min(requestedMaxNss, getMaxNss(directional.mcsNss));
+        if (requestedMaxNss < 1)
+            return {};
+    }
     if (constraints.extendedRangeSu || ppduFormat == HE_EXTENDED_RANGE_SU)
         requestedMaxNss = 1;
     auto& state = getPeerState(peer);
@@ -143,7 +161,10 @@ IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const Mac
     for (int nss = 1; nss <= requestedMaxNss; nss++) {
         for (int mcs = minMcs; mcs <= maxMcs; mcs++) {
             int constrainedMcs = clampMcsForConstraints(mcs, ruToneSize, ppduFormat, requestedMaxNss, constraints);
-            if (constrainedMcs != mcs || !isHeValidMcsNssCombination(mcs, nss, ruToneSize))
+            if (constrainedMcs != mcs ||
+                    (constraints.directionalCapabilities &&
+                     mcs > constraints.directionalCapabilities->mcsNss.maxMcsPerNss[nss - 1]) ||
+                    !isHeValidMcsNssCombination(mcs, nss, ruToneSize))
                 continue;
             auto mode = findHeMode(mcs, nss, bandwidth, constraints.extendedRangeSu, constraints.ldpc);
             if (mode == nullptr)
@@ -155,15 +176,21 @@ IIeee80211HeRateControl::Selection HeMinstrelRateControl::selectHeMode(const Mac
     if (candidates.empty())
         return {};
 
+    const bool hasFreshSnir = seedFromSnir && state.snirGeneration != 0 &&
+            simTime() >= state.latestSnirUpdate &&
+            simTime() - state.latestSnirUpdate <= updateInterval;
     for (const auto& candidate : candidates) {
-        auto& stats = state.rates[candidate.first];
-        if (stats.attempts == 0 && stats.successes == 0)
+        auto [rate, inserted] = state.rates.try_emplace(candidate.first);
+        auto& stats = rate->second;
+        if (inserted)
             stats.ewmaSuccessProbability = initialSuccessProbability;
-        if (seedFromSnir && !std::isnan(stats.lastSnirDb)) {
-            double margin = stats.lastSnirDb - (snirMcs0ThresholdDb + snirMcsStepDb * candidate.first.mcs);
+        if (hasFreshSnir && stats.appliedSnirGeneration != state.snirGeneration) {
+            double margin = state.latestSnirDb -
+                    (snirMcs0ThresholdDb + snirMcsStepDb * candidate.first.mcs);
             double seeded = std::clamp(0.5 + margin / 20.0, 0.05, 0.98);
             stats.ewmaSuccessProbability = ewmaWeight * stats.ewmaSuccessProbability +
                     (1 - ewmaWeight) * seeded;
+            stats.appliedSnirGeneration = state.snirGeneration;
         }
     }
 
@@ -206,8 +233,10 @@ void HeMinstrelRateControl::reportHeTxResult(const MacAddress& peer, int mcs,
         int numberOfSpatialStreams, int ruToneSize, int retryCount, bool success, int64_t ackedBytes)
 {
     Enter_Method("reportHeTxResult");
-    auto& stats = getPeerState(peer).rates[{mcs, numberOfSpatialStreams}];
-    if (stats.attempts == 0 && stats.successes == 0)
+    auto& state = getPeerState(peer);
+    auto [rate, inserted] = state.rates.try_emplace(RateKey {mcs, numberOfSpatialStreams});
+    auto& stats = rate->second;
+    if (inserted)
         stats.ewmaSuccessProbability = initialSuccessProbability;
     stats.attempts++;
     if (success)
@@ -228,9 +257,23 @@ void HeMinstrelRateControl::reportHeTxResult(const MacAddress& peer, int mcs,
 void HeMinstrelRateControl::reportHeRxSnir(const MacAddress& peer, double snirDb)
 {
     Enter_Method("reportHeRxSnir");
+    if (!std::isfinite(snirDb))
+        throw cRuntimeError("HE Minstrel SNIR observation must be finite");
     auto& state = getPeerState(peer);
-    for (auto& rate : state.rates)
-        rate.second.lastSnirDb = snirDb;
+    state.latestSnirDb = snirDb;
+    state.latestSnirUpdate = simTime();
+    state.snirGeneration++;
+    if (state.snirGeneration == 0) {
+        state.snirGeneration = 1;
+        for (auto& rate : state.rates)
+            rate.second.appliedSnirGeneration = 0;
+    }
+}
+
+void HeMinstrelRateControl::invalidatePeer(const MacAddress& peer)
+{
+    Enter_Method("invalidatePeer");
+    peers.erase(peer);
 }
 
 const IIeee80211Mode *HeMinstrelRateControl::getRate()

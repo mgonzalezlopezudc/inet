@@ -67,7 +67,7 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             if (dataHeader->getBufferStatusPresent()) {
                 auto aid = getAssociationId(dataHeader->getTransmitterAddress());
                 if (aid > 0) {
-                    ulCoordinator->updateBufferStatus(aid,
+                    ulCoordinator->updateBufferStatus(aid, dataHeader->getTransmitterAddress(),
                             static_cast<AccessCategory>(dataHeader->getBufferStatusAc()),
                             dataHeader->getBufferStatusTid(), dataHeader->getBufferStatusQueueSize(), dataHeader->getRetry());
                 }

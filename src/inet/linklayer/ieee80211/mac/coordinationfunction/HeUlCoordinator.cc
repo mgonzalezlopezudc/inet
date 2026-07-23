@@ -114,7 +114,8 @@ std::string HeUlCoordinator::getBufferStatusSummary() const
     return stream.str();
 }
 
-void HeUlCoordinator::updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_t tid,
+void HeUlCoordinator::updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
+        AccessCategory ac, uint8_t tid,
         int64_t backlogBytes, bool retryPending)
 {
     // IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
@@ -122,8 +123,12 @@ void HeUlCoordinator::updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_
     // carried inside the HE Variant QoS Control fields or in BSRP trigger frame responses.
     // The AP caches this AID backlog state to inform its uplink scheduler.
     ASSERT(aid != 0);
+    ASSERT(!stationAddress.isUnspecified());
     ASSERT(ac >= AC_BK && ac <= AC_VO);
     auto& status = bufferStatusByAid[aid];
+    if (!status.stationAddress.isUnspecified() && status.stationAddress != stationAddress)
+        status = BufferStatus {};
+    status.stationAddress = stationAddress;
     status.backlogBytes[ac] = std::max<int64_t>(0, backlogBytes);
     status.tid[ac] = tid;
     status.retryPending[ac] = retryPending;
@@ -132,9 +137,20 @@ void HeUlCoordinator::updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_
     emit(bufferStatusReportedBytesSignal, (long)status.backlogBytes[ac]);
 }
 
-void HeUlCoordinator::clearStation(uint16_t aid)
+void HeUlCoordinator::clearStation(const MacAddress& stationAddress)
 {
-    bufferStatusByAid.erase(aid);
+    for (auto it = bufferStatusByAid.begin(); it != bufferStatusByAid.end(); )
+        if (it->second.stationAddress == stationAddress)
+            it = bufferStatusByAid.erase(it);
+        else
+            ++it;
+}
+
+void HeUlCoordinator::invalidatePeer(const MacAddress& stationAddress)
+{
+    clearStation(stationAddress);
+    if (scheduler != nullptr)
+        scheduler->invalidatePeer(stationAddress);
 }
 
 IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ieee80211Mib *mib) const
@@ -148,7 +164,9 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ie
         context.associatedStations++;
         auto aid = mib->getAssociationId(station.first);
         auto status = bufferStatusByAid.find(aid);
-        if (status == bufferStatusByAid.end() || simTime() - status->second.updateTime > reportMaxAge)
+        if (status == bufferStatusByAid.end() ||
+                status->second.stationAddress != station.first ||
+                simTime() - status->second.updateTime > reportMaxAge)
             continue;
         context.freshReports++;
         if (std::any_of(status->second.retryPending.begin(), status->second.retryPending.end(),
@@ -211,7 +229,9 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
             continue;
         auto aid = mib->getAssociationId(station.first);
         auto status = bufferStatusByAid.find(aid);
-        if (status == bufferStatusByAid.end() || simTime() - status->second.updateTime > reportMaxAge) {
+        if (status == bufferStatusByAid.end() ||
+                status->second.stationAddress != station.first ||
+                simTime() - status->second.updateTime > reportMaxAge) {
             staleReportAids.push_back(aid);
             continue;
         }
@@ -233,6 +253,10 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
         const auto peer = linkPhyContext.getPeerSnapshot(station.first, maximumLinkEstimateAge);
         candidate.pathLossDb = peer.getPathLossDb();
         candidate.hasFreshPathLoss = peer.getHasFreshPathLoss();
+        if (auto negotiated = mib->findNegotiatedHeCapabilities(station.first)) {
+            candidate.hasNegotiatedHeCapabilities = true;
+            candidate.negotiatedHeCapabilities = *negotiated;
+        }
         candidate.ulMuDisabled = isUlMuDisabled && isUlMuDisabled(station.first);
         context.candidates.push_back(candidate);
     }
@@ -283,6 +307,9 @@ void HeUlCoordinator::commitSchedule(const IIeee80211HeUlScheduler::Schedule& sc
             auto status = bufferStatusByAid.find(allocation.associationId);
             if (status == bufferStatusByAid.end())
                 throw cRuntimeError("Cannot commit HE UL allocation for unknown AID %u",
+                        allocation.associationId);
+            if (status->second.stationAddress != allocation.staAddress)
+                throw cRuntimeError("Cannot commit HE UL allocation for stale AID %u owner",
                         allocation.associationId);
             status->second.lastService = simTime();
             status->second.scheduledBytes[allocation.accessCategory] =

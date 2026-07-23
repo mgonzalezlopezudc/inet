@@ -9,6 +9,12 @@ Test standard equal-sized IEEE 802.11ax RU scheduling for fBW and fHoL.
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.scheduler.HeDlSchedulerEqualSizedRUs;
 
+simple TestableHeDlScheduler extends HeDlSchedulerEqualSizedRUs
+{
+    parameters:
+        @class(TestableHeDlScheduler);
+}
+
 network TestNetwork
 {
     submodules:
@@ -36,6 +42,7 @@ network TestNetwork
                 schedulingFunction = "fHoL";
                 maxMuStations = 2;
         }
+        schedulerExternal: TestableHeDlScheduler;
 }
 
 %inifile: omnetpp.ini
@@ -47,6 +54,32 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 using namespace inet::units::values;
+
+class TestableHeDlScheduler : public HeDlSchedulerEqualSizedRUs
+{
+  public:
+    void setRateControlForTest(IIeee80211HeRateControl *rateControl)
+    {
+        heRateControl = rateControl;
+    }
+};
+
+Define_Module(TestableHeDlScheduler);
+
+class RecordingHeRateControl : public IIeee80211HeRateControl
+{
+  public:
+    std::vector<MacAddress> invalidatedPeers;
+
+    virtual Selection selectHeMode(const MacAddress&, Hz, int, uint8_t, int,
+            const Constraints&) override { return {}; }
+    virtual void reportHeTxResult(const MacAddress&, int, int, int, int, bool, int64_t) override {}
+    virtual void reportHeRxSnir(const MacAddress&, double) override {}
+    virtual void invalidatePeer(const MacAddress& peer) override
+    {
+        invalidatedPeers.push_back(peer);
+    }
+};
 
 static IIeee80211HeDlScheduler::ScheduleContext makeContext(int count, Hz bandwidth)
 {
@@ -94,6 +127,8 @@ auto schedulerFbwCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
         getParentModule()->getSubmodule("schedulerFbwCap"));
 auto schedulerFholCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
         getParentModule()->getSubmodule("schedulerFholCap"));
+auto schedulerExternal = check_and_cast<TestableHeDlScheduler *>(
+        getParentModule()->getSubmodule("schedulerExternal"));
 
 {
     const int fbwCounts[] = {1, 2, 2, 4, 4, 4, 4, 4, 9, 9};
@@ -211,6 +246,16 @@ auto schedulerFholCap = check_and_cast<HeDlSchedulerEqualSizedRUs *>(
     EV << "Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.\n";
 }
 
+{
+    RecordingHeRateControl externalRateControl;
+    schedulerExternal->setRateControlForTest(&externalRateControl);
+    MacAddress peer("02:00:00:00:00:F1");
+    schedulerExternal->invalidatePeer(peer);
+    ASSERT(externalRateControl.invalidatedPeers.size() == 1);
+    ASSERT(externalRateControl.invalidatedPeers.front() == peer);
+    EV << "Scheduler lifecycle invalidation reached its external HE rate controller.\n";
+}
+
 EV << ".\n";
 
 %contains: stdout
@@ -227,6 +272,9 @@ fBW prioritized backlog, fHoL prioritized delay, and packing duration used eligi
 
 %contains: stdout
 Negotiated HE width, RU, DL-OFDMA, and MCS limits were enforced.
+
+%contains: stdout
+Scheduler lifecycle invalidation reached its external HE rate controller.
 
 %contains: stdout
 .

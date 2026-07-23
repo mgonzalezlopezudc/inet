@@ -619,6 +619,12 @@ StationQueueBank *Ieee80211Mac::getStationQueueBank(const MacAddress &staAddr) c
     return hcf == nullptr ? nullptr : hcf->getStationQueueBank(staAddr);
 }
 
+void Ieee80211Mac::invalidatePeerDerivedState(const MacAddress& peer)
+{
+    if (hcf != nullptr)
+        hcf->invalidatePeerDerivedState(peer);
+}
+
 bool Ieee80211Mac::isTransmittingDuring(simtime_t rxStart, simtime_t rxEnd) const
 {
     if (transmissionState == physicallayer::IRadio::TRANSMISSION_STATE_TRANSMITTING) {

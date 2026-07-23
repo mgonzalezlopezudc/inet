@@ -18,7 +18,7 @@ simple HeMinstrelRateControl extends SimpleModule like IRateControl, IIeee80211H
     parameters:
         @class(HeMinstrelRateControl);
         double initialRate @unit(bps) = default(-1bps); // inherited initialization fallback
-        double updateInterval @unit(s) = default(100ms);
+        double updateInterval @unit(s) = default(100ms); // Maximum age of an SNIR observation used to seed a rate candidate
         double ewmaWeight = default(0.75);
         double lookaroundRatio = default(0.1);
         double initialSuccessProbability = default(0.9);

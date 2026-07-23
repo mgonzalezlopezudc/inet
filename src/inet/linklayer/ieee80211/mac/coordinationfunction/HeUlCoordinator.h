@@ -44,6 +44,7 @@ class INET_API HeUlCoordinator : public SimpleModule
 
     /** Most recent backlog and retry information reported by one associated STA. */
     struct BufferStatus {
+        MacAddress stationAddress;
         std::array<int64_t, 4> backlogBytes = {};
         std::array<uint8_t, 4> tid = {};
         simtime_t updateTime = SIMTIME_ZERO;
@@ -85,9 +86,11 @@ class INET_API HeUlCoordinator : public SimpleModule
   public:
     bool isEnabled() const { return enabled; }
     simtime_t getReportMaxAge() const { return reportMaxAge; }
-    void updateBufferStatus(uint16_t aid, AccessCategory ac, uint8_t tid,
+    void updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
+            AccessCategory ac, uint8_t tid,
             int64_t backlogBytes, bool retryPending);
-    void clearStation(uint16_t aid);
+    void clearStation(const MacAddress& stationAddress);
+    void invalidatePeer(const MacAddress& stationAddress);
     IIeee80211HeUlTriggerPolicy::TriggerType selectTrigger(const Ieee80211Mib *mib) const;
     AccessCategory getPreferredAccessCategory() const;
     IIeee80211HeUlScheduler::Schedule prepareSchedule(const Ieee80211Mib *mib,

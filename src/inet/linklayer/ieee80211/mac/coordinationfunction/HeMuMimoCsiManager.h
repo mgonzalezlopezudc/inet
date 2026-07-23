@@ -94,6 +94,18 @@ class INET_API HeMuMimoCsiManager
         csiTable.erase({address, bandwidth});
     }
 
+    void invalidatePeer(const MacAddress& address)
+    {
+        for (auto it = csiTable.begin(); it != csiTable.end(); ) {
+            if (it->first.first == address)
+                it = csiTable.erase(it);
+            else {
+                it->second.leakages.erase(address);
+                ++it;
+            }
+        }
+    }
+
     bool hasFreshCsi(const MacAddress& address, Hz bandwidth) const
     {
         auto it = csiTable.find({address, bandwidth});

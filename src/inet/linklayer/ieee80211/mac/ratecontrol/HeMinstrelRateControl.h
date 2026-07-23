@@ -8,8 +8,8 @@
 #define __INET_HEMINSTRELRATECONTROL_H
 
 #include <map>
-#include <vector>
 #include <ostream>
+#include <vector>
 
 #include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
 #include "inet/linklayer/ieee80211/mac/ratecontrol/RateControlBase.h"
@@ -51,14 +51,14 @@ class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211
         int attempts = 0;
         int successes = 0;
         simtime_t lastProbe = SIMTIME_ZERO;
-        double lastSnirDb = NaN;
+        uint64_t appliedSnirGeneration = 0;
 
         friend std::ostream& operator<<(std::ostream& os, const RateStats& stats)
         {
             os << "ewma=" << stats.ewmaSuccessProbability 
                << " attempts=" << stats.attempts 
                << " successes=" << stats.successes 
-               << " lastSnir=" << stats.lastSnirDb;
+               << " snirGeneration=" << stats.appliedSnirGeneration;
             return os;
         }
     };
@@ -66,10 +66,16 @@ class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211
     struct PeerState {
         std::map<RateKey, RateStats> rates;
         int selectionCount = 0;
+        double latestSnirDb = NaN;
+        simtime_t latestSnirUpdate = SIMTIME_ZERO;
+        uint64_t snirGeneration = 0;
 
         friend std::ostream& operator<<(std::ostream& os, const PeerState& state)
         {
-            os << "selections=" << state.selectionCount << " rates=" << state.rates.size();
+            os << "selections=" << state.selectionCount << " rates=" << state.rates.size()
+               << " latestSnir=" << state.latestSnirDb
+               << " latestSnirUpdate=" << state.latestSnirUpdate
+               << " snirGeneration=" << state.snirGeneration;
             return os;
         }
     };
@@ -118,6 +124,7 @@ class INET_API HeMinstrelRateControl : public RateControlBase, public IIeee80211
     virtual void reportHeTxResult(const MacAddress& peer, int mcs, int numberOfSpatialStreams,
             int ruToneSize, int retryCount, bool success, int64_t ackedBytes) override;
     virtual void reportHeRxSnir(const MacAddress& peer, double snirDb) override;
+    virtual void invalidatePeer(const MacAddress& peer) override;
 };
 
 } // namespace ieee80211

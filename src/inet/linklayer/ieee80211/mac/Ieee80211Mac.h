@@ -149,6 +149,7 @@ class INET_API Ieee80211Mac : public MacProtocolBase
     virtual StationQueueBank *createStationQueueBank(const MacAddress &staAddr);
     virtual void destroyStationQueueBank(const MacAddress &staAddr);
     virtual StationQueueBank *getStationQueueBank(const MacAddress &staAddr) const;
+    virtual void invalidatePeerDerivedState(const MacAddress& peer);
 };
 
 } // namespace ieee80211

@@ -82,6 +82,12 @@ void HeDlSchedulerBase::initialize(int stage)
     }
 }
 
+void HeDlSchedulerBase::invalidatePeer(const MacAddress& peer)
+{
+    if (heRateControl != nullptr)
+        heRateControl->invalidatePeer(peer);
+}
+
 int HeDlSchedulerBase::requestRuForBytes(int64_t bytes, Hz channelBandwidth) const
 {
     // Map queue backlog size to standard RU tone sizes (Clause 27.3.2.2).
@@ -169,9 +175,8 @@ int HeDlSchedulerBase::selectMcs(const ScheduleContext& context, const Candidate
     constraints.maxMcs = context.coding == HE_CODING_BCC ? 9 : 11;
     if (candidate.hasNegotiatedHeCapabilities &&
             candidate.negotiatedHeCapabilities.localTxPeerRx.valid) {
-        int peerMaxMcs = candidate.negotiatedHeCapabilities.localTxPeerRx.mcsNss.maxMcsPerNss[0];
-        if (peerMaxMcs >= 0)
-            constraints.maxMcs = std::min(constraints.maxMcs, peerMaxMcs);
+        constraints.directionalCapabilities =
+                candidate.negotiatedHeCapabilities.localTxPeerRx;
     }
     auto estimatedSnrDb = estimateSnrDb(context, candidate, ru);
     if (std::isfinite(estimatedSnrDb))

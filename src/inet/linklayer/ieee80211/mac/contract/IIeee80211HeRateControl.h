@@ -7,8 +7,11 @@
 #ifndef __INET_IIEEE80211HERATECONTROL_H
 #define __INET_IIEEE80211HERATECONTROL_H
 
+#include <optional>
+
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/IIeee80211Mode.h"
 
 namespace inet {
@@ -30,6 +33,7 @@ class INET_API IIeee80211HeRateControl
         bool ldpc = false;
         bool dcm = false;
         bool extendedRangeSu = false;
+        std::optional<Ieee80211HeDirectionalCapabilities> directionalCapabilities;
     };
 
     struct Selection {
@@ -48,10 +52,10 @@ class INET_API IIeee80211HeRateControl
     virtual void reportHeTxResult(const MacAddress& peer, int mcs, int numberOfSpatialStreams,
             int ruToneSize, int retryCount, bool success, int64_t ackedBytes) = 0;
     virtual void reportHeRxSnir(const MacAddress& peer, double snirDb) = 0;
+    virtual void invalidatePeer(const MacAddress& peer) = 0;
 };
 
 } // namespace ieee80211
 } // namespace inet
 
 #endif
-

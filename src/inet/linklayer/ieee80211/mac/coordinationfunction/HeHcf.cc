@@ -348,6 +348,7 @@ queueing::IPacketQueue *HeHcf::getPerStaQueue(const MacAddress& staAddr, AccessC
 
 StationQueueBank *HeHcf::createStationQueueBank(const MacAddress& staAddr)
 {
+    invalidatePeerDerivedState(staAddr);
     if (queueBankManager == nullptr) {
         EV_WARN << "Queue bank manager not initialized (not an 802.11ax AP?)\n";
         return nullptr;
@@ -357,6 +358,7 @@ StationQueueBank *HeHcf::createStationQueueBank(const MacAddress& staAddr)
 
 void HeHcf::destroyStationQueueBank(const MacAddress& staAddr)
 {
+    invalidatePeerDerivedState(staAddr);
     if (queueBankManager == nullptr) {
         EV_WARN << "Queue bank manager not initialized (not an 802.11ax AP?)\n";
         return;
@@ -367,6 +369,17 @@ void HeHcf::destroyStationQueueBank(const MacAddress& staAddr)
 StationQueueBank *HeHcf::getStationQueueBank(const MacAddress& staAddr) const
 {
     return queueBankManager == nullptr ? nullptr : queueBankManager->getQueueBank(staAddr);
+}
+
+void HeHcf::invalidatePeerDerivedState(const MacAddress& peer)
+{
+    Hcf::invalidatePeerDerivedState(peer);
+    if (dlScheduler != nullptr)
+        dlScheduler->invalidatePeer(peer);
+    if (ulCoordinator != nullptr)
+        ulCoordinator->invalidatePeer(peer);
+    peerOperatingModes.erase(peer);
+    csiManager.invalidatePeer(peer);
 }
 
 bool HeHcf::releaseChannelIfNoFallbackFrame(AccessCategory ac)

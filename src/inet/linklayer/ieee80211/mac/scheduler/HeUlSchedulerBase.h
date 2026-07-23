@@ -50,6 +50,9 @@ class INET_API HeUlSchedulerBase : public IIeee80211HeUlScheduler, public Simple
             const std::vector<RuAllocation>& allocations) const;
     void recordSchedule(const ScheduleContext& context, const Schedule& schedule, const char *reason);
     std::string getLastScheduleSummary() const;
+
+  public:
+    virtual void invalidatePeer(const MacAddress& peer) override;
 };
 
 } // namespace ieee80211

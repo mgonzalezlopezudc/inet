@@ -1247,5 +1247,9 @@ StationQueueBank *Hcf::getStationQueueBank(const MacAddress& staAddr) const
     return nullptr;
 }
 
+void Hcf::invalidatePeerDerivedState(const MacAddress& peer)
+{
+}
+
 } // namespace ieee80211
 } // namespace inet
