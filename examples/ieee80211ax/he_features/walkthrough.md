@@ -49,7 +49,7 @@ remove the offered-load ceiling when puncturing is evaluated.
 
 **Description:** Baseline HE MU-OFDMA with BCC coding, zero packet-extension duration, and no preamble puncturing.
 
-**What to observe:** This is the reference point. The AP schedules all four stations concurrently. With the backlog-based scheduler, stations receive large RUs (up to 484-tone once backlog has grown). The HE MU PHY header uses `HE_CODING_BCC`, `packetExtensionDurationUs = 0`, and `puncturedSubchannelMask = 0`, so the compact (non-extended) PHY header format is used.
+**What to observe:** This is the reference point. The AP schedules all four stations concurrently. BCC allocations are capped at 242-tone RUs because the HE scheduler requires LDPC for 484-tone and larger RUs. The canonical HE TXVECTOR and projected HE MU PHY header use `HE_CODING_BCC`, `packetExtensionDurationUs = 0`, and `puncturedSubchannelMask = 0`.
 
 ### Scenario B: `HeLdpc`
 
@@ -81,8 +81,8 @@ remove the offered-load ceiling when puncturing is evaluated.
 
 **What it demonstrates:**
 
-* **PE metadata propagation:** The default PE duration is read from `Ieee80211Mib` (`heDefaultPeDurationUs`), copied into the scheduler's `ScheduleContext`, attached to the MU container via `Ieee80211HeMuCommonReq`, written into the `Ieee80211HeMuPhyHeader`, and finally passed to `computeHePpduParameters()` where it is added to the PPDU duration.
-* **Extended HE MU PHY header:** The serializer emits the extended HE MU PHY header whenever the PE duration or puncturing mask is non-zero, preserving backward compatibility for the default case.
+* **PE propagation:** The default PE duration is read from `Ieee80211Mib` (`heDefaultPeDurationUs`), copied into the scheduler's `ScheduleContext`, supplied to `Ieee80211HeTxVectorFactory`, and stored in the immutable TXVECTOR/PPDU layout. The radio projects the same value into the represented HE signaling, while `computeHePpduParameters()` includes it in the PPDU duration.
+* **Single canonical header contract:** PE does not select a private compact or extended wire format. The represented HE header is a projection of the validated canonical vector.
 
 **Configuration:**
 
@@ -95,7 +95,7 @@ remove the offered-load ceiling when puncturing is evaluated.
 
 * PPDU durations are exactly 8 µs longer than in the baseline.
 * The HE MU signal details show `packetExtensionDurationUs = 8`.
-* The emitted HE MU PHY header is the extended variant.
+* The represented HE MU header and immutable PPDU layout agree on the PE duration.
 
 ### Scenario D: `PreamblePuncturing`
 
@@ -105,7 +105,7 @@ remove the offered-load ceiling when puncturing is evaluated.
 
 * **Validated puncturing configuration:** `HeHcf::parseHePreamblePuncturing()` checks that the mask is only used for 80/160 MHz, that the primary 20 MHz subchannel remains active, and that at least one subchannel stays enabled.
 * **Puncture-aware RU allocation:** `Ieee80211HeRu::allocateHeRus()` receives the punctured-subchannel mask and marks the corresponding tones as occupied before fitting RUs. No RU is placed on the disabled subchannel.
-* **Puncturing metadata:** The mask is carried through the trigger / MU request tags and written into the `Ieee80211HeMuPhyHeader` as `puncturedSubchannelMask`.
+* **Puncturing signaling:** The mask is validated in the schedule context, carried by the canonical TXVECTOR, and projected into the HE MU header as `puncturedSubchannelMask`.
 
 **Configuration:**
 
@@ -120,7 +120,7 @@ Bit 0 is the primary 20 MHz subchannel; `0100` disables subchannel index 1 only.
 * The scheduler cannot place the large requested RUs on the remaining three 20 MHz subchannels (a 484-tone RU needs two adjacent active 20 MHz subchannels). `fitRequestedRus()` downgrades one or more allocations to smaller RU sizes so that no RU overlaps the punctured subchannel.
 * No RU overlaps the punctured subchannel.
 * The HE MU signal details show `puncturedSubchannelMask = 0x2` (binary `0100` where character index 1 maps to bit 1).
-* The extended HE MU PHY header is emitted.
+* The canonical TXVECTOR, HE-SIG projection, and decoded receiver facts preserve the same puncturing state.
 
 ### Scenario E: `MixedLdpcSupport`
 
@@ -230,8 +230,9 @@ In Qtenv, inspect the AP `mib` module for `heCapabilitiesSummary`, `heOperationS
 | Capability negotiation | `src/inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h`, `Ieee80211Mib.cc` |
 | Puncturing validation & filtering | `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc` |
 | Puncture-aware RU allocation | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h` |
-| HE MU PHY header metadata | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader.msg` |
-| Metadata tags & trigger frame | `src/inet/linklayer/ieee80211/mac/Ieee80211Frame.msg`, `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag.msg` |
+| HE MU represented PHY header | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader.msg` |
+| Canonical TXVECTOR/RXVECTOR and model-only handoff tags | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h` |
+| Trigger frame fields | `src/inet/linklayer/ieee80211/mac/Ieee80211Frame.msg` |
 
 ---
 
@@ -303,7 +304,10 @@ The decoded output timeline shows:
 
 * HE LDPC in INET is a packet-level model: it does not include a bit-level LDPC codec. Instead it models the timing and PER impact (codeword accounting, tail-bit omission, and a 1.5 dB SNR boost).
 * Preamble puncturing capability is advertised by default in the current `Ieee80211HeCapabilities` struct, so all peers in this example support it. The scenario therefore emphasizes **configuration validation** and **puncture-aware allocation** rather than a peer-capability fallback.
-* The example focuses on downlink MU-OFDMA. The same metadata paths (PE duration, puncturing mask, coding) are also used for uplink MU-OFDMA via the Trigger frame.
+* The example focuses on downlink MU-OFDMA. Uplink HE TB derives its coding
+  and timing from the Trigger Common/User Info fields and canonical TXVECTOR.
+  The current Trigger response profile rejects puncturing instead of copying a
+  downlink-only puncturing mask into a nonstandard MAC field.
 * LDPC buys robustness and can improve useful throughput near a decoding
   boundary; on a clean link it may only change coding/timing telemetry.
 * Packet extension gives receivers more processing time at a direct airtime

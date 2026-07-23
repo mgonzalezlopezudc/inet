@@ -13,18 +13,20 @@ and puncturing-aware RU allocation.
 using namespace inet;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 %activity:
 
 auto ru = makeHeRu(Hz(5.18e9), 996, 1, 242, 0);
 auto bcc = computeHeUserPhyParameters(B(1500), ru, 5, 1, false, HE_GI_1_6_US, HE_CODING_BCC);
 auto ldpc = computeHeUserPhyParameters(B(1500), ru, 5, 1, false, HE_GI_1_6_US, HE_CODING_LDPC);
-ASSERT(getHeDefaultLtfType(HE_GI_0_8_US) == HE_LTF_4X);
-ASSERT(getHeDefaultLtfType(HE_GI_1_6_US) == HE_LTF_2X);
-ASSERT(getHeDefaultLtfType(HE_GI_3_2_US) == HE_LTF_4X);
-ASSERT(bcc.tailBits > 0);
-ASSERT(ldpc.tailBits == 0);
-ASSERT(ldpc.ldpcCodewordLength > 0);
-ASSERT(ldpc.ldpcCodewordCount > 0);
+REQUIRE(getHeDefaultLtfType(HE_GI_0_8_US) == HE_LTF_4X);
+REQUIRE(getHeDefaultLtfType(HE_GI_1_6_US) == HE_LTF_2X);
+REQUIRE(getHeDefaultLtfType(HE_GI_3_2_US) == HE_LTF_4X);
+REQUIRE(bcc.tailBits > 0);
+REQUIRE(ldpc.tailBits == 0);
+REQUIRE(ldpc.ldpcCodewordLength > 0);
+REQUIRE(ldpc.ldpcCodewordCount > 0);
 EV << "HE LDPC tail omission and codeword accounting passed.\n";
 
 Ieee80211HeUserPhyParameters request;
@@ -35,8 +37,8 @@ auto noPe = computeHePpduParameters({request}, Hz(80e6), HE_MU_DOWNLINK, HE_GI_1
         getHeDefaultLtfType(HE_GI_1_6_US), 0);
 auto pe = computeHePpduParameters({request}, Hz(80e6), HE_MU_DOWNLINK, HE_GI_1_6_US,
         getHeDefaultLtfType(HE_GI_1_6_US), 8);
-ASSERT(noPe && pe);
-ASSERT(pe.parameters.duration - noPe.parameters.duration == SimTime(8, SIMTIME_US));
+REQUIRE(noPe && pe);
+REQUIRE(pe.parameters.duration - noPe.parameters.duration == SimTime(8, SIMTIME_US));
 EV << "HE packet extension timing passed.\n";
 
 auto header = makeShared<Ieee80211HeMuPhyHeader>();
@@ -49,6 +51,7 @@ user.ruIndex = headerRu.index;
 user.ruToneSize = headerRu.toneSize;
 user.ruToneOffset = headerRu.toneOffset;
 user.staId = 1;
+user.coding = HE_CODING_LDPC;
 header->appendUsers(user);
 Ieee80211HeMuSignalingFields signaling;
 signaling.signalingValid = true;
@@ -63,19 +66,20 @@ auto packet = new Packet("extended-he-header", header);
 auto bytes = packet->peekDataAsBytes();
 auto received = new Packet("extended-he-header-rx", bytes);
 auto decoded = received->popAtFront<Ieee80211HeMuPhyHeader>();
-ASSERT(decoded->getCoding() == HE_CODING_LDPC);
-ASSERT(decoded->getUsersArraySize() == 1);
-ASSERT(decoded->getUsers(0).ruToneSize == headerRu.toneSize);
-ASSERT(decoded->getUsers(0).staId == 1);
+REQUIRE(decoded->getCoding() == HE_CODING_LDPC);
+REQUIRE(decoded->getUsersArraySize() == 1);
+REQUIRE(decoded->getUsers(0).ruToneSize == headerRu.toneSize);
+REQUIRE(decoded->getUsers(0).staId == 1);
+REQUIRE(decoded->getUsers(0).coding == HE_CODING_LDPC);
 delete packet;
 delete received;
 EV << "HE signaling header round trip passed.\n";
 
 std::vector<Ieee80211HeRu> allocations;
-ASSERT(allocateHeRus(Hz(5.18e9), Hz(80e6), {242, 242}, allocations,
+REQUIRE(allocateHeRus(Hz(5.18e9), Hz(80e6), {242, 242}, allocations,
         {false, true, false, false}));
 for (const auto& allocation : allocations)
-    ASSERT(!(allocation.toneOffset < 498 && allocation.toneOffset + allocation.toneSize > 249));
+    REQUIRE(!(allocation.toneOffset < 498 && allocation.toneOffset + allocation.toneSize > 249));
 EV << "Punctured RU allocation avoided the disabled subchannel.\n";
 EV << ".\n";
 

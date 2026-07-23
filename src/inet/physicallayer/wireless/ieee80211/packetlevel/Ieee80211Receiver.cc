@@ -360,13 +360,13 @@ static B getObservedHePsduLength(const Packet *packet)
     return B(bitLength / 8);
 }
 
-static Packet *buildLegacyHeMuPreambleIndication(const Ptr<const Ieee80211HePhyHeader>& phyHeader, const IReception *reception)
+static Packet *buildLegacyPreambleIndication(const Ptr<const Ieee80211HePhyHeader>& phyHeader, const IReception *reception)
 {
     auto packet = new Packet("HE-MU-Legacy-Preamble");
     auto phyHeaderCopy = copyHeMuPhyHeader(phyHeader);
     phyHeaderCopy->setLengthField(B(0));
     packet->insertAtFront(phyHeaderCopy);
-    packet->addTagIfAbsent<Ieee80211HeMuLegacyPreambleInd>()->setDurationField(reception->getTransmission()->getDuration());
+    packet->addTagIfAbsent<Ieee80211LegacyPreambleInd>()->setDurationField(reception->getTransmission()->getDuration());
     packet->addTagIfAbsent<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
     return packet;
 }
@@ -813,8 +813,10 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
                     getObservedHePsduLength(packet));
             auto recipientParameters = std::shared_ptr<const Ieee80211HeUserPhyParameters>(
                     layout, &activeUser);
-            packet->addTag<Ieee80211HeTbRecipientContextInd>()->setRecipientParameters(
-                    std::move(recipientParameters));
+            auto recipientContext = packet->addTag<Ieee80211HeTbRecipientContextInd>();
+            if (allocationPhyHeader->getTriggerId() != 0)
+                recipientContext->setTriggerId(allocationPhyHeader->getTriggerId());
+            recipientContext->setRecipientParameters(std::move(recipientParameters));
             return new ReceptionResult(reception, decisions, packet);
         }
         auto networkInterface = getContainingNicModule(this);
@@ -825,10 +827,10 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
                 modeSet->containsMode(transmission->getMode());
         auto packet = decodedPsdu
                 ? buildHeMuPhyPacket(transmission, allocationPhyHeader, *myStaId, selectedUserIndex)
-                : buildLegacyHeMuPreambleIndication(allocationPhyHeader, reception);
+                : buildLegacyPreambleIndication(allocationPhyHeader, reception);
         if (packet == nullptr) {
             decodedPsdu = false;
-            packet = buildLegacyHeMuPreambleIndication(allocationPhyHeader, reception);
+            packet = buildLegacyPreambleIndication(allocationPhyHeader, reception);
         }
         if (decodedPsdu)
             attachHeRxVector(packet, transmission, selectedUserIndex, myStaId,

@@ -303,7 +303,7 @@ HeSigBLogicalField buildHeSigBLogicalField(const Ieee80211HePhyHeader& header,
                 value.staId = user.staId;
                 value.spatialConfiguration = user.spatialConfiguration;
                 value.mcs = user.mcs;
-                value.ldpcCoding = header.getCoding() == HE_CODING_LDPC;
+                value.ldpcCoding = user.coding == HE_CODING_LDPC;
                 encoded = encodeHeSigBMuMimoUser(value);
             }
             else {
@@ -312,7 +312,7 @@ HeSigBLogicalField buildHeSigBLogicalField(const Ieee80211HePhyHeader& header,
                 value.numberOfSpaceTimeStreams = user.numberOfSpatialStreams;
                 value.mcs = user.mcs;
                 value.dcm = user.dcm;
-                value.ldpcCoding = header.getCoding() == HE_CODING_LDPC;
+                value.ldpcCoding = user.coding == HE_CODING_LDPC;
                 encoded = encodeHeSigBNonMuMimoUser(value);
             }
             if (!encoded)
@@ -1039,10 +1039,11 @@ const Ptr<Chunk> Ieee80211HePhyHeaderSerializer::deserialize(MemoryInputStream& 
                 }
                 if (user.staId == 2046)
                     continue;
-                if (codingInitialized && commonCoding != userCoding)
-                    throw cRuntimeError("Packet-level HE header cannot represent mixed per-user FEC coding");
-                codingInitialized = true;
-                commonCoding = userCoding;
+                user.coding = userCoding ? HE_CODING_LDPC : HE_CODING_BCC;
+                if (!codingInitialized) {
+                    codingInitialized = true;
+                    commonCoding = userCoding;
+                }
                 user.ruIndex = ru.index;
                 user.ruToneSize = ru.toneSize;
                 user.ruToneOffset = ru.toneOffset;

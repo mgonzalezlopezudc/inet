@@ -37,6 +37,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/GenericFrameSequences.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 
 namespace inet {
 namespace ieee80211 {
@@ -118,17 +119,28 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
 
     virtual bool acceptsHeaderlessFrame(const Packet *frame) const override
     {
-        auto tag = frame == nullptr ? nullptr : frame->findTag<physicallayer::Ieee80211HeMuRxTag>();
-        return nfrp && frame != nullptr && frame->getDataLength() == b(0) && tag != nullptr &&
-                tag->getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK &&
-                tag->getAllocationsArraySize() == 1 && tag->getAllocations(0).ndpFeedbackReport;
+        auto indication = frame == nullptr ? nullptr :
+                frame->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+        auto context = frame == nullptr ? nullptr :
+                frame->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
+        return nfrp && frame != nullptr && frame->getDataLength() == b(0) &&
+                indication != nullptr && indication->getRxVector() != nullptr &&
+                indication->getRxVector()->getCommon().getPpduFormat() ==
+                        physicallayer::HE_TRIGGER_BASED_UPLINK &&
+                context != nullptr && context->getRecipientParameters() != nullptr &&
+                context->getRecipientParameters()->ndpFeedbackReport;
     }
 
     virtual void setFrameToReceive(Packet *frame) override
     {
-        auto tag = frame->findTag<physicallayer::Ieee80211HeMuRxTag>();
-        if (tag == nullptr || tag->getPpduFormat() != physicallayer::HE_TRIGGER_BASED_UPLINK ||
-                tag->getTriggerId() != triggerId || simTime() < firstResponseTime || simTime() > lastResponseTime) {
+        auto indication = frame->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+        auto context = frame->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
+        if (indication == nullptr || indication->getRxVector() == nullptr ||
+                indication->getRxVector()->getCommon().getPpduFormat() !=
+                        physicallayer::HE_TRIGGER_BASED_UPLINK ||
+                context == nullptr || context->getRecipientParameters() == nullptr ||
+                context->getTriggerId() != triggerId ||
+                simTime() < firstResponseTime || simTime() > lastResponseTime) {
             // This collection window is intentionally strict: accepting a late
             // or foreign HE-TB PPDU could acknowledge a different Trigger.
             EV_INFO << "Discarding HE UL response outside Trigger " << triggerId
@@ -136,24 +148,24 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
             delete frame;
             return;
         }
+        const auto& canonical = *context->getRecipientParameters();
         uint16_t aid = 0;
         if (nfrp) {
-            if (frame->getDataLength() != b(0) || tag->getAllocationsArraySize() != 1) {
+            if (frame->getDataLength() != b(0)) {
                 EV_INFO << "Discarding malformed NFRP feedback response for Trigger " << triggerId << "\n";
                 delete frame;
                 return;
             }
-            const auto& report = tag->getAllocations(0);
-            if (!report.ndpFeedbackReport || report.ndpFeedbackStatus > 1 ||
-                    report.ndpRuToneSetIndex < 1 ||
-                    report.ndpRuToneSetIndex > nfrpToneSetsPerSpatialStream ||
-                    report.ndpStartingStsNumber > 1) {
+            if (!canonical.ndpFeedbackReport || canonical.ndpFeedbackStatus > 1 ||
+                    canonical.ndpRuToneSetIndex < 1 ||
+                    canonical.ndpRuToneSetIndex > nfrpToneSetsPerSpatialStream ||
+                    canonical.ndpStartingStsNumber > 1) {
                 EV_INFO << "Discarding invalid NFRP report metadata for Trigger " << triggerId << "\n";
                 delete frame;
                 return;
             }
-            const int offset = report.ndpStartingStsNumber * nfrpToneSetsPerSpatialStream +
-                    report.ndpRuToneSetIndex - 1;
+            const int offset = canonical.ndpStartingStsNumber * nfrpToneSetsPerSpatialStream +
+                    canonical.ndpRuToneSetIndex - 1;
             if (offset >= nfrpScheduledStaCount || nfrpStartingAid + offset > 4095) {
                 EV_INFO << "Discarding out-of-range NFRP report for Trigger " << triggerId << "\n";
                 delete frame;
@@ -161,22 +173,19 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
             }
             aid = nfrpStartingAid + offset;
             EV_INFO << "Collected NFRP feedback report: trigger=" << triggerId
-                    << ", aid=" << aid << ", status=" << (int)report.ndpFeedbackStatus
-                    << ", toneSet=" << (int)report.ndpRuToneSetIndex
-                    << ", startingSts=" << (int)report.ndpStartingStsNumber << "\n";
+                    << ", aid=" << aid << ", status=" << (int)canonical.ndpFeedbackStatus
+                    << ", toneSet=" << (int)canonical.ndpRuToneSetIndex
+                    << ", startingSts=" << (int)canonical.ndpStartingStsNumber << "\n";
         }
         bool randomAccess = false;
         if (!nfrp) {
-            if (tag->getAllocationsArraySize() != 1 ||
-                    tag->getAllocations(0).ndpFeedbackReport) {
+            if (canonical.ndpFeedbackReport) {
                 EV_INFO << "Discarding HE UL response without one canonical TB allocation\n";
                 delete frame;
                 return;
             }
-            const auto& canonical = tag->getAllocations(0);
             for (const auto& allocation : allocations) {
-                if (tag->getRuIndex() != allocation.ru.index ||
-                        canonical.ruIndex != allocation.ru.index)
+                if (canonical.ru.index != allocation.ru.index)
                     continue;
                 if (!allocation.randomAccess &&
                         canonical.staId == allocation.associationId)
@@ -189,7 +198,7 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
         }
         if ((!nfrp && aid == 0 && !randomAccess) ||
                 (aid != 0 && receivedAids.count(aid) != 0) ||
-                (randomAccess && receivedRandomAccessRus.count(tag->getRuIndex()) != 0)) {
+                (randomAccess && receivedRandomAccessRus.count(canonical.ru.index) != 0)) {
             EV_INFO << "Discarding " << (aid == 0 ? "unallocated" : "duplicate")
                      << " HE UL response for Trigger " << triggerId << "\n";
             delete frame;
@@ -198,9 +207,9 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
         if (aid != 0)
             receivedAids.insert(aid);
         if (randomAccess)
-            receivedRandomAccessRus.insert(tag->getRuIndex());
+            receivedRandomAccessRus.insert(canonical.ru.index);
         EV_INFO << "Collected HE UL response: trigger=" << triggerId
-                 << ", aid=" << (randomAccess ? 0 : aid) << ", RU=" << tag->getRuIndex() << "\n";
+                 << ", aid=" << (randomAccess ? 0 : aid) << ", RU=" << canonical.ru.index << "\n";
         ReceiveCollectionStep::setFrameToReceive(frame);
     }
 };
@@ -272,22 +281,21 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);
     header->setTriggerType(triggerType);
-    header->setTriggerId(triggerId);
     header->setUlLength(schedule.ulLength);
-    header->setCommonDuration(schedule.commonDuration);
-    header->setCommonDurationExact(schedule.commonDurationExact);
+    auto durationEnvelope = physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
+            schedule.ulLength);
+    if (!durationEnvelope)
+        throw cRuntimeError("Cannot decode finalized Trigger UL Length: %s",
+                durationEnvelope.error.c_str());
+    header->setCommonDuration(durationEnvelope.txTime);
     header->setChannelBandwidthMhz(std::lround(schedule.channelBandwidth.get() / 1e6));
-    header->setNoSignalExtension(schedule.noSignalExtension);
     header->setGuardInterval(schedule.guardInterval);
     header->setLtfType(schedule.ltfType);
-    header->setCoding(schedule.coding);
     header->setLdpcExtraSymbolSegment(schedule.ldpcExtraSymbolSegment);
     header->setPreFecPaddingFactor(schedule.preFecPaddingFactor);
     header->setPeDisambiguity(schedule.peDisambiguity);
     header->setNumberOfHeLtfSymbols(schedule.numberOfHeLtfSymbols);
     header->setApTxPowerDbm(schedule.apTxPowerDbm);
-    header->setPacketExtensionDurationUs(schedule.packetExtensionDurationUs);
-    header->setPuncturedSubchannelMask(schedule.puncturedSubchannelMask);
     header->setNfrpStartingAid(schedule.nfrpStartingAid);
     header->setNfrpFeedbackType(schedule.nfrpFeedbackType);
     header->setNfrpTargetRssiDbm(schedule.nfrpTargetRssiDbm);
@@ -306,7 +314,6 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
         user.streamStartIndex = allocation.streamStartIndex;
         user.muMimo = allocation.muMimo;
-        user.tid = allocation.tid;
         user.tidAggregationLimit = 1; // single-TID HE TB A-MPDU model
         user.preferredAc = accessCategoryToAci(allocation.accessCategory);
         user.targetRssiDbm = allocation.targetRssiDbm;
@@ -335,6 +342,8 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     auto packet = new Packet(triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "HE-BSRP-Trigger" :
             triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? "HE-NFRP-Trigger" : "HE-Basic-Trigger", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    packet->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
+            setTriggerId(triggerId);
     return packet;
 }
 
@@ -369,13 +378,13 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE |
             Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
     for (auto packet : collection->getReceivedFrames()) {
-        auto rxTag = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
-        if (rxTag == nullptr || rxTag->getAllocationsArraySize() != 1)
+        auto context = packet->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
+        if (context == nullptr || context->getRecipientParameters() == nullptr)
             continue;
-        const auto& canonical = rxTag->getAllocations(0);
+        const auto& canonical = *context->getRecipientParameters();
         const IIeee80211HeUlScheduler::RuAllocation *matchedAllocation = nullptr;
         for (const auto& allocation : schedule.allocations)
-            if (allocation.ru.index == canonical.ruIndex &&
+            if (allocation.ru.index == canonical.ru.index &&
                     (allocation.randomAccess || allocation.associationId == canonical.staId)) {
                 matchedAllocation = &allocation;
                 break;

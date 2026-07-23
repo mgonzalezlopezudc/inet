@@ -640,9 +640,9 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
             metadataPacket->findRegionTag<CreationTimeTag>(b(0), metadataPacket->getTotalLength()) != nullptr,
             "commit should preserve data-region offsets and region tags");
     auto container = check_and_cast<ITransmitStep *>(step)->getFrameToTransmit();
-    auto txTag = container->getTag<Ieee80211HeMuTxTag>();
-    requireTrue(txTag->getAllocationsArraySize() == fs.getActiveAllocations().size(),
-            "DL frame-sequence tag and active plan must have the same allocation count");
+    auto canonicalRequest = container->getTag<Ieee80211HeTxVectorReq>();
+    requireTrue(canonicalRequest->getTxVector()->getUsers().size() == fs.getActiveAllocations().size(),
+            "DL frame-sequence TXVECTOR and active plan must have the same allocation count");
     radio->testEncapsulate(container);
     auto handoff = container->getTag<Ieee80211HeTxVectorReq>();
     auto transmission = check_and_cast<const Ieee80211Transmission *>(
@@ -673,7 +673,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     for (size_t index = 0; index < fs.getActiveAllocations().size(); ++index) {
         const auto& planned = fs.getDlPlanForTest().getAllocations()[index];
         const auto& actual = transmission->getHeTxVector()->getUsers()[index].getParameters();
-        const auto& tagged = txTag->getAllocations(index);
+        const auto& active = fs.getActiveAllocations()[index];
         const auto& layoutUser = transmission->getHePpduLayout()->getUsers()[index];
         const auto& psduRange = transmission->getHePpduLayout()->getPsduBitRanges()[index];
         if (!(actual.ru == planned.ru &&
@@ -682,8 +682,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
                 actual.streamStartIndex == fs.getActiveAllocations()[index].streamStartIndex &&
                 actual.dcm == planned.dcm &&
                 actual.coding == dlScheduleContext.coding &&
-                actual.staId == tagged.staId &&
-                actual.psduLength == tagged.psduLength &&
+                actual.staId == active.associationId &&
                 areIeee80211HeUserParametersEqual(actual, layoutUser) &&
                 psduRange.getUserIndex() == index &&
                 psduRange.getStaId() == actual.staId &&
@@ -842,9 +841,9 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     responseRequest.channelBandwidth = MHz(decodedTrigger->getChannelBandwidthMhz());
     responseRequest.ppduFormat = HE_TRIGGER_BASED_UPLINK;
     responseRequest.lSigLength = decodedTrigger->getUlLength();
-    responseRequest.noSignalExtension = decodedTrigger->getNoSignalExtension();
+    responseRequest.noSignalExtension = false;
     responseRequest.requestedTxTime = decodedTrigger->getCommonDuration();
-    responseRequest.requestedTxTimeExact = decodedTrigger->getCommonDurationExact();
+    responseRequest.requestedTxTimeExact = false;
     responseRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
     responseRequest.preFecPaddingFactor = decodedTrigger->getPreFecPaddingFactor();
     responseRequest.ldpcExtraSymbolSegment = decodedTrigger->getLdpcExtraSymbolSegment();
@@ -852,7 +851,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
     responseRequest.numberOfHeLtfSymbols = decodedTrigger->getNumberOfHeLtfSymbols();
     responseRequest.guardInterval = static_cast<Ieee80211HeGuardInterval>(decodedTrigger->getGuardInterval());
     responseRequest.ltfType = static_cast<Ieee80211HeLtfType>(decodedTrigger->getLtfType());
-    responseRequest.packetExtensionDurationUs = decodedTrigger->getPacketExtensionDurationUs();
+    responseRequest.packetExtensionDurationUs = 0;
     const auto responseRuCatalog = getHeRuAllocationCatalog(
             responseRequest.centerFrequency, responseRequest.channelBandwidth);
     for (unsigned int i = 0; i < decodedTrigger->getUsersArraySize(); ++i) {

@@ -30,9 +30,9 @@ Source: Table 27-27. The fixture set must exercise at least these semantic
 boundaries:
 
 ```text
-valid:    0, 15, 16, 31, 96, 112, 113, 114, 115, 116, 127,
+valid:    0, 15, 16, 31, 96, 111, 112, 113, 114, 115,
           128, 191, 192, 199, 200, 207, 208, 215
-reserved: 216, 223, 224, 255
+reserved: 116, 119, 120, 127, 216, 223, 224, 255
 ```
 
 Code `0` is the 20 MHz partition containing nine single-user 26-tone RUs in
@@ -139,6 +139,33 @@ Content channel 2: ab 0d 54 01 00 00 00
 
 These octets are an oracle for a complete represented HE-SIG-B content-channel
 codec. Merely comparing the literals to themselves is not a conformance test.
+
+## HE-SIG-A logical-field octet oracles
+
+Sources: Tables 27-20 and 27-21, the HE TB format in Clause 27.3.11.5, and the
+CRC/tail procedure in Clause 27.3.11.5 and Figure 27-24. Fields are packed in
+their table order, least-significant bit first within each subfield. The first
+42 bits are protected by the represented CRC-4 and are followed by six zero
+tail bits. The seventh octet below therefore contains only padding outside the
+52-bit logical field.
+
+The literals were packed independently from the named semantic values; they
+are not serializer output captured from INET:
+
+| Format | Decisive semantic values | Expected 52-bit bytes |
+|---|---|---|
+| HE SU | beam change 1, MCS 5, BSS color 37, spatial reuse 13, 80 MHz, GI/LTF code 2, NSTS 6, TXOP code 38, LDPC + extra symbol, beamformed, pre-FEC factor 2, PE disambiguity | `2b e5 d6 9a d6 2d 00` |
+| HE ER SU | uplink 1, MCS 2, BSS color 22, spatial reuse 14, GI/LTF code 3, NSTS 2, TXOP code 52, LDPC, STBC, pre-FEC factor 3 | `15 56 e7 d0 6a 31 00` |
+| HE MU, uncompressed | BSS color 43, spatial reuse 15, ten HE-SIG-B symbols, GI/LTF code 3, TXOP code 20, LDPC extra symbol, pre-FEC factor 1, PE disambiguity | `60 7d a4 51 a2 1e 00` |
+| HE MU, compressed | HE-SIG-B MCS 1 with DCM, BSS color 18, spatial reuse 13, 160 MHz, three MU-MIMO users, GI/LTF code 2, Doppler, TXOP code 22, four HE-LTF symbols, midamble periodicity 20, pre-FEC factor 2 | `52 ea 49 5b 1a 21 00` |
+| HE TB | BSS color 45, spatial reuse fields 1/6/11/15, 160 MHz, TXOP code 24, required Trigger-reserved value 511 | `da b0 fd 63 fe 1f 00` |
+
+The corresponding test also corrupts CRC, tail, reserved, format, and
+bandwidth-dependent HE TB Spatial Reuse bits independently. This distinguishes
+an exact literal oracle from a serializer/parser symmetry check. The compressed
+MU Doppler vector validates the logical codec only; canonical TXVECTOR
+construction deliberately rejects Doppler until midamble insertion contributes
+to the PPDU timeline.
 
 ## Individual TWT Setup action-body vector
 

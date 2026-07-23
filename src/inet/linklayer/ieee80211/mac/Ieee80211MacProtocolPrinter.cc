@@ -119,7 +119,6 @@ void printTriggerInfo(std::ostream& stream, const Ieee80211TriggerFrame& trigger
     constexpr size_t maxPrintedUsers = 6;
     auto usersCount = trigger.getUsersArraySize();
     stream << " triggerType=" << triggerTypeName(trigger.getTriggerType())
-           << " id=" << trigger.getTriggerId()
            << " users=" << usersCount
            << " apTxPower=" << static_cast<int>(trigger.getApTxPowerDbm()) << "dBm/20MHz";
     if (trigger.getTriggerType() == 7)
@@ -144,7 +143,7 @@ void printTriggerInfo(std::ostream& stream, const Ieee80211TriggerFrame& trigger
             stream << " limit" << static_cast<int>(user.tidAggregationLimit)
                    << " preferredACI" << static_cast<int>(user.preferredAc);
         else if (trigger.getTriggerType() == 2)
-            stream << " TID" << static_cast<int>(user.tid);
+            stream << " TID" << static_cast<int>(user.muBarTidInfo);
         stream << " MCS" << static_cast<int>(user.mcs);
     }
     if (usersCount > maxPrintedUsers)

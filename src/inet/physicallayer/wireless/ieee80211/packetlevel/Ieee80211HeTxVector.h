@@ -50,6 +50,7 @@ inline bool areIeee80211HeCommonParametersEqual(const Ieee80211HeCommonPhyParame
             left.nominalPacketExtensionDurationUs == right.nominalPacketExtensionDurationUs &&
             left.packetExtensionDurationUs == right.packetExtensionDurationUs &&
             left.sigA.ppduFormat == right.sigA.ppduFormat && left.sigA.bssColor == right.sigA.bssColor &&
+            left.sigA.spatialReuse == right.sigA.spatialReuse &&
             left.sigA.uplink == right.sigA.uplink &&
             left.sigA.txopUnspecified == right.sigA.txopUnspecified &&
             left.sigA.txopDurationUs == right.sigA.txopDurationUs &&
@@ -155,6 +156,7 @@ struct Ieee80211HeTxVectorRequest
     Ieee80211HeTriggerMethod triggerMethod = Ieee80211HeTriggerMethod::NONE;
     bool ndp = false;
     uint8_t bssColor = 0;
+    std::array<uint8_t, 4> spatialReuse {{0, 0, 0, 0}};
     bool uplink = false;
     Ieee80211HeTxopDuration txopDuration;
     bool doppler = false;
@@ -539,6 +541,19 @@ class INET_API Ieee80211HeTxVectorFactory final
             if (request.bssColor > 63)
                 return makeError(Ieee80211HeValidationErrorCode::INVALID_BSS_COLOR,
                         "bssColor", "HE BSS color exceeds the 6-bit field width");
+            if (std::any_of(request.spatialReuse.begin(), request.spatialReuse.end(),
+                    [] (uint8_t value) { return value > 15; }))
+                return makeError(Ieee80211HeValidationErrorCode::INVALID_SPATIAL_REUSE,
+                        "spatialReuse", "HE Spatial Reuse exceeds a 4-bit field width");
+            if (request.ppduFormat != HE_TRIGGER_BASED_UPLINK) {
+                const auto value = request.spatialReuse.front();
+                if ((value > 0 && value < 13) ||
+                        std::any_of(request.spatialReuse.begin() + 1,
+                                request.spatialReuse.end(),
+                                [=] (uint8_t candidate) { return candidate != value; }))
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_SPATIAL_REUSE,
+                            "spatialReuse", "HE SU/ER/MU requires one legal Spatial Reuse value (0 or 13-15)");
+            }
             std::vector<bool> puncturedSubchannels(
                     std::lround(request.channelBandwidth.get() / 20e6), false);
             for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
@@ -553,6 +568,12 @@ class INET_API Ieee80211HeTxVectorFactory final
             if (request.doppler || request.midamblePeriodicity != 0)
                 return makeError(Ieee80211HeValidationErrorCode::UNSUPPORTED_DOPPLER_TIMING,
                         "doppler", "HE Doppler is deferred until N_MA midamble timing is modeled");
+            if (request.ldpcExtraSymbolSegment &&
+                    std::none_of(request.users.begin(), request.users.end(),
+                            [] (const auto& user) { return user.coding == HE_CODING_LDPC; }))
+                return makeError(Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION,
+                        "ldpcExtraSymbolSegment",
+                        "an LDPC extra-symbol outcome requires at least one LDPC-coded user");
             if (request.ndp) {
                 if (request.ppduFormat != HE_SINGLE_USER &&
                         request.ppduFormat != HE_TRIGGER_BASED_UPLINK)
@@ -764,11 +785,22 @@ class INET_API Ieee80211HeTxVectorFactory final
                 for (auto& user : parameters.users)
                     user.duration = targetDuration;
             }
+            else {
+                auto format = request.ppduFormat == HE_SINGLE_USER ?
+                        Ieee80211HeSigFormat::SU : Ieee80211HeSigFormat::ER_SU;
+                auto lSig = buildHeLSig(format, parameters.duration.inUnit(SIMTIME_NS),
+                        parameters.common.signalExtensionNs);
+                if (!lSig)
+                    return makeError(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH,
+                            "duration", lSig.error);
+                parameters.common.lSigLength = lSig.value.length;
+            }
             if (request.ndp && request.ppduFormat == HE_TRIGGER_BASED_UPLINK &&
                     parameters.common.heLtfDuration != SimTime(32, SIMTIME_US))
                 return makeError(Ieee80211HeValidationErrorCode::INVALID_STREAM_MAPPING,
                         "streamStartIndex", "HE TB feedback NDP requires exactly two 4x HE-LTF symbols", 0);
             parameters.common.sigA.bssColor = request.bssColor;
+            parameters.common.sigA.spatialReuse = request.spatialReuse;
             parameters.common.sigA.uplink = request.uplink;
             parameters.common.sigA.txopUnspecified = request.txopDuration.unspecified;
             parameters.common.sigA.txopDurationUs = request.txopDuration.unspecified ? 0 :
@@ -862,6 +894,7 @@ class INET_API Ieee80211HeCommonRxVector final
     const Ieee80211HeGuardInterval guardInterval;
     const Ieee80211HeLtfType ltfType;
     const uint8_t bssColor;
+    const std::array<uint8_t, 4> spatialReuse;
     const std::optional<bool> uplink;
     const Ieee80211HeTxopDuration txopDuration;
     const bool doppler;
@@ -878,6 +911,7 @@ class INET_API Ieee80211HeCommonRxVector final
                         Ieee80211HeErSuRuMode::PRIMARY_242_TONE :
                         Ieee80211HeErSuRuMode::PRIMARY_UPPER_106_TONE)),
         guardInterval(common.guardInterval), ltfType(common.ltfType), bssColor(common.sigA.bssColor),
+        spatialReuse(common.sigA.spatialReuse),
         uplink(common.ppduFormat == HE_TRIGGER_BASED_UPLINK ?
                 std::optional<bool>() : std::optional<bool>(common.sigA.uplink)),
         txopDuration{common.sigA.txopUnspecified,
@@ -897,6 +931,7 @@ class INET_API Ieee80211HeCommonRxVector final
     Ieee80211HeGuardInterval getGuardInterval() const { return guardInterval; }
     Ieee80211HeLtfType getLtfType() const { return ltfType; }
     uint8_t getBssColor() const { return bssColor; }
+    const std::array<uint8_t, 4>& getSpatialReuse() const { return spatialReuse; }
     const std::optional<bool>& getUplink() const { return uplink; }
     const Ieee80211HeTxopDuration& getTxopDuration() const { return txopDuration; }
     bool getDoppler() const { return doppler; }
@@ -907,7 +942,8 @@ class INET_API Ieee80211HeCommonRxVector final
         return ppduFormat == other.ppduFormat && channelBandwidth == other.channelBandwidth &&
                 erSuRuMode == other.erSuRuMode &&
                 guardInterval == other.guardInterval && ltfType == other.ltfType &&
-                bssColor == other.bssColor && uplink == other.uplink &&
+                bssColor == other.bssColor && spatialReuse == other.spatialReuse &&
+                uplink == other.uplink &&
                 txopDuration == other.txopDuration && doppler == other.doppler && stbc == other.stbc;
     }
 };
@@ -1246,12 +1282,22 @@ class INET_API Ieee80211HeRxVectorInd final : public TagBase
 class INET_API Ieee80211HeTbRecipientContextInd final : public TagBase
 {
   private:
+    uint32_t triggerId = 0;
     std::shared_ptr<const Ieee80211HeUserPhyParameters> recipientParameters;
 
   public:
     Ieee80211HeTbRecipientContextInd() = default;
     Ieee80211HeTbRecipientContextInd(const Ieee80211HeTbRecipientContextInd&) = default;
     virtual Ieee80211HeTbRecipientContextInd *dup() const override { return new Ieee80211HeTbRecipientContextInd(*this); }
+
+    void setTriggerId(uint32_t triggerId)
+    {
+        if (triggerId == 0 || this->triggerId != 0)
+            throw cRuntimeError("Invalid HE TB Trigger identifier");
+        this->triggerId = triggerId;
+    }
+
+    uint32_t getTriggerId() const { return triggerId; }
 
     void setRecipientParameters(std::shared_ptr<const Ieee80211HeUserPhyParameters> recipientParameters)
     {

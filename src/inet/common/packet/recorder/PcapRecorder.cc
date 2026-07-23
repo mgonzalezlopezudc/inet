@@ -29,8 +29,9 @@
 
 #ifdef INET_WITH_IEEE80211
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
-#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HtMode.h"
@@ -249,19 +250,19 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
     bool isLastSubframe = false;
     uint32_t ampduRef = 0;
 
-    Ptr<const physicallayer::Ieee80211HeMuReq> heMuReq;
-    Ptr<const physicallayer::Ieee80211HeMuRxTag> heMuRx;
-    Ptr<const physicallayer::Ieee80211HeMuCommonReq> heMuCommonReq;
+    Ptr<const physicallayer::Ieee80211HeTxVectorReq> heTxVectorReq;
+    Ptr<const physicallayer::Ieee80211HeRxVectorInd> heRxVectorInd;
+    Ptr<const physicallayer::Ieee80211HeTbRecipientContextInd> heTbRecipientContext;
     const physicallayer::Ieee80211HeMode *heMode = nullptr;
     const physicallayer::Ieee80211EhtMode *ehtMode = nullptr;
     const physicallayer::Ieee80211VhtMode *vhtMode = nullptr;
     const physicallayer::Ieee80211HtMode *htMode = nullptr;
 
 #ifdef INET_WITH_IEEE80211
-    heMuReq = packet->findTag<physicallayer::Ieee80211HeMuReq>();
-    heMuRx = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
-    heMuCommonReq = packet->findTag<physicallayer::Ieee80211HeMuCommonReq>();
-    if (heMuReq != nullptr || heMuRx != nullptr || heMuCommonReq != nullptr) {
+    heTxVectorReq = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
+    heRxVectorInd = packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+    heTbRecipientContext = packet->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
+    if (heTxVectorReq != nullptr || heRxVectorInd != nullptr) {
         isHe = true;
     }
     else {
@@ -461,69 +462,102 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
         uint16_t data5 = 0;
         uint16_t data6 = 0;
 
-        if (heMuReq != nullptr) {
-            auto ppduFormat = static_cast<physicallayer::Ieee80211HePpduFormat>(heMuReq->getPpduFormat());
+        if (heTxVectorReq != nullptr && heTxVectorReq->getTxVector() != nullptr) {
+            const auto& txVector = *heTxVectorReq->getTxVector();
+            const auto& common = txVector.getCommon().getParameters();
+            auto ppduFormat = common.ppduFormat;
             auto radiotapFormat = getRadiotapHeFormat(ppduFormat);
-            data1 |= radiotapFormat | RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_DATA_DCM_KNOWN |
-                    RADIOTAP_HE_CODING_KNOWN | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
-            if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
-                data1 |= RADIOTAP_HE_UL_DL_KNOWN;
-                if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
-                    data3 |= 0x0080;
-            }
-            if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
-                data1 |= RADIOTAP_HE_MU_STA_ID_KNOWN;
-                data4 |= (heMuReq->getStaId() & 0x7ff) << 4;
-            }
-            data2 |= RADIOTAP_HE_GI_KNOWN;
-            data3 |= (heMuReq->getMcs() & 0xf) << 8;
-            data3 |= (heMuReq->getDcm() ? 1U : 0U) << 12;
-            data3 |= (heMuReq->getCoding() & 0x1) << 13;
-            data4 |= heMuReq->getSpatialReuse() & 0xf;
-            auto ruAllocation = getRadiotapHeRuAllocation(heMuReq->getRuToneSize());
-            if (ruAllocation >= 0) {
-                data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
-                data5 |= ruAllocation;
-            }
-            data5 |= (heMuReq->getGuardInterval() & 0x3) << 4;
-            data6 |= std::clamp<int>(heMuReq->getNumberOfSpatialStreams(), 1, 15);
-        }
-        else if (heMuRx != nullptr) {
-            auto ppduFormat = static_cast<physicallayer::Ieee80211HePpduFormat>(heMuRx->getPpduFormat());
-            data1 |= getRadiotapHeFormat(ppduFormat) | RADIOTAP_HE_CODING_KNOWN;
+            data1 |= radiotapFormat | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
             if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
                 data1 |= RADIOTAP_HE_UL_DL_KNOWN;
                 if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
                     data3 |= 0x0080;
             }
             data2 |= RADIOTAP_HE_GI_KNOWN;
-            data3 |= (heMuRx->getCoding() & 0x1) << 13;
-            data5 |= (heMuRx->getGuardInterval() & 0x3) << 4;
-
-            const physicallayer::Ieee80211HeMuRxAllocationInfo *capturedAllocation = nullptr;
-            for (size_t i = 0; i < heMuRx->getAllocationsArraySize(); ++i) {
-                const auto& allocation = heMuRx->getAllocations(i);
-                if (allocation.ruIndex == heMuRx->getRuIndex()) {
-                    capturedAllocation = &allocation;
-                    break;
-                }
-            }
-            if (capturedAllocation == nullptr && heMuRx->getAllocationsArraySize() == 1)
-                capturedAllocation = &heMuRx->getAllocations(0);
-            if (capturedAllocation != nullptr) {
-                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_DATA_DCM_KNOWN;
-                data3 |= (capturedAllocation->mcs & 0xf) << 8;
-                data3 |= (capturedAllocation->dcm ? 1U : 0U) << 12;
-                data6 |= std::clamp<int>(capturedAllocation->numberOfSpatialStreams, 1, 15);
-                auto ruAllocation = getRadiotapHeRuAllocation(capturedAllocation->ruToneSize);
-                if (ruAllocation >= 0) {
-                    data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
-                    data5 |= ruAllocation;
-                }
+            data4 |= common.sigA.spatialReuse.front() & 0xf;
+            data5 |= (common.guardInterval & 0x3) << 4;
+            // A transmit-side multi-user PPDU has no selected recipient.
+            // Export per-user facts only when the canonical container has one
+            // unambiguous user; receive-side selection is handled below.
+            if (txVector.getUsers().size() == 1) {
+                const auto& user = txVector.getUsers().front().getParameters();
+                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_DATA_DCM_KNOWN |
+                        RADIOTAP_HE_CODING_KNOWN;
                 if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
                     data1 |= RADIOTAP_HE_MU_STA_ID_KNOWN;
-                    data4 |= (capturedAllocation->staId & 0x7ff) << 4;
+                    data4 |= (user.staId & 0x7ff) << 4;
                 }
+                data3 |= (user.mcs & 0xf) << 8;
+                data3 |= (user.dcm ? 1U : 0U) << 12;
+                data3 |= (user.coding & 0x1) << 13;
+                auto bandwidthOrRu = ppduFormat == physicallayer::HE_SINGLE_USER ?
+                        getRadiotapHeBandwidth(common.channelBandwidth) :
+                        getRadiotapHeRuAllocation(user.ru.toneSize);
+                if (bandwidthOrRu >= 0) {
+                    data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
+                    data5 |= bandwidthOrRu;
+                }
+                data6 |= std::clamp<int>(user.numberOfSpatialStreams, 1, 15);
+            }
+        }
+        else if (heRxVectorInd != nullptr && heRxVectorInd->getRxVector() != nullptr) {
+            const auto& rxVector = *heRxVectorInd->getRxVector();
+            const auto& common = rxVector.getCommon();
+            const auto& user = rxVector.getUser();
+            auto ppduFormat = common.getPpduFormat();
+            data1 |= getRadiotapHeFormat(ppduFormat) | RADIOTAP_HE_SPATIAL_REUSE_KNOWN;
+            if (ppduFormat == physicallayer::HE_MU_DOWNLINK || ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK) {
+                data1 |= RADIOTAP_HE_UL_DL_KNOWN;
+                if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK)
+                    data3 |= 0x0080;
+            }
+            data2 |= RADIOTAP_HE_GI_KNOWN;
+            data4 |= common.getSpatialReuse().front() & 0xf;
+            data5 |= (common.getGuardInterval() & 0x3) << 4;
+
+            const physicallayer::Ieee80211HeUserPhyParameters *recipientParameters = nullptr;
+            if (ppduFormat == physicallayer::HE_TRIGGER_BASED_UPLINK &&
+                    heTbRecipientContext != nullptr &&
+                    heTbRecipientContext->getRecipientParameters() != nullptr)
+                recipientParameters = heTbRecipientContext->getRecipientParameters().get();
+
+            auto mcs = user.getMcs();
+            auto dcm = user.getDcm();
+            auto coding = user.getCoding();
+            auto numberOfSpaceTimeStreams = user.getNumberOfSpaceTimeStreams();
+            auto ruAllocation = user.getRuAllocation();
+            if (recipientParameters != nullptr) {
+                mcs = recipientParameters->mcs;
+                dcm = recipientParameters->dcm;
+                coding = recipientParameters->coding;
+                numberOfSpaceTimeStreams = recipientParameters->numberOfSpatialStreams;
+                ruAllocation = recipientParameters->ru;
+            }
+            if (mcs.has_value()) {
+                data1 |= RADIOTAP_HE_DATA_MCS_KNOWN;
+                data3 |= (*mcs & 0xf) << 8;
+            }
+            if (dcm.has_value()) {
+                data1 |= RADIOTAP_HE_DATA_DCM_KNOWN;
+                data3 |= (*dcm ? 1U : 0U) << 12;
+            }
+            if (coding.has_value()) {
+                data1 |= RADIOTAP_HE_CODING_KNOWN;
+                data3 |= (*coding & 0x1) << 13;
+            }
+            if (numberOfSpaceTimeStreams.has_value())
+                data6 |= std::clamp<int>(*numberOfSpaceTimeStreams, 1, 15);
+            auto bandwidthOrRu = ppduFormat == physicallayer::HE_SINGLE_USER &&
+                    common.getChannelBandwidth().has_value() ?
+                    getRadiotapHeBandwidth(*common.getChannelBandwidth()) :
+                    (ruAllocation.has_value() ? getRadiotapHeRuAllocation(ruAllocation->toneSize) : -1);
+            if (bandwidthOrRu >= 0) {
+                data1 |= RADIOTAP_HE_BW_RU_ALLOC_KNOWN;
+                data5 |= bandwidthOrRu;
+            }
+            if (ppduFormat == physicallayer::HE_MU_DOWNLINK && user.getStaId().has_value()) {
+                data1 |= RADIOTAP_HE_MU_STA_ID_KNOWN;
+                data4 |= (*user.getStaId() & 0x7ff) << 4;
             }
         }
         else if (heMode != nullptr) {
@@ -548,13 +582,6 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
                 data6 |= std::clamp<int>(dm->getNumberOfSpatialStreams(), 1, 15);
             }
         }
-        else if (heMuCommonReq != nullptr) {
-            data1 |= RADIOTAP_HE_FORMAT_MU | RADIOTAP_HE_UL_DL_KNOWN | RADIOTAP_HE_CODING_KNOWN;
-            data2 |= RADIOTAP_HE_GI_KNOWN;
-            data3 |= (heMuCommonReq->getCoding() & 0x1) << 13;
-            data5 |= (heMuCommonReq->getGuardInterval() & 0x3) << 4;
-        }
-
         appendUint16(bytes, data1);
         appendUint16(bytes, data2);
         appendUint16(bytes, data3);

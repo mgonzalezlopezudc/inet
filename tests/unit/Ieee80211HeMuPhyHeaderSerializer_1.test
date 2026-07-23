@@ -13,6 +13,7 @@ Validate exact HE MU/TB logical signaling serialization, content-channel orderin
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Radio.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeSigCodec.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
@@ -122,6 +123,25 @@ REQUIRE(decodedMu20->getUsers(0).staId == 0x155 && decodedMu20->getUsers(1).staI
 REQUIRE(decodedMu20->getUsers(0).ruIndex == rus20[0].index);
 REQUIRE(decodedMu20->getUsers(1).ruIndex == rus20[1].index);
 REQUIRE(mu20Received.getDataLength() == b(8));
+
+// Table 27-29 B20 is per-user. A legal mixed BCC/LDPC DL-MU allocation must
+// preserve each user's coding instead of projecting one common header value.
+auto mixedFec = makeShared<Ieee80211HeMuPhyHeader>();
+auto bccUser = makeUser(rus20[0], 0x155, 4, 1);
+auto ldpcUser = makeUser(rus20[1], 0x2aa, 5, 2);
+bccUser.coding = HE_CODING_BCC;
+ldpcUser.coding = HE_CODING_LDPC;
+mixedFec->appendUsers(bccUser);
+mixedFec->appendUsers(ldpcUser);
+mixedFec->setSignaling(makeMuSignaling(MHz(20), 0, false, 2, 3));
+mixedFec->setChunkLength(b(178));
+auto mixedFecBits = serializeWithPayload(mixedFec);
+Packet mixedFecReceived("mixed-fec-he-mu-received");
+mixedFecReceived.insertAtFront(mixedFecBits);
+auto decodedMixedFec = mixedFecReceived.popAtFront<Ieee80211HeMuPhyHeader>();
+REQUIRE(decodedMixedFec->getUsersArraySize() == 2);
+REQUIRE(decodedMixedFec->getUsers(0).coding == HE_CODING_BCC);
+REQUIRE(decodedMixedFec->getUsers(1).coding == HE_CODING_LDPC);
 
 // HE-SIG-B Common and User block CRC errors are independently rejected.
 auto badCommonBits = mu20Bits->getBits();
@@ -236,7 +256,27 @@ REQUIRE(decodedSparse->getUsers(0).staId == 0x321);
 Packet radioReceived("radio-byte-backed-he-mu");
 radioReceived.insertAtFront(makeShared<BitsChunk>(sparseBits->getBits()));
 radioReceived.addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
-radioReceived.addTag<Ieee80211HeMuReq>()->setPpduFormat(HE_MU_DOWNLINK);
+Ieee80211HeTxVectorRequest radioVectorRequest;
+radioVectorRequest.centerFrequency = GHz(5.18);
+radioVectorRequest.channelBandwidth = MHz(20);
+radioVectorRequest.ppduFormat = HE_MU_DOWNLINK;
+Ieee80211HeUserTxVectorRequest radioUser;
+radioUser.ru = getHeEqualRuLayout(radioVectorRequest.centerFrequency,
+        radioVectorRequest.channelBandwidth, 1).front();
+radioUser.staId = 0x321;
+radioUser.psduLength = B(1);
+radioVectorRequest.users = {radioUser};
+auto radioCanonical = Ieee80211HeTxVectorFactory::create(radioVectorRequest);
+REQUIRE(radioCanonical);
+Ieee80211HeRxVectorReconstructionRequest radioReconstruction;
+radioReconstruction.selection.userIndex = 0;
+radioReconstruction.receivedPsduLength = B(1);
+auto radioRxVector = Ieee80211HeRxVectorFactory::reconstruct(
+        *radioCanonical.getTxVector(), *radioCanonical.getPpduLayout(),
+        radioReconstruction);
+REQUIRE(radioRxVector);
+radioReceived.addTag<Ieee80211HeRxVectorInd>()->setRxVector(
+        radioRxVector.getRxVector());
 auto radioHeader = Ieee80211Radio::popIeee80211PhyHeaderAtFront(&radioReceived);
 REQUIRE(dynamicPtrCast<const Ieee80211HeMuPhyHeader>(radioHeader) != nullptr);
 REQUIRE(radioReceived.getDataLength() == b(8));

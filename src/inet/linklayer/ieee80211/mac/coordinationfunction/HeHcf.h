@@ -23,20 +23,48 @@
 #include "inet/queueing/contract/IPacketQueue.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeOmi.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
 namespace inet {
 namespace ieee80211 {
+
+struct INET_API HeTbResponseProtection
+{
+    simtime_t macDurationField = SIMTIME_ZERO;
+    physicallayer::Ieee80211HeTxopDuration txopDuration;
+};
+
+/**
+ * Returns the soliciting HE PPDU's decoded TXOP duration, if the incoming
+ * packet was received in an HE PPDU.
+ */
+INET_API std::optional<physicallayer::Ieee80211HeTxopDuration>
+getIeee80211HeSolicitingTxopDuration(const Packet *packet);
+
+/**
+ * IEEE 802.11-2024 26.11.5 response protection derived from the soliciting
+ * frame Duration, SIFS, and the actual response PPDU TXTIME.
+ */
+INET_API HeTbResponseProtection deriveIeee80211HeTbResponseProtection(
+        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
+        simtime_t triggerDuration, simtime_t sifsTime, simtime_t responseTxTime);
 
 /** Builds the compressed Block Ack bitmap requested by an MU-BAR User Info field. */
 INET_API Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
         const Ieee80211HeTriggerUserInfo& user, RecipientBlockAckAgreement *agreement,
         const MacAddress& receiverAddress, const MacAddress& transmitterAddress);
 
-/** Projects the selected wire-decoded Trigger context into an HE-TB request. */
-INET_API void populateHeTbRequestFromTrigger(physicallayer::Ieee80211HeMuReq *request,
+/** Attaches the immutable Trigger-derived HE-TB TXVECTOR and model-only controls. */
+INET_API HeTbResponseProtection attachHeTbTxVectorFromTrigger(Packet *packet,
         const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& user,
-        uint16_t staId);
+        uint16_t staId, Hz centerFrequency, W transmitPower, B psduLength,
+        uint8_t bssColor, uint32_t triggerId,
+        bool ndpFeedbackReport = false, uint8_t ndpFeedbackStatus = 0,
+        uint8_t ndpRuToneSetIndex = 0, uint8_t ndpStartingStsNumber = 0,
+        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration =
+                std::nullopt,
+        simtime_t sifsTime = SIMTIME_ZERO);
 
 /** Computes DL path loss from Trigger AP power and total received PPDU power. */
 INET_API double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
@@ -151,11 +179,14 @@ class INET_API HeHcf : public Hcf
     virtual void scheduleTriggeredUlResponseTimeout();
     virtual void handleTriggeredUlResponseTimeout();
     virtual void beforeTriggeredUlPacketCommit(int packetIndex) {}
-    virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
+    virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger,
+            uint32_t triggerId);
     virtual Packet *buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
             AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
             const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
-            W transmitPower, TriggeredUlExchange& exchange, bool& committed);
+            uint32_t triggerId, W transmitPower,
+            const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
+            TriggeredUlExchange& exchange, bool& committed);
     virtual void processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
     virtual void processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck);
 

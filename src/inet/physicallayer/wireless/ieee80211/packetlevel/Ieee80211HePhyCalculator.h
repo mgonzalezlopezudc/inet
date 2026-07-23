@@ -8,6 +8,7 @@
 #define __INET_IEEE80211HEPHYCALCULATOR_H
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <optional>
@@ -234,6 +235,7 @@ struct Ieee80211HeSigAFields
 {
     Ieee80211HePpduFormat ppduFormat = HE_MU_DOWNLINK;
     uint8_t bssColor = 0;           // 6-bit BSS Color identifier (1-63, 0 means disabled)
+    std::array<uint8_t, 4> spatialReuse {{0, 0, 0, 0}};
     bool uplink = false;
     bool txopUnspecified = true;
     int txopDurationUs = 0;         // Decoded, wire-quantized remaining TXOP duration
@@ -419,6 +421,7 @@ enum class Ieee80211HeValidationErrorCode {
     INVALID_NOMINAL_PACKET_PADDING = 27,
     INVALID_TRIGGER_CONTEXT = 28,
     UNSUPPORTED_STBC = 29,
+    INVALID_SPATIAL_REUSE = 30,
 };
 
 /** Machine-readable location and human-readable detail for an HE validation error. */

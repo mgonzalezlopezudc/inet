@@ -11,6 +11,7 @@
 #include "inet/networklayer/common/NetworkInterface.h"
 #include "inet/common/ModuleAccess.h"
 #include "inet/common/packet/Packet.h"
+#include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
@@ -90,7 +91,8 @@ bool HeSoundingCoordinator::tryStartSoundingSequence(AccessCategory ac,
             soundingStas.resize(8);
         EV_INFO << "At least two MU-capable backlogged STAs lack fresh CSI. Initiating sounding sequence." << std::endl;
         auto soundingSequence = new HeSoundingFs(mac->getMib(), soundingStas, modeSet,
-                                                 &csiManager, scheduleContext.channelBandwidth,
+                                                 &csiManager, scheduleContext.channelCenterFrequency,
+                                                 scheduleContext.channelBandwidth,
                                                  nextSoundingDialogToken++, allocateIeee80211HeTriggerId());
         frameSequenceHandler->startFrameSequence(soundingSequence, context, hcf);
         hcf->emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
@@ -163,6 +165,12 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
         // NDPA and NDP and solicits HE compressed beamforming/CQI feedback in
         // an HE TB PPDU.
         if (trigger->getTriggerType() == 1) {
+            auto correlation = packet->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>();
+            if (correlation == nullptr || correlation->getTriggerId() == 0) {
+                EV_WARN << "Ignoring BFRP Trigger without model-only correlation context\n";
+                delete packet;
+                return true;
+            }
             if (ndpAnnouncementReceived && ndpReceived) {
                 auto myAid = mac->getMib()->bssStationData.associationId;
                 const Ieee80211HeTriggerUserInfo *selected = nullptr;
@@ -203,10 +211,28 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                     response->insertAtBack(feedback);
                     response->insertAtBack(makeShared<Ieee80211MacTrailer>());
 
-                    auto request = response->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
-                    populateHeTbRequestFromTrigger(request.get(), *trigger, *selected, myAid);
+                    const auto phy = linkPhyContext.getSnapshot();
+                    auto protection = attachHeTbTxVectorFromTrigger(
+                            response, *trigger, *selected, myAid,
+                            phy.getChannelCenterFrequency(), phy.getMaximumTransmitPower(),
+                            B((response->getDataLength().get<b>() + 7) / 8),
+                            mac->getMib()->heOperation.bssColor,
+                            correlation->getTriggerId(), false, 0, 0, 0,
+                            getIeee80211HeSolicitingTxopDuration(packet),
+                            modeSet->getSifsTime());
+                    auto writableHeader = response->removeAtFront<Ieee80211ActionFrame>();
+                    writableHeader->setDurationField(protection.macDurationField);
+                    response->insertAtFront(writableHeader);
+                    auto trailer = response->removeAtBack<Ieee80211MacTrailer>(B(4));
+                    auto fcsMode = mac->getFcsMode();
+                    trailer->setFcsMode(fcsMode);
+                    if (fcsMode == FCS_COMPUTED)
+                        trailer->setFcs(computeEthernetFcs(response, fcsMode));
+                    response->insertAtBack(trailer);
 
-                    tx->transmitFrame(response, responseHeader, modeSet->getSifsTime(), callback);
+                    tx->transmitFrame(response,
+                            response->peekAtFront<Ieee80211ActionFrame>(),
+                            modeSet->getSifsTime(), callback);
                     delete response;
                 }
                 ndpAnnouncementReceived = false;

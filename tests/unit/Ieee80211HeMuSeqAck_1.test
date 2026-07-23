@@ -10,10 +10,12 @@ Test 802.11ax DL OFDMA sequential Block Ack steps, timeouts, and individual retr
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeFrameSequenceHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuTxOpFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IQosRateSelection.h"
 #include "inet/linklayer/ieee80211/mac/contract/IAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
 %file: TestNetwork.ned
@@ -278,11 +280,11 @@ EV << "Step 0 prepared: Transmit container frame.\n";
 
 // The MU-wide NAV duration is transmitter metadata; the packet data starts
 // directly with the first standard A-MPDU delimiter.
-auto containerTxTag = containerPacket->getTag<physicallayer::Ieee80211HeMuTxTag>();
-ASSERT(containerTxTag != nullptr);
+auto containerMetadata = containerPacket->getTag<Ieee80211HeMuContainerReq>();
+ASSERT(containerMetadata != nullptr);
 ASSERT(containerPacket->hasAtFront<Ieee80211MpduSubframeHeader>());
-simtime_t containerDuration = containerTxTag->getDurationField();
-EV << "Container TXVECTOR duration field: " << containerDuration << "\n";
+simtime_t containerDuration = containerMetadata->getDurationField();
+EV << "Container MAC duration field: " << containerDuration << "\n";
 
 // Calculate expected duration per phase 2 sequential formula:
 // Every response is explicitly solicited: SIFS + BAR + SIFS + Block Ack.
@@ -476,7 +478,7 @@ pendingQueue->removeAllPackets();
 
 %contains: stdout
 Step 0 prepared: Transmit container frame.
-Container TXVECTOR duration field: 0.000984
+Container MAC duration field: 0.000984
 Expected duration: 0.000984
 SIFS=, BlockAck=, BAR=
   SIFS=0.000016, BlockAck=0.000212, BAR=0.000084

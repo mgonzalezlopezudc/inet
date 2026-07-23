@@ -10,6 +10,7 @@
 #include "inet/common/packet/serializer/ChunkSerializerRegistry.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211HeOmi.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 
 namespace inet {
@@ -474,6 +475,8 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 throw cRuntimeError("Invalid Trigger Pre-FEC Padding Factor");
             if (trigger->getApTxPowerDbm() < -20 || trigger->getApTxPowerDbm() > 40)
                 throw cRuntimeError("Trigger AP Tx Power is outside the encodable -20..40 dBm/20 MHz range");
+            if (nfrp && (trigger->getUlSpatialReuse() != 0 || trigger->getDoppler()))
+                throw cRuntimeError("NFRP Trigger requires reserved UL Spatial Reuse and Doppler fields to be zero");
             const uint8_t apTxPower = trigger->getApTxPowerDbm() + 20;
 
             // --- Common Info Field (8 octets = 64 bits) ---
@@ -488,6 +491,8 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                     ((static_cast<uint64_t>(apTxPower) & 0x3F) << 28) | // B28-B33: AP Tx Power + 20 dBm/20 MHz
                     (nfrp ? 0 : (static_cast<uint64_t>(trigger->getPreFecPaddingFactor() % 4) << 34)) | // B34-B35
                     (nfrp ? 0 : (static_cast<uint64_t>(trigger->getPeDisambiguity()) << 36)) | // B36
+                    (nfrp ? 0 : (static_cast<uint64_t>(trigger->getUlSpatialReuse()) << 37)) | // B37-B52
+                    (nfrp ? 0 : (static_cast<uint64_t>(trigger->getDoppler()) << 53)) | // B53
                     (0x1FFULL << 54);                                 // B54-B62: HE variant reserved bits are all ones
             writeLeBits(stream, commonInfo, 64);
 
@@ -649,7 +654,9 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                         }
                     }
                     else {
-                        auto tidInfo = user.muBarTidInfo == 255 ? user.tid : user.muBarTidInfo;
+                        auto tidInfo = user.muBarTidInfo;
+                        if (tidInfo > 15)
+                            throw cRuntimeError("MU-BAR User Info requires an explicit 4-bit TID Info");
                         stream.writeUint16Le(packBlockAckControl(user.muBarBarAckPolicy, false, true,
                                 user.muBarReserved, tidInfo));
                         writeSequenceControl(stream, user.muBarFragmentNumber,
@@ -1066,8 +1073,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             // boundary. The original HE-symbol-aligned TXTIME may be below this
             // boundary, but this is the authoritative usable duration budget
             // recoverable from the Trigger wire image.
-            trigger->setCommonDuration(SimTime(20000 + ((ulLength + 5) / 3) * 4000, SIMTIME_NS));
-            trigger->setCommonDurationExact(false);
+            auto durationEnvelope =
+                    physicallayer::getIeee80211HeTriggerTxTimeUpperBound(ulLength);
+            if (!durationEnvelope)
+                throw cRuntimeError("Cannot decode Trigger UL Length: %s",
+                        durationEnvelope.error.c_str());
+            trigger->setCommonDuration(durationEnvelope.txTime);
 
             auto ulBw = (commonInfo >> 18) & 0x3;
             trigger->setChannelBandwidthMhz(20U << ulBw);
@@ -1104,14 +1115,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             auto preFecPaddingFactor = (commonInfo >> 34) & 0x3;
             trigger->setPreFecPaddingFactor(preFecPaddingFactor == 0 ? 4 : preFecPaddingFactor);
             trigger->setPeDisambiguity((commonInfo >> 36) & 0x1);
-            if ((commonInfo >> 53) & 0x1)
-                throw cRuntimeError("Trigger Doppler is unsupported until HE midamble timing is modeled");
+            trigger->setUlSpatialReuse((commonInfo >> 37) & 0xFFFF);
+            trigger->setDoppler((commonInfo >> 53) & 0x1);
             if (((commonInfo >> 54) & 0x1FF) != 0x1FF)
                 throw cRuntimeError("HE Trigger Common Info B54-B62 reserved bits are not all ones");
             if ((commonInfo >> 63) != 0)
                 throw cRuntimeError("HE Trigger Common Info B63 reserved bit is not zero");
-            trigger->setTriggerId(0);
-
             // Determine users from remaining chunk length. MU-BAR has variable-size
             // BAR Information, so parse user records sequentially.
             int remainingBytes = stream.getRemainingLength().get<B>();
@@ -1143,7 +1152,6 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                         static_cast<int8_t>(targetPower - 110));
                 trigger->setNfrpMultiplexingFlag((userInfo >> 47) & 0x1);
                 trigger->setUsersArraySize(0);
-                trigger->setCoding(0);
                 trigger->setLdpcExtraSymbolSegment(false);
                 trigger->setChunkLength(B(stream.getPosition().get<B>()));
                 return trigger;
@@ -1244,14 +1252,12 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                     user.mpduMuSpacingFactor = basicUserInfo & 0x3;
                     user.tidAggregationLimit = (basicUserInfo >> 2) & 0x7;
                     user.preferredAc = (basicUserInfo >> 6) & 0x3;
-                    user.tid = 0;
                 }
                 else if (triggerType == 1) { // BFRP Trigger
                     if (remainingBytes - consumedBytes < 1)
                         throw cRuntimeError("Truncated BFRP Trigger dependent User Info field");
                     user.bfrpFeedbackSegmentRetransmissionBitmap = stream.readByte();
                     consumedBytes += 1;
-                    user.tid = 0;
                 }
                 else if (triggerType == 2) { // MU-BAR Trigger
                     if (remainingBytes - consumedBytes < 4)
@@ -1292,13 +1298,9 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                         SequenceNumberCyclic sequenceNumber;
                         readSequenceControl(stream, fragmentNumber, sequenceNumber);
                         consumedBytes += 2;
-                        user.tid = tidInfo;
                         user.muBarFragmentNumber = fragmentNumber;
                         user.muBarStartingSequenceNumber = sequenceNumber.get();
                     }
-                }
-                else {
-                    user.tid = 0;
                 }
 
                 users.push_back(user);
@@ -1315,7 +1317,6 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             trigger->setUsersArraySize(users.size());
             for (unsigned int i = 0; i < users.size(); i++)
                 trigger->setUsers(i, users[i]);
-            trigger->setCoding(users.empty() ? 0 : users.front().coding);
             trigger->setChunkLength(B(stream.getPosition().get<B>()));
             return trigger;
         }

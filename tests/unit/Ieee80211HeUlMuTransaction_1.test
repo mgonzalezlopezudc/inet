@@ -102,8 +102,7 @@ class TestHeHcf : public HeHcf
     }
 
     Ptr<Ieee80211TriggerFrame> makeTrigger(
-            uint32_t triggerId, const MacAddress& ap,
-            Ieee80211HeTriggerUserInfo& user,
+            const MacAddress& ap, Ieee80211HeTriggerUserInfo& user,
             int requestedToneSize = 0, int requestedToneOffset = 0) const
     {
         auto phy = getLinkPhyContext().getSnapshot();
@@ -140,17 +139,19 @@ class TestHeHcf : public HeHcf
 
         auto trigger = makeShared<Ieee80211TriggerFrame>();
         trigger->setTriggerType(IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
-        trigger->setTriggerId(triggerId);
         trigger->setTransmitterAddress(ap);
         trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
         trigger->setUlLength(finalized.ulLength);
-        trigger->setCommonDuration(finalized.commonDuration);
-        trigger->setCommonDurationExact(finalized.commonDurationExact);
+        auto durationEnvelope =
+                getIeee80211HeTriggerTxTimeUpperBound(finalized.ulLength);
+        REQUIRE(durationEnvelope);
+        trigger->setCommonDuration(durationEnvelope.txTime);
+        trigger->setDurationField(finalized.commonDuration +
+                SimTime(200, SIMTIME_US));
         trigger->setChannelBandwidthMhz(
                 std::lround(phy.getChannelBandwidth().get() / 1e6));
         trigger->setGuardInterval(HE_GI_3_2_US);
         trigger->setLtfType(HE_LTF_4X);
-        trigger->setCoding(coding);
         trigger->setLdpcExtraSymbolSegment(
                 finalized.parameters.common.ldpcExtraSymbol);
         trigger->setPreFecPaddingFactor(
@@ -158,8 +159,6 @@ class TestHeHcf : public HeHcf
         trigger->setPeDisambiguity(finalized.peDisambiguity);
         trigger->setNumberOfHeLtfSymbols(
                 finalized.parameters.common.numberOfHeLtfSymbols);
-        trigger->setPacketExtensionDurationUs(
-                finalized.parameters.common.packetExtensionDurationUs);
         trigger->setUsersArraySize(1);
         user.aid = mac->getMib()->bssStationData.associationId;
         user.ruIndex = ru.index;
@@ -181,7 +180,7 @@ class TestHeHcf : public HeHcf
         auto queue = getSourceQueue();
         REQUIRE(queue->getNumPackets() >= 1);
         Ieee80211HeTriggerUserInfo user;
-        auto trigger = makeTrigger(triggerId, ap, user,
+        auto trigger = makeTrigger(ap, user,
                 requestedToneSize, requestedToneOffset);
         TriggeredUlExchange exchange;
         exchange.tid = 0;
@@ -199,8 +198,9 @@ class TestHeHcf : public HeHcf
         try {
             response = buildTriggeredUlResponsePacket(queue->getPacket(0), queue,
                     AC_BE, 0, queueBytes, 64, &user, trigger,
+                    triggerId,
                     getLinkPhyContext().getSnapshot().getMaximumTransmitPower(),
-                    exchange, committed);
+                    std::nullopt, exchange, committed);
         }
         catch (...) {
             failingCommitIndex = -1;
@@ -209,6 +209,15 @@ class TestHeHcf : public HeHcf
         }
         failingCommitIndex = -1;
         REQUIRE(committed);
+        auto handoff = response->getTag<Ieee80211HeTxVectorReq>();
+        auto protection = deriveIeee80211HeTbResponseProtection(std::nullopt,
+                trigger->getDurationField(), SimTime(16, SIMTIME_US),
+                handoff->getPpduLayout()->getDuration());
+        auto responseHeader = response->peekAt<Ieee80211DataHeader>(B(4));
+        REQUIRE(responseHeader->getDurationField() == protection.macDurationField);
+        REQUIRE(handoff->getTxVector()->getCommon().getRequestedTxopDuration() ==
+                protection.txopDuration);
+        REQUIRE(responseHeader->getDurationField() < trigger->getDurationField());
         delete response;
         result.packets = exchange.packets;
         result.sequenceNumbers = exchange.sequenceNumbers;

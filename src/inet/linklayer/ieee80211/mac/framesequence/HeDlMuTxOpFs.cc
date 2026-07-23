@@ -43,7 +43,9 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/GenericFrameSequences.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPackingPlanner.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
@@ -360,17 +362,10 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
         header->setTransmitterAddress(owner->getTransmitterAddress());
         header->setTriggerType(2); // MU-BAR Trigger
-        header->setTriggerId(owner->ackTriggerId);
         const auto& scheduleContext = owner->dlPlan.getScheduleContext();
         header->setChannelBandwidthMhz(std::lround(scheduleContext.channelBandwidth.get() / 1e6));
         header->setGuardInterval(HE_GI_1_6_US);
         header->setLtfType(HE_LTF_2X);
-        const bool requiresLdpc = std::any_of(owner->activeAllocations.begin(),
-                owner->activeAllocations.end(), [] (const auto& allocation) {
-                    return allocation.ru.toneSize >= 484;
-                });
-        header->setCoding(requiresLdpc ? HE_CODING_LDPC : scheduleContext.coding);
-        header->setPuncturedSubchannelMask(scheduleContext.puncturedSubchannelMask);
         header->setUsersArraySize(owner->activeAllocations.size());
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(owner->activeAllocations.size());
@@ -389,7 +384,6 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
             user.streamStartIndex = allocation.streamStartIndex;
             user.muMimo = allocation.muMimo;
-            user.tid = allocation.tid;
             SequenceNumberCyclic startingSequenceNumber;
             auto tid = allocation.tid;
             if (allocation.packet != nullptr) {
@@ -409,7 +403,6 @@ class HeDlMuBarBlockAckFs : public OptionalFs
                     startingSequenceNumber = it->second;
                 }
             }
-            user.tid = tid;
             // 26.4.2 requires Ack Type 0 for Multi-STA BlockAck responses to
             // MU-BAR.  This model solicits compressed single-TID BlockAcks per
             // user, so the BAR-dependent fields mirror a Compressed BAR.
@@ -422,7 +415,6 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             header->setUsers(i, user);
             responseUsers.push_back(responseUser);
         }
-        header->setNoSignalExtension(false);
         auto finalization = finalizeTriggeredBlockAckResponse(responseUsers,
                 scheduleContext.channelCenterFrequency,
                 scheduleContext.channelBandwidth);
@@ -434,13 +426,18 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         header->setPreFecPaddingFactor(finalization.parameters.common.preFecPaddingFactor);
         header->setLdpcExtraSymbolSegment(finalization.parameters.common.ldpcExtraSymbol);
         header->setPeDisambiguity(finalization.peDisambiguity);
-        header->setPacketExtensionDurationUs(finalization.parameters.common.packetExtensionDurationUs);
-        header->setCommonDuration(finalization.commonDuration);
-        header->setCommonDurationExact(finalization.commonDurationExact);
+        auto durationEnvelope = getIeee80211HeTriggerTxTimeUpperBound(
+                finalization.ulLength);
+        if (!durationEnvelope)
+            throw cRuntimeError("Cannot decode finalized MU-BAR Trigger UL Length: %s",
+                    durationEnvelope.error.c_str());
+        header->setCommonDuration(durationEnvelope.txTime);
         header->setDurationField(owner->modeSet->getSifsTime() + finalization.commonDuration);
         header->setChunkLength(getMuBarTriggerHeaderLength(owner->activeAllocations.size()));
         auto packet = new Packet("HE-MU-BAR-Trigger", header);
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        packet->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
+                setTriggerId(owner->ackTriggerId);
         EV_INFO << "HE DL MU-BAR FS: built MU-BAR trigger for " << owner->activeAllocations.size()
                  << " STAs, triggerId = " << owner->ackTriggerId << "\n";
         return packet;
@@ -466,11 +463,12 @@ class HeDlMuBarBlockAckFs : public OptionalFs
                         return allocation.staAddress == blockAck->getTransmitterAddress() &&
                                 allocation.tid == blockAck->getTidInfo();
                     });
-            auto rx = packet->findTag<Ieee80211HeMuRxTag>();
+            auto rx = packet->findTag<Ieee80211HeTbRecipientContextInd>();
             if (expected == owner->activeAllocations.end() ||
                     rx == nullptr ||
                     rx->getTriggerId() != owner->ackTriggerId ||
-                    rx->getRuIndex() != expected->ruIndex ||
+                    rx->getRecipientParameters() == nullptr ||
+                    rx->getRecipientParameters()->ru.index != expected->ruIndex ||
                     responded.count(expected->staAddress) != 0) {
                 EV_WARN << "HE DL MU-BAR FS: ignoring unexpected BlockAck from "
                         << blockAck->getTransmitterAddress()
@@ -919,10 +917,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                 modeSet->getSifsTime() + response.commonDuration;
     }
     containerHdr->setDurationField(totalDuration);
-    auto txTag = container->addTagIfAbsent<Ieee80211HeMuTxTag>();
-    txTag->setNdp(false);
-    txTag->setDurationField(totalDuration);
-
     // Prepare the complete PPDU on private packet copies. Sequence numbers are
     // assigned against a cloned counter state, so every remaining fallible
     // operation precedes the queue/BA ownership commit.
@@ -978,19 +972,6 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
 
         const auto& staPackets = selectedAllocation.packets;
 
-        Ieee80211HeMuTxAllocationInfo txAllocation;
-        txAllocation.ruIndex = alloc.ru.index;
-        txAllocation.ruToneSize = alloc.ru.toneSize;
-        txAllocation.ruToneOffset = alloc.ru.toneOffset;
-        txAllocation.staId = selectedAllocation.associationId;
-        txAllocation.mcs = alloc.mcs;
-        txAllocation.numberOfSpatialStreams = alloc.numberOfSpatialStreams;
-        txAllocation.dcm = alloc.dcm;
-        txAllocation.psduLength = selectedAllocation.psduLength;
-        txAllocation.streamStartIndex = selectedAllocation.streamStartIndex;
-        txAllocation.muMimo = selectedAllocation.muMimo;
-        txAllocation.totalNsts = selectedAllocation.muMimo ? selectedAllocation.totalNsts : 0;
-        txTag->appendAllocations(txAllocation);
         auto psduStartOffset = container->getDataLength();
         for (size_t i = 0; i < staPackets.size(); ++i) {
             auto preparedPacket = preparedPackets.at(staPackets[i]).get();
@@ -1030,15 +1011,45 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
                  << " packets=" << staPackets.size() << "\n";
     }
 
-    // The common request tag carries the HE MU PPDU common TXVECTOR fields
-    // that are not literal MAC header fields: GI, coding, PE duration, and
-    // preamble puncturing state (26.11 and 27.3.11.13).
-    auto commonRequest = container->addTagIfAbsent<Ieee80211HeMuCommonReq>();
-    commonRequest->setGuardInterval(scheduleContext.guardInterval);
-    commonRequest->setLtfType(scheduleContext.ltfType);
-    commonRequest->setCoding(scheduleContext.coding);
-    commonRequest->setPacketExtensionDurationUs(scheduleContext.packetExtensionDurationUs);
-    commonRequest->setPuncturedSubchannelMask(scheduleContext.puncturedSubchannelMask);
+    // The scheduler plan is projected once into the immutable canonical
+    // TXVECTOR/layout before ownership commits. The radio must not
+    // reinterpret mutable per-user or common request tags.
+    Ieee80211HeTxVectorRequest canonicalRequest;
+    canonicalRequest.centerFrequency = scheduleContext.channelCenterFrequency;
+    canonicalRequest.channelBandwidth = scheduleContext.channelBandwidth;
+    canonicalRequest.ppduFormat = HE_MU_DOWNLINK;
+    canonicalRequest.puncturedSubchannelMask = scheduleContext.puncturedSubchannelMask;
+    canonicalRequest.bssColor = hcfMac == nullptr ? 0 : hcfMac->getMib()->heOperation.bssColor;
+    if (scheduleContext.txopLimit > SIMTIME_ZERO)
+        canonicalRequest.txopDuration = {false, static_cast<uint16_t>(std::min<int64_t>(
+                8448, scheduleContext.txopLimit.inUnit(SIMTIME_US)))};
+    canonicalRequest.guardInterval = scheduleContext.guardInterval;
+    canonicalRequest.ltfType = scheduleContext.ltfType;
+    canonicalRequest.packetExtensionDurationUs = scheduleContext.packetExtensionDurationUs;
+    for (const auto& selectedAllocation : finalAllocations) {
+        Ieee80211HeUserTxVectorRequest user;
+        user.ru = selectedAllocation.allocation.ru;
+        user.staId = selectedAllocation.associationId;
+        user.mcs = selectedAllocation.allocation.mcs;
+        user.numberOfSpatialStreams = selectedAllocation.allocation.numberOfSpatialStreams;
+        user.streamStartIndex = selectedAllocation.streamStartIndex;
+        user.dcm = selectedAllocation.allocation.dcm;
+        user.coding = scheduleContext.coding;
+        user.psduLength = selectedAllocation.psduLength;
+        canonicalRequest.users.push_back(user);
+    }
+    auto canonicalResult = Ieee80211HeTxVectorFactory::create(canonicalRequest);
+    if (!canonicalResult ||
+            canonicalResult.getPpduLayout()->getDuration() != plannedPpdu.parameters.duration) {
+        EV_WARN << "Canonical HE DL MU TXVECTOR disagrees with the validated packing plan\n";
+        activeAllocations.clear();
+        delete container;
+        notifyPlanningFailure();
+        return nullptr;
+    }
+    auto handoff = container->addTag<Ieee80211HeTxVectorReq>();
+    handoff->setCanonicalPair(canonicalResult.getTxVector(), canonicalResult.getPpduLayout());
+    container->addTag<Ieee80211HeMuContainerReq>()->setDurationField(totalDuration);
 
     if (activeAllocations.size() < 2)
         throw cRuntimeError("Validated HE DL MU plan lost allocations before commit");

@@ -1,5 +1,13 @@
 # 802.11ax UL MU OFDMA Implementation Walkthrough
 
+> Historical note: this walkthrough predates the immutable TXVECTOR/RXVECTOR,
+> transactional UL plan, standards-layout Trigger serializer, and separate HE
+> TB recipient context. It is retained for development history. The
+> authoritative boundary and migration table are in
+> [80211ax-supported-feature-matrix.md](80211ax-supported-feature-matrix.md);
+> current runnable behavior is documented in
+> [the UL OFDMA example](../examples/ieee80211ax/ul_ofdma/walkthrough.md).
+
 This document describes how the INET codebase implements the uplink multi-user OFDMA (UL MU OFDMA) features of IEEE 802.11ax/HE. It explains the core design decisions, architecture, scheduling, trigger frame coordination, Uplink OFDMA Random Access (UORA), Multi-STA Block Ack, and the verification of these features.
 
 ## Implementation Walkthrough
@@ -7,8 +15,13 @@ This document describes how the INET codebase implements the uplink multi-user O
 Uplink MU OFDMA is coordinated by the Access Point (AP), which schedules transmissions from multiple Non-AP Stations (STAs) in frequency (RUs) and time. The key modules involved are:
 
 1. **Trigger Frames and Coordination**:
-   - The AP triggers UL MU OFDMA transmissions using Trigger frames. The HCF submodule `HeUlCoordinator` (defined in [HeUlCoordinator.cc](file:///home/user/omnetpp_ws/inet/src/inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.cc)) determines when to send trigger frames based on BSRP (Buffer Status Report Poll) or direct scheduled triggers.
-   - The Trigger frame carries both Common Info (such as PPDU duration, guard interval, and preamble puncturing mask) and User Info per scheduled STA (such as STA Association ID, allocated RU tone size and index, MCS, and Target RSSI).
+   - The AP triggers UL MU OFDMA transmissions through the HE HCF uplink service in [HeHcfUl.cc](../src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcfUl.cc), which determines when to send trigger frames based on BSRP (Buffer Status Report Poll) or direct scheduled triggers.
+   - The Trigger frame carries Common Info such as UL Length, bandwidth,
+     GI/HE-LTF settings, LDPC-extra/pre-FEC state, Spatial Reuse, and AP
+     transmit power. User Info carries the STA Association ID, encoded RU
+     allocation, MCS, coding, spatial-stream allocation, and target RSSI.
+     Transaction correlation remains in a model-only tag rather than a MAC
+     wire field.
 
 2. **UL OFDMA Schedulers**:
    - Schedulers are implemented under `src/inet/linklayer/ieee80211/mac/scheduler/`. Schedulers decide which STAs are allocated to which RUs.
@@ -32,12 +45,11 @@ Uplink MU OFDMA is coordinated by the Access Point (AP), which schedules transmi
 ## Verification
 
 ### Automated Simulations
-The UL OFDMA examples are located under [examples/ieee80211ax/ul_ofdma/](file:///home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/).
+The UL OFDMA examples are located under [examples/ieee80211ax/ul_ofdma/](../examples/ieee80211ax/ul_ofdma/).
 You can run the regression scenarios (ScheduledOnly, MixedUora, EqualRus) using:
 
 ```sh
 export CCACHE_DISABLE=1
-source /home/user/omnetpp-6.4.0aipre2/setenv -f
 source setenv -q
 opp_run -u Cmdenv -l src/libINET.so -n src:examples:tutorials:showcases examples/ieee80211ax/ul_ofdma/omnetpp.ini -c MixedUora
 ```

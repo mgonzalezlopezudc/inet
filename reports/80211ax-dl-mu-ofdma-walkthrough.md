@@ -1,5 +1,13 @@
 # 802.11ax DL MU OFDMA Implementation Walkthrough
 
+> Historical note: this walkthrough describes the pre-refactor implementation
+> and is retained for development history. Its equal-slice RU model,
+> `Ieee80211HeMuTag`, and wire-like per-RU container descriptions are no longer
+> current. The authoritative implementation boundary and type migration are in
+> [80211ax-supported-feature-matrix.md](80211ax-supported-feature-matrix.md);
+> current runnable behavior is documented in
+> [the DL OFDMA example](../examples/ieee80211ax/dl_ofdma/walkthrough.md).
+
 This note describes how the current INET codebase implements the parts of
 802.11ax that matter for downlink multi-user OFDMA, with emphasis on the
 main design decisions visible in the implementation. It also lists scoped
@@ -133,7 +141,7 @@ The focused HE/OFDMA unit-test filter passed:
 
 ```sh
 export CCACHE_DISABLE=1
-source /home/user/omnetpp-6.4.0aipre2/setenv -f
+source /path/to/omnetpp/setenv -f
 source setenv -q
 bin/inet_run_unit_tests -m release -f "(Ieee80211He|HeDlScheduler).*\\.test"
 ```

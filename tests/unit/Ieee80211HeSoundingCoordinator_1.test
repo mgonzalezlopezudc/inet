@@ -9,6 +9,7 @@ Test HE Sounding Coordinator STA-side state machine.
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.coordinationfunction.HeSoundingCoordinator;
@@ -137,26 +138,66 @@ MockHeLinkPhyContext linkPhyContext(linkPhySnapshot);
 {
     auto trigger = makeShared<Ieee80211TriggerFrame>();
     trigger->setTriggerType(1); // Beamforming Report Poll
-    trigger->setCoding(physicallayer::HE_CODING_LDPC);
     trigger->setUsersArraySize(1);
     Ieee80211HeTriggerUserInfo user;
     user.aid = 5;
-    user.ruIndex = 1;
-    user.ruToneSize = 484;
+    const auto soundingRu = physicallayer::getHeEqualRuLayout(
+            Hz(5.18e9), MHz(20), 1).front();
+    user.ruIndex = soundingRu.index;
+    user.ruToneSize = soundingRu.toneSize;
+    user.ruToneOffset = soundingRu.toneOffset;
     user.coding = physicallayer::HE_CODING_LDPC;
     trigger->setUsers(0, user);
+    physicallayer::Ieee80211HeUserPhyParameters feedbackUser;
+    feedbackUser.ru = soundingRu;
+    feedbackUser.coding = physicallayer::HE_CODING_LDPC;
+    feedbackUser.psduLength = B(34);
+    auto feedbackPpdu = physicallayer::computeHePpduParameters(
+            {feedbackUser}, MHz(20), physicallayer::HE_TRIGGER_BASED_UPLINK,
+            physicallayer::HE_GI_3_2_US, physicallayer::HE_LTF_4X);
+    if (!feedbackPpdu)
+        throw cRuntimeError("Cannot construct the sounding feedback PPDU fixture");
+    auto feedbackUlLength = physicallayer::buildIeee80211HeTriggerUlLength(
+            feedbackPpdu.parameters.duration);
+    if (!feedbackUlLength)
+        throw cRuntimeError("Cannot encode the sounding feedback UL Length fixture");
+    trigger->setUlLength(feedbackUlLength.value.length);
+    auto feedbackDurationEnvelope =
+            physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
+                    feedbackUlLength.value.length);
+    if (!feedbackDurationEnvelope)
+        throw cRuntimeError("Cannot decode the sounding feedback UL Length fixture");
+    trigger->setCommonDuration(feedbackDurationEnvelope.txTime);
+    const auto expectedRemainingProtection = SimTime(200, SIMTIME_US);
+    trigger->setDurationField(modeSet->getSifsTime() +
+            feedbackPpdu.parameters.duration + expectedRemainingProtection);
+    trigger->setPreFecPaddingFactor(feedbackPpdu.parameters.common.preFecPaddingFactor);
+    trigger->setLdpcExtraSymbolSegment(feedbackPpdu.parameters.common.ldpcExtraSymbol);
+    trigger->setNumberOfHeLtfSymbols(feedbackPpdu.parameters.common.numberOfHeLtfSymbols);
     trigger->setTransmitterAddress(MacAddress("66:77:88:99:AA:BB"));
 
     auto pkt = new Packet("BRP", trigger);
+    pkt->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
+            setTriggerId(1);
     bool res = soundingCoordinator->processSoundingFrame(pkt, trigger, &mockMac, modeSet,
             csiManager, linkPhyContext, &mockTx, nullptr);
     EV << "BRP processed: " << (res ? "yes" : "no") << "\n";
 
     if (mockTx.lastSent != nullptr) {
         EV << "Transmitted action frame: " << mockTx.lastSent->getName() << "\n";
-        auto request = mockTx.lastSent->getTag<physicallayer::Ieee80211HeMuReq>();
-        ASSERT(request->getRuToneSize() == 484);
-        ASSERT(request->getCoding() == physicallayer::HE_CODING_LDPC);
+        auto request = mockTx.lastSent->getTag<physicallayer::Ieee80211HeTxVectorReq>();
+        const auto& user = request->getTxVector()->getUsers().front().getParameters();
+        if (user.ru.toneSize != 242)
+            throw cRuntimeError("Sounding feedback did not use the allocated 242-tone RU");
+        if (user.coding != physicallayer::HE_CODING_LDPC)
+            throw cRuntimeError("Sounding feedback did not use the allocated LDPC coding");
+        auto responseHeader = mockTx.lastSent->peekAtFront<Ieee80211ActionFrame>();
+        if (responseHeader->getDurationField() != expectedRemainingProtection)
+            throw cRuntimeError("Sounding feedback MAC Duration does not contain the remaining protection");
+        const auto txopDuration =
+                request->getTxVector()->getCommon().getRequestedTxopDuration();
+        if (txopDuration.unspecified || txopDuration.durationUs != 200)
+            throw cRuntimeError("Sounding feedback HE-SIG-A TXOP does not contain the remaining protection");
         delete mockTx.lastSent;
     }
 }

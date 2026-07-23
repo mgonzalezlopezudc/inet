@@ -108,7 +108,14 @@ IIeee80211HeDlScheduler::ScheduleContext HeHcf::collectScheduleContext(AccessCat
     ASSERT(mib != nullptr);
     std::vector<MacAddress> seenDestinations;
     auto baHandler = getOriginatorBlockAckAgreementHandler();
-    ASSERT(baHandler != nullptr);
+    if (baHandler == nullptr) {
+        // A station may use HeHcf without the optional QoS Block Ack service.
+        // Such a configuration can still transmit HE SU frames, but it cannot
+        // supply the active agreements required by INET's DL MU packing path.
+        EV_DEBUG << "HE DL schedule context has no originator Block Ack handler; "
+                    "returning without MU candidates\n";
+        return context;
+    }
     auto ackHandler = edcaf->getAckHandler();
     ASSERT(ackHandler != nullptr);
     std::vector<queueing::IPacketQueue *> queues = {edcaf->getPendingQueue()};

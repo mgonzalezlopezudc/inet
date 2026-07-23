@@ -163,13 +163,6 @@ static Packet *makeHeTbAmpduResponse(
 {
     auto packet = new Packet("he-tb-response");
     auto indication = packet->addTag<Ieee80211MpduReceiveInd>();
-    auto rx = packet->addTag<Ieee80211HeMuRxTag>();
-    rx->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
-    rx->setRuIndex(allocation.ru.index);
-    Ieee80211HeMuRxAllocationInfo canonical;
-    canonical.ruIndex = allocation.ru.index;
-    canonical.staId = allocation.associationId;
-    rx->appendAllocations(canonical);
     for (size_t i = 0; i < statuses.size(); ++i) {
         if (insertZeroLengthDelimiter && i == 1) {
             auto paddingDelimiter = makeShared<Ieee80211MpduSubframeHeader>();
@@ -200,6 +193,59 @@ static Packet *makeHeTbAmpduResponse(
         indication->appendResults(outcome);
         delete mpdu;
     }
+    Ieee80211HeUserPhyParameters calculatorUser;
+    calculatorUser.ru = allocation.ru;
+    calculatorUser.mcs = allocation.mcs;
+    calculatorUser.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
+    calculatorUser.streamStartIndex = allocation.streamStartIndex;
+    calculatorUser.dcm = false;
+    calculatorUser.coding = HE_CODING_BCC;
+    calculatorUser.psduLength = B((packet->getDataLength().get<b>() + 7) / 8);
+    calculatorUser.staId = allocation.associationId;
+    auto calculated = computeHePpduParameters({calculatorUser}, MHz(20),
+            HE_TRIGGER_BASED_UPLINK, HE_GI_3_2_US, HE_LTF_4X);
+    REQUIRE(calculated);
+    auto ulLength = buildIeee80211HeTriggerUlLength(calculated.parameters.duration);
+    REQUIRE(ulLength);
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = Hz(5.18e9);
+    request.channelBandwidth = MHz(20);
+    request.ppduFormat = HE_TRIGGER_BASED_UPLINK;
+    request.lSigLength = ulLength.value.length;
+    request.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    request.preFecPaddingFactor = calculated.parameters.common.preFecPaddingFactor;
+    request.ldpcExtraSymbolSegment = calculated.parameters.common.ldpcExtraSymbol;
+    request.numberOfHeLtfSymbols = calculated.parameters.common.numberOfHeLtfSymbols;
+    request.requestedTxTime = calculated.parameters.duration;
+    request.requestedTxTimeExact = true;
+    request.guardInterval = HE_GI_3_2_US;
+    request.ltfType = HE_LTF_4X;
+    Ieee80211HeUserTxVectorRequest user;
+    user.ru = allocation.ru;
+    user.staId = allocation.associationId;
+    user.mcs = allocation.mcs;
+    user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
+    user.streamStartIndex = allocation.streamStartIndex;
+    user.dcm = false;
+    user.coding = HE_CODING_BCC;
+    user.psduLength = calculatorUser.psduLength;
+    request.users = {user};
+    auto canonical = Ieee80211HeTxVectorFactory::create(request);
+    if (!canonical)
+        throw cRuntimeError("HE-TB receive fixture rejected: %s (%s)",
+                canonical.getContext().fieldName.c_str(),
+                canonical.getContext().detail.c_str());
+    Ieee80211HeRxVectorReconstructionRequest reconstruction;
+    reconstruction.selection.userIndex = 0;
+    reconstruction.receivedPsduLength = user.psduLength;
+    auto reconstructed = Ieee80211HeRxVectorFactory::reconstruct(
+            *canonical.getTxVector(), *canonical.getPpduLayout(), reconstruction);
+    REQUIRE(reconstructed);
+    packet->addTag<Ieee80211HeRxVectorInd>()->setRxVector(reconstructed.getRxVector());
+    auto context = packet->addTag<Ieee80211HeTbRecipientContextInd>();
+    context->setTriggerId(1);
+    context->setRecipientParameters(std::shared_ptr<const Ieee80211HeUserPhyParameters>(
+            canonical.getPpduLayout(), &canonical.getPpduLayout()->getUsers().front()));
     return packet;
 }
 
@@ -239,9 +285,9 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     request.channelBandwidth = MHz(decoded->getChannelBandwidthMhz());
     request.ppduFormat = HE_TRIGGER_BASED_UPLINK;
     request.lSigLength = decoded->getUlLength();
-    request.noSignalExtension = decoded->getNoSignalExtension();
+    request.noSignalExtension = false;
     request.requestedTxTime = decoded->getCommonDuration();
-    request.requestedTxTimeExact = decoded->getCommonDurationExact();
+    request.requestedTxTimeExact = false;
     request.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
     request.preFecPaddingFactor = decoded->getPreFecPaddingFactor();
     request.ldpcExtraSymbolSegment = decoded->getLdpcExtraSymbolSegment();
@@ -249,7 +295,7 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     request.numberOfHeLtfSymbols = decoded->getNumberOfHeLtfSymbols();
     request.guardInterval = static_cast<Ieee80211HeGuardInterval>(decoded->getGuardInterval());
     request.ltfType = static_cast<Ieee80211HeLtfType>(decoded->getLtfType());
-    request.packetExtensionDurationUs = decoded->getPacketExtensionDurationUs();
+    request.packetExtensionDurationUs = 0;
     const auto catalog = getHeRuAllocationCatalog(centerFrequency, request.channelBandwidth);
     for (unsigned int i = 0; i < decoded->getUsersArraySize(); ++i) {
         const auto& decodedUser = decoded->getUsers(i);
@@ -310,12 +356,34 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
             MacAddress("10:00:00:00:00:00"));
     std::unique_ptr<IReceiveStep> nfrpReceiveStep(sequence.buildReceiveCollectionStepForTest());
     auto nfrpNdp = new Packet("valid-headerless-nfrp");
-    auto rx = nfrpNdp->addTag<Ieee80211HeMuRxTag>();
-    rx->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
-    rx->setAllocationsArraySize(1);
-    Ieee80211HeMuRxAllocationInfo allocation;
-    allocation.ndpFeedbackReport = true;
-    rx->setAllocations(0, allocation);
+    Ieee80211HeTxVectorRequest ndpRequest;
+    ndpRequest.centerFrequency = Hz(5.18e9);
+    ndpRequest.channelBandwidth = MHz(20);
+    ndpRequest.ppduFormat = HE_TRIGGER_BASED_UPLINK;
+    ndpRequest.lSigLength = 34;
+    ndpRequest.ndp = true;
+    ndpRequest.requestedTxTime = SimTime(72, SIMTIME_US);
+    ndpRequest.requestedTxTimeExact = true;
+    Ieee80211HeUserTxVectorRequest ndpUser;
+    ndpUser.ru = getHeEqualRuLayout(ndpRequest.centerFrequency,
+            ndpRequest.channelBandwidth, 1).front();
+    ndpUser.staId = schedule.nfrpStartingAid;
+    ndpUser.ndpFeedbackReport = true;
+    ndpUser.ndpRuToneSetIndex = 1;
+    ndpRequest.users = {ndpUser};
+    auto canonical = Ieee80211HeTxVectorFactory::create(ndpRequest);
+    REQUIRE(canonical);
+    Ieee80211HeRxVectorReconstructionRequest reconstruction;
+    reconstruction.selection.userIndex = 0;
+    reconstruction.receivedPsduLength = B(0);
+    auto reconstructed = Ieee80211HeRxVectorFactory::reconstruct(
+            *canonical.getTxVector(), *canonical.getPpduLayout(), reconstruction);
+    REQUIRE(reconstructed);
+    nfrpNdp->addTag<Ieee80211HeRxVectorInd>()->setRxVector(reconstructed.getRxVector());
+    auto context = nfrpNdp->addTag<Ieee80211HeTbRecipientContextInd>();
+    context->setTriggerId(1);
+    context->setRecipientParameters(std::shared_ptr<const Ieee80211HeUserPhyParameters>(
+            canonical.getPpduLayout(), &canonical.getPpduLayout()->getUsers().front()));
     REQUIRE(nfrpReceiveStep->acceptsHeaderlessFrame(nfrpNdp));
     delete nfrpNdp;
     delete callback;
@@ -349,13 +417,11 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     trigger->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
     trigger->setTriggerType(0);
-    trigger->setTriggerId(42);
     trigger->setUlLength(58);
     trigger->setChannelBandwidthMhz(20);
     trigger->setCommonDuration(SimTime(800, SIMTIME_US));
     trigger->setGuardInterval(HE_GI_1_6_US);
     trigger->setLtfType(HE_LTF_1X);
-    trigger->setCoding(1);
     trigger->setUsersArraySize(2);
     Ieee80211HeTriggerUserInfo scheduled;
     scheduled.aid = 7;
@@ -364,7 +430,6 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     scheduled.ruToneOffset = 0;
     scheduled.mcs = 3;
     scheduled.coding = 1;
-    scheduled.tid = 5;
     scheduled.targetRssiDbm = -70;
     trigger->setUsers(0, scheduled);
     Ieee80211HeTriggerUserInfo randomAccess;
@@ -380,13 +445,10 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     auto bytes = packet->peekDataAsBytes();
     auto received = new Packet("trigger-rx", bytes);
     auto decoded = received->popAtFront<Ieee80211TriggerFrame>();
-    // triggerId is local correlation metadata, not an on-wire Trigger field.
-    REQUIRE(decoded->getTriggerId() == 0);
     REQUIRE(decoded->getUlLength() == 58);
     REQUIRE(decoded->getCommonDuration() == SimTime(104, SIMTIME_US));
     REQUIRE(decoded->getGuardInterval() == HE_GI_1_6_US);
     REQUIRE(decoded->getLtfType() == HE_LTF_1X);
-    REQUIRE(decoded->getCoding() == 1);
     REQUIRE(decoded->getUsersArraySize() == 2);
     REQUIRE(decoded->getUsers(0).aid == 7);
     REQUIRE(decoded->getUsers(1).randomAccess);
@@ -591,9 +653,9 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     request.channelBandwidth = MHz(decoded->getChannelBandwidthMhz());
     request.ppduFormat = HE_TRIGGER_BASED_UPLINK;
     request.lSigLength = decoded->getUlLength();
-    request.noSignalExtension = decoded->getNoSignalExtension();
+    request.noSignalExtension = false;
     request.requestedTxTime = decoded->getCommonDuration();
-    request.requestedTxTimeExact = decoded->getCommonDurationExact();
+    request.requestedTxTimeExact = false;
     request.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
     request.preFecPaddingFactor = decoded->getPreFecPaddingFactor();
     request.ldpcExtraSymbolSegment = decoded->getLdpcExtraSymbolSegment();
@@ -601,7 +663,7 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     request.numberOfHeLtfSymbols = decoded->getNumberOfHeLtfSymbols();
     request.guardInterval = static_cast<Ieee80211HeGuardInterval>(decoded->getGuardInterval());
     request.ltfType = static_cast<Ieee80211HeLtfType>(decoded->getLtfType());
-    request.packetExtensionDurationUs = decoded->getPacketExtensionDurationUs();
+    request.packetExtensionDurationUs = 0;
     Ieee80211HeUserTxVectorRequest user;
     user.ru = proposed.allocations.front().ru;
     user.staId = decoded->getUsers(0).aid;

@@ -20,6 +20,7 @@
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/common/packet/chunk/SequenceChunk.h"
 
 namespace inet {
@@ -47,6 +48,7 @@ HeSoundingFs::HeSoundingFs(Ieee80211Mib *mib,
                            const std::vector<TargetSta>& targets,
                            physicallayer::Ieee80211ModeSet *modeSet,
                            HeMuMimoCsiManager *csiManager,
+                           Hz centerFrequency,
                            Hz bandwidth,
                            uint8_t dialogToken,
                            uint32_t triggerId) :
@@ -54,6 +56,7 @@ HeSoundingFs::HeSoundingFs(Ieee80211Mib *mib,
     targets(targets),
     modeSet(modeSet),
     csiManager(csiManager),
+    centerFrequency(centerFrequency),
     bandwidth(bandwidth),
     dialogToken(dialogToken),
     triggerId(triggerId)
@@ -61,6 +64,7 @@ HeSoundingFs::HeSoundingFs(Ieee80211Mib *mib,
     ASSERT(mib != nullptr);
     ASSERT(modeSet != nullptr);
     ASSERT(csiManager != nullptr);
+    ASSERT(std::isfinite(centerFrequency.get()));
     ASSERT(!std::isnan(bandwidth.get()) && bandwidth > Hz(0));
     for (const auto& target : targets) {
         ASSERT(target.aid != 0);
@@ -170,42 +174,35 @@ Packet *HeSoundingFs::buildNdpFrame(FrameSequenceContext *context)
 {
     ASSERT(context != nullptr);
     auto ndpPacket = new Packet("HE-NDP");
-    auto txTag = ndpPacket->addTagIfAbsent<physicallayer::Ieee80211HeMuTxTag>();
-    txTag->setNdp(true);
-
-    uint16_t ruToneSize = 242;
-    if (bandwidth >= Hz(160e6)) ruToneSize = 1992;
-    else if (bandwidth >= Hz(80e6)) ruToneSize = 996;
-    else if (bandwidth >= Hz(40e6)) ruToneSize = 484;
-
-    int totalNsts = 0;
+    physicallayer::Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = centerFrequency;
+    request.channelBandwidth = bandwidth;
+    request.ppduFormat = physicallayer::HE_SINGLE_USER;
+    request.ndp = true;
+    request.bssColor = mib->heOperation.bssColor;
+    request.spatialReuse = {{15, 15, 15, 15}};
+    request.guardInterval = physicallayer::HE_GI_3_2_US;
+    request.ltfType = physicallayer::HE_LTF_4X;
+    request.packetExtensionDurationUs = 4;
+    physicallayer::Ieee80211HeUserTxVectorRequest user;
+    user.ru = physicallayer::getHeEqualRuLayout(centerFrequency, bandwidth, 1).front();
+    user.mcs = 0;
+    user.numberOfSpatialStreams = 1;
     for (const auto& target : targets)
-        totalNsts += target.maxNss;
-    ASSERT(totalNsts > 0);
-
-    int streamStartIndex = 0;
-    for (size_t i = 0; i < targets.size(); ++i) {
-        physicallayer::Ieee80211HeMuTxAllocationInfo allocation;
-        allocation.ruIndex = 0;
-        allocation.ruToneSize = ruToneSize;
-        allocation.ruToneOffset = 0;
-        allocation.staId = targets[i].aid;
-        allocation.mcs = 0;
-        allocation.numberOfSpatialStreams = targets[i].maxNss;
-        allocation.dcm = false;
-        allocation.psduLength = B(0);
-        allocation.streamStartIndex = streamStartIndex;
-        allocation.muMimo = true;
-        allocation.totalNsts = totalNsts;
-        txTag->appendAllocations(allocation);
-        streamStartIndex += targets[i].maxNss;
+        user.numberOfSpatialStreams = std::max(user.numberOfSpatialStreams, target.maxNss);
+    user.coding = bandwidth >= MHz(40) ?
+            physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
+    user.psduLength = B(0);
+    request.users.push_back(user);
+    auto result = physicallayer::Ieee80211HeTxVectorFactory::create(request);
+    if (!result) {
+        delete ndpPacket;
+        throw cRuntimeError("Cannot construct canonical HE sounding NDP: %s (%s)",
+                result.getContext().fieldName.c_str(),
+                result.getContext().detail.c_str());
     }
-
-    auto commonRequest = ndpPacket->addTagIfAbsent<physicallayer::Ieee80211HeMuCommonReq>();
-    commonRequest->setGuardInterval(physicallayer::HE_GI_3_2_US);
-    commonRequest->setCoding(ruToneSize >= 484 ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC);
-    commonRequest->setPacketExtensionDurationUs(0);
-    commonRequest->setPuncturedSubchannelMask(0);
+    ndpPacket->addTag<physicallayer::Ieee80211HeTxVectorReq>()->
+            setCanonicalPair(result.getTxVector(), result.getPpduLayout());
 
     return ndpPacket;
 }
@@ -217,7 +214,6 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     // 9.3.1.22 Table 9-47: Trigger type 1 is BFRP.  9.3.1.22.3 says the
     // BFRP Trigger-dependent User Info field is the feedback segment bitmap.
     header->setTriggerType(1);
-    header->setTriggerId(triggerId);
     header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);
     header->setChannelBandwidthMhz(std::lround(bandwidth.get() / 1e6));
@@ -234,7 +230,6 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     bool requiresLdpc = std::any_of(ruLayout.begin(), ruLayout.end(), [] (const auto& ru) {
         return ru.toneSize >= 484;
     });
-    header->setCoding(requiresLdpc ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC);
     header->setGuardInterval(physicallayer::HE_GI_1_6_US);
     header->setLtfType(physicallayer::HE_LTF_2X);
 
@@ -272,7 +267,6 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
             modeSet->findHeMode(0, 1, bandwidth, bandwidth > MHz(20))) : nullptr;
     if (heMode == nullptr)
         throw cRuntimeError("Cannot select HE BFRP signal extension without an HE operating band");
-    header->setNoSignalExtension(false);
     physicallayer::Ieee80211HeTriggerResponseFinalizationRequest request;
     request.users = responseUsers;
     request.centerFrequency = heMode->getCenterFrequencyMode() == physicallayer::Ieee80211HeMode::BAND_2_4GHZ ? Hz(2.4e9) :
@@ -280,7 +274,7 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     request.channelBandwidth = bandwidth;
     request.guardInterval = physicallayer::HE_GI_1_6_US;
     request.ltfType = physicallayer::HE_LTF_2X;
-    request.noSignalExtension = header->getNoSignalExtension();
+    request.noSignalExtension = false;
     auto finalization = physicallayer::finalizeHeTriggerResponse(request);
     if (!finalization)
         throw cRuntimeError("Cannot finalize BFRP Trigger response: %s", finalization.error.c_str());
@@ -289,14 +283,19 @@ Packet *HeSoundingFs::buildBfrpTriggerFrame(FrameSequenceContext *context)
     header->setPreFecPaddingFactor(finalization.parameters.common.preFecPaddingFactor);
     header->setLdpcExtraSymbolSegment(finalization.parameters.common.ldpcExtraSymbol);
     header->setPeDisambiguity(finalization.peDisambiguity);
-    header->setPacketExtensionDurationUs(finalization.parameters.common.packetExtensionDurationUs);
-    header->setCommonDuration(finalization.commonDuration);
-    header->setCommonDurationExact(finalization.commonDurationExact);
+    auto durationEnvelope = physicallayer::getIeee80211HeTriggerTxTimeUpperBound(
+            finalization.ulLength);
+    if (!durationEnvelope)
+        throw cRuntimeError("Cannot decode finalized BFRP Trigger UL Length: %s",
+                durationEnvelope.error.c_str());
+    header->setCommonDuration(durationEnvelope.txTime);
     header->setDurationField(modeSet->getSifsTime() + finalization.commonDuration);
     header->setChunkLength(B(24 + 6 * targets.size()));
 
     auto packet = new Packet("HE-BFRP-Trigger", header);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    packet->addTag<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
+            setTriggerId(triggerId);
     EV_INFO << "Built HE BFRP Trigger " << triggerId
             << " for " << targets.size() << " sounding targets"
             << " using " << layoutCount << " RUs and "

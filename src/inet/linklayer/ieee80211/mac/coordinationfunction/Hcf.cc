@@ -17,10 +17,12 @@
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckProcedure.h"
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/framesequence/HcfFs.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader_m.h"
 
 namespace inet {
@@ -36,7 +38,7 @@ Define_Module(Hcf);
 
 static bool isHeMuContainerPacket(Packet *packet)
 {
-    return packet != nullptr && packet->hasTag<Ieee80211HeMuTxTag>();
+    return packet != nullptr && packet->findTag<Ieee80211HeMuContainerReq>() != nullptr;
 }
 
 static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcsMode)
@@ -254,14 +256,19 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
     EV_INFO << "Processing lower frame: " << packet->getName() << endl;
     auto edcaf = edca->getChannelOwner();
     if (header == nullptr) {
-        auto heMuRx = packet->findTag<physicallayer::Ieee80211HeMuRxTag>();
+        auto rxVectorInd = packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+        auto recipientContext =
+                packet->findTag<physicallayer::Ieee80211HeTbRecipientContextInd>();
         const bool outcomeAmpdu = packet->findTag<physicallayer::Ieee80211MpduReceiveInd>() != nullptr &&
                 packet->getDataLength() > b(0) &&
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
-        const bool nfrpFeedbackNdp = heMuRx != nullptr &&
-                heMuRx->getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK &&
-                heMuRx->getAllocationsArraySize() == 1 &&
-                heMuRx->getAllocations(0).ndpFeedbackReport;
+        const bool nfrpFeedbackNdp = rxVectorInd != nullptr &&
+                rxVectorInd->getRxVector() != nullptr &&
+                rxVectorInd->getRxVector()->getCommon().getPpduFormat() ==
+                        physicallayer::HE_TRIGGER_BASED_UPLINK &&
+                recipientContext != nullptr &&
+                recipientContext->getRecipientParameters() != nullptr &&
+                recipientContext->getRecipientParameters()->ndpFeedbackReport;
         auto receiveStep = edcaf && frameSequenceHandler->isSequenceRunning() ?
                 dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep()) : nullptr;
         if (outcomeAmpdu && receiveStep != nullptr) {
@@ -506,17 +513,11 @@ void Hcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee8021
 
     bool wasHeMu = false;
     int myAllocationIndex = -1;
-    if (auto heMuRxTag = packet->findTag<Ieee80211HeMuRxTag>()) {
+    if (auto indication = packet->findTag<Ieee80211HeRxVectorInd>();
+            indication != nullptr && indication->getRxVector() != nullptr &&
+            indication->getRxVector()->getCommon().getPpduFormat() == HE_MU_DOWNLINK) {
         wasHeMu = true;
-        auto mib = mac->getMib();
-        auto myStaId = mib == nullptr ? computeHeMuStaId(mac->getAddress()) :
-                mib->bssStationData.associationId;
-        for (unsigned int i = 0; i < heMuRxTag->getAllocationsArraySize(); ++i) {
-            if (myStaId > 0 && heMuRxTag->getAllocations(i).staId == myStaId) {
-                myAllocationIndex = i;
-                break;
-            }
-        }
+        myAllocationIndex = indication->getRxVector()->getUser().getStaId().has_value() ? 0 : -1;
     }
 
     if (wasHeMu && myAllocationIndex != -1) {
@@ -860,10 +861,11 @@ void Hcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTra
     EV_INFO << "Processing received frame " << receivedPacket->getName() << " as originator in frame sequence.\n";
     emit(packetReceivedFromPeerSignal, receivedPacket);
     Ptr<const Ieee80211MacHeader> lastTransmittedHeader;
-    if (auto txTag = lastTransmittedPacket->findTag<Ieee80211HeMuTxTag>()) {
+    if (auto metadata = lastTransmittedPacket->findTag<Ieee80211HeMuContainerReq>();
+            metadata != nullptr) {
         auto metadataHeader = makeShared<Ieee80211DataHeader>();
         metadataHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
-        metadataHeader->setDurationField(txTag->getDurationField());
+        metadataHeader->setDurationField(metadata->getDurationField());
         lastTransmittedHeader = metadataHeader;
     }
     else
@@ -1012,11 +1014,12 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
     auto channelOwner = edca->getChannelOwner();
     if (channelOwner) {
         Ptr<const Ieee80211MacHeader> header;
-        if (auto txTag = packet->findTag<Ieee80211HeMuTxTag>()) {
+        if (auto metadata = packet->findTag<Ieee80211HeMuContainerReq>();
+                metadata != nullptr) {
             auto metadataHeader = makeShared<Ieee80211DataHeader>();
             metadataHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
             metadataHeader->setType(ST_DATA_WITH_QOS);
-            metadataHeader->setDurationField(txTag->getDurationField());
+            metadataHeader->setDurationField(metadata->getDurationField());
             header = metadataHeader;
         }
         else

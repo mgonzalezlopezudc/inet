@@ -169,7 +169,7 @@ class TestHeSoundingFs : public HeSoundingFs
     };
     auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
     FrameSequenceContext context(mib->address, modeSet, nullptr, nullptr, nullptr, nullptr, nullptr);
-    TestHeSoundingFs sounding(mib, targets, modeSet, &csi, MHz(20), 7, 99);
+    TestHeSoundingFs sounding(mib, targets, modeSet, &csi, GHz(5.18), MHz(20), 7, 99);
     auto triggerPacket = sounding.buildBfrpTriggerFrameForTest(&context);
     auto directTrigger = triggerPacket->peekAtFront<Ieee80211TriggerFrame>();
     requireBfrp(directTrigger->getGuardInterval() == HE_GI_1_6_US,
@@ -199,9 +199,9 @@ class TestHeSoundingFs : public HeSoundingFs
     responseRequest.channelBandwidth = MHz(decodedTrigger->getChannelBandwidthMhz());
     responseRequest.ppduFormat = HE_TRIGGER_BASED_UPLINK;
     responseRequest.lSigLength = decodedTrigger->getUlLength();
-    responseRequest.noSignalExtension = decodedTrigger->getNoSignalExtension();
+    responseRequest.noSignalExtension = false;
     responseRequest.requestedTxTime = decodedTrigger->getCommonDuration();
-    responseRequest.requestedTxTimeExact = decodedTrigger->getCommonDurationExact();
+    responseRequest.requestedTxTimeExact = false;
     responseRequest.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
     responseRequest.preFecPaddingFactor = decodedTrigger->getPreFecPaddingFactor();
     responseRequest.ldpcExtraSymbolSegment = decodedTrigger->getLdpcExtraSymbolSegment();
@@ -209,7 +209,7 @@ class TestHeSoundingFs : public HeSoundingFs
     responseRequest.numberOfHeLtfSymbols = decodedTrigger->getNumberOfHeLtfSymbols();
     responseRequest.guardInterval = static_cast<Ieee80211HeGuardInterval>(decodedTrigger->getGuardInterval());
     responseRequest.ltfType = static_cast<Ieee80211HeLtfType>(decodedTrigger->getLtfType());
-    responseRequest.packetExtensionDurationUs = decodedTrigger->getPacketExtensionDurationUs();
+    responseRequest.packetExtensionDurationUs = 0;
     const auto catalog = getHeRuAllocationCatalog(responseRequest.centerFrequency,
             responseRequest.channelBandwidth);
     for (unsigned int i = 0; i < decodedTrigger->getUsersArraySize(); ++i) {

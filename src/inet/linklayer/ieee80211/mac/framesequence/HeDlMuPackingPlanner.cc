@@ -140,7 +140,8 @@ HeDlMuPackingPlanner::Plan HeDlMuPackingPlanner::plan(const Parameters& paramete
         }
         return computeHePpduParameters(users, parameters.scheduleContext.channelBandwidth,
                 HE_MU_DOWNLINK, parameters.scheduleContext.guardInterval,
-                parameters.scheduleContext.ltfType);
+                parameters.scheduleContext.ltfType,
+                parameters.scheduleContext.packetExtensionDurationUs);
     };
 
     auto plannedPpdu = calculatePlannedPpdu();

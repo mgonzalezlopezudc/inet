@@ -30,6 +30,7 @@
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211ControlInfo_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/common/contract/packetlevel/SignalTag_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/twt/ITwtManager.h"
@@ -233,7 +234,7 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
             return;
         }
     }
-    if (auto legacyPreambleInd = packet->findTag<Ieee80211HeMuLegacyPreambleInd>()) {
+    if (auto legacyPreambleInd = packet->findTag<Ieee80211LegacyPreambleInd>()) {
         rx->legacySignalReceived(legacyPreambleInd->getDurationField());
         if (auto heHcf = dynamic_cast<HeHcf *>(hcf.get())) {
             heHcf->legacyPreambleReceived(packet);
@@ -253,11 +254,15 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
             return;
         }
         if (packet->getDataLength() == b(0)) {
-            auto heMuRx = packet->findTag<Ieee80211HeMuRxTag>();
-            const bool nfrpFeedbackNdp = heMuRx != nullptr &&
-                    heMuRx->getPpduFormat() == HE_TRIGGER_BASED_UPLINK &&
-                    heMuRx->getAllocationsArraySize() == 1 &&
-                    heMuRx->getAllocations(0).ndpFeedbackReport;
+            auto rxVectorInd = packet->findTag<Ieee80211HeRxVectorInd>();
+            auto recipientContext = packet->findTag<Ieee80211HeTbRecipientContextInd>();
+            const bool nfrpFeedbackNdp = rxVectorInd != nullptr &&
+                    rxVectorInd->getRxVector() != nullptr &&
+                    rxVectorInd->getRxVector()->getCommon().getPpduFormat() ==
+                            HE_TRIGGER_BASED_UPLINK &&
+                    recipientContext != nullptr &&
+                    recipientContext->getRecipientParameters() != nullptr &&
+                    recipientContext->getRecipientParameters()->ndpFeedbackReport;
             if (nfrpFeedbackNdp && mib->qos) {
                 // NFRP feedback is intentionally headerless: its responder
                 // identity and status are carried by RXVECTOR metadata. Route

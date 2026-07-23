@@ -27,7 +27,6 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     trigger->setTransmitterAddress(MacAddress("10:00:00:00:00:00"));
     trigger->setTriggerType(0);
-    trigger->setTriggerId(0x12345678);
     trigger->setDurationField(SimTime(800, SIMTIME_US)); // Explicitly set duration field
     trigger->setCommonDuration(SimTime(800, SIMTIME_US));
     trigger->setUlLength(799); // Valid HE TB modulo-3 Trigger UL Length
@@ -36,7 +35,6 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setGuardInterval(2); // GI = 2
     trigger->setLtfType(physicallayer::HE_LTF_4X);
     trigger->setNumberOfHeLtfSymbols(4);
-    trigger->setCoding(1); // LDPC = 1
     trigger->setPreFecPaddingFactor(3);
     trigger->setPeDisambiguity(true);
     trigger->setUsersArraySize(1);
@@ -50,17 +48,13 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     user.coding = 1;
     user.numberOfSpatialStreams = 3;
     user.streamStartIndex = 2;
-    user.tid = 5;
     user.mpduMuSpacingFactor = 2;
     user.tidAggregationLimit = 1;
     user.preferredAc = 3;
     user.targetRssiDbm = -70; // Target Rssi = -70 dBm -> PTARGET = -70 + 110 = 40
     trigger->setUsers(0, user);
 
-    physicallayer::Ieee80211HeMuReq directRequest;
-    populateHeTbRequestFromTrigger(&directRequest, *trigger, trigger->getUsers(0), 7);
-    REQUIRE(directRequest.getNominalPacketPaddingDurationUs() == 0);
-    REQUIRE(directRequest.getLtfType() == physicallayer::HE_LTF_4X);
+    REQUIRE(trigger->getLtfType() == physicallayer::HE_LTF_4X);
 
     trigger->setChunkLength(B(24 + 6)); // Basic trigger frame header + 1 user info field
 
@@ -82,6 +76,23 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     REQUIRE(((commonInfo >> 23) & 0x7) == 2);
     REQUIRE(((commonInfo >> 34) & 0x3) == 3);
     REQUIRE(((commonInfo >> 36) & 0x1) == 1);
+    {
+        constexpr uint16_t ulSpatialReuse = 0xFB61;
+        std::vector<uint8_t> spatialReuseBytes(bytes->getChunkLength().get<B>());
+        for (int i = 0; i < (int)spatialReuseBytes.size(); ++i)
+            spatialReuseBytes[i] = bytes->getByte(i);
+        auto spatialReuseCommonInfo =
+                (commonInfo & ~(0xFFFFULL << 37)) |
+                (static_cast<uint64_t>(ulSpatialReuse) << 37);
+        for (int i = 0; i < 8; ++i)
+            spatialReuseBytes[16 + i] =
+                    (spatialReuseCommonInfo >> (8 * i)) & 0xFF;
+        Packet spatialReusePacket("trigger-ul-spatial-reuse",
+                makeShared<BytesChunk>(spatialReuseBytes));
+        auto decodedSpatialReuse =
+                spatialReusePacket.popAtFront<Ieee80211TriggerFrame>();
+        REQUIRE(decodedSpatialReuse->getUlSpatialReuse() == ulSpatialReuse);
+    }
 
     struct GiLtfWireCase {
         physicallayer::Ieee80211HeGuardInterval guardInterval;
@@ -107,11 +118,8 @@ REQUIRE(canonical26ToneRus.size() >= 2);
         auto decodedPair = decodedPairPacket.popAtFront<Ieee80211TriggerFrame>();
         REQUIRE(decodedPair->getGuardInterval() == wireCase.guardInterval);
         REQUIRE(decodedPair->getLtfType() == wireCase.ltfType);
-        physicallayer::Ieee80211HeMuReq responseRequest;
-        populateHeTbRequestFromTrigger(&responseRequest, *decodedPair,
-                decodedPair->getUsers(0), 7);
-        REQUIRE(responseRequest.getGuardInterval() == wireCase.guardInterval);
-        REQUIRE(responseRequest.getLtfType() == wireCase.ltfType);
+        REQUIRE(decodedPair->getGuardInterval() == wireCase.guardInterval);
+        REQUIRE(decodedPair->getLtfType() == wireCase.ltfType);
     }
 
     auto requireSemanticSerializeRejected = [&] (const char *name, const auto& mutate) {
@@ -138,15 +146,12 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
     REQUIRE(recvTrigger->getTriggerType() == 0);
-    REQUIRE(recvTrigger->getTriggerId() == 0);
     REQUIRE(recvTrigger->getDurationField() == SimTime(800, SIMTIME_US));
     REQUIRE(recvTrigger->getCommonDuration() == SimTime(1092, SIMTIME_US));
-    REQUIRE(!recvTrigger->getCommonDurationExact());
     REQUIRE(recvTrigger->getUlLength() == 799);
     REQUIRE(recvTrigger->getGuardInterval() == 2);
     REQUIRE(recvTrigger->getLtfType() == physicallayer::HE_LTF_4X);
     REQUIRE(recvTrigger->getNumberOfHeLtfSymbols() == 4);
-    REQUIRE(recvTrigger->getCoding() == 1);
     REQUIRE(recvTrigger->getPreFecPaddingFactor() == 3);
     REQUIRE(recvTrigger->getPeDisambiguity());
     REQUIRE(recvTrigger->getUsersArraySize() == 1);
@@ -157,36 +162,20 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     REQUIRE(recvTrigger->getUsers(0).coding == 1);
     REQUIRE(recvTrigger->getUsers(0).numberOfSpatialStreams == 3);
     REQUIRE(recvTrigger->getUsers(0).streamStartIndex == 2);
-    REQUIRE(recvTrigger->getUsers(0).tid == 0);
     REQUIRE(recvTrigger->getUsers(0).mpduMuSpacingFactor == 2);
     REQUIRE(recvTrigger->getUsers(0).tidAggregationLimit == 1);
     REQUIRE(recvTrigger->getUsers(0).preferredAc == 3);
     REQUIRE(recvTrigger->getUsers(0).targetRssiDbm == -70);
 
-    physicallayer::Ieee80211HeMuReq selectedRequest;
-    populateHeTbRequestFromTrigger(&selectedRequest, *recvTrigger, recvTrigger->getUsers(0), 7);
-    REQUIRE(selectedRequest.getPpduFormat() == physicallayer::HE_TRIGGER_BASED_UPLINK);
-    REQUIRE(selectedRequest.getLSigLength() == 799);
-    REQUIRE(selectedRequest.getChannelBandwidthMhz() == 20);
-    REQUIRE(!selectedRequest.getNoSignalExtension());
-    REQUIRE(selectedRequest.getCoding() == 1);
-    REQUIRE(selectedRequest.getTriggerMethod() ==
-            static_cast<uint8_t>(physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME));
-    REQUIRE(!selectedRequest.getLdpcExtraSymbolSegment());
-    REQUIRE(selectedRequest.getPreFecPaddingFactor() == 3);
-    REQUIRE(selectedRequest.getPeDisambiguity());
-    REQUIRE(selectedRequest.getNumberOfHeLtfSymbols() == 4);
-    REQUIRE(selectedRequest.getNominalPacketPaddingDurationUs() == 0);
-    REQUIRE(selectedRequest.getNominalPacketPaddingDurationUs() ==
-            directRequest.getNominalPacketPaddingDurationUs());
-    REQUIRE(selectedRequest.getPreFecPaddingFactor() == directRequest.getPreFecPaddingFactor());
-    REQUIRE(selectedRequest.getPeDisambiguity() == directRequest.getPeDisambiguity());
-    REQUIRE(selectedRequest.getNumberOfHeLtfSymbols() == directRequest.getNumberOfHeLtfSymbols());
-    REQUIRE(selectedRequest.getLtfType() == directRequest.getLtfType());
-    REQUIRE(selectedRequest.getLdpcExtraSymbolSegment() ==
-            directRequest.getLdpcExtraSymbolSegment());
-    REQUIRE(selectedRequest.getCommonDuration() == SimTime(1092, SIMTIME_US));
-    REQUIRE(!selectedRequest.getCommonDurationExact());
+    REQUIRE(recvTrigger->getUlLength() == 799);
+    REQUIRE(recvTrigger->getChannelBandwidthMhz() == 20);
+    REQUIRE(recvTrigger->getUsers(0).coding == 1);
+    REQUIRE(!recvTrigger->getLdpcExtraSymbolSegment());
+    REQUIRE(recvTrigger->getPreFecPaddingFactor() == 3);
+    REQUIRE(recvTrigger->getPeDisambiguity());
+    REQUIRE(recvTrigger->getNumberOfHeLtfSymbols() == 4);
+    REQUIRE(recvTrigger->getLtfType() == physicallayer::HE_LTF_4X);
+    REQUIRE(recvTrigger->getCommonDuration() == SimTime(1092, SIMTIME_US));
 
     auto requireMalformedCommonRejected = [&] (const char *name, uint64_t malformedCommonInfo) {
         std::vector<uint8_t> malformed(bytes->getChunkLength().get<B>());
@@ -203,7 +192,17 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     requireMalformedCommonRejected("trigger-reserved-ltf-count",
             (commonInfo & ~(0x7ULL << 23)) | (0x5ULL << 23));
     requireMalformedCommonRejected("trigger-unsupported-stbc", commonInfo | (1ULL << 26));
-    requireMalformedCommonRejected("trigger-unsupported-doppler", commonInfo | (1ULL << 53));
+    {
+        std::vector<uint8_t> dopplerBytes(bytes->getChunkLength().get<B>());
+        for (int i = 0; i < (int)dopplerBytes.size(); ++i)
+            dopplerBytes[i] = bytes->getByte(i);
+        auto dopplerCommonInfo = commonInfo | (1ULL << 53);
+        for (int i = 0; i < 8; ++i)
+            dopplerBytes[16 + i] = (dopplerCommonInfo >> (8 * i)) & 0xFF;
+        Packet dopplerPacket("trigger-doppler", makeShared<BytesChunk>(dopplerBytes));
+        auto decodedDoppler = dopplerPacket.popAtFront<Ieee80211TriggerFrame>();
+        REQUIRE(decodedDoppler->getDoppler());
+    }
     requireMalformedCommonRejected("trigger-reserved-gi-ltf",
             (commonInfo & ~(0x3ULL << 20)) | (0x3ULL << 20));
 
@@ -218,7 +217,6 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setReceiverAddress(MacAddress("02:00:00:00:00:01"));
     trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:02"));
     trigger->setTriggerType(4);
-    trigger->setTriggerId(0xABCDEF01);
     trigger->setDurationField(SimTime(400, SIMTIME_US)); // Explicitly set duration field
     trigger->setCommonDuration(SimTime(400, SIMTIME_US));
     trigger->setUlLength(400);
@@ -227,7 +225,6 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setLdpcExtraSymbolSegment(true);
     trigger->setGuardInterval(1);
     trigger->setLtfType(physicallayer::HE_LTF_2X);
-    trigger->setCoding(0); // BCC = 0
     trigger->setUsersArraySize(2);
 
     Ieee80211HeTriggerUserInfo user1;
@@ -270,12 +267,10 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
     REQUIRE(recvTrigger->getTriggerType() == 4);
-    REQUIRE(recvTrigger->getTriggerId() == 0);
     REQUIRE(recvTrigger->getDurationField() == SimTime(400, SIMTIME_US));
     REQUIRE(recvTrigger->getCommonDuration() == SimTime(560, SIMTIME_US));
     REQUIRE(recvTrigger->getUlLength() == 400);
     REQUIRE(recvTrigger->getGuardInterval() == 1);
-    REQUIRE(recvTrigger->getCoding() == 0);
     REQUIRE(recvTrigger->getUsersArraySize() == 2);
     REQUIRE(recvTrigger->getUsers(0).aid == 100);
     REQUIRE(recvTrigger->getUsers(0).ruToneSize == 26);
@@ -289,11 +284,8 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     REQUIRE(recvTrigger->getUsers(1).coding == 1);
     REQUIRE(recvTrigger->getLdpcExtraSymbolSegment());
     REQUIRE(recvTrigger->getUsers(1).targetRssiDbm == -65);
-    physicallayer::Ieee80211HeMuReq secondUserRequest;
-    populateHeTbRequestFromTrigger(&secondUserRequest, *recvTrigger,
-            recvTrigger->getUsers(1), 200);
-    REQUIRE(secondUserRequest.getCoding() == physicallayer::HE_CODING_LDPC);
-    REQUIRE(secondUserRequest.getCoding() != recvTrigger->getUsers(0).coding);
+    REQUIRE(recvTrigger->getUsers(1).coding == physicallayer::HE_CODING_LDPC);
+    REQUIRE(recvTrigger->getUsers(1).coding != recvTrigger->getUsers(0).coding);
 
     delete pk;
     delete pk2;
@@ -306,7 +298,6 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
     trigger->setTransmitterAddress(MacAddress("02:00:00:00:00:03"));
     trigger->setTriggerType(2);
-    trigger->setTriggerId(0x10203040);
     trigger->setDurationField(SimTime(600, SIMTIME_US));
     trigger->setCommonDuration(SimTime(600, SIMTIME_US));
     trigger->setUlLength(601);
@@ -314,7 +305,6 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     trigger->setApTxPowerDbm(-20);
     trigger->setGuardInterval(2);
     trigger->setLtfType(physicallayer::HE_LTF_4X);
-    trigger->setCoding(0);
     trigger->setUsersArraySize(2);
 
     Ieee80211HeTriggerUserInfo user1;
@@ -323,7 +313,6 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     user1.ruToneSize = canonical26ToneRus[0].toneSize;
     user1.ruToneOffset = canonical26ToneRus[0].toneOffset;
     user1.mcs = 0;
-    user1.tid = 3;
     user1.targetRssiDbm = -55;
     user1.muBarTidInfo = 3;
     user1.muBarStartingSequenceNumber = 0x123;
@@ -362,13 +351,12 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     auto recvTrigger = pk2->popAtFront<Ieee80211TriggerFrame>();
 
     REQUIRE(recvTrigger->getTriggerType() == 2);
-    REQUIRE(recvTrigger->getTriggerId() == 0);
     REQUIRE(recvTrigger->getDurationField() == SimTime(600, SIMTIME_US));
     REQUIRE(recvTrigger->getCommonDuration() == SimTime(828, SIMTIME_US));
     REQUIRE(recvTrigger->getUlLength() == 601);
     REQUIRE(recvTrigger->getUsersArraySize() == 2);
     REQUIRE(recvTrigger->getUsers(0).aid == 11);
-    REQUIRE(recvTrigger->getUsers(0).tid == 3);
+    REQUIRE(recvTrigger->getUsers(0).muBarTidInfo == 3);
     REQUIRE(!recvTrigger->getUsers(0).muBarMultiTid);
     REQUIRE(recvTrigger->getUsers(0).muBarCompressedBitmap);
     REQUIRE(recvTrigger->getUsers(0).muBarTidInfo == 3);
@@ -566,12 +554,8 @@ REQUIRE(canonical26ToneRus.size() >= 2);
     auto decoded = decodedPacket.popAtFront<Ieee80211TriggerFrame>();
     REQUIRE(decoded->getChannelBandwidthMhz() == 80);
     REQUIRE(decoded->getUsers(0).ruToneSize == 996);
-    REQUIRE(!decoded->getCommonDurationExact());
-    physicallayer::Ieee80211HeMuReq request;
-    populateHeTbRequestFromTrigger(&request, *decoded, decoded->getUsers(0), 37);
-    REQUIRE(request.getChannelBandwidthMhz() == 80);
-    REQUIRE(request.getRuToneSize() == 996);
-    REQUIRE(!request.getCommonDurationExact());
+    REQUIRE(decoded->getChannelBandwidthMhz() == 80);
+    REQUIRE(decoded->getUsers(0).ruToneSize == 996);
     EV << "Byte-backed 80 MHz Trigger request verified successfully.\n";
 }
 

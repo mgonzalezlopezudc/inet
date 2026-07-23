@@ -243,9 +243,9 @@ struct Ieee80211MuBarTriggerUserInfoRecord
 struct Ieee80211HeTriggerUserInfo
 {
     uint16_t aid;
-    // INET model metadata used to bind the scheduled user to the RU catalog entry.
-    // The serializer derives the standard-shaped RU Allocation subfield from
-    // ruToneSize/ruToneOffset; ruIndex itself is not an 802.11 Trigger User Info field.
+    // Decoded semantic RU catalog index. The serializer projects the standard
+    // RU Allocation subfield from ruToneSize/ruToneOffset and the decoder
+    // reconstructs the same catalog entry.
     int ruIndex = -1;
     uint16_t ruToneSize;
     uint16_t ruToneOffset;
@@ -258,8 +258,6 @@ struct Ieee80211HeTriggerUserInfo
     uint8_t mpduMuSpacingFactor = 0;
     uint8_t tidAggregationLimit = 1;
     uint8_t preferredAc = 0; // ACI encoding from Table 9-193
-    // Runtime scheduler metadata; this is not a Basic Trigger wire field.
-    uint8_t tid = 0;
     int8_t targetRssiDbm = -60;
     bool useMaximumTransmitPower = false; // UL Target Receive Power encoding 127
     bool randomAccess = false;
@@ -279,31 +277,20 @@ class Ieee80211TriggerFrame extends Ieee80211TwoAddressHeader
 {
     type = ST_TRIGGER;
     uint8_t triggerType = 0; // 0: Basic, 1: BFRP, 2: MU-BAR, 4: BSRP Trigger
-    // INET model correlation identifier. It is used to group simulated HE-TB
-    // responses and is intentionally not serialized as an 802.11 Trigger field.
-    uint32_t triggerId;
     // Table 9-47 UL Length: the solicited HE TB L-SIG LENGTH field. This is
-    // wire data and is distinct from INET's resolved common airtime metadata.
+    // wire data. commonDuration is its decoded 4 us response-time envelope.
     uint16_t ulLength = 0;
     simtime_t commonDuration;
-    bool commonDurationExact = false; // true only for explicitly resolved TXTIME; raw decode yields an upper envelope
     uint16_t channelBandwidthMhz = 20; // decoded Trigger Common Info UL BW
-    bool noSignalExtension = false; // ordinary HE-TB TXVECTOR policy; not carried by Trigger Common Info
     uint8_t guardInterval = 2;
     uint8_t ltfType = 4; // semantic HE-LTF type: 1x, 2x, or 4x
     uint8_t numberOfHeLtfSymbols = 1; // semantic count: 1, 2, 4, 6, or 8
-    uint8_t coding = 0; // compatibility summary; each User Info carries its own FEC coding
     bool ldpcExtraSymbolSegment = false; // Trigger Common Info B27
     int8_t apTxPowerDbm = 0; // Trigger Common Info B28-B33, normalized to 20 MHz
     uint8_t preFecPaddingFactor = 4; // semantic Trigger Common Info value a, 1..4
     bool peDisambiguity = false; // Trigger Common Info B36
-    // INET PHY request metadata copied to the HE-TB PPDU model. These fields
-    // summarize behavior that would be carried by several Trigger/HE-SIG
-    // subfields in a full bit-level implementation.
-    uint8_t packetExtensionDurationUs = 0;
-    uint8_t puncturedSubchannelMask = 0;
-    uint8_t ocwMin = 7;
-    uint8_t ocwMax = 31;
+    uint16_t ulSpatialReuse = 0; // Trigger Common Info B37-B52, four HE-TB nibbles
+    bool doppler = false; // Trigger Common Info B53; unsupported responses are rejected by TXVECTOR validation
     // Figure 9-101 NFRP User Info. Trigger type 7 carries exactly one of
     // these special 48-bit records instead of ordinary per-STA users[].
     uint16_t nfrpStartingAid = 0;

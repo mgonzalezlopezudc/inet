@@ -622,7 +622,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
 
     auto result = rxModule1->computeTestReceptionResult(reception, &snir, decisions);
     auto receivedPacket = result->getPacket();
-    bool hasLegacyIndication = receivedPacket->hasTag<Ieee80211HeMuLegacyPreambleInd>();
+    bool hasLegacyIndication = receivedPacket->hasTag<Ieee80211LegacyPreambleInd>();
     bool hasMacProtocol = receivedPacket->getTag<PacketProtocolTag>()->getProtocol() == &Protocol::ieee80211HePhy;
     EV << "Legacy receiver gets HE MU duration indication: " << (hasLegacyIndication ? "PASS" : "FAIL") << "\n";
     EV << "Legacy receiver does not get MAC RU payload: " << (hasMacProtocol ? "PASS" : "FAIL") << "\n";
@@ -682,7 +682,6 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
         delete mpdu;
     }
     packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
-    packet->addTag<Ieee80211HeMuTxTag>();
 
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
             mode, channel,
@@ -692,7 +691,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto selectedHeader = received->popAtFront<Ieee80211DataHeader>();
     bool selectedSecondSpan = selectedDelimiter->getLength() == expectedSecondModelLength &&
             selectedHeader->getReceiverAddress() == MacAddress("00:11:22:33:44:55");
-    bool txTagStripped = !received->hasTag<Ieee80211HeMuTxTag>();
+    bool txTagStripped = !received->hasTag<Ieee80211HeTxVectorReq>();
     std::cout << "Round-tripped header discards duplicate PSDU lengths: " << (headerLengthsDiscarded ? "PASS" : "FAIL") << "\n";
     std::cout << "Serializer canonicalizes RU indexes and reverses signaling order: " << (canonicalReversedHeader ? "PASS" : "FAIL") << "\n";
     std::cout << "Transmission model selects unequal second PSDU span: " << (selectedSecondSpan ? "PASS" : "FAIL") << "\n";
@@ -772,7 +771,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
             mode, channel,
             modelUsers, modelPpdu);
     auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
-    bool zeroLengthDataPreserved = !received->hasTag<Ieee80211HeMuLegacyPreambleInd>() &&
+    bool zeroLengthDataPreserved = !received->hasTag<Ieee80211LegacyPreambleInd>() &&
             received->hasTag<Ieee80211MpduReceiveInd>() &&
             rxVector->getCommon().getPpduFormat() == HE_MU_DOWNLINK &&
             rxVector->getUser().getPsduLength() == B(0);
@@ -819,7 +818,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     auto received = receiveHeMuPacket(rxModule1, radio1, packet,
             mode, channel,
             modelUsers, modelPpdu);
-    bool rejectedData = received->hasTag<Ieee80211HeMuLegacyPreambleInd>() &&
+    bool rejectedData = received->hasTag<Ieee80211LegacyPreambleInd>() &&
             !received->hasTag<Ieee80211MpduReceiveInd>();
     std::cout << "Oversized model PSDU span rejects leading MPDU: " << (rejectedData ? "PASS" : "FAIL") << "\n";
     delete received;
@@ -1214,7 +1213,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
             mode, channel, modelUsers, makeHeModelPpdu(modelUsers, false));
     if (!received->hasTag<Ieee80211MpduReceiveInd>())
         throw cRuntimeError("AID 37 sentinel selection failed: legacy=%d rxvector=%d length=%s",
-                received->hasTag<Ieee80211HeMuLegacyPreambleInd>(),
+                received->hasTag<Ieee80211LegacyPreambleInd>(),
                 received->hasTag<Ieee80211HeRxVectorInd>(),
                 received->getDataLength().str().c_str());
     auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
@@ -1236,7 +1235,7 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
         aidMib->bssStationData.associationId = invalidAid;
         auto rejected = receiveHeMuPacket(aidReceiver, aidRadio, packet,
                 mode, channel, modelUsers, makeHeModelPpdu(modelUsers, false));
-        REQUIRE(rejected->hasTag<Ieee80211HeMuLegacyPreambleInd>());
+        REQUIRE(rejected->hasTag<Ieee80211LegacyPreambleInd>());
         REQUIRE(!rejected->hasTag<Ieee80211MpduReceiveInd>());
         REQUIRE(!rejected->hasTag<Ieee80211HeRxVectorInd>());
         auto stripped = rejected->dup();

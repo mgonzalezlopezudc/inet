@@ -38,6 +38,7 @@ class INET_API HeSoundingFs : public IFrameSequence
     std::vector<TargetSta> targets;
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     HeMuMimoCsiManager *csiManager = nullptr;
+    Hz centerFrequency;
     Hz bandwidth;
     uint8_t dialogToken = 1;
     uint32_t triggerId = 0;
@@ -54,6 +55,7 @@ class INET_API HeSoundingFs : public IFrameSequence
                  const std::vector<TargetSta>& targets,
                  physicallayer::Ieee80211ModeSet *modeSet,
                  HeMuMimoCsiManager *csiManager,
+                 Hz centerFrequency,
                  Hz bandwidth,
                  uint8_t dialogToken,
                  uint32_t triggerId);

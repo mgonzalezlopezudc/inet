@@ -181,6 +181,7 @@ struct Ieee80211HeMuUserInfo
     uint8_t mcs = 0;
     uint8_t numberOfSpatialStreams = 1;
     bool dcm = false;
+    uint8_t coding = 0; // HE-SIG-B per-user BCC/LDPC field
     bool ndpFeedbackReport = false;
     uint8_t ndpFeedbackStatus = 0;
     uint8_t ndpRuToneSetIndex = 0;

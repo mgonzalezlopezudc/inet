@@ -46,90 +46,46 @@
 namespace inet {
 namespace ieee80211 {
 
-void populateHeTbRequestFromTrigger(physicallayer::Ieee80211HeMuReq *request,
-        const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& user,
-        uint16_t staId)
-{
-    if (request == nullptr)
-        throw cRuntimeError("Cannot populate an empty HE-TB request");
-    request->setPpduFormat(physicallayer::HE_TRIGGER_BASED_UPLINK);
-    request->setTriggerId(trigger.getTriggerId());
-    request->setLSigLength(trigger.getUlLength());
-    request->setChannelBandwidthMhz(trigger.getChannelBandwidthMhz());
-    request->setNoSignalExtension(trigger.getNoSignalExtension());
-    request->setRuIndex(user.ruIndex);
-    request->setRuToneSize(user.ruToneSize);
-    request->setRuToneOffset(user.ruToneOffset);
-    request->setStaId(staId);
-    request->setMcs(user.mcs);
-    request->setNumberOfSpatialStreams(user.numberOfSpatialStreams);
-    request->setStreamStartIndex(user.streamStartIndex);
-    request->setMuMimo(user.muMimo);
-    request->setGuardInterval(trigger.getGuardInterval());
-    request->setLtfType(trigger.getLtfType());
-    request->setCoding(user.coding);
-    request->setTriggerMethod(static_cast<uint8_t>(physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME));
-    request->setLdpcExtraSymbolSegment(trigger.getLdpcExtraSymbolSegment());
-    request->setPreFecPaddingFactor(trigger.getPreFecPaddingFactor());
-    request->setPeDisambiguity(trigger.getPeDisambiguity());
-    request->setNumberOfHeLtfSymbols(trigger.getNumberOfHeLtfSymbols());
-    request->setPacketExtensionDurationUs(trigger.getPacketExtensionDurationUs());
-    request->setPuncturedSubchannelMask(trigger.getPuncturedSubchannelMask());
-    request->setCommonDuration(trigger.getCommonDuration());
-    request->setCommonDurationExact(trigger.getCommonDurationExact());
-    std::vector<physicallayer::Ieee80211HeMuTxAllocationInfo> companionUsers;
-    int totalNsts = user.streamStartIndex + user.numberOfSpatialStreams;
-    if (user.muMimo) {
-        for (unsigned int i = 0; i < trigger.getUsersArraySize(); ++i) {
-            const auto& candidate = trigger.getUsers(i);
-            if (&candidate == &user || !candidate.muMimo ||
-                    candidate.ruToneSize != user.ruToneSize ||
-                    candidate.ruToneOffset != user.ruToneOffset)
-                continue;
-            physicallayer::Ieee80211HeMuTxAllocationInfo companion;
-            companion.ruIndex = candidate.ruIndex;
-            companion.ruToneSize = candidate.ruToneSize;
-            companion.ruToneOffset = candidate.ruToneOffset;
-            companion.staId = candidate.aid;
-            companion.mcs = candidate.mcs;
-            companion.numberOfSpatialStreams = candidate.numberOfSpatialStreams;
-            companion.streamStartIndex = candidate.streamStartIndex;
-            companion.muMimo = true;
-            companion.psduLength = B(0);
-            totalNsts = std::max(totalNsts,
-                    candidate.streamStartIndex + candidate.numberOfSpatialStreams);
-            companionUsers.push_back(companion);
-        }
-    }
-    request->setTotalNsts(totalNsts);
-    request->setCompanionUsersArraySize(companionUsers.size());
-    for (size_t i = 0; i < companionUsers.size(); ++i)
-        request->setCompanionUsers(i, companionUsers[i]);
-}
-
 static physicallayer::Ieee80211HeTxVectorValidationResult createHeTbTxVector(
         const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& selected,
-        Hz centerFrequency, uint16_t staId, B psduLength)
+        Hz centerFrequency, uint16_t staId, B psduLength,
+        uint8_t bssColor = 0,
+        bool ndpFeedbackReport = false, uint8_t ndpFeedbackStatus = 0,
+        uint8_t ndpRuToneSetIndex = 0, uint8_t ndpStartingStsNumber = 0,
+        physicallayer::Ieee80211HeTxopDuration txopDuration = {})
 {
     physicallayer::Ieee80211HeTxVectorRequest request;
     request.centerFrequency = centerFrequency;
     request.channelBandwidth = Hz(trigger.getChannelBandwidthMhz() * 1e6);
     request.ppduFormat = physicallayer::HE_TRIGGER_BASED_UPLINK;
-    request.puncturedSubchannelMask = trigger.getPuncturedSubchannelMask();
+    // Puncturing is not carried by the 802.11ax Trigger Common Info field.
+    // The supported HE-TB response therefore uses the unpunctured bandwidth
+    // described by UL BW and the selected wire RU allocation.
+    request.puncturedSubchannelMask = 0;
     request.lSigLength = trigger.getUlLength();
-    request.noSignalExtension = trigger.getNoSignalExtension();
+    request.noSignalExtension = false;
     request.requestedTxTime = trigger.getCommonDuration();
-    request.requestedTxTimeExact = trigger.getCommonDurationExact();
+    // UL Length reconstructs a 4 us response-time envelope, not the original
+    // transmitter-local exact TXTIME.
+    request.requestedTxTimeExact = false;
     request.triggerMethod = physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    request.bssColor = bssColor;
+    request.txopDuration = txopDuration;
     request.preFecPaddingFactor = trigger.getPreFecPaddingFactor();
     request.ldpcExtraSymbolSegment = trigger.getLdpcExtraSymbolSegment();
     request.peDisambiguity = trigger.getPeDisambiguity();
+    for (size_t i = 0; i < request.spatialReuse.size(); ++i)
+        request.spatialReuse[i] = (trigger.getUlSpatialReuse() >> (4 * i)) & 0xF;
+    request.doppler = trigger.getDoppler();
     request.numberOfHeLtfSymbols = trigger.getNumberOfHeLtfSymbols();
     request.guardInterval =
             static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger.getGuardInterval());
     request.ltfType =
             static_cast<physicallayer::Ieee80211HeLtfType>(trigger.getLtfType());
-    request.packetExtensionDurationUs = trigger.getPacketExtensionDurationUs();
+    // The nominal PE is reconstructed from the wire pre-FEC padding factor
+    // and PE disambiguity fields by the HE-TB calculator.
+    request.packetExtensionDurationUs = 0;
+    request.ndp = ndpFeedbackReport;
 
     auto appendUser = [&] (const Ieee80211HeTriggerUserInfo& triggerUser,
             uint16_t userStaId, B userPsduLength) {
@@ -144,6 +100,12 @@ static physicallayer::Ieee80211HeTxVectorValidationResult createHeTbTxVector(
         user.coding =
                 static_cast<physicallayer::Ieee80211HeCoding>(triggerUser.coding);
         user.psduLength = userPsduLength;
+        if (&triggerUser == &selected) {
+            user.ndpFeedbackReport = ndpFeedbackReport;
+            user.ndpFeedbackStatus = ndpFeedbackStatus;
+            user.ndpRuToneSetIndex = ndpRuToneSetIndex;
+            user.ndpStartingStsNumber = ndpStartingStsNumber;
+        }
         request.users.push_back(user);
     };
 
@@ -159,6 +121,76 @@ static physicallayer::Ieee80211HeTxVectorValidationResult createHeTbTxVector(
         }
     }
     return physicallayer::Ieee80211HeTxVectorFactory::create(request);
+}
+
+std::optional<physicallayer::Ieee80211HeTxopDuration>
+getIeee80211HeSolicitingTxopDuration(const Packet *packet)
+{
+    auto indication = packet == nullptr ? nullptr :
+            packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+    if (indication == nullptr || indication->getRxVector() == nullptr)
+        return std::nullopt;
+    return indication->getRxVector()->getCommon().getTxopDuration();
+}
+
+HeTbResponseProtection deriveIeee80211HeTbResponseProtection(
+        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
+        simtime_t triggerDuration, simtime_t sifsTime, simtime_t responseTxTime)
+{
+    if (triggerDuration < SIMTIME_ZERO || sifsTime < SIMTIME_ZERO ||
+            responseTxTime < SIMTIME_ZERO)
+        throw cRuntimeError("Cannot derive HE-TB response protection from negative timing");
+    auto remaining = std::max(SIMTIME_ZERO,
+            triggerDuration - sifsTime - responseTxTime);
+    int64_t remainingUs = remaining.inUnit(SIMTIME_US);
+    if (SimTime(remainingUs, SIMTIME_US) < remaining)
+        remainingUs++;
+    HeTbResponseProtection result;
+    result.macDurationField = SimTime(remainingUs, SIMTIME_US);
+    if (solicitingTxopDuration.has_value() && solicitingTxopDuration->unspecified)
+        result.txopDuration = {};
+    else
+        result.txopDuration = {false, static_cast<uint16_t>(
+                std::min<int64_t>(8448, remainingUs))};
+    return result;
+}
+
+HeTbResponseProtection attachHeTbTxVectorFromTrigger(Packet *packet,
+        const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& user,
+        uint16_t staId, Hz centerFrequency, W transmitPower, B psduLength,
+        uint8_t bssColor, uint32_t triggerId,
+        bool ndpFeedbackReport, uint8_t ndpFeedbackStatus,
+        uint8_t ndpRuToneSetIndex, uint8_t ndpStartingStsNumber,
+        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
+        simtime_t sifsTime)
+{
+    if (packet == nullptr)
+        throw cRuntimeError("Cannot attach an HE-TB TXVECTOR to an empty packet");
+    auto preliminary = createHeTbTxVector(trigger, user, centerFrequency, staId, psduLength,
+            bssColor,
+            ndpFeedbackReport, ndpFeedbackStatus, ndpRuToneSetIndex,
+            ndpStartingStsNumber);
+    if (!preliminary)
+        throw cRuntimeError("Cannot construct preliminary Trigger-derived HE-TB TXVECTOR: %s (%s)",
+                preliminary.getContext().fieldName.c_str(),
+                preliminary.getContext().detail.c_str());
+    auto protection = deriveIeee80211HeTbResponseProtection(
+            solicitingTxopDuration, trigger.getDurationField(), sifsTime,
+            preliminary.getPpduLayout()->getDuration());
+    auto result = createHeTbTxVector(trigger, user, centerFrequency, staId, psduLength,
+            bssColor,
+            ndpFeedbackReport, ndpFeedbackStatus, ndpRuToneSetIndex,
+            ndpStartingStsNumber, protection.txopDuration);
+    if (!result)
+        throw cRuntimeError("Cannot construct Trigger-derived HE-TB TXVECTOR: %s (%s)",
+                result.getContext().fieldName.c_str(), result.getContext().detail.c_str());
+    packet->addTag<physicallayer::Ieee80211HeTxVectorReq>()->setCanonicalPair(
+            result.getTxVector(), result.getPpduLayout());
+    packet->addTagIfAbsent<physicallayer::Ieee80211HeTriggerCorrelationTag>()->
+            setTriggerId(triggerId);
+    if (!std::isnan(transmitPower.get()))
+        packet->addTagIfAbsent<SignalPowerReq>()->setPower(transmitPower);
+    return protection;
 }
 
 double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
@@ -225,17 +257,12 @@ std::optional<std::string> validateIeee80211HeUlTrigger(
             trigger.getPreFecPaddingFactor() > 4 ||
             trigger.getApTxPowerDbm() < -20 || trigger.getApTxPowerDbm() > 40)
         return "invalid Trigger common signaling";
-    if (trigger.getPuncturedSubchannelMask() != 0)
-        return "HE-TB Trigger cannot carry sender-only puncturing metadata";
-
     if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         if (trigger.getUsersArraySize() != 0 || trigger.getNfrpFeedbackType() != 0 ||
                 trigger.getNfrpStartingAid() > 4095 ||
                 trigger.getGuardInterval() != HE_GI_3_2_US ||
                 trigger.getLtfType() != HE_LTF_4X ||
-                trigger.getNumberOfHeLtfSymbols() != 2 ||
-                trigger.getCoding() != HE_CODING_BCC ||
-                trigger.getPacketExtensionDurationUs() != 0)
+                trigger.getNumberOfHeLtfSymbols() != 2)
             return "invalid NFRP Trigger fields";
         try {
             if (trigger.getNfrpStartingAid() +
@@ -745,13 +772,14 @@ Ptr<Ieee80211CompressedBlockAck> buildHeMuBarCompressedBlockAck(
     blockAck->setTransmitterAddress(transmitterAddress);
     blockAck->setCompressedBitmap(true);
     blockAck->setStartingSequenceNumber(startingSequenceNumber);
-    blockAck->setTidInfo(user.tid);
+    blockAck->setTidInfo(user.muBarTidInfo);
     blockAck->setBlockAckBitmap(bitmap);
     blockAck->setDurationField(SIMTIME_ZERO);
     return blockAck;
 }
 
-void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
+void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger,
+        uint32_t triggerId)
 {
     // 9.3.1.22.4 defines MU-BAR Trigger User Info as BAR Control plus BAR
     // Information.  26.4.5 requires a Compressed BlockAck response when the
@@ -765,14 +793,14 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
         }
     auto agreement = selected == nullptr || recipientBlockAckAgreementHandler == nullptr ?
             nullptr : recipientBlockAckAgreementHandler->getAgreement(
-                    selected->tid, trigger->getTransmitterAddress());
+                    selected->muBarTidInfo, trigger->getTransmitterAddress());
     if (selected == nullptr)
         EV_WARN << "Ignoring MU-BAR Trigger because it has no User Info for local AID " << myAid << endl;
     else if (recipientBlockAckAgreementHandler == nullptr)
         EV_WARN << "Ignoring MU-BAR Trigger for AID " << myAid << " because no recipient Block Ack handler is installed" << endl;
     else if (agreement == nullptr)
         EV_WARN << "Ignoring MU-BAR Trigger for AID " << myAid << " because no recipient Block Ack agreement exists for TID "
-                << (int)selected->tid << " and originator " << trigger->getTransmitterAddress() << endl;
+                << (int)selected->muBarTidInfo << " and originator " << trigger->getTransmitterAddress() << endl;
     if (agreement != nullptr) {
         if (!selected->muBarCompressedBitmap || selected->muBarMultiTid)
             throw cRuntimeError("Unsupported MU-BAR BlockAckReq variant");
@@ -780,9 +808,25 @@ void HeHcf::sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80
                 trigger->getTransmitterAddress(), mac->getAddress());
         auto response = new Packet("HE-TB-BlockAck", blockAck);
         response->insertAtBack(makeShared<Ieee80211MacTrailer>());
-        auto request = response->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
-        populateHeTbRequestFromTrigger(request.get(), *trigger, *selected, myAid);
-        tx->transmitFrame(response, blockAck, modeSet->getSifsTime(), this);
+        const auto phy = getLinkPhyContext().getSnapshot();
+        auto protection = attachHeTbTxVectorFromTrigger(response, *trigger, *selected, myAid,
+                phy.getChannelCenterFrequency(), phy.getMaximumTransmitPower(),
+                B((response->getDataLength().get<b>() + 7) / 8),
+                mac->getMib()->heOperation.bssColor, triggerId, false, 0, 0, 0,
+                getIeee80211HeSolicitingTxopDuration(packet),
+                modeSet->getSifsTime());
+        auto writableBlockAck = response->removeAtFront<Ieee80211CompressedBlockAck>();
+        writableBlockAck->setDurationField(protection.macDurationField);
+        response->insertAtFront(writableBlockAck);
+        auto trailer = response->removeAtBack<Ieee80211MacTrailer>(B(4));
+        auto fcsMode = mac->getFcsMode();
+        trailer->setFcsMode(fcsMode);
+        if (fcsMode == FCS_COMPUTED)
+            trailer->setFcs(computeEthernetFcs(response, fcsMode));
+        response->insertAtBack(trailer);
+        tx->transmitFrame(response,
+                response->peekAtFront<Ieee80211CompressedBlockAck>(),
+                modeSet->getSifsTime(), this);
         delete response;
     }
     delete packet;
@@ -863,7 +907,9 @@ Packet *HeHcf::buildHeTbAmpdu(const std::vector<Packet *>& mpdus)
 Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
         AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
         const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
-        W transmitPower, TriggeredUlExchange& exchange, bool& committed)
+        uint32_t triggerId, W transmitPower,
+        const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
+        TriggeredUlExchange& exchange, bool& committed)
 {
     committed = false;
     if (sourceQueue == nullptr || selected == nullptr || trigger == nullptr)
@@ -873,6 +919,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     auto preparedSequenceNumberState = qosDataService->cloneSequenceNumberState();
     std::vector<Packet *> originalPackets;
     std::vector<std::unique_ptr<Packet>> preparedPacketOwners;
+    std::unique_ptr<Packet> nullMpdu;
     std::unique_ptr<Packet> responsePacket;
     if (sourcePacket != nullptr) {
         // 26.5.2.4 requires a QoS Null response when the allocation cannot
@@ -928,8 +975,8 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         nullHeader->setBufferStatusQueueSize(queueBytes);
         nullHeader->setChunkLength(B(30));
         preparedSequenceNumberState->assignSequenceNumber(nullHeader);
-        responsePacket = std::make_unique<Packet>("HE-TB-QoS-Null", nullHeader);
-        responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        nullMpdu = std::make_unique<Packet>("HE-TB-QoS-Null", nullHeader);
+        nullMpdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
     }
 
     if (sourcePacket != nullptr) {
@@ -980,34 +1027,34 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         auto firstHeader = exchange.packets.front()->removeAtFront<Ieee80211DataHeader>();
         firstHeader->setBufferStatusQueueSize(reportedQueueBytes);
         exchange.packets.front()->insertAtFront(firstHeader);
-        for (auto mpdu : exchange.packets) {
-            auto trailer = mpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
-            auto fcsMode = mac->getFcsMode();
-            trailer->setFcsMode(fcsMode);
-            if (fcsMode == FCS_COMPUTED)
-                trailer->setFcs(computeEthernetFcs(mpdu, fcsMode));
-            mpdu->insertAtBack(trailer);
-        }
-        responsePacket.reset(buildHeTbAmpdu(exchange.packets));
     }
-    else {
-        auto nullMpdu = responsePacket.release();
-        auto trailer = nullMpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
+
+    auto finalizeMpdu = [&] (Packet *mpdu, simtime_t durationField) {
+        auto header = mpdu->removeAtFront<Ieee80211DataHeader>();
+        header->setDurationField(durationField);
+        mpdu->insertAtFront(header);
+        auto trailer = mpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
         auto fcsMode = mac->getFcsMode();
         trailer->setFcsMode(fcsMode);
         if (fcsMode == FCS_COMPUTED)
-            trailer->setFcs(computeEthernetFcs(nullMpdu, fcsMode));
-        nullMpdu->insertAtBack(trailer);
-        responsePacket.reset(buildHeTbAmpdu({nullMpdu}));
-        delete nullMpdu;
-    }
+            trailer->setFcs(computeEthernetFcs(mpdu, fcsMode));
+        mpdu->insertAtBack(trailer);
+    };
+    auto buildResponseAmpdu = [&] {
+        if (sourcePacket != nullptr)
+            responsePacket.reset(buildHeTbAmpdu(exchange.packets));
+        else
+            responsePacket.reset(buildHeTbAmpdu({nullMpdu.get()}));
+    };
+    if (sourcePacket != nullptr)
+        for (auto mpdu : exchange.packets)
+            finalizeMpdu(mpdu, SIMTIME_ZERO);
+    else
+        finalizeMpdu(nullMpdu.get(), SIMTIME_ZERO);
+    buildResponseAmpdu();
 
     // Complete and validate the Trigger-derived request while all selected
     // queue packets and live sequence counters are still untouched.
-    auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
-    populateHeTbRequestFromTrigger(request.get(), *trigger, *selected,
-            mac->getMib()->bssStationData.associationId);
-    request->setTransmitPower(transmitPower);
     auto txVector = createHeTbTxVector(*trigger, *selected,
             phy.getChannelCenterFrequency(),
             mac->getMib()->bssStationData.associationId,
@@ -1016,6 +1063,25 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         throw cRuntimeError("Prepared HE-TB response is invalid: %s (%s)",
                 txVector.getContext().fieldName.c_str(),
                 txVector.getContext().detail.c_str());
+    auto protection = deriveIeee80211HeTbResponseProtection(
+            solicitingTxopDuration, trigger->getDurationField(),
+            modeSet->getSifsTime(), txVector.getPpduLayout()->getDuration());
+    if (sourcePacket != nullptr)
+        for (auto mpdu : exchange.packets)
+            finalizeMpdu(mpdu, protection.macDurationField);
+    else
+        finalizeMpdu(nullMpdu.get(), protection.macDurationField);
+    buildResponseAmpdu();
+    auto attachedProtection = attachHeTbTxVectorFromTrigger(
+            responsePacket.get(), *trigger, *selected,
+            mac->getMib()->bssStationData.associationId,
+            phy.getChannelCenterFrequency(), transmitPower,
+            B((responsePacket->getDataLength().get<b>() + 7) / 8),
+            mac->getMib()->heOperation.bssColor, triggerId, false, 0, 0, 0,
+            solicitingTxopDuration, modeSet->getSifsTime());
+    if (attachedProtection.macDurationField != protection.macDurationField ||
+            !(attachedProtection.txopDuration == protection.txopDuration))
+        throw cRuntimeError("HE-TB response protection changed while rebuilding the unchanged-length PSDU");
 
     if (!originalPackets.empty()) {
         for (auto original : originalPackets) {
@@ -1065,8 +1131,15 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         delete packet;
         return;
     }
+    auto correlation = packet->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>();
+    if (correlation == nullptr || correlation->getTriggerId() == 0) {
+        EV_WARN << "Ignoring Trigger without model-only correlation context\n";
+        delete packet;
+        return;
+    }
+    const uint32_t triggerId = correlation->getTriggerId();
     if (trigger->getTriggerType() == 2) {
-        sendTriggeredBlockAckResponse(packet, trigger);
+        sendTriggeredBlockAckResponse(packet, trigger, triggerId);
         return;
     }
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
@@ -1101,6 +1174,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         delete packet;
         return;
     }
+    auto solicitingTxopDuration = getIeee80211HeSolicitingTxopDuration(packet);
     std::optional<double> triggerPathLossDb;
     auto signalPower = packet->findTag<SignalPowerInd>();
     auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
@@ -1142,7 +1216,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
                 Hz(trigger->getChannelBandwidthMhz() * 1e6),
                 trigger->getNfrpMultiplexingFlag());
         if (!resource.scheduled) {
-            EV_INFO << "Ignoring NFRP Trigger " << trigger->getTriggerId()
+            EV_INFO << "Ignoring NFRP Trigger " << triggerId
                     << ": AID " << myAid << " is outside the scheduled range\n";
             delete packet;
             return;
@@ -1274,7 +1348,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         }
     }
     if (selected == nullptr) {
-        EV_INFO << "Ignoring HE UL Trigger " << trigger->getTriggerId()
+        EV_INFO << "Ignoring HE UL Trigger " << triggerId
                  << ": this STA has no scheduled or selected random-access RU\n";
         delete packet;
         return;
@@ -1374,7 +1448,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         try {
             responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
                     selectedTid, queueBytes, availableSlots, selected, trigger,
-                    transmitPower, exchange, responseCommitted);
+                    triggerId, transmitPower, solicitingTxopDuration, exchange, responseCommitted);
         }
         catch (const std::exception& error) {
             if (responseCommitted || randomAccessCommitted)
@@ -1391,33 +1465,28 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         responsePacketCount = exchange.packets.empty() ? 1 : exchange.packets.size();
         // Every solicited HE-TB response owns a terminal Multi-STA BA window,
         // including scheduled QoS Null/BSR responses with no retained MPDU.
-        auto inserted = triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
+        auto inserted = triggeredUlExchanges.emplace(triggerId, std::move(exchange));
         if (!inserted.second)
             throw cRuntimeError("Duplicate HE-TB Trigger ID reached the post-commit exchange ledger");
         EV_INFO << "Committed HE-TB exchange ledger: trigger="
-                << trigger->getTriggerId() << ", packets="
+                << triggerId << ", packets="
                 << inserted.first->second.packets.size() << ", deadline="
                 << inserted.first->second.expectedResponseTime << "\n";
         scheduleTriggeredUlResponseTimeout();
     }
 
     // 26.5.2.3.3 and 27.3.11.12: the HE TB TXVECTOR is derived from the
-    // selected Trigger User Info and Common Info fields.  These request tags
-    // carry that standard information to INET's packet-level PHY.
+    // selected Trigger User Info and Common Info fields before the packet
+    // crosses the MAC/PHY boundary.
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
-        populateHeTbRequestFromTrigger(request.get(), *trigger, *selected, myAid);
-        request->setPsduLength(B(0));
-        request->setDcm(false);
-        request->setNdpFeedbackReport(true);
-        request->setNdpFeedbackStatus(queueBytes > 256 ? 1 : 0);
-        request->setNdpRuToneSetIndex(nfrpToneSetIndex);
-        request->setNdpStartingStsNumber(nfrpStartingStsNumber);
-        request->setPsrDisallowed(true);
-        request->setTransmitPower(transmitPower);
-        responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuTxTag>()->setNdp(true);
+        attachHeTbTxVectorFromTrigger(responsePacket, *trigger, *selected, myAid,
+                phy.getChannelCenterFrequency(), transmitPower, B(0),
+                mac->getMib()->heOperation.bssColor, triggerId, true,
+                queueBytes > 256 ? 1 : 0, nfrpToneSetIndex,
+                nfrpStartingStsNumber, solicitingTxopDuration,
+                modeSet->getSifsTime());
     }
-    EV_INFO << "Sending HE-TB response: trigger=" << trigger->getTriggerId()
+    EV_INFO << "Sending HE-TB response: trigger=" << triggerId
              << ", AID=" << myAid
              << ", " << (randomAccess ? "random-access" : "scheduled")
              << " RU=" << selected->ruIndex

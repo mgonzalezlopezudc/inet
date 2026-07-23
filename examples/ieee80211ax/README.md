@@ -8,6 +8,16 @@ keep the topology and offered load fixed, and compare both protocol events and
 end-to-end results. They model the behavior relevant to INET experiments; they
 are not waveform implementations or interoperability certification tests.
 
+The HE PHY boundary is standards-oriented but packet-level: represented
+L-SIG/RL-SIG and HE-SIG fields, RU geometry, symbol counts, timing, packet
+extension, recipient selection, and radiotap metadata are validated. Coding,
+interleaving, modulation, pilots, samples, and RF synchronization remain
+analytical rather than emitted bitstreams or waveforms. Runtime channels are
+20/40/80/contiguous-160 MHz; 80+80 and Doppler/midamble timing are explicitly
+rejected. See the
+[supported-feature matrix](../../reports/80211ax-supported-feature-matrix.md)
+for the exact contract and migration table.
+
 | Area | Example | Main mechanisms |
 |------|---------|-----------------|
 | Downlink multi-user access | [dl_ofdma](dl_ofdma/walkthrough.md) | RU scheduling, SU baseline, wide channels, DL MU-MIMO, Multi-TID Block Ack |

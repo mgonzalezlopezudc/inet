@@ -165,9 +165,17 @@ void Ieee80211PhyProtocolPrinter::print(const Ptr<const Chunk>& chunk, const Pro
         context.typeColumn << hePpduFormatName(getIeee80211HePpduFormat(*heHeader)) << " PHY";
         std::ostringstream stream;
         printCommonPhyInfo(stream, *heHeader);
+        bool mixedCoding = false;
+        for (size_t i = 1; i < heHeader->getUsersArraySize(); ++i)
+            mixedCoding |= heHeader->getUsers(i).coding != heHeader->getUsers(0).coding;
         stream << ", BSS color=" << static_cast<int>(heHeader->getBssColor())
                << ", GI=" << static_cast<int>(heHeader->getGuardInterval())
-               << ", coding=" << codingName(heHeader->getCoding())
+               << ", coding=";
+        if (mixedCoding)
+            stream << "mixed";
+        else
+            stream << codingName(heHeader->getCoding());
+        stream
                << ", ";
         printUserSummary(stream, *heHeader);
         context.infoColumn << stream.str();

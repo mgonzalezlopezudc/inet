@@ -194,10 +194,10 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
         MacAddress receiverAddress = macHeader != nullptr ? macHeader->getReceiverAddress() : MacAddress::UNSPECIFIED_ADDRESS;
 
         bool useLdpc = false;
-        if (auto htMode = dynamic_cast<const Ieee80211HtMode *>(transmissionMode)) {
+        if (dynamic_cast<const Ieee80211HtMode *>(transmissionMode) != nullptr) {
             useLdpc = mib->localHtLdpc;
         }
-        else if (auto vhtMode = dynamic_cast<const Ieee80211VhtMode *>(transmissionMode)) {
+        else if (dynamic_cast<const Ieee80211VhtMode *>(transmissionMode) != nullptr) {
             if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
                 auto negotiatedVht = mib->findNegotiatedVhtCapabilities(receiverAddress);
                 useLdpc = negotiatedVht ? negotiatedVht->intersection.ldpc : mib->localVhtCapabilities.ldpc;
@@ -206,7 +206,7 @@ const IIeee80211Mode *Ieee80211Transmitter::computeTransmissionMode(const Packet
                 useLdpc = mib->localVhtCapabilities.ldpc;
             }
         }
-        else if (auto heMode = dynamic_cast<const Ieee80211HeMode *>(transmissionMode)) {
+        else if (dynamic_cast<const Ieee80211HeMode *>(transmissionMode) != nullptr) {
             if (receiverAddress != MacAddress::UNSPECIFIED_ADDRESS && !receiverAddress.isMulticast()) {
                 auto negotiatedHe = mib->findNegotiatedHeCapabilities(receiverAddress);
                 useLdpc = negotiatedHe ? negotiatedHe->mutual.ldpc : mib->localHeCapabilities.ldpc;
@@ -437,12 +437,12 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
                         projected.ruToneOffset != canonical.ru.toneOffset ||
                         projected.staId != canonical.staId || projected.mcs != canonical.mcs ||
                         projected.numberOfSpatialStreams != canonical.numberOfSpatialStreams ||
-                        projected.dcm != canonical.dcm || projected.psduLength != canonical.psduLength ||
+                        projected.dcm != canonical.dcm || projected.coding != canonical.coding ||
+                        projected.psduLength != canonical.psduLength ||
                         projected.duration != hePpduLayout->getDuration() ||
                         projected.streamStartIndex != canonical.streamStartIndex ||
                         projected.muMimo != muMimo ||
-                        projected.spatialConfiguration != spatialConfiguration ||
-                        heMuHeader->getCoding() != canonical.coding)
+                        projected.spatialConfiguration != spatialConfiguration)
                     throw cRuntimeError("HE MU/TB PHY header user %zu disagrees with the canonical PPDU layout", i);
             }
         }
@@ -461,9 +461,6 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
             const auto& ru = hePpduLayout->getUsers().front().ru;
             transmissionBandwidth = ru.bandwidth;
             transmissionCenterFrequency = ru.centerFrequency;
-            if (auto request = packet->findTag<Ieee80211HeMuReq>())
-                if (!std::isnan(request->getTransmitPower().get()))
-                    transmissionPower = request->getTransmitPower();
         }
     }
     const simtime_t endTime = startTime + duration;
