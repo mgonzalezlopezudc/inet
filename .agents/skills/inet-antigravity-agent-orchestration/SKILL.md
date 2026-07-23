@@ -1,11 +1,11 @@
 ---
 name: inet-antigravity-agent-orchestration
-description: Route and coordinate Antigravity Gemini 3.5 Pro and Gemini 3.5 Flash specialist agents for nontrivial OMNeT++/INET and IEEE 802.11 work. Use for multi-stage debugging, standards-to-implementation analysis, C++/NED/MSG changes, Wi-Fi packet or PHY/MAC investigations, regression design, result analysis, patch review, or any task with multiple independent evidence lanes or specialist handoffs.
+description: Route and coordinate Antigravity Gemini 3.6 Flash specialist agents for nontrivial OMNeT++/INET and IEEE 802.11 work. Use for multi-stage debugging, standards-to-implementation analysis, C++/NED/MSG changes, Wi-Fi packet or PHY/MAC investigations, regression design, result analysis, patch review, or any task with multiple independent evidence lanes or specialist handoffs.
 ---
 
 # INET Antigravity Agent Orchestration
 
-Antigravity counterpart of `inet-agent-orchestration` (which targets GPT-5.6 Sol/Terra/Luna under Codex) and `inet-kimi-agent-orchestration` (which targets Kimi models). The specialist roles, evidence lanes, assignment rules, and gating are the same; the model bindings and reasoning effort settings are tailored for Gemini 3.5 Pro and Gemini 3.5 Flash.
+Antigravity counterpart of `inet-agent-orchestration` (which targets GPT-5.6 Sol/Terra/Luna under Codex) and `inet-kimi-agent-orchestration` (which targets Kimi models). The specialist roles, evidence lanes, assignment rules, and gating are the same; the model bindings and reasoning effort settings are tailored for Gemini 3.6 Flash.
 
 Preserve correctness while limiting duplicate work and model cost. Keep requirements and synthesis in the root thread, delegate narrow evidence or execution outcomes, and use the cheapest model that is reliable for each bounded assignment.
 
@@ -24,11 +24,11 @@ Select models for the judgment required, not the amount of text or number of fil
 
 | Tier | Model and effort | Use | Do not use |
 | --- | --- | --- | --- |
-| Sol-tier | Gemini 3.5 Pro (`gemini-3.5-pro`), effort `high` | Ambiguous 802.11 MAC/PHY or standards reasoning; difficult event causality; risky production implementation; final correctness review | Mechanical inventory or bulk extraction |
-| Terra-tier | Gemini 3.5 Pro (`gemini-3.5-pro`), effort `medium` or Gemini 3.5 Flash (`gemini-3.5-flash`), effort `high` | Architecture and NED/INI tracing; established build/test workflows; deterministic regression work; result analysis with known semantics | Resolving genuinely ambiguous normative or causal questions without Sol-tier review |
-| Luna-tier | Gemini 3.5 Flash (`gemini-3.5-flash`), effort `low` | Exact searches, artifact inventory, fixed-filter log/PCAP/result extraction, structured summaries, mechanical checks | Causality, standards interpretation, fix design, statistical judgment, or approval decisions |
+| Sol-tier | Gemini 3.6 Flash (`gemini-3.6-flash`), effort `high` | Ambiguous 802.11 MAC/PHY or standards reasoning; difficult event causality; risky production implementation; final correctness review | Mechanical inventory or bulk extraction |
+| Terra-tier | Gemini 3.6 Flash (`gemini-3.6-flash`), effort `medium` | Architecture and NED/INI tracing; established build/test workflows; deterministic regression work; result analysis with known semantics | Resolving genuinely ambiguous normative or causal questions without Sol-tier review |
+| Luna-tier | Gemini 3.6 Flash (`gemini-3.6-flash`), effort `low` | Exact searches, artifact inventory, fixed-filter log/PCAP/result extraction, structured summaries, mechanical checks | Causality, standards interpretation, fix design, statistical judgment, or approval decisions |
 
-If a model or reasoning effort is unavailable, move upward in capability: Luna-tier to Terra-tier, then Terra-tier to Sol-tier. Do not silently downgrade Sol-tier work. If Gemini 3.5 Pro is unavailable, keep the work in a capable root thread or use Gemini 3.5 Flash at `high` plus an independent verification lane and disclose the substitution.
+If a model or reasoning effort is unavailable, move upward in capability: Luna-tier to Terra-tier, then Terra-tier to Sol-tier. Do not silently downgrade Sol-tier work.
 
 ### Antigravity mechanics and honest tier claims
 
@@ -40,14 +40,14 @@ Read the persona file for the assigned role from `agents/<agent-name>.md` next t
 
 | Agent | Tier | Assigned Model & Effort | Assign |
 | --- | --- | --- | --- |
-| `inet-navigator` | Terra-tier | Gemini 3.5 Pro, `medium` | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing, and architecture-aware pre-change mapping |
-| `inet-evidence-miner` | Luna-tier | Gemini 3.5 Flash, `low` | Bounded artifact discovery and exact extraction from source, logs, PCAPs, event logs, scalars, and vectors; facts only |
-| `inet-wifi-specialist` | Sol-tier | Gemini 3.5 Pro, `high` | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
-| `inet-simulation-detective` | Sol-tier | Gemini 3.5 Pro, `high` | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
-| `inet-implementer` | Sol-tier | Gemini 3.5 Pro, `high` | Focused production C++/NED/MSG patch after mechanism and change surface are established |
-| `inet-regression-guard` | Terra-tier | Gemini 3.5 Flash, `high` | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
-| `inet-results-analyst` | Terra-tier | Gemini 3.5 Flash, `high` | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
-| `inet-reviewer` | Sol-tier | Gemini 3.5 Pro, `high` | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
+| `inet-navigator` | Terra-tier | Gemini 3.6 Flash, `medium` | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing, and architecture-aware pre-change mapping |
+| `inet-evidence-miner` | Luna-tier | Gemini 3.6 Flash, `low` | Bounded artifact discovery and exact extraction from source, logs, PCAPs, event logs, scalars, and vectors; facts only |
+| `inet-wifi-specialist` | Sol-tier | Gemini 3.6 Flash, `high` | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
+| `inet-simulation-detective` | Sol-tier | Gemini 3.6 Flash, `high` | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
+| `inet-implementer` | Sol-tier | Gemini 3.6 Flash, `high` | Focused production C++/NED/MSG patch after mechanism and change surface are established |
+| `inet-regression-guard` | Terra-tier | Gemini 3.6 Flash, `high` | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
+| `inet-results-analyst` | Terra-tier | Gemini 3.6 Flash, `high` | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
+| `inet-reviewer` | Sol-tier | Gemini 3.6 Flash, `high` | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
 
 Use the relevant repository workflow skills inside each lane. An agent role does not replace `inet-simulation-run`, `inet-80211-packet-debugging`, `ieee80211-standards`, testing, build, or result-analysis skills.
 

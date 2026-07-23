@@ -22,7 +22,7 @@ Select models for the judgment required, not the amount of text or number of fil
 
 | Tier | Use | Do not use |
 | --- | --- | --- |
-| Sol, `high` | Ambiguous 802.11 MAC/PHY or standards reasoning; difficult event causality; risky production implementation; final correctness review | Mechanical inventory or bulk extraction |
+| Sol, `medium` or `high` | Ambiguous 802.11 MAC/PHY or standards reasoning; difficult event causality; risky production implementation; final correctness review | Mechanical inventory or bulk extraction |
 | Terra, `medium` or `high` | Architecture and NED/INI tracing; established build/test workflows; deterministic regression work; result analysis with known semantics | Resolving genuinely ambiguous normative or causal questions without Sol review |
 | Luna, `low` or `medium` | Exact searches, artifact inventory, fixed-filter log/PCAP/result extraction, structured summaries, mechanical checks | Causality, standards interpretation, fix design, statistical judgment, or approval decisions |
 
@@ -36,9 +36,9 @@ If a model is unavailable, move upward in capability: Luna to Terra, then Terra 
 | --- | --- | --- |
 | `inet-navigator` | Terra, `medium` | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing, and architecture-aware pre-change mapping |
 | `inet-evidence-miner` | Luna, `medium` | Bounded artifact discovery and exact extraction from source, logs, PCAPs, event logs, scalars, and vectors; facts only |
-| `inet-wifi-specialist` | Sol, `high` | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
+| `inet-wifi-specialist` | Sol, `medium` | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
 | `inet-simulation-detective` | Sol, `high` | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
-| `inet-implementer` | Sol, `high` | Focused production C++/NED/MSG patch after mechanism and change surface are established |
+| `inet-implementer` | Sol, `medium` | Focused production C++/NED/MSG patch after mechanism and change surface are established |
 | `inet-regression-guard` | Terra, `high` | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
 | `inet-results-analyst` | Terra, `high` | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
 | `inet-reviewer` | Sol, `high` | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
