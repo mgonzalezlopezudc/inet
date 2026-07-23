@@ -764,12 +764,30 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
             throw cRuntimeError("Configured IEEE 802.11 error model does not support per-MPDU HE outcomes");
         if (dynamicPtrCast<const Ieee80211HeTbPhyHeader>(allocationPhyHeader) != nullptr) {
             lastHeRuAssigned = true;
-            if (!layout || layout->getUsers().size() != 1)
-                throw cRuntimeError("Packet-level HE TB reception requires exactly one canonical user");
             size_t selectedUserIndex = 0;
+            if (!layout)
+                throw cRuntimeError("Packet-level HE TB reception requires a canonical layout");
+            if (layout->isNdp()) {
+                if (layout->getUsers().size() != 1)
+                    throw cRuntimeError("Packet-level HE TB feedback NDP requires exactly one canonical user");
+            }
+            else {
+                std::optional<size_t> activeUserIndex;
+                for (const auto& range : layout->getPsduBitRanges()) {
+                    if (range.getBitLength() == b(0))
+                        continue;
+                    if (activeUserIndex)
+                        throw cRuntimeError("One HE TB transmission cannot carry multiple active PSDUs");
+                    activeUserIndex = range.getUserIndex();
+                }
+                if (!activeUserIndex)
+                    throw cRuntimeError("HE TB data transmission has no active PSDU user");
+                selectedUserIndex = *activeUserIndex;
+            }
+            const auto& activeUser = layout->getUsers().at(selectedUserIndex);
             auto packet = layout->isNdp() ? transmittedPacket->dup() :
                     buildHeMuPhyPacket(transmission, allocationPhyHeader,
-                            layout->getUsers().front().staId, selectedUserIndex);
+                            activeUser.staId, selectedUserIndex);
             bool decodedPsdu = packet != nullptr;
             if (packet == nullptr) {
                 packet = transmittedPacket->dup();
@@ -788,10 +806,10 @@ const IReceptionResult *Ieee80211Receiver::computeReceptionResult(const IListeni
             addReceptionIndications(packet, reception, interference, snir);
             packet->addTagIfAbsent<Ieee80211ModeInd>()->setMode(transmission->getMode());
             packet->addTagIfAbsent<Ieee80211ChannelInd>()->setChannel(transmission->getChannel());
-            attachHeRxVector(packet, transmission, 0, layout->getUsers().front().staId,
+            attachHeRxVector(packet, transmission, selectedUserIndex, activeUser.staId,
                     getObservedHePsduLength(packet));
             auto recipientParameters = std::shared_ptr<const Ieee80211HeUserPhyParameters>(
-                    layout, &layout->getUsers().front());
+                    layout, &activeUser);
             packet->addTag<Ieee80211HeTbRecipientContextInd>()->setRecipientParameters(
                     std::move(recipientParameters));
             return new ReceptionResult(reception, decisions, packet);

@@ -9,10 +9,10 @@
 namespace inet {
 namespace ieee80211 {
 
-EhtUlMuTxOpFs::EhtUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback, const IIeee80211HeUlScheduler::Schedule& schedule,
-                             IIeee80211HeUlTriggerPolicy::TriggerType triggerType, physicallayer::Ieee80211ModeSet *modeSet,
+EhtUlMuTxOpFs::EhtUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback, const HeUlMuPlan& plan,
+                             physicallayer::Ieee80211ModeSet *modeSet,
                              MacAddress apAddress, bool ehtEnabled)
-    : HeUlMuTxOpFs(coordinator, callback, schedule, triggerType, modeSet, apAddress)
+    : HeUlMuTxOpFs(coordinator, callback, plan, modeSet, apAddress)
 {
     this->ehtEnabled = ehtEnabled;
 }

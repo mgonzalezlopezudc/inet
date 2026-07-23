@@ -33,6 +33,15 @@ namespace ieee80211 {
 class INET_API HeUlCoordinator : public SimpleModule
 {
   public:
+    struct PreparedRandomAccessSelection {
+        AccessCategory accessCategory = AC_BE;
+        int randomAccessRuCount = 0;
+        int originalBackoff = 0;
+        int resultingBackoff = 0;
+        int selectedRu = -1;
+        bool attempt = false;
+    };
+
     /** Most recent backlog and retry information reported by one associated STA. */
     struct BufferStatus {
         std::array<int64_t, 4> backlogBytes = {};
@@ -81,14 +90,19 @@ class INET_API HeUlCoordinator : public SimpleModule
     void clearStation(uint16_t aid);
     IIeee80211HeUlTriggerPolicy::TriggerType selectTrigger(const Ieee80211Mib *mib) const;
     AccessCategory getPreferredAccessCategory() const;
-    IIeee80211HeUlScheduler::Schedule createSchedule(const Ieee80211Mib *mib,
+    IIeee80211HeUlScheduler::Schedule prepareSchedule(const Ieee80211Mib *mib,
             const IIeee80211HeLinkPhyContext& linkPhyContext, simtime_t maximumLinkEstimateAge,
             Hz centerFrequency, Hz bandwidth, simtime_t txopLimit, simtime_t requestedDuration,
             double sensitivityDbm, double targetRssiMarginDb,
             int estimatedRaContenders, double collisionRate, double idleRate,
-            const std::function<bool(const MacAddress&)>& isUlMuDisabled = {});
+            const std::function<bool(const MacAddress&)>& isUlMuDisabled = {},
+            IIeee80211HeUlScheduler::ScheduleContext *preparedContext = nullptr);
+    void commitSchedule(const IIeee80211HeUlScheduler::Schedule& schedule);
     uint32_t allocateTriggerId();
     void noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
+    PreparedRandomAccessSelection prepareRandomAccessRu(
+            AccessCategory ac, int randomAccessRuCount);
+    int commitRandomAccessRu(const PreparedRandomAccessSelection& selection);
     int selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount);
     int selectRandomAccessRu(int randomAccessRuCount) { return selectRandomAccessRu(AC_BE, randomAccessRuCount); }
     void reportRandomAccessResult(AccessCategory ac, bool success);

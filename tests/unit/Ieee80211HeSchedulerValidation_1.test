@@ -3,6 +3,7 @@ Validates immutable HE scheduler plans with release-active diagnostics before an
 
 %includes:
 #include "inet/linklayer/ieee80211/mac/framesequence/HeDlMuPlan.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeMuMimoCsiManager.h"
 #include "inet/queueing/contract/IPacketQueue.h"
 
@@ -77,6 +78,83 @@ static void requireRejected(const IIeee80211HeDlScheduler::ScheduleContext& cont
 {
     HeMuPlanDiagnostic diagnostic;
     auto plan = HeDlMuPlan::create(context, allocations, diagnostic);
+    requireTrue(!plan.has_value() && diagnostic.code == expected, message);
+}
+
+struct ValidUlFixture {
+    HeUlMuPlan::ValidationContext context;
+    IIeee80211HeUlScheduler::Schedule schedule;
+};
+
+static ValidUlFixture makeValidUlFixture(const MacAddress& station)
+{
+    ValidUlFixture fixture;
+    fixture.context.centerFrequency = Hz(5.18e9);
+    fixture.context.requireSchedulerCandidate = true;
+    Ieee80211HeCapabilities apCapabilities;
+    Ieee80211HeCapabilities staCapabilities;
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = MHz(20);
+    HeUlMuPlan::StationContract contract;
+    contract.station = station;
+    contract.associationId = 7;
+    contract.capabilities = negotiateHeCapabilities(apCapabilities, staCapabilities,
+            operation, true);
+    contract.schedulerCandidate = true;
+    fixture.context.stations.push_back(contract);
+
+    auto& schedule = fixture.schedule;
+    schedule.channelBandwidth = MHz(20);
+    schedule.guardInterval = HE_GI_3_2_US;
+    schedule.ltfType = HE_LTF_4X;
+    schedule.coding = HE_CODING_BCC;
+    schedule.apTxPowerDbm = 17;
+    IIeee80211HeUlScheduler::RuAllocation allocation;
+    allocation.staAddress = station;
+    allocation.associationId = 7;
+    allocation.ru = getHeEqualRuLayout(fixture.context.centerFrequency,
+            schedule.channelBandwidth, 9).front();
+    allocation.mcs = 3;
+    allocation.numberOfSpatialStreams = 1;
+    allocation.estimatedDuration = SimTime(1, SIMTIME_MS);
+    allocation.targetRssiDbm = -70;
+    schedule.allocations.push_back(allocation);
+
+    Ieee80211HeUserPhyParameters user;
+    user.ru = allocation.ru;
+    user.mcs = allocation.mcs;
+    user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
+    user.staId = allocation.associationId;
+    user.coding = schedule.coding;
+    user.psduLength = B(1);
+    Ieee80211HeTriggerResponseFinalizationRequest request;
+    request.users.push_back(user);
+    request.centerFrequency = fixture.context.centerFrequency;
+    request.channelBandwidth = schedule.channelBandwidth;
+    request.guardInterval = schedule.guardInterval;
+    request.ltfType = schedule.ltfType;
+    request.durationBudget = SimTime(1, SIMTIME_MS);
+    auto finalization = finalizeHeTriggerResponse(request);
+    requireTrue(static_cast<bool>(finalization), "valid UL fixture must finalize");
+    schedule.ulLength = finalization.ulLength;
+    schedule.commonDuration = finalization.commonDuration;
+    schedule.commonDurationExact = finalization.commonDurationExact;
+    schedule.numberOfHeLtfSymbols = finalization.parameters.common.numberOfHeLtfSymbols;
+    schedule.preFecPaddingFactor = finalization.parameters.common.preFecPaddingFactor;
+    schedule.ldpcExtraSymbolSegment = finalization.parameters.common.ldpcExtraSymbol;
+    schedule.peDisambiguity = finalization.peDisambiguity;
+    schedule.packetExtensionDurationUs =
+            finalization.parameters.common.packetExtensionDurationUs;
+    return fixture;
+}
+
+static void requireRejectedUl(const HeUlMuPlan::ValidationContext& context,
+        const IIeee80211HeUlScheduler::Schedule& schedule,
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+        HeUlMuPlanErrorCode expected, const char *message)
+{
+    HeUlMuPlanDiagnostic diagnostic;
+    auto plan = HeUlMuPlan::create(context, schedule, triggerType, diagnostic);
     requireTrue(!plan.has_value() && diagnostic.code == expected, message);
 }
 
@@ -213,7 +291,138 @@ allocations[0].numberOfSpatialStreams = 5;
 requireRejected(eligibleMuMimoContext, allocations, HeMuPlanErrorCode::INVALID_NSS,
         "an HE MU-MIMO user cannot exceed the four-stream spatial-configuration limit");
 
-EV << "Immutable DL scheduler plan rejected every malformed release-path case without queue mutation.\n";
+auto ulFixture = makeValidUlFixture(sta1);
+HeUlMuPlanDiagnostic ulDiagnostic;
+auto ulPlan = HeUlMuPlan::create(ulFixture.context, ulFixture.schedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, ulDiagnostic);
+requireTrue(ulPlan.has_value() && !ulDiagnostic,
+        "canonical UL scheduler output should produce an immutable plan");
+ulFixture.schedule.allocations.front().mcs = 11;
+requireTrue(ulPlan->getSchedule().allocations.front().mcs == 3,
+        "UL plan must retain a private immutable scheduler copy");
+
+auto ulSchedule = ulPlan->getSchedule();
+ulSchedule.allocations.front().ru.dataSubcarriers = 1;
+ulSchedule.allocations.front().ru.pilotSubcarriers = 0;
+ulSchedule.allocations.front().ru.centerFrequency = Hz(1);
+ulSchedule.allocations.front().ru.bandwidth = Hz(1);
+auto normalizedUlPlan = HeUlMuPlan::create(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, ulDiagnostic);
+requireTrue(normalizedUlPlan.has_value() &&
+        normalizedUlPlan->getSchedule().allocations.front().ru.dataSubcarriers ==
+                ulPlan->getSchedule().allocations.front().ru.dataSubcarriers &&
+        normalizedUlPlan->getSchedule().allocations.front().ru.centerFrequency ==
+                ulPlan->getSchedule().allocations.front().ru.centerFrequency,
+        "UL plan must replace forged RU details with a canonical catalog entry");
+
+requireRejectedUl(ulFixture.context, ulPlan->getSchedule(),
+        IIeee80211HeUlTriggerPolicy::NO_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_TRIGGER_TYPE,
+        "unsupported Trigger type must have a stable release-path diagnostic");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.allocations.front().mcs = 12;
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_MCS, "invalid UL MCS must be rejected");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.allocations.front().numberOfSpatialStreams = 0;
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_NSS, "invalid UL NSS must be rejected");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.allocations.front().ru =
+        getHeEqualRuLayout(ulFixture.context.centerFrequency, MHz(20), 1).front();
+ulSchedule.allocations.front().muMimo = true;
+ulSchedule.allocations.front().streamStartIndex = 1;
+auto muMimoCapableUlContext = ulFixture.context;
+muMimoCapableUlContext.stations.front().capabilities.localRxPeerTx.
+        transmitterCanTransmitFullBandwidthUlMuMimo = true;
+requireRejectedUl(muMimoCapableUlContext, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_NSS,
+        "singleton UL RU must reject forged MU-MIMO and nonzero stream start");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.allocations.front().estimatedDuration = SIMTIME_ZERO;
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_DURATION, "zero UL duration must be rejected");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.allocations.front().targetRssiDbm = -10;
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_POWER, "unencodable UL target RSSI must be rejected");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.puncturedSubchannelMask = 2;
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_COMMON_PARAMETERS,
+        "HE-TB puncturing metadata that cannot cross the Trigger wire must be rejected");
+
+auto unknownUlContext = ulFixture.context;
+unknownUlContext.stations.clear();
+requireRejectedUl(unknownUlContext, ulPlan->getSchedule(),
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::UNKNOWN_STATION,
+        "UL allocation for an unknown station must be rejected");
+
+auto disabledUlContext = ulFixture.context;
+disabledUlContext.stations.front().ulMuDisabled = true;
+requireRejectedUl(disabledUlContext, ulPlan->getSchedule(),
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::UNSUPPORTED_CAPABILITY,
+        "OMI-disabled UL MU allocation must be rejected");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.allocations.push_back(ulSchedule.allocations.front());
+ulSchedule.allocations.back().ru =
+        getHeEqualRuLayout(ulFixture.context.centerFrequency, MHz(20), 9)[1];
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::DUPLICATE_STATION,
+        "duplicate scheduled UL station must be rejected");
+
+ulSchedule = ulPlan->getSchedule();
+auto randomAccess = ulSchedule.allocations.front();
+randomAccess.randomAccess = true;
+randomAccess.staAddress = MacAddress::UNSPECIFIED_ADDRESS;
+randomAccess.associationId = 1;
+randomAccess.ru = getHeEqualRuLayout(ulFixture.context.centerFrequency, MHz(20), 9)[1];
+ulSchedule.allocations.push_back(randomAccess);
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INVALID_AID,
+        "associated random-access allocation must use AID 0");
+
+ulSchedule = ulPlan->getSchedule();
+randomAccess = ulSchedule.allocations.front();
+randomAccess.randomAccess = true;
+randomAccess.staAddress = MacAddress::UNSPECIFIED_ADDRESS;
+randomAccess.associationId = 0;
+randomAccess.estimatedDuration = SimTime(1, SIMTIME_MS);
+ulSchedule.allocations.clear();
+ulSchedule.allocations.push_back(randomAccess);
+ulSchedule.coding = HE_CODING_LDPC;
+auto bccOnlyRaContext = ulFixture.context;
+bccOnlyRaContext.stations.front().capabilities.mutual.ldpc = false;
+requireRejectedUl(bccOnlyRaContext, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::UNSUPPORTED_CAPABILITY,
+        "RA-RU coding must be supported by every eligible associated contender");
+
+ulSchedule = ulPlan->getSchedule();
+ulSchedule.ulLength += 3;
+requireRejectedUl(ulFixture.context, ulSchedule,
+        IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+        HeUlMuPlanErrorCode::INCONSISTENT_TXVECTOR,
+        "UL Length inconsistent with the canonical TB calculation must be rejected");
+
+EV << "Immutable DL and UL scheduler plans rejected malformed release-path cases without mutation.\n";
 
 %contains: stdout
-Immutable DL scheduler plan rejected every malformed release-path case without queue mutation.
+Immutable DL and UL scheduler plans rejected malformed release-path cases without mutation.

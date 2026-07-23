@@ -118,6 +118,10 @@ class INET_API IIeee80211HeUlScheduler
     /** Complete Trigger allocation plus PHY parameters common to all HE-TB users. */
     struct Schedule {
         std::vector<RuAllocation> allocations;
+        // Coordinator-owned observation metadata. This is model-only state,
+        // is overwritten after the extension scheduler returns, and is
+        // emitted only when the validated schedule commits.
+        std::vector<uint16_t> staleReportAids;
         // NFRP Trigger type 7 uses one range User Info record, not the
         // ordinary per-STA RU allocations above.
         uint16_t nfrpStartingAid = 0;

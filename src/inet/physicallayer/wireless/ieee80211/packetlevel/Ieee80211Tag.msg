@@ -84,7 +84,9 @@ class Ieee80211MpduReceiveInd extends TagBase
 
 //
 // Request for transmitting one user's part of a HE MU or trigger-based PPDU.
-// The transmitter combines these tags into a common packet-level PHY header.
+// For full-bandwidth UL MU-MIMO, companionUsers preserves the other solicited
+// users' stream geometry so radio-side canonicalization sees the complete
+// Trigger group. This is model-only metadata and is never wire serialized.
 //
 class Ieee80211HeMuReq extends TagBase
 {
@@ -130,6 +132,7 @@ class Ieee80211HeMuReq extends TagBase
     simtime_t commonDuration;
     bool commonDurationExact = false;
     W transmitPower = W(NaN);
+    Ieee80211HeMuTxAllocationInfo companionUsers[];
 }
 
 //

@@ -184,6 +184,13 @@ static Ieee80211HeTxVectorValidationResult makeCanonicalPair(
             request.users.push_back(user);
         }
     }
+    if (request.ppduFormat == HE_TRIGGER_BASED_UPLINK && !request.ndp) {
+        int maximumSpaceTimeStream = 1;
+        for (const auto& user : request.users)
+            maximumSpaceTimeStream = std::max(maximumSpaceTimeStream,
+                    user.streamStartIndex + user.numberOfSpatialStreams);
+        request.numberOfHeLtfSymbols = getHeNumberOfLtfSymbols(maximumSpaceTimeStream);
+    }
     auto result = Ieee80211HeTxVectorFactory::create(request);
     if (!result)
         throw cRuntimeError("Cannot construct test HE TXVECTOR: %s", result.getContext().detail.c_str());
@@ -367,13 +374,15 @@ static Ptr<const Ieee80211HeTbPhyHeader> roundTripHeTbPhyHeader(const Ptr<Ieee80
 
 static Ieee80211HeUserPhyParameters makeHeModelUser(const Ieee80211HeRu& ru,
         const MacAddress& address, B psduLength, int mcs = 0,
-        int numberOfSpatialStreams = 1, bool dcm = false)
+        int numberOfSpatialStreams = 1, bool dcm = false,
+        int streamStartIndex = 0)
 {
     Ieee80211HeUserPhyParameters user;
     user.ru = ru;
     user.staId = computeHeMuStaId(address);
     user.mcs = mcs;
     user.numberOfSpatialStreams = numberOfSpatialStreams;
+    user.streamStartIndex = streamStartIndex;
     user.dcm = dcm;
     user.psduLength = psduLength;
     return user;
@@ -980,7 +989,60 @@ auto rus = calculateHeRus(Hz(5.18e9), Hz(20e6), 4);
     delete packet;
 }
 
-// --- Test 15: a delimited non-data MPDU is structurally valid HE content ---
+// --- Test 15: HE TB MU-MIMO reception selects the one active PSDU user ---
+{
+    auto activeRecipient = MacAddress("00:11:22:33:44:55");
+    auto companionRecipient = MacAddress("66:77:88:99:AA:BB");
+    auto fullRu = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
+    auto packet = new Packet("he-tb-mu-mimo-active-user");
+    auto phyHeader = makeShared<Ieee80211HeTbPhyHeader>();
+    Ieee80211HeTbSignalingFields signaling;
+    signaling.signalingValid = true;
+    signaling.lSigLength = 130;
+    signaling.bandwidth = 0;
+    signaling.txop = 127;
+    phyHeader->setSignaling(signaling);
+    phyHeader->setChunkLength(b(100));
+    packet->insertAtBack(roundTripHeTbPhyHeader(phyHeader));
+    auto mpdu = makeSizedMpdu(activeRecipient, 13, 321);
+    B mpduLength(mpdu->getByteLength());
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(mpduLength.get<B>());
+    delimiter->setEof(true);
+    packet->insertAtBack(delimiter);
+    packet->insertAtBack(mpdu->peekAll());
+    delete mpdu;
+    packet->addTag<PacketProtocolTag>()->setProtocol(&Protocol::ieee80211HePhy);
+    std::vector<Ieee80211HeUserPhyParameters> modelUsers {
+        makeHeModelUser(fullRu, activeRecipient, B(4) + mpduLength,
+                0, 1, false, 0),
+        makeHeModelUser(fullRu, companionRecipient, B(0),
+                0, 1, false, 1)
+    };
+    auto testErrorModel = check_and_cast<TestHeErrorModel *>(rxModule1->getSubmodule("errorModel"));
+    testErrorModel->failedBitLength = 0;
+    auto received = receiveHeMuPacket(rxModule1, radio1, packet,
+            mode, channel, modelUsers,
+            makeHeModelPpdu(modelUsers, false, HE_TRIGGER_BASED_UPLINK));
+    auto rxVector = received->getTag<Ieee80211HeRxVectorInd>()->getRxVector();
+    REQUIRE(!rxVector->getUser().getStaId());
+    REQUIRE(rxVector->getUser().getPsduLength() == B(4) + mpduLength);
+    REQUIRE(!rxVector->getUser().getNumberOfSpaceTimeStreams());
+    auto recipientContext =
+            received->getTag<Ieee80211HeTbRecipientContextInd>()->getRecipientParameters();
+    REQUIRE(recipientContext->staId == computeHeMuStaId(activeRecipient));
+    REQUIRE(recipientContext->streamStartIndex == 0);
+    REQUIRE(recipientContext->psduLength == B(4) + mpduLength);
+    auto outcomes = received->getTag<Ieee80211MpduReceiveInd>();
+    REQUIRE(outcomes->getResultsArraySize() == 1);
+    REQUIRE(outcomes->getResults(0).sequenceNumber == 321);
+    REQUIRE(outcomes->getResults(0).status == MPDU_SUCCESS);
+    std::cout << "HE TB MU-MIMO reception selects the active PSDU user: PASS\n";
+    delete received;
+    delete packet;
+}
+
+// --- Test 16: a delimited non-data MPDU is structurally valid HE content ---
 {
     auto recipient = MacAddress("00:11:22:33:44:55");
     auto ru = getHeEqualRuLayout(Hz(5.18e9), MHz(20), 1).front();
@@ -1060,5 +1122,6 @@ Explicit MPDU outcomes preserve 101 and consume three ordered RNG draws: PASS
 All-padding zero-length delimiters remain non-NDP and consume no RNG: PASS
 Unsupported HE per-MPDU error model is rejected explicitly: PASS
 Single-subframe HE TB receives one explicit FCS outcome and RNG draw: PASS
+HE TB MU-MIMO reception selects the active PSDU user: PASS
 Delimited HE Block Ack MPDU remains structurally valid: PASS
 .

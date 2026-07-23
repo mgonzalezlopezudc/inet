@@ -66,6 +66,7 @@ static void assertValidSchedule(const IIeee80211HeUlScheduler::Schedule& schedul
     std::vector<Ieee80211HeRu> rus;
     int randomAccessRus = 0;
     for (const auto& allocation : schedule.allocations) {
+        ASSERT(allocation.estimatedDuration > SIMTIME_ZERO);
         rus.push_back(allocation.ru);
         if (allocation.randomAccess) {
             randomAccessRus++;

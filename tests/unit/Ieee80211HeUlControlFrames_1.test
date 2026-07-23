@@ -69,6 +69,7 @@ static IIeee80211HeUlScheduler::Schedule makeUlSchedule(
         IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
 {
     IIeee80211HeUlScheduler::Schedule schedule;
+    schedule.channelBandwidth = channelBandwidth;
     schedule.commonDuration = duration;
     schedule.guardInterval = HE_GI_3_2_US;
     schedule.ltfType = HE_LTF_4X;
@@ -92,6 +93,66 @@ static IIeee80211HeUlScheduler::Schedule makeUlSchedule(
     else
         schedule.allocations.push_back(allocation);
     return schedule;
+}
+
+static HeUlMuPlan makeUlPlan(const IIeee80211HeUlScheduler::Schedule& schedule,
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+{
+    auto normalized = schedule;
+    for (auto& allocation : normalized.allocations)
+        if (allocation.estimatedDuration <= SIMTIME_ZERO)
+            allocation.estimatedDuration = normalized.commonDuration;
+    const auto centerFrequency = normalized.allocations.empty() ?
+            Hz(5.18e9) : normalized.allocations.front().ru.centerFrequency;
+    if (normalized.ulLength == 0 || normalized.ulLength % 3 != 1) {
+        auto finalized = TestHeHcfScheduleFinalizer::finalize(normalized,
+                centerFrequency, normalized.channelBandwidth,
+                triggerType);
+        REQUIRE(finalized);
+        normalized = finalized.schedule;
+    }
+    HeUlMuPlan::ValidationContext context;
+    context.centerFrequency = centerFrequency;
+    Ieee80211HeCapabilities apCapabilities;
+    Ieee80211HeCapabilities staCapabilities;
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+        staCapabilities.ndpFeedbackReport = true;
+    for (const auto& allocation : normalized.allocations) {
+        const int nssIndex = allocation.numberOfSpatialStreams - 1;
+        apCapabilities.rxMcsNss.maxMcsPerNss[nssIndex] = 11;
+        staCapabilities.txMcsNss.maxMcsPerNss[nssIndex] = 11;
+        if (allocation.muMimo)
+            staCapabilities.fullBandwidthUlMuMimo = true;
+    }
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = normalized.channelBandwidth;
+    auto capabilities = negotiateHeCapabilities(apCapabilities, staCapabilities,
+            operation, true);
+    for (const auto& allocation : normalized.allocations)
+        if (!allocation.randomAccess) {
+            HeUlMuPlan::StationContract station;
+            station.station = allocation.staAddress;
+            station.associationId = allocation.associationId;
+            station.capabilities = capabilities;
+            station.schedulerCandidate = true;
+            context.stations.push_back(station);
+        }
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        HeUlMuPlan::StationContract station;
+        station.station = MacAddress("02:00:00:00:00:25");
+        station.associationId = normalized.nfrpStartingAid;
+        station.capabilities = capabilities;
+        context.stations.push_back(station);
+    }
+    HeUlMuPlanDiagnostic diagnostic;
+    auto plan = HeUlMuPlan::create(context, normalized, triggerType, diagnostic);
+    if (!plan)
+        throw cRuntimeError("HE UL test plan rejected: code=%d detail=%s bw=%g ul=%u duration=%s exact=%d pe=%d ltf=%d power=%d",
+                (int)diagnostic.code, diagnostic.detail.c_str(), normalized.channelBandwidth.get(),
+                normalized.ulLength, normalized.commonDuration.str().c_str(), normalized.commonDurationExact,
+                normalized.packetExtensionDurationUs, normalized.numberOfHeLtfSymbols,
+                normalized.apTxPowerDbm);
+    return *plan;
 }
 
 static Packet *makeHeTbAmpduResponse(
@@ -149,7 +210,8 @@ static Ptr<const Ieee80211TriggerFrame> buildSerializeAndDecodeTrigger(
     auto coordinator = new HeUlCoordinator();
     auto callback = new TestHeHcfScheduleFinalizer();
     auto modeSet = const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax"));
-    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule, triggerType,
+    auto plan = makeUlPlan(schedule, triggerType);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             modeSet, MacAddress("10:00:00:00:00:00"));
     auto packet = sequence.buildTriggerPacketForTest();
     packet->popAtBack<Ieee80211MacTrailer>(B(4));
@@ -235,8 +297,15 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     schedule.channelBandwidth = MHz(20);
     auto coordinator = new HeUlCoordinator();
     auto callback = new TestHeHcfScheduleFinalizer();
-    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
-            IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER,
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER);
+    HeUlMuPlan::ValidationContext emptyContext;
+    emptyContext.centerFrequency = Hz(5.18e9);
+    HeUlMuPlanDiagnostic emptyDiagnostic;
+    auto emptyPlan = HeUlMuPlan::create(emptyContext, plan.getSchedule(),
+            IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER, emptyDiagnostic);
+    REQUIRE(!emptyPlan);
+    REQUIRE(emptyDiagnostic.code == HeUlMuPlanErrorCode::UNSUPPORTED_CAPABILITY);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
             MacAddress("10:00:00:00:00:00"));
     std::unique_ptr<IReceiveStep> nfrpReceiveStep(sequence.buildReceiveCollectionStepForTest());
@@ -406,6 +475,65 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
             centerFrequency, channelBandwidth,
             IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER));
     EV << "All Trigger GI/HE-LTF wire pairs crossed responder and TXVECTOR boundaries.\n";
+}
+
+{
+    const auto centerFrequency = Hz(5.18e9);
+    auto proposed = makeUlSchedule(centerFrequency, MHz(20),
+            SimTime(1, SIMTIME_MS), IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+    proposed.guardInterval = HE_GI_1_6_US;
+    proposed.ltfType = HE_LTF_1X;
+    auto fullRu = getHeEqualRuLayout(centerFrequency, MHz(20), 1).front();
+    proposed.allocations.front().ru = fullRu;
+    proposed.allocations.front().muMimo = true;
+    auto second = proposed.allocations.front();
+    second.staAddress = MacAddress("02:00:00:00:00:02");
+    second.associationId = 2;
+    second.streamStartIndex = 1;
+    proposed.allocations.push_back(second);
+    auto finalized = TestHeHcfScheduleFinalizer::finalize(proposed,
+            centerFrequency, MHz(20), IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+    REQUIRE(finalized);
+    auto decoded = buildSerializeAndDecodeTrigger(finalized.schedule,
+            IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
+    REQUIRE(!validateIeee80211HeUlTrigger(*decoded, centerFrequency));
+
+    auto singleton = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
+    singleton->setUsersArraySize(1);
+    auto singletonUser = singleton->getUsers(0);
+    singletonUser.streamStartIndex = 1;
+    singleton->setUsers(0, singletonUser);
+    REQUIRE(validateIeee80211HeUlTrigger(*singleton, centerFrequency));
+
+    auto partial = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
+    auto partialRu = getHeEqualRuLayout(centerFrequency, MHz(20), 2).front();
+    for (unsigned int i = 0; i < partial->getUsersArraySize(); ++i) {
+        auto user = partial->getUsers(i);
+        user.ruIndex = partialRu.index;
+        user.ruToneSize = partialRu.toneSize;
+        user.ruToneOffset = partialRu.toneOffset;
+        partial->setUsers(i, user);
+    }
+    REQUIRE(validateIeee80211HeUlTrigger(*partial, centerFrequency));
+
+    auto overlapping = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
+    auto overlappingSecond = overlapping->getUsers(1);
+    overlappingSecond.streamStartIndex = 0;
+    overlapping->setUsers(1, overlappingSecond);
+    REQUIRE(validateIeee80211HeUlTrigger(*overlapping, centerFrequency));
+
+    auto gapped = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
+    auto gappedSecond = gapped->getUsers(1);
+    gappedSecond.streamStartIndex = 2;
+    gapped->setUsers(1, gappedSecond);
+    REQUIRE(validateIeee80211HeUlTrigger(*gapped, centerFrequency));
+
+    auto tooManyPerUser = staticPtrCast<Ieee80211TriggerFrame>(decoded->dupShared());
+    auto oversizedUser = tooManyPerUser->getUsers(0);
+    oversizedUser.numberOfSpatialStreams = 5;
+    tooManyPerUser->setUsers(0, oversizedUser);
+    REQUIRE(validateIeee80211HeUlTrigger(*tooManyPerUser, centerFrequency));
+    EV << "Responder validation rejected malformed UL MU-MIMO RU and stream geometry.\n";
 }
 
 {
@@ -621,8 +749,8 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     auto coordinator = new HeUlCoordinator();
     auto callback = new TestHeHcfScheduleFinalizer();
     callback->associationIds[transmitter] = 7;
-    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
-            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
             MacAddress("10:00:00:00:00:00"));
     FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
@@ -654,8 +782,8 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     auto coordinator = new HeUlCoordinator();
     auto callback = new TestHeHcfScheduleFinalizer();
     callback->associationIds[wrongTransmitter] = 8;
-    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
-            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
             MacAddress("10:00:00:00:00:00"));
     FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
@@ -686,8 +814,8 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     auto coordinator = new HeUlCoordinator();
     auto callback = new TestHeHcfScheduleFinalizer();
     callback->associationIds[transmitter] = 7;
-    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
-            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
             MacAddress("10:00:00:00:00:00"));
     FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
@@ -718,8 +846,8 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     auto coordinator = new HeUlCoordinator();
     auto callback = new TestHeHcfScheduleFinalizer();
     callback->associationIds[transmitter] = 7;
-    TestHeUlMuTxOpFs sequence(coordinator, callback, schedule,
-            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
+    auto plan = makeUlPlan(schedule, IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
             const_cast<Ieee80211ModeSet *>(Ieee80211ModeSet::getModeSet("ax")),
             MacAddress("10:00:00:00:00:00"));
     FrameSequenceContext context(MacAddress("10:00:00:00:00:00"),
@@ -796,6 +924,7 @@ Trigger-derived path loss controls exact HE-TB power and preserves maximum-power
 Trigger frame round trip passed.
 HCF-finalized BSRP/NFRP Trigger build and wire round trips passed.
 All Trigger GI/HE-LTF wire pairs crossed responder and TXVECTOR boundaries.
+Responder validation rejected malformed UL MU-MIMO RU and stream geometry.
 NFRP AID range and tone-set/STS mapping passed for all HE bandwidths.
 2.4 GHz maximum HE-TB schedule crossed the TXVECTOR boundary legally.
 BE/BK BSR ACI wire mappings passed.

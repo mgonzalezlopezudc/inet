@@ -34,6 +34,7 @@
 #include "inet/linklayer/ieee80211/mac/originator/OriginatorQosMacDataService.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/linklayer/ieee80211/mgmt/Ieee80211MgmtFrame_m.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HePreamblePuncturing.h"
@@ -63,7 +64,6 @@ void populateHeTbRequestFromTrigger(physicallayer::Ieee80211HeMuReq *request,
     request->setMcs(user.mcs);
     request->setNumberOfSpatialStreams(user.numberOfSpatialStreams);
     request->setStreamStartIndex(user.streamStartIndex);
-    request->setTotalNsts(user.numberOfSpatialStreams);
     request->setMuMimo(user.muMimo);
     request->setGuardInterval(trigger.getGuardInterval());
     request->setLtfType(trigger.getLtfType());
@@ -77,6 +77,34 @@ void populateHeTbRequestFromTrigger(physicallayer::Ieee80211HeMuReq *request,
     request->setPuncturedSubchannelMask(trigger.getPuncturedSubchannelMask());
     request->setCommonDuration(trigger.getCommonDuration());
     request->setCommonDurationExact(trigger.getCommonDurationExact());
+    std::vector<physicallayer::Ieee80211HeMuTxAllocationInfo> companionUsers;
+    int totalNsts = user.streamStartIndex + user.numberOfSpatialStreams;
+    if (user.muMimo) {
+        for (unsigned int i = 0; i < trigger.getUsersArraySize(); ++i) {
+            const auto& candidate = trigger.getUsers(i);
+            if (&candidate == &user || !candidate.muMimo ||
+                    candidate.ruToneSize != user.ruToneSize ||
+                    candidate.ruToneOffset != user.ruToneOffset)
+                continue;
+            physicallayer::Ieee80211HeMuTxAllocationInfo companion;
+            companion.ruIndex = candidate.ruIndex;
+            companion.ruToneSize = candidate.ruToneSize;
+            companion.ruToneOffset = candidate.ruToneOffset;
+            companion.staId = candidate.aid;
+            companion.mcs = candidate.mcs;
+            companion.numberOfSpatialStreams = candidate.numberOfSpatialStreams;
+            companion.streamStartIndex = candidate.streamStartIndex;
+            companion.muMimo = true;
+            companion.psduLength = B(0);
+            totalNsts = std::max(totalNsts,
+                    candidate.streamStartIndex + candidate.numberOfSpatialStreams);
+            companionUsers.push_back(companion);
+        }
+    }
+    request->setTotalNsts(totalNsts);
+    request->setCompanionUsersArraySize(companionUsers.size());
+    for (size_t i = 0; i < companionUsers.size(); ++i)
+        request->setCompanionUsers(i, companionUsers[i]);
 }
 
 double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
@@ -110,6 +138,133 @@ static AccessCategory aciToAccessCategory(uint8_t aci)
         case 3: return AC_VO;
         default: throw cRuntimeError("Invalid Preferred AC in Basic Trigger");
     }
+}
+
+std::optional<std::string> validateIeee80211HeUlTrigger(
+        const Ieee80211TriggerFrame& trigger, Hz centerFrequency)
+{
+    using namespace physicallayer;
+    const auto triggerType = trigger.getTriggerType();
+    if (triggerType != IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
+            triggerType != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER &&
+            triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER)
+        return "unsupported Trigger type";
+    const auto bandwidth = Hz(trigger.getChannelBandwidthMhz() * 1e6);
+    if (bandwidth != MHz(20) && bandwidth != MHz(40) &&
+            bandwidth != MHz(80) && bandwidth != MHz(160))
+        return "unsupported Trigger bandwidth";
+    if (trigger.getUlLength() > 4095 || trigger.getUlLength() % 3 != 1 ||
+            trigger.getCommonDuration() <= SIMTIME_ZERO ||
+            trigger.getCommonDuration() > SimTime(5.484, SIMTIME_MS))
+        return "invalid UL Length or common duration";
+    const bool validGiLtf =
+            (trigger.getGuardInterval() == HE_GI_1_6_US &&
+             (trigger.getLtfType() == HE_LTF_1X || trigger.getLtfType() == HE_LTF_2X)) ||
+            (trigger.getGuardInterval() == HE_GI_3_2_US &&
+             trigger.getLtfType() == HE_LTF_4X);
+    if (!validGiLtf || (trigger.getNumberOfHeLtfSymbols() != 1 &&
+            trigger.getNumberOfHeLtfSymbols() != 2 &&
+            trigger.getNumberOfHeLtfSymbols() != 4 &&
+            trigger.getNumberOfHeLtfSymbols() != 6 &&
+            trigger.getNumberOfHeLtfSymbols() != 8) ||
+            trigger.getPreFecPaddingFactor() < 1 ||
+            trigger.getPreFecPaddingFactor() > 4 ||
+            trigger.getApTxPowerDbm() < -20 || trigger.getApTxPowerDbm() > 40)
+        return "invalid Trigger common signaling";
+    if (trigger.getPuncturedSubchannelMask() != 0)
+        return "HE-TB Trigger cannot carry sender-only puncturing metadata";
+
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        if (trigger.getUsersArraySize() != 0 || trigger.getNfrpFeedbackType() != 0 ||
+                trigger.getNfrpStartingAid() > 4095 ||
+                trigger.getGuardInterval() != HE_GI_3_2_US ||
+                trigger.getLtfType() != HE_LTF_4X ||
+                trigger.getNumberOfHeLtfSymbols() != 2 ||
+                trigger.getCoding() != HE_CODING_BCC ||
+                trigger.getPacketExtensionDurationUs() != 0)
+            return "invalid NFRP Trigger fields";
+        try {
+            if (trigger.getNfrpStartingAid() +
+                    IIeee80211HeUlScheduler::getNfrpScheduledStaCount(
+                            bandwidth, trigger.getNfrpMultiplexingFlag()) > 4096)
+                return "NFRP AID range exceeds 12 bits";
+        }
+        catch (const std::exception&) {
+            return "invalid NFRP bandwidth";
+        }
+        return std::nullopt;
+    }
+    if (trigger.getUsersArraySize() == 0)
+        return "Basic/BSRP Trigger contains no User Info records";
+
+    auto catalog = getHeRuAllocationCatalog(centerFrequency, bandwidth);
+    std::set<uint16_t> scheduledAids;
+    std::map<std::pair<int, int>, std::vector<const Ieee80211HeTriggerUserInfo *>> usersPerRu;
+    std::vector<Ieee80211HeRu> physicalRus;
+    for (unsigned int i = 0; i < trigger.getUsersArraySize(); ++i) {
+        const auto& user = trigger.getUsers(i);
+        auto canonical = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
+            return ru.index == user.ruIndex && ru.toneSize == user.ruToneSize &&
+                    ru.toneOffset == user.ruToneOffset;
+        });
+        if (canonical == catalog.end())
+            return "User Info RU is not canonical";
+        if (user.mcs > 11 || user.numberOfSpatialStreams < 1 ||
+                user.numberOfSpatialStreams > 8 || user.streamStartIndex > 7 ||
+                user.streamStartIndex + user.numberOfSpatialStreams > 8)
+            return "invalid User Info MCS or spatial streams";
+        if (!user.useMaximumTransmitPower &&
+                (user.targetRssiDbm < -110 || user.targetRssiDbm > -20))
+            return "invalid User Info target RSSI";
+        if (user.randomAccess) {
+            if (user.aid != 0 || user.muMimo ||
+                    user.numberOfSpatialStreams != 1 || user.streamStartIndex != 0)
+                return "invalid associated-STA random-access User Info";
+        }
+        else if (user.aid == 0 || user.aid > 2007 ||
+                !scheduledAids.insert(user.aid).second)
+            return "invalid or duplicate scheduled AID";
+        if (user.coding == HE_CODING_BCC &&
+                (user.mcs > 9 || user.numberOfSpatialStreams > 4 ||
+                 user.ruToneSize >= 484))
+            return "invalid BCC User Info";
+        auto geometry = std::make_pair(user.ruToneSize, user.ruToneOffset);
+        if (usersPerRu[geometry].empty())
+            physicalRus.push_back(*canonical);
+        usersPerRu[geometry].push_back(&user);
+    }
+    if (!validateHeRuLayout(physicalRus, bandwidth))
+        return "overlapping or out-of-band Trigger RU layout";
+    const auto fullRu = getHeEqualRuLayout(centerFrequency, bandwidth, 1).front();
+    bool fullBandwidthUlMuMimo = physicalRus.size() == 1;
+    for (const auto& entry : usersPerRu) {
+        const auto& users = entry.second;
+        if (users.size() == 1) {
+            if (users.front()->muMimo || users.front()->streamStartIndex != 0)
+                return "single-user RU cannot use MU-MIMO or a nonzero starting stream";
+            fullBandwidthUlMuMimo = false;
+            continue;
+        }
+        if (users.size() > 8 || entry.first.first != fullRu.toneSize ||
+                entry.first.second != fullRu.toneOffset)
+            return "UL MU-MIMO requires at most eight users on the full-bandwidth RU";
+        std::set<int> streams;
+        for (const auto user : users) {
+            if (!user->muMimo || user->randomAccess ||
+                    user->numberOfSpatialStreams > 4)
+                return "shared RU is not scheduled UL MU-MIMO";
+            for (int stream = user->streamStartIndex;
+                    stream < user->streamStartIndex + user->numberOfSpatialStreams; ++stream)
+                if (!streams.insert(stream).second)
+                    return "UL MU-MIMO spatial streams overlap";
+        }
+        if (streams.empty() || streams.size() > 8 || *streams.begin() != 0 ||
+                *streams.rbegin() + 1 != static_cast<int>(streams.size()))
+            return "UL MU-MIMO spatial streams are gapped or exceed eight streams";
+    }
+    if (trigger.getLtfType() == HE_LTF_1X && !fullBandwidthUlMuMimo)
+        return "1x HE-LTF requires full-bandwidth UL MU-MIMO";
+    return std::nullopt;
 }
 
 bool HeHcf::allAssociatedStationsSupportPreamblePuncturing() const
@@ -230,6 +385,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         return false;
 
     ulTriggerAccessRequested = false;
+    const auto triggerType = pendingUlTrigger;
     const auto phy = getLinkPhyContext().getSnapshot();
     auto centerFrequency = phy.getChannelCenterFrequency();
     auto channelBandwidth = phy.getChannelBandwidth();
@@ -240,13 +396,15 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 edcaf->getTxopProcedure()->getLimit() - edcaf->getTxopProcedure()->getDuration());
     auto sensitivityDbm = math::mW2dBmW(phy.getReceiveSensitivity().get<mW>());
     IIeee80211HeUlScheduler::Schedule ulSchedule;
+    IIeee80211HeUlScheduler::ScheduleContext schedulerContext;
+    bool schedulerPrepared = false;
     // 9.3.1.22 encodes the triggering AP's combined transmit power normalized
     // to 20 MHz in one-dB steps. Keep the projected value in the schedule so
     // the frame sequence and serializer cannot silently substitute a default.
     auto apTxPowerDbm20Mhz = math::mW2dBmW(phy.getMaximumTransmitPower().get<mW>()) -
             10 * std::log10(channelBandwidth.get() / 20e6);
-    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
-            pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+    if (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
+            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         // IEEE 802.11-2024 9.3.1.22 Table 9-47 defines BSRP as Trigger type 4.
         // 26.5.2 permits the AP to solicit HE TB responses via addressed User
         // Info fields and RA-RUs.  The standard leaves scheduling policy open;
@@ -261,7 +419,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
             if (station.second != Ieee80211Mib::ASSOCIATED)
                 continue;
-            if (pendingUlTrigger != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
+            if (triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
                     (index >= maxRus || index >= maxMuStations))
                 break;
             if (isTwtSleeping(mac, station.first)) {
@@ -269,11 +427,11 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 continue;
             }
             auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(station.first);
-            if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
+            if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER &&
                     (negotiated == nullptr || !negotiated->localRxPeerTx.valid ||
                      !negotiated->localRxPeerTx.transmitterCanTransmitNdpFeedbackReport))
                 continue;
-            if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+            if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
                 nfrpEligibleAids.push_back(mac->getMib()->getAssociationId(station.first));
                 continue;
             }
@@ -284,10 +442,9 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             allocation.targetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
             ulSchedule.allocations.push_back(allocation);
         }
-        if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
             if (nfrpEligibleAids.empty()) {
                 EV_WARN << "HE UL skipping NFRP Trigger because no awake associated STA negotiated NDP feedback\n";
-                pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
                 return false;
             }
             std::sort(nfrpEligibleAids.begin(), nfrpEligibleAids.end());
@@ -311,7 +468,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             ulSchedule.nfrpMultiplexingFlag = false;
             ulSchedule.nfrpTargetRssiDbm = (int)std::round(sensitivityDbm + (double)par("ulTargetRssiMargin"));
         }
-        while (index < maxRus && pendingUlTrigger != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        while (index < maxRus && triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
             IIeee80211HeUlScheduler::RuAllocation allocation;
             allocation.randomAccess = true;
             allocation.associationId = 0;
@@ -321,6 +478,8 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         }
         ulSchedule.commonDuration = std::min(SimTime(par("maxHeTbPpduDuration")), txopLimit > SIMTIME_ZERO ?
                 txopLimit : SimTime(par("maxHeTbPpduDuration")));
+        for (auto& allocation : ulSchedule.allocations)
+            allocation.estimatedDuration = ulSchedule.commonDuration;
     }
     else {
         int staleOrUnknown = 0;
@@ -333,25 +492,26 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                     simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge())
                 staleOrUnknown++;
         }
-        ulSchedule = ulCoordinator->createSchedule(mac->getMib(), getLinkPhyContext(),
+        ulSchedule = ulCoordinator->prepareSchedule(mac->getMib(), getLinkPhyContext(),
                 SimTime(par("linkEstimateMaxAge")), centerFrequency, channelBandwidth,
                 txopLimit, par("maxHeTbPpduDuration"), sensitivityDbm,
                 par("ulTargetRssiMargin"), staleOrUnknown, 0, 0,
                 [this] (const MacAddress& address) {
                     Ieee80211HeOperatingMode mode;
                     return getPeerOperatingMode(address, mode) && mode.ulMuDisable;
-                });
+                }, &schedulerContext);
+        schedulerPrepared = true;
     }
     ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
             [this] (const auto& allocation) {
                 return !allocation.randomAccess && isTwtSleeping(mac, allocation.staAddress);
             }), ulSchedule.allocations.end());
-    auto puncturedSubchannels = pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
+    auto puncturedSubchannels = triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
             std::vector<bool>() : phy.getPuncturedSubchannels();
     if (!puncturedSubchannels.empty()) {
         for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
             if (puncturedSubchannels[i])
-                ulSchedule.puncturedSubchannelMask |= 1U << i;
+                EV_DEBUG << "HE UL excludes scheduler RUs in punctured 20 MHz subchannel " << i << "\n";
         ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
                 [&] (const auto& allocation) {
                     return overlapsHePuncturedSubchannel(allocation.ru, puncturedSubchannels, channelBandwidth) ||
@@ -359,7 +519,7 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
                 }), ulSchedule.allocations.end());
     }
     ulSchedule.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
-    if (par("enableUlMuMimo").boolValue() && pendingUlTrigger == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER) {
+    if (par("enableUlMuMimo").boolValue() && triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER) {
         std::vector<IIeee80211HeUlScheduler::RuAllocation *> eligible;
         for (auto& allocation : ulSchedule.allocations) {
             if (allocation.randomAccess)
@@ -398,26 +558,32 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
             break;
     }
     // Table 27-32 permits only 4x HE-LTF with 3.2 us GI for feedback NDP.
-    if (pendingUlTrigger == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+    if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
         ulSchedule.ltfType = physicallayer::HE_LTF_4X;
     }
     bool ldpcSupportedByAll = mac->getMib()->localHeCapabilities.ldpc;
     for (const auto& allocation : ulSchedule.allocations) {
-        if (allocation.randomAccess)
+        if (allocation.randomAccess) {
+            for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
+                if (station.second != Ieee80211Mib::ASSOCIATED)
+                    continue;
+                auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+                ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr &&
+                        capabilities->localRxPeerTx.valid && capabilities->mutual.ldpc;
+            }
             continue;
+        }
         auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
         ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr &&
                 capabilities->localRxPeerTx.valid && capabilities->mutual.ldpc;
     }
     ulSchedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
-    auto triggerType = pendingUlTrigger;
     if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         ulSchedule.coding = physicallayer::HE_CODING_BCC;
         ulSchedule.packetExtensionDurationUs = 0;
     }
     ulSchedule.apTxPowerDbm = std::clamp((int)std::lround(apTxPowerDbm20Mhz), -20, 40);
-    pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     if (ulSchedule.allocations.empty() && triggerType != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         EV_WARN << "HE UL skipping Trigger because no usable RU allocations remain"
                 << " after scheduling and puncturing checks\n";
@@ -433,16 +599,45 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     }
     ulSchedule = std::move(finalization.schedule);
 
-    ASSERT(ulSchedule.commonDuration > SIMTIME_ZERO);
+    HeUlMuPlan::ValidationContext validationContext;
+    validationContext.centerFrequency = centerFrequency;
+    validationContext.requireSchedulerCandidate = schedulerPrepared;
+    for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
+        if (station.second != Ieee80211Mib::ASSOCIATED)
+            continue;
+        auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+        HeUlMuPlan::StationContract contract;
+        contract.station = station.first;
+        contract.associationId = mac->getMib()->getAssociationId(station.first);
+        if (capabilities != nullptr)
+            contract.capabilities = *capabilities;
+        contract.schedulerCandidate = !schedulerPrepared ||
+                std::any_of(schedulerContext.candidates.begin(), schedulerContext.candidates.end(),
+                        [&] (const auto& candidate) { return candidate.staAddress == station.first; });
+        Ieee80211HeOperatingMode operatingMode;
+        contract.ulMuDisabled = getPeerOperatingMode(station.first, operatingMode) && operatingMode.ulMuDisable;
+        validationContext.stations.push_back(contract);
+    }
+    HeUlMuPlanDiagnostic diagnostic;
+    auto ulPlan = HeUlMuPlan::create(validationContext, ulSchedule, triggerType, diagnostic);
+    if (!ulPlan) {
+        EV_WARN << "HE UL plan rejected: code=" << (int)diagnostic.code
+                << ", allocation=" << diagnostic.allocationIndex
+                << ", station=" << diagnostic.station
+                << ", detail=" << diagnostic.detail
+                << "; no Trigger transmitted and coordinator state preserved\n";
+        return false;
+    }
+
     EV_INFO << "HE UL starting"
              << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? " BSRP" :
                      triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ? " NFRP" : " Basic")
-             << " exchange with " << ulSchedule.allocations.size()
-             << " RU allocations for " << ulSchedule.commonDuration << "\n";
+             << " exchange with " << ulPlan->getSchedule().allocations.size()
+             << " RU allocations for " << ulPlan->getSchedule().commonDuration << "\n";
     frameSequenceHandler->startFrameSequence(
-            new HeUlMuTxOpFs(ulCoordinator, this, ulSchedule, triggerType,
-                    modeSet, mac->getAddress()),
+            new HeUlMuTxOpFs(ulCoordinator, this, *ulPlan, modeSet, mac->getAddress()),
             buildContext(ac), this);
+    pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     emit(IFrameSequenceHandler::frameSequenceStartedSignal, frameSequenceHandler->getContext());
     return true;
 }
@@ -553,6 +748,42 @@ void HeHcf::retryPendingTriggeredUlExchanges()
         }
     }
     triggeredUlExchanges.clear();
+    cancelEvent(triggeredUlResponseTimer);
+}
+
+void HeHcf::scheduleTriggeredUlResponseTimeout()
+{
+    cancelEvent(triggeredUlResponseTimer);
+    if (triggeredUlExchanges.empty())
+        return;
+    auto deadline = std::min_element(triggeredUlExchanges.begin(), triggeredUlExchanges.end(),
+            [] (const auto& left, const auto& right) {
+                return left.second.expectedResponseTime < right.second.expectedResponseTime;
+            })->second.expectedResponseTime;
+    scheduleAt(std::max(simTime(), deadline), triggeredUlResponseTimer);
+}
+
+void HeHcf::handleTriggeredUlResponseTimeout()
+{
+    for (auto it = triggeredUlExchanges.begin(); it != triggeredUlExchanges.end(); ) {
+        if (it->second.expectedResponseTime > simTime()) {
+            ++it;
+            continue;
+        }
+        auto& exchange = it->second;
+        EV_WARN << "HE-TB response timeout: trigger=" << it->first
+                << ", packets=" << exchange.packets.size() << "\n";
+        if (exchange.randomAccess)
+            ulCoordinator->reportRandomAccessResult(false);
+        for (auto packet : exchange.packets) {
+            auto writableHeader = packet->removeAtFront<Ieee80211DataHeader>();
+            writableHeader->setRetry(true);
+            packet->insertAtFront(writableHeader);
+            exchange.sourceQueue->pushPacket(packet, nullptr);
+        }
+        it = triggeredUlExchanges.erase(it);
+    }
+    scheduleTriggeredUlResponseTimeout();
 }
 
 Packet *HeHcf::buildHeTbAmpdu(const std::vector<Packet *>& mpdus)
@@ -567,7 +798,7 @@ Packet *HeHcf::buildHeTbAmpdu(const std::vector<Packet *>& mpdus)
         delimiter->setLength(mpdus[i]->getByteLength());
         delimiter->setEof(i + 1 == mpdus.size());
         ampdu->insertAtBack(delimiter);
-        ampdu->insertAtBack(mpdus[i]->peekAll());
+        ampdu->insertAtBack(mpdus[i]->peekData());
         int padding = (4 - (B(4) + B(mpdus[i]->getByteLength())).get<B>() % 4) % 4;
         if (i + 1 != mpdus.size() && padding != 0)
             ampdu->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
@@ -578,9 +809,16 @@ Packet *HeHcf::buildHeTbAmpdu(const std::vector<Packet *>& mpdus)
 Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
         AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
         const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
-        TriggeredUlExchange& exchange)
+        W transmitPower, TriggeredUlExchange& exchange, bool& committed)
 {
-    Packet *responsePacket = nullptr;
+    committed = false;
+    if (sourceQueue == nullptr || selected == nullptr || trigger == nullptr)
+        throw cRuntimeError("Cannot prepare an HE-TB response without queue and Trigger context");
+    auto qosDataService = check_and_cast<OriginatorQosMacDataService *>(originatorDataService);
+    auto preparedSequenceNumberState = qosDataService->cloneSequenceNumberState();
+    std::vector<Packet *> originalPackets;
+    std::vector<std::unique_ptr<Packet>> preparedPacketOwners;
+    std::unique_ptr<Packet> responsePacket;
     if (sourcePacket != nullptr) {
         // 26.5.2.4 requires a QoS Null response when the allocation cannot
         // contain pending data. Check the first MPDU too; the aggregation loop
@@ -600,14 +838,16 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             sourcePacket = nullptr;
     }
     if (sourcePacket != nullptr) {
+        auto originalSourcePacket = sourcePacket;
+        preparedPacketOwners.emplace_back(sourcePacket->dup());
+        sourcePacket = preparedPacketOwners.back().get();
+        originalPackets.push_back(originalSourcePacket);
         // 26.5.2.4: a Basic Trigger response can carry QoS Data in an A-MPDU.
         // The Ack Policy is Block Ack/Implicit BAR style so the AP can return a
         // Multi-STA BA context after collecting simultaneous HE TB responses.
         auto writableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
-        if (!writableHeader->getRetry()) {
-            auto qosDataService = check_and_cast<OriginatorQosMacDataService *>(originatorDataService);
-            qosDataService->assignSequenceNumber(writableHeader);
-        }
+        if (!writableHeader->getRetry())
+            preparedSequenceNumberState->assignSequenceNumber(writableHeader);
         if (!writableHeader->getBufferStatusPresent())
             writableHeader->setChunkLength(writableHeader->getChunkLength() + B(4));
         writableHeader->setOrder(true);
@@ -617,7 +857,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         writableHeader->setBufferStatusAc(selectedAc);
         writableHeader->setBufferStatusQueueSize(queueBytes);
         sourcePacket->insertAtFront(writableHeader);
-        responsePacket = sourcePacket->dup();
+        responsePacket.reset(sourcePacket->dup());
     }
     else {
         // 26.5.2.4 allows a triggered STA with no data fitting the allocation
@@ -637,7 +877,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         nullHeader->setBufferStatusAc(selectedAc);
         nullHeader->setBufferStatusQueueSize(queueBytes);
         nullHeader->setChunkLength(B(30));
-        responsePacket = new Packet("HE-TB-QoS-Null", nullHeader);
+        responsePacket = std::make_unique<Packet>("HE-TB-QoS-Null", nullHeader);
         responsePacket->insertAtBack(makeShared<Ieee80211MacTrailer>());
     }
 
@@ -654,7 +894,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         for (int i = 0; availableSlots > 0 && (int)exchange.packets.size() < maximumMpduCount &&
                 i < sourceQueue->getNumPackets(); ++i) {
             auto candidate = sourceQueue->getPacket(i);
-            if (candidate == sourcePacket)
+            if (candidate == originalPackets.front())
                 continue;
             auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(candidate->peekAtFront<Ieee80211MacHeader>());
             if (candidateHeader == nullptr || candidateHeader->getType() != ST_DATA_WITH_QOS ||
@@ -674,14 +914,16 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                     static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger->getGuardInterval()),
                     static_cast<physicallayer::Ieee80211HeCoding>(selected->coding)).duration > trigger->getCommonDuration())
                 break;
+            auto originalCandidate = candidate;
+            preparedPacketOwners.emplace_back(candidate->dup());
+            candidate = preparedPacketOwners.back().get();
             auto writableCandidateHeader = candidate->removeAtFront<Ieee80211DataHeader>();
-            if (!writableCandidateHeader->getRetry()) {
-                auto qosDataService = check_and_cast<OriginatorQosMacDataService *>(originatorDataService);
-                qosDataService->assignSequenceNumber(writableCandidateHeader);
-            }
+            if (!writableCandidateHeader->getRetry())
+                preparedSequenceNumberState->assignSequenceNumber(writableCandidateHeader);
             writableCandidateHeader->setOrder(true);
             writableCandidateHeader->setAckPolicy(BLOCK_ACK);
             candidate->insertAtFront(writableCandidateHeader);
+            originalPackets.push_back(originalCandidate);
             exchange.packets.push_back(candidate);
             exchange.sequenceNumbers.push_back(writableCandidateHeader->getSequenceNumber().get());
         }
@@ -699,25 +941,128 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                 trailer->setFcs(computeEthernetFcs(mpdu, fcsMode));
             mpdu->insertAtBack(trailer);
         }
-        delete responsePacket;
-        responsePacket = buildHeTbAmpdu(exchange.packets);
-        for (auto pkt : exchange.packets) {
-            exchange.sourceQueue->removePacket(pkt);
-            take(pkt);
-        }
+        responsePacket.reset(buildHeTbAmpdu(exchange.packets));
     }
     else {
-        auto nullMpdu = responsePacket;
+        auto nullMpdu = responsePacket.release();
         auto trailer = nullMpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
         auto fcsMode = mac->getFcsMode();
         trailer->setFcsMode(fcsMode);
         if (fcsMode == FCS_COMPUTED)
             trailer->setFcs(computeEthernetFcs(nullMpdu, fcsMode));
         nullMpdu->insertAtBack(trailer);
-        responsePacket = buildHeTbAmpdu({nullMpdu});
+        responsePacket.reset(buildHeTbAmpdu({nullMpdu}));
         delete nullMpdu;
     }
-    return responsePacket;
+
+    // Complete and validate the Trigger-derived request while all selected
+    // queue packets and live sequence counters are still untouched.
+    auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
+    populateHeTbRequestFromTrigger(request.get(), *trigger, *selected,
+            mac->getMib()->bssStationData.associationId);
+    request->setTransmitPower(transmitPower);
+    const auto phy = getLinkPhyContext().getSnapshot();
+    physicallayer::Ieee80211HeTxVectorRequest txVectorRequest;
+    txVectorRequest.centerFrequency = phy.getChannelCenterFrequency();
+    txVectorRequest.channelBandwidth = Hz(trigger->getChannelBandwidthMhz() * 1e6);
+    txVectorRequest.ppduFormat = physicallayer::HE_TRIGGER_BASED_UPLINK;
+    txVectorRequest.lSigLength = trigger->getUlLength();
+    txVectorRequest.noSignalExtension = trigger->getNoSignalExtension();
+    txVectorRequest.requestedTxTime = trigger->getCommonDuration();
+    txVectorRequest.requestedTxTimeExact = trigger->getCommonDurationExact();
+    txVectorRequest.triggerMethod = physicallayer::Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    txVectorRequest.preFecPaddingFactor = trigger->getPreFecPaddingFactor();
+    txVectorRequest.ldpcExtraSymbolSegment = trigger->getLdpcExtraSymbolSegment();
+    txVectorRequest.peDisambiguity = trigger->getPeDisambiguity();
+    txVectorRequest.numberOfHeLtfSymbols = trigger->getNumberOfHeLtfSymbols();
+    txVectorRequest.guardInterval =
+            static_cast<physicallayer::Ieee80211HeGuardInterval>(trigger->getGuardInterval());
+    txVectorRequest.ltfType =
+            static_cast<physicallayer::Ieee80211HeLtfType>(trigger->getLtfType());
+    txVectorRequest.packetExtensionDurationUs = trigger->getPacketExtensionDurationUs();
+    auto catalog = physicallayer::getHeRuAllocationCatalog(
+            txVectorRequest.centerFrequency, txVectorRequest.channelBandwidth);
+    auto canonicalRu = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
+        return ru.index == selected->ruIndex && ru.toneSize == selected->ruToneSize &&
+                ru.toneOffset == selected->ruToneOffset;
+    });
+    if (canonicalRu == catalog.end())
+        throw cRuntimeError("Selected Trigger RU is not canonical for the HE-TB response channel");
+    physicallayer::Ieee80211HeUserTxVectorRequest txVectorUser;
+    txVectorUser.ru = *canonicalRu;
+    txVectorUser.staId = mac->getMib()->bssStationData.associationId;
+    txVectorUser.mcs = selected->mcs;
+    txVectorUser.numberOfSpatialStreams = selected->numberOfSpatialStreams;
+    txVectorUser.streamStartIndex = selected->streamStartIndex;
+    txVectorUser.coding = static_cast<physicallayer::Ieee80211HeCoding>(selected->coding);
+    txVectorUser.psduLength = B((responsePacket->getDataLength().get<b>() + 7) / 8);
+    txVectorRequest.users.push_back(txVectorUser);
+    if (selected->muMimo) {
+        for (unsigned int i = 0; i < trigger->getUsersArraySize(); ++i) {
+            const auto& peer = trigger->getUsers(i);
+            if (&peer == selected || !peer.muMimo ||
+                    peer.ruToneSize != selected->ruToneSize ||
+                    peer.ruToneOffset != selected->ruToneOffset)
+                continue;
+            auto peerRu = std::find_if(catalog.begin(), catalog.end(), [&] (const auto& ru) {
+                return ru.index == peer.ruIndex && ru.toneSize == peer.ruToneSize &&
+                        ru.toneOffset == peer.ruToneOffset;
+            });
+            if (peerRu == catalog.end())
+                throw cRuntimeError("Peer Trigger RU is not canonical for the HE-TB response channel");
+            physicallayer::Ieee80211HeUserTxVectorRequest peerUser;
+            peerUser.ru = *peerRu;
+            peerUser.staId = peer.aid;
+            peerUser.mcs = peer.mcs;
+            peerUser.numberOfSpatialStreams = peer.numberOfSpatialStreams;
+            peerUser.streamStartIndex = peer.streamStartIndex;
+            peerUser.coding = static_cast<physicallayer::Ieee80211HeCoding>(peer.coding);
+            // The local station does not know another station's PSDU length.
+            // A one-byte model placeholder is sufficient to preserve the
+            // complete shared-RU stream geometry while local TXTIME remains
+            // bounded by the Trigger common duration.
+            peerUser.psduLength = B(0);
+            txVectorRequest.users.push_back(peerUser);
+        }
+    }
+    auto txVector = physicallayer::Ieee80211HeTxVectorFactory::create(txVectorRequest);
+    if (!txVector)
+        throw cRuntimeError("Prepared HE-TB response is invalid: %s (%s)",
+                txVector.getContext().fieldName.c_str(),
+                txVector.getContext().detail.c_str());
+
+    if (!originalPackets.empty()) {
+        for (auto original : originalPackets) {
+            bool found = false;
+            for (int i = 0; i < sourceQueue->getNumPackets(); ++i)
+                found |= sourceQueue->getPacket(i) == original;
+            if (!found)
+                throw cRuntimeError("HE-TB selected packet changed queue membership before commit");
+        }
+        for (size_t i = 0; i < originalPackets.size(); ++i)
+            beforeTriggeredUlPacketCommit(i);
+
+        // Explicit commit boundary. Post-boundary failures are invariant
+        // violations and deliberately fail loudly instead of faking queue
+        // rollback after observer-visible removals.
+        committed = true;
+        qosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+        for (size_t i = 0; i < originalPackets.size(); ++i) {
+            auto original = originalPackets[i];
+            auto prepared = preparedPacketOwners[i].get();
+            sourceQueue->removePacket(original);
+            original->removeAll();
+            original->insertAtBack(prepared->peekAll());
+            original->setFrontOffset(prepared->getFrontOffset());
+            original->setBackOffset(prepared->getBackOffset());
+            original->clearTags();
+            original->copyTags(*prepared);
+            original->getRegionTags() = prepared->getRegionTags();
+            take(original);
+            exchange.packets[i] = original;
+        }
+    }
+    return responsePacket.release();
 }
 
 void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger)
@@ -725,6 +1070,12 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     // IEEE 802.11-2024 9.3.1.22 Table 9-47: Trigger type 2 is MU-BAR.  A
     // MU-BAR Trigger carries BAR control/information in each User Info field
     // and solicits BlockAck responses in HE TB PPDUs.
+    if (trigger->getTransmitterAddress() != mac->getMib()->bssData.bssid) {
+        EV_WARN << "Ignoring Trigger from non-associated AP "
+                << trigger->getTransmitterAddress() << "\n";
+        delete packet;
+        return;
+    }
     if (trigger->getTriggerType() == 2) {
         sendTriggeredBlockAckResponse(packet, trigger);
         return;
@@ -739,18 +1090,53 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         delete packet;
         return;
     }
-    std::optional<double> triggerPathLossDb;
-    if (trigger->getTransmitterAddress() == mac->getMib()->bssData.bssid) {
-        auto signalPower = packet->findTag<SignalPowerInd>();
-        auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
-        if (signalPower != nullptr && modeInd != nullptr && modeInd->getMode() != nullptr) {
-            const auto receivedBandwidth = modeInd->getMode()->getDataMode()->getBandwidth();
-            triggerPathLossDb = computeIeee80211HeTriggerPathLossDb(
-                    trigger->getApTxPowerDbm(), signalPower->getPower(), receivedBandwidth);
-        }
+    const auto phy = getLinkPhyContext().getSnapshot();
+    if (Hz(trigger->getChannelBandwidthMhz() * 1e6) != phy.getChannelBandwidth()) {
+        EV_WARN << "Ignoring HE UL Trigger whose bandwidth differs from the active link\n";
+        delete packet;
+        return;
     }
-    retryPendingTriggeredUlExchanges();
+    auto triggerError = validateIeee80211HeUlTrigger(*trigger,
+            phy.getChannelCenterFrequency());
+    if (triggerError) {
+        EV_WARN << "Ignoring malformed HE UL Trigger: " << *triggerError << "\n";
+        delete packet;
+        return;
+    }
+    if (isTwtSleeping(mac, mac->getMib()->bssData.bssid)) {
+        delete packet;
+        return;
+    }
+    if (!triggeredUlExchanges.empty()) {
+        EV_WARN << "Ignoring HE UL Trigger while an earlier HE-TB exchange awaits Multi-STA BA\n";
+        delete packet;
+        return;
+    }
+    std::optional<double> triggerPathLossDb;
+    auto signalPower = packet->findTag<SignalPowerInd>();
+    auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
+    if (signalPower != nullptr && modeInd != nullptr && modeInd->getMode() != nullptr) {
+        const auto receivedBandwidth = modeInd->getMode()->getDataMode()->getBandwidth();
+        triggerPathLossDb = computeIeee80211HeTriggerPathLossDb(
+                trigger->getApTxPowerDbm(), signalPower->getPower(), receivedBandwidth);
+    }
     auto myAid = mac->getMib()->bssStationData.associationId;
+    auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(
+            mac->getMib()->bssData.bssid);
+    const auto bandwidth = Hz(trigger->getChannelBandwidthMhz() * 1e6);
+    const bool ulMuDisabled = par("operatingModeUlMuDisable").boolValue();
+    auto supportsUser = [&] (const Ieee80211HeTriggerUserInfo& user) {
+        const int nssIndex = user.numberOfSpatialStreams - 1;
+        return negotiated != nullptr && negotiated->localTxPeerRx.valid &&
+                negotiated->localTxPeerRx.ofdma &&
+                negotiated->localTxPeerRx.supportedChannelWidths.count(bandwidth) != 0 &&
+                negotiated->localTxPeerRx.supportedRuToneSizes.count(user.ruToneSize) != 0 &&
+                negotiated->localTxPeerRx.mcsNss.maxMcsPerNss[nssIndex] >= user.mcs &&
+                (user.coding != physicallayer::HE_CODING_LDPC || negotiated->mutual.ldpc) &&
+                (!user.muMimo ||
+                 negotiated->localTxPeerRx.transmitterCanTransmitFullBandwidthUlMuMimo) &&
+                !ulMuDisabled;
+    };
     const Ieee80211HeTriggerUserInfo *selected = nullptr;
     Ieee80211HeTriggerUserInfo nfrpUser;
     uint8_t nfrpToneSetIndex = 0;
@@ -791,7 +1177,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     std::vector<const Ieee80211HeTriggerUserInfo *> randomAccessUsers;
     for (unsigned int i = 0; selected == nullptr && i < trigger->getUsersArraySize(); i++) {
         const auto& user = trigger->getUsers(i);
-        if (user.randomAccess)
+        if (user.randomAccess && supportsUser(user))
             randomAccessUsers.push_back(&user);
         else if (user.aid == myAid)
             selected = &user;
@@ -801,6 +1187,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     queueing::IPacketQueue *sourceQueue = nullptr;
     Packet *sourcePacket = nullptr;
     bool randomAccess = false;
+    bool randomAccessCommitted = false;
+    std::optional<HeUlCoordinator::PreparedRandomAccessSelection> randomAccessSelection;
     int bsrpTid = -1;
     if (selected != nullptr && trigger->getTriggerType() != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER &&
             trigger->getTriggerType() != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
@@ -877,10 +1265,13 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
             }
         }
         if (pendingQueue != nullptr) {
-            int raIndex = ulCoordinator->selectRandomAccessRu(randomAccessUsers.size());
+            randomAccessSelection = ulCoordinator->prepareRandomAccessRu(
+                    pendingAc, randomAccessUsers.size());
+            int raIndex = ulCoordinator->commitRandomAccessRu(*randomAccessSelection);
             if (raIndex >= 0) {
                 selected = randomAccessUsers[raIndex];
                 randomAccess = true;
+                randomAccessCommitted = true;
                 selectedAc = pendingAc;
                 sourceQueue = pendingQueue;
                 if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
@@ -900,8 +1291,11 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         return;
     }
 
-    ASSERT(selected->ruToneSize > 0);
-    ASSERT(trigger->getCommonDuration() > SIMTIME_ZERO);
+    if (!supportsUser(*selected)) {
+        EV_WARN << "Ignoring HE UL Trigger allocation that exceeds negotiated local-TX/peer-RX capabilities\n";
+        delete packet;
+        return;
+    }
 
     uint8_t selectedTid = bsrpTid >= 0 ? bsrpTid : 0;
     if (sourcePacket != nullptr) {
@@ -954,7 +1348,15 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     exchange.ru.index = selected->ruIndex;
     exchange.ru.toneSize = selected->ruToneSize;
     exchange.ru.toneOffset = selected->ruToneOffset;
-    exchange.expectedResponseTime = simTime() + modeSet->getSifsTime();
+    auto maximumBlockAckLength = B(18 + 12 * trigger->getUsersArraySize() + 4);
+    exchange.expectedResponseTime = simTime() + modeSet->getSifsTime() +
+            trigger->getCommonDuration() + modeSet->getSifsTime() +
+            modeSet->getSlowestMandatoryMode()->getDuration(maximumBlockAckLength) +
+            modeSet->getSlotTime();
+    W transmitPower = phy.getMaximumTransmitPower();
+    if (triggerPathLossDb.has_value())
+        transmitPower = computeIeee80211HeTbTransmitPower(phy.getMaximumTransmitPower(),
+                selected->targetRssiDbm, *triggerPathLossDb, selected->useMaximumTransmitPower);
     Packet *responsePacket;
     Ptr<const Ieee80211MacHeader> responseHeader;
     size_t responsePacketCount = 0;
@@ -976,28 +1378,39 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         // NDP carries no MPDU; no triggered exchange state to track.
     }
     else {
-        responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
-                selectedTid, queueBytes, availableSlots, selected, trigger, exchange);
+        bool responseCommitted = false;
+        try {
+            responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
+                    selectedTid, queueBytes, availableSlots, selected, trigger,
+                    transmitPower, exchange, responseCommitted);
+        }
+        catch (const std::exception& error) {
+            if (responseCommitted || randomAccessCommitted)
+                throw;
+            EV_WARN << "HE-TB response preparation aborted before commit: "
+                    << error.what() << "\n";
+            delete packet;
+            return;
+        }
         if (exchange.packets.empty())
             responseHeader = responsePacket->peekAt<Ieee80211DataHeader>(B(4));
         else
             responseHeader = exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
         responsePacketCount = exchange.packets.empty() ? 1 : exchange.packets.size();
-        if (!exchange.packets.empty() || exchange.randomAccess)
-            triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
+        if (!exchange.packets.empty() || exchange.randomAccess) {
+            auto inserted = triggeredUlExchanges.emplace(trigger->getTriggerId(), std::move(exchange));
+            if (!inserted.second)
+                throw cRuntimeError("Duplicate HE-TB Trigger ID reached the post-commit exchange ledger");
+            scheduleTriggeredUlResponseTimeout();
+        }
     }
 
-    const auto phy = getLinkPhyContext().getSnapshot();
-    W transmitPower = phy.getMaximumTransmitPower();
-    if (triggerPathLossDb.has_value())
-        transmitPower = computeIeee80211HeTbTransmitPower(phy.getMaximumTransmitPower(),
-                selected->targetRssiDbm, *triggerPathLossDb, selected->useMaximumTransmitPower);
     // 26.5.2.3.3 and 27.3.11.12: the HE TB TXVECTOR is derived from the
     // selected Trigger User Info and Common Info fields.  These request tags
     // carry that standard information to INET's packet-level PHY.
-    auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
-    populateHeTbRequestFromTrigger(request.get(), *trigger, *selected, myAid);
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
+        auto request = responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuReq>();
+        populateHeTbRequestFromTrigger(request.get(), *trigger, *selected, myAid);
         request->setPsduLength(B(0));
         request->setDcm(false);
         request->setNdpFeedbackReport(true);
@@ -1005,9 +1418,9 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         request->setNdpRuToneSetIndex(nfrpToneSetIndex);
         request->setNdpStartingStsNumber(nfrpStartingStsNumber);
         request->setPsrDisallowed(true);
+        request->setTransmitPower(transmitPower);
         responsePacket->addTagIfAbsent<physicallayer::Ieee80211HeMuTxTag>()->setNdp(true);
     }
-    request->setTransmitPower(transmitPower);
     EV_INFO << "Sending HE-TB response: trigger=" << trigger->getTriggerId()
              << ", AID=" << myAid
              << ", " << (randomAccess ? "random-access" : "scheduled")
@@ -1025,6 +1438,10 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
     // 26.4.2: a non-AP STA originator processes only the Per AID TID Info
     // record matching its AID and TID, then applies the Block Ack starting
     // sequence number and bitmap to the outstanding triggered MPDUs.
+    if (multiStaBlockAck->getTransmitterAddress() != mac->getMib()->bssData.bssid) {
+        delete packet;
+        return;
+    }
     auto myAid = mac->getMib()->bssStationData.associationId;
     bool success = false;
     for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {
@@ -1076,6 +1493,7 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
         success = success || exchangeSuccess;
     }
     triggeredUlExchanges.clear();
+    cancelEvent(triggeredUlResponseTimer);
     delete packet;
     return;
 }

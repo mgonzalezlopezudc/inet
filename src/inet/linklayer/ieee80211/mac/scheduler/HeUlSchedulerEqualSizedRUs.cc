@@ -56,6 +56,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
         allocation.ru = layout[scheduledCount + i];
         allocation.mcs = defaultMcs;
         allocation.targetRssiDbm = targetRssiDbm;
+        allocation.estimatedDuration = context.requestedDuration;
         result.allocations.push_back(allocation);
     }
     result.commonDuration = computeCommonDuration(context, result.allocations);

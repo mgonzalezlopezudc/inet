@@ -208,14 +208,14 @@ class HeUlReceiveCollectionStep : public ReceiveCollectionStep
 } // namespace
 
 HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
-        const IIeee80211HeUlScheduler::Schedule& schedule,
-        IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+        const HeUlMuPlan& plan,
         physicallayer::Ieee80211ModeSet *modeSet,
         const MacAddress& apAddress) :
     coordinator(coordinator),
     callback(callback),
-    schedule(schedule),
-    triggerType(triggerType),
+    plan(plan),
+    schedule(this->plan.getSchedule()),
+    triggerType(this->plan.getTriggerType()),
     modeSet(modeSet),
     apAddress(apAddress),
     // G.5 HE sequences
@@ -250,11 +250,6 @@ HeUlMuTxOpFs::HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
     ASSERT(coordinator != nullptr);
     ASSERT(callback != nullptr);
     ASSERT(modeSet != nullptr);
-    ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER || !schedule.allocations.empty());
-    ASSERT(schedule.commonDuration > SIMTIME_ZERO);
-    ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ||
-            triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
-            triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER);
     triggerId = coordinator->allocateTriggerId();
 }
 
@@ -520,6 +515,8 @@ void HeUlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
     sequence->startSequence(context, firstStep);
     EV_INFO << "Starting HE UL " << (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ? "BSRP" : "Basic")
              << " Trigger " << triggerId << " with " << schedule.allocations.size() << " RU allocations\n";
+    if (triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER)
+        coordinator->commitSchedule(schedule);
     coordinator->noteTriggerSent(triggerType);
 }
 

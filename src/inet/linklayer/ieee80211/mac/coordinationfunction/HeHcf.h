@@ -9,6 +9,7 @@
 
 #include <map>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <ostream>
 
@@ -42,6 +43,10 @@ INET_API double computeIeee80211HeTriggerPathLossDb(int apTxPowerDbm20Mhz,
 /** Applies HE-TB target-receive-power control and the local maximum-power cap. */
 INET_API W computeIeee80211HeTbTransmitPower(W maximumPower, int targetReceivePowerDbm,
         double pathLossDb, bool useMaximumTransmitPower);
+
+/** Release-active structural validation for a decoded HE Basic/BSRP/NFRP Trigger. */
+INET_API std::optional<std::string> validateIeee80211HeUlTrigger(
+        const Ieee80211TriggerFrame& trigger, Hz centerFrequency);
 
 /** Validated result of resolving a scheduler policy into Trigger wire timing. */
 struct INET_API HeUlScheduleFinalizationResult
@@ -77,6 +82,7 @@ class INET_API HeHcf : public Hcf
     std::unique_ptr<StationQueueBankManager> queueBankManager;
     std::unique_ptr<IIeee80211HeLinkPhyContext> linkPhyContext;
     cMessage *ulTriggerTimer = nullptr;
+    cMessage *triggeredUlResponseTimer = nullptr;
     IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     bool ulTriggerAccessRequested = false;
     struct TriggeredUlExchange {
@@ -130,11 +136,14 @@ class INET_API HeHcf : public Hcf
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
     static Packet *buildHeTbAmpdu(const std::vector<Packet *>& mpdus);
     virtual void retryPendingTriggeredUlExchanges();
+    virtual void scheduleTriggeredUlResponseTimeout();
+    virtual void handleTriggeredUlResponseTimeout();
+    virtual void beforeTriggeredUlPacketCommit(int packetIndex) {}
     virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
     virtual Packet *buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
             AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
             const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
-            TriggeredUlExchange& exchange);
+            W transmitPower, TriggeredUlExchange& exchange, bool& committed);
     virtual void processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
     virtual void processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck);
 

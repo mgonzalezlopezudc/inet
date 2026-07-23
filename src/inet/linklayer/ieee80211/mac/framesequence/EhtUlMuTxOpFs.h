@@ -20,8 +20,8 @@ namespace ieee80211 {
 class INET_API EhtUlMuTxOpFs : public HeUlMuTxOpFs
 {
   public:
-    EhtUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback, const IIeee80211HeUlScheduler::Schedule& schedule,
-                  IIeee80211HeUlTriggerPolicy::TriggerType triggerType, physicallayer::Ieee80211ModeSet *modeSet,
+    EhtUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback, const HeUlMuPlan& plan,
+                  physicallayer::Ieee80211ModeSet *modeSet,
                   MacAddress apAddress, bool ehtEnabled = true);
     
     virtual ~EhtUlMuTxOpFs() override;

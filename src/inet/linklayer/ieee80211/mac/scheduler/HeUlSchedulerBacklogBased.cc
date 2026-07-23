@@ -99,6 +99,7 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(const Sche
         else {
             allocation.mcs = defaultMcs;
             allocation.randomAccess = true;
+            allocation.estimatedDuration = context.requestedDuration;
         }
         result.allocations.push_back(allocation);
     }

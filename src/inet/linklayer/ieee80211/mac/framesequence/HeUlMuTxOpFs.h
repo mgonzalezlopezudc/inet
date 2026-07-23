@@ -13,7 +13,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/linklayer/ieee80211/mac/contract/IFrameSequence.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/IIeee80211HeUlTriggerPolicy.h"
-#include "inet/linklayer/ieee80211/mac/scheduler/IIeee80211HeUlScheduler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuPlan.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211ModeSet.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 
@@ -38,8 +38,9 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
   protected:
     HeUlCoordinator *coordinator = nullptr;
     HeHcf *callback = nullptr;
-    IIeee80211HeUlScheduler::Schedule schedule;
-    IIeee80211HeUlTriggerPolicy::TriggerType triggerType;
+    const HeUlMuPlan plan;
+    const IIeee80211HeUlScheduler::Schedule& schedule;
+    const IIeee80211HeUlTriggerPolicy::TriggerType triggerType;
     physicallayer::Ieee80211ModeSet *modeSet = nullptr;
     MacAddress apAddress;
     uint32_t triggerId = 0;
@@ -55,8 +56,7 @@ class INET_API HeUlMuTxOpFs : public IFrameSequence
 
   public:
     HeUlMuTxOpFs(HeUlCoordinator *coordinator, HeHcf *callback,
-            const IIeee80211HeUlScheduler::Schedule& schedule,
-            IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+            const HeUlMuPlan& plan,
             physicallayer::Ieee80211ModeSet *modeSet,
             const MacAddress& apAddress);
 

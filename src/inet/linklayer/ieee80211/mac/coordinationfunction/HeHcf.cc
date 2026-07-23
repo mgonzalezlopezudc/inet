@@ -168,6 +168,7 @@ Define_Module(HeHcf);
 HeHcf::~HeHcf()
 {
     cancelAndDelete(ulTriggerTimer);
+    cancelAndDelete(triggeredUlResponseTimer);
     for (auto& entry : triggeredUlExchanges) {
         for (auto pkt : entry.second.packets) {
             delete pkt;
@@ -182,6 +183,7 @@ void HeHcf::initialize(int stage)
         dlScheduler = check_and_cast<IIeee80211HeDlScheduler *>(getSubmodule("dlScheduler"));
         ulCoordinator = check_and_cast<HeUlCoordinator *>(getSubmodule("ulCoordinator"));
         ulTriggerTimer = new cMessage("heUlTriggerTimer");
+        triggeredUlResponseTimer = new cMessage("heTriggeredUlResponseTimer");
         linkPhyContext = std::make_unique<Ieee80211HeLinkPhyContext>(this, mac);
         delete frameSequenceHandler;
         frameSequenceHandler = new HeFrameSequenceHandler();
@@ -293,6 +295,10 @@ void HeHcf::finish()
 
 void HeHcf::handleMessage(cMessage *msg)
 {
+    if (msg == triggeredUlResponseTimer) {
+        handleTriggeredUlResponseTimeout();
+        return;
+    }
     if (msg != ulTriggerTimer) {
         Hcf::handleMessage(msg);
         return;

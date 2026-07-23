@@ -71,6 +71,8 @@ using namespace inet;
 using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 class InspectableRadio : public Ieee80211Radio
 {
   public:
@@ -260,6 +262,81 @@ auto rus = calculateHeRus(channel->getCenterFrequency(), Hz(20e6), 4);
     ASSERT(analog->getBandwidth() == rus[2].bandwidth);
 
     delete transmission;
+    delete packet;
+}
+
+// Full-bandwidth UL MU-MIMO keeps companion stream geometry through radio
+// canonicalization without adding phantom PSDU bytes.
+{
+    auto fullRu = getHeEqualRuLayout(channel->getCenterFrequency(), MHz(20), 1).front();
+    Ieee80211HeUserPhyParameters localUser;
+    localUser.ru = fullRu;
+    localUser.mcs = 0;
+    localUser.numberOfSpatialStreams = 1;
+    localUser.streamStartIndex = 0;
+    localUser.coding = HE_CODING_BCC;
+    localUser.psduLength = B(100);
+    localUser.staId = 7;
+    auto peerUser = localUser;
+    peerUser.streamStartIndex = 1;
+    peerUser.psduLength = B(0);
+    peerUser.staId = 8;
+    Ieee80211HeTriggerResponseFinalizationRequest finalizationRequest;
+    finalizationRequest.users = {localUser, peerUser};
+    finalizationRequest.centerFrequency = channel->getCenterFrequency();
+    finalizationRequest.channelBandwidth = MHz(20);
+    finalizationRequest.guardInterval = HE_GI_1_6_US;
+    finalizationRequest.ltfType = HE_LTF_1X;
+    finalizationRequest.durationBudget = SimTime(1, SIMTIME_MS);
+    auto finalization = finalizeHeTriggerResponse(finalizationRequest);
+    REQUIRE(finalization);
+
+    auto packet = new Packet("ul-he-tb-full-band-mu-mimo");
+    packet->insertAtBack(makeShared<ByteCountChunk>(B(100)));
+    auto request = packet->addTag<Ieee80211HeMuReq>();
+    request->setPpduFormat(HE_TRIGGER_BASED_UPLINK);
+    request->setTriggerId(43);
+    request->setLSigLength(finalization.ulLength);
+    request->setRuIndex(fullRu.index);
+    request->setRuToneSize(fullRu.toneSize);
+    request->setRuToneOffset(fullRu.toneOffset);
+    request->setStaId(7);
+    request->setMcs(0);
+    request->setNumberOfSpatialStreams(1);
+    request->setStreamStartIndex(0);
+    request->setTotalNsts(2);
+    request->setMuMimo(true);
+    request->setGuardInterval(HE_GI_1_6_US);
+    request->setLtfType(HE_LTF_1X);
+    request->setCoding(HE_CODING_BCC);
+    request->setTriggerMethod(static_cast<uint8_t>(Ieee80211HeTriggerMethod::TRIGGER_FRAME));
+    request->setPreFecPaddingFactor(finalization.parameters.common.preFecPaddingFactor);
+    request->setLdpcExtraSymbolSegment(finalization.parameters.common.ldpcExtraSymbol);
+    request->setPeDisambiguity(finalization.peDisambiguity);
+    request->setNumberOfHeLtfSymbols(finalization.parameters.common.numberOfHeLtfSymbols);
+    request->setCommonDuration(finalization.commonDuration);
+    request->setCommonDurationExact(finalization.commonDurationExact);
+    request->setCompanionUsersArraySize(1);
+    Ieee80211HeMuTxAllocationInfo companion;
+    companion.ruIndex = fullRu.index;
+    companion.ruToneSize = fullRu.toneSize;
+    companion.ruToneOffset = fullRu.toneOffset;
+    companion.staId = 8;
+    companion.mcs = 0;
+    companion.numberOfSpatialStreams = 1;
+    companion.streamStartIndex = 1;
+    companion.muMimo = true;
+    companion.psduLength = B(0);
+    request->setCompanionUsers(0, companion);
+
+    radio->testEncapsulate(packet);
+    auto handoff = packet->getTag<Ieee80211HeTxVectorReq>();
+    REQUIRE(handoff->getPpduLayout()->getUsers().size() == 2);
+    REQUIRE(handoff->getPpduLayout()->getPsduBitRanges().back().getEndBitOffset() == b(800));
+    REQUIRE(handoff->getPpduLayout()->getLtfType() == HE_LTF_1X);
+    REQUIRE(handoff->getPpduLayout()->getGuardInterval() == HE_GI_1_6_US);
+    auto phyHeader = packet->peekAtFront<Ieee80211HeTbPhyHeader>();
+    REQUIRE(phyHeader->getTotalNsts() == 2);
     delete packet;
 }
 

@@ -179,12 +179,13 @@ AccessCategory HeUlCoordinator::getPreferredAccessCategory() const
     return AC_BE;
 }
 
-IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee80211Mib *mib,
+IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee80211Mib *mib,
         const IIeee80211HeLinkPhyContext& linkPhyContext, simtime_t maximumLinkEstimateAge,
         Hz centerFrequency, Hz bandwidth, simtime_t txopLimit, simtime_t requestedDuration,
         double sensitivityDbm, double targetRssiMarginDb,
         int estimatedRaContenders, double collisionRate, double idleRate,
-        const std::function<bool(const MacAddress&)>& isUlMuDisabled)
+        const std::function<bool(const MacAddress&)>& isUlMuDisabled,
+        IIeee80211HeUlScheduler::ScheduleContext *preparedContext)
 {
     ASSERT(mib != nullptr);
     ASSERT(scheduler != nullptr);
@@ -204,13 +205,14 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
     context.estimatedRandomAccessContenders = estimatedRaContenders;
     context.recentRandomAccessCollisionRate = collisionRate;
     context.recentRandomAccessIdleRate = idleRate;
+    std::vector<uint16_t> staleReportAids;
     for (const auto& station : mib->bssAccessPointData.stations) {
         if (station.second != Ieee80211Mib::ASSOCIATED)
             continue;
         auto aid = mib->getAssociationId(station.first);
         auto status = bufferStatusByAid.find(aid);
         if (status == bufferStatusByAid.end() || simTime() - status->second.updateTime > reportMaxAge) {
-            emit(staleReportSignal, (long)aid);
+            staleReportAids.push_back(aid);
             continue;
         }
         IIeee80211HeUlScheduler::CandidateInfo candidate;
@@ -239,21 +241,10 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
                 [] (const auto& left, const auto& right) { return left.lastService < right.lastService; });
         anchor->anchor = true;
     }
+    if (preparedContext != nullptr)
+        *preparedContext = context;
     auto schedule = scheduler->schedule(context);
-    std::set<int> ruIndices;
-    std::set<uint16_t> scheduledAids;
-    for (const auto& allocation : schedule.allocations) {
-        ASSERT(allocation.ru.toneSize > 0);
-        ASSERT(ruIndices.insert(allocation.ru.index).second);
-        if (allocation.randomAccess)
-            ASSERT(allocation.associationId == 0);
-        else {
-            ASSERT(allocation.associationId != 0);
-            ASSERT(scheduledAids.insert(allocation.associationId).second);
-        }
-    }
-    if (!schedule.allocations.empty())
-        ASSERT(schedule.commonDuration > SIMTIME_ZERO);
+    schedule.staleReportAids = std::move(staleReportAids);
     schedule.packetExtensionDurationUs = mib->heOperation.defaultPeDurationUs;
     bool ldpcSupportedByAll = mib->localHeCapabilities.ldpc;
     for (const auto& allocation : schedule.allocations) {
@@ -272,27 +263,38 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::createSchedule(const Ieee8021
         for (auto& allocation : schedule.allocations)
             allocation.mcs = std::min(allocation.mcs, 9);
     }
+    EV_DEBUG << "Prepared HE UL schedule without committing coordinator state: candidates="
+             << context.candidates.size() << ", allocations=" << schedule.allocations.size()
+             << ", commonDuration=" << schedule.commonDuration << "\n";
+    return schedule;
+}
+
+void HeUlCoordinator::commitSchedule(const IIeee80211HeUlScheduler::Schedule& schedule)
+{
+    for (auto aid : schedule.staleReportAids)
+        emit(staleReportSignal, (long)aid);
     long scheduledUsers = 0;
     long randomAccessRus = 0;
     for (const auto& allocation : schedule.allocations)
         if (allocation.randomAccess)
             randomAccessRus++;
-        else
+        else {
             scheduledUsers++;
+            auto status = bufferStatusByAid.find(allocation.associationId);
+            if (status == bufferStatusByAid.end())
+                throw cRuntimeError("Cannot commit HE UL allocation for unknown AID %u",
+                        allocation.associationId);
+            status->second.lastService = simTime();
+            status->second.scheduledBytes[allocation.accessCategory] =
+                    status->second.backlogBytes[allocation.accessCategory];
+            emit(bufferStatusScheduledBytesSignal,
+                    (long)status->second.scheduledBytes[allocation.accessCategory]);
+        }
     emit(scheduledUsersSignal, scheduledUsers);
     emit(randomAccessRusSignal, randomAccessRus);
-    for (const auto& allocation : schedule.allocations)
-        if (!allocation.randomAccess) {
-            auto& status = bufferStatusByAid[allocation.associationId];
-            status.lastService = simTime();
-            status.scheduledBytes[allocation.accessCategory] = status.backlogBytes[allocation.accessCategory];
-            emit(bufferStatusScheduledBytesSignal, (long)status.scheduledBytes[allocation.accessCategory]);
-        }
-    EV_INFO << "HE UL schedule: candidates=" << context.candidates.size()
-             << ", scheduledUsers=" << scheduledUsers
-             << ", randomAccessRUs=" << randomAccessRus
-             << ", commonDuration=" << schedule.commonDuration << "\n";
-    return schedule;
+    EV_INFO << "Committed HE UL schedule: scheduledUsers=" << scheduledUsers
+            << ", randomAccessRUs=" << randomAccessRus
+            << ", commonDuration=" << schedule.commonDuration << "\n";
 }
 
 uint32_t HeUlCoordinator::allocateTriggerId()
@@ -313,34 +315,63 @@ void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType t
         emit(basicTriggerSentSignal, 1L);
 }
 
-int HeUlCoordinator::selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount)
+HeUlCoordinator::PreparedRandomAccessSelection HeUlCoordinator::prepareRandomAccessRu(
+        AccessCategory ac, int randomAccessRuCount)
 {
     // IEEE 802.11-2024 Clause 26.5.4 ("Uplink OFDMA random access").
     // HE STAs contend for Random Access RUs (AID=0) using the UORA procedure.
     // The OFDMA Backoff (OBO) counter is decremented by the number of RA-RUs (randomAccessRuCount)
     // present in the Trigger frame.
+    PreparedRandomAccessSelection selection;
+    selection.accessCategory = ac;
+    selection.randomAccessRuCount = randomAccessRuCount;
     if (randomAccessRuCount <= 0)
-        return -1;
+        return selection;
     int acIndex = getAccessCategoryIndex(ac);
-    int& ofdmaContentionWindow = ofdmaContentionWindows[acIndex];
-    int& ofdmaBackoff = ofdmaBackoffs[acIndex];
+    int ofdmaContentionWindow = ofdmaContentionWindows[acIndex];
+    int ofdmaBackoff = ofdmaBackoffs[acIndex];
     ASSERT(ofdmaContentionWindow >= ocwMin && ofdmaContentionWindow <= ocwMax);
     ASSERT(ofdmaBackoff >= 0 && ofdmaBackoff <= ofdmaContentionWindow);
-    if (ofdmaBackoff >= randomAccessRuCount) {
-        ofdmaBackoff -= randomAccessRuCount;
-        EV_INFO << "HE UORA deferred: ac=" << (int)ac
-                 << ", backoff=" << ofdmaBackoff
-                 << ", advertisedRUs=" << randomAccessRuCount << "\n";
-        return -1;
+    selection.originalBackoff = ofdmaBackoff;
+    if (ofdmaBackoff > randomAccessRuCount) {
+        selection.resultingBackoff = ofdmaBackoff - randomAccessRuCount;
+        return selection;
     }
-    // When OBO reaches 0, the STA attempts random access and selects one of the RA-RUs uniformly at random.
-    ofdmaBackoff = 0;
-    emit(randomAccessAttemptSignal, 1L);
-    auto selectedRu = intuniform(0, randomAccessRuCount - 1);
-    EV_INFO << "HE UORA attempt: ac=" << (int)ac
-             << ", selected RU " << selectedRu
-             << " from " << randomAccessRuCount << " advertised RUs\n";
-    return selectedRu;
+    // The random draw is part of commit. Preparation establishes only the
+    // normative OBO transition and whether this Trigger permits an attempt.
+    selection.resultingBackoff = 0;
+    selection.attempt = true;
+    return selection;
+}
+
+int HeUlCoordinator::commitRandomAccessRu(
+        const PreparedRandomAccessSelection& selection)
+{
+    if (selection.randomAccessRuCount <= 0)
+        return -1;
+    int acIndex = getAccessCategoryIndex(selection.accessCategory);
+    if (ofdmaBackoffs[acIndex] != selection.originalBackoff)
+        throw cRuntimeError("HE UORA backoff changed between preparation and commit");
+    ofdmaBackoffs[acIndex] = selection.resultingBackoff;
+    if (selection.attempt) {
+        int selectedRu = intuniform(0, selection.randomAccessRuCount - 1);
+        emit(randomAccessAttemptSignal, 1L);
+        EV_INFO << "HE UORA attempt: ac=" << (int)selection.accessCategory
+                << ", selected RU " << selectedRu
+                << " from " << selection.randomAccessRuCount << " advertised RUs\n";
+        return selectedRu;
+    }
+    else
+        EV_INFO << "HE UORA deferred: ac=" << (int)selection.accessCategory
+                << ", backoff=" << selection.resultingBackoff
+                << ", advertisedRUs=" << selection.randomAccessRuCount << "\n";
+    return -1;
+}
+
+int HeUlCoordinator::selectRandomAccessRu(AccessCategory ac, int randomAccessRuCount)
+{
+    auto selection = prepareRandomAccessRu(ac, randomAccessRuCount);
+    return commitRandomAccessRu(selection);
 }
 
 void HeUlCoordinator::reportRandomAccessResult(AccessCategory ac, bool success)

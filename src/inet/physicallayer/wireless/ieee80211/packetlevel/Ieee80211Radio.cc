@@ -130,6 +130,31 @@ static std::vector<Ieee80211HeMuUserInfo> collectHeMuUsers(const Packet *packet)
                 static_cast<Ieee80211HeGuardInterval>(request->getGuardInterval()),
                 static_cast<Ieee80211HeCoding>(request->getCoding())).duration;
         users.push_back(user);
+        for (unsigned int i = 0; i < request->getCompanionUsersArraySize(); ++i) {
+            const auto& companion = request->getCompanionUsers(i);
+            Ieee80211HeMuUserInfo peer;
+            peer.ruIndex = companion.ruIndex;
+            peer.ruToneSize = companion.ruToneSize;
+            peer.ruToneOffset = companion.ruToneOffset;
+            peer.staId = companion.staId;
+            peer.mcs = companion.mcs;
+            peer.numberOfSpatialStreams = companion.numberOfSpatialStreams;
+            peer.streamStartIndex = companion.streamStartIndex;
+            peer.dcm = companion.dcm;
+            peer.psduLength = companion.psduLength;
+            Ieee80211HeRu peerRu;
+            peerRu.index = peer.ruIndex;
+            peerRu.toneSize = std::max<int>(peer.ruToneSize, 26);
+            peerRu.toneOffset = peer.ruToneOffset;
+            peerRu.dataSubcarriers = getHeRuDataSubcarrierCount(peerRu.toneSize);
+            peerRu.pilotSubcarriers = getHeRuPilotSubcarrierCount(peerRu.toneSize);
+            peerRu.bandwidth = Hz(peerRu.toneSize * 78125.0);
+            peer.duration = computeHeUserPhyParameters(peer.psduLength, peerRu, peer.mcs,
+                    peer.numberOfSpatialStreams, peer.dcm,
+                    static_cast<Ieee80211HeGuardInterval>(request->getGuardInterval()),
+                    static_cast<Ieee80211HeCoding>(request->getCoding())).duration;
+            users.push_back(peer);
+        }
         return users;
     }
     if (auto txTag = packet->findTag<Ieee80211HeMuTxTag>()) {

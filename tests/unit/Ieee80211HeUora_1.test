@@ -38,6 +38,8 @@ network = TestNetwork
 using namespace inet;
 using namespace inet::ieee80211;
 
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
 class TestHeUlCoordinator : public HeUlCoordinator
 {
   public:
@@ -83,7 +85,27 @@ int initialObo = coord->getObo();
 ASSERT(initialObo >= 0 && initialObo <= coord->getOcwMin());
 ASSERT(coord->getOcw() == coord->getOcwMin());
 
-// 2. Verify decrement of OBO while keeping the injected value within OCW.
+// 2. Preparation must not mutate the OBO; commit applies the prepared result.
+coord->setObo(7);
+auto prepared = coord->prepareRandomAccessRu(AC_BE, 3);
+REQUIRE(prepared.selectedRu == -1);
+REQUIRE(prepared.originalBackoff == 7);
+REQUIRE(prepared.resultingBackoff == 4);
+REQUIRE(coord->getObo() == 7);
+coord->commitRandomAccessRu(prepared);
+REQUIRE(coord->getObo() == 4);
+
+// 3. Equality permits an attempt, and the random draw occurs only at commit.
+coord->setObo(3);
+prepared = coord->prepareRandomAccessRu(AC_BE, 3);
+REQUIRE(prepared.attempt);
+REQUIRE(prepared.selectedRu == -1);
+REQUIRE(coord->getObo() == 3);
+auto committedRu = coord->commitRandomAccessRu(prepared);
+REQUIRE(committedRu >= 0 && committedRu < 3);
+REQUIRE(coord->getObo() == 0);
+
+// 4. Verify decrement of OBO while keeping the injected value within OCW.
 coord->setObo(7);
 int ruIndex = coord->selectRandomAccessRu(3); // OBO (7) >= 3 RA-RUs -> defer, OBO -> 4
 ASSERT(ruIndex == -1);
@@ -93,12 +115,12 @@ ruIndex = coord->selectRandomAccessRu(3); // OBO (4) >= 3 RA-RUs -> defer, OBO -
 ASSERT(ruIndex == -1);
 ASSERT(coord->getObo() == 1);
 
-// 3. Verify random RA-RU selection and transmission when OBO reaches 0
+// 5. Verify random RA-RU selection and transmission when OBO reaches 0
 ruIndex = coord->selectRandomAccessRu(3); // OBO (1) < 3 RA-RUs -> transmit, OBO -> 0
 ASSERT(ruIndex >= 0 && ruIndex < 3);
 ASSERT(coord->getObo() == 0);
 
-// 4. Verify UORA failure doubles OCW and chooses a new OBO
+// 6. Verify UORA failure doubles OCW and chooses a new OBO
 coord->reportRandomAccessResult(false);
 ASSERT(coord->getOcw() == 15); // doubled: min(31, 2 * 7 + 1) = 15
 int oboAfterFail1 = coord->getObo();
@@ -113,13 +135,13 @@ ASSERT(oboAfterFail2 >= 0 && oboAfterFail2 <= 31);
 coord->reportRandomAccessResult(false);
 ASSERT(coord->getOcw() == 31); // capped at ocwMax = 31
 
-// 5. Verify UORA success resets OCW to ocwMin (7)
+// 7. Verify UORA success resets OCW to ocwMin (7)
 coord->reportRandomAccessResult(true);
 ASSERT(coord->getOcw() == 7);
 int oboAfterSuccess = coord->getObo();
 ASSERT(oboAfterSuccess >= 0 && oboAfterSuccess <= 7);
 
-// 6. Verify AC-specific overloads keep independent OCW/OBO state.
+// 8. Verify AC-specific overloads keep independent OCW/OBO state.
 coord->setOcw(7, AC_VO);
 coord->setObo(7, AC_VO);
 coord->setOcw(7, AC_BE);
