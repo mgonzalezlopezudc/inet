@@ -1,0 +1,311 @@
+#!/usr/bin/env python3
+"""Render scalar/vector metric tables and figures into walkthrough sections."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import math
+import os
+import re
+from pathlib import Path
+from typing import Any
+
+from analysis_core import (
+    DEFAULT_MANIFEST,
+    REPOSITORY_ROOT,
+    atomic_write_text,
+    load_manifest,
+)
+
+
+DEFAULT_METRICS = Path(__file__).resolve().parent / "metrics.json"
+
+
+def escape_cell(value: object) -> str:
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def format_number(value: object) -> str:
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            return "N/A"
+        return f"{value:.6g}"
+    return escape_cell(value)
+
+
+def metric_label(name: str) -> str:
+    return name.replace("_", " ")
+
+
+def metric_rows(group_metrics: dict[str, Any]) -> list[list[str]]:
+    rows: list[list[str]] = []
+    for condition, metrics in group_metrics.items():
+        if not isinstance(metrics, dict):
+            rows.append([
+                condition, "direct value", "—", format_number(metrics), "—",
+            ])
+            continue
+        for metric, summary in metrics.items():
+            if isinstance(summary, dict) and {"count", "mean"} <= summary.keys():
+                rows.append([
+                    condition,
+                    metric_label(metric),
+                    format_number(summary["count"]),
+                    format_number(summary["mean"]),
+                    format_number(summary.get("ci95", "N/A")),
+                ])
+            else:
+                rows.append([
+                    condition,
+                    metric_label(metric),
+                    "—",
+                    format_number(summary),
+                    "—",
+                ])
+    return rows
+
+
+def relative_link(target: Path, walkthrough: Path) -> str:
+    return Path(os.path.relpath(target, walkthrough.parent)).as_posix()
+
+
+def source_filter_summary(sidecar: dict[str, Any]) -> str:
+    filters = sidecar.get("result_filters", [])
+    parts = []
+    for item in filters:
+        fields = [
+            item.get("type"),
+            item.get("module"),
+            item.get("name"),
+            f"unit={item['unit']}" if item.get("unit") else None,
+        ]
+        parts.append(" / ".join(str(value) for value in fields if value))
+    return "<br>".join(parts) or "See figure provenance sidecar"
+
+
+def window_aggregation_summary(sidecar: dict[str, Any]) -> str:
+    windows = {
+        (
+            condition.get("measurement", {}).get("start_s"),
+            condition.get("measurement", {}).get("end_s"),
+        )
+        for condition in sidecar.get("conditions", [])
+    }
+    window_text = ", ".join(
+        f"[{start}, {end}) s" for start, end in sorted(windows)
+    )
+    aggregation = sidecar.get("aggregation", {})
+    aggregation_text = "; ".join(
+        f"{key}={value}" for key, value in aggregation.items()
+    )
+    return "; ".join(
+        value for value in (window_text, aggregation_text) if value
+    ) or "See figure provenance sidecar"
+
+
+def validate_bundle_provenance(
+    group_name: str,
+    metrics_document: dict[str, Any],
+    sidecar_document: dict[str, Any],
+) -> str:
+    provenance = metrics_document.get("_provenance", {})
+    group_provenance = provenance.get("groups", {}).get(group_name, {})
+    if group_provenance.get("status") != "PASS":
+        raise RuntimeError(
+            f"{group_name}: metrics have no PASS session provenance; "
+            "rerun summarize_results.py"
+        )
+    session_id = group_provenance.get("session_id")
+    if not session_id:
+        raise RuntimeError(f"{group_name}: metrics provenance has no session_id")
+
+    conditions = sidecar_document.get("conditions")
+    if not isinstance(conditions, list) or not conditions:
+        raise RuntimeError(f"{group_name}: figure sidecar has no conditions")
+    metric_conditions = group_provenance.get("conditions")
+    if not isinstance(metric_conditions, list) or not metric_conditions:
+        raise RuntimeError(
+            f"{group_name}: metrics provenance has no condition/input hashes"
+        )
+    if metric_conditions != conditions:
+        raise RuntimeError(
+            f"{group_name}: metric and figure condition provenance differs "
+            "(configurations, windows, inputs, or hashes)"
+        )
+    for condition in conditions:
+        if condition.get("group") != group_name:
+            raise RuntimeError(
+                f"{group_name}: figure sidecar contains group "
+                f"{condition.get('group')!r}"
+            )
+        files = condition.get("result_files")
+        if not isinstance(files, list) or not files:
+            raise RuntimeError(
+                f"{group_name}: figure sidecar condition has no result files"
+            )
+        for result_file in files:
+            path = f"/{result_file.get('path', '').strip('/')}/"
+            if f"/{session_id}/" not in path:
+                raise RuntimeError(
+                    f"{group_name}: figure and metrics sessions differ; "
+                    f"{result_file.get('path')} is not from {session_id}"
+                )
+    return session_id
+
+
+def render_group(
+    group_name: str,
+    group: dict[str, Any],
+    metrics: dict[str, Any],
+    metrics_path: Path = DEFAULT_METRICS,
+    sidecar_document: dict[str, Any] | None = None,
+) -> str:
+    walkthrough = REPOSITORY_ROOT / group["walkthrough"]
+    figure = REPOSITORY_ROOT / group["output"]
+    sidecar = figure.with_suffix(figure.suffix + ".json")
+    figure_link = relative_link(figure, walkthrough)
+    sidecar_link = relative_link(sidecar, walkthrough)
+    if not figure.is_file():
+        raise RuntimeError(f"{group_name}: figure does not exist: {figure}")
+    if not sidecar.is_file():
+        raise RuntimeError(
+            f"{group_name}: figure provenance does not exist: {sidecar}"
+        )
+    if sidecar_document is None:
+        sidecar_document = json.loads(sidecar.read_text(encoding="utf-8"))
+    metrics_link = relative_link(metrics_path.resolve(), walkthrough)
+    source_summary = source_filter_summary(sidecar_document)
+    aggregation_summary = window_aggregation_summary(sidecar_document)
+
+    lines = [
+        "### Generated scalar/vector plot and table\n\n",
+        f"![{group_name} scalar/vector analysis]({figure_link})\n\n",
+        f"Figure provenance: [`{sidecar_link}`]({sidecar_link}). "
+        f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
+        "| Configuration or comparison | Metric | Source result filters / "
+        "modules / units | Window / per-run aggregation / exclusions | "
+        "Independent runs (n) | Mean or direct value | 95% CI half-width |\n",
+        "|---|---|---|---|---:|---:|---:|\n",
+    ]
+    for row in metric_rows(metrics):
+        expanded = [row[0], row[1], source_summary, aggregation_summary, *row[2:]]
+        lines.append(
+            "| " + " | ".join(escape_cell(cell) for cell in expanded) + " |\n"
+        )
+    lines.append(
+        "\nThe table is a presentation view of the session-bound run-level "
+        "summary. The source and aggregation columns reproduce the bundle-level "
+        "figure provenance; the authored analysis identifies which source "
+        "supports each metric and supplies the interpretation.\n"
+    )
+    return "".join(lines)
+
+
+def replace_generated_section(
+    content: str,
+    marker: str,
+    generated_markdown: str,
+    heading: str = "Scalar and vector analysis",
+) -> str:
+    begin_marker = f"<!-- BEGIN GENERATED: {marker} -->"
+    end_marker = f"<!-- END GENERATED: {marker} -->"
+    generated = (
+        f"{begin_marker}\n{generated_markdown.rstrip()}\n{end_marker}\n"
+    )
+    if begin_marker in content or end_marker in content:
+        if content.count(begin_marker) != 1 or content.count(end_marker) != 1:
+            raise ValueError(f"Malformed generated-section markers for {marker}")
+        begin = content.index(begin_marker)
+        end = content.index(end_marker, begin) + len(end_marker)
+        return content[:begin] + generated.rstrip() + content[end:]
+
+    headings = list(re.finditer(r"^##\s+(.+?)\s*$", content, re.MULTILINE))
+    heading_index = next(
+        (
+            index for index, match in enumerate(headings)
+            if re.sub(r"\s+", " ", re.sub(r"[`*_]", "", match.group(1)))
+            .strip()
+            .lower() == heading.lower()
+        ),
+        None,
+    )
+    if heading_index is None:
+        raise ValueError(f"Missing walkthrough section: {heading}")
+    heading_match = headings[heading_index]
+    section_end = (
+        headings[heading_index + 1].start()
+        if heading_index + 1 < len(headings)
+        else len(content)
+    )
+    prefix = content[:section_end].rstrip()
+    suffix = content[section_end:].lstrip("\n")
+    return f"{prefix}\n\n{generated}\n{suffix}".rstrip() + "\n"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("group", help="manifest group name, or 'all'")
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--metrics", type=Path, default=DEFAULT_METRICS)
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help="update marker-bounded blocks in the configured walkthroughs",
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    manifest = load_manifest(args.manifest)
+    metrics = json.loads(args.metrics.read_text(encoding="utf-8"))
+    groups = sorted(manifest["groups"]) if args.group == "all" else [args.group]
+    unknown = [name for name in groups if name not in manifest["groups"]]
+    if unknown:
+        raise SystemExit(f"unknown group: {unknown[0]}")
+
+    for group_name in groups:
+        group = manifest["groups"][group_name]
+        if "walkthrough" not in group:
+            raise RuntimeError(f"{group_name}: manifest has no walkthrough path")
+        if group_name not in metrics:
+            raise RuntimeError(f"{group_name}: metrics are NOT RUN or missing")
+        sidecar = (
+            REPOSITORY_ROOT / group["output"]
+        ).with_suffix(Path(group["output"]).suffix + ".json")
+        if not sidecar.is_file():
+            raise RuntimeError(
+                f"{group_name}: figure provenance does not exist: {sidecar}"
+            )
+        sidecar_document = json.loads(sidecar.read_text(encoding="utf-8"))
+        validate_bundle_provenance(group_name, metrics, sidecar_document)
+        markdown = render_group(
+            group_name,
+            group,
+            metrics[group_name],
+            args.metrics,
+            sidecar_document,
+        )
+        marker = f"ieee80211-scalar-vector-{group_name}"
+        walkthrough = REPOSITORY_ROOT / group["walkthrough"]
+        if args.update:
+            content = walkthrough.read_text(encoding="utf-8")
+            atomic_write_text(
+                walkthrough,
+                replace_generated_section(content, marker, markdown),
+            )
+            print(f"UPDATED {walkthrough.relative_to(REPOSITORY_ROOT)}")
+        else:
+            print(f"{walkthrough.relative_to(REPOSITORY_ROOT)}\n")
+            print(f"<!-- BEGIN GENERATED: {marker} -->")
+            print(markdown.rstrip())
+            print(f"<!-- END GENERATED: {marker} -->")
+
+
+if __name__ == "__main__":
+    main()

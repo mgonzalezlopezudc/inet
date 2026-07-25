@@ -13,6 +13,7 @@ from analyze_pcap_types import (
     capture_map_from_manifest,
     capture_source_state,
     calculate_phy_rate,
+    compact_statistics_markdown,
     decode_eht_fields,
     decode_he_fields,
     decode_legacy_fields,
@@ -151,6 +152,32 @@ class GeneratedSectionTest(unittest.TestCase):
             updated,
             f"Manual prefix\n\n{GENERATED_BEGIN}\nnew\n{GENERATED_END}\n\nManual tail\n",
         )
+
+    def test_generated_bundle_is_inserted_inside_pcap_section(self):
+        original = (
+            "# Walkthrough\n\n## **PCAP statistics**\n\nAuthored summary.\n\n"
+            "## Frame exchange analysis\n\nTimeline.\n"
+        )
+        updated = replace_generated_section(original, "generated")
+        self.assertLess(
+            updated.index("generated"),
+            updated.index("## Frame exchange analysis"),
+        )
+        self.assertIn("Authored summary.", updated)
+
+    def test_tail_level_bundle_is_migrated_inside_pcap_section(self):
+        original = (
+            "# Walkthrough\n\n## PCAP statistics\n\nAuthored summary.\n\n"
+            "## Frame exchange analysis\n\nTimeline.\n\n"
+            f"{GENERATED_BEGIN}\nold\n{GENERATED_END}\n"
+        )
+        updated = replace_generated_section(original, "new")
+        self.assertLess(
+            updated.index(GENERATED_BEGIN),
+            updated.index("## Frame exchange analysis"),
+        )
+        self.assertNotIn("\nold\n", updated)
+        self.assertIn("\nnew\n", updated)
 
     def test_migrates_legacy_generated_tail(self):
         original = "Manual prefix\n\n## 802.11 Packet Type Statistics\nlegacy\n"
@@ -302,6 +329,40 @@ class CaptureValidationTest(unittest.TestCase):
                 "requirement": "observable",
                 "evidence": "none",
             }], "sample")
+
+    def test_compact_statistics_table_states_counting_limits(self):
+        key = (
+            "2", "8", "HE-SU", "HE-MCS 2", "20 MHz", "0.8 us",
+            "1", "LDPC", False, False,
+        )
+        markdown = compact_statistics_markdown({
+            "Treatment": {
+                "global": {
+                    "total": 4,
+                    "used_ap_only": True,
+                    "captures": [
+                        "examples/ieee80211ax/sample/results/ap.wlan0.pcapng"
+                    ],
+                    "display_filter": "wlan.fc.type == 2",
+                    "stats": {
+                        key: {
+                            "count": 4,
+                            "airtime_evidence_status": "AVAILABLE",
+                            "airtime_pct": 100.0,
+                            "airtime_sim_pct": 12.5,
+                        }
+                    },
+                }
+            }
+        })
+        self.assertIn(
+            "AP interface(s); capture observations<br>"
+            "`examples/ieee80211ax/sample/results/ap.wlan0.pcapng`",
+            markdown,
+        )
+        self.assertIn("| `wlan.fc.type == 2` | 4 |", markdown)
+        self.assertIn("Data: QoS Data [HE-SU", markdown)
+        self.assertIn("Not delivery or de-duplicated transmissions", markdown)
 
 
 class DlOfdmaEvidenceTest(unittest.TestCase):

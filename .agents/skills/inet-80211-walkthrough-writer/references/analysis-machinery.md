@@ -8,6 +8,8 @@ analysis commands are compatibility entry points over this shared layer.
 ## Contents
 
 - [Discovery](#discovery)
+- [Presentation bundles](#presentation-bundles)
+- [Scalar and vector presentation](#scalar-and-vector-presentation)
 - [Shared PCAP entry point](#shared-pcap-entry-point)
 - [Typed PHY evidence](#typed-phy-evidence)
 - [EHT raw-radiotap fallback](#eht-raw-radiotap-fallback)
@@ -29,6 +31,51 @@ Use `suites/ax.json` for the existing IEEE 802.11ax examples and
 `suites/be-eht-features.json` for the initial EHT adopter. Add a declarative
 suite or scenario entry when the common pipeline applies to a new example.
 
+## Presentation bundles
+
+Each analysis family must publish a self-contained presentation bundle:
+
+- a compact Markdown table for the explanatory section;
+- a deterministic PNG when a comparison, distribution, or timeline benefits
+  from a plot, or an explicit no-plot rationale;
+- a JSON provenance sidecar for every generated PNG; and
+- a marker-bounded Markdown fragment that can be regenerated without
+  overwriting the author's explanation.
+
+The scalar/vector and PCAP bundles belong inside their canonical walkthrough
+sections. Exhaustive packet-type tables remain subordinate to the compact
+summary. Generated images and tables are evidence views, not new evidence;
+their provenance must bind them to the exact result or capture session.
+
+## Scalar and vector presentation
+
+For the manifest-driven AX analyses, generate the run-level metrics and plots,
+then render the walkthrough bundle:
+
+```sh
+python3 examples/ieee80211ax/analysis/summarize_results.py \
+  --session-id <YYYYMMDDTHHMMSSZ>
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211ax/analysis/first_tranche.py <group> \
+  --session-id <YYYYMMDDTHHMMSSZ>
+python3 examples/ieee80211ax/analysis/render_walkthrough_results.py \
+  <group> --update
+```
+
+The renderer reads `metrics.json`, the experiment manifest, the selected
+figure, and its `.png.json` sidecar. It writes a compact table with one row per
+configuration and metric under a group-specific
+`ieee80211-scalar-vector-*` marker. The table reports the independent-run
+count, mean or direct value, and 95% confidence-interval half-width when
+available. The surrounding authored text remains responsible for naming the
+source query/module/unit, measurement window, aggregation, exclusions, and
+interpretation.
+
+For a new suite, reuse this split: compute validated run-level summaries,
+produce the deterministic figure and sidecar, then render the bounded
+Markdown fragment. Do not make a plotting function edit prose or make a
+Markdown renderer reinterpret raw vector samples as repetitions.
+
 ## Shared PCAP entry point
 
 Run from the repository root:
@@ -47,7 +94,12 @@ artifacts in the walkthrough.
 The shared launcher configures the compatibility analyzer with suite-owned
 paths and markers. Do not duplicate its campaign construction, capture
 discovery, provenance binding, generated-block handling, or common PCAP
-statistics in a scenario-local script.
+statistics in a scenario-local script. The generated PCAP bundle contains a
+compact cross-configuration table, the packet count-versus-airtime plot, a
+`.png.json` provenance sidecar, representative timelines, and subordinate
+exhaustive packet-type tables. On first insertion it is placed under
+`## PCAP statistics`; an existing marker-bounded block is updated in place or
+migrated into that section.
 
 ## Typed PHY evidence
 
@@ -133,6 +185,14 @@ When AX compatibility code changes, also run:
 python3 -m unittest discover \
   -s examples/ieee80211ax/analysis \
   -p 'test_*.py'
+```
+
+Validate a newly authored or migrated walkthrough with the presentation-bundle
+gate enabled:
+
+```sh
+python3 .agents/skills/inet-80211-walkthrough-writer/scripts/validate_walkthrough.py \
+  --require-analysis-visuals path/to/walkthrough.md
 ```
 
 For a new suite or feature plugin, validate at least one real capture through

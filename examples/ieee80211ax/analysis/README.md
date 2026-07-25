@@ -28,6 +28,10 @@ the common warm-up definition.
 | [Dense IoT](../dense_iot/README.md) | Matched AX/AC campaigns across station counts, workloads, delivery, delay, and energy | This broader campaign has its own runner and result analyzer because each configuration combines station-count iterations with repetitions. |
 
 Machine-readable plotted summaries are in [`metrics.json`](metrics.json). Each PNG has a `.png.json` provenance sidecar containing the exact inputs, SHA-256 hashes, filters, measurement window, aggregation rule, and source revision.
+`render_walkthrough_results.py` turns those session-bound metrics and figures
+into a compact marker-bounded table and plot link inside each walkthrough's
+scalar/vector section; it does not replace the authored query, aggregation,
+and interpretation text.
 
 ## Reproduce and verify
 
@@ -43,11 +47,10 @@ From the repository root:
 python3 examples/ieee80211ax/analysis/run_campaign.py all
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/first_tranche.py all
 python3 examples/ieee80211ax/analysis/summarize_results.py
+python3 examples/ieee80211ax/analysis/render_walkthrough_results.py all --update
 python3 examples/ieee80211ax/analysis/evaluate_evidence.py
-MPLCONFIGDIR=/tmp/matplotlib python3 -m unittest \
-    examples/ieee80211ax/analysis/test_analysis_core.py \
-    examples/ieee80211ax/analysis/test_analyze_pcap_types.py \
-    examples/ieee80211ax/analysis/test_evaluate_evidence.py
+MPLCONFIGDIR=/tmp/matplotlib python3 -m unittest discover \
+    -s examples/ieee80211ax/analysis -p 'test_*.py'
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/first_tranche.py all --check
 ```
 
@@ -72,8 +75,9 @@ records the scalar hash and run attributes plus `capinfos` file, link,
 size/count, timestamp-order, precision, snapshot, and interface metadata.
 
 The PCAP analyzer validates every capture before parsing, writes a bounded
-frame-exchange timeline and provenance into the generated walkthrough section
-and `summary_results_pcap.json`, and exits nonzero when an evidence check is
+frame-exchange timeline, compact cross-configuration table, count-versus-
+airtime plot, and figure provenance into the generated walkthrough section
+and `summary_results_pcap.json`. It exits nonzero when an evidence check is
 `FAIL`. `--allow-failed-evidence` is intended only for preserving an
 exploratory report whose failed checks will be investigated.
 

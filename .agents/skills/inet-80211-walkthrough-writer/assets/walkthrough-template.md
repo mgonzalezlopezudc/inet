@@ -77,8 +77,14 @@ opp_scavetool query -l \
 |---|---|---|---:|---:|---|
 | <metric> | <module/result/unit> | <window/method> | <value> | <value> | <feature relevance> |
 
+![<Scalar/vector comparison, distribution, or timeline>](<relative-result-figure.png>)
+
+Figure provenance: [`<relative-result-figure.png.json>`](<relative-result-figure.png.json>).
+
 <Explain run count, seeds, warm-up, per-run aggregation, uncertainty, ambiguous
-or empty matches, and the distinction between mechanism and outcome metrics.>
+or empty matches, and the distinction between mechanism and outcome metrics.
+If a plot is not useful, replace the image and provenance lines with
+`No plot: <concrete reason>.`>
 
 ## PCAP statistics
 
@@ -94,6 +100,14 @@ tshark -n -r <file.pcapng> -q \
 | Configuration | Observation count | Relevant frame/PHY summary | Interpretation limit |
 |---|---:|---|---|
 | <configuration> | <count> | <types/formats/fields> | <capture semantics> |
+
+![<Packet composition or count-versus-airtime comparison>](<relative-pcap-figure.png>)
+
+Figure provenance: [`<relative-pcap-figure.png.json>`](<relative-pcap-figure.png.json>).
+
+<If a plot is not useful, replace the image and provenance lines with
+`No plot: <concrete reason>.` Keep exhaustive generated packet rows in a
+subordinate marker-bounded block.>
 
 ## Frame exchange analysis
 

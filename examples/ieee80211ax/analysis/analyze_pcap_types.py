@@ -1660,6 +1660,11 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                 "stats": stats,
                 "total": total,
                 "used_ap_only": bool(ap_pcaps),
+                "captures": [
+                    str(path.relative_to(REPOSITORY_ROOT))
+                    for path in target_pcaps
+                ],
+                "display_filter": "none (all decoded frames)",
                 "timeline": extract_frame_timeline(target_pcaps, subdir),
             }
         }
@@ -1832,7 +1837,7 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
             valid_configs.append(cfg_name)
             
     if not valid_configs:
-        return
+        return None
         
     # Get union of all packet type names
     packet_types = set()
@@ -1910,6 +1915,62 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
     plot_path = plot_dir / "packet_statistics.png"
     plt.savefig(str(plot_path), dpi=150, bbox_inches='tight')
     plt.close()
+    return plot_path
+
+
+def write_packet_plot_provenance(plot_path, config_results, subdir, manifest):
+    """Bind a packet-statistics figure to its capture session and semantics."""
+    entries = [
+        {
+            "config": entry["config"],
+            "run_number": entry["run_number"],
+            "seed_set": entry["seed_set"],
+            "captures": entry["captures"],
+        }
+        for entry in manifest["entries"]
+        if entry["subdir"] == subdir
+    ]
+    payload = {
+        "schema_version": 1,
+        "figure": str(plot_path.relative_to(REPOSITORY_ROOT)),
+        "figure_sha256": sha256_file(plot_path),
+        "capture_session_id": manifest["session_id"],
+        "repository_revision": manifest["repository_revision"],
+        "analysis_script_sha256": manifest["analysis_script_sha256"],
+        "capture_manifest": manifest["_selected_manifest"],
+        "tshark_version": manifest["tshark_version"],
+        "capinfos_version": manifest.get("capinfos_version"),
+        "scenario": subdir,
+        "entries": entries,
+        "configuration_observation_counts": {
+            config: result["global"]["total"]
+            for config, result in sorted(config_results.items())
+            if "global" in result
+        },
+        "counting_semantics": (
+            "capture observations of over-the-air frames/MPDUs; observations "
+            "are not application deliveries or de-duplicated transmissions"
+        ),
+        "plot_semantics": {
+            "left": "frame-type share of capture observation count",
+            "right": "frame-type share of summed estimated airtime",
+        },
+        "airtime_limitations": (
+            "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB "
+            "user-dependent signaling that radiotap does not expose remains "
+            "approximate"
+        ),
+        "decode_limitations": (
+            "typed PHY profiles fail closed; absent, unsupported, or unknown "
+            "radiotap fields remain unknown"
+        ),
+    }
+    sidecar = plot_path.with_suffix(plot_path.suffix + ".json")
+    atomic_write_text(
+        sidecar,
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+    )
+    return sidecar
 
 def count_frames(config_results, config_name, frame_type=None, frame_subtype=None, standard=None):
     result = config_results.get(config_name, {}).get("global", {})
@@ -1923,6 +1984,57 @@ def count_frames(config_results, config_name, frame_type=None, frame_subtype=Non
             continue
         count += values["count"]
     return count
+
+
+def compact_statistics_markdown(config_results):
+    lines = [
+        "| Configuration | Observation point / counting unit | Selection/filter | Observations | "
+        "Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |\n",
+        "|---|---|---|---:|---|---:|---|\n",
+    ]
+    for config_name, result in sorted(config_results.items()):
+        global_result = result.get("global", {})
+        stats = global_result.get("stats", {})
+        total = global_result.get("total", 0)
+        dominant = sorted(
+            (
+                (values.get("count", 0), unpack_key_to_name(key))
+                for key, values in stats.items()
+            ),
+            reverse=True,
+        )[:3]
+        dominant_text = ", ".join(
+            f"{name} ({count})" for count, name in dominant
+        ) or "No decoded observations"
+        available_airtime = [
+            values for values in stats.values()
+            if values.get("airtime_evidence_status") == "AVAILABLE"
+        ]
+        airtime = (
+            f"{sum(item.get('airtime_sim_pct', 0) for item in available_airtime):.2f}%"
+            if available_airtime else "N/A"
+        )
+        point = (
+            "AP interface(s); capture observations"
+            if global_result.get("used_ap_only")
+            else "active WLAN interfaces; capture observations"
+        )
+        capture_paths = global_result.get("captures", [])
+        if capture_paths:
+            point += "<br>" + "<br>".join(f"`{path}`" for path in capture_paths)
+        cells = [
+            f"`{config_name}`",
+            point,
+            f"`{global_result.get('display_filter', 'not recorded')}`",
+            str(total),
+            dominant_text,
+            airtime,
+            "Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown",
+        ]
+        lines.append("| " + " | ".join(
+            cell.replace("|", "\\|") for cell in cells
+        ) + " |\n")
+    return "".join(lines)
 
 
 def evaluate_evidence(config_results, subdir):
@@ -2144,8 +2256,12 @@ def generate_markdown_tables(config_results, subdir, checks, manifest):
         return ""
     
     md = []
-    md.append("## 802.11 Packet Type Statistics\n")
+    md.append("### Generated PCAP plots and tables\n")
     md.append("![802.11 Packet Type Statistics](packet_statistics.png)\n\n")
+    md.append(
+        "Figure provenance: "
+        "[`packet_statistics.png.json`](packet_statistics.png.json).\n\n"
+    )
     md.append("This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. ")
     
     ap_used = all(res["global"]["used_ap_only"] for res in config_results.values() if "global" in res)
@@ -2167,6 +2283,9 @@ def generate_markdown_tables(config_results, subdir, checks, manifest):
     md.append("Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.\n")
     md.append("- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.\n")
     md.append("- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.\n\n")
+    md.append("#### Compact cross-configuration summary\n\n")
+    md.append(compact_statistics_markdown(config_results))
+    md.append("\n")
 
     md.append("### Evidence checks\n\n")
     md.append("| Status | Requirement | Observed evidence |\n")
@@ -2341,6 +2460,21 @@ def generate_markdown_tables(config_results, subdir, checks, manifest):
     md.append(analysis_text + "\n")
     return "".join(md)
 
+
+def find_level_two_section(content, label):
+    headings = list(re.finditer(r"^##\s+(.+?)\s*$", content, re.MULTILINE))
+    index = next(
+        (
+            position for position, match in enumerate(headings)
+            if re.sub(r"\s+", " ", re.sub(r"[`*_]", "", match.group(1)))
+            .strip()
+            .lower() == label.lower()
+        ),
+        None,
+    )
+    return headings, index
+
+
 def replace_generated_section(content, md_content):
     generated_content = f"{GENERATED_BEGIN}\n{md_content.rstrip()}\n{GENERATED_END}\n"
     if GENERATED_BEGIN in content or GENERATED_END in content:
@@ -2348,15 +2482,35 @@ def replace_generated_section(content, md_content):
             raise ValueError("Malformed generated-section markers")
         begin = content.index(GENERATED_BEGIN)
         end = content.index(GENERATED_END, begin) + len(GENERATED_END)
-        return content[:begin] + generated_content.rstrip() + content[end:]
-    else:
-        section_header = "## 802.11 Packet Type Statistics"
-        if section_header in content:
-            # One-time migration of the legacy generated tail. Future updates are marker-bounded.
-            begin = content.index(section_header)
-            return content[:begin].rstrip() + "\n\n" + generated_content
-        else:
-            return content.rstrip() + "\n\n" + generated_content
+        _, canonical_index = find_level_two_section(content, "PCAP statistics")
+        if canonical_index is None:
+            return content[:begin] + generated_content.rstrip() + content[end:]
+        # Move old tail-level generated blocks into the canonical section.
+        without_generated = (
+            content[:begin].rstrip() + "\n\n" + content[end:].lstrip("\n")
+        )
+        content = without_generated
+
+    legacy_header = "## 802.11 Packet Type Statistics"
+    if legacy_header in content:
+        # One-time migration of the legacy generated tail.
+        begin = content.index(legacy_header)
+        content = content[:begin].rstrip() + "\n"
+
+    headings, canonical_index = find_level_two_section(
+        content, "PCAP statistics"
+    )
+    if canonical_index is None:
+        return content.rstrip() + "\n\n" + generated_content
+    canonical = headings[canonical_index]
+    section_end = (
+        headings[canonical_index + 1].start()
+        if canonical_index + 1 < len(headings)
+        else len(content)
+    )
+    prefix = content[:section_end].rstrip()
+    suffix = content[section_end:].lstrip("\n")
+    return f"{prefix}\n\n{generated_content}\n{suffix}".rstrip() + "\n"
 
 
 def update_walkthrough_file(subdir, md_content):
@@ -2439,7 +2593,10 @@ def main():
     global_color_map = {pt: get_packet_color(pt) for pt in global_packet_types}
 
     for subdir, res in all_results.items():
-        generate_stacked_bar_plot(res, subdir, global_color_map)
+        plot_path = generate_stacked_bar_plot(res, subdir, global_color_map)
+        if plot_path is None:
+            raise RuntimeError(f"{subdir}: no packet statistics plot generated")
+        write_packet_plot_provenance(plot_path, res, subdir, manifest)
         md_table = generate_markdown_tables(res, subdir, all_checks[subdir], manifest)
         if md_table:
             update_walkthrough_file(subdir, md_table)
@@ -2486,6 +2643,8 @@ def main():
                 serialized[subdir][config_name]["global"] = {
                     "total": g["total"],
                     "used_ap_only": g["used_ap_only"],
+                    "captures": g["captures"],
+                    "display_filter": g["display_filter"],
                     "stats": {",".join(str(x) for x in k): v for k, v in g["stats"].items()},
                     "timeline": g["timeline"],
                 }

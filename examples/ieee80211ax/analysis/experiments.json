@@ -45,6 +45,7 @@
   },
   "groups": {
     "fragmentation": {
+      "walkthrough": "examples/ieee80211ax/mac_features/dynamic_fragmentation/walkthrough.md",
       "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results",
       "expected_repetitions": 5,
@@ -57,6 +58,7 @@
       ]
     },
     "uora": {
+      "walkthrough": "examples/ieee80211ax/ul_ofdma/walkthrough.md",
       "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/ul_ofdma/results",
       "expected_repetitions": 5,
@@ -70,6 +72,7 @@
       ]
     },
     "twt": {
+      "walkthrough": "examples/ieee80211ax/twt/walkthrough.md",
       "ini": "examples/ieee80211ax/twt/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/twt/results",
       "expected_repetitions": 5,
@@ -81,6 +84,7 @@
       ]
     },
     "rate": {
+      "walkthrough": "examples/ieee80211ax/he_rate_adaptation/walkthrough.md",
       "ini": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_rate_adaptation/results",
       "expected_repetitions": 5,
@@ -91,6 +95,7 @@
       ]
     },
     "er": {
+      "walkthrough": "examples/ieee80211ax/he_er_su/walkthrough.md",
       "ini": "examples/ieee80211ax/he_er_su/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_er_su/results",
       "expected_repetitions": 5,
@@ -102,6 +107,7 @@
       ]
     },
     "puncturing": {
+      "walkthrough": "examples/ieee80211ax/he_features/walkthrough.md",
       "ini": "examples/ieee80211ax/he_features/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_features/results",
       "expected_repetitions": 5,
@@ -115,6 +121,7 @@
       ]
     },
     "mimo": {
+      "walkthrough": "examples/ieee80211ax/multi_user/mu_mimo/walkthrough.md",
       "ini": "examples/ieee80211ax/multi_user/mu_mimo/downlink.ini",
       "result_dir": "examples/ieee80211ax/multi_user/mu_mimo/results",
       "expected_repetitions": 5,
@@ -126,6 +133,7 @@
       ]
     },
     "bss": {
+      "walkthrough": "examples/ieee80211ax/bss_coloring/walkthrough.md",
       "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/bss_coloring/results",
       "expected_repetitions": 5,
@@ -140,6 +148,7 @@
       ]
     },
     "width": {
+      "walkthrough": "examples/ieee80211ax/he_channel_widths/walkthrough.md",
       "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_channel_widths/results",
       "expected_repetitions": 5,
@@ -153,6 +162,7 @@
       ]
     },
     "dl": {
+      "walkthrough": "examples/ieee80211ax/dl_ofdma/walkthrough.md",
       "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/dl_ofdma/results",
       "expected_repetitions": 5,
@@ -177,6 +187,7 @@
       ]
     },
     "bsr": {
+      "walkthrough": "examples/ieee80211ax/he_bsr/walkthrough.md",
       "ini": "examples/ieee80211ax/he_bsr/omnetpp.ini",
       "result_dir": "examples/ieee80211ax/he_bsr/results",
       "expected_repetitions": 5,

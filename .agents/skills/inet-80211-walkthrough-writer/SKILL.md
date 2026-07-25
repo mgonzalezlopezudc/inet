@@ -35,9 +35,11 @@ Apply the repository workflow skills that match the evidence being created:
 - Use `inet-ned-ini-analysis` to prove the configuration inheritance, winning
   parameter assignments, instantiated types, and recording paths.
 - Use `inet-simulation-run` for reproducible Cmdenv runs.
-- Use `omnetpp-result-analysis` to discover and query scalar/vector results.
-  Use `omnetpp-result-plotting` only when a plot materially improves the
-  explanation.
+- Use `omnetpp-result-analysis` to discover and query scalar/vector results
+  and `omnetpp-result-plotting` to produce the section's comparison,
+  distribution, or timeline figure. If no plot would improve the explanation,
+  record that decision and its reason in the section instead of emitting a
+  decorative chart.
 - Use `inet-pcap-tshark-analysis` and, for Wi-Fi semantics,
   `inet-80211-packet-debugging` for capture setup and frame analysis.
 - Use `inet-cmdenv-log-analysis`, `omnetpp-eventlog-analysis`, or
@@ -143,6 +145,15 @@ Explain why each metric is relevant to the feature. Separate outcome metrics
 such as goodput, delay, fairness, or energy from mechanism telemetry such as
 RU allocation, Trigger counts, retry state, NAV, TWT state, or rate selection.
 
+Publish a compact Markdown table and a deterministic plot as a
+provenance-bound presentation bundle inside `## Scalar and vector analysis`.
+The table must expose the configuration, metric or invariant, source
+result/module/unit, window and per-run aggregation, independent-run count and
+exclusions, and estimate or single-run observation. The plot must answer a
+stated comparison, distribution, or timeline question. When a plot would not
+materially improve the explanation, write an explicit no-plot rationale in
+the section. Keep exhaustive machine output outside the explanatory table.
+
 ### 6. Analyze PCAP statistics and the frame exchange
 
 Decode PHY facts through the shared typed profiles. Accept a field as
@@ -160,14 +171,17 @@ transmissions.
 
 Provide both:
 
-1. A compact frame/PHY statistics summary for each relevant configuration.
-2. An annotated timeline of a representative exchange with frame numbers,
+1. A compact frame/PHY statistics table for each relevant configuration.
+2. A packet-composition or count-versus-airtime plot when it distinguishes the
+   configurations; otherwise an explicit no-plot rationale.
+3. An annotated timeline of a representative exchange with frame numbers,
    simulation timestamps, transmitter/receiver, decoded fields, and the role
    of each frame in the invariant.
 
 Correlate PCAP timestamps with result vectors or targeted logs when the claim
 depends on causality or internal classification. State undecoded or missing
-fields explicitly.
+fields explicitly. Keep the compact table and plot inside `## PCAP statistics`;
+put exhaustive generated packet-type rows in a subordinate marked block.
 
 ### 7. Write the verdict and debugging path
 
@@ -187,7 +201,7 @@ Run:
 
 ```sh
 python3 .agents/skills/inet-80211-walkthrough-writer/scripts/validate_walkthrough.py \
-  path/to/walkthrough.md
+  --require-analysis-visuals path/to/walkthrough.md
 ```
 
 Fix every error and assess every warning. Then manually apply the quality

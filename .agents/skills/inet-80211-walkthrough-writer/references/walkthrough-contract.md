@@ -131,8 +131,16 @@ Cmdenv module logs, PCAP fields, result telemetry, event-log ordering, or LLDB.
 - Do not treat samples within one vector as repetitions.
 - Pair outcome metrics with feature-specific mechanism telemetry.
 - State whether results are single-run observations or multi-run estimates.
-- Use a plot only when it improves understanding; keep its provenance with the
-  input files, hashes, filters, runs, seeds, and window.
+- Include a compact explanatory Markdown table with configuration, metric or
+  invariant, source result/module/unit, window and per-run aggregation,
+  independent runs used/excluded, and estimate with uncertainty or a labeled
+  single-run observation.
+- Include a deterministic comparison, distribution, or timeline plot when it
+  improves understanding. If no plot is warranted, state `No plot` and the
+  concrete reason in this section.
+- Keep the table and plot (or no-plot rationale) inside this section. Bind
+  generated output to input files and hashes, native result-API queries or
+  filters, runs, seeds, window, exclusions, unit conversions, and aggregation.
 
 ### PCAP statistics
 
@@ -145,6 +153,15 @@ Cmdenv module logs, PCAP fields, result telemetry, event-log ordering, or LLDB.
   de-duplicated transmissions.
 - Do not infer application delivery or internal scheduling decisions from
   frame totals.
+- Include a compact explanatory Markdown table with configuration, capture
+  observation point and counting semantics, selection/filter, observation
+  count, decisive frame/PHY facts, airtime when authoritative, and limits.
+- Include a deterministic packet-composition or count-versus-airtime plot when
+  it materially distinguishes configurations. If no plot is warranted, state
+  `No plot` and the concrete reason in this section.
+- Bind the table and plot to the capture-manifest hash, capture hashes,
+  configuration/run/seed, TShark and capinfos versions, decode profile and
+  known-field limitations, filters, counting unit, and airtime denominator.
 - Keep generated exhaustive tables in a marked appendix or generated block;
   put the explanatory summary before them.
 
