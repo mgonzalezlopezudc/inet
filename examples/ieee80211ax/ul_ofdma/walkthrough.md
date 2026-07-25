@@ -4,12 +4,62 @@ This example provides scheduled-uplink, mixed-access, and UORA configurations.
 The retained evidence includes a five-run UORA comparison and a separate run-0
 packet-exchange appendix.
 
+## Learning objectives and feature primer
+
+After completing this walkthrough, the reader can:
+
+- explain AP-scheduled uplink OFDMA and uplink OFDMA random access (UORA);
+- read a Basic Trigger's association-identifier (AID12) entries to distinguish
+  scheduled users from random-access RUs (RA-RUs);
+- relate UORA attempts/successes and Jain fairness to contention; and
+- reproduce a Trigger → simultaneous HE-TB response → Block Ack timeline.
+
+For scheduled uplink, the access point (AP) names stations and resource units
+(RUs) in a Basic Trigger. UORA instead advertises RA-RUs with AID12 zero.
+Eligible stations decrement an OFDMA backoff counter and may choose the same
+RA-RU; simultaneous same-frequency responses make contention visible. INET's
+coordinator counters, not frame totals alone, decide whether attempts succeed.
+
+## Scenario description
+
+The [network](Lan80211AxUlOfdma.ned) extends the common single-BSS topology
+with one AP, a wired server, and three or eight fixed stations. The
+[configuration](omnetpp.ini) uses 5 GHz, 20 MHz, one stationary close-range
+BSS, no external interferer, and a 2 s run. Warm-up traffic begins at 0.2 s to
+establish Block Ack; measured uplink begins at 0.3 s.
+
+```text
+host[0..N-1] -- HE uplink --> AP === wired LAN === server
+                    Trigger <--
+```
+
+Three-STA configurations send 1000-byte payloads every 5 ms. Eight-STA UORA
+loads use 100-byte payloads every 4 ms (light) or 1 ms (heavy). This stresses
+contention and scheduled/random-access capacity, not mobility or coverage.
+
+## Standards and INET model boundary
+
+IEEE Std 802.11-2024 Clause 26.5.4.1 permits a Basic Trigger to allocate
+RA-RUs and requires UORA-capable stations to maintain OFDMA contention-window
+and backoff state (`80211ax-2024:chunk:09810`). AID12 zero represents RA-RUs
+for associated stations in the observed Trigger encoding. HE trigger-based
+uplink responses use HE-TB PPDUs.
+
+INET implements this with `HeHcf`, an AP UL coordinator/scheduler, modeled
+UORA counters, and typed radiotap HE observations. The model's attempt/success
+counters are authoritative for its classification. Captured same-RU responses
+are direct contention evidence, but absence of a decoded response is not by
+itself a modeled failure.
+
 ## Evidence status
 
-- Scalar/vector session: [`results/scalar-vector/20260725T181500Z`](results/scalar-vector/20260725T181500Z). `MixedUora`, `UoraLightContention`, `UoraHeavyContention`, and `UoraMoreRandomAccessRus` each have complete `.sca` and `.vec` files for runs 0–4.
-- Dashboard: [UORA figure](../analysis/figures/uora/uora-dashboard.png) and its [provenance](../analysis/figures/uora/uora-dashboard.png.json). The provenance records all four conditions, input hashes, scalar filters, run-level aggregation, and confidence-interval method.
-- Packet session: [`results/packet-statistics/20260724T175025Z`](results/packet-statistics/20260724T175025Z). It contains run-0 AP-interface PCAPng files for `EdcaBaseline`, `EqualRus`, `MixedUora`, `ScheduledOnly`, `UoraLightContention`, and `UoraMoreRandomAccessRus`. The exact generated tables appear below.
-- Supplemental heavy-load packet session: [`results/packet-statistics/20260725T182100Z`](results/packet-statistics/20260725T182100Z). It adds the missing run-0 `UoraHeavyContention` AP-interface capture.
+| Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
+|---|---|---|---|---|
+| UORA attempts/successes are recorded | `PASS` | per-STA coordinator scalars | session `20260725T181500Z`, runs/seeds 0–4 | four configurations |
+| Five RA-RUs improve heavy-load UORA success | `PASS` | matched run-level counters | heavy 1-RU vs 5-RU, five seeds | 0.8 vs 7.2 mean successes |
+| Trigger frames advertise AID12-zero RA-RUs | `PASS` | AP captures | packet sessions, run 0 | one vs five entries |
+| Same-RU contention is visible | `PASS` | same-time/same-frequency HE-TB responses | run-0 captures | direct observations |
+| Packet frames cause exact scalar outcomes | `INCONCLUSIVE` | separate sessions | — | instrumentation changes trajectory |
 
 The scalar/vector campaign and packet sessions are separate experiments.
 PcapRecorder instrumentation changes the event trajectory, so exact run-0
@@ -35,7 +85,29 @@ The last two rows have the same station count, packet size, packet interval,
 measurement window, and scheduler family; their configured RA-RU count differs.
 This makes them the matched heavy-load comparison documented below.
 
-## Five-run UORA comparison
+## Expected invariants and diagnostic map
+
+| Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
+|---|---|---|---|---|
+| Basic Trigger advertises configured RA-RUs | AP AID12 fields | wrong zero-entry count | UL scheduler/Trigger encoding | typed Trigger decode and config trace |
+| Contending STAs emit HE-TB responses | AP same-time RU observations | no responses despite attempts | UORA backoff/MAC/PHY | STA/AP capture plus coordinator logs |
+| Success counters match model decisions | per-STA attempt/success scalars | impossible ratio or empty matches | coordinator signals/recording | narrow scalar query and source trace |
+| Heavy 5-RU treatment exceeds heavy 1-RU success | paired run aggregation | no increase across seeds | RU allocation/contention | inspect per-run Trigger opportunities |
+
+## Reproduction
+
+Run from the INET repository root. This command was **not executed during this
+rewrite**; status: `NOT RUN`.
+
+```sh
+bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
+  -c UoraMoreRandomAccessRus -r 0 \
+  --result-dir=/tmp/inet-uora-more-ra-rus-r0
+```
+
+The retained sessions completed historically; no new exit status is claimed.
+
+## Scalar and vector analysis
 
 The evidence is the per-STA scalar pair
 `heUlRandomAccessAttempt:count` and `heUlRandomAccessSuccess:count` in the 15
@@ -115,7 +187,7 @@ packets still queued at 2 s do not contribute.
   workload remains overloaded. The evidence supports increased UORA capacity
   in this sample, not an optimal RA-RU count.
 
-### PCAP/TShark interpretation by configuration
+## PCAP statistics
 
 The captures observe `ap.wlan[0]`. A Basic Trigger's decoded
 `wlan.trigger.he.user_info.aid12` values expose advertised random-access RUs:
@@ -175,7 +247,7 @@ tshark -n -r "$PCAP" \
   -e wlan.trigger.he.user_info.aid12 -e _ws.col.Info
 ```
 
-## Reproduction and inspection
+### Regeneration and inspection
 
 Run one configuration from the repository root:
 
@@ -226,6 +298,84 @@ row, while `EqualRus`, `MixedUora`, `ScheduledOnly`, `UoraLightContention`, and
 not distinguish scheduled from random access. The Trigger's AID12 fields expose
 advertised AID-0 RA-RUs, while the UORA scalar counters above remain the
 evidence for attempts and successes.
+
+## Frame exchange analysis
+
+```sh
+tshark -n -r \
+  'examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T182100Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  -Y 'frame.number >= 620 && frame.number <= 625' \
+  -T fields -E header=y -E separator='|' -E occurrence=a \
+  -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
+  -e wlan.ta -e wlan.ra -e radiotap.he.data_1.ppdu_format \
+  -e radiotap.channel.freq -e wlan.trigger.he.user_info.aid12 \
+  -e _ws.col.Info
+```
+
+| Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 620 | 0.301531 s | AP → broadcast | Basic Trigger | AID12 `5,6,0` | two scheduled RUs plus one RA-RU |
+| 621 | 0.302547 s | STA 8 → AP | QoS Null, HE-TB | 5006 MHz | RA-RU response |
+| 622 | 0.302547 s | STA 7 → AP | QoS Null, HE-TB | 5006 MHz | same-time, same-RU contention |
+| 623 | 0.302547 s | STA 6 → AP | QoS Null, HE-TB | 5004 MHz | scheduled/other RU response |
+| 624 | 0.302547 s | STA 5 → AP | QoS Null, HE-TB | 5002 MHz | scheduled/other RU response |
+| 625 | 0.302612 s | AP → broadcast | Block Ack | Multi-user response | closes trigger exchange |
+
+Frames 621–622 are direct evidence that two stations selected the same
+frequency allocation after one Trigger. The scalar session is separate; it
+supplies the model's success classification but cannot be matched to these
+frame numbers.
+
+## Cross-layer findings and verdict
+
+| Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
+|---|---|---|---|---|---|
+| One-RA-RU heavy UORA contends | `PASS` | one configured RA-RU | low attempt/success sample | frames 620–625 | high delivery-conditioned delay |
+| Five RA-RUs increase heavy UORA capacity | `PASS` | only RA-RU count changes | 7.2 vs 0.8 mean successes | five AID12-zero entries | delay intervals overlap |
+| More RA-RUs optimize total service | `INCONCLUSIVE` | five-RU treatment | scheduled service not summarized | fewer duplicate-RU groups | no decisive total-goodput invariant |
+| Packet and scalar events correspond exactly | `INCONCLUSIVE` | matched scenario basis | separate session | separate session | instrumentation changes trajectory |
+
+The matched heavy comparison directly supports increased random-access success
+in these five seeds, but not an optimal RU split. More RA-RUs consume capacity
+that could otherwise be scheduled.
+
+## Limitations and inconclusive claims
+
+- Scalar/vector and packet evidence are separate sessions.
+- Attempt/success counters have scalars but no temporal vectors.
+- Delay is delivery-conditioned; queued packets at 2 s are excluded.
+- Heavy one-RU fairness excludes one all-zero-success run as undefined.
+- Co-record Trigger fields, UORA decisions, and sink delivery for one heavy
+  pair to establish event-level causality and total-service impact.
+
+## Further experiments
+
+- Sweep 1–5 RA-RUs under the same heavy load and report both UORA success and
+  total delivered goodput.
+- Vary the UORA contention window while keeping one RA-RU.
+- Add a scheduled-only eight-STA heavy control to quantify the capacity trade.
+
+## Implementation plan
+
+| Item | Evidence-backed plan |
+|---|---|
+| Demonstrated gap | UORA attempts/successes lack timestamped vectors and cannot correlate with PCAP |
+| Intended behavior | make each eligibility/attempt/success decision directly testable |
+| Smallest change surface | first extend result recording/feature plugin; production signals only if existing telemetry is insufficient |
+| Observability | timestamp, STA, Trigger identity, selected RU, collision/success reason |
+| Validation | heavy 1-RU vs 5-RU, run 0 first then five seeds |
+| Compatibility and risks | added recording may alter trajectories; compare within session |
+| Architecture and sealing | required before any future `src/inet` edit |
+| Next handoff | simulation investigator to identify existing signal surface |
+
+## Artifact provenance
+
+| Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
+|---|---|---|---|---|
+| Scalar/vector | `results/scalar-vector/20260725T181500Z` | four UORA configs, runs 0–4 | scalar counters; delay `[0.3,2)` s | hashes retained in figure JSON |
+| PCAP | `results/packet-statistics/20260724T175025Z` | six configs, run 0 | TShark 4.6.4, AP point | generated block preserved |
+| Supplemental PCAP | `results/packet-statistics/20260725T182100Z` | heavy 1-RU, run 0 | timeline above | separate from generated block |
+| Figure | `../analysis/figures/uora/uora-dashboard.png` | four configs | one observation/run, 95% t CI | provenance retained |
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ## 802.11 Packet Type Statistics

@@ -1,58 +1,153 @@
-# HE Preamble Puncturing Walkthrough
+# HE preamble puncturing walkthrough
 
-This walkthrough is limited to puncturing behavior demonstrated by the retained
-results. The network and configuration definitions are in
-[omnetpp.ini](omnetpp.ini) and [Lan80211AxHeFeatures.ned](Lan80211AxHeFeatures.ned).
+This walkthrough teaches how an 802.11ax access point (AP) disables a
+20 MHz part of a wider channel and keeps scheduled resource units (RUs) out
+of that region. The retained evidence directly shows INET's mask and
+allocation telemetry and five-run delivery outcomes; the packet capture
+shows HE exchanges but does not export the puncturing mask.
 
-## Demonstrated configurations
+## Learning objectives and feature primer
 
-The scalar/vector session
-[`20260725T120411Z`](results/scalar-vector/20260725T120411Z) contains five runs
-(`-r 0` through `-r 4`) for each configuration below.
+After completing this walkthrough, the reader can:
 
-| Configuration | Direct evidence |
-|---|---|
-| `CleanChannelBaseline` | `packetReceived:vector(packetBytes)` records `16.000 Mbps` aggregate goodput (five-run mean, 95% CI `±0.000 Mbps`). |
-| `LegacyInterferenceWithoutPuncturing` | `packetReceived:vector(packetBytes)` records `63.931 ± 0.033 Mbps`. |
-| `PreamblePuncturingUnderInterference` | `packetReceived:vector(packetBytes)` records `63.902 ± 0.043 Mbps`; `hePuncturedSubchannelMask:vector` and the paired `heRuToneOffset:vector`/`heRuToneSize:vector` are the mask and allocation evidence. |
-| `DynamicPuncturing` | `hePuncturedSubchannelMask:vector` contains masks `0` and `2`, directly recording runtime mask changes; `packetReceived:vector(packetBytes)` records `63.921 ± 0.033 Mbps`. |
+- explain why preamble puncturing preserves usable spectrum around a busy
+  secondary subchannel;
+- identify INET's punctured-mask and RU-placement vectors;
+- distinguish model telemetry from radiotap-decoded PHY facts; and
+- reproduce the treatment and diagnose a mask/allocation violation.
 
-The interference configurations have overlapping five-run goodput intervals,
-so these measurements demonstrate puncturing state and RU-placement telemetry,
-not a goodput advantage. For each scheduled allocation, interpret
-`heRuToneOffset:vector`, `heRuToneSize:vector`, and `heStaId:vector` at the same
-timestamp as `hePuncturedSubchannelMask:vector`; those aligned vectors are the
-evidence for whether an RU occupies an enabled frequency region.
+Preamble puncturing lets an HE multi-user (HE-MU) transmission omit selected
+20 MHz subchannels of an 80 or 160 MHz channel. The scheduler must then place
+RUs only in enabled frequency regions. The learning outcome is to trace
+configured mask → recorded mask → RU placement → delivery. The validation
+outcome is a scoped `PASS` for recorded runtime mask changes and retained
+delivery, but only `INCONCLUSIVE` packet-level mask validation.
 
-## Reproduce and inspect
+## Scenario description
 
-Run one configuration and run number at a time from the INET project root:
+[Lan80211AxHeFeatures.ned](Lan80211AxHeFeatures.ned) extends the common
+single-BSS topology with one wired UDP server, one AP, four stationary STAs,
+and an optional legacy interferer. [omnetpp.ini](omnetpp.ini) sends downlink
+UDP to all four STAs from 0.3 s over an 80 MHz, 5.2 GHz channel. The
+interference treatments place a continuous 20 MHz 802.11a transmitter on the
+second subchannel; `DynamicPuncturing` activates both jammer and mask during
+the middle of the 1 s run.
 
-```sh
-bin/inet -u Cmdenv -f examples/ieee80211ax/he_features/omnetpp.ini -c DynamicPuncturing -r 0 --result-dir=examples/ieee80211ax/he_features/results/manual
+```text
+server -- Ethernet --> AP == 80 MHz HE MU ==> host[0..3]
+                         X second 20 MHz <== legacy interferer
 ```
 
-Query only the puncturing and delivery vectors:
+## Standards and INET model boundary
+
+IEEE Std 802.11-2024 describes HE PHY preamble puncturing in Clause 27 and
+enumerates 80/160 MHz punctured `CH_BANDWIDTH` values in Table 27-1
+(`80211ax-2024:chunk:10001`); Table 27-21 carries the corresponding HE-SIG-A
+encoding (`80211ax-2024:chunk:10158`). INET represents the requested mask as
+an HCF string and records mask and RU tone geometry as model vectors.
+Radiotap HE fields authoritatively expose only known MCS/BW/RU facts; the
+retained analyzer explicitly reports that subtype counts cannot establish
+mask transitions or RU non-overlap.
+
+## Evidence status
+
+| Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
+|---|---|---|---|---|
+| dynamic puncturing changes runtime mask | `PASS` | `hePuncturedSubchannelMask:vector` values 0 and 2 | `DynamicPuncturing` 0--4 | direct model telemetry |
+| RU placement can be checked against mask | `PASS` | timestamp-aligned mask, tone offset/size, STA ID vectors | retained campaign | model-level allocation evidence |
+| capture directly decodes puncturing mask | `INCONCLUSIVE` | AP PCAP and generated evidence check | `PreamblePuncturing` run 0 | decisive mask absent from table |
+| puncturing improves goodput under interference | `INCONCLUSIVE` | five-run goodput CIs | four configs, 0--4 | interference CIs overlap |
+
+## Configuration matrix
+
+| Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
+|---|---|---|---|---|---|
+| `CleanChannelBaseline` | clean reference | no jammer, no mask | downlink; 80 MHz | 0--4 | full-band delivery |
+| `LegacyInterferenceWithoutPuncturing` | negative control | jammer, empty mask | matched 80 MHz load | 0--4 | no puncture telemetry |
+| `PreamblePuncturingUnderInterference` | treatment | jammer; static `"0100"` mask | matched 80 MHz load | 0--4 | allocations avoid subchannel index 1 |
+| `DynamicPuncturing` | transition treatment | mask 0→2→0; jammer 0.3--0.7 s | matched 80 MHz load | 0--4 | mask changes during active interval |
+
+The interference rows inherit `BccBaseline` and then override width, bitrate,
+LDPC support, explicit interferer, and offered load. `CleanChannelBaseline`
+does not inherit the 0.5 ms interference workload override and its 16 Mbps
+goodput is therefore confounded; it is not a capacity control for the other
+three rows. Seeds are retained as result attributes, not inferred here.
+
+## Expected invariants and diagnostic map
+
+| Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
+|---|---|---|---|---|
+| mask follows configured interval | AP `hePuncturedSubchannelMask:vector` | missing 0→2→0 transition | HCF dynamic puncturing | inspect effective times and HCF logs |
+| no RU overlaps masked 20 MHz region | aligned tone offset/size and mask vectors | allocation crosses disabled region | HE DL scheduler / RU allocator | export same-timestamp tuples |
+| HE frames remain protocol-visible | AP PCAP known HE fields | empty/undecoded capture | recorder / radiotap encoding | inspect `radiotap.he.data_*_known` |
+
+## Reproduction
+
+Run from the repository root:
+
+```sh
+bin/inet -u Cmdenv -f examples/ieee80211ax/he_features/omnetpp.ini \
+  -c DynamicPuncturing -r 0 \
+  --result-dir=examples/ieee80211ax/he_features/results/manual/DynamicPuncturing
+```
+
+Status: `NOT RUN` during this rewrite. The retained
+`results/packet-statistics/20260724T175025Z/PreamblePuncturing/cmdenv.stdout`
+reached 1 s and `End.`, but the original process exit status and exact command
+were not retained. Suite regeneration, also `NOT RUN` here:
+
+```sh
+python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir he_features --run 0
+```
+
+## Scalar and vector analysis
+
+Inputs:
+`results/scalar-vector/20260725T120411Z/{configuration}/*.{sca,vec}`.
+Figure provenance:
+[puncturing-frequency-allocation.png.json](../analysis/figures/puncturing/puncturing-frequency-allocation.png.json).
 
 ```sh
 opp_scavetool query -l \
-  -f 'name =~ "hePuncturedSubchannelMask:vector" or name =~ "heRuToneOffset:vector" or name =~ "heRuToneSize:vector" or name =~ "heStaId:vector" or name =~ "packetReceived:vector(packetBytes)"' \
-  examples/ieee80211ax/he_features/results/manual/*.sca \
-  examples/ieee80211ax/he_features/results/manual/*.vec
+  -f 'name =~ "hePuncturedSubchannelMask:vector" OR name =~ "heRuToneOffset:vector" OR name =~ "heRuToneSize:vector" OR name =~ "heStaId:vector" OR name =~ "packetReceived:vector(packetBytes)"' \
+  examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/*/*.sca \
+  examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/*/*.vec
 ```
 
-The retained packet-statistics session
-[`20260724T175025Z`](results/packet-statistics/20260724T175025Z) supplies the
-PCAP, scalar, and vector artifacts summarized in the exact tables below. The
-tables record `2264` AP/global observations for both `BccBaseline` and
-`PreamblePuncturing`; their evidence check explicitly leaves mask transitions
-and RU non-overlap to the result vectors.
+| Metric | Window/aggregation | Clean | unpunctured interference | punctured interference | dynamic | Interpretation |
+|---|---|---:|---:|---:|---:|---|
+| aggregate goodput | per-run application bytes, then mean ± 95% t-CI over 5 runs | 16.000 ± 0.000 Mbps | 63.931 ± 0.033 | 63.902 ± 0.043 | 63.921 ± 0.033 | outcome; interference rows overlap |
+| puncture mask | event vector | — | empty/0 | configured nonzero | values 0 and 2 | mechanism telemetry |
 
-To inspect the punctured AP capture directly:
+The plot provenance lists all input hashes. Interpret tone offset, tone size,
+STA ID, and mask only at aligned timestamps. Five runs support variability of
+goodput; vector samples within a run are not repetitions.
+
+## PCAP statistics
+
+Capture point: `Lan80211AxHeFeatures.ap.wlan[0]`
+
+Capture:
+`results/packet-statistics/20260724T175025Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap`
+
+Scope: legacy PCAP AP observations, simulation timestamps, TShark 4.6.4;
+FCS/checksum settings are not retained.
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/he_features/results/packet-statistics/20260724T175025Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' -c 20
+tshark -n -r \
+  'examples/ieee80211ax/he_features/results/packet-statistics/20260724T175025Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' \
+  -Y 'frame.number <= 8' -T fields -E header=y -E separator='|' \
+  -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
+  -e wlan.fc.type_subtype -e radiotap.he.data_1.data_mcs_known \
+  -e radiotap.he.data_3.data_mcs \
+  -e radiotap.he.data_1.data_bw_ru_allocation_known \
+  -e radiotap.he.data_5.data_bw_ru_allocation
 ```
+
+The generated block below is exhaustive packet-population evidence and is
+preserved verbatim; it is subordinate to the mechanism vectors.
 
 <!-- REWRITE-PREFIX-END -->
 
@@ -114,3 +209,69 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2264*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33cc52" /></svg> | Control: Subtype 0 [HE-MU, HE, GI 3.2 us] | 350 | 15.46% | 3210.0 B | 0.0 B | 3547.8 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 86.48% | 124.17% |
 
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
+
+## Frame exchange analysis
+
+| Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 1 | 0.200196 s | AP → STA 1 | QoS Data, HE-SU | MCS known=1; MCS=1; BW/RU known=1; code=2 | first warm-up downlink |
+| 2 | 0.200240 s | STA 1 → AP | Ack | no HE data fields | acknowledges data |
+| 3 | 0.200292 s | AP → STA 1 | Action | management exchange | block-ack setup |
+| 4 | 0.200337 s | STA 1 → AP | Ack | no HE data fields | acknowledges action |
+
+This is a representative retained exchange, not a puncturing proof. The
+capture authoritatively supplies known HE fields for frame 1, but no exported
+mask field ties it to a disabled 20 MHz region. The model vectors remain the
+decisive allocation evidence.
+
+## Cross-layer findings and verdict
+
+| Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
+|---|---|---|---|---|---|
+| dynamic mask changes | `PASS` | start 0.35 s, end 0.7 s, mask `"0100"` | recorded masks 0 and 2 | not decoded | delivery continues |
+| RUs avoid punctured region | `PASS` | puncture-aware scheduler selected | aligned mask/tone vectors | `INCONCLUSIVE` | not a delivery proof |
+| puncturing improves goodput | `INCONCLUSIVE` | matched interference topology | mechanism active | HE traffic visible | 95% CIs overlap |
+
+The scalar/vector and packet sessions are separate. They support adjacent
+findings but not event-level packet-to-vector causality. The evidence
+demonstrates INET's mask transition and allocation observability, while making
+no broad performance claim.
+Evidence basis: mask and known packet fields are **direct observations**,
+goodput and its intervals are **derived measurements**, and any uncorrelated
+mask-to-frame link is an **inference**.
+
+## Limitations and inconclusive claims
+
+- The retained radiotap export does not expose the puncturing mask.
+- `CleanChannelBaseline` has a different offered load and is confounded.
+- No co-recorded log ties one scheduler decision to one captured PPDU.
+- A minimal resolving run would co-record mask/tone vectors, scheduler
+  decision ID, and AP PCAP for one static and one dynamic treatment.
+
+## Further experiments
+
+- Shift the dynamic interval while holding jammer timing fixed; predict mask
+  transitions move but jammer frames do not.
+- Try each valid secondary 20 MHz mask and assert no aligned RU overlap.
+- Add a matched-load clean 80 MHz control and five paired seeds before making
+  a capacity comparison.
+
+## Implementation plan
+
+| Item | Evidence-backed plan |
+|---|---|
+| Demonstrated gap | packet artifacts cannot directly expose mask-to-PPDU correlation |
+| Intended behavior | make one scheduler decision, mask, RU geometry, and emitted PPDU joinable |
+| Smallest change surface | shared AX feature plugin/result correlation first; production telemetry only if that is insufficient |
+| Observability | stable decision/PPDU identifier in mask and RU records |
+| Validation | static and dynamic control/treatment, one run first then five paired seeds; vectors + PCAP |
+| Compatibility and risks | preserve typed-PHY fail-closed decoding and legacy suite output |
+| Architecture and sealing | required before any `src/inet` change; no production edit is authorized here |
+| Next handoff | HE scheduler/analysis owner and independent Wi-Fi regression reviewer |
+
+## Artifact provenance
+
+| Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
+|---|---|---|---|---|
+| scalar/vector | `results/scalar-vector/20260725T120411Z` | four comparison configs, 0--4 | figure JSON and named vectors | hashes in JSON; separate from PCAP |
+| PCAP/results/log | `results/packet-statistics/20260724T175025Z` | `BccBaseline`, `PreamblePuncturing`, run 0 | shared analyzer; TShark 4.6.4 | AP and STA captures retained |

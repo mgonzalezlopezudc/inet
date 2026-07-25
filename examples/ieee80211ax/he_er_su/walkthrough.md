@@ -1,21 +1,97 @@
-# HE Extended-Range Single-User Comparison
+# Walkthrough: HE extended-range single-user
 
-This example compares `CellBoundaryHeSu` and `CellBoundaryHeErSu` in the
-[HeErSuNetwork](HeErSuNetwork.ned) topology. The parameters are defined in
-[omnetpp.ini](omnetpp.ini). Application vectors measure delivery in the
-configured reception-boundary experiment, while radiotap fields establish the
-PPDU format, MCS, RU, and spatial-stream metadata.
+This walkthrough compares matched cell-boundary HE single-user (HE-SU) and HE
+extended-range single-user (HE-ER-SU) transmissions. Run-0 radiotap fields
+distinguish the PPDU formats; five-run application vectors measure the bounded
+delivery outcome under the configured error model.
 
-## Run the example
+## Learning objectives and feature primer
 
-```sh
-bin/inet -u Cmdenv -c CellBoundaryHeSu \
-  examples/ieee80211ax/he_er_su/omnetpp.ini -r 0
-bin/inet -u Cmdenv -c CellBoundaryHeErSu \
-  examples/ieee80211ax/he_er_su/omnetpp.ini -r 0
+After completing this walkthrough, the reader can:
+
+- distinguish HE-SU from HE-ER-SU physical layer protocol data units (PPDUs);
+- explain why repeated HE-SIG-A signaling can improve robustness;
+- separate transmitted-format evidence from receiver/application evidence;
+  and
+- reproduce the representative run and first diagnostics.
+
+HE-ER-SU carries one user's payload and repeats the HE-SIG-A signaling field.
+The extra signaling time trades efficiency for robustness. A format label in
+a sender-side capture proves what was transmitted, not that the receiver
+decoded it or that range improved.
+
+## Scenario description
+
+[HeErSuNetwork.ned](HeErSuNetwork.ned) extends the common single-BSS network
+with one AP and one station; a wired server sends downlink UDP. In the boundary
+pair the AP and host are 340 m apart, background noise is `-89 dBm`,
+sensitivity is `-100 dBm`, generic SNIR threshold is `0 dB`, payload is
+100 B, interval is 600 µs, and Block Ack is disabled. Traffic starts at
+`0.3 s`; there is no separate warm-up interval in the boundary pair, and
+results use `0.3–2.0 s`. [omnetpp.ini](omnetpp.ini) fixes MCS 0 in
+both cases so the primary delta is the PPDU format.
+
+```text
+server -- AP  ~~~~~~~~~ 340 m ~~~~~~~~~  host[0]
 ```
 
-Generate runs `0–4` and rebuild the comparison figure:
+`ErBss` is a separate management/rate-control example and is not part of the
+cell-boundary outcome comparison.
+
+## Standards and INET model boundary
+
+IEEE Std 802.11-2024 Clauses 27.1.4 and 27.3.4 define HE-SU and HE-ER-SU PPDU
+formats; Table 27-13 gives the longer HE-SIG-A-R duration for HE-ER-SU. These
+were verified in corpus chunks `80211ax-2024:chunk:09989`, `10075`, and
+`10124`.
+
+INET's `enableExtendedRangeSu` rate-control choice, error model, path loss,
+noise, and thresholds are modeling choices. The experiment does not decode
+HE-SIG-A success separately and does not certify a real-world range gain.
+
+## Evidence status
+
+| Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
+|---|---|---|---|---|
+| Treatment transmits HE-ER-SU at MCS 0 | `PASS` | radiotap HE profile | packet run/seed `0` | 4513 QoS Data observations |
+| Control transmits HE-SU at MCS 0 | `PASS` | radiotap HE profile | packet run/seed `0` | 4615 QoS Data observations |
+| HE-ER-SU goodput is higher in boundary setup | `PASS` | application vectors | runs/seeds `0–4` | `0.3–2.0 s` |
+| Repeated HE-SIG-A caused each delivery | `INCONCLUSIVE` | no per-frame signaling decode/outcome correlation | none | configuration-level inference |
+| General range extension | `NOT RUN` | no distance curve | none | one boundary point only |
+
+## Configuration matrix
+
+| Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
+|---|---|---|---|---|---|
+| `CellBoundaryHeSu` | Control | fixed HE-SU MCS 0 | 340 m, matched UDP/noise | `0–4` | HE-SU frames |
+| `CellBoundaryHeErSu` | Treatment | extends control; ER-SU enabled, max MCS 0 | matched | `0–4` | HE-ER-SU and improved boundary delivery |
+| `ErBss` | Feature example | ER-BSS and full management exchange | lighter traffic | packet run `0` | HE-ER-SU management/data formats |
+
+The treatment extends the control, then installs `HeMinstrelRateControl`,
+enables extended-range SU, clears the fixed data bitrate with `-1bps`, and
+caps MCS at 0. Those more specific assignments win over the general interface
+bitrate.
+
+## Expected invariants and diagnostic map
+
+| Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
+|---|---|---|---|---|
+| PPDU format differs while MCS matches | AP PCAP HE fields | same/unknown format or MCS | rate control/PHY encoder | inspect known bits and selected mode |
+| ER frame duration is longer at equal payload | packet statistics | no signaling overhead | duration calculator | compare GI, NSS, coding, and size |
+| ER boundary goodput is higher | sink byte vectors | overlap/reversal | receiver error model | correlate reception/drop telemetry per seed |
+
+## Reproduction
+
+Run from the repository root. This command is illustrative and was **NOT RUN**
+during this rewrite:
+
+```sh
+bin/inet -u Cmdenv -f examples/ieee80211ax/he_er_su/omnetpp.ini \
+  -c CellBoundaryHeErSu -r 0 --seed-set=0 \
+  --result-dir=examples/ieee80211ax/he_er_su/results/manual/CellBoundaryHeErSu
+```
+
+Campaign regeneration:
 
 ```sh
 python3 examples/ieee80211ax/analysis/run_campaign.py er -j$(nproc)
@@ -23,19 +99,12 @@ MPLCONFIGDIR=/tmp/matplotlib \
   python3 examples/ieee80211ax/analysis/first_tranche.py er
 ```
 
-The campaign is stored under
-[`results/scalar-vector/20260725T120411Z`](results/scalar-vector/20260725T120411Z).
-The figure provenance,
-[`he-er-su-boundary.png.json`](../analysis/figures/er/he-er-su-boundary.png.json),
-lists all `.sca` and `.vec` inputs with SHA-256 digests, runs `0–4`, the
-`0.3–2.0 s` window, and the exact result filters.
+## Scalar and vector analysis
 
-## Scalar/vector evidence
-
-The figure computes application goodput from
-`packetReceived:vector(packetBytes)` at `**.app[*]`. It also names
-`packetDropIncorrectlyReceived:vector(packetBytes)` at `**.mac` as an optional
-result when its value is zero.
+Inputs are the `.sca`/`.vec` pairs in each configuration directory under
+`results/scalar-vector/20260725T120411Z/`. The sidecar
+[he-er-su-boundary.png.json](../analysis/figures/er/he-er-su-boundary.png.json)
+records all hashes, filters, seeds, and the `0.3–2.0 s` window.
 
 ```sh
 opp_scavetool query -l \
@@ -43,57 +112,98 @@ opp_scavetool query -l \
   examples/ieee80211ax/he_er_su/results/scalar-vector/20260725T120411Z/*/*.vec
 ```
 
-![HE-SU and HE-ER-SU boundary comparison](../analysis/figures/er/he-er-su-boundary.png)
-
 | Configuration | Application goodput |
 |---|---:|
 | `CellBoundaryHeSu` | 0.3870 ± 0.0059 Mbit/s |
 | `CellBoundaryHeErSu` | 0.4435 ± 0.0098 Mbit/s |
 
-Values are means ± 95% Student-t confidence intervals over runs `0–4` in the
-provenance-defined window. The delivery vectors therefore show higher
-application goodput for `CellBoundaryHeErSu` in this configured experiment.
-They do not establish a general range guarantee.
+Values are per-run means ± two-sided 95% Student-t CIs over five independent
+seeds. Bytes received in `0.3–2.0 s` are aggregated within each run before
+the across-run CI. The optional incorrect-reception vector may be absent when
+zero. This supports a bounded delivery comparison, not a general range claim.
 
-## Packet evidence
+## PCAP statistics
 
-The retained run-0 packet session is
-[`results/packet-statistics/20260724T175025Z`](results/packet-statistics/20260724T175025Z).
-Its evidence checks and exact frame rows report:
+Session `results/packet-statistics/20260724T175025Z` contains run/seed 0 legacy
+PCAPs at AP and host MAC observation points. TShark 4.6.4 decodes them.
+
+```sh
+tshark -n -r 'examples/ieee80211ax/he_er_su/results/packet-statistics/20260724T175025Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
+  -q -z io,stat,0,'wlan.fc.type_subtype==0x28'
+```
 
 | Configuration | AP/global observations | QoS Data evidence |
 |---|---:|---|
-| `CellBoundaryHeSu` | 7007 | 4615 HE-SU, MCS 0, 20 MHz observations; 0 decoded as HE-ER-SU |
-| `CellBoundaryHeErSu` | 8669 | 4513 HE-ER-SU, MCS 0, 242-tone RU, NSTS 1 observations |
-| `ErBss` | 240 | 120/120 QoS Data observations decoded as HE-ER-SU |
+| `CellBoundaryHeSu` | 7007 | 4615 HE-SU, MCS 0, 20 MHz; mean 217.6 µs, 166 B |
+| `CellBoundaryHeErSu` | 8669 | 4513 HE-ER-SU, MCS 0, 242-tone RU, NSTS 1; mean 225.6 µs, 166 B |
+| `ErBss` | 240 | 120 HE-ER-SU QoS Data; MCS 0/1/2 counts 3/5/112 |
 
-For `CellBoundaryHeSu`, the QoS Data row reports mean duration `217.6 µs`,
-mean size `166.0 B`, and transmit power `10.0 dBm`. For
-`CellBoundaryHeErSu`, the matching row reports `225.6 µs`, `166.0 B`, and
-`10.0 dBm`. These radiotap-decoded rows establish equal MCS 0 and different
-HE-SU/HE-ER-SU formats; the application-delivery difference is measured by
-`packetReceived:vector(packetBytes)`, not by the transmitted-frame counts.
+Both boundary rows use 10 dBm transmit power. Counts are capture observations,
+not delivered application packets.
 
-The `ErBss` packet table further breaks its 120 HE-ER-SU QoS Data observations
-into 3 at MCS 0, 5 at MCS 1, and 112 at MCS 2; all use a 242-tone RU and one
-spatial stream according to the packet-statistics evidence check.
-
-Inspect the AP-side HE-ER-SU capture:
+## Frame exchange analysis
 
 ```sh
-tshark -n -r \
-  'examples/ieee80211ax/he_er_su/results/packet-statistics/20260724T175025Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
-  -c 20
+tshark -n -r 'examples/ieee80211ax/he_er_su/results/packet-statistics/20260724T175025Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
+  -Y 'frame.number <= 2' -T fields -E header=y -E separator='|' \
+  -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
+  -e wlan.fc.type_subtype -e radiotap.he.data_1.ppdu_format \
+  -e radiotap.he.data_3.data_mcs -e radiotap.he.data_5.data_bw_ru_allocation \
+  -e radiotap.he.data_6.nsts
 ```
 
-Regenerate the packet artifacts with:
+| Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 1 | 0.300252 s | AP → host[0] | QoS Data / HE-ER-SU | PPDU `1`, MCS 0, BW/RU code 7, NSTS 1 | treatment data |
+| 2 | 0.300314 s | host[0] → AP | Ack | subtype `0x1d` | receiver MAC response |
 
-```sh
-MPLCONFIGDIR=/tmp/matplotlib \
-  python3 examples/ieee80211ax/analysis/analyze_pcap_types.py \
-  --generate --subdir he_er_su
-```
+The typed analyzer maps code 7 to the authoritative 242-tone HE-ER-SU
+observation after checking radiotap presence and known bits.
 
-See `packet_statistics.png` for the complete QoS Data, Ack, duration, RU,
-frequency, signal, power, and estimated-airtime tables. The capture identifies
-transmitted formats; it does not separately decode HE-SIG-A reliability.
+## Cross-layer findings and verdict
+
+| Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
+|---|---|---|---|---|---|
+| ER treatment changes PPDU format | `PASS` | ER rate control enabled | selected-mode path implied | HE-ER-SU vs HE-SU decoded | n/a |
+| ER treatment improves this boundary outcome | `PASS` | matched MCS/load/channel | application receive vectors | equal-MCS format distinction | higher five-run goodput |
+| repeated SIG-A is per-frame cause | `INCONCLUSIVE` | requested format | no signaling decision vector | no SIG-A-success field | separate-session aggregate |
+
+The bounded verdict is `PASS` for PPDU-format selection and higher application
+goodput at this configured boundary, with per-packet causal attribution
+`INCONCLUSIVE`.
+
+## Limitations and inconclusive claims
+
+- Scalar/vector and packet evidence come from separate sessions.
+- The capture identifies transmitted format but not HE-SIG-A decode success.
+- One distance, path-loss realization, MCS, and noise point do not define a
+  range curve.
+- Resolve causality by co-recording selected mode, signaling/header error
+  outcome, receiver decision, and AP/host captures in one seed.
+
+## Further experiments
+
+- Sweep distance or noise around the boundary and compare matched delivery
+  curves across several seeds.
+- Add a negative control with ER disabled but dynamic rate control retained.
+
+## Implementation plan
+
+| Item | Evidence-backed plan |
+|---|---|
+| Demonstrated gap | no direct HE-SIG-A success/failure observation |
+| Intended behavior | expose signaling-field outcome without altering reception |
+| Smallest change surface | first assess existing PHY error-model signals/results; add telemetry only if absent |
+| Observability | selected PPDU format plus preamble/header/data error stage |
+| Validation | co-record control/treatment, boundary points, seeds, PCAP and receiver telemetry |
+| Compatibility and risks | telemetry must not perturb RNG or packet processing |
+| Architecture and sealing | apply architecture/sealing review before any `src/inet` edit |
+| Next handoff | HE PHY/error-model maintainer |
+
+## Artifact provenance
+
+| Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
+|---|---|---|---|---|
+| Scalar/vector | `results/scalar-vector/20260725T120411Z` | boundary pair, runs/seeds `0–4` | sidecar; `0.3–2.0 s` | SHA-256 per input |
+| PCAP | `results/packet-statistics/20260724T175025Z` | three configs, run/seed `0` | TShark 4.6.4; MAC | separate session |
+| Figure | `../analysis/figures/er/he-er-su-boundary.png` | boundary pair | per-run CI | provenance sidecar |

@@ -1,54 +1,151 @@
-# HE Rate-Adaptation Walkthrough
+# HE rate-adaptation walkthrough
 
-This walkthrough is limited to the selected-rate, probability, outcome, and
-retry telemetry recorded for the HE Minstrel configurations in
-[omnetpp.ini](omnetpp.ini). The topology is defined in
-[HeRateAdaptationNetwork.ned](HeRateAdaptationNetwork.ned).
+This walkthrough teaches how INET's HE Minstrel controller selects modulation
+and coding scheme (MCS) and spatial streams per peer. Retained five-run
+telemetry directly demonstrates changing selections and outcomes for a mobile
+edge STA; it does not retain a matched five-run fixed-rate control.
 
-## Five-run telemetry
+## Learning objectives and feature primer
 
-The scalar/vector session
-[`20260725T120411Z`](results/scalar-vector/20260725T120411Z) contains
-`HeMinstrelMobile` runs `0` through `4`. Its aligned AP rate-control vectors are:
+After completing this walkthrough, the reader can:
 
-| Vector | Evidence represented |
-|---|---|
-| `heRateSelectedMcs:vector` | Selected MCS; observed range across the five runs is MCS `0` through `9`. |
-| `heRateSelectedNss:vector` | Selected spatial-stream count; every recorded value is `1` in all five runs. |
-| `heRateSuccessProbability:vector` | Controller success-probability telemetry for the selected candidate; recorded values span `0.0158203` through `0.98` across the five runs. |
-| `heRateTxSuccess:vector` | Per-attempt outcome; its five-run success fraction is `0.998445 ± 0.001980` (95% CI). |
-| `heRateRetryCount:vector` | Controller retry telemetry; every recorded value is `0` in all five runs. |
-| `packetSentToPeerWithRetry:vector(packetBytes)` and `packetDropRetryLimitReached:vector(packetBytes)` | MAC retry and retry-limit telemetry; inspect matching AP HCF modules and timestamps rather than deriving retries from control-frame counts. |
-| `packetReceived:vector(packetBytes)` | Application delivery; five-run aggregate goodput is `13.338 ± 1.053 Mbps` (95% CI). |
+- distinguish controller choice, predicted probability, transmission outcome,
+  MAC retry, and application delivery;
+- align HE rate-control vectors by module and timestamp;
+- verify known MCS values in radiotap without substituting INI defaults; and
+- reproduce the mobile treatment and diagnose a frozen or invalid selector.
 
-The MCS range and outcome fraction demonstrate that multiple selections were
-made while nearly all recorded attempts succeeded. They do not establish a
-performance advantage because this session contains no matched comparison
-configuration.
+Rate adaptation chooses a PHY rate from recent success history. A higher MCS
+can carry more bits per symbol but needs a better channel; the number of
+spatial streams (NSS) is another dimension. Minstrel explores alternatives and
+updates a success estimate. The validation outcome is a `PASS` that the
+retained mobile run selected MCS 0--9 with valid outcome telemetry, and
+`INCONCLUSIVE` for any comparative performance advantage.
 
-## Reproduce and inspect
+## Scenario description
+
+[HeRateAdaptationNetwork.ned](HeRateAdaptationNetwork.ned) uses one wired UDP
+server, one stationary AP, and four STAs. [omnetpp.ini](omnetpp.ini) sends
+saturated downlink traffic from 0.3--1.7 s on a 20 MHz 5 GHz channel. Hosts
+0--2 are stationary; in `HeMinstrelMobile`, host 3 starts 230 m left of the AP
+and moves right at 40 m/s. The AP's backlog-aware downlink scheduler consults
+the HE rate-control module.
+
+```text
+server --> AP == HE downlink ==> host[0..2] stationary
+                              ==> host[3] moving at 40 m/s
+```
+
+## Standards and INET model boundary
+
+IEEE Std 802.11-2024 Clause 26.15.3 covers HE MCS, NSS, bandwidth, and DCM
+selection (`80211ax-2024:chunk:09938`). The standard constrains valid PHY
+operation; it does not mandate INET's Minstrel algorithm. `HeMinstrelRateControl`
+and its probability are model choices. Controller vectors are authoritative
+for internal choice; known radiotap HE bits are authoritative for captured
+MCS; application vectors are outcomes. None alone proves that Minstrel
+outperforms a fixed rate.
+
+## Evidence status
+
+| Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
+|---|---|---|---|---|
+| controller selects multiple HE MCS values | `PASS` | `heRateSelectedMcs:vector` range 0--9 | mobile 0--4 | direct controller telemetry |
+| selected NSS remains valid | `PASS` | `heRateSelectedNss:vector` all 1 | mobile 0--4 | single-stream retained scope |
+| selected-attempt success is high | `PASS` | `heRateTxSuccess:vector` | mobile 0--4 | 0.998445 ± 0.001980 |
+| Minstrel improves delivery | `INCONCLUSIVE` | only mobile five-run campaign | — | no matched five-run control |
+
+## Configuration matrix
+
+| Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
+|---|---|---|---|---|---|
+| `FixedMcs` | control | no rate-control typename; configured 7.3125 Mbps | matched static topology | packet run 0 | captured data stays at fixed MCS |
+| `HeMinstrel` | treatment | `HeMinstrelRateControl`, MCS 0--11, lookaround 0.1 | static topology | packet run 0 | controller emits choices |
+| `HeMinstrelMobile` | stress treatment | extends Minstrel; host 3 moves 40 m/s | matched downlink load | packet run 0; scalar 0--4 | MCS changes with controller state |
+| `HighCollisionRate` | unexecuted stress | adds uplink contention | bidirectional load | `NOT RUN` | failures/retries drive updates |
+
+The packet session offers run-0 controls, while the five-run result campaign
+contains only `HeMinstrelMobile`; these sessions cannot support a five-run
+algorithm comparison. Seeds must be read from result attributes.
+
+## Expected invariants and diagnostic map
+
+| Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
+|---|---|---|---|---|
+| selected MCS stays in configured 0--11 | AP controller vector | out-of-range or empty value | HE Minstrel candidate table | query module path and rate-control logs |
+| probability and outcome align to attempts | same-module timestamped vectors | missing/misaligned samples | controller instrumentation | export narrow interval as CSV-R |
+| captured MCS is known | AP PCAP known bit + value | value present without known bit | recorder / typed HE decoder | inspect `radiotap.he.data_1.data_mcs_known` |
+| retry outcome is consistent | controller plus MAC retry/drop vectors | contradictory counts/timestamps | rate control / HCF retry | correlate one attempt in co-recorded run |
+
+## Reproduction
+
+Run from the repository root:
 
 ```sh
-bin/inet -u Cmdenv -c HeMinstrelMobile -r 0 examples/ieee80211ax/he_rate_adaptation/omnetpp.ini --result-dir=examples/ieee80211ax/he_rate_adaptation/results/manual
+bin/inet -u Cmdenv -f examples/ieee80211ax/he_rate_adaptation/omnetpp.ini \
+  -c HeMinstrelMobile -r 0 \
+  --result-dir=examples/ieee80211ax/he_rate_adaptation/results/manual/HeMinstrelMobile
 ```
+
+Status: `NOT RUN` during this rewrite. The retained packet run's
+`cmdenv.stdout` reached 2 s and `End.`; original process exit status and exact
+command were not retained. Suite regeneration (`NOT RUN` here):
+
+```sh
+python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir he_rate_adaptation --run 0
+```
+
+## Scalar and vector analysis
+
+Inputs:
+`results/scalar-vector/20260725T120411Z/HeMinstrelMobile/*.{sca,vec}`.
+Figure provenance:
+[rate-adaptation-timeline.png.json](../analysis/figures/rate/rate-adaptation-timeline.png.json).
 
 ```sh
 opp_scavetool query -l \
-  -f 'name =~ "heRateSelectedMcs:vector" or name =~ "heRateSelectedNss:vector" or name =~ "heRateSuccessProbability:vector" or name =~ "heRateTxSuccess:vector" or name =~ "heRateRetryCount:vector" or name =~ "packetSentToPeerWithRetry:vector(packetBytes)" or name =~ "packetDropRetryLimitReached:vector(packetBytes)"' \
-  examples/ieee80211ax/he_rate_adaptation/results/manual/*.sca \
-  examples/ieee80211ax/he_rate_adaptation/results/manual/*.vec
+  -f 'name =~ "heRateSelectedMcs:vector" OR name =~ "heRateSelectedNss:vector" OR name =~ "heRateSuccessProbability:vector" OR name =~ "heRateTxSuccess:vector" OR name =~ "heRateRetryCount:vector" OR name =~ "packetSentToPeerWithRetry:vector(packetBytes)" OR name =~ "packetDropRetryLimitReached:vector(packetBytes)" OR name =~ "packetReceived:vector(packetBytes)"' \
+  examples/ieee80211ax/he_rate_adaptation/results/scalar-vector/20260725T120411Z/HeMinstrelMobile/*.sca \
+  examples/ieee80211ax/he_rate_adaptation/results/scalar-vector/20260725T120411Z/HeMinstrelMobile/*.vec
 ```
 
-The retained packet-statistics session
-[`20260724T175025Z`](results/packet-statistics/20260724T175025Z) contains AP and
-station captures plus `.sca`/`.vec` files for `FixedMcs`, `HeMinstrel`, and
-`HeMinstrelMobile`. Its exact tables below establish protocol-visible frame
-populations. The table's evidence check correctly treats selected MCS/NSS,
-probability, outcomes, and retries as vector evidence.
+| Metric | Source/units | Aggregation | Five-run result | Interpretation |
+|---|---|---|---:|---|
+| selected MCS | controller vector, index | observed range | 0--9 | mechanism choice |
+| selected NSS | controller vector, streams | observed values | 1 only | mechanism choice |
+| success probability | controller vector, ratio | observed range | 0.0158203--0.98 | internal estimate |
+| attempt success | outcome vector, Boolean | fraction per run, then mean ± 95% t-CI | 0.998445 ± 0.001980 | direct attempt outcome |
+| retry count | controller vector, count | observed values | 0 only | not a MAC retry substitute |
+| aggregate goodput | app received bytes | per run, then mean ± 95% t-CI | 13.338 ± 1.053 Mbps | end-to-end outcome |
+
+Vector samples are not independent repetitions. Retry diagnosis must include
+the AP HCF `packetSentToPeerWithRetry` and retry-limit drop vectors at matched
+timestamps; control-frame counts are not a substitute.
+
+## PCAP statistics
+
+Capture point: `HeRateAdaptationNetwork.ap.wlan[0]`
+
+Capture:
+`results/packet-statistics/20260724T175025Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap`
+
+Scope: AP packet-signal observations in legacy PCAP with simulation
+timestamps; TShark 4.6.4; FCS/checksum settings not retained.
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260724T175025Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap' -c 20
+tshark -n -r \
+  'examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260724T175025Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap' \
+  -Y 'wlan.fc.type_subtype == 0x0028' \
+  -T fields -E header=y -E separator='|' \
+  -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
+  -e radiotap.he.data_1.data_mcs_known \
+  -e radiotap.he.data_3.data_mcs -e wlan.fc.retry
 ```
+
+The preserved generated block is exhaustive population evidence; its
+controller check remains correctly `INCONCLUSIVE`.
 
 <!-- REWRITE-PREFIX-END -->
 
@@ -130,3 +227,71 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4800*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#82cc33" /></svg> | A-MPDU Delimiter / Aggregation Overhead | 916 | 19.08% | 3.0 B | 0.0 B | 21.0 us | 0.0 us | - | 3349.7 dBm | - | 1.94% | 0.96% |
 
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
+
+## Frame exchange analysis
+
+| Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 1 | 0.201124 s | AP → STA 1 | QoS Data, HE-SU | MCS known=1, MCS=0, retry=0 | warm-up transmission |
+| 2 | 0.201184 s | STA 1 → AP | Ack | retry=0 | acknowledges frame 1 |
+| 3 | 0.201236 s | AP → STA 1 | Action | management | block-ack setup |
+| 5 | 0.201351 s | STA 1 → AP | Action | management | setup response |
+| 7 | 0.202580 s | AP → STA 2 | QoS Data, HE-SU | MCS known=1, MCS=0, retry=0 | next peer transmission |
+
+These frames directly establish known captured MCS values and exchange order.
+They do not reveal Minstrel's probability or candidate-selection reason; those
+are internal vectors. TShark frame numbers are not OMNeT++ event numbers.
+
+## Cross-layer findings and verdict
+
+| Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
+|---|---|---|---|---|---|
+| HE Minstrel is active and varies MCS | `PASS` | controller typename and 0--11 bounds | observed 0--9, NSS 1 | known HE MCS visible | 13.338 ± 1.053 Mbps |
+| selected attempts usually succeed | `PASS` | same treatment | success 0.998445 ± 0.001980 | representative retry bit 0 | delivery recorded |
+| Minstrel beats fixed MCS | `INCONCLUSIVE` | fixed control exists | no five-run fixed telemetry | separate run-0 populations | no matched estimate |
+
+The five-run results and run-0 PCAP session are separate and cannot establish
+event-level vector-to-frame causality. The bounded verdict is that controller
+selection and outcome observability work for the mobile treatment; comparative
+algorithm efficacy is not demonstrated.
+Evidence basis: selections, outcomes, and known radiotap fields are **direct
+observations**; success fractions and goodput intervals are **derived
+measurements**; a controller decision causing a separately captured frame
+would be an **inference**.
+
+## Limitations and inconclusive claims
+
+- No five-run `FixedMcs` or static `HeMinstrel` result set is retained.
+- The mobile campaign changes path geometry only for host 3, but the reported
+  aggregate goodput pools all four destinations.
+- Controller retry count and MAC retry signals need a same-attempt join.
+- A matched three-configuration campaign with paired seeds and per-peer
+  delivery would resolve the primary comparison gap.
+
+## Further experiments
+
+- Run `FixedMcs`, `HeMinstrel`, and `HeMinstrelMobile` with five paired seeds;
+  predict selection variability only in adaptive rows.
+- Sweep host-3 speed while retaining per-peer MCS, SNIR, delay, and delivery.
+- Run `HighCollisionRate` and predict nonzero failure/retry telemetry before
+  interpreting throughput.
+
+## Implementation plan
+
+| Item | Evidence-backed plan |
+|---|---|
+| Demonstrated gap | no stable join among candidate choice, probability, frame, and MAC retry |
+| Intended behavior | make one rate decision traceable through attempt and outcome |
+| Smallest change surface | shared analysis correlation first; controller/HCF telemetry only if identifiers are absent |
+| Observability | decision ID, peer, MCS/NSS, probability, attempt, retry, result |
+| Validation | fixed/adaptive/mobile matched controls; boundary MCS checks and five paired seeds |
+| Compatibility and risks | instrumentation must not perturb exploration timing or random streams |
+| Architecture and sealing | apply architectural requirements before any production source change |
+| Next handoff | HE rate-control owner and independent regression reviewer |
+
+## Artifact provenance
+
+| Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
+|---|---|---|---|---|
+| scalar/vector | `results/scalar-vector/20260725T120411Z` | mobile 0--4 | figure JSON and named vectors | hashes retained in JSON |
+| PCAP/results/log | `results/packet-statistics/20260724T175025Z` | fixed, Minstrel, mobile; run 0 | shared analyzer; TShark 4.6.4 | separate from five-run campaign |

@@ -4,11 +4,71 @@ This example contains controlled downlink scheduler workloads and run-0 packet
 captures. Result claims in this walkthrough refer only to the retained artifacts
 listed below.
 
-## Evidence sets
+## Learning objectives and feature primer
 
-- Scalar/vector session: [`results/scalar-vector/20260725T120411Z`](results/scalar-vector/20260725T120411Z). Every dashboard condition has runs 0 through 4 with both `.sca` and `.vec` files.
-- Dashboard: [DL scheduler figure](../analysis/figures/dl/dl-scheduler-dashboard.png) and its [provenance](../analysis/figures/dl/dl-scheduler-dashboard.png.json). The provenance records the input-file hashes, the `0.3–0.88 s` window, and the exact vector filters.
-- Packet session: [`results/packet-statistics/20260725T105717Z`](results/packet-statistics/20260725T105717Z). The generated tables below are exact run-0 AP/global and per-host capture summaries from that session.
+After completing this walkthrough, the reader can:
+
+- explain how downlink OFDMA lets an access point (AP) transmit to several
+  stations in one high-efficiency multi-user (HE-MU) physical-layer protocol
+  data unit (PPDU);
+- distinguish equal-RU, backlog-based, head-of-line (HoL), and single-user
+  Enhanced Distributed Channel Access (EDCA) configurations;
+- identify simultaneous HE-MU QoS Data and the following acknowledgment
+  exchange in a capture; and
+- reproduce the five-run outcome queries and run-0 packet inspection.
+
+The AP partitions channel tones into resource units (RUs), selects recipients,
+and transmits separate payloads concurrently. The equal-RU `fBW` policy chooses
+the widest equal layout for a subset of users; `fHoL` serves all backlogged
+users using the smallest fitting layout. Backlog and HoL schedulers instead
+adapt service to unequal queues. The central validation invariant is a decoded
+HE-MU transmission to multiple recipients at the same timestamp, supported by
+AP scheduler telemetry and application outcomes.
+
+## Scenario description
+
+The [network](Lan80211AxDlOfdma.ned) and [configuration](omnetpp.ini) contain
+one fixed AP, three fixed stations, and a wired UDP server. The AP sits at
+`(250,200)` m and the stations at three nearby coordinates; all use a 5 GHz,
+20 MHz channel except the explicit 80 MHz variants. Warm-up traffic establishes
+Block Ack agreements before 0.25 s. Measured server-to-station traffic starts
+at 0.3 s; the run ends at 1 s and the dashboard uses `[0.3,0.88)` s.
+
+```text
+server === wired LAN === AP  -- HE downlink -->  host[0]
+                               |-------------->  host[1]
+                               `-------------->  host[2]
+```
+
+The geometry is stationary and close range, with no external interferer. It
+isolates scheduling and queueing, but is not a coverage or coexistence study.
+
+## Standards and INET model boundary
+
+IEEE Std 802.11-2024 defines a downlink HE-MU PPDU as one transmitted by an HE
+AP to one or more associated HE stations (definition in
+`80211ax-2024:chunk:00350`). Clause 27.3.11 describes HE-SIG-B; its Common
+field carries RU allocation and its User Specific fields tell recipients how
+to decode their payloads (`80211ax-2024:chunk:10175`). These are normative PHY
+structures.
+
+INET's `HeHcf` and scheduler classes are model abstractions. AP-radio vectors
+expose STA ID, scheduled PSDU bytes, and user PPDU duration. Radiotap directly
+decodes HE-MU format and RU width for captured observations, but the capture
+does not expose the scheduler's internal objective. The SU control also changes
+queue organization: one shared 300-packet queue replaces three destination
+queues. Outcome differences therefore cannot be attributed to frequency
+partitioning alone.
+
+## Evidence status
+
+| Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
+|---|---|---|---|---|
+| OFDMA treatment records HE-MU transmissions | `PASS` | run-0 AP PCAP HE PPDU format and RU decode | Packet session `20260725T105717Z`, run 0 | Direct packet observation |
+| Multiple recipients share one HE-MU transmission time | `PASS` | frames 20–21 at 0.300605 s | `EqualSizedRUs_fBW`, run 0 | Two recipients, 106-tone RUs |
+| Scheduler telemetry is present | `PASS` | aligned `heStaId`, `heScheduledPsduBytes`, `heUserPpduDuration` vectors | Scalar/vector session `20260725T120411Z`, runs 0–4 | Direct model telemetry |
+| Equal-RU treatments improve retained symmetric outcomes | `PASS` | application goodput and per-run pooled p95 delay | Five seeds | Bounded by queue confounder |
+| Scheduler objective caused a particular captured allocation | `INCONCLUSIVE` | Results and PCAP are separate sessions | — | No event-level correlation |
 
 The dashboard computes one observation per run. Goodput sums
 `packetReceived:vector(packetBytes)` at the application sinks. Delay is the
@@ -18,7 +78,7 @@ Reported uncertainty is a two-sided 95% Student-t confidence interval over runs
 `heStaId:vector`, `heScheduledPsduBytes:vector`, and
 `heUserPpduDuration:vector`; these exact filters appear in the provenance file.
 
-## Configurations
+## Configuration matrix
 
 The configuration facts in this table come from [the INI file](omnetpp.ini).
 They describe inputs, not measured outcomes.
@@ -34,7 +94,30 @@ configs use `HeHcf`, whose destination queues are separate. The symmetric
 comparison therefore holds aggregate configured queue capacity at 300 packets
 but does not isolate frequency partitioning from queue organization.
 
-## Five-run scalar/vector results
+## Expected invariants and diagnostic map
+
+| Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
+|---|---|---|---|---|
+| AP schedules at least two users together | aligned AP-radio telemetry and same-time HE-MU frames | one STA ID or only HE-SU | DL scheduler/rate selection | inspect scheduler vectors, then AP PCAP |
+| Captured users occupy valid RUs | radiotap HE format/RU fields | unknown or overlapping allocation | transmitter/recorder/typed decoder | typed-HE decode and transmitter logs |
+| HE-MU data receives a response | QoS Data → MU-BAR/Block Ack timeline | missing response/retry | acknowledgment policy or reception | receiver PCAP and Block Ack logs |
+| Outcome comparison uses matched inputs | provenance, result metadata, window | mismatched seed/window/load | campaign/analysis | inspect JSON hashes and run attributes |
+
+## Reproduction
+
+Run from the INET repository root. This minimal command was **not executed
+during this rewrite**; status: `NOT RUN`.
+
+```sh
+bin/inet -u Cmdenv -f examples/ieee80211ax/dl_ofdma/omnetpp.ini \
+  -c EqualSizedRUs_fBW -r 0 \
+  --result-dir=/tmp/inet-dl-ofdma-equal-rus-r0
+```
+
+The retained scalar/vector and PCAP sessions are historical evidence with
+complete artifacts; no new simulation exit status is claimed here.
+
+## Scalar and vector analysis
 
 ![Downlink scheduler dashboard](../analysis/figures/dl/dl-scheduler-dashboard.png)
 
@@ -69,14 +152,7 @@ aggregate goodput and pooled p95 values are equal at 2.5 ms and longer
 intervals. Pooled p95 combines samples from flows with different packet sizes
 and must not be read as a per-flow percentile.
 
-## Reproduction
-
-Run one configuration from the repository root:
-
-```sh
-bin/inet -u Cmdenv -f examples/ieee80211ax/dl_ofdma/omnetpp.ini \
-  -c EqualSizedRUs_fBW -r 0
-```
+### Regeneration and result inspection
 
 Regenerate the five-run result group and validate the checked-in dashboard:
 
@@ -108,6 +184,105 @@ Ack row establishes that the frame subtype was observed at the recorded
 interface; it does not by itself establish application delivery or explain a
 scheduler decision. The scalar/vector dashboard supplies the application result
 evidence.
+
+## PCAP statistics
+
+Capture point: `Lan80211AxDlOfdma.ap.wlan[0]`, with per-host captures retained.
+Capture session: `results/packet-statistics/20260725T105717Z`.
+Decode scope: captured transmission/MPDU observations, TShark 4.6.4; HE fields
+are reported only when radiotap marks them known.
+
+```sh
+tshark -n -r \
+  'examples/ieee80211ax/dl_ofdma/results/packet-statistics/20260725T105717Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
+  -q -z io,stat,0,'radiotap.he.data_1.ppdu_format == 2','wlan.fc.type_subtype == 0x19'
+```
+
+| Configuration | Observation count | Relevant frame/PHY summary | Interpretation limit |
+|---|---:|---|---|
+| `EqualSizedRUs_fBW` | 4,414 | HE-MU QoS Data, MU-BAR, Block Ack | no scheduler intent in subtype totals |
+| `SuEdcaBaseline` | 1,790 | SU control observations | queue organization also differs |
+| Generated DL set | nonempty | typed HE fields when known | run 0 only |
+
+The generated check below also records a `FAIL`: recipient addresses do not
+support reliable per-flow grouping for all HE-MU observations. Application
+sink vectors remain authoritative for per-flow outcomes.
+
+## Frame exchange analysis
+
+```sh
+tshark -n -r \
+  'examples/ieee80211ax/dl_ofdma/results/packet-statistics/20260725T105717Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
+  -Y 'frame.number >= 19 && frame.number <= 24' \
+  -T fields -E header=y -E separator='|' -E occurrence=a \
+  -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
+  -e wlan.ta -e wlan.ra -e radiotap.he.data_1.ppdu_format \
+  -e radiotap.he.data_5.data_bw_ru_allocation -e wlan.qos.tid \
+  -e _ws.col.Info
+```
+
+| Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 19 | 0.300148 s | AP → STA 1 | QoS Data, HE-SU | format 0, full 20 MHz, TID 0 | preceding SU service |
+| 20 | 0.300605 s | AP → STA 2 | QoS Data, HE-MU | format 2, 106-tone RU, TID 0 | simultaneous user 1 |
+| 21 | 0.300605 s | AP → STA 3 | QoS Data, HE-MU | format 2, 106-tone RU, TID 0 | simultaneous user 2 |
+| 22 | 0.300661 s | AP → broadcast | Trigger, HE MU-BAR | subtype 0x12 | solicits responses |
+| 23 | 0.300811 s | STA 2 → AP | HE-TB Block Ack | format 3, 106-tone RU | response 1 |
+| 24 | 0.300812 s | STA 3 → AP | HE-TB Block Ack | format 3, 106-tone RU | response 2 |
+
+This is direct packet evidence of a two-user exchange. The scheduler vectors
+belong to a separate session, so linking this allocation to one internal
+decision is inference.
+
+## Cross-layer findings and verdict
+
+| Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
+|---|---|---|---|---|---|
+| Equal-RU DL OFDMA is exercised | `PASS` | `HeHcf`/equal-RU scheduler | aligned AP vectors | frames 20–24 | symmetric goodput/delay |
+| Equal-RU exceeds SU in retained symmetric case | `PASS` | matched load/channel; different queues | OFDMA telemetry | SU/MU sessions | 2.388/2.400 vs 1.744 Mbit/s and lower p95 |
+| Backlog is universally superior to HoL | `FAIL` | matched asymmetric pairs | scheduler telemetry | run-0 captures | separation only at 1.5/2 ms |
+| Named policy caused this captured allocation | `INCONCLUSIVE` | policy requested | separate session | decoded exchange | no event correlation |
+
+The evidence directly establishes a representative HE-MU exchange and bounded
+outcomes. It neither proves a universal scheduler ranking nor isolates OFDMA
+from the queue-organization confounder.
+
+## Limitations and inconclusive claims
+
+- Results session `20260725T120411Z` and packet session `20260725T105717Z`
+  cannot prove event-level causality.
+- The SU/OFDMA control changes queue organization.
+- Pooled p95 is not a per-flow percentile.
+- Recipient-address grouping fails for some HE-MU observations.
+- One co-recorded equal-RU run with AP vectors and AP/STA PCAP is the smallest
+  additional evidence needed.
+
+## Further experiments
+
+- Match per-destination queues in an SU control.
+- Sweep one asymmetric interval around 2–2.5 ms.
+- Repeat the representative pair with co-recorded packet and scheduler data.
+
+## Implementation plan
+
+| Item | Evidence-backed plan |
+|---|---|
+| Demonstrated gap | HE-MU addresses do not reliably support per-flow PCAP grouping |
+| Intended behavior | expose unambiguous user attribution without inventing absent PHY fields |
+| Smallest change surface | OFDMA feature plugin/typed-HE analysis using existing STA-ID telemetry; no production edit yet |
+| Observability | co-record PPDU/user identity, STA ID, scheduled bytes, and sink |
+| Validation | equal-RU plus SU control; unique mapping and unchanged totals |
+| Compatibility and risks | preserve fail-closed typed profiles |
+| Architecture and sealing | required before any future `src/inet` edit |
+| Next handoff | result/packet analyst, then implementer only if a model gap is proven |
+
+## Artifact provenance
+
+| Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
+|---|---|---|---|---|
+| Scalar/vector | `results/scalar-vector/20260725T120411Z` | dashboard configs, runs 0–4 | provenance; `[0.3,0.88)` s | hashes retained in figure JSON |
+| PCAP | `results/packet-statistics/20260725T105717Z` | generated configs, run 0 | TShark 4.6.4, AP/host | generated block preserved |
+| Figure | `../analysis/figures/dl/dl-scheduler-dashboard.png` | five-run groups | one observation/run, 95% t CI | provenance file retained |
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ## 802.11 Packet Type Statistics
