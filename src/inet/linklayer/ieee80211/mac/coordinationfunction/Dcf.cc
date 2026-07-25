@@ -59,12 +59,30 @@ void Dcf::forEachChild(cVisitor *v)
 void Dcf::handleMessage(cMessage *msg)
 {
     if (msg == startRxTimer) {
-        if (!isReceptionInProgress()) {
+        if (!frameSequenceHandler->isSequenceRunning())
+            return;
+        else if (isReceptionInProgress())
+            deferredStartRxTimeoutStep = frameSequenceHandler->getContext()->getLastStep();
+        else
             frameSequenceHandler->handleStartRxTimeout();
-        }
     }
     else
         throw cRuntimeError("Unknown msg type");
+}
+
+void Dcf::handleDeferredStartRxTimeout()
+{
+    if (deferredStartRxTimeoutStep == nullptr || isReceptionInProgress())
+        return;
+    auto timeoutStep = deferredStartRxTimeoutStep;
+    deferredStartRxTimeoutStep = nullptr;
+    // IEEE Std 802.11-2024, 10.3.2.9 and 10.3.2.11: a reception that starts
+    // before the response timeout is processed before deciding that the
+    // expected response is missing. Do not apply the expired timeout to a
+    // step that the received frame has already completed.
+    if (frameSequenceHandler->isSequenceRunning() &&
+            frameSequenceHandler->getContext()->getLastStep() == timeoutStep)
+        frameSequenceHandler->handleStartRxTimeout();
 }
 
 void Dcf::channelGranted(IChannelAccess *channelAccess)
@@ -134,6 +152,7 @@ void Dcf::recipientProcessTransmittedControlResponseFrame(Packet *packet, const 
 void Dcf::scheduleStartRxTimer(simtime_t timeout)
 {
     Enter_Method("scheduleStartRxTimer");
+    deferredStartRxTimeoutStep = nullptr;
     scheduleAfter(timeout, startRxTimer);
 }
 
@@ -173,6 +192,7 @@ void Dcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         emit(packetDroppedSignal, packet, &details);
         delete packet;
     }
+    handleDeferredStartRxTimeout();
 }
 
 void Dcf::transmitFrame(Packet *packet, simtime_t ifs)
@@ -203,6 +223,7 @@ void Dcf::transmitFrame(Packet *packet, simtime_t ifs)
 void Dcf::frameSequenceFinished()
 {
     Enter_Method("frameSequenceFinished");
+    deferredStartRxTimeoutStep = nullptr;
     emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
     // IEEE Std 802.11-2024, 10.3.4.3: after a frame exchange the DCF releases
     // the current access and, if traffic remains, performs another contention.
@@ -414,7 +435,9 @@ bool Dcf::isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const
 void Dcf::corruptedFrameReceived()
 {
     Enter_Method("corruptedFrameReceived");
-    if (frameSequenceHandler->isSequenceRunning() && !startRxTimer->isScheduled()) {
+    if (deferredStartRxTimeoutStep != nullptr)
+        handleDeferredStartRxTimeout();
+    else if (frameSequenceHandler->isSequenceRunning() && !startRxTimer->isScheduled()) {
         frameSequenceHandler->handleStartRxTimeout();
     }
     else

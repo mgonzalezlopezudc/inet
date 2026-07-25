@@ -9,5 +9,5 @@ Remain read-only. Locate the first layer where the observed exchange diverges: u
 """
 nickname_candidates = ["Beacon", "Spectrum", "Airtime"]
 model = "gpt-5.6-sol"
-model_reasoning_effort = "high"
+model_reasoning_effort = "medium"
 sandbox_mode = "read-only"

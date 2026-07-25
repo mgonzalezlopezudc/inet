@@ -1,9 +1,69 @@
 {
   "aggregation": {
+    "fairness": "Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined",
     "observation": "one value per run",
-    "uncertainty": "95% Student-t CI"
+    "uncertainty": "95% Student-t CI",
+    "zero_success_runs": {
+      "MixedUora": 0,
+      "UoraHeavyContention": 1,
+      "UoraLightContention": 0,
+      "UoraMoreRandomAccessRus": 0
+    }
   },
   "conditions": [
+    {
+      "configuration": "MixedUora",
+      "group": "uora",
+      "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "label": "Mixed, adaptive 1\u20133 RA-RUs",
+      "measurement": {
+        "end_s": 2.0,
+        "start_s": 0.3
+      },
+      "metadata": {},
+      "result_files": [
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#0.sca",
+          "sha256": "85e06386d268aae34e509dfd330d2c04f6bcb8f3f177f6c6015516a29b4d456a"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#0.vec",
+          "sha256": "d806e750de41b392d1653dde17726fc90a94ce49e91695b403ab160bc9ec980a"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#1.sca",
+          "sha256": "6a79991439d9245d27c917b930c2fb9638c684bd5a4ef2591d5a0933290973c6"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#1.vec",
+          "sha256": "5a43072e2404f5db0348b2378e9b575d2946c80c55603b920797ed9b1a0624c7"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#2.sca",
+          "sha256": "eb75db6660f2292dc9a1a256a9977305c8f7a0b08d50fbf621fa8e097101c063"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#2.vec",
+          "sha256": "b00ba935a196ed2db5e4e6ea674a19bd43f831bc799e7f95f1abbbbcc7b7c6d1"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#3.sca",
+          "sha256": "778da6bef0946495d775310c1c6fc4b5fb0dd51e25254d63b7e319378f471538"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#3.vec",
+          "sha256": "79214bb975d6b406d4dca3b6d28fc33d806e86d1a64d7de207d8e0da08a21bda"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#4.sca",
+          "sha256": "dbb33a8a6dbc717cd97dbd6160051ca234c0689df08234aedd7317568068bf77"
+        },
+        {
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/MixedUora-#4.vec",
+          "sha256": "347bea56090d8c4b674d723c56009d282b7310a18c058d6598e43a016ddcac30"
+        }
+      ]
+    },
     {
       "configuration": "UoraLightContention",
       "group": "uora",
@@ -16,44 +76,44 @@
       "metadata": {},
       "result_files": [
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#0.sca",
-          "sha256": "604d3e8d4723d72560171dc28d56acb0ca4159958928899998fc560d84f38d63"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#0.sca",
+          "sha256": "368abee839d3ce89a993e68f25c465244846a7815d06905a757eab188ad231ce"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#0.vec",
-          "sha256": "cb150131248919cfcdb1780ae2b1a745580b75c12612378682fbeeab7507c07d"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#0.vec",
+          "sha256": "034049e6298227b994e44d612ed8a4f2ec9b55ff430a791c4b4111731687155f"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#1.sca",
-          "sha256": "7cec7d7744be15c5a796e9083e854937c8c253103511a13929f289652db90220"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#1.sca",
+          "sha256": "c19a80baafe533bae3be1388a50a6f99066e28da93413dafeeded9f68166f03b"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#1.vec",
-          "sha256": "3292b57c0e1d93a3783ddc05c5463ac22c7864db20e307ce705c6c0e64cd9b79"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#1.vec",
+          "sha256": "4e09e0a1f4195543239bdd0dc7920676a54ee1260cd8dc23ed83a06245c00617"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#2.sca",
-          "sha256": "173550be2b58cd822d7b9e56cf01b1e392513be2544157ff213f4dfb51b7f210"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#2.sca",
+          "sha256": "d628b30cc4f505fe03df9d963dca9c7b294b1c00923d415a41bd666be27f606b"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#2.vec",
-          "sha256": "2249646414e4f467bb9099433d6e177f3a318029494ab55bf6923c56690d5591"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#2.vec",
+          "sha256": "ca14fba5fee59908b2059d9f020ea3d6241d0327f8e5ed33b2f31053d0e12d9a"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#3.sca",
-          "sha256": "ff42147f5d6a80e10652f1c364317a124a06a7ab15750ee6a8c88cda22646221"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#3.sca",
+          "sha256": "4e9eca30221c093d103380a64e889ac01bad0c80ba7ac70b7059beb816a4b70a"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#3.vec",
-          "sha256": "faf32eebf6231de9499c3b958b0531accf63ae6b5db102deb46f1b9b6b0edbc4"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#3.vec",
+          "sha256": "e76233461f4c4de47f3130c57948f9f368273c8f87ca72829676ee160b01787a"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#4.sca",
-          "sha256": "6e7bebc5438cb80e62a475204e21f58c163f624baa57da7e00407a09a4e10de7"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#4.sca",
+          "sha256": "902c7a309e30505a74ebdb07a2445c9032a95d372b89f6f20234a4419af65da6"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraLightContention-#4.vec",
-          "sha256": "da728a248b97a4038e713f9d95a5f861f0d522ed365a0e0aff9dac00f617cbdc"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/UoraLightContention-#4.vec",
+          "sha256": "6dad8ebc6809a0c845787e591ab69988bea95b0fcf796d660c1e3ca0a82ffb16"
         }
       ]
     },
@@ -69,44 +129,44 @@
       "metadata": {},
       "result_files": [
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#0.sca",
-          "sha256": "a55d5d19284b27448303dce609c2075b1f45c2a628543dbb8d3bc22328fb43c3"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#0.sca",
+          "sha256": "132b607d777f050aa10f030fa22a0ce3b8445c04e2ce418ff28beff9162f6cc3"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#0.vec",
-          "sha256": "61a52901fbe7a1b9c6b27f9a7e916da142122a099997f4a86dc8986ab080f573"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#0.vec",
+          "sha256": "d5e67c3e868a4a2abf58f40e97ecd5df5964aea18163ee910f036548c5b500fc"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#1.sca",
-          "sha256": "191ba47a175973b845b60bac225e85dd892feb0518c2db168fcc9ec673a5f35a"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#1.sca",
+          "sha256": "f6b792efe82d951e034adf95601668d7596b7bca9e251c64607567bbe33cea22"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#1.vec",
-          "sha256": "ae932f2553ad54b43a02e42c8c81bfaedfb2d1b8153af00c1683211358b784ea"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#1.vec",
+          "sha256": "aa6872177616bd9476de63ea2960d140ce6f5826bb669664d028a8eb9d23b4ed"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#2.sca",
-          "sha256": "361d4c01ec21da655d43256ee41960ab666b9b20bf399811ab4b4544c06c6b53"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#2.sca",
+          "sha256": "e3bb527f6e1f30938eb3d7f5aa489a403389e0f9bdddf45a9e324a95f8890b4e"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#2.vec",
-          "sha256": "0f5c3d34edb8e3a5ef982afe5369d7fac8333e99b1ac7a87efda34e21137a196"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#2.vec",
+          "sha256": "924797f862bd3b8f6bc7a00aae4e6f0b0d6ad5afa6f48924f54b2efa5fa67a23"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#3.sca",
-          "sha256": "f1a20b0fc554a5efb6c9df7aabda64b599dee227c3726be93068e4affd7dd49d"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#3.sca",
+          "sha256": "4b12eec274c866506088a660bbe8cf53756e91e44c63cbfc6ec6be17fb7a89b6"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#3.vec",
-          "sha256": "31dd8bad28612a9fec15b08012d5da5c99bd0266b7f86ac9b76940e58cd1e39a"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#3.vec",
+          "sha256": "3cecdf4662925d75dc7be244b6a63f5e4901e3e78c6f7860bd9e09456bc556c9"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#4.sca",
-          "sha256": "50285eaab190b3fbd685468ad6efabeebafeabdff4022127ba35faf33e0be28d"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#4.sca",
+          "sha256": "4f9cb34f8de8c387a8f4fb239e38e7b1b64a74fc17a5d74d792eb35d3239755a"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraHeavyContention-#4.vec",
-          "sha256": "65fd699137bff8e9cf352253971c35a57d3c28601a0f867bc3d4317e0b654f73"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/UoraHeavyContention-#4.vec",
+          "sha256": "91afc42a402ff3abac70f99807bfec253837660e7b9baf5de3af9e46787747d5"
         }
       ]
     },
@@ -122,51 +182,51 @@
       "metadata": {},
       "result_files": [
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#0.sca",
-          "sha256": "4ef9f0387dad6f5c53522cc9b81f7bbdce75cb26bff695ae5b033bbe8e9054e9"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0.sca",
+          "sha256": "970fc9e2dc6821e4c5a6fa0053f926f219d223fd16b22658b3919ae26fa1ef59"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#0.vec",
-          "sha256": "8c3296bc3a4792fed130b03848195bbbe7c465204a82c870b179f6ab9e0725ff"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0.vec",
+          "sha256": "df074bf61aae206bfdd72fbe29b9a37eb65055bd9bdf214a93ebff61fe7f2ff5"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#1.sca",
-          "sha256": "09f98f097ca3e14d5411f4a566d3e30db398bf6a9498bb61591b656f178811d6"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#1.sca",
+          "sha256": "267e6b3cabd71aa9dd7f0c412e99b4faa94f46310152cce862d3d2f3fb5d4d9c"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#1.vec",
-          "sha256": "c7c33446867528b4c077b5e7642b80a46e99db91da2dc5c6806640803d7e5966"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#1.vec",
+          "sha256": "14896ce8f1412a1f3767d5862b23e0b9fd15d11e52c13b098fe22458e40d2cdf"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#2.sca",
-          "sha256": "8ccb6a2dc0e0d0cba0f16729cfa20d4629d4cd342610cbc1c5238fd10a638e4f"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#2.sca",
+          "sha256": "bbff999d1eb2a1d3374e13998641a2bfa28417f54cc3af384c7262dffcd2d51d"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#2.vec",
-          "sha256": "57766fa5e1b39391a599f1c2aa365d7ac6721c6a6e6109b4f4476b985d7f7d0e"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#2.vec",
+          "sha256": "ee290eabb3d1a7a4ef43b9a4b1ec6c91d51604ccc32cd2cbe3734b488fc905fe"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#3.sca",
-          "sha256": "2f2f4003513cbb62ecf100ce45d0a2b41586b495be7ca44a581b1395c78c1231"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#3.sca",
+          "sha256": "5f6aebe13db73c0c664895b90998e661c0ee9c84399814a21738458187a5d9b4"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#3.vec",
-          "sha256": "fa973eeba14f64f5113b53a6c96af921e5c8108ce62b82ad53bca2d055e3db69"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#3.vec",
+          "sha256": "c1c44cd5a90ae13bb8aa16ba110f892bba92d2326102f2112340123bb9f71a43"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#4.sca",
-          "sha256": "47a68eab6feec783e1245afb3ee46704d5eb40948a89a665b5a75cd386cddad5"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#4.sca",
+          "sha256": "9eda5585f4288cfb83a9c1d916d816298aa7eb55bd19b3d4c23ccd10747088d6"
         },
         {
-          "path": "examples/ieee80211ax/ul_ofdma/results/UoraMoreRandomAccessRus-#4.vec",
-          "sha256": "40dc32d32286339270585bae00c7e42b9e42a8ea733ce6faada149ab3ba98f5f"
+          "path": "examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#4.vec",
+          "sha256": "f16961a6f62aebcd12f90506bdf2dfba8e3e3248b057c54ff323d641b68642c0"
         }
       ]
     }
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/uora/uora-dashboard.png",
-  "git_revision": "7ad40beb26b428944ec5f67a22d02326dbdc607c",
+  "git_revision": "5e76f58368c96a0ed746024b5b152189c196a85c",
   "result_filters": [
     {
       "name": "heUlRandomAccessAttempt:count",

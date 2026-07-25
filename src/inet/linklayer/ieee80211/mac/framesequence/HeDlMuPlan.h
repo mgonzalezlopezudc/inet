@@ -159,12 +159,16 @@ class INET_API HeDlMuPlan
                         allocation.staAddress, "NSS is outside 1..8");
                 return std::nullopt;
             }
-            if (allocation.estimatedDuration <= SIMTIME_ZERO ||
-                    allocation.estimatedDuration > SimTime(5.484, SIMTIME_MS)) {
+            if (allocation.estimatedDuration <= SIMTIME_ZERO) {
                 fail(diagnostic, HeMuPlanErrorCode::INVALID_DURATION, i,
-                        allocation.staAddress, "estimated duration is outside the HE PPDU limit");
+                        allocation.staAddress, "estimated duration must be positive");
                 return std::nullopt;
             }
+            // The scheduler estimate may cover the complete queued backlog and
+            // therefore exceed aPPDUMaxTime. Keep it as a sizing hint here;
+            // HeDlMuPackingPlanner performs exact MPDU trimming and the PHY
+            // remains the final legality guard (IEEE 802.11-2024 Table 27-61,
+            // Clause 10.13).
             if (!candidate.hasNegotiatedHeCapabilities) {
                 fail(diagnostic, HeMuPlanErrorCode::UNSUPPORTED_CAPABILITY, i,
                         allocation.staAddress, "station has no negotiated HE capability contract");

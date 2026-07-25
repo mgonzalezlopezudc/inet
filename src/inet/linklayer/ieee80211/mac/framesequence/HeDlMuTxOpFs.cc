@@ -369,11 +369,13 @@ class HeDlMuBarBlockAckFs : public OptionalFs
         header->setUsersArraySize(owner->activeAllocations.size());
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(owner->activeAllocations.size());
+        std::map<int, int> responseStreamStartIndex;
         for (size_t i = 0; i < owner->activeAllocations.size(); ++i) {
             const auto& allocation = owner->activeAllocations[i];
+            auto responseStart = responseStreamStartIndex[allocation.ru.index]++;
             auto responseUser = makeTriggeredBlockAckResponseUser(allocation.ru,
-                    allocation.associationId, allocation.numberOfSpatialStreams,
-                    allocation.streamStartIndex, scheduleContext.coding);
+                    allocation.associationId, 1, responseStart,
+                    scheduleContext.coding);
             Ieee80211HeTriggerUserInfo user;
             user.aid = allocation.associationId;
             user.ruIndex = allocation.ruIndex;
@@ -381,8 +383,8 @@ class HeDlMuBarBlockAckFs : public OptionalFs
             user.ruToneOffset = allocation.ru.toneOffset;
             user.mcs = 0;
             user.coding = responseUser.coding;
-            user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
-            user.streamStartIndex = allocation.streamStartIndex;
+            user.numberOfSpatialStreams = 1;
+            user.streamStartIndex = responseStart;
             user.muMimo = allocation.muMimo;
             SequenceNumberCyclic startingSequenceNumber;
             auto tid = allocation.tid;
@@ -776,6 +778,18 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
     }
     ASSERT(selectedAllocations.size() >= 2);
 
+    // The preliminary MU-BAR timing check runs before the packing planner,
+    // which later assigns the same contiguous per-RU stream ranges to the
+    // final allocations. Supply those ranges here as well so shared-RU
+    // MU-MIMO users do not all appear to start at spatial stream zero.
+    std::map<int, int> preliminaryStreamStartIndex;
+    for (auto& selectedAllocation : selectedAllocations) {
+        auto ruIndex = selectedAllocation.allocation.ru.index;
+        selectedAllocation.streamStartIndex = preliminaryStreamStartIndex[ruIndex];
+        preliminaryStreamStartIndex[ruIndex] +=
+                selectedAllocation.allocation.numberOfSpatialStreams;
+    }
+
     Ptr<Ieee80211BlockAckReq> dummyReq;
     if (ackMethod == AckMethod::MU_BAR_TRIGGER)
         dummyReq = makeShared<Ieee80211CompressedBlockAckReq>();
@@ -799,11 +813,14 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(selectedAllocations.size()));
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(selectedAllocations.size());
-        for (const auto& selectedAllocation : selectedAllocations)
+        std::map<int, int> responseStreamStartIndex;
+        for (const auto& selectedAllocation : selectedAllocations) {
+            auto responseStart =
+                    responseStreamStartIndex[selectedAllocation.allocation.ru.index]++;
             responseUsers.push_back(makeTriggeredBlockAckResponseUser(
                     selectedAllocation.allocation.ru, selectedAllocation.associationId,
-                    selectedAllocation.allocation.numberOfSpatialStreams,
-                    selectedAllocation.streamStartIndex, scheduleContext.coding));
+                    1, responseStart, scheduleContext.coding));
+        }
         auto response = finalizeTriggeredBlockAckResponse(responseUsers,
                 scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth);
         if (!response) {
@@ -900,11 +917,14 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         auto triggerDuration = responseMode->getDuration(getMuBarTriggerFrameLength(finalAllocations.size()));
         std::vector<Ieee80211HeUserPhyParameters> responseUsers;
         responseUsers.reserve(finalAllocations.size());
-        for (const auto& finalAllocation : finalAllocations)
+        std::map<int, int> responseStreamStartIndex;
+        for (const auto& finalAllocation : finalAllocations) {
+            auto responseStart =
+                    responseStreamStartIndex[finalAllocation.allocation.ru.index]++;
             responseUsers.push_back(makeTriggeredBlockAckResponseUser(
                     finalAllocation.allocation.ru, finalAllocation.associationId,
-                    finalAllocation.allocation.numberOfSpatialStreams,
-                    finalAllocation.streamStartIndex, scheduleContext.coding));
+                    1, responseStart, scheduleContext.coding));
+        }
         auto response = finalizeTriggeredBlockAckResponse(responseUsers,
                 scheduleContext.channelCenterFrequency, scheduleContext.channelBandwidth);
         if (!response) {
@@ -996,6 +1016,7 @@ Packet *HeDlMuTxOpFs::buildMuContainerPacket(FrameSequenceContext *context)
         activeAlloc.tid = dataHeader->getTid();
         activeAlloc.ruIndex = alloc.ru.index;
         activeAlloc.ru = alloc.ru;
+        activeAlloc.mcs = alloc.mcs;
         activeAlloc.numberOfSpatialStreams = alloc.numberOfSpatialStreams;
         activeAlloc.streamStartIndex = selectedAllocation.streamStartIndex;
         activeAlloc.totalNsts = selectedAllocation.totalNsts;

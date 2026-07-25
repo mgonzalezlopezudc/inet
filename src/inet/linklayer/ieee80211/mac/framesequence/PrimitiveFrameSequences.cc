@@ -16,6 +16,14 @@ namespace {
 auto expectedResponse(Ieee80211FrameType type)
 {
     return [type](Packet *packet, FrameSequenceContext *context) {
+        // IEEE Std 802.11-2024, 9.7.1: an A-MPDU starts with an MPDU
+        // delimiter. The primitive exchanges below expect only CTS, ACK, or
+        // BlockAck control responses, never an A-MPDU, so reject it without
+        // reinterpreting its delimiter or PHY content as a MAC header.
+        auto frontChunk = packet->peekAtFront();
+        auto delimiter = dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frontChunk);
+        if (delimiter != nullptr)
+            return false;
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         return context->isForUs(header) && header->getType() == type;
     };

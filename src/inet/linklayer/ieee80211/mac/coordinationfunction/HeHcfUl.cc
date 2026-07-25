@@ -909,9 +909,11 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
         uint32_t triggerId, W transmitPower,
         const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-        TriggeredUlExchange& exchange, bool& committed)
+        TriggeredUlExchange& exchange, Ptr<const Ieee80211MacHeader>& responseHeader,
+        bool& committed)
 {
     committed = false;
+    responseHeader = nullptr;
     if (sourceQueue == nullptr || selected == nullptr || trigger == nullptr)
         throw cRuntimeError("Cannot prepare an HE-TB response without queue and Trigger context");
     const auto phy = getLinkPhyContext().getSnapshot();
@@ -1117,6 +1119,12 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             exchange.packets[i] = original;
         }
     }
+    // The PSDU starts with an A-MPDU delimiter, so its first MAC header is
+    // deliberately retained from the inner MPDU instead of being re-peeked
+    // through the aggregate representation by the Tx handoff.
+    responseHeader = sourcePacket != nullptr ?
+            exchange.packets.front()->peekAtFront<Ieee80211MacHeader>() :
+            nullMpdu->peekAtFront<Ieee80211MacHeader>();
     return responsePacket.release();
 }
 
@@ -1448,7 +1456,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         try {
             responsePacket = buildTriggeredUlResponsePacket(sourcePacket, sourceQueue, selectedAc,
                     selectedTid, queueBytes, availableSlots, selected, trigger,
-                    triggerId, transmitPower, solicitingTxopDuration, exchange, responseCommitted);
+                    triggerId, transmitPower, solicitingTxopDuration, exchange,
+                    responseHeader, responseCommitted);
         }
         catch (const std::exception& error) {
             if (responseCommitted || randomAccessCommitted)
@@ -1458,10 +1467,6 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
             delete packet;
             return;
         }
-        if (exchange.packets.empty())
-            responseHeader = responsePacket->peekAt<Ieee80211DataHeader>(B(4));
-        else
-            responseHeader = exchange.packets.front()->peekAtFront<Ieee80211MacHeader>();
         responsePacketCount = exchange.packets.empty() ? 1 : exchange.packets.size();
         // Every solicited HE-TB response owns a terminal Multi-STA BA window,
         // including scheduled QoS Null/BSR responses with no retained MPDU.

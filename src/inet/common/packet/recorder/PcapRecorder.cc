@@ -31,6 +31,7 @@
 #include "inet/linklayer/ieee80211/mac/Ieee80211Frame_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
+#include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Transmission.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211EhtMode.h"
@@ -63,6 +64,7 @@ enum RadiotapPresentBit {
     RADIOTAP_HE = 23,
     RADIOTAP_HE_MU = 24,
     RADIOTAP_0_LENGTH_PSDU = 26,
+    RADIOTAP_U_SIG = 33,
     RADIOTAP_EHT = 34,
 };
 
@@ -96,6 +98,23 @@ enum RadiotapHeData1 {
 
 enum RadiotapHeData2 {
     RADIOTAP_HE_GI_KNOWN = 0x0002,
+};
+
+enum RadiotapUsigCommon {
+    RADIOTAP_U_SIG_PHY_VERSION_KNOWN = 0x00000001,
+    RADIOTAP_U_SIG_BANDWIDTH_KNOWN = 0x00000002,
+};
+
+enum RadiotapEhtKnown {
+    RADIOTAP_EHT_GI_KNOWN = 0x00000004,
+    RADIOTAP_EHT_NUMBER_NON_OFDMA_USERS_KNOWN = 0x00080000,
+};
+
+enum RadiotapEhtUserInfo {
+    RADIOTAP_EHT_USER_MCS_KNOWN = 0x00000002,
+    RADIOTAP_EHT_USER_CODING_KNOWN = 0x00000004,
+    RADIOTAP_EHT_USER_NSS_KNOWN = 0x00000010,
+    RADIOTAP_EHT_USER_DATA_FOR_USER = 0x00000080,
 };
 
 uint16_t getRadiotapHeFormat(physicallayer::Ieee80211HePpduFormat format)
@@ -166,7 +185,17 @@ struct MpduRange
 {
     b offset;
     b length;
+    int heMuUserIndex = -1;
 };
+
+uint32_t makeAmpduReference(const Packet *packet, int heMuUserIndex)
+{
+    auto treeId = static_cast<uint64_t>(packet->getTreeId());
+    uint32_t reference = static_cast<uint32_t>(treeId) ^ static_cast<uint32_t>(treeId >> 32);
+    if (heMuUserIndex >= 0)
+        reference ^= static_cast<uint32_t>(heMuUserIndex + 1) * 0x9E3779B9U;
+    return reference;
+}
 
 bool getIeee80211AmpduMpduRanges(const Packet *packet, b frontOffset, b backOffset, std::vector<MpduRange>& mpduRanges)
 {
@@ -210,14 +239,78 @@ bool getIeee80211AmpduMpduRanges(const Packet *packet, b frontOffset, b backOffs
     return false;
 }
 
+bool getIeee80211HeMuAmpduMpduRanges(const Packet *packet, b frontOffset, b backOffset, std::vector<MpduRange>& mpduRanges)
+{
+    auto heTxVectorReq = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
+    if (heTxVectorReq == nullptr || heTxVectorReq->getPpduLayout() == nullptr)
+        return false;
+    const auto& ppduLayout = heTxVectorReq->getPpduLayout();
+    const auto& psduBitRanges = ppduLayout->getPsduBitRanges();
+    if (ppduLayout->getPpduFormat() != physicallayer::HE_MU_DOWNLINK || psduBitRanges.size() < 2)
+        return false;
+
+    auto packetLength = packet->getDataLength();
+    auto dataLength = packetLength - frontOffset - backOffset;
+    if (psduBitRanges.back().getEndBitOffset() != dataLength)
+        return false;
+
+    std::vector<MpduRange> allMpduRanges;
+    for (const auto& psduBitRange : psduBitRanges) {
+        if (psduBitRange.getBitLength() == b(0))
+            continue;
+        auto psduFrontOffset = frontOffset + psduBitRange.getStartBitOffset();
+        auto psduBackOffset = packetLength - frontOffset - psduBitRange.getEndBitOffset();
+        std::vector<MpduRange> psduMpduRanges;
+        if (!getIeee80211AmpduMpduRanges(packet, psduFrontOffset, psduBackOffset, psduMpduRanges))
+            return false;
+        for (auto& mpduRange : psduMpduRanges)
+            mpduRange.heMuUserIndex = static_cast<int>(psduBitRange.getUserIndex());
+        allMpduRanges.insert(allMpduRanges.end(), psduMpduRanges.begin(), psduMpduRanges.end());
+    }
+    if (allMpduRanges.empty())
+        return false;
+    mpduRanges = std::move(allMpduRanges);
+    return true;
+}
+
+bool findIeee80211HeMuAmpduMpduRanges(const Packet *packet, b mpduOffset, std::vector<MpduRange>& mpduRanges)
+{
+    auto heTxVectorReq = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
+    if (heTxVectorReq == nullptr || heTxVectorReq->getPpduLayout() == nullptr)
+        return false;
+    const auto& psduBitRanges = heTxVectorReq->getPpduLayout()->getPsduBitRanges();
+    if (psduBitRanges.empty())
+        return false;
+
+    auto packetLength = packet->getDataLength();
+    auto dataLength = psduBitRanges.back().getEndBitOffset();
+    auto dataFrontOffsetResidue = b(mpduOffset.get<b>() % 8);
+    for (b dataFrontOffset = dataFrontOffsetResidue; dataFrontOffset <= mpduOffset; dataFrontOffset += b(8)) {
+        auto dataBackOffset = packetLength - dataFrontOffset - dataLength;
+        if (dataBackOffset < b(0))
+            continue;
+        std::vector<MpduRange> tempRanges;
+        if (!getIeee80211HeMuAmpduMpduRanges(packet, dataFrontOffset, dataBackOffset, tempRanges))
+            continue;
+        for (const auto& mpduRange : tempRanges) {
+            if (mpduRange.offset == mpduOffset) {
+                mpduRanges = std::move(tempRanges);
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 #endif
 
 std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b backOffset, Direction direction, const physicallayer::ITransmission *transmission, const physicallayer::IReception *reception)
 {
     std::vector<uint32_t> presentWords;
     auto setPresentBit = [&](int bitIndex) {
-        int wordIndex = bitIndex / 31;
-        int bitOffset = bitIndex % 31;
+        int wordIndex = bitIndex / 32;
+        int bitOffset = bitIndex % 32;
+        ASSERT(bitOffset != 31); // reserved for the extension flag
         if (wordIndex >= (int)presentWords.size())
             presentWords.resize(wordIndex + 1, 0);
         presentWords[wordIndex] |= 1U << bitOffset;
@@ -245,9 +338,15 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
     uint8_t vhtGroupId = 0;
     uint16_t vhtPartialAid = 0;
 
-    std::vector<MpduRange> mpduRanges;
+    uint32_t uSigCommon = 0;
+    uint32_t ehtKnown = 0;
+    uint32_t ehtData[9] = {0};
+    std::vector<uint32_t> ehtUserInfo;
+    double ehtBandwidthHz = NAN;
+
     bool isAmpdu = false;
     bool isLastSubframe = false;
+    int selectedHeMuUserIndex = -1;
     uint32_t ampduRef = 0;
 
     Ptr<const physicallayer::Ieee80211HeTxVectorReq> heTxVectorReq;
@@ -267,13 +366,18 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
     }
     else {
         const physicallayer::IIeee80211Mode *mode = nullptr;
-        auto modeReq = packet->findTag<physicallayer::Ieee80211ModeReq>();
-        if (modeReq != nullptr)
-            mode = modeReq->getMode();
+        auto ieee80211Transmission = dynamic_cast<const physicallayer::Ieee80211Transmission *>(transmission);
+        if (ieee80211Transmission != nullptr)
+            mode = ieee80211Transmission->getMode();
         else {
-            auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
-            if (modeInd != nullptr)
-                mode = modeInd->getMode();
+            auto modeReq = packet->findTag<physicallayer::Ieee80211ModeReq>();
+            if (modeReq != nullptr)
+                mode = modeReq->getMode();
+            else {
+                auto modeInd = packet->findTag<physicallayer::Ieee80211ModeInd>();
+                if (modeInd != nullptr)
+                    mode = modeInd->getMode();
+            }
         }
         if (mode != nullptr) {
             auto dm = mode->getDataMode();
@@ -293,6 +397,62 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
                 ehtMode = dynamic_cast<const physicallayer::Ieee80211EhtMode *>(mode);
                 if (ehtMode != nullptr) {
                     isEht = true;
+                    // The current EHT mode is SU and owns these PHY facts.
+                    // Radiotap EHT does not carry channel bandwidth, so export
+                    // that independently in U-SIG when its value is
+                    // unambiguous. The two 320 MHz encodings depend on primary
+                    // channel placement, which the mode does not expose.
+                    uSigCommon = RADIOTAP_U_SIG_PHY_VERSION_KNOWN;
+                    auto ehtDm = ehtMode->getDataMode();
+                    if (ehtDm != nullptr) {
+                        auto bandwidth = ehtDm->getBandwidth().get();
+                        ehtBandwidthHz = bandwidth;
+                        int radiotapBandwidth =
+                                bandwidth == 20e6 ? 0 :
+                                bandwidth == 40e6 ? 1 :
+                                bandwidth == 80e6 ? 2 :
+                                bandwidth == 160e6 ? 3 : -1;
+                        if (radiotapBandwidth >= 0) {
+                            uSigCommon |= RADIOTAP_U_SIG_BANDWIDTH_KNOWN;
+                            uSigCommon |= radiotapBandwidth << 15;
+                        }
+
+                        // The currently implemented EHT mode represents one
+                        // non-OFDMA SU user. Radiotap encodes N users as N-1,
+                        // so data[7] remains zero while the known bit is set.
+                        ehtKnown |= RADIOTAP_EHT_NUMBER_NON_OFDMA_USERS_KNOWN;
+                        auto guardInterval = ehtDm->getGuardIntervalType();
+                        int radiotapGi =
+                                guardInterval == physicallayer::Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_SHORT ? 0 :
+                                guardInterval == physicallayer::Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_MEDIUM ? 1 :
+                                guardInterval == physicallayer::Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_LONG ? 2 : -1;
+                        if (radiotapGi >= 0) {
+                            ehtKnown |= RADIOTAP_EHT_GI_KNOWN;
+                            ehtData[0] |= radiotapGi << 7;
+                        }
+
+                        uint32_t userInfo = RADIOTAP_EHT_USER_DATA_FOR_USER;
+                        auto modulationAndCodingScheme = ehtDm->getModulationAndCodingScheme();
+                        if (modulationAndCodingScheme != nullptr) {
+                            auto mcs = modulationAndCodingScheme->getMcsIndex();
+                            if (mcs <= 13) {
+                                userInfo |= RADIOTAP_EHT_USER_MCS_KNOWN;
+                                userInfo |= mcs << 20;
+                            }
+                        }
+                        auto numberOfSpatialStreams = ehtDm->getNumberOfSpatialStreams();
+                        if (numberOfSpatialStreams >= 1 && numberOfSpatialStreams <= 16) {
+                            userInfo |= RADIOTAP_EHT_USER_NSS_KNOWN;
+                            userInfo |= (numberOfSpatialStreams - 1) << 24;
+                        }
+                        auto code = ehtDm->getCode();
+                        if (code != nullptr) {
+                            userInfo |= RADIOTAP_EHT_USER_CODING_KNOWN;
+                            if (code->isLdpc())
+                                userInfo |= 1U << 19;
+                        }
+                        ehtUserInfo.push_back(userInfo);
+                    }
                 }
                 else {
                     vhtMode = dynamic_cast<const physicallayer::Ieee80211VhtMode *>(mode);
@@ -329,26 +489,42 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
         }
     }
 
-    for (b startOffset = b(0); startOffset <= frontOffset; startOffset += b(8)) {
-        for (b backOffsetIdx = b(0); backOffsetIdx <= backOffset; backOffsetIdx += b(8)) {
-            std::vector<MpduRange> tempRanges;
-            if (getIeee80211AmpduMpduRanges(packet, startOffset, backOffsetIdx, tempRanges)) {
-                for (size_t i = 0; i < tempRanges.size(); ++i) {
-                    if (tempRanges[i].offset == frontOffset) {
-                        isAmpdu = true;
-                        mpduRanges = tempRanges;
-                        ampduRef = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(packet) & 0xFFFFFFFF);
-                        if (i == tempRanges.size() - 1) {
-                            isLastSubframe = true;
-                        }
-                        break;
-                    }
-                }
+    auto matchMpduRange = [&](const std::vector<MpduRange>& ranges) {
+        for (size_t i = 0; i < ranges.size(); i++) {
+            if (ranges[i].offset == frontOffset) {
+                isAmpdu = true;
+                isLastSubframe = i == ranges.size() - 1 ||
+                        ranges[i + 1].heMuUserIndex != ranges[i].heMuUserIndex;
+                selectedHeMuUserIndex = ranges[i].heMuUserIndex;
+                return;
             }
-            if (isAmpdu) break;
         }
-        if (isAmpdu) break;
+    };
+
+    std::vector<MpduRange> heMuMpduRanges;
+    if (findIeee80211HeMuAmpduMpduRanges(packet, frontOffset, heMuMpduRanges))
+        matchMpduRange(heMuMpduRanges);
+    if (!isAmpdu) {
+        // A PHY header may place the byte-aligned A-MPDU at a non-byte-aligned
+        // packet offset (for example, after the 100-bit HE PHY header). Preserve
+        // the recorded MPDU's bit residues so the candidate grid can include the
+        // actual aggregate boundaries.
+        auto startOffsetResidue = b(frontOffset.get<b>() % 8);
+        auto backOffsetResidue = b(backOffset.get<b>() % 8);
+        for (b startOffset = startOffsetResidue; startOffset <= frontOffset; startOffset += b(8)) {
+            for (b backOffsetIdx = backOffsetResidue; backOffsetIdx <= backOffset; backOffsetIdx += b(8)) {
+                std::vector<MpduRange> tempRanges;
+                if (getIeee80211AmpduMpduRanges(packet, startOffset, backOffsetIdx, tempRanges))
+                    matchMpduRange(tempRanges);
+                if (isAmpdu)
+                    break;
+            }
+            if (isAmpdu)
+                break;
+        }
     }
+    if (isAmpdu)
+        ampduRef = makeAmpduReference(packet, selectedHeMuUserIndex);
 #endif
 
     // IEEE 802.11 packets recorded by PcapRecorder contain the MAC trailer.
@@ -388,6 +564,28 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
             uint16_t channelFlags = frequencyMHz < 3000 ? RADIOTAP_CHANNEL_2GHZ :
                     frequencyMHz < 6000 ? RADIOTAP_CHANNEL_5GHZ : 0;
             appendUint16(bytes, channelFlags);
+
+            // IEEE 802.11be-2024 Table 36-28 and 36.3.24.2 distinguish two
+            // 320 MHz U-SIG bandwidth encodings by channel-center sequence.
+            // The selected analog-model center frequency supplies the missing
+            // placement fact; leave bandwidth unknown for any non-enumerated
+            // center instead of choosing a variant.
+            if (isEht && ehtBandwidthHz == 320e6) {
+                auto channelNumber = static_cast<int>(
+                        std::round((frequencyMHz - 5950) / 5));
+                auto expectedFrequencyMHz = 5950 + channelNumber * 5;
+                int radiotapBandwidth = -1;
+                if (std::abs(frequencyMHz - expectedFrequencyMHz) < 1e-6) {
+                    if (channelNumber == 31 || channelNumber == 95 || channelNumber == 159)
+                        radiotapBandwidth = 4;
+                    else if (channelNumber == 63 || channelNumber == 127 || channelNumber == 191)
+                        radiotapBandwidth = 5;
+                }
+                if (radiotapBandwidth >= 0) {
+                    uSigCommon |= RADIOTAP_U_SIG_BANDWIDTH_KNOWN;
+                    uSigCommon |= radiotapBandwidth << 15;
+                }
+            }
         }
 
         auto power = narrowbandAnalogModel->computeMinPower(startTime, endTime);
@@ -476,11 +674,14 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
             data2 |= RADIOTAP_HE_GI_KNOWN;
             data4 |= common.sigA.spatialReuse.front() & 0xf;
             data5 |= (common.guardInterval & 0x3) << 4;
-            // A transmit-side multi-user PPDU has no selected recipient.
-            // Export per-user facts only when the canonical container has one
-            // unambiguous user; receive-side selection is handled below.
-            if (txVector.getUsers().size() == 1) {
-                const auto& user = txVector.getUsers().front().getParameters();
+            const physicallayer::Ieee80211HeUserPhyParameters *selectedUser = nullptr;
+            if (selectedHeMuUserIndex >= 0 &&
+                    selectedHeMuUserIndex < static_cast<int>(txVector.getUsers().size()))
+                selectedUser = &txVector.getUsers()[selectedHeMuUserIndex].getParameters();
+            else if (txVector.getUsers().size() == 1)
+                selectedUser = &txVector.getUsers().front().getParameters();
+            if (selectedUser != nullptr) {
+                const auto& user = *selectedUser;
                 data1 |= RADIOTAP_HE_DATA_MCS_KNOWN | RADIOTAP_HE_DATA_DCM_KNOWN |
                         RADIOTAP_HE_CODING_KNOWN;
                 if (ppduFormat == physicallayer::HE_MU_DOWNLINK) {
@@ -597,11 +798,24 @@ std::vector<uint8_t> makeRadiotapHeader(const Packet *packet, b frontOffset, b b
         bytes.push_back(0); // sounding PPDU / zero-length PSDU
     }
 
-    // 14. RADIOTAP_EHT (34)
+    // 14. RADIOTAP_U_SIG (33)
+    if (isEht && uSigCommon != 0) {
+        setPresentBit(RADIOTAP_U_SIG);
+        appendPadding(bytes, 4);
+        appendUint32(bytes, uSigCommon);
+        appendUint32(bytes, 0); // value: no format-specific U-SIG bits known
+        appendUint32(bytes, 0); // mask
+    }
+
+    // 15. RADIOTAP_EHT (34)
     if (isEht) {
         setPresentBit(RADIOTAP_EHT);
         appendPadding(bytes, 4);
-        appendUint32(bytes, 0); // EHT known: 0
+        appendUint32(bytes, ehtKnown);
+        for (auto data : ehtData)
+            appendUint32(bytes, data);
+        for (auto userInfo : ehtUserInfo)
+            appendUint32(bytes, userInfo);
     }
 #endif
 
@@ -819,7 +1033,8 @@ void PcapRecorder::writePacket(const Protocol *protocol, const Packet *packet, b
 #ifdef INET_WITH_IEEE80211
     if (*protocol == Protocol::ieee80211Mac) {
         std::vector<MpduRange> mpduRanges;
-        if (getIeee80211AmpduMpduRanges(packet, frontOffset, backOffset, mpduRanges)) {
+        if (getIeee80211HeMuAmpduMpduRanges(packet, frontOffset, backOffset, mpduRanges) ||
+                getIeee80211AmpduMpduRanges(packet, frontOffset, backOffset, mpduRanges)) {
             for (const auto& mpduRange : mpduRanges)
                 writePacketRecord(protocol, packet, mpduRange.offset, packet->getDataLength() - mpduRange.offset - mpduRange.length, direction, networkInterface);
             return;

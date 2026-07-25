@@ -18,44 +18,44 @@
       },
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#0.sca",
-          "sha256": "3aa092416607995bf2f054321af3c1978d6ba479468fc0ab5fc8421562d2a58d"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#0.sca",
+          "sha256": "dd2552724f5a9fda48edd73fa36c0ef616259adb1e5c23481aa5725de9e3b213"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#0.vec",
-          "sha256": "0e03b08b725842747259c3f17fc3611fb33d7235e2f7c12317eef28719fe2222"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#0.vec",
+          "sha256": "e0eaef75c3b68a554f85dd6ba545937baaa762824a9813787a9cc7825f022223"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#1.sca",
-          "sha256": "35eff1e3e6fc939d38389d969955d59875ab2e32e971ccb4b75e502713d23e85"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#1.sca",
+          "sha256": "38b6a3d8dc33ab902c2aa725c22ee45c1bccabcda10f0ff6b2219eb21154e04a"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#1.vec",
-          "sha256": "ef0403b1a836954499b4744774cd0779584d5fa0154f98be51603b1c8a8f4e67"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#1.vec",
+          "sha256": "2ddc331b28ed781806aa3d693886133548371c9d42f824cf31aef942935b92c6"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#2.sca",
-          "sha256": "29ae696b95b71d6fd59c8f45ef3d14888fe49717d6c00ace1fc0bea0b9843d7c"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#2.sca",
+          "sha256": "8bfee85924d8791480a4afac2d0dfc07090d22c1d4dd1387d9bb9a85d9f0ee02"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#2.vec",
-          "sha256": "a7c9e2680987db7438e7e84d17a791f7bab603dc9fa2b115ef6efb62a2887b1c"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#2.vec",
+          "sha256": "e54cc87c763d9bcf92bceada254cfc124661343935995bf4456a714b8925beba"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#3.sca",
-          "sha256": "7b37c69cd558384cf6431f72208713d0806f7b716211f8f1f1ee591b0d96a9a9"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#3.sca",
+          "sha256": "ccc3e9660b3e7967b17942398016cf5ca44727fc41632717a1f701f74aa4c488"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#3.vec",
-          "sha256": "8fe56087e7d1c952ed88877816ba81b1e0b8b7a455c4da573f4d3f807d484ebe"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#3.vec",
+          "sha256": "e68395407c9060aa674f1cab448c0219ee4db4a6ac9fc0f4f228b5b445568814"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#4.sca",
-          "sha256": "dd90295a372fbe915b3d852b198d23a9900a3a595fd5c0fd73dd1ce589ba85b2"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#4.sca",
+          "sha256": "d48e9401e9899783bd9e3995ba8a6b1460dc9a1e74f1e1648e59cdce6c492b28"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width20MHz-#4.vec",
-          "sha256": "2f5c9d39803eaa6ab2c1f40300921cc13d027591e5c367cb496435c4c6a53bf6"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width20MHz/Width20MHz-#4.vec",
+          "sha256": "7148da62a481ecf54beb58c9689f842d67c78a90312ef32e605a0385191f7300"
         }
       ]
     },
@@ -73,44 +73,44 @@
       },
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#0.sca",
-          "sha256": "e3d0ca32639fba019716fdc14c23fcac86e9cd40be5f6410aaa218527a428381"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#0.sca",
+          "sha256": "d9d8885ed1d8a54b7f95b64e745603f1bde64bcb440f11df01cf0ee35d5989a8"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#0.vec",
-          "sha256": "63087825450d3422dae17591ff289b49aa3154bc578d053e64df3cce012112f3"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#0.vec",
+          "sha256": "ebc7ded3027317c30da72d44d9dd40cbdb01d6fc6d210b10d4bb143fd832a85d"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#1.sca",
-          "sha256": "f6f0ac049e502646ac56205bf9a2f4ef4da59844ecf0897e1a1323383e3c4a31"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#1.sca",
+          "sha256": "1ba6670259be72bd38c77dc1e0365ec5c3a75f8ba7c572587f3c92a62ec1143e"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#1.vec",
-          "sha256": "0f65b00fb4720c4d47774bd430b8df861da3b0c8e4ca0405cf646c3311908632"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#1.vec",
+          "sha256": "6168c286845a2549eb37a6bda8759ff96e3be54f325a3574c217150525380bd9"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#2.sca",
-          "sha256": "519e6276160319301c28057a58301e13b2c79b0ae9b5658117b5bcf121f46b65"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#2.sca",
+          "sha256": "8400e2044a7385d6c7269f20c8f23570ab58b752c9c2bfce8dfb8090b42cb06a"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#2.vec",
-          "sha256": "82accb03dce7336369025e3bf31122fa416112677334c1108f0e9bff1b7431cf"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#2.vec",
+          "sha256": "c1c0e6dee6589392d9bf4c922486dd97014772f23d2ecd5ad8a514900730b4e1"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#3.sca",
-          "sha256": "3cd50b68fbe16adbcfdde239454b474e46e22104ef6be845ad816462b2809705"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#3.sca",
+          "sha256": "bdc164b16ea570d725ed440efc82f9637b020d905d39ac8e5bbd615493ae4df4"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#3.vec",
-          "sha256": "289bb86fc49b53ebeb1ce391301c8502d8aa6f9fe9ca53780b63774cca3e1f79"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#3.vec",
+          "sha256": "496632d2e662fbd8ef3a9c1dfb8810d3ceb5d0de54a8e7afb43ce81376beba5b"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#4.sca",
-          "sha256": "6974ca88c8f1b961a97fe5300d293ae1aa11e4b4ab8879f6b2030b368544542d"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#4.sca",
+          "sha256": "76471ab001093940f7f612dbb603c2998201f1add966e8eaba345f25bbef9595"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width40MHz-#4.vec",
-          "sha256": "0c82c48fffa74b7d7c92b4ec5b7d7ce4adfe1b5360195473f08af6733c4dcce0"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width40MHz/Width40MHz-#4.vec",
+          "sha256": "01d3358958e66d15168e4b28afcbdae55ceddaa14d62d7dd9b835cb04bfbb275"
         }
       ]
     },
@@ -128,44 +128,44 @@
       },
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#0.sca",
-          "sha256": "9eb8ca28c35f604c9d8aeeb6af2f047caf918219049081536da44217d191f83c"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#0.sca",
+          "sha256": "305029da5a74f8676ae45a01f262d5db3308eda8c197fb8e4ff5b8a1f22b3944"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#0.vec",
-          "sha256": "8ca3fd18cad6e952c40afb0558675be5d6b40450c0be96db7a0566a1fd3c92da"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#0.vec",
+          "sha256": "2ed5c9b3802acadd1b3153451afd771c6549056a60b25938bef777c36ed3577c"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#1.sca",
-          "sha256": "29c3afec684fbc44511a1413e43362624f57c78a61aec569fe58268d6c7f77bb"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#1.sca",
+          "sha256": "59635c9e595c97811bd10d916cf5bca1af8d04cc0d67f4252dc63f1607436e4e"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#1.vec",
-          "sha256": "4080b5dfb1a52d05a40ef95526e9af417af3c245bf462266c54cb1c6fe7ee7c9"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#1.vec",
+          "sha256": "731968bbaaa0ca96fa4e58c32b61576654fa8c29db350697ab651b94302c6168"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#2.sca",
-          "sha256": "dfe58a7cd5b445f7a76a068ef89e0bcaecfe1d6675614ed0c9746d44c6a57977"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#2.sca",
+          "sha256": "ffbf6d6a1452653d30a83fefe57a3b2abee33c6f4fddd3f635f85f402c98857f"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#2.vec",
-          "sha256": "83939979beacf48552ba9ebbf2b9ed0f2afa5915a7e26809ab54a13af6dc37c7"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#2.vec",
+          "sha256": "d261a5d8dd3969f052e9fae63557f78d4797e8041a8434c99ca27b7b19385448"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#3.sca",
-          "sha256": "0e9ef541ee15821ed37f9f2ec82fd653e50565575d5c0d6bf56d6a458791c124"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#3.sca",
+          "sha256": "4719bf0425b3b73ce62d1c59adfe37fd6631ae89179e266f01152d4bd5602a38"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#3.vec",
-          "sha256": "fa5d1051d0adadb1c227df5922c31870268c4c4134c2834561a76c84af7724e2"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#3.vec",
+          "sha256": "63fc673c15a1c7f53542d5a811bc54c0ec5659f1eadfcb13218e20f06d3b149a"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#4.sca",
-          "sha256": "781d9171c84d5e6670a1d4654fa1bfd91ca284902a1b8c9c5526661d04539213"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#4.sca",
+          "sha256": "7c9eeb07fd162fe02e1ddbecdd72dd921fa9146d52c342cdb2acc3ff9d929c5e"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width80MHz-#4.vec",
-          "sha256": "460f455df0076b7877f86801764488c435c6eb95af08f8bfb033cf1c062ce465"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width80MHz/Width80MHz-#4.vec",
+          "sha256": "9974c75e5c8fd65b5f89de2b6acf54fe93dda3518743093a46280698eaf8457b"
         }
       ]
     },
@@ -183,51 +183,51 @@
       },
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#0.sca",
-          "sha256": "243b6e13e63b7832c663afd095cfa944fdbb7a90e4ecebe26038e5d4751109e8"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#0.sca",
+          "sha256": "3a3fa14ec5fb3b9681f37203f839ba0c3b54fd442aec3e0fb2196cd32d6896c5"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#0.vec",
-          "sha256": "efaefa68e6b0663536ccb9255486ceb0de0afae360fee1460749962409f0fe41"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#0.vec",
+          "sha256": "8b2ec54ff7740de9e0eaa122298f2565fe0749beafc322523f446840e5da11ba"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#1.sca",
-          "sha256": "bb81a187dfcc8745424f60a575dc6d26b74707e3be387891a821d404c82d5645"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#1.sca",
+          "sha256": "2ce3a887085b77f9e1d00e0b506948cde5ba3cc55d4afa9cf900eb8d3c67ede5"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#1.vec",
-          "sha256": "0cb78b594d36bc52be6cf5d9d4bfa2b0bf8c7200af23315ac026cd1eed04b253"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#1.vec",
+          "sha256": "dd12c08c84950cf8a4e7b15e550330512196414ecad992cf75ff64d413a34712"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#2.sca",
-          "sha256": "a966625088a3cb58933a67c8bb0abfe0aae50a9301fc90f02d3dbd11d7fe912e"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#2.sca",
+          "sha256": "05d9e58256cb6065f208143b0949e476e00c01944825dea8918a684345dd3150"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#2.vec",
-          "sha256": "1c7d289533116549b802385c84b0d61c15bb01949cd76e501c5d2f4a02dfcf19"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#2.vec",
+          "sha256": "5f3b0b9d833284c8d4355079cf9c97a77d63065afa5fe17d1158620513f0e655"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#3.sca",
-          "sha256": "68c30f0352e48947a870c259ec009283159975f783d53699b1c12795e77e826b"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#3.sca",
+          "sha256": "cca57f6610ab45a195d895c4aadb3e164fe183b0187cbfff11c8768bedbfa497"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#3.vec",
-          "sha256": "0510b37373ffe64c7df1806102588395cac1216f0a6277d875b6ac63caf86dc3"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#3.vec",
+          "sha256": "8b283d2ed0917a11854df85f3cfad5425d31bd08c33b11e0434c4270aa095755"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#4.sca",
-          "sha256": "c24224664cdf2d447433190ee730d091f2475ef2936f8bc5dfe55f5483d88406"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#4.sca",
+          "sha256": "2ee8304208892011dc605f6294d111ffe3b18c4de6a8ebe7c1dd2bc22cb6f4a6"
         },
         {
-          "path": "examples/ieee80211ax/he_channel_widths/results/Width160MHz-#4.vec",
-          "sha256": "61a38c5fe49b481b22e33c4de17e4d7b2d75faf00fca990b2e952f2460ec5fd3"
+          "path": "examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/Width160MHz/Width160MHz-#4.vec",
+          "sha256": "7e05ca8dd6c348f75afec46b9151e41590758bad62ae5b0e650c6c19167c796f"
         }
       ]
     }
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/width/channel-width-dashboard.png",
-  "git_revision": "a78b9cea58daa2d8d871956c98798c8462219e60",
+  "git_revision": "5e76f58368c96a0ed746024b5b152189c196a85c",
   "result_filters": [
     {
       "module": "**.app[*]",

@@ -9,6 +9,7 @@
 #define __INET_HCF_H
 
 #include <map>
+#include <set>
 #include <string>
 
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
@@ -63,6 +64,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
     cMessage *startRxTimer = nullptr;
     cMessage *inactivityTimer = nullptr;
+    const IFrameSequenceStep *deferredStartRxTimeoutStep = nullptr;
 
     // Transmission and Reception
     IRx *rx = nullptr;
@@ -120,6 +122,8 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void forEachChild(cVisitor *v) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void refreshDisplay() const override;
+    void handleDeferredStartRxTimeout();
+    void processResponseAndCancelStartRxTimerIfCompleted(Packet *packet, IReceiveStep *receiveStep);
 
     virtual void startFrameSequence(AccessCategory ac);
     void resumeContention();
@@ -144,6 +148,10 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void originatorProcessReceivedManagementFrame(const Ptr<const Ieee80211MgmtHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
     virtual void originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, Packet *lastTransmittedPacket, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
     virtual void originatorProcessReceivedDataFrame(const Ptr<const Ieee80211DataHeader>& header, const Ptr<const Ieee80211MacHeader>& lastTransmittedHeader, AccessCategory ac);
+    virtual void originatorProcessBlockAckResult(
+            const Ptr<const Ieee80211BlockAck>& blockAck,
+            const std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>& ackedFrames,
+            AccessCategory ac) {}
 
     virtual void setFrameMode(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, const physicallayer::IIeee80211Mode *mode) const;
     virtual void recordSelectedMode(Packet *packet, const physicallayer::IIeee80211Mode *mode);

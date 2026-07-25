@@ -20,6 +20,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/Ieee80211HeMuContainerTag_m.h"
 #include "inet/linklayer/ieee80211/mac/recipient/RecipientAckProcedure.h"
 #include "inet/linklayer/ethernet/common/Ethernet.h"
+#include "inet/physicallayer/wireless/ieee80211/mode/Ieee80211HeMode.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211Tag_m.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeMuUtil.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h"
@@ -70,6 +71,20 @@ static Packet *buildAmpduPacket(const std::vector<Packet *>& frames, FcsMode fcs
     }
     aggregatedPacket->setName(aggregatedName.c_str());
     return aggregatedPacket;
+}
+
+static B calculateAmpduLength(const std::vector<Packet *>& frames)
+{
+    B aggregateLength(0);
+    for (size_t i = 0; i < frames.size(); i++) {
+        // Match buildAmpduPacket(): the complete stored MPDU (including its
+        // existing MAC trailer) follows the four-byte delimiter.
+        auto subframeLength = B(4) + frames[i]->getTotalLength();
+        aggregateLength += subframeLength;
+        if (i + 1 != frames.size())
+            aggregateLength += B((4 - subframeLength.get<B>() % 4) % 4);
+    }
+    return aggregateLength;
 }
 
 void Hcf::initialize(int stage)
@@ -144,9 +159,12 @@ void Hcf::forEachChild(cVisitor *v)
 void Hcf::handleMessage(cMessage *msg)
 {
     if (msg == startRxTimer) {
-        if (!isReceptionInProgress()) {
+        if (!frameSequenceHandler->isSequenceRunning())
+            return;
+        else if (isReceptionInProgress())
+            deferredStartRxTimeoutStep = frameSequenceHandler->getContext()->getLastStep();
+        else
             frameSequenceHandler->handleStartRxTimeout();
-        }
     }
     else if (msg == inactivityTimer) {
         if (originatorBlockAckAgreementHandler && recipientBlockAckAgreementHandler) {
@@ -158,6 +176,34 @@ void Hcf::handleMessage(cMessage *msg)
     }
     else
         throw cRuntimeError("Unknown msg type");
+}
+
+void Hcf::handleDeferredStartRxTimeout()
+{
+    if (deferredStartRxTimeoutStep == nullptr || isReceptionInProgress())
+        return;
+    auto timeoutStep = deferredStartRxTimeoutStep;
+    deferredStartRxTimeoutStep = nullptr;
+    // IEEE Std 802.11-2024, 10.3.2.9 and 10.3.2.11: a reception that starts
+    // before the response timeout is processed before deciding that the
+    // expected response is missing. Do not apply the expired timeout to a
+    // step that the received frame has already completed.
+    if (frameSequenceHandler->isSequenceRunning() &&
+            frameSequenceHandler->getContext()->getLastStep() == timeoutStep)
+        frameSequenceHandler->handleStartRxTimeout();
+}
+
+void Hcf::processResponseAndCancelStartRxTimerIfCompleted(Packet *packet, IReceiveStep *receiveStep)
+{
+    auto receiveStepAtStart = receiveStep;
+    bool completesOnReception = receiveStepAtStart->completesOnReception();
+    frameSequenceHandler->processResponse(packet);
+    // IEEE Std 802.11-2024, 10.3.2.9 and 10.3.2.11: once the
+    // expected response completes the exchange, its timeout no longer applies.
+    if (completesOnReception &&
+            (!frameSequenceHandler->isSequenceRunning() ||
+             frameSequenceHandler->getContext()->getLastStep() != receiveStepAtStart))
+        cancelEvent(startRxTimer);
 }
 
 void Hcf::refreshDisplay() const
@@ -239,6 +285,7 @@ void Hcf::processUpperFrame(Packet *packet, const Ptr<const Ieee80211DataOrMgmtH
 void Hcf::scheduleStartRxTimer(simtime_t timeout)
 {
     Enter_Method("scheduleStartRxTimer");
+    deferredStartRxTimeoutStep = nullptr;
     cancelEvent(startRxTimer);
     scheduleAfter(timeout, startRxTimer);
 }
@@ -269,14 +316,28 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
                 recipientContext != nullptr &&
                 recipientContext->getRecipientParameters() != nullptr &&
                 recipientContext->getRecipientParameters()->ndpFeedbackReport;
+        const bool soundingNdp = rxVectorInd != nullptr &&
+                rxVectorInd->getRxVector() != nullptr &&
+                rxVectorInd->getRxVector()->getCommon().getPpduFormat() ==
+                        physicallayer::HE_SINGLE_USER &&
+                packet->getDataLength() == b(0);
         auto receiveStep = edcaf && frameSequenceHandler->isSequenceRunning() ?
                 dynamic_cast<IReceiveStep *>(frameSequenceHandler->getContext()->getLastStep()) : nullptr;
+        if (soundingNdp) {
+            // A sounding NDP has no MAC header, but the HE recipient still
+            // needs its RXVECTOR to advance the NDPA/NDP/BFRP state.
+            recipientProcessReceivedFrame(packet, header);
+            handleDeferredStartRxTimeout();
+            return;
+        }
         if (outcomeAmpdu && receiveStep != nullptr) {
-            frameSequenceHandler->processResponse(packet);
+            processResponseAndCancelStartRxTimerIfCompleted(packet, receiveStep);
+            handleDeferredStartRxTimeout();
             return;
         }
         if (outcomeAmpdu) {
             recipientProcessReceivedFrame(packet, header);
+            handleDeferredStartRxTimeout();
             return;
         }
         if (nfrpFeedbackNdp && receiveStep != nullptr && receiveStep->acceptsHeaderlessFrame(packet)) {
@@ -285,10 +346,12 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
             // may opt into this path; it validates Trigger ID, timing,
             // tone-set, STS, and duplicate AID.
             frameSequenceHandler->processResponse(packet);
+            handleDeferredStartRxTimeout();
             return;
         }
         EV_INFO << "Discarding headerless PHY indication outside an active NFRP collection" << endl;
         delete packet;
+        handleDeferredStartRxTimeout();
         return;
     }
     if (edcaf && frameSequenceHandler->isSequenceRunning()) {
@@ -326,6 +389,7 @@ void Hcf::processLowerFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>&
         emit(packetDroppedSignal, packet, &details);
         delete packet;
     }
+    handleDeferredStartRxTimeout();
 }
 
 void Hcf::channelGranted(IChannelAccess *channelAccess)
@@ -443,6 +507,7 @@ void Hcf::handleInternalCollision(std::vector<Edcaf *> internallyCollidedEdcafs)
 void Hcf::frameSequenceFinished()
 {
     Enter_Method("frameSequenceFinished");
+    deferredStartRxTimeoutStep = nullptr;
     emit(IFrameSequenceHandler::frameSequenceFinishedSignal, frameSequenceHandler->getContext());
     auto edcaf = edca->getChannelOwner();
     if (edcaf) {
@@ -940,6 +1005,7 @@ void Hcf::originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const 
         // retransmission window.
         edcaf->getRecoveryProcedure()->blockAckFrameReceived();
         auto ackedSeqAndFragNums = edcaf->getAckHandler()->processReceivedBlockAck(blockAck);
+        originatorProcessBlockAckResult(blockAck, ackedSeqAndFragNums, ac);
         if (originatorBlockAckAgreementHandler)
             originatorBlockAckAgreementHandler->processReceivedBlockAck(blockAck, this);
         EV_TRACE << "It has acknowledged the following frames:" << std::endl;
@@ -1049,6 +1115,7 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
 
         Packet *packetToTransmit = packet;
         bool deletePacketToTransmit = false;
+        auto mode = rateSelection->computeMode(packet, header, txop);
         if (!isHeMuContainerPacket(packet))
           if (auto dataFrame = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
             if (dataFrame->getAckPolicy() == AckPolicy::BLOCK_ACK && !rtsPolicy->isRtsNeeded(packet, header)) {
@@ -1089,6 +1156,28 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
                     frame->insertAtFront(mutableHeader);
                     ampduFrames.push_back(frame);
                 }
+                if (dynamic_cast<const Ieee80211HeMode *>(mode) != nullptr) {
+                    // IEEE 802.11-2024 Table 27-61 and Clause 10.13 bound an
+                    // HE PPDU to aPPDUMaxTime. Trim only optional aggregate
+                    // members; the PHY independently validates the final PPDU.
+                    simtime_t durationLimit = SimTime(5.484, SIMTIME_MS);
+                    auto originalFrameCount = ampduFrames.size();
+                    auto aggregateLength = calculateAmpduLength(ampduFrames);
+                    while (ampduFrames.size() > 1 &&
+                            mode->getDuration(aggregateLength) > durationLimit) {
+                        auto previousSubframeLength =
+                                B(4) + ampduFrames[ampduFrames.size() - 2]->getTotalLength();
+                        auto previousSubframePadding =
+                                B((4 - previousSubframeLength.get<B>() % 4) % 4);
+                        aggregateLength -= B(4) + ampduFrames.back()->getTotalLength() +
+                                previousSubframePadding;
+                        ampduFrames.pop_back();
+                    }
+                    if (ampduFrames.size() != originalFrameCount)
+                        EV_DEBUG << "Trimmed HE SU A-MPDU from " << originalFrameCount
+                                 << " to " << ampduFrames.size()
+                                 << " MPDUs for PPDU/TXOP duration " << durationLimit << ".\n";
+                }
                 if (ampduFrames.size() > 1) {
                     packetToTransmit = buildAmpduPacket(ampduFrames, mac->getFcsMode());
                     deletePacketToTransmit = true;
@@ -1097,7 +1186,6 @@ void Hcf::transmitFrame(Packet *packet, simtime_t ifs)
             }
           }
 
-        auto mode = rateSelection->computeMode(packetToTransmit, header, txop);
         setFrameMode(packetToTransmit, header, mode);
         recordSelectedMode(packetToTransmit, mode);
         emit(IRateSelection::datarateSelectedSignal, mode->getDataMode()->getNetBitrate().get<bps>(), packetToTransmit);
@@ -1208,7 +1296,9 @@ bool Hcf::isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const
 void Hcf::corruptedFrameReceived()
 {
     Enter_Method("corruptedFrameReceived");
-    if (frameSequenceHandler->isSequenceRunning() && !startRxTimer->isScheduled()) {
+    if (deferredStartRxTimeoutStep != nullptr)
+        handleDeferredStartRxTimeout();
+    else if (frameSequenceHandler->isSequenceRunning() && !startRxTimer->isScheduled()) {
         frameSequenceHandler->handleStartRxTimeout();
     }
     else

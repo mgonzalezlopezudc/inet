@@ -656,16 +656,19 @@ auto queue2 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSub
     localUser.ru = fullRu;
     localUser.mcs = 0;
     localUser.numberOfSpatialStreams = 1;
-    localUser.streamStartIndex = 0;
+    localUser.streamStartIndex = 2;
     localUser.coding = HE_CODING_BCC;
     localUser.psduLength = B(100);
     localUser.staId = 7;
     auto peerUser = localUser;
-    peerUser.streamStartIndex = 1;
+    peerUser.streamStartIndex = 0;
     peerUser.psduLength = B(0);
     peerUser.staId = 8;
+    auto secondPeerUser = peerUser;
+    secondPeerUser.streamStartIndex = 1;
+    secondPeerUser.staId = 9;
     Ieee80211HeTriggerResponseFinalizationRequest finalizationRequest;
-    finalizationRequest.users = {localUser, peerUser};
+    finalizationRequest.users = {localUser, peerUser, secondPeerUser};
     finalizationRequest.centerFrequency = channel->getCenterFrequency();
     finalizationRequest.channelBandwidth = MHz(20);
     finalizationRequest.guardInterval = HE_GI_1_6_US;
@@ -691,21 +694,26 @@ auto queue2 = check_and_cast<queueing::IPacketQueue *>(getParentModule()->getSub
     muMimoRequest.guardInterval = HE_GI_1_6_US;
     muMimoRequest.ltfType = HE_LTF_1X;
     auto local = makeUser(fullRu, 7, 0, 1, false, 100);
-    local.streamStartIndex = 0;
+    local.streamStartIndex = 2;
     auto companion = makeUser(fullRu, 8, 0, 1, false, 0);
-    companion.streamStartIndex = 1;
-    muMimoRequest.users = {local, companion};
+    companion.streamStartIndex = 0;
+    auto secondCompanion = makeUser(fullRu, 9, 0, 1, false, 0);
+    secondCompanion.streamStartIndex = 1;
+    muMimoRequest.users = {local, companion, secondCompanion};
     attachCanonicalVector(packet, muMimoRequest);
     packet->addTag<Ieee80211HeTriggerCorrelationTag>()->setTriggerId(43);
 
     radio->testEncapsulate(packet);
     auto handoff = packet->getTag<Ieee80211HeTxVectorReq>();
-    REQUIRE(handoff->getPpduLayout()->getUsers().size() == 2);
+    REQUIRE(handoff->getPpduLayout()->getUsers().size() == 3);
     REQUIRE(handoff->getPpduLayout()->getPsduBitRanges().back().getEndBitOffset() == b(800));
     REQUIRE(handoff->getPpduLayout()->getLtfType() == HE_LTF_1X);
     REQUIRE(handoff->getPpduLayout()->getGuardInterval() == HE_GI_1_6_US);
     auto phyHeader = packet->peekAtFront<Ieee80211HeTbPhyHeader>();
-    REQUIRE(phyHeader->getTotalNsts() == 2);
+    REQUIRE(phyHeader->getTotalNsts() == 3);
+    // The local STA transmits one STS even though it occupies shared-RU stream
+    // index 2. The two zero-PSDU companions must not require three antennas.
+    delete transmitter->createTransmission(radio, packet, SimTime(4, SIMTIME_S));
     delete packet;
 }
 

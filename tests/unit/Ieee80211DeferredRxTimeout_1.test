@@ -1,0 +1,471 @@
+%description:
+Verify that DCF and HCF defer an expired receive-start timeout until an
+overlapping reception is processed, and apply it exactly once only when the
+same receive step remains active.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Dcf.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceHandler.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+
+%file: TestNetwork.ned
+module TestDcf
+{
+    parameters:
+        @class(TestDcf);
+}
+
+module TestHcf
+{
+    parameters:
+        @class(TestHcf);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        dcf: TestDcf;
+        hcf: TestHcf;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+struct ExchangeOutcome
+{
+    int acceptedCompletions = 0;
+    int expiredCompletions = 0;
+    int finishedSequences = 0;
+    int receivedResponses = 0;
+};
+
+class TrackingReceiveStep : public ReceiveStep
+{
+  protected:
+    ExchangeOutcome *outcome;
+
+  public:
+    TrackingReceiveStep(ExchangeOutcome *outcome, bool expected) :
+        ReceiveStep(SimTime(1, SIMTIME_MS), TimeoutHandling::COMPLETE_STEP,
+                [expected] (Packet *, FrameSequenceContext *) { return expected; },
+                UnexpectedResponseHandling::IGNORE_RESPONSE, Completion::EXPIRED),
+        outcome(outcome)
+    {
+    }
+
+    virtual void setCompletion(Completion completion) override
+    {
+        ReceiveStep::setCompletion(completion);
+        if (completion == Completion::ACCEPTED)
+            outcome->acceptedCompletions++;
+        else if (completion == Completion::EXPIRED)
+            outcome->expiredCompletions++;
+    }
+};
+
+class TrackingReceiveCollectionStep : public ReceiveCollectionStep
+{
+  protected:
+    ExchangeOutcome *outcome;
+
+  public:
+    TrackingReceiveCollectionStep(ExchangeOutcome *outcome) :
+        ReceiveCollectionStep(SimTime(1, SIMTIME_MS)),
+        outcome(outcome)
+    {
+    }
+
+    virtual void setCompletion(Completion completion) override
+    {
+        ReceiveCollectionStep::setCompletion(completion);
+        if (completion == Completion::ACCEPTED)
+            outcome->acceptedCompletions++;
+        else if (completion == Completion::EXPIRED)
+            outcome->expiredCompletions++;
+    }
+};
+
+class TestExchangeFs : public IFrameSequence
+{
+  protected:
+    ExchangeOutcome *outcome;
+    bool expected;
+    bool collection;
+    int step = 0;
+
+  public:
+    TestExchangeFs(ExchangeOutcome *outcome, bool expected, bool collection) :
+        outcome(outcome),
+        expected(expected),
+        collection(collection)
+    {
+    }
+
+    virtual void startSequence(FrameSequenceContext *, int firstStep) override
+    {
+        REQUIRE(firstStep == 0);
+        step = 0;
+    }
+
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *) override
+    {
+        if (step == 0)
+            return new TransmitStep(new Packet("request"), SIMTIME_ZERO, true);
+        else if (step == 1)
+            return collection ?
+                    static_cast<IFrameSequenceStep *>(new TrackingReceiveCollectionStep(outcome)) :
+                    static_cast<IFrameSequenceStep *>(new TrackingReceiveStep(outcome, expected));
+        else if (step == 2)
+            return nullptr;
+        else
+            throw cRuntimeError("Unknown test frame sequence step");
+    }
+
+    virtual bool completeStep(FrameSequenceContext *) override
+    {
+        step++;
+        return true;
+    }
+
+    virtual std::string getHistory() const override { return ""; }
+};
+
+class DeferredRxTimeoutHarness
+{
+  public:
+    virtual ~DeferredRxTimeoutHarness() {}
+    virtual void startExchange(ExchangeOutcome& outcome, bool expected, bool collection) = 0;
+    virtual void expireDuringReception() = 0;
+    virtual void processResponse() = 0;
+    virtual void finishReception() = 0;
+    virtual void finishCorruptReception() = 0;
+    virtual void expireAfterSequenceCompletionDuringReception() = 0;
+    virtual void checkNoDeferredTimeout() = 0;
+};
+
+template<typename CoordinationFunction>
+class TestCoordinationFunction : public CoordinationFunction, public DeferredRxTimeoutHarness
+{
+  protected:
+    bool receptionInProgress = false;
+    InProgressFrames inProgressFrames;
+    ExchangeOutcome *outcome = nullptr;
+
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override
+    {
+        this->startRxTimer = new cMessage("startRxTimeout");
+        this->frameSequenceHandler = new FrameSequenceHandler();
+    }
+
+    virtual bool isReceptionInProgress() override
+    {
+        return receptionInProgress;
+    }
+
+    virtual void scheduleStartRxTimer(simtime_t timeout) override
+    {
+        REQUIRE(timeout >= SIMTIME_ZERO);
+        this->deferredStartRxTimeoutStep = nullptr;
+    }
+
+    virtual void transmitFrame(Packet *packet, simtime_t) override
+    {
+        packet->removeFromOwnershipTree();
+        this->frameSequenceHandler->transmissionComplete();
+    }
+
+    virtual void originatorProcessTransmittedFrame(Packet *) override {}
+
+    virtual void originatorProcessReceivedFrame(Packet *, Packet *) override
+    {
+        outcome->receivedResponses++;
+    }
+
+    virtual void frameSequenceFinished() override
+    {
+        this->deferredStartRxTimeoutStep = nullptr;
+        outcome->finishedSequences++;
+    }
+
+  public:
+    virtual void startExchange(ExchangeOutcome& outcome, bool expected, bool collection) override
+    {
+        REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
+        this->outcome = &outcome;
+        auto context = new FrameSequenceContext(MacAddress::UNSPECIFIED_ADDRESS,
+                nullptr, &inProgressFrames, nullptr, nullptr, nullptr, nullptr);
+        this->frameSequenceHandler->startFrameSequence(
+                new TestExchangeFs(&outcome, expected, collection), context, this);
+        REQUIRE(this->frameSequenceHandler->isSequenceRunning());
+        REQUIRE(dynamic_cast<IReceiveStep *>(
+                this->frameSequenceHandler->getContext()->getLastStep()) != nullptr);
+    }
+
+    virtual void expireDuringReception() override
+    {
+        receptionInProgress = true;
+        this->handleMessage(this->startRxTimer);
+        REQUIRE(this->deferredStartRxTimeoutStep ==
+                this->frameSequenceHandler->getContext()->getLastStep());
+    }
+
+    virtual void processResponse() override
+    {
+        auto response = new Packet("response");
+        response->removeFromOwnershipTree();
+        this->frameSequenceHandler->processResponse(response);
+    }
+
+    virtual void finishReception() override
+    {
+        receptionInProgress = false;
+        this->handleDeferredStartRxTimeout();
+    }
+
+    virtual void finishCorruptReception() override
+    {
+        receptionInProgress = false;
+        this->corruptedFrameReceived();
+    }
+
+    virtual void expireAfterSequenceCompletionDuringReception() override
+    {
+        REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
+        receptionInProgress = true;
+        this->handleMessage(this->startRxTimer);
+        receptionInProgress = false;
+    }
+
+    virtual void checkNoDeferredTimeout() override
+    {
+        this->handleDeferredStartRxTimeout();
+        this->corruptedFrameReceived();
+    }
+};
+
+class TestDcf : public TestCoordinationFunction<Dcf> {};
+class TestHcf : public TestCoordinationFunction<Hcf>
+{
+  protected:
+    IReceiveStep *getCurrentReceiveStep()
+    {
+        REQUIRE(this->frameSequenceHandler->isSequenceRunning());
+        auto receiveStep = dynamic_cast<IReceiveStep *>(
+                this->frameSequenceHandler->getContext()->getLastStep());
+        REQUIRE(receiveStep != nullptr);
+        return receiveStep;
+    }
+
+    void scheduleStartRxTimerForTest()
+    {
+        REQUIRE(!this->startRxTimer->isScheduled());
+        this->scheduleAfter(SimTime(1, SIMTIME_MS), this->startRxTimer);
+        REQUIRE(this->startRxTimer->isScheduled());
+    }
+
+    void processHeaderlessOutcomeResponse(IReceiveStep *receiveStep)
+    {
+        auto response = new Packet("headerlessOutcomeAmpdu");
+        response->removeFromOwnershipTree();
+        this->processResponseAndCancelStartRxTimerIfCompleted(response, receiveStep);
+    }
+
+  public:
+    void testAcceptedHeaderlessOutcomeResponse()
+    {
+        Enter_Method_Silent();
+        ExchangeOutcome outcome;
+        this->startExchange(outcome, true, false);
+        auto receiveStep = getCurrentReceiveStep();
+        scheduleStartRxTimerForTest();
+        processHeaderlessOutcomeResponse(receiveStep);
+        REQUIRE(!this->startRxTimer->isScheduled());
+        REQUIRE(!this->frameSequenceHandler->isSequenceRunning());
+        REQUIRE(outcome.acceptedCompletions == 1);
+        REQUIRE(outcome.expiredCompletions == 0);
+        REQUIRE(outcome.receivedResponses == 1);
+        REQUIRE(outcome.finishedSequences == 1);
+        EV << "HCF accepted headerless outcome: timer canceled\n";
+    }
+
+    void testIgnoredHeaderlessOutcomeResponse()
+    {
+        Enter_Method_Silent();
+        ExchangeOutcome outcome;
+        this->startExchange(outcome, false, false);
+        auto receiveStep = getCurrentReceiveStep();
+        scheduleStartRxTimerForTest();
+        processHeaderlessOutcomeResponse(receiveStep);
+        REQUIRE(this->startRxTimer->isScheduled());
+        REQUIRE(this->frameSequenceHandler->isSequenceRunning());
+        REQUIRE(this->frameSequenceHandler->getContext()->getLastStep() == receiveStep);
+        this->cancelEvent(this->startRxTimer);
+        this->handleMessage(this->startRxTimer);
+        this->checkNoDeferredTimeout();
+        REQUIRE(outcome.acceptedCompletions == 0);
+        REQUIRE(outcome.expiredCompletions == 1);
+        REQUIRE(outcome.receivedResponses == 0);
+        REQUIRE(outcome.finishedSequences == 1);
+        EV << "HCF ignored headerless outcome: timer expired once\n";
+    }
+};
+
+Define_Module(TestDcf);
+Define_Module(TestHcf);
+
+static void testExpectedResponse(const char *name, DeferredRxTimeoutHarness *harness)
+{
+    ExchangeOutcome outcome;
+    harness->startExchange(outcome, true, false);
+    harness->expireDuringReception();
+    harness->processResponse();
+    harness->finishReception();
+    harness->checkNoDeferredTimeout();
+    REQUIRE(outcome.acceptedCompletions == 1);
+    REQUIRE(outcome.expiredCompletions == 0);
+    REQUIRE(outcome.receivedResponses == 1);
+    REQUIRE(outcome.finishedSequences == 1);
+    EV << name << " expected response: no deferred timeout\n";
+}
+
+static void testUnexpectedResponse(const char *name, DeferredRxTimeoutHarness *harness)
+{
+    ExchangeOutcome outcome;
+    harness->startExchange(outcome, false, false);
+    harness->expireDuringReception();
+    harness->processResponse();
+    harness->finishReception();
+    harness->checkNoDeferredTimeout();
+    REQUIRE(outcome.acceptedCompletions == 0);
+    REQUIRE(outcome.expiredCompletions == 1);
+    REQUIRE(outcome.receivedResponses == 0);
+    REQUIRE(outcome.finishedSequences == 1);
+    EV << name << " unexpected response: one deferred timeout\n";
+}
+
+static void testCorruptResponse(const char *name, DeferredRxTimeoutHarness *harness)
+{
+    ExchangeOutcome outcome;
+    harness->startExchange(outcome, true, false);
+    harness->expireDuringReception();
+    harness->finishCorruptReception();
+    harness->checkNoDeferredTimeout();
+    REQUIRE(outcome.acceptedCompletions == 0);
+    REQUIRE(outcome.expiredCompletions == 1);
+    REQUIRE(outcome.receivedResponses == 0);
+    REQUIRE(outcome.finishedSequences == 1);
+    EV << name << " corrupt response: one deferred timeout\n";
+}
+
+static void testReceiveCollection(const char *name, DeferredRxTimeoutHarness *harness)
+{
+    ExchangeOutcome outcome;
+    harness->startExchange(outcome, true, true);
+    harness->expireDuringReception();
+    harness->processResponse();
+    harness->finishReception();
+    harness->checkNoDeferredTimeout();
+    REQUIRE(outcome.acceptedCompletions == 1);
+    REQUIRE(outcome.expiredCompletions == 0);
+    REQUIRE(outcome.receivedResponses == 0);
+    REQUIRE(outcome.finishedSequences == 1);
+    EV << name << " collection: deferred timeout finished collection\n";
+}
+
+static void testStaleTimeoutAfterSequenceCompletion(const char *name, DeferredRxTimeoutHarness *harness)
+{
+    ExchangeOutcome outcome;
+    harness->startExchange(outcome, true, false);
+    harness->processResponse();
+    harness->expireAfterSequenceCompletionDuringReception();
+    harness->checkNoDeferredTimeout();
+    REQUIRE(outcome.acceptedCompletions == 1);
+    REQUIRE(outcome.expiredCompletions == 0);
+    REQUIRE(outcome.receivedResponses == 1);
+    REQUIRE(outcome.finishedSequences == 1);
+    EV << name << " completed sequence: stale timeout ignored\n";
+}
+
+static void testIgnoredResponseKeepsTimeout(const char *name, DeferredRxTimeoutHarness *harness)
+{
+    ExchangeOutcome outcome;
+    harness->startExchange(outcome, false, false);
+    harness->processResponse();
+    harness->expireDuringReception();
+    harness->finishReception();
+    harness->checkNoDeferredTimeout();
+    REQUIRE(outcome.acceptedCompletions == 0);
+    REQUIRE(outcome.expiredCompletions == 1);
+    REQUIRE(outcome.receivedResponses == 0);
+    REQUIRE(outcome.finishedSequences == 1);
+    EV << name << " ignored response: timeout remains applicable\n";
+}
+
+static void runTests(const char *name, DeferredRxTimeoutHarness *harness)
+{
+    testExpectedResponse(name, harness);
+    testUnexpectedResponse(name, harness);
+    testCorruptResponse(name, harness);
+    testReceiveCollection(name, harness);
+    testStaleTimeoutAfterSequenceCompletion(name, harness);
+    testIgnoredResponseKeepsTimeout(name, harness);
+}
+
+%activity:
+runTests("DCF", check_and_cast<TestDcf *>(getParentModule()->getSubmodule("dcf")));
+auto hcf = check_and_cast<TestHcf *>(getParentModule()->getSubmodule("hcf"));
+runTests("HCF", hcf);
+hcf->testAcceptedHeaderlessOutcomeResponse();
+hcf->testIgnoredHeaderlessOutcomeResponse();
+
+%contains: stdout
+DCF expected response: no deferred timeout
+
+%contains: stdout
+DCF unexpected response: one deferred timeout
+
+%contains: stdout
+DCF corrupt response: one deferred timeout
+
+%contains: stdout
+DCF collection: deferred timeout finished collection
+
+%contains: stdout
+DCF completed sequence: stale timeout ignored
+
+%contains: stdout
+DCF ignored response: timeout remains applicable
+
+%contains: stdout
+HCF expected response: no deferred timeout
+
+%contains: stdout
+HCF unexpected response: one deferred timeout
+
+%contains: stdout
+HCF corrupt response: one deferred timeout
+
+%contains: stdout
+HCF collection: deferred timeout finished collection
+
+%contains: stdout
+HCF completed sequence: stale timeout ignored
+
+%contains: stdout
+HCF ignored response: timeout remains applicable
+
+%contains: stdout
+HCF accepted headerless outcome: timer canceled
+
+%contains: stdout
+HCF ignored headerless outcome: timer expired once

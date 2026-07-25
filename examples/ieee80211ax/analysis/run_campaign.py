@@ -5,16 +5,27 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from analysis_core import DEFAULT_MANIFEST, REPOSITORY_ROOT, load_manifest
 
+GENERAL_ANALYSIS_ROOT = Path(__file__).resolve().parents[2] / "ieee80211" / "analysis"
+if str(GENERAL_ANALYSIS_ROOT) not in sys.path:
+    sys.path.insert(0, str(GENERAL_ANALYSIS_ROOT))
+
+from inet_wifi_analysis import (
+    CampaignJob,
+    build_cmdenv_command,
+    collect_campaign_jobs,
+)
 
 VECTOR_STATISTICS = (
     "packetReceived", "endToEndDelay", "packetSentToPeer", "packetDropIncorrectlyReceived",
@@ -31,19 +42,7 @@ VECTOR_STATISTICS = (
     "heSpatialReuseTransmitPowerLimit",
     "heSpatialReuseReason",
 )
-
-
-@dataclass(frozen=True)
-class CampaignJob:
-    group: str
-    config: str
-    run: int
-    result_dir: Path
-    command: tuple[str, ...]
-
-    @property
-    def label(self) -> str:
-        return f"{self.group}/{self.config} run {self.run}"
+SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 
 
 @dataclass(frozen=True)
@@ -58,6 +57,16 @@ def positive_int(value: str) -> int:
     if parsed < 1:
         raise argparse.ArgumentTypeError("must be at least 1")
     return parsed
+
+
+def session_id(value: str) -> str:
+    if not SESSION_ID_PATTERN.fullmatch(value):
+        raise argparse.ArgumentTypeError("must have UTC format YYYYMMDDTHHMMSSZ")
+    return value
+
+
+def new_session_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
 def available_cpu_count() -> int:
@@ -75,17 +84,16 @@ def build_command(
     run: int,
     repetitions: int,
 ) -> tuple[str, ...]:
-    command = [
-        str(REPOSITORY_ROOT / "bin/inet"), "-u", "Cmdenv", "-f", str(ini),
-        "-c", config, "-r", str(run),
-        f"--repeat={repetitions}", f"--result-dir={result_dir}", f"--seed-set={run}",
-        "--**.vector-recording=false",
-        "--**.scalar-recording=false",
-        "--**.heUlRandomAccessAttempt*.scalar-recording=true",
-        "--**.heUlRandomAccessSuccess*.scalar-recording=true",
-    ]
-    command.extend(f"--**.{statistic}*.vector-recording=true" for statistic in VECTOR_STATISTICS)
-    return tuple(command)
+    return build_cmdenv_command(
+        REPOSITORY_ROOT,
+        ini,
+        result_dir,
+        config,
+        run,
+        repetitions,
+        VECTOR_STATISTICS,
+        ("heUlRandomAccessAttempt", "heUlRandomAccessSuccess"),
+    )
 
 
 def collect_jobs(
@@ -93,26 +101,18 @@ def collect_jobs(
     selected_group: str,
     repetitions_override: int | None = None,
     selected_configs: set[str] | None = None,
+    campaign_session_id: str | None = None,
 ) -> list[CampaignJob]:
-    group_names = sorted(manifest["groups"]) if selected_group == "all" else [selected_group]
-    jobs = []
-    for group_name in group_names:
-        group = manifest["groups"][group_name]
-        repetitions = repetitions_override or int(group["expected_repetitions"])
-        for entry in group["conditions"]:
-            if selected_configs and entry["config"] not in selected_configs:
-                continue
-            ini = REPOSITORY_ROOT / entry.get("ini", group["ini"])
-            result_dir = REPOSITORY_ROOT / entry.get("result_dir", group["result_dir"])
-            for run in range(repetitions):
-                jobs.append(CampaignJob(
-                    group=group_name,
-                    config=entry["config"],
-                    run=run,
-                    result_dir=result_dir,
-                    command=build_command(ini, result_dir, entry["config"], run, repetitions),
-                ))
-    return jobs
+    return collect_campaign_jobs(
+        manifest,
+        selected_group,
+        REPOSITORY_ROOT,
+        campaign_session_id or new_session_id(),
+        VECTOR_STATISTICS,
+        ("heUlRandomAccessAttempt", "heUlRandomAccessSuccess"),
+        repetitions_override,
+        selected_configs,
+    )
 
 
 def execute_job(job: CampaignJob) -> JobResult:
@@ -162,6 +162,11 @@ def main() -> None:
     parser.add_argument("--runs", type=positive_int, help="override repetition count for a diagnostic campaign")
     parser.add_argument("--config", action="append", help="run only the named configuration")
     parser.add_argument(
+        "--session-id",
+        type=session_id,
+        help="UTC result-set ID (default: current time as YYYYMMDDTHHMMSSZ)",
+    )
+    parser.add_argument(
         "-j", "--jobs", type=positive_int, default=available_cpu_count(),
         help="maximum parallel simulations (default: all available CPUs, equivalent to nproc)",
     )
@@ -170,11 +175,14 @@ def main() -> None:
     if args.group != "all" and args.group not in manifest["groups"]:
         parser.error(f"unknown group {args.group!r}; choose from: all, {', '.join(sorted(manifest['groups']))}")
 
+    campaign_session_id = args.session_id or new_session_id()
+    print(f"Campaign session: {campaign_session_id}", flush=True)
     jobs = collect_jobs(
         manifest,
         args.group,
         repetitions_override=args.runs,
         selected_configs=set(args.config) if args.config else None,
+        campaign_session_id=campaign_session_id,
     )
     if not run_jobs(jobs, args.jobs):
         raise SystemExit(1)

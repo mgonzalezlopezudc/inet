@@ -129,8 +129,8 @@ const INoise *ScalarMediumAnalogModel::computeNoise(const IListening *listening,
     const BandListening *bandListening = check_and_cast<const BandListening *>(listening);
     Hz commonCenterFrequency = bandListening->getCenterFrequency();
     Hz commonBandwidth = bandListening->getBandwidth();
-    simtime_t noiseStartTime = SimTime::getMaxTime();
-    simtime_t noiseEndTime = 0;
+    simtime_t noiseStartTime = listening->getStartTime();
+    simtime_t noiseEndTime = listening->getEndTime();
     std::map<simtime_t, W> powerChanges;
     powerChanges[math::getLowerBound<simtime_t>()] = W(0);
     powerChanges[math::getUpperBound<simtime_t>()] = W(0);
@@ -235,4 +235,3 @@ const IReception *ScalarMediumAnalogModel::computeReception(const IRadio *receiv
 } // namespace physicallayer
 
 } // namespace inet
-

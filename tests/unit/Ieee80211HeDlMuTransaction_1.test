@@ -403,6 +403,20 @@ MacAddress sta2("02:00:00:00:20:02");
 MacAddress sta3("02:00:00:00:20:03");
 Tid tid = 3;
 
+{
+    auto context = makeScheduleContext({sta1, sta2});
+    MockDlMuScheduler scheduler({makeAllocation(sta1, 0, 106), makeAllocation(sta2, 1, 106)});
+    scheduler.allocations[0].estimatedDuration = SimTime(8, SIMTIME_MS);
+    scheduler.allocations[1].estimatedDuration = SimTime(7, SIMTIME_MS);
+    for (auto& candidate : context.candidates)
+        candidate.sourceQueue = pendingQueue;
+    HeMuPlanDiagnostic diagnostic;
+    auto plan = HeDlMuPlan::create(context, scheduler.schedule(context), diagnostic);
+    requireTrue(plan.has_value(),
+            "backlog-sized scheduler estimates above the PPDU limit must reach exact packing");
+    EV << "DL MU plan retained oversized backlog estimates for exact packing.\n";
+}
+
 auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::SelectedAllocation>& selections,
         const std::set<std::pair<MacAddress, Tid>>& inactiveAgreements = {},
         const std::map<std::pair<MacAddress, Tid>, int>& slotLimits = {}) {
@@ -677,6 +691,7 @@ auto makePlannerParameters = [&] (const std::vector<HeDlMuPackingPlanner::Select
         const auto& layoutUser = transmission->getHePpduLayout()->getUsers()[index];
         const auto& psduRange = transmission->getHePpduLayout()->getPsduBitRanges()[index];
         if (!(actual.ru == planned.ru &&
+                active.mcs == planned.mcs &&
                 actual.mcs == planned.mcs &&
                 actual.numberOfSpatialStreams == planned.numberOfSpatialStreams &&
                 actual.streamStartIndex == fs.getActiveAllocations()[index].streamStartIndex &&
@@ -936,6 +951,9 @@ EV << ".\n";
 
 %contains: stdout
 Compressed Block Ack uses the standard 32-byte frame length.
+
+%contains: stdout
+DL MU plan retained oversized backlog estimates for exact packing.
 
 %contains: stdout
 Planner produced deterministic multi-user packing without queue mutation.

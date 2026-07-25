@@ -6,8 +6,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
@@ -21,6 +23,12 @@ from scipy.stats import t
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 ANALYSIS_DIR = Path(__file__).resolve().parent
 DEFAULT_MANIFEST = ANALYSIS_DIR / "experiments.json"
+SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
+EVIDENCE_HANDLERS = {
+    "unimplemented",
+    "mimo_disjoint_streams",
+    "matched_delivery_ratio",
+}
 
 QUERY_OPTIONS = {
     "include_attrs": True,
@@ -33,7 +41,7 @@ QUERY_OPTIONS = {
 def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
         manifest = json.load(stream)
-    if manifest.get("schema_version") != 1:
+    if manifest.get("schema_version") != 2:
         raise RuntimeError(f"Unsupported analysis manifest schema in {path}")
     validate_evidence_contracts(manifest)
     return manifest
@@ -44,16 +52,46 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
     contracts = manifest.get("evidence_contracts")
     if not isinstance(contracts, dict) or set(contracts) != groups:
         raise RuntimeError("Evidence contracts must exist for every analysis group and no others")
+    identifiers: set[str] = set()
     for group_name, requirements in contracts.items():
         if not isinstance(requirements, list) or not requirements:
             raise RuntimeError(f"{group_name}: evidence contract must contain requirements")
         for requirement in requirements:
+            identifier = requirement.get("id")
+            if not isinstance(identifier, str) or not identifier.strip():
+                raise RuntimeError(f"{group_name}: missing evidence-contract id")
+            if identifier in identifiers:
+                raise RuntimeError(f"Duplicate evidence-contract id {identifier!r}")
+            identifiers.add(identifier)
             if requirement.get("kind") not in {"normative", "model", "metric"}:
                 raise RuntimeError(f"{group_name}: invalid evidence-contract kind")
             if not requirement.get("requirement"):
                 raise RuntimeError(f"{group_name}: missing evidence-contract requirement")
             if not isinstance(requirement.get("results"), list) or not requirement["results"]:
                 raise RuntimeError(f"{group_name}: evidence-contract result list is empty")
+            evaluation = requirement.get("evaluation")
+            if not isinstance(evaluation, dict):
+                raise RuntimeError(f"{identifier}: missing evaluation object")
+            handler = evaluation.get("handler")
+            if handler not in EVIDENCE_HANDLERS:
+                raise RuntimeError(f"{identifier}: unknown evidence handler {handler!r}")
+            if handler == "unimplemented":
+                reason = evaluation.get("reason")
+                if not isinstance(reason, str) or not reason.strip():
+                    raise RuntimeError(f"{identifier}: unimplemented handler needs a reason")
+            elif handler == "mimo_disjoint_streams":
+                required = {"config", "module", "station_id", "stream_count", "stream_start"}
+                missing = required - evaluation.keys()
+                if missing:
+                    raise RuntimeError(f"{identifier}: missing parameters {sorted(missing)}")
+            elif handler == "matched_delivery_ratio":
+                required = {"baseline_config", "treatment_config", "result", "minimum_ratio"}
+                missing = required - evaluation.keys()
+                if missing:
+                    raise RuntimeError(f"{identifier}: missing parameters {sorted(missing)}")
+                ratio = evaluation["minimum_ratio"]
+                if not isinstance(ratio, (int, float)) or not math.isfinite(ratio) or ratio <= 0:
+                    raise RuntimeError(f"{identifier}: minimum_ratio must be finite and positive")
 
 
 def sha256(path: Path) -> str:
@@ -62,6 +100,24 @@ def sha256(path: Path) -> str:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def atomic_write_text(path: Path, content: str) -> None:
+    """Replace a text artifact only after its complete content is durable."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp", text=True
+    )
+    temporary_path = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_path, path)
+    except Exception:
+        temporary_path.unlink(missing_ok=True)
+        raise
 
 
 def git_revision() -> str | None:
@@ -134,6 +190,7 @@ class Condition:
         group_name: str,
         group: dict[str, Any],
         entry: dict[str, Any],
+        session_id: str,
     ) -> "Condition":
         root = REPOSITORY_ROOT
         window_data = entry.get("measurement", group["measurement"])
@@ -142,7 +199,13 @@ class Condition:
             label=entry["label"],
             config=entry["config"],
             ini=root / group["ini"],
-            result_dir=root / entry.get("result_dir", group["result_dir"]),
+            result_dir=(
+                root
+                / entry.get("result_dir", group["result_dir"])
+                / "scalar-vector"
+                / session_id
+                / entry["config"]
+            ),
             expected_repetitions=int(entry.get(
                 "expected_repetitions", group["expected_repetitions"]
             )),
@@ -314,15 +377,116 @@ class Condition:
         }
 
 
+def _session_is_complete(
+    root: Path,
+    group: dict[str, Any],
+    session_id: str,
+) -> bool:
+    for entry in group["conditions"]:
+        result_dir = (
+            root
+            / entry.get("result_dir", group["result_dir"])
+            / "scalar-vector"
+            / session_id
+            / entry["config"]
+        )
+        repetitions = int(entry.get(
+            "expected_repetitions", group["expected_repetitions"]
+        ))
+        for run in range(repetitions):
+            stem = f"{entry['config']}-#{run}"
+            if not (result_dir / f"{stem}.sca").is_file():
+                return False
+            if not (result_dir / f"{stem}.vec").is_file():
+                return False
+    return True
+
+
+def resolve_session_id(
+    group: dict[str, Any],
+    requested_session_id: str | None = None,
+    *,
+    root: Path = REPOSITORY_ROOT,
+) -> str:
+    if requested_session_id is not None:
+        if not SESSION_ID_PATTERN.fullmatch(requested_session_id):
+            raise ValueError(
+                f"Invalid session ID {requested_session_id!r}; "
+                "expected YYYYMMDDTHHMMSSZ"
+            )
+        candidates = [requested_session_id]
+    else:
+        result_roots = {
+            root
+            / entry.get("result_dir", group["result_dir"])
+            / "scalar-vector"
+            for entry in group["conditions"]
+        }
+        candidate_sets = []
+        for result_root in result_roots:
+            candidate_sets.append({
+                path.name
+                for path in result_root.iterdir()
+                if path.is_dir() and SESSION_ID_PATTERN.fullmatch(path.name)
+            } if result_root.is_dir() else set())
+        candidates = sorted(
+            set.intersection(*candidate_sets) if candidate_sets else set(),
+            reverse=True,
+        )
+
+    for candidate in candidates:
+        if _session_is_complete(root, group, candidate):
+            return candidate
+    if requested_session_id is not None:
+        raise FileNotFoundError(
+            f"Result session {requested_session_id} is missing or incomplete"
+        )
+    raise FileNotFoundError(
+        "No complete timestamped result session found; "
+        "expected results/scalar-vector/YYYYMMDDTHHMMSSZ/<configuration>"
+    )
+
+
+def resolve_manifest_sessions(
+    manifest: dict[str, Any],
+    requested_session_id: str | None = None,
+    *,
+    root: Path = REPOSITORY_ROOT,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Resolve each group's session without silently mixing partial sessions."""
+    selected: dict[str, str] = {}
+    unavailable: dict[str, str] = {}
+    for group_name, group in manifest["groups"].items():
+        try:
+            selected[group_name] = resolve_session_id(
+                group, requested_session_id, root=root
+            )
+        except (FileNotFoundError, ValueError) as error:
+            unavailable[group_name] = str(error)
+    if requested_session_id is not None and unavailable:
+        details = "; ".join(
+            f"{group}: {reason}" for group, reason in sorted(unavailable.items())
+        )
+        raise FileNotFoundError(
+            f"Requested session {requested_session_id} is not complete for every "
+            f"analysis group: {details}"
+        )
+    return selected, unavailable
+
+
 def conditions_for_group(
-    manifest: dict[str, Any], group_name: str
+    manifest: dict[str, Any],
+    group_name: str,
+    session_id: str | None = None,
 ) -> list[Condition]:
     try:
         group = manifest["groups"][group_name]
     except KeyError as error:
         raise KeyError(f"Unknown analysis group {group_name!r}") from error
+    selected_session_id = resolve_session_id(group, session_id)
+    print(f"Using result session {selected_session_id} for {group_name}")
     return [
-        Condition.from_manifest(group_name, group, entry)
+        Condition.from_manifest(group_name, group, entry, selected_session_id)
         for entry in group["conditions"]
     ]
 

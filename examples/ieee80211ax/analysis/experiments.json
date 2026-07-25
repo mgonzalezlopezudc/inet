@@ -1,46 +1,46 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "default_repetitions": 5,
   "evidence_contracts": {
     "fragmentation": [
-      {"kind": "normative", "requirement": "Peer capability gates dynamic fragmentation", "results": ["fragment capability state"]},
-      {"kind": "normative", "requirement": "Fragment numbers, More Fragments, sizes, and ACK/BA state are consistent", "results": ["fragment number", "fragment size", "More Fragments", "acknowledgmentFrameType"]}
+      {"id": "fragmentation-capability-gate", "kind": "normative", "requirement": "Peer capability gates dynamic fragmentation", "results": ["fragment capability state"], "evaluation": {"handler": "unimplemented", "reason": "No retained scalar/vector result exposes the negotiated peer fragmentation capability state."}},
+      {"id": "fragmentation-sequence-consistency", "kind": "normative", "requirement": "Fragment numbers, More Fragments, sizes, and ACK/BA state are consistent", "results": ["fragment number", "fragment size", "More Fragments", "acknowledgmentFrameType"], "evaluation": {"handler": "unimplemented", "reason": "The scalar/vector campaign does not retain correlated fragment-header and acknowledgment state."}}
     ],
     "uora": [
-      {"kind": "normative", "requirement": "Random-access attempts use advertised RA-RUs", "results": ["heUlRandomAccessAttempt", "heUlRandomAccessSuccess", "heRuToneOffset", "heStaId"]}
+      {"id": "uora-advertised-ra-ru-use", "kind": "normative", "requirement": "Random-access attempts use advertised RA-RUs", "results": ["heUlRandomAccessAttempt", "heUlRandomAccessSuccess", "heRuToneOffset", "heStaId"], "evaluation": {"handler": "unimplemented", "reason": "The retained results do not correlate each random-access attempt with the Trigger frame that advertised its RA-RU."}}
     ],
     "twt": [
-      {"kind": "normative", "requirement": "Announced TWT requester signals wake presence before responder traffic", "results": ["PS-Poll/APSD trigger sequence"]},
-      {"kind": "metric", "requirement": "Energy comparison preserves delivery", "results": ["powerConsumption", "packetReceived"]}
+      {"id": "twt-announced-wake-sequence", "kind": "normative", "requirement": "Announced TWT requester signals wake presence before responder traffic", "results": ["PS-Poll/APSD trigger sequence"], "evaluation": {"handler": "unimplemented", "reason": "The scalar/vector campaign does not retain the packet-level PS-Poll or APSD trigger sequence."}},
+      {"id": "twt-matched-delivery-ratio", "kind": "metric", "requirement": "Energy comparison preserves delivery", "results": ["powerConsumption", "packetReceived"], "evaluation": {"handler": "matched_delivery_ratio", "baseline_config": "BaselineEnergy", "treatment_config": "TwtEnergySaving", "result": "packetReceived:vector(packetBytes)", "minimum_ratio": 0.95}}
     ],
     "rate": [
-      {"kind": "model", "requirement": "Rate decisions are joined to outcomes and retries", "results": ["heRateSelectedMcs", "heRateSelectedNss", "heRateSuccessProbability", "heRateTxSuccess", "heRateRetryCount"]}
+      {"id": "rate-decision-outcome-join", "kind": "model", "requirement": "Rate decisions are joined to outcomes and retries", "results": ["heRateSelectedMcs", "heRateSelectedNss", "heRateSuccessProbability", "heRateTxSuccess", "heRateRetryCount"], "evaluation": {"handler": "unimplemented", "reason": "No stable transmission identifier currently joins each retained rate decision to its outcome and retry count."}}
     ],
     "er": [
-      {"kind": "normative", "requirement": "The treatment selects a legal HE-ER-SU PPDU while the control remains HE-SU", "results": ["radiotap HE format", "HE MCS", "RU size"]},
-      {"kind": "metric", "requirement": "Cell-boundary delivery is measured over matched seeds without assuming a standards-mandated gain", "results": ["packetReceived", "packetDropIncorrectlyReceived"]}
+      {"id": "er-ppdu-format-selection", "kind": "normative", "requirement": "The treatment selects a legal HE-ER-SU PPDU while the control remains HE-SU", "results": ["radiotap HE format", "HE MCS", "RU size"], "evaluation": {"handler": "unimplemented", "reason": "PPDU format legality requires packet metadata not retained in the scalar/vector result session."}},
+      {"id": "er-matched-boundary-delivery", "kind": "metric", "requirement": "Cell-boundary delivery is measured over matched seeds without assuming a standards-mandated gain", "results": ["packetReceived", "packetDropIncorrectlyReceived"], "evaluation": {"handler": "unimplemented", "reason": "A matched delivery/drop evaluator and its explicit acceptance criterion have not yet been implemented."}}
     ],
     "puncturing": [
-      {"kind": "normative", "requirement": "RU allocations never overlap punctured subchannels", "results": ["hePuncturedSubchannelMask", "heRuToneOffset", "heRuToneSize", "heStaId"]},
-      {"kind": "metric", "requirement": "Interference comparison uses delivered application bytes", "results": ["packetReceived"]}
+      {"id": "puncturing-ru-exclusion", "kind": "normative", "requirement": "RU allocations never overlap punctured subchannels", "results": ["hePuncturedSubchannelMask", "heRuToneOffset", "heRuToneSize", "heStaId"], "evaluation": {"handler": "unimplemented", "reason": "The evaluator does not yet join time-varying puncturing masks to every same-PPDU RU allocation."}},
+      {"id": "puncturing-delivery-comparison", "kind": "metric", "requirement": "Interference comparison uses delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "No manifest acceptance threshold is defined for the multi-condition delivered-byte comparison."}}
     ],
     "mimo": [
-      {"kind": "normative", "requirement": "A PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"]}
+      {"id": "mimo-disjoint-multi-user-streams", "kind": "normative", "requirement": "A PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}}
     ],
     "bss": [
-      {"kind": "normative", "requirement": "OBSS classification, OBSS/PD threshold, CCA, and power-limit decisions are observable", "results": ["OBSS classification", "OBSS/PD threshold", "reuse decision", "transmit power limit"]},
-      {"kind": "metric", "requirement": "Reuse comparison reports delivery, fairness, and concurrent airtime", "results": ["packetReceived", "transmissionState"]}
+      {"id": "bss-obss-decision-observability", "kind": "normative", "requirement": "OBSS classification, OBSS/PD threshold, CCA, and power-limit decisions are observable", "results": ["OBSS classification", "OBSS/PD threshold", "reuse decision", "transmit power limit"], "evaluation": {"handler": "unimplemented", "reason": "The retained telemetry does not expose a correlated per-reception OBSS classification and reuse decision."}},
+      {"id": "bss-reuse-outcome-comparison", "kind": "metric", "requirement": "Reuse comparison reports delivery, fairness, and concurrent airtime", "results": ["packetReceived", "transmissionState"], "evaluation": {"handler": "unimplemented", "reason": "The multi-condition delivery, fairness, and airtime ordering lacks a manifest-defined executable threshold."}}
     ],
     "width": [
-      {"kind": "normative", "requirement": "TXVECTOR channel width matches the configured 20/40/80/160 MHz mode", "results": ["configured channel width", "HE bandwidth metadata"]},
-      {"kind": "metric", "requirement": "Capacity comparison uses goodput and delay", "results": ["packetReceived", "endToEndDelay"]}
+      {"id": "width-txvector-match", "kind": "normative", "requirement": "TXVECTOR channel width matches the configured 20/40/80/160 MHz mode", "results": ["configured channel width", "HE bandwidth metadata"], "evaluation": {"handler": "unimplemented", "reason": "The scalar/vector session does not retain decoded per-PPDU HE bandwidth metadata."}},
+      {"id": "width-capacity-comparison", "kind": "metric", "requirement": "Capacity comparison uses goodput and delay", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "No executable goodput-and-delay acceptance envelope is specified for the width sweep."}}
     ],
     "dl": [
-      {"kind": "model", "requirement": "Per-user scheduling is keyed by STA ID without MAC-address filtering", "results": ["heStaId", "heScheduledPsduBytes", "heUserPpduDuration"]},
-      {"kind": "metric", "requirement": "Per-user delivery and delay come from application results", "results": ["packetReceived", "endToEndDelay"]}
+      {"id": "dl-staid-scheduling-attribution", "kind": "model", "requirement": "Per-user scheduling is keyed by STA ID without MAC-address filtering", "results": ["heStaId", "heScheduledPsduBytes", "heUserPpduDuration"], "evaluation": {"handler": "unimplemented", "reason": "The evaluator does not yet correlate each STA ID with its same-PPDU scheduled bytes and duration."}},
+      {"id": "dl-application-delivery-delay", "kind": "metric", "requirement": "Per-user delivery and delay come from application results", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "No manifest-defined acceptance criterion exists for the per-user delivery and delay matrix."}}
     ],
     "bsr": [
-      {"kind": "normative", "requirement": "Reported backlog is joined to scheduler-consumed backlog", "results": ["heUlBufferStatusReportedBytes", "heUlBufferStatusScheduledBytes"]}
+      {"id": "bsr-reported-scheduled-join", "kind": "normative", "requirement": "Reported backlog is joined to scheduler-consumed backlog", "results": ["heUlBufferStatusReportedBytes", "heUlBufferStatusScheduledBytes"], "evaluation": {"handler": "unimplemented", "reason": "The retained vectors lack a stable scheduling-decision identifier for joining reported and consumed backlog."}}
     ]
   },
   "groups": {
@@ -63,6 +63,7 @@
       "measurement": {"start": 0.3, "end": 2.0},
       "output": "examples/ieee80211ax/analysis/figures/uora/uora-dashboard.png",
       "conditions": [
+        {"label": "Mixed, adaptive 1–3 RA-RUs", "config": "MixedUora"},
         {"label": "Light, 1 RA-RU", "config": "UoraLightContention"},
         {"label": "Heavy, 1 RA-RU", "config": "UoraHeavyContention"},
         {"label": "Heavy, 5 RA-RUs", "config": "UoraMoreRandomAccessRus"}
@@ -120,7 +121,7 @@
       "measurement": {"start": 0.55, "end": 0.88},
       "output": "examples/ieee80211ax/analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png",
       "conditions": [
-        {"label": "20 MHz OFDMA", "config": "EqualSizedRUs_fBW", "result_dir": "examples/ieee80211ax/dl_ofdma/results"},
+        {"label": "20 MHz OFDMA", "config": "EqualSizedRUs_fBW"},
         {"label": "20 MHz MU-MIMO", "config": "DlMuMimo"}
       ]
     },
@@ -161,8 +162,18 @@
         {"label": "EDCA", "config": "SuEdcaBaseline", "metadata": {"workload": "symmetric"}},
         {"label": "fBW", "config": "EqualSizedRUs_fBW", "metadata": {"workload": "symmetric"}},
         {"label": "fHoL", "config": "EqualSizedRUs_fHoL", "metadata": {"workload": "symmetric"}},
-        {"label": "Backlog", "config": "BacklogBased", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [80000000, 8000000, 800000]}},
-        {"label": "HoL min delay", "config": "HoLMinDelay", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [80000000, 8000000, 800000]}}
+        {"label": "Backlog", "config": "BacklogBased", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
+        {"label": "HoL min delay", "config": "HoLMinDelay", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
+        {"label": "Backlog (4ms)", "config": "BacklogBased4ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2000000, 800000, 200000]}},
+        {"label": "HoL min delay (4ms)", "config": "HoLMinDelay4ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2000000, 800000, 200000]}},
+        {"label": "Backlog (3ms)", "config": "BacklogBased3ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2666667, 1066667, 266667]}},
+        {"label": "HoL min delay (3ms)", "config": "HoLMinDelay3ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2666667, 1066667, 266667]}},
+        {"label": "Backlog (3.5ms)", "config": "BacklogBased3_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2285714, 914286, 228571]}},
+        {"label": "HoL min delay (3.5ms)", "config": "HoLMinDelay3_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2285714, 914286, 228571]}},
+        {"label": "Backlog (2.5ms)", "config": "BacklogBased2_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [3200000, 1280000, 320000]}},
+        {"label": "HoL min delay (2.5ms)", "config": "HoLMinDelay2_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [3200000, 1280000, 320000]}},
+        {"label": "Backlog (1.5ms)", "config": "BacklogBased1_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [5333333, 2133333, 533333]}},
+        {"label": "HoL min delay (1.5ms)", "config": "HoLMinDelay1_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [5333333, 2133333, 533333]}}
       ]
     },
     "bsr": {

@@ -3,7 +3,10 @@
 
 from __future__ import annotations
 
+import argparse
 import json
+import math
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -11,12 +14,15 @@ import numpy as np
 from analysis_core import (
     DEFAULT_MANIFEST,
     REPOSITORY_ROOT,
+    atomic_write_text,
     conditions_for_group,
     crop_vector,
     jain,
     load_manifest,
     per_run_delay_percentile,
     per_run_goodput,
+    git_revision,
+    resolve_manifest_sessions,
     summarize_ci95,
 )
 from analysis_plots import _ap_overlap, _energy_per_run, _per_run_fairness
@@ -26,21 +32,65 @@ def ci(values) -> dict:
     return summarize_ci95(np.asarray(values, dtype=float))
 
 
+def time_weighted_step_mean(times, values, measurement) -> float:
+    """Average an event-driven, post-step state over a measurement window."""
+    times = np.asarray(times, dtype=float)
+    values = np.asarray(values, dtype=float)
+    initial_index = np.searchsorted(times, measurement.start, side="right") - 1
+    if initial_index < 0:
+        raise RuntimeError("step vector has no state at the measurement-window start")
+    following_times = times[initial_index + 1:]
+    following_values = values[initial_index + 1:]
+    inside = following_times < measurement.end
+    boundaries = np.concatenate((
+        [measurement.start],
+        following_times[inside],
+        [measurement.end],
+    ))
+    states = np.concatenate(([values[initial_index]], following_values[inside]))
+    return float(np.sum(states * np.diff(boundaries)) /
+                 (measurement.end - measurement.start))
+
+
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--session-id",
+        help="use this YYYYMMDDTHHMMSSZ result session instead of the latest complete one",
+    )
+    args = parser.parse_args()
     manifest = load_manifest(DEFAULT_MANIFEST)
     output = REPOSITORY_ROOT / "examples/ieee80211ax/analysis/metrics.json"
-    payload: dict[str, dict] = {}
-    if output.exists():
-        try:
-            payload = json.loads(output.read_text())
-        except Exception:
-            pass
+    selected_sessions, unavailable_sessions = resolve_manifest_sessions(
+        manifest, args.session_id
+    )
+    payload: dict[str, dict] = {
+        "_provenance": {
+            "schema_version": 1,
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "repository_revision": git_revision(),
+            "requested_session_id": args.session_id,
+            "groups": {},
+        }
+    }
     for group_name in manifest["groups"]:
-        try:
-            conditions = conditions_for_group(manifest, group_name)
-        except Exception as e:
-            print(f"Skipping group '{group_name}' (results not found/incomplete): {e}")
+        if group_name not in selected_sessions:
+            reason = unavailable_sessions[group_name]
+            payload["_provenance"]["groups"][group_name] = {
+                "status": "NOT RUN",
+                "reason": reason,
+            }
+            print(f"Skipping group '{group_name}' (NOT RUN): {reason}")
             continue
+        selected_session = selected_sessions[group_name]
+        conditions = conditions_for_group(
+            manifest, group_name, selected_session
+        )
+        payload["_provenance"]["groups"][group_name] = {
+            "status": "PASS",
+            "session_id": selected_session,
+            "conditions": [condition.provenance() for condition in conditions],
+        }
         group_metrics: dict[str, dict] = {}
         for condition in conditions:
             item: dict = {}
@@ -70,8 +120,15 @@ def main() -> None:
                 item["attempts"] = ci(attempt_totals)
                 item["successful_transmissions"] = ci(success_totals)
                 item["success_probability"] = ci(success_totals / attempt_totals)
+                fairness = [
+                    jain(rows.value)
+                    for _, rows in successes.groupby("runnumber")
+                ]
+                item["zero_success_run_count"] = sum(
+                    math.isnan(value) for value in fairness
+                )
                 item["success_fairness"] = ci([
-                    jain(rows.value) for _, rows in successes.groupby("runnumber")
+                    value for value in fairness if not math.isnan(value)
                 ])
             if group_name == "fragmentation":
                 sizes = condition.vectors(
@@ -94,18 +151,16 @@ def main() -> None:
                     for _, rows in airtime.groupby("runnumber")
                 ])
             if group_name == "bsr":
-                for result_name, vector_name in (
-                    ("reported_backlog_mean_bytes", "heUlBufferStatusReportedBytes:vector"),
-                    ("scheduled_backlog_mean_bytes", "heUlBufferStatusScheduledBytes:vector"),
-                ):
-                    vectors = condition.vectors(vector_name)
-                    item[result_name] = ci([
-                        np.mean(np.concatenate([
-                            crop_vector(row.vectime, row.vecvalue, condition.measurement)[1]
-                            for _, row in rows.iterrows()
-                        ]))
-                        for _, rows in vectors.groupby("runnumber")
-                    ])
+                vectors = condition.vectors(
+                    "heUlBufferStatusReportedBytes:vector",
+                    module="**.ap.wlan[0].mac.hcf.ulCoordinator",
+                )
+                item["reported_backlog_time_weighted_mean_bytes"] = ci([
+                    time_weighted_step_mean(
+                        row.vectime, row.vecvalue, condition.measurement
+                    )
+                    for _, row in vectors.iterrows()
+                ])
             if group_name == "rate":
                 mcs = condition.vectors("heRateSelectedMcs:vector", module="**.rateControl")
                 outcomes = condition.vectors("heRateTxSuccess:vector", module="**.rateControl")
@@ -124,8 +179,10 @@ def main() -> None:
             treatment = _energy_per_run(conditions[1]).set_index("runnumber").delivered_bytes
             group_metrics["delivery_ratio_twt_over_baseline"] = ci(treatment / baseline)
         payload[group_name] = group_metrics
-    output = REPOSITORY_ROOT / "examples/ieee80211ax/analysis/metrics.json"
-    output.write_text(json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n")
+    atomic_write_text(
+        output,
+        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+    )
     print(f"CREATED {output}")
 
 

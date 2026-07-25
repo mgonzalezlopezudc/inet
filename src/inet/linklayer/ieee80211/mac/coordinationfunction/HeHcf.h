@@ -179,6 +179,11 @@ class INET_API HeHcf : public Hcf
     virtual void scheduleTriggeredUlResponseTimeout();
     virtual void handleTriggeredUlResponseTimeout();
     virtual void beforeTriggeredUlPacketCommit(int packetIndex) {}
+    virtual bool reportHeDlMuTxResult(Packet *packet, AccessCategory ac, bool success);
+    virtual void originatorProcessBlockAckResult(
+            const Ptr<const Ieee80211BlockAck>& blockAck,
+            const std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>& ackedFrames,
+            AccessCategory ac) override;
     virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger,
             uint32_t triggerId);
     virtual Packet *buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
@@ -186,7 +191,8 @@ class INET_API HeHcf : public Hcf
             const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
             uint32_t triggerId, W transmitPower,
             const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
-            TriggeredUlExchange& exchange, bool& committed);
+            TriggeredUlExchange& exchange, Ptr<const Ieee80211MacHeader>& responseHeader,
+            bool& committed);
     virtual void processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger);
     virtual void processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee80211MultiStaBlockAck>& multiStaBlockAck);
 

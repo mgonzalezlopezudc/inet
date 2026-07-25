@@ -46,6 +46,7 @@ class INET_API HeDlMuTxOpFs : public IFrameSequence
         Tid tid = 0;
         int ruIndex;
         physicallayer::Ieee80211HeRu ru;
+        int mcs = 0;
         int numberOfSpatialStreams = 1;
         int streamStartIndex = 0;
         int totalNsts = 1;

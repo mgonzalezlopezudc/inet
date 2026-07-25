@@ -1,320 +1,61 @@
-# 802.11ax HE Advanced Features Showcase
+# HE Preamble Puncturing Walkthrough
 
-This example isolates several 802.11ax HE PHY/MAC choices and the trade-offs
-they introduce relative to a BCC, unpunctured HE MU baseline:
+This walkthrough is limited to puncturing behavior demonstrated by the retained
+results. The network and configuration definitions are in
+[omnetpp.ini](omnetpp.ini) and [Lan80211AxHeFeatures.ned](Lan80211AxHeFeatures.ned).
 
-* HE LDPC timing/accounting and LDPC PER gain
-* Packet-extension (PE) timing metadata
-* HE MU PHY header puncturing metadata
-* HE LDPC / preamble-puncturing capability negotiation
-* Validated preamble-puncturing configuration
-* Puncture-aware RU allocation
+## Demonstrated configurations
 
-All scenarios share the same network, `Lan80211AxHeFeatures`, which consists of a wired server, one access point, and four wireless stations operating on an 80 MHz channel.  80 MHz is required because HE preamble puncturing is only defined for 80 MHz and 160 MHz channels.
+The scalar/vector session
+[`20260725T120411Z`](results/scalar-vector/20260725T120411Z) contains five runs
+(`-r 0` through `-r 4`) for each configuration below.
 
----
-
-## 1. Network Configuration
-
-The network is configured in `omnetpp.ini` under `[General]`:
-
-* `**.opMode = "ax"`
-* `**.bandName = "5 GHz (80 MHz)"` with `**.centerFrequency = 5.2GHz` and `**.channelNumber = 2`
-* `**.wlan[*].radio.receiver.bandwidth = 80MHz`
-* `**.mac.hcf.typename = "HeHcf"`
-* `**.ap.wlan[*].mac.hcf.dlScheduler.typename = "HeDlSchedulerBacklogBased"`
-  * This scheduler is used for all scenarios because it calls `allocateHeRus()` with the punctured-subchannel mask, producing a puncture-aware RU layout.
-* `**.displayHeMuSignalDetails = true` and `**.displayHeMuSignalPhyFields = true`
-
-The server sends 1000-byte downlink UDP packets to all four hosts every 2 ms in
-the ordinary feature configurations. A single warm-up trigger runs from
-`0.2s` to `0.25s`; normal traffic starts at `0.3s`. The interference
-configurations override the data interval to `0.5ms` to saturate the channel.
-The resulting backlog exceeds the scheduler's 1500 B threshold, so it requests
-large RUs (up to 484-tone). Under puncturing, the allocator downgrades or
-relocates allocations so that no RU overlaps the disabled 20 MHz subchannel.
-
-These values are deliberate. An 80 MHz channel is the smallest width in this
-example that can lose one 20 MHz subchannel while retaining a useful wideband
-transmission. Four continuously backlogged stations give the scheduler several
-RU-placement choices. The 1000-byte packets make PHY coding and RU capacity
-more visible than a tiny-packet workload, while the `0.5 ms` interference cases
-remove the offered-load ceiling when puncturing is evaluated.
-
----
-
-## 2. Simulation Scenarios
-
-### Scenario A: `BccBaseline`
-
-**Description:** Baseline HE MU-OFDMA with BCC coding, zero packet-extension duration, and no preamble puncturing.
-
-**What to observe:** This is the reference point. The AP schedules all four stations concurrently. BCC allocations are capped at 242-tone RUs because the HE scheduler requires LDPC for 484-tone and larger RUs. The canonical HE TXVECTOR and projected HE MU PHY header use `HE_CODING_BCC`, `packetExtensionDurationUs = 0`, and `puncturedSubchannelMask = 0`.
-
-### Scenario B: `HeLdpc`
-
-**Description:** Enable HE LDPC at the AP and all four stations.
-
-**What it demonstrates:**
-
-* **LDPC timing / accounting:** When `HE_CODING_LDPC` is selected, `Ieee80211HePhyCalculator` omits the BCC tail bits and instead computes the LDPC codeword length (648, 1296, or 1944 bits), the number of codewords, shortening bits, and repetition bits.
-* **LDPC PER gain:** `Ieee80211YansErrorModel` applies a 1.5 dB SNR boost for LDPC-coded HE transmissions, improving the per-user success rate.
-
-**Configuration:**
-
-```ini
-**.ap.wlan[*].mib.heLdpc = true
-**.host[*].wlan[*].mib.heLdpc = true
-```
-
-**What to observe:**
-
-* Slightly shorter PPDU durations because the BCC tail bits are no longer transmitted and LDPC codeword accounting is used.
-* The LDPC PHY path is selected, but this offered load is fully delivered in
-  both BCC and LDPC runs; application packet counts alone do not expose the
-  modeled PER improvement here.
-* The HE MU signal details show `coding = LDPC`.
-
-### Scenario C: `PacketExtension`
-
-**Description:** Use an 8 µs HE packet-extension duration.
-
-**What it demonstrates:**
-
-* **PE propagation:** The default PE duration is read from `Ieee80211Mib` (`heDefaultPeDurationUs`), copied into the scheduler's `ScheduleContext`, supplied to `Ieee80211HeTxVectorFactory`, and stored in the immutable TXVECTOR/PPDU layout. The radio projects the same value into the represented HE signaling, while `computeHePpduParameters()` includes it in the PPDU duration.
-* **Single canonical header contract:** PE does not select a private compact or extended wire format. The represented HE header is a projection of the validated canonical vector.
-
-**Configuration:**
-
-```ini
-**.ap.wlan[*].mib.heDefaultPeDurationUs = 8
-**.host[*].wlan[*].mib.heDefaultPeDurationUs = 8
-```
-
-**What to observe:**
-
-* PPDU durations are exactly 8 µs longer than in the baseline.
-* The HE MU signal details show `packetExtensionDurationUs = 8`.
-* The represented HE MU header and immutable PPDU layout agree on the PE duration.
-
-### Scenario D: `PreamblePuncturing`
-
-**Description:** Puncture the second 20 MHz subchannel of the 80 MHz channel.
-
-**What it demonstrates:**
-
-* **Validated puncturing configuration:** `HeHcf::parseHePreamblePuncturing()` checks that the mask is only used for 80/160 MHz, that the primary 20 MHz subchannel remains active, and that at least one subchannel stays enabled.
-* **Puncture-aware RU allocation:** `Ieee80211HeRu::allocateHeRus()` receives the punctured-subchannel mask and marks the corresponding tones as occupied before fitting RUs. No RU is placed on the disabled subchannel.
-* **Puncturing signaling:** The mask is validated in the schedule context, carried by the canonical TXVECTOR, and projected into the HE MU header as `puncturedSubchannelMask`.
-
-**Configuration:**
-
-```ini
-**.ap.wlan[*].mac.hcf.hePreamblePuncturing = "0100"
-```
-
-Bit 0 is the primary 20 MHz subchannel; `0100` disables subchannel index 1 only.
-
-**What to observe:**
-
-* The scheduler cannot place the large requested RUs on the remaining three 20 MHz subchannels (a 484-tone RU needs two adjacent active 20 MHz subchannels). `fitRequestedRus()` downgrades one or more allocations to smaller RU sizes so that no RU overlaps the punctured subchannel.
-* No RU overlaps the punctured subchannel.
-* The HE MU signal details show `puncturedSubchannelMask = 0x2` (binary `0100` where character index 1 maps to bit 1).
-* The canonical TXVECTOR, HE-SIG projection, and decoded receiver facts preserve the same puncturing state.
-
-### Scenario E: `MixedLdpcSupport`
-
-**Description:** The AP supports HE LDPC, but `host[3]` does not.
-
-**What it demonstrates:**
-
-* **Capability negotiation:** During association, the AP and each STA exchange `Ieee80211HeCapabilitiesElement`s. `negotiateHeCapabilities()` computes the intersection of local and peer capabilities: `ldpc = local.ldpc && peer.ldpc`. The negotiated result is stored per peer in `Ieee80211Mib`.
-* **Scheduling fallback:** `HeHcf` selects `HE_CODING_LDPC` only when **all** scheduled peers support it. Any MU frame that includes `host[3]` therefore falls back to `HE_CODING_BCC`.
-
-**Configuration:**
-
-```ini
-**.ap.wlan[*].mib.heLdpc = true
-**.host[0].wlan[*].mib.heLdpc = true
-**.host[1].wlan[*].mib.heLdpc = true
-**.host[2].wlan[*].mib.heLdpc = true
-**.host[3].wlan[*].mib.heLdpc = false
-```
-
-**What to observe:**
-
-* HE MU frames that do not include `host[3]` use `coding = LDPC`.
-* HE MU frames that include `host[3]` use `coding = BCC`.
-* This demonstrates that capability negotiation is per-peer and that the scheduler respects the negotiated result.
-
-### Scenario F: `CombinedHeFeatures`
-
-**Description:** Enable LDPC, an 8 µs packet extension, and one punctured 20 MHz subchannel at the same time.
-
-**What it demonstrates:** All featured mechanisms working together in a single configuration.
-
-**Configuration:**
-
-```ini
-**.ap.wlan[*].mib.heLdpc = true
-**.host[*].wlan[*].mib.heLdpc = true
-**.ap.wlan[*].mib.heDefaultPeDurationUs = 8
-**.host[*].wlan[*].mib.heDefaultPeDurationUs = 8
-**.ap.wlan[*].mac.hcf.hePreamblePuncturing = "0100"
-```
-
-**What to observe:**
-
-* Extended HE MU PHY header carrying `coding = LDPC`, `packetExtensionDurationUs = 8`, and `puncturedSubchannelMask = 0x2`.
-* PPDU duration includes the PE contribution.
-* The RU layout avoids the punctured subchannel.
-
----
-
-## 3. How to Run
-
-From the INET project root, run the desired configuration:
-
-```sh
-bin/inet -u Qtenv -c HeLdpc examples/ieee80211ax/he_features/omnetpp.ini
-```
-
-Other useful configurations:
-
-```sh
-bin/inet -u Qtenv -c BccBaseline examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -u Qtenv -c PacketExtension examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -u Qtenv -c PreamblePuncturing examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -u Qtenv -c MixedLdpcSupport examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -u Qtenv -c CombinedHeFeatures examples/ieee80211ax/he_features/omnetpp.ini
-```
-
-For a batch run comparing all scenarios:
-
-```sh
-bin/inet -c BccBaseline examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -c HeLdpc examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -c PacketExtension examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -c PreamblePuncturing examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -c MixedLdpcSupport examples/ieee80211ax/he_features/omnetpp.ini
-bin/inet -c CombinedHeFeatures examples/ieee80211ax/he_features/omnetpp.ini
-```
-
----
-
-## 4. Verification Hints
-
-The following log or signal fields are useful for verifying each mechanism:
-
-| Feature | Where to look |
+| Configuration | Direct evidence |
 |---|---|
-| LDPC vs BCC selection | HE MU signal detail label / `Ieee80211HeMuPhyHeader::coding` |
-| LDPC codeword accounting | `Ieee80211HeUserPhyParameters` (`ldpcCodewordLength`, `ldpcCodewordCount`, `ldpcShorteningBits`, `tailBits`) |
-| LDPC PER gain | `udpApp[*]` packet received counts compared with `BccBaseline` |
-| PE duration | `Ieee80211HeMuPhyHeader::packetExtensionDurationUs` and PPDU duration |
-| Extended PHY header | `Ieee80211HeMuPhyHeaderSerializer` emits extra bytes when PE or puncturing is non-zero |
-| Puncturing mask | `Ieee80211HeMuPhyHeader::puncturedSubchannelMask` and the number of scheduled users per PPDU |
-| Puncture-aware allocation | RU indices in the HE MU signal details should avoid the punctured 20 MHz subchannel |
-| Capability negotiation | Per-peer negotiated capabilities in `Ieee80211Mib` and the resulting `coding` field per frame |
+| `CleanChannelBaseline` | `packetReceived:vector(packetBytes)` records `16.000 Mbps` aggregate goodput (five-run mean, 95% CI `±0.000 Mbps`). |
+| `LegacyInterferenceWithoutPuncturing` | `packetReceived:vector(packetBytes)` records `63.931 ± 0.033 Mbps`. |
+| `PreamblePuncturingUnderInterference` | `packetReceived:vector(packetBytes)` records `63.902 ± 0.043 Mbps`; `hePuncturedSubchannelMask:vector` and the paired `heRuToneOffset:vector`/`heRuToneSize:vector` are the mask and allocation evidence. |
+| `DynamicPuncturing` | `hePuncturedSubchannelMask:vector` contains masks `0` and `2`, directly recording runtime mask changes; `packetReceived:vector(packetBytes)` records `63.921 ± 0.033 Mbps`. |
 
-In Qtenv, inspect the AP `mib` module for `heCapabilitiesSummary`, `heOperationSummary`, `negotiatedHePeers`, and the HE capability maps. Inspect `wlan[0].mac.hcf.dlScheduler` for `lastScheduleSummary` and `lastRuAllocations`, and inspect the radio transmitter for `lastHeTransmissionSummary` and `lastHeUserPhyParameters`.
+The interference configurations have overlapping five-run goodput intervals,
+so these measurements demonstrate puncturing state and RU-placement telemetry,
+not a goodput advantage. For each scheduled allocation, interpret
+`heRuToneOffset:vector`, `heRuToneSize:vector`, and `heStaId:vector` at the same
+timestamp as `hePuncturedSubchannelMask:vector`; those aligned vectors are the
+evidence for whether an RU occupies an enabled frequency region.
 
----
+## Reproduce and inspect
 
-## 5. Code Pointers
-
-| Mechanism | Key files |
-|---|---|
-| LDPC accounting & PE timing | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h` |
-| LDPC PER boost | `src/inet/physicallayer/wireless/ieee80211/packetlevel/errormodel/Ieee80211YansErrorModel.cc` |
-| Capability negotiation | `src/inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h`, `Ieee80211Mib.cc` |
-| Puncturing validation & filtering | `src/inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.cc` |
-| Puncture-aware RU allocation | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h` |
-| HE MU represented PHY header | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211PhyHeader.msg` |
-| Canonical TXVECTOR/RXVECTOR and model-only handoff tags | `src/inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeTxVector.h` |
-| Trigger frame fields | `src/inet/linklayer/ieee80211/mac/Ieee80211Frame.msg` |
-
----
-
-## 6. Quantitative Results and Verification
-
-All configurations were run with Cmdenv using five seeds. The table reports
-aggregate goodput from `packetReceived:vector(packetBytes)` in the common
-`0.3–0.95s` measurement window. The ordinary feature cases offer 2 ms traffic;
-the three interference cases use the 0.5 ms override.
-
-| Configuration / Config | Description | Measured aggregate goodput |
-|---|---|---|
-| **`BccBaseline`** | HE MU-OFDMA with BCC coding | **16.000 Mbps**; 325 packets/STA/run |
-| **`HeLdpc`** | HE LDPC timing and PER gain | **16.000 Mbps**; 325 packets/STA/run |
-| **`PacketExtension`** | 8 µs HE packet-extension duration | **16.000 Mbps**; 325 packets/STA/run |
-| **`PreamblePuncturing`** | Punctured second 20 MHz subchannel | **16.000 Mbps**; 325 packets/STA/run |
-| **`MixedLdpcSupport`** | AP LDPC enabled, host[3] disabled | **16.000 Mbps**; 325 packets/STA/run |
-| **`CombinedHeFeatures`** | LDPC, PE, and puncturing enabled | **16.000 Mbps**; 325 packets/STA/run |
-| **`CleanChannelBaseline`** | Clean channel baseline (no interferer) | **16.000 Mbps**; 325 packets/STA/run |
-| **`LegacyInterferenceWithoutPuncturing`** | Jammer on 2nd subchannel (no puncturing) | **63.941 ± 0.051 Mbps** |
-| **`PreamblePuncturingUnderInterference`** | Jammer on 2nd subchannel (punctured) | **63.882 ± 0.033 Mbps** |
-| **`DynamicPuncturing`** | Dynamic preamble puncturing | **63.931 ± 0.033 Mbps** |
-
-The intervals are 95% Student-t confidence intervals over five run-level
-observations. The equal ordinary-case goodput is the offered-load ceiling:
-LDPC, PE, and puncturing change the PHY representation without changing an
-application rate that is already fully served. The near-equal interference
-results also do not establish a puncturing gain in this scalar-medium scenario;
-the decisive evidence here is the mask transition and puncture-aware RU
-placement. Conceptually, puncturing's advantage is resilience, not extra
-clean-channel capacity: it sacrifices one 20 MHz subchannel so traffic can
-continue on the remaining spectrum when that subchannel is unusable.
-
-To query the received packet counts using `opp_scavetool`:
+Run one configuration and run number at a time from the INET project root:
 
 ```sh
-opp_scavetool query -l -f 'name =~ "packetReceived:vector(packetBytes)" and module =~ "*.host*app*"' examples/ieee80211ax/he_features/results/*.vec
+bin/inet -u Cmdenv -f examples/ieee80211ax/he_features/omnetpp.ini -c DynamicPuncturing -r 0 --result-dir=examples/ieee80211ax/he_features/results/manual
 ```
 
----
-
-## 7. PCAP Tshark Packet Exchange Analysis
-
-To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
+Query only the puncturing and delivery vectors:
 
 ```sh
-mkdir -p examples/ieee80211ax/he_features/results/pcap
-bin/inet -u Cmdenv -f examples/ieee80211ax/he_features/omnetpp.ini -c DynamicPuncturing -r 0 --result-dir=examples/ieee80211ax/he_features/results/pcap --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\" --**.pcapRecorder[*].moduleNamePatterns=\"wlan[0]\" --**.pcapRecorder[*].dumpProtocols=\"ieee80211mac\" --**.pcapRecorder[*].fileFormat=\"pcapng\" --**.pcapRecorder[*].timePrecision=9 --**.pcapRecorder[*].alwaysFlush=true
+opp_scavetool query -l \
+  -f 'name =~ "hePuncturedSubchannelMask:vector" or name =~ "heRuToneOffset:vector" or name =~ "heRuToneSize:vector" or name =~ "heStaId:vector" or name =~ "packetReceived:vector(packetBytes)"' \
+  examples/ieee80211ax/he_features/results/manual/*.sca \
+  examples/ieee80211ax/he_features/results/manual/*.vec
 ```
 
-Use TShark to print the timeline of packet exchanges at the Access Point's wireless interface:
+The retained packet-statistics session
+[`20260724T175025Z`](results/packet-statistics/20260724T175025Z) supplies the
+PCAP, scalar, and vector artifacts summarized in the exact tables below. The
+tables record `2264` AP/global observations for both `BccBaseline` and
+`PreamblePuncturing`; their evidence check explicitly leaves mask transitions
+and RU non-overlap to the result vectors.
+
+To inspect the punctured AP capture directly:
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/he_features/results/pcap/DynamicPuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' -c 20
+tshark -n -r 'examples/ieee80211ax/he_features/results/packet-statistics/20260724T175025Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' -c 20
 ```
 
-The decoded output timeline shows:
-1. **Downlink UDP Traffic**: The AP transmits UDP data packets (e.g. frame 1) to the client hosts.
-2. **ADDBA Handshake**: The AP and hosts exchange block acknowledgment action frames (e.g. frames 3, 5, 7) to negotiate Multi-STA block acknowledgments.
-3. **Preamble Puncturing Verification**: The AP `.vec` telemetry observes
-   mask values `0` and `2`, with the runtime transition at approximately
-   `0.35s` and `0.7s`. The aligned RU offset/size/STA vectors show the
-   scheduler's puncture-aware allocation; the native PCAP confirms the
-   surrounding IEEE 802.11 exchange but does not carry all HE PHY fields.
+<!-- REWRITE-PREFIX-END -->
 
----
-
-## 8. How to interpret the feature trade-offs
-
-* HE LDPC in INET is a packet-level model: it does not include a bit-level LDPC codec. Instead it models the timing and PER impact (codeword accounting, tail-bit omission, and a 1.5 dB SNR boost).
-* Preamble puncturing capability is advertised by default in the current `Ieee80211HeCapabilities` struct, so all peers in this example support it. The scenario therefore emphasizes **configuration validation** and **puncture-aware allocation** rather than a peer-capability fallback.
-* The example focuses on downlink MU-OFDMA. Uplink HE TB derives its coding
-  and timing from the Trigger Common/User Info fields and canonical TXVECTOR.
-  The current Trigger response profile rejects puncturing instead of copying a
-  downlink-only puncturing mask into a nonstandard MAC field.
-* LDPC buys robustness and can improve useful throughput near a decoding
-  boundary; on a clean link it may only change coding/timing telemetry.
-* Packet extension gives receivers more processing time at a direct airtime
-  cost. The configured `8 us` makes that cost easy to identify in PPDU duration.
-* Mixed capability is intentionally included because an AP can use a feature
-  only when the scheduled peers support the relevant mode. Negotiation is part
-  of the advantage: it permits modern and less-capable stations to coexist.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ## 802.11 Packet Type Statistics
@@ -322,7 +63,7 @@ The decoded output timeline shows:
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260718T132413Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260724T175025Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -332,44 +73,44 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | BccBaseline produced protocol-visible wireless observations | 2262 AP/global transmission observations |
-| **PASS** | PreamblePuncturing produced protocol-visible wireless observations | 2262 AP/global transmission observations |
+| **PASS** | BccBaseline produced protocol-visible wireless observations | 2264 AP/global transmission observations |
+| **PASS** | PreamblePuncturing produced protocol-visible wireless observations | 2264 AP/global transmission observations |
 | **INCONCLUSIVE** | Puncturing mask transitions and RU allocations do not overlap punctured subchannels | Subtype counts cannot establish the puncturing mask; result vectors remain authoritative |
 
 ### Configuration: `BccBaseline`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2262**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2264**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#18d818" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, BCC] | 350 | 15.47% | 3276.0 B | 0.0 B | 3620.0 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 86.20% | 126.70% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c62f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 354 | 15.65% | 1066.0 B | 0.0 B | 175.2 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 4.22% | 6.20% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 354 | 15.64% | 1066.0 B | 0.0 B | 619.1 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 13.28% | 21.92% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d3700d" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 350 | 15.47% | 55.0 B | 0.0 B | 36.9 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.88% | 1.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#844c2e" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 69 | 3.05% | 24.0 B | 0.0 B | 36.4 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.17% | 0.25% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a2b7f" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 69 | 3.05% | 32.0 B | 0.0 B | 36.5 us | 0.0 us | 5200 MHz | -67.0 dBm | - | 0.17% | 0.25% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#154eb2" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, BCC] | 1050 | 46.42% | 32.0 B | 0.0 B | 116.3 us | 0.0 us | 5165 MHz, 5176 MHz, 5184 MHz | -67.0 dBm | - | 8.31% | 12.21% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4d91ea" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 4 | 0.18% | 14.0 B | 0.0 B | 37.8 us | 0.0 us | 5200 MHz | -67.0 dBm | - | 0.01% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3498df" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 8 | 0.35% | 14.0 B | 0.0 B | 36.2 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.02% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 350 | 15.46% | 55.0 B | 0.0 B | 38.3 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 0.81% | 1.34% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 69 | 3.05% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 0.12% | 0.19% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 69 | 3.05% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5050 MHz | -67.0 dBm | - | 0.13% | 0.21% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#184baa" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, BCC] | 350 | 15.46% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5045 MHz | -67.0 dBm | - | 2.30% | 3.79% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0842a6" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] | 700 | 30.92% | 32.0 B | 0.0 B | 189.6 us | 0.0 us | 5053 MHz, 5057 MHz | -67.0 dBm | - | 8.04% | 13.27% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 4 | 0.18% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -67.0 dBm | - | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 8 | 0.35% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -67.0 dBm | 20.0 dBm | 0.01% | 0.02% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c81927" /></svg> | Management: Action [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 8 | 0.35% | 37.0 B | 0.0 B | 36.6 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.02% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.44% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -67.0 dBm | 20.0 dBm | 0.04% | 0.07% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33cc52" /></svg> | Control: Subtype 0 [HE-MU, HE, GI 3.2 us] | 350 | 15.46% | 3210.0 B | 0.0 B | 3547.8 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 75.26% | 124.17% |
 
 ### Configuration: `PreamblePuncturing`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2262**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2264**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24db3c" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, LDPC] | 350 | 15.47% | 3276.0 B | 0.0 B | 3620.0 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 86.20% | 126.70% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c62f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, BCC] | 354 | 15.65% | 1066.0 B | 0.0 B | 175.2 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 4.22% | 6.20% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#27a52f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] | 354 | 15.64% | 1066.0 B | 0.0 B | 175.2 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 4.32% | 6.20% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d3700d" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 350 | 15.47% | 55.0 B | 0.0 B | 36.9 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.88% | 1.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#844c2e" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 69 | 3.05% | 24.0 B | 0.0 B | 36.4 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.17% | 0.25% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#183cbf" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, LDPC] | 69 | 3.05% | 32.0 B | 0.0 B | 36.5 us | 0.0 us | 5200 MHz | -67.0 dBm | - | 0.17% | 0.25% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0639bc" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, LDPC] | 1050 | 46.42% | 32.0 B | 0.0 B | 116.3 us | 0.0 us | 5165 MHz, 5176 MHz, 5206 MHz | -67.0 dBm | - | 8.31% | 12.21% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3a81df" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] | 4 | 0.18% | 14.0 B | 0.0 B | 37.8 us | 0.0 us | 5200 MHz | -67.0 dBm | - | 0.01% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5cb1e6" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, LDPC] | 8 | 0.35% | 14.0 B | 0.0 B | 36.2 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.02% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 350 | 15.46% | 55.0 B | 0.0 B | 38.3 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.93% | 1.34% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 69 | 3.05% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.13% | 0.19% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 69 | 3.05% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5200 MHz | -67.0 dBm | - | 0.15% | 0.21% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | 1050 | 46.38% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5165 MHz, 5176 MHz, 5206 MHz | -67.0 dBm | - | 7.92% | 11.37% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 12 | 0.53% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.02% | 0.03% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c81927" /></svg> | Management: Action [HE-SU, HE-MCS 11, 80 MHz, GI 3.2 us, BCC] | 8 | 0.35% | 37.0 B | 0.0 B | 36.6 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.02% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.44% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.05% | 0.07% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33cc52" /></svg> | Control: Subtype 0 [HE-MU, HE, GI 3.2 us] | 350 | 15.46% | 3210.0 B | 0.0 B | 3547.8 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 86.48% | 124.17% |
 
-### Analysis of Packet Distribution
-`BccBaseline` and `PreamblePuncturing` have identical frame counts in this run. That is not a standards violation and does not mean the PHY configuration was identical: preamble puncturing changes the usable subchannels/RU placement, while a fully served offered load can leave packet totals unchanged. Validate the mask and puncture-aware RU allocation with the vectors documented above; packet totals alone cannot prove them.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->

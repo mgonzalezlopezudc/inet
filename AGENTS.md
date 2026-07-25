@@ -91,6 +91,7 @@ Store project-wide agent behavior in `AGENTS.md`. Store task-specific reusable w
 * `inet-unit-tests`: Build and run INET unit tests with repository-specific requirements.
 * `inet-80211-packet-debugging`: Debug IEEE 802.11 PHY/MAC packet exchanges with Cmdenv, PCAPng, TShark, logs, event logs, results, source inspection, and LLDB.
 * `inet-80211-regression-testing`: Design and verify focused IEEE 802.11 regression coverage across deterministic runs, seeds, captures, logs, results, and fingerprints.
+* `inet-80211-walkthrough-writer`: Create, revise, and review evidence-backed IEEE 802.11 example walkthroughs that teach the feature and serve as reproducible feature-test and debugging guides.
 * `inet-fingerprint-regression`: Diagnose fingerprint mismatches and update expected fingerprints only after the changed simulation trajectory is explained.
 * `inet-ned-ini-analysis`: Trace NED inheritance, INI inheritance, wildcard precedence, module paths, `typename` selection, and effective parameter values.
 * `inet-packet-tag-debugging`: Debug INET `Packet`, chunk, protocol tag, request/indication tag, region tag, encapsulation, and metadata propagation issues.

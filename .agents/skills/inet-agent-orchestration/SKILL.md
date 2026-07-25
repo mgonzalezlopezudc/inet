@@ -37,11 +37,11 @@ If a model is unavailable, move upward in capability: Luna to Terra, then Terra 
 | `inet-navigator` | Terra, `medium` | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing, and architecture-aware pre-change mapping |
 | `inet-evidence-miner` | Luna, `medium` | Bounded artifact discovery and exact extraction from source, logs, PCAPs, event logs, scalars, and vectors; facts only |
 | `inet-wifi-specialist` | Sol, `medium` | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
-| `inet-simulation-detective` | Sol, `high` | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
+| `inet-simulation-detective` | Sol, `medium` | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
 | `inet-implementer` | Sol, `medium` | Focused production C++/NED/MSG patch after mechanism and change surface are established |
 | `inet-regression-guard` | Terra, `high` | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
 | `inet-results-analyst` | Terra, `high` | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
-| `inet-reviewer` | Sol, `high` | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
+| `inet-reviewer` | Sol, `medium` | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
 
 Use the relevant repository workflow skills inside each lane. An agent role does not replace `inet-simulation-run`, `inet-80211-packet-debugging`, `ieee80211-standards`, testing, build, or result-analysis skills.
 

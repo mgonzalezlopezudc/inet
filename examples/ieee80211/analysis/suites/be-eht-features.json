@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "suite": "be-eht-features",
+  "example_root": "examples/ieee80211be",
+  "generated_marker": "ieee80211-pcap-statistics",
+  "capture": {
+    "interface_patterns": ["**.wlan[*]"],
+    "observer_selector": "all-wireless-interfaces"
+  },
+  "scenarios": {
+    "eht_features": {
+      "ini": "eht_features/omnetpp.ini",
+      "configurations": ["BaselineAx", "EhtFeatures"],
+      "phy_profiles": ["legacy", "he", "eht"],
+      "feature_plugins": ["eht-su"]
+    }
+  }
+}
+

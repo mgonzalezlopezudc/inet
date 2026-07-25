@@ -193,6 +193,7 @@ class TestHeHcf : public HeHcf
         for (int i = 0; i < queue->getNumPackets(); ++i)
             queueBytes += queue->getPacket(i)->getByteLength();
         bool committed = false;
+        Ptr<const Ieee80211MacHeader> responseHeader;
         failingCommitIndex = failAt;
         Packet *response = nullptr;
         try {
@@ -200,7 +201,7 @@ class TestHeHcf : public HeHcf
                     AC_BE, 0, queueBytes, 64, &user, trigger,
                     triggerId,
                     getLinkPhyContext().getSnapshot().getMaximumTransmitPower(),
-                    std::nullopt, exchange, committed);
+                    std::nullopt, exchange, responseHeader, committed);
         }
         catch (...) {
             failingCommitIndex = -1;
@@ -213,11 +214,12 @@ class TestHeHcf : public HeHcf
         auto protection = deriveIeee80211HeTbResponseProtection(std::nullopt,
                 trigger->getDurationField(), SimTime(16, SIMTIME_US),
                 handoff->getPpduLayout()->getDuration());
-        auto responseHeader = response->peekAt<Ieee80211DataHeader>(B(4));
-        REQUIRE(responseHeader->getDurationField() == protection.macDurationField);
+        auto responseDataHeader = dynamicPtrCast<const Ieee80211DataHeader>(responseHeader);
+        REQUIRE(responseDataHeader != nullptr);
+        REQUIRE(responseDataHeader->getDurationField() == protection.macDurationField);
         REQUIRE(handoff->getTxVector()->getCommon().getRequestedTxopDuration() ==
                 protection.txopDuration);
-        REQUIRE(responseHeader->getDurationField() < trigger->getDurationField());
+        REQUIRE(responseDataHeader->getDurationField() < trigger->getDurationField());
         delete response;
         result.packets = exchange.packets;
         result.sequenceNumbers = exchange.sequenceNumbers;

@@ -110,6 +110,25 @@ bool HeSoundingCoordinator::processSoundingFrame(Packet *packet,
                           ITx *tx,
                           ITx::ICallback *callback)
 {
+    if (header == nullptr) {
+        auto rxVectorInd = packet->findTag<physicallayer::Ieee80211HeRxVectorInd>();
+        const bool soundingNdp = rxVectorInd != nullptr &&
+                rxVectorInd->getRxVector() != nullptr &&
+                rxVectorInd->getRxVector()->getCommon().getPpduFormat() ==
+                        physicallayer::HE_SINGLE_USER;
+        if (soundingNdp) {
+            // IEEE 802.11-2024 26.7.3: the sounding NDP has no PSDU or MAC
+            // header, so its successful RXVECTOR advances the STA-side
+            // NDPA/NDP/BFRP state directly.
+            if (ndpAnnouncementReceived)
+                ndpReceived = true;
+            else
+                EV_WARN << "Ignoring HE sounding NDP without a preceding NDPA\n";
+            delete packet;
+            return true;
+        }
+    }
+
     if (dynamicPtrCast<const Ieee80211MgmtHeader>(header) && header->getType() == ST_ACTION) {
         if (auto ndpa = findPacketChunk<Ieee80211HeNdpAnnouncement>(packet)) {
             soundingTargets.clear();

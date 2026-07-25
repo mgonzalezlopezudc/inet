@@ -1,367 +1,223 @@
-# Walkthrough - HE MU-MIMO (Downlink and Uplink)
+# Walkthrough - HE MU-MIMO
 
-This walkthrough shows how 802.11ax MU-MIMO increases capacity by assigning
-different spatial streams to several stations on the same frequency resource.
-OFDMA separates users in frequency; MU-MIMO reuses that frequency in space.
-The example therefore checks both the stream allocation and the resulting
-application-level gain over matched single-user or OFDMA controls.
+This example demonstrates how IEEE 802.11ax assigns several users to one
+frequency resource while separating them by spatial stream. OFDMA separates
+users in frequency; MU-MIMO reuses the same RU in space.
 
-## What the experiment demonstrates
+The retained evidence has two scopes:
 
-The examples demonstrate both the required MU-MIMO structure and an
-application-level aggregate delivery advantage over matched EDCA controls:
+- `results/scalar-vector/20260725T120411Z/` contains five matched runs of the
+  20 MHz downlink `DlMuMimo` and `EqualSizedRUs_fBW` configurations.
+- `results/packet-statistics/20260724T175025Z/` contains AP and station
+  captures for `DlMuMimo` and `UlMuMimo`.
 
-- `DlMuMimo` sounds the stations, then sends three users on the same 242-tone
-  RU with one stream each at starting stream indices 0, 1, and 2.
-- `UlMuMimo` sends Basic Triggers assigning the same 242-tone RU and disjoint
-  stream ranges to as many as three stations. The stations answer with
-  simultaneous HE TB QoS Data PPDUs and the AP acknowledges the exchange.
-- `DlMuMimo80MHz` extends the same mechanism to eight stations and an
-  eight-antenna AP.
-- The serialized Basic Trigger contains the spatial-stream allocation, TID
-  Aggregation Limit, and Preferred AC fields that TShark decodes.
+The scalar/vector session establishes the downlink application comparison and
+the AP's full-bandwidth spatial-stream allocations. The packet session
+establishes protocol-visible sounding and Trigger exchanges. These are
+packet-level model results, not a general real-world MU-MIMO capacity claim.
 
-The results below were generated with release INET libraries on 2026-07-15.
+## Configurations
 
-## IEEE 802.11 expectations
+- `DlMuMimo`: 20 MHz, three stations, a four-antenna AP, downlink sounding,
+  and full-bandwidth MU-MIMO.
+- `EqualSizedRUs_fBW`: the matched 20 MHz, three-station OFDMA control. It
+  separates the users into frequency-domain RUs.
+- `SuEdcaBaseline`: the 20 MHz single-user downlink control.
+- `DlMuMimo80MHz`: 80 MHz, eight stations, and an eight-antenna AP.
+- `UlMuMimo`: 20 MHz, three saturated uplinks, a four-antenna AP, and
+  full-bandwidth uplink MU-MIMO.
+- `EdcaBaseline`: the saturated uplink workload using EDCA.
 
-The relevant normative requirements are:
+The focused settings are in [downlink.ini](downlink.ini) and
+[uplink.ini](uplink.ini). `DlMuMimo` and `EqualSizedRUs_fBW` both use a
+1,000-byte application payload every 1 ms and
+`dlMuAckMethod = "sequentialBar"`. The three downlink flows therefore offer
+24 Mbit/s in total under the same acknowledgment policy.
 
-- Clause 27.3.1.1: DL MU permits an AP to transmit to multiple non-AP STAs and
-  UL MU permits it to receive from multiple non-AP STAs simultaneously.
-- Clause 27.3.2.5: full-bandwidth DL MU-MIMO uses one RU spanning the PPDU
-  bandwidth and signals each user's spatial-stream allocation.
-- Clauses 26.7.1 and 26.7.3, including Figure 26-8: DL MU-MIMO obtains channel
-  state information using NDP Announcement, sounding NDP, BFRP Trigger, and
-  compressed beamforming/CQI feedback.
-- Clause 9.3.1.22.2 and Figures 9-93, 9-94, and 9-96: Trigger User Info carries
-  RU allocation, starting spatial stream, number of spatial streams, TID
-  Aggregation Limit, and Preferred AC.
-- Clauses 26.5.2.3 and 27.3.11.12: a Basic Trigger supplies the common HE TB
-  duration and per-user RU, MCS, stream, and target-RSSI parameters.
-- Clause 27.3.3.2.4: UL MU-MIMO users receive non-overlapping stream ranges,
-  with no more than four streams per user and eight in total.
-- Clauses 10.3.2.13.3 and 26.4.4.5: QoS Data in an HE TB UL MU exchange can be
-  acknowledged immediately with a Multi-STA BlockAck.
+## Reproduce scalar/vector runs
 
-The searchable standards-corpus evidence used for this validation includes
-`80211ax-2024:chunk:01666`, `01670`, `01673`, `01674`, `05102`, `09778`,
-`09796`, and `09805`. The source PDF was not needed.
-
-The observable invariants are therefore:
-
-1. DL sounding precedes an HE MU PPDU containing multiple users on one
-   full-bandwidth RU with disjoint spatial-stream ranges.
-2. A UL Basic Trigger identifies multiple stations on one full-bandwidth RU
-   with disjoint stream ranges, followed by simultaneous HE TB responses.
-3. A performance claim compares the same topology, traffic, interval, seed,
-   channel, and application payload.
-
-## Configurations and matched controls
-
-- `DlMuMimo`: 20 MHz, three stations, four-antenna AP, DL sounding and
-  full-bandwidth MU-MIMO.
-- `SuEdcaBaseline`: the matched 20 MHz DL single-user control.
-- `DlMuMimo80MHz`: 80 MHz, eight stations, eight-antenna AP.
-- `UlMuMimo`: 20 MHz, three saturated uplinks, four-antenna AP, 1.5 ms HE TB
-  budget, and full-bandwidth UL MU-MIMO.
-- `EdcaBaseline`: the same saturated UL workload using EDCA only.
-
-The focused `uplink.ini` sets the application interval to `0.5 ms` in both UL
-configurations. This deliberately keeps all three station queues backlogged:
-without simultaneous demand, spatial multiplexing has nothing to combine and
-its sounding and Trigger overhead can dominate. The `1.5 ms` HE TB duration is
-long enough to amortize Trigger and Block Ack overhead, fits the voice TXOP,
-and remains below the standard's `5.484 ms` PPDU limit.
-
-`SuEdcaBaseline80MHz` is not a matched control for `DlMuMimo80MHz`: it has
-three stations instead of eight and must not be used for a performance ratio.
-
-## Run reproducible scalar/vector comparisons
-
-Run one configuration and run number at a time:
+Run one configuration and repetition at a time:
 
 ```sh
-mkdir -p results/validation/dl-mu results/validation/dl-su
-mkdir -p results/validation/ul-mu results/validation/ul-su
+mkdir -p results/validation/dl-mu results/validation/dl-ofdma
 
 bin/inet -u Cmdenv -c DlMuMimo -r 0 \
-    --warmup-period=0.7s \
-    --result-dir=results/validation/dl-mu \
-    examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
+  --result-dir=results/validation/dl-mu \
+  examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
 
-bin/inet -u Cmdenv -c SuEdcaBaseline -r 0 \
-    --warmup-period=0.7s \
-    --result-dir=results/validation/dl-su \
-    examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
-
-bin/inet -u Cmdenv -c UlMuMimo -r 0 \
-    --result-dir=results/validation/ul-mu \
-    examples/ieee80211ax/multi_user/mu_mimo/uplink.ini
-
-bin/inet -u Cmdenv -c EdcaBaseline -r 0 \
-    --result-dir=results/validation/ul-su \
-    examples/ieee80211ax/multi_user/mu_mimo/uplink.ini
+bin/inet -u Cmdenv -c EqualSizedRUs_fBW -r 0 \
+  --result-dir=results/validation/dl-ofdma \
+  examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
 ```
 
-Repeat with `--seed-set=1` and separate result directories.
+Repeat with run numbers 1 through 4 and distinct result directories.
 
-### Application results from `.sca`
+Query the application payload vectors:
 
 ```sh
 opp_scavetool query -l \
-    -f 'name =~ "packetReceived:count" and module =~ "*.host*app*"' \
-    results/validation/dl-mu/DlMuMimo-#0.sca \
-    results/validation/dl-su/SuEdcaBaseline-#0.sca
-
-opp_scavetool query -l \
-    -f 'name =~ "endToEndDelay:histogram" and module =~ "*.host*app*"' \
-    results/validation/dl-mu/DlMuMimo-#0.sca \
-    results/validation/dl-su/SuEdcaBaseline-#0.sca
-
-opp_scavetool query -l \
-    -f 'name =~ "packetReceived:count" and module =~ "*.server.app*"' \
-    results/validation/ul-mu/UlMuMimo-#0.sca \
-    results/validation/ul-su/EdcaBaseline-#0.sca
-
-opp_scavetool query -l \
-    -f 'name =~ "endToEndDelay:histogram" and module =~ "*.server.app*"' \
-    results/validation/ul-mu/UlMuMimo-#0.sca \
-    results/validation/ul-su/EdcaBaseline-#0.sca
+  -f 'module =~ "*.host*.app[0]" and name =~ "packetReceived:vector(packetBytes)"' \
+  results/validation/dl-mu/*.vec results/validation/dl-ofdma/*.vec
 ```
 
-Two deterministic seeds produced:
-
-| Direction | Seed | MU delivered | EDCA delivered | Delivery gain | MU mean delay | EDCA mean delay |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| DL | 0 | 14640 | 2796 | 423.6% | 6.31 ms | 16.91 ms |
-| DL | 1 | 14640 | 2823 | 418.6% | 6.28 ms | 16.87 ms |
-| UL | 0 | 2378 | 1677 | 41.8% | 200.35 ms | 270.69 ms |
-| UL | 1 | 2385 | 1715 | 39.1% | 199.72 ms | 268.24 ms |
-
-The five-seed campaign compares 20 MHz DL MU-MIMO over
-`0.55–0.88 s` against the OFDMA control. The result vectors report
-`38.982 Mbps` for MU-MIMO and `23.568 Mbps` for OFDMA. MU-MIMO uses the
-model's calibrated default inter-user CSI leakage of 0.01. The structural
-multi-user and disjoint-stream checks in the next section remain essential;
-this is not a universal performance ranking.
-
-### Internal HE PHY and scheduler vectors from `.vec`/`.sca`
-
-Application counts alone do not prove MU-MIMO. Query the HE metadata:
+Query the HE allocation vectors:
 
 ```sh
 opp_scavetool query -l \
-    -f 'module =~ "*.ap.wlan[0].radio" and (name =~ "heRuToneSize:vector" or name =~ "heStaId:vector" or name =~ "heSpatialStreams:vector" or name =~ "heStreamStartIndex:vector")' \
-    results/validation/dl-mu/DlMuMimo-#0.vec
-
-opp_scavetool query -l \
-    -f 'module =~ "*.ap.wlan[0].mac.hcf.ulCoordinator" and (name =~ "heUlScheduledUsers:*" or name =~ "heUlBasicTriggerSent:*")' \
-    results/validation/ul-mu/UlMuMimo-#0.sca
-
-opp_scavetool query -l \
-    -f 'type =~ vector and module =~ "*.host*.wlan[0].radio" and (name =~ "heRuToneSize:vector" or name =~ "heStaId:vector" or name =~ "heSpatialStreams:vector" or name =~ "heStreamStartIndex:vector")' \
-    results/validation/ul-mu/UlMuMimo-#0.vec
+  -f 'module =~ "*.ap.wlan[0].radio" and (name =~ "heRuToneSize:vector" or name =~ "heStaId:vector" or name =~ "heSpatialStreams:vector" or name =~ "heStreamStartIndex:vector")' \
+  results/validation/dl-mu/*.vec
 ```
 
-For DL seed 0, each AP-radio user vector has 921 records. RU tone size is 242
-for every record; STA IDs range from 1 to 3; NSS is always one; and starting
-stream indices range from 0 to 2. The aligned records form 307 three-user
-full-bandwidth MU-MIMO PPDUs.
+## Five-run downlink result
 
-For UL seed 0, the AP records 458 Basic Triggers, 1358 scheduled-user
-allocations, and a maximum of three users per Trigger. Seed 1 records 438,
-1297, and three respectively. Station-radio vectors show 242-tone, one-stream
-HE TB transmissions at starting stream indices 0, 1, and 2. Initial BSRP and
-occasional single-user allocations account for the small-RU records.
+Goodput is the sum of received `packetBytes` at the three station applications
+over `[0.55 s, 0.88 s)`, divided by the 0.33 s interval. Each received vector
+sample is 1,000 bytes. The inputs are the ten `.vec` files under
+`results/scalar-vector/20260725T120411Z/DlMuMimo/` and
+`results/scalar-vector/20260725T120411Z/EqualSizedRUs_fBW/`.
 
-Use CSV export to inspect aligned times and values:
+| Run | `DlMuMimo` packets | `DlMuMimo` goodput | `EqualSizedRUs_fBW` packets | `EqualSizedRUs_fBW` goodput |
+|---:|---:|---:|---:|---:|
+| 0 | 1,044 | 25.309 Mbit/s | 440 | 10.667 Mbit/s |
+| 1 | 1,041 | 25.236 Mbit/s | 440 | 10.667 Mbit/s |
+| 2 | 1,044 | 25.309 Mbit/s | 440 | 10.667 Mbit/s |
+| 3 | 1,043 | 25.285 Mbit/s | 440 | 10.667 Mbit/s |
+| 4 | 1,044 | 25.309 Mbit/s | 440 | 10.667 Mbit/s |
+| Mean | -- | 25.290 Mbit/s | -- | 10.667 Mbit/s |
 
-```sh
-opp_scavetool export -F CSV-R -o results/validation/dl-he-phy.csv \
-    -f 'module =~ "*.ap.wlan[0].radio" and (name =~ "heRuToneSize:vector" or name =~ "heStaId:vector" or name =~ "heSpatialStreams:vector" or name =~ "heStreamStartIndex:vector")' \
-    results/validation/dl-mu/DlMuMimo-#0.vec
-```
+In this table, the mean goodput ratio is 2.37. The `DlMuMimo` mean has a
+95% t-confidence interval of approximately ±0.039 Mbit/s; the five
+`EqualSizedRUs_fBW` values are identical. This comparison is limited to the
+matched configurations, five repetitions, and stated measurement interval.
 
-## Record and inspect native IEEE 802.11 captures
+The AP-radio vectors in
+[`DlMuMimo-#0.vec`](results/scalar-vector/20260725T120411Z/DlMuMimo/DlMuMimo-%230.vec)
+contain 727 records for each of `heRuToneSize`, `heStaId`,
+`heSpatialStreams`, and `heStreamStartIndex`. `heRuToneSize` is 242 for every
+record, `heStaId` ranges from 1 to 3, `heSpatialStreams` is one for every
+record, and `heStreamStartIndex` ranges from 0 to 2. These vectors directly
+show that the AP assigned one full-bandwidth RU to several station IDs using
+disjoint one-stream ranges.
 
-Use PCAPng, nanosecond timestamps, and computed checksums/FCS. The files keep a
-`.pcap` suffix, but `capinfos` identifies them as PCAPng.
+Application goodput alone does not prove MU-MIMO. The result is supported by
+both the received-payload vectors and the HE allocation vectors named above.
+
+## Reproduce packet captures
+
+Use PCAPng, nanosecond timestamps, and computed checksums/FCS:
 
 ```sh
 mkdir -p results/validation/pcap-dl results/validation/pcap-ul
 
 bin/inet -u Cmdenv -c DlMuMimo -r 0 \
-    --result-dir=results/validation/pcap-dl \
-    '--**.numPcapRecorders=1' \
-    '--**.pcapRecorder[*].moduleNamePatterns="wlan[0]"' \
-    '--**.pcapRecorder[*].dumpProtocols="ieee80211mac"' \
-    '--**.pcapRecorder[*].fileFormat="pcapng"' \
-    '--**.pcapRecorder[*].timePrecision=9' \
-    '--**.pcapRecorder[*].alwaysFlush=true' \
-    '--**.pcapRecorder[*].verbose=false' \
-    '--**.checksumMode="computed"' \
-    '--**.fcsMode="computed"' \
-    examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
+  --result-dir=results/validation/pcap-dl \
+  '--**.numPcapRecorders=1' \
+  '--**.pcapRecorder[*].moduleNamePatterns="wlan[0]"' \
+  '--**.pcapRecorder[*].dumpProtocols="ieee80211mac"' \
+  '--**.pcapRecorder[*].fileFormat="pcapng"' \
+  '--**.pcapRecorder[*].timePrecision=9' \
+  '--**.pcapRecorder[*].alwaysFlush=true' \
+  '--**.pcapRecorder[*].verbose=false' \
+  '--**.checksumMode="computed"' \
+  '--**.fcsMode="computed"' \
+  examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
 
 bin/inet -u Cmdenv -c UlMuMimo -r 0 \
-    --result-dir=results/validation/pcap-ul \
-    '--**.numPcapRecorders=1' \
-    '--**.pcapRecorder[*].moduleNamePatterns="wlan[0]"' \
-    '--**.pcapRecorder[*].dumpProtocols="ieee80211mac"' \
-    '--**.pcapRecorder[*].fileFormat="pcapng"' \
-    '--**.pcapRecorder[*].timePrecision=9' \
-    '--**.pcapRecorder[*].alwaysFlush=true' \
-    '--**.pcapRecorder[*].verbose=false' \
-    '--**.checksumMode="computed"' \
-    '--**.fcsMode="computed"' \
-    examples/ieee80211ax/multi_user/mu_mimo/uplink.ini
+  --result-dir=results/validation/pcap-ul \
+  '--**.numPcapRecorders=1' \
+  '--**.pcapRecorder[*].moduleNamePatterns="wlan[0]"' \
+  '--**.pcapRecorder[*].dumpProtocols="ieee80211mac"' \
+  '--**.pcapRecorder[*].fileFormat="pcapng"' \
+  '--**.pcapRecorder[*].timePrecision=9' \
+  '--**.pcapRecorder[*].alwaysFlush=true' \
+  '--**.pcapRecorder[*].verbose=false' \
+  '--**.checksumMode="computed"' \
+  '--**.fcsMode="computed"' \
+  examples/ieee80211ax/multi_user/mu_mimo/uplink.ini
 ```
+
+The retained AP captures are:
+
+- [`DlMuMimo AP PCAP`](results/packet-statistics/20260724T175025Z/DlMuMimo/DlMuMimo-%230Lan80211AxDlOfdma.ap.wlan%5B0%5D.pcap),
+  containing 1,770 packets from 0.200148 s through 0.998391 s.
+- [`UlMuMimo AP PCAP`](results/packet-statistics/20260724T175025Z/UlMuMimo/UlMuMimo-%230Lan80211AxUlOfdma.ap.wlan%5B0%5D.pcap),
+  containing 3,777 packets from 0.001048 s through 1.999351 s.
+
+These are AP wireless-interface observations. They are not de-duplicated
+end-to-end application packets.
+
+### Downlink sounding evidence
 
 ```sh
-DL_PCAP='results/validation/pcap-dl/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap'
-UL_PCAP='results/validation/pcap-ul/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap'
-
-capinfos "$DL_PCAP"
-capinfos "$UL_PCAP"
+tshark -n -r results/packet-statistics/20260724T175025Z/DlMuMimo/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap \
+  -Y 'wlan.trigger.he.trigger_type == 1' \
+  -T fields -E header=y -E separator=, -E occurrence=a \
+  -e frame.number -e frame.time_epoch \
+  -e wlan.trigger.he.user_info.aid12 -e _ws.col.Info
 ```
 
-The validated AP captures contain 3611 DL packets and 4508 UL packets, use
-IEEE 802.11 encapsulation, have nanosecond precision, and are strictly ordered.
+That exact PCAP contains seven decoded BFRP Triggers. Frame 22 at
+0.300989 s polls AIDs 2 and 3; the later six BFRP Triggers poll AIDs 1, 2,
+and 3. The capture proves protocol-visible sounding feedback polling. Native
+MAC capture does not expose every HE-SIG-B stream-allocation field, so the
+downlink stream indices must be read from the AP vectors named above.
 
-### Downlink sounding
+### Uplink Trigger evidence
 
 ```sh
-tshark -n -r "$DL_PCAP" \
-    -Y 'wlan.trigger.he.trigger_type == 1' \
-    -T fields -E header=y -E separator=, -E occurrence=a \
-    -e frame.number -e frame.time_epoch \
-    -e wlan.trigger.he.user_info.aid12 \
-    -e wlan.trigger.he.ru_allocation \
-    -e wlan.trigger.he.ul_fec_coding_type \
-    -e _ws.col.Info
+tshark -n -r results/packet-statistics/20260724T175025Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap \
+  -Y 'wlan.trigger.he.trigger_type == 0' \
+  -T fields -E header=y -E separator=, -E occurrence=a \
+  -e frame.number -e frame.time_epoch \
+  -e wlan.trigger.he.user_info.aid12 \
+  -e wlan.trigger.he.ru_allocation \
+  -e wlan.trigger.he.ru_starting_spatial_stream \
+  -e wlan.trigger.he.ru_number_of_spatial_stream \
+  -e wlan.trigger.he.tid_aggregation_limit \
+  -e wlan.trigger.he.preferred_ac -e _ws.col.Info
 ```
 
-Seed 0 contains seven BFRP Triggers. The first appears at 0.300624062 s for
-AIDs 2, 3, and 1; later polls also include all three beamformees. The exchange is
-preceded by the NDP Announcement and sounding NDP and followed by compressed
-beamforming feedback, matching Figure 26-8. Native MAC captures do not contain
-radiotap/HE-SIG-B metadata, so use the AP HE vectors for the DL stream indices.
-
-### Uplink Basic Trigger and simultaneous data
+That exact PCAP contains 49 decoded Basic Triggers. Frame 16 at 0.202272 s
+assigns AIDs 1, 2, and 3 to RU allocation 61, with starting stream indices
+0, 1, and 2. The encoded NSS value is zero for each user, representing one
+spatial stream per user.
 
 ```sh
-tshark -n -r "$UL_PCAP" \
-    -Y 'wlan.trigger.he.trigger_type == 0' \
-    -T fields -E header=y -E separator=, -E occurrence=a \
-    -e frame.number -e frame.time_epoch \
-    -e wlan.trigger.he.user_info.aid12 \
-    -e wlan.trigger.he.ru_allocation \
-    -e wlan.trigger.he.ru_starting_spatial_stream \
-    -e wlan.trigger.he.ru_number_of_spatial_stream \
-    -e wlan.trigger.he.tid_aggregation_limit \
-    -e wlan.trigger.he.preferred_ac \
-    -e _ws.col.Info
+tshark -n -r results/packet-statistics/20260724T175025Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap \
+  -Y 'frame.number >= 16 && frame.number <= 20' \
+  -T fields -E separator=, \
+  -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
+  -e wlan.sa -e wlan.da -e _ws.col.Info
 ```
 
-The capture contains 458 decoded Basic Triggers. Frame 170 at 0.361001785 s
-identifies AIDs 3, 2, and 1, assigns RU allocation 61 (the full 242-tone RU) to
-all three, and decodes starting streams 0, 1, and 2. The encoded NSS values are
-0, 0, and 0, meaning one spatial stream per user; the TID Aggregation Limit is
-one for every user.
+Frames 17, 18, and 19 are simultaneous QoS Null responses at 0.203788 s from
+the three stations, followed by the AP's Block Ack in frame 20 at
+0.203857 s. This capture directly supports the multi-user Trigger and
+simultaneous-response structure. It does not establish uplink application
+goodput.
 
-Inspect the following frames:
+## Packet-type summary
 
-```sh
-tshark -n -r "$UL_PCAP" \
-    -Y 'frame.number >= 170 && frame.number <= 174' \
-    -T fields -E separator=, \
-    -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
-    -e wlan.sa -e wlan.da -e _ws.col.Info
-```
+The table below is derived from the two AP PCAPs named above. It counts AP
+wireless-interface observations and therefore must not be read as application
+delivery.
 
-Frames 171, 172, and 173 are 1000-byte QoS Data frames from the three stations at
-0.362517900-0.362518005 s; frame 174 is the AP's Block Ack response. The capture
-therefore corroborates the Trigger structure and actual simultaneous payload
-delivery rather than only QoS Null responses.
+| Configuration | Total observations | Selected decoded observations |
+|---|---:|---|
+| `DlMuMimo` | 1,770 | 7 Trigger, 724 BAR, 724 Block Ack, 262 HE-MU aggregates |
+| `UlMuMimo` | 3,777 | 49 Basic Trigger plus 2 other Trigger, 1,939 QoS Data/Null observations, 51 Block Ack |
 
-## 80 MHz completion check
+Packet totals show that the configured exchanges executed, but subtype totals
+alone cannot prove disjoint stream allocation. Use the Trigger fields and the
+HE vectors for that claim.
 
-```sh
-bin/inet -u Cmdenv -c DlMuMimo80MHz -r 0 \
-    --warmup-period=0.7s \
-    examples/ieee80211ax/multi_user/mu_mimo/downlink.ini
-```
+## Standards and model boundary
 
-The run reaches the 1 s simulation limit. Its eight receivers deliver 1500
-packets each with mean delay of approximately `0.48 ms`.
+IEEE Std 802.11-2024 Clause 27.3.2.5 defines full-bandwidth DL MU-MIMO user
+allocation, and Clause 27.3.3.2.4 constrains non-overlapping UL spatial-stream
+ranges. Trigger User Info carries RU allocation and spatial-stream assignment.
 
-## How to read the result
-
-MU-MIMO's advantage comes from simultaneous spatial streams, not from a faster
-MCS or wider channel. That is why the 20 MHz comparison keeps bandwidth and
-traffic fixed and why the vector checks are essential. The `38.982 Mbps`
-MU-MIMO result versus `23.568 Mbps` for OFDMA is credible only together with
-the observed three users, common 242-tone RU, and non-overlapping stream
-indices. Sounding cost, channel correlation, station capability, and a light
-load can all reduce or eliminate this advantage in another workload.
-
-<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-## 802.11 Packet Type Statistics
-![802.11 Packet Type Statistics](packet_statistics.png)
-
-This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
-
-Capture session `20260718T132413Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
-
-Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
-- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
-- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
-
-### Evidence checks
-
-| Status | Requirement | Observed evidence |
-|---|---|---|
-| **PASS** | DlMuMimo produced protocol-visible wireless observations | 3826 AP/global transmission observations |
-| **PASS** | UlMuMimo produced protocol-visible wireless observations | 4320 AP/global transmission observations |
-| **INCONCLUSIVE** | Multiple users with disjoint stream allocations in one PPDU | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
-
-### Configuration: `DlMuMimo`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3826**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#98f098" /></svg> | Data: Data [HE-MU, HE, GI 3.2 us, BCC] | 7 | 0.18% | 53.7 B | 4.2 B | 94.8 us | 4.6 us | 5010 MHz | - | 20.0 dBm | 0.12% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24db3c" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, LDPC] | 700 | 18.30% | 398.4 B | 28.0 B | 471.9 us | 30.7 us | 5010 MHz | - | 20.0 dBm | 59.05% | 33.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#23bf18" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC, A-MPDU] | 2 | 0.05% | 166.0 B | 0.0 B | 108.8 us | 18.0 us | 5010 MHz | - | 20.0 dBm | 0.04% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 684 | 17.88% | 166.0 B | 0.0 B | 126.8 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 15.50% | 8.67% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d28a04" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 707 | 18.48% | 46.2 B | 1.5 B | 39.0 us | 0.1 us | 5010 MHz | - | 20.0 dBm | 4.93% | 2.76% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c88037" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 136 | 3.55% | 24.0 B | 0.0 B | 37.6 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.91% | 0.51% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#11289c" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 136 | 3.55% | 32.0 B | 0.0 B | 38.1 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 0.93% | 0.52% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0e3caf" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] | 1417 | 37.04% | 32.0 B | 0.0 B | 71.0 us | 0.0 us | 5010 MHz | -65.0 dBm | - | 17.99% | 10.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5e93e8" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 3 | 0.08% | 14.0 B | 0.0 B | 43.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.02% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3598e3" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 6 | 0.16% | 14.0 B | 0.0 B | 36.9 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.04% | 0.02% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 13 | 0.34% | 36.1 B | 1.0 B | 38.4 us | 0.1 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.09% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d5151f" /></svg> | Management: Action [HE-TB, HE-MCS 0, 106-tone RU, GI 3.2 us, BCC] | 12 | 0.31% | 34.0 B | 0.0 B | 121.3 us | 0.0 us | 5005 MHz, 5015 MHz | -65.0 dBm | - | 0.26% | 0.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e9140c" /></svg> | Management: Action [HE-TB, HE-MCS 0, 52-tone RU, GI 3.2 us, BCC] | 3 | 0.08% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz | -65.3 dBm | - | 0.12% | 0.07% |
-
-### Configuration: `UlMuMimo`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4320**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 187 | 4.33% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.5 dBm | - | 3.83% | 5.81% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3dcc33" /></svg> | Data: QoS Data [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] | 2357 | 54.56% | 1070.0 B | 0.0 B | 1206.6 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 93.76% | 142.20% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1e7218" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] | 3 | 0.07% | 34.0 B | 0.0 B | 73.2 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#14690c" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC] | 6 | 0.14% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 0.08% | 0.12% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a480e" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 52-tone RU, GI 3.2 us, LDPC] | 1 | 0.02% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5003 MHz | -67.0 dBm | - | 0.01% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d28a04" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 792 | 18.33% | 46.0 B | 1.5 B | 39.0 us | 0.1 us | 5010 MHz | - | 10.0 dBm | 1.02% | 1.55% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0621d0" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 791 | 18.31% | 57.9 B | 1.2 B | 39.8 us | 0.1 us | 5010 MHz | - | 10.0 dBm | 1.04% | 1.57% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5e93e8" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 183 | 4.24% | 14.0 B | 0.0 B | 43.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.26% | 0.40% |
-
-### Analysis of Packet Distribution
-Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2.5 identifies each HE-MU user and its spatial streams; the direct evidence is multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above; the radiotap suffix establishes the PPDU format but not all users' stream allocations.
-<!-- END GENERATED: ieee80211ax-pcap-statistics -->
+INET's packet-level model uses configured CSI freshness and leakage constants
+and ideal separation for disjoint scalar stream ranges. It does not derive the
+reported gain from a waveform channel matrix. The evidence therefore
+demonstrates the mechanism and benefit in these configurations only.

@@ -1,175 +1,157 @@
 # Walkthrough - HE Multi-TID Block Ack
 
-This walkthrough explains how 802.11ax reduces acknowledgment overhead when a
-station has traffic in several QoS queues. Earlier per-TID Block Ack exchanges
-repeat BAR, BA, and SIFS overhead; Multi-TID feedback can describe several TID
-windows in one acknowledgment context.
+This example provides three traffic arrangements for inspecting Block Ack
+exchanges when more than one traffic identifier (TID) or station is involved.
 
-## Background: Multi-TID Block Ack
+## Configurations
 
-In high-QoS wireless networks, stations (STAs) generate traffic belonging to different traffic classes or Traffic Identifiers (TIDs). In legacy 802.11, Block Ack agreements are negotiated separately for each TID. If an Access Point (AP) or station wants to acknowledge packets from multiple TIDs, it has to send separate Block Ack Request (BAR) and Block Ack (BA) frames for each TID. This introduces significant channel overhead and increases latency.
-
-802.11ax introduces **Multi-TID Block Ack**:
-- **Multi-TID ADDBA Negotiation**: Allows stations and APs to establish a shared acknowledgment context covering multiple TIDs.
-- **Combined Feedback**: A single Multi-TID Block Ack frame can acknowledge MAC Service Data Units (MSDUs) belonging to multiple TIDs, reducing control frame overhead and SIFS gaps.
-
----
-
-## Network Topology and Configuration
-
-The simulation runs in a single-BSS network (`Lan80211AxUlOfdma`) where:
-- **`ap`**: The Access Point.
-- **`host[0..2]`**: Three wireless stations.
-- **`server`**: A wired server connected to the AP.
-- **Traffic**: Uplink traffic is generated from two separate UDP applications on each host:
-  - `app[0]` generates **TID 0 (Best Effort)** traffic (1000B packets sent every 5ms).
-  - `app[1]` generates **TID 6 (Voice)** traffic (200B packets sent every 10ms).
-
-The `MultiTidBlockAck` config in `omnetpp.ini` is defined as:
-```ini
-[Config MultiTidBlockAck]
-description = "HE Multi-TID Block Ack: AP and stations negotiate Multi-TID Aggregation and transmit voice/video/BE traffic concurrently"
-**.ap.wlan[*].mib.heMultiTidAggregationRx = true
-**.ap.wlan[*].mib.heMultiTidAggregationTx = true
-**.host[*].wlan[*].mib.heMultiTidAggregationRx = true
-**.host[*].wlan[*].mib.heMultiTidAggregationTx = true
-```
-
-### Key Parameters:
-1. **`heMultiTidAggregationRx = true`**: Declares that the node's receiver supports receiving aggregated Multi-TID A-MPDUs.
-2. **`heMultiTidAggregationTx = true`**: Declares that the node's transmitter supports building and transmitting Multi-TID A-MPDUs.
-
-The two applications use different TIDs and unequal packet sizes/rates so both
-acknowledgment windows remain active and easy to distinguish. A single-TID
-stream could negotiate the capability but would never exercise its purpose.
-
----
-
-## Running the Simulation
-
-Execute the simulation using Cmdenv for either downlink or uplink direction:
-```sh
-# Run Downlink Multi-TID Block Ack
-bin/inet -u Cmdenv -c MultiTidBlockAck examples/ieee80211ax/mac_features/multi_tid_block_ack/downlink.ini
-
-# Run Uplink Multi-TID Block Ack
-bin/inet -u Cmdenv -c UlMuMultiTidBlockAck examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini
-```
-
----
-
-## Verifying Results
-
-After the simulation completes, check the results using `opp_scavetool`:
-```sh
-# Query packetSent at host applications (Uplink run)
-opp_scavetool query -l -f 'name =~ "packetSent:count" and module =~ "*.host*app*"' examples/ieee80211ax/mac_features/multi_tid_block_ack/results/*.sca
-
-# Query packetReceived at server applications (Uplink run)
-opp_scavetool query -l -f 'name =~ "packetReceived:count" and module =~ "*.server.app*"' examples/ieee80211ax/mac_features/multi_tid_block_ack/results/*.sca
-```
-
-### Quantitative Summary:
-- **`host[0].app[0] packetSent:count` (TID 6)**: 361 packets.
-- **`host[1].app[0] packetSent:count` (TID 7)**: 361 packets.
-- **`host[2]`**: Traffic is disabled (`numApps = 0`).
-- **`server.app[0] packetReceived:count` (TID 6)**: 360.
-- **`server.app[1] packetReceived:count` (TID 7)**: 360.
-
----
-
-## PCAP Tshark Packet Exchange Analysis
-
-To record PCAP traces and inspect them with TShark, run the simulation with PCAP recording and checksum computation enabled:
-
-```sh
-bin/inet -u Cmdenv -c UlMuMultiTidBlockAck examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini --result-dir=examples/ieee80211ax/mac_features/multi_tid_block_ack/results --**.numPcapRecorders=1 --**.checksumMode=\"computed\" --**.fcsMode=\"computed\"
-```
-
-Use TShark to print the timeline of packet exchanges:
-
-```sh
-tshark -n -r examples/ieee80211ax/mac_features/multi_tid_block_ack/results/UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap -c 20
-```
-
-The decoded output timeline shows:
-1. **BSRP and Basic Triggers**: The AP broadcasts Buffer Status Report Poll (BSRP) triggers (e.g. frames 1, 6) and Basic triggers (e.g. frame 15) to coordinate multi-user uplink access.
-2. **Concurrent Uplink Traffic**: Target stations transmit UDP data frames (TID 0/6) concurrently via HE TB PPDUs (e.g. frame 11, 13, 20).
-3. **Multi-STA Block Acks**: The AP acknowledges the received frames via Block Ack frames (e.g. frames 5, 10, 19).
-
----
-
-## Interpreting the result
-
-The application counts establish delivery of both TIDs, while the Trigger and
-Block Ack sequence establishes coordinated feedback. The current scenario
-exercises capability negotiation and the per-TID acknowledgment state, but it
-does not measure an airtime saving from packing several TID records into one
-physical Multi-TID Block Ack. Such a performance claim requires a matched
-single-TID control and direct BAR/BA airtime accounting.
-
-<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-## 802.11 Packet Type Statistics
-![802.11 Packet Type Statistics](packet_statistics.png)
-
-This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
-
-Capture session `20260718T132413Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
-
-Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
-- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
-- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
-
-### Evidence checks
-
-| Status | Requirement | Observed evidence |
+| Configuration | Input file | Traffic visible in the retained scalar file |
 |---|---|---|
-| **PASS** | MultiTidBlockAck produced protocol-visible wireless observations | 1027 AP/global transmission observations |
-| **PASS** | UlMuMultiTidBlockAck produced protocol-visible wireless observations | 3093 AP/global transmission observations |
-| **PASS** | UlSuMultiTidBlockAck produced protocol-visible wireless observations | 921 AP/global transmission observations |
-| **INCONCLUSIVE** | BA variant and per-AID/TID entries | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
+| `MultiTidBlockAck` | `downlink.ini` | The server sends two application flows to each of hosts 0 and 1. |
+| `UlSuMultiTidBlockAck` | `uplink.ini` | Host 0 sends two application flows. |
+| `UlMuMultiTidBlockAck` | `uplink.ini` | Hosts 0 and 1 each send one application flow; host 2 has no application send result. |
 
-### Configuration: `MultiTidBlockAck`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1027**
+These descriptions are limited to the application counters in the retained
+`.sca` files. TID values and Block Ack contents must be checked in decoded
+packet fields or dedicated model telemetry.
 
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24db3c" /></svg> | Data: QoS Data [HE-MU, HE, GI 3.2 us, LDPC] | 1 | 0.10% | 594.0 B | 0.0 B | 685.8 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 0.32% | 0.07% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 401 | 39.05% | 798.7 B | 377.4 B | 472.9 us | 206.4 us | 5010 MHz | - | 20.0 dBm | 88.62% | 18.96% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c88037" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 303 | 29.50% | 24.0 B | 0.2 B | 37.6 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 5.32% | 1.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#11289c" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 302 | 29.41% | 32.0 B | 0.2 B | 38.1 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 5.38% | 1.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5e93e8" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 4 | 0.39% | 14.0 B | 0.0 B | 43.7 us | 0.0 us | 5010 MHz | -64.5 dBm | - | 0.08% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3598e3" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 8 | 0.78% | 14.0 B | 0.0 B | 36.9 us | 0.0 us | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.14% | 0.03% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 8 | 0.78% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.14% | 0.03% |
+## Run the configurations
 
-### Configuration: `UlMuMultiTidBlockAck`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3093**
+```sh
+bin/inet -u Cmdenv -c MultiTidBlockAck \
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/downlink.ini
 
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 698 | 22.57% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.9 dBm | - | 48.15% | 21.68% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#14690c" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC] | 1029 | 33.27% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -63.7 dBm | - | 45.55% | 20.51% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#d28a04" /></svg> | Control: Trigger [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 343 | 11.09% | 46.2 B | 2.5 B | 39.0 us | 0.2 us | 5010 MHz | - | 10.0 dBm | 1.49% | 0.67% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0621d0" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 343 | 11.09% | 58.0 B | 0.0 B | 39.8 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.52% | 0.68% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5e93e8" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 680 | 21.99% | 14.0 B | 0.0 B | 43.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.30% | 1.48% |
+bin/inet -u Cmdenv -c UlSuMultiTidBlockAck \
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini
 
-### Configuration: `UlSuMultiTidBlockAck`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **921**
+bin/inet -u Cmdenv -c UlMuMultiTidBlockAck \
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini
+```
 
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 510 | 55.37% | 803.3 B | 377.1 B | 475.4 us | 206.3 us | 5010 MHz | -60.0 dBm | - | 93.26% | 12.12% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c88037" /></svg> | Control: Block Ack Request (BAR) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 33 | 3.58% | 24.0 B | 0.0 B | 37.6 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.48% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#11289c" /></svg> | Control: Block Ack (BA) [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 33 | 3.58% | 32.0 B | 0.0 B | 38.1 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.48% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#5e93e8" /></svg> | Control: Ack [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 341 | 37.02% | 14.0 B | 0.0 B | 43.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 5.73% | 0.74% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3598e3" /></svg> | Control: Ack [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, LDPC] | 2 | 0.22% | 14.0 B | 0.0 B | 36.9 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.03% | 0.00% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#c71b0f" /></svg> | Management: Action [HE-SU, HE-MCS 11, 20 MHz, GI 3.2 us, BCC] | 2 | 0.22% | 37.0 B | 0.0 B | 38.4 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.03% | 0.00% |
+To create packet captures in a separate result directory:
 
-### Analysis of Packet Distribution
-BAR and Block Ack subtype counts show acknowledgment exchanges, but they do not identify the BA Control variant or its per-AID/TID entries. IEEE Std 802.11-2024 Clauses 9.3.1.8.6 and 10.25.5 require those contents to distinguish Multi-STA and Multi-TID operation. Treat this table as an exchange count; use decoded BA fields or simulator telemetry to prove that multiple TIDs were acknowledged.
-<!-- END GENERATED: ieee80211ax-pcap-statistics -->
+```sh
+bin/inet -u Cmdenv -c UlMuMultiTidBlockAck \
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini \
+  --result-dir=examples/ieee80211ax/mac_features/multi_tid_block_ack/results/manual-run \
+  --**.numPcapRecorders=1 \
+  --**.checksumMode=\"computed\" \
+  --**.fcsMode=\"computed\"
+```
+
+## Scalar/vector run evidence
+
+The run-0 scalar/vector artifacts for all three configurations are under the
+retained `results/scalar-vector/20260725T120411Z` session:
+
+```sh
+opp_scavetool query -l \
+  -f 'name =~ "packetSent:count" or name =~ "packetReceived:count"' \
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/results/scalar-vector/20260725T120411Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-\#0.sca
+
+opp_scavetool query -l \
+  -f 'type =~ vector and module =~ "*.app[*]" and (name =~ "packetSent:vector(packetBytes)" or name =~ "packetReceived:vector(packetBytes)")' \
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/results/scalar-vector/20260725T120411Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-\#0.vec
+```
+
+The run-0 scalar and application-vector queries report:
+
+| Configuration and application result | Scalar count | Vector count and packet-byte range |
+|---|---:|---|
+| `MultiTidBlockAck`: `server.app[0..3] packetSent` | 141, 71, 141, 71 | 141 × 1000 B, 71 × 200 B, 141 × 1000 B, 71 × 200 B |
+| `MultiTidBlockAck`: `host[0].app[0..1] packetReceived` | 134, 68 | 134 × 1000 B, 68 × 200 B |
+| `MultiTidBlockAck`: `host[1].app[0..1] packetReceived` | 133, 68 | 133 × 1000 B, 68 × 200 B |
+| `UlSuMultiTidBlockAck`: `host[0].app[0..1] packetSent` | 341, 171 | 341 × 1000 B, 171 × 200 B |
+| `UlSuMultiTidBlockAck`: `server.app[0..1] packetReceived` | 340, 170 | 340 × 1000 B, 170 × 200 B |
+| `UlMuMultiTidBlockAck`: `host[0..1].app[0] packetSent` | 341, 341 | 341 × 1000 B for each host |
+| `UlMuMultiTidBlockAck`: `server.app[0..1] packetReceived` | 340, 340 | 340 × 1000 B for each application |
+
+Exact run-0 artifacts:
+
+- [`MultiTidBlockAck-#0.sca`](results/scalar-vector/20260725T120411Z/MultiTidBlockAck/MultiTidBlockAck-%230.sca) and [`MultiTidBlockAck-#0.vec`](results/scalar-vector/20260725T120411Z/MultiTidBlockAck/MultiTidBlockAck-%230.vec)
+- [`UlSuMultiTidBlockAck-#0.sca`](results/scalar-vector/20260725T120411Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-%230.sca) and [`UlSuMultiTidBlockAck-#0.vec`](results/scalar-vector/20260725T120411Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-%230.vec)
+- [`UlMuMultiTidBlockAck-#0.sca`](results/scalar-vector/20260725T120411Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-%230.sca) and [`UlMuMultiTidBlockAck-#0.vec`](results/scalar-vector/20260725T120411Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-%230.vec)
+
+The scalar counts establish only the recorded application sends and receives.
+The application vectors additionally establish the recorded sample counts and
+packet-byte values shown in the table.
+They do not identify a Block Ack variant, decoded per-TID entries, aggregation,
+retransmissions, or why a packet was not received.
+
+## Packet-statistics evidence
+
+The `20260724T175025Z` packet-statistics session contains `.sca`, `.vec`,
+AP/STA PCAP files as applicable, and Cmdenv output for each configuration.
+The packet tables below use its AP captures. Its scalar files can be queried
+independently with:
+
+```sh
+opp_scavetool query -l \
+  -f 'name =~ "packetSent:count" or name =~ "packetReceived:count"' \
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/results/packet-statistics/20260724T175025Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-\#0.sca
+```
+
+Inspect an AP capture directly:
+
+```sh
+tshark -n \
+  -r examples/ieee80211ax/mac_features/multi_tid_block_ack/results/packet-statistics/20260724T175025Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-\#0Lan80211AxUlOfdma.ap.wlan[0].pcap \
+  -c 20
+```
+
+The following tables summarize frame labels in the named AP PCAPs. A row is a
+recorded observation at that capture point. The tables do not de-duplicate
+transmissions and do not expose Block Ack Control variants or per-AID/TID
+entries.
+
+### `MultiTidBlockAck`
+
+Source:
+[`MultiTidBlockAck AP PCAP`](results/packet-statistics/20260724T175025Z/MultiTidBlockAck/MultiTidBlockAck-%230Lan80211AxDlOfdma.ap.wlan[0].pcap)
+
+| Decoded frame label | Observations |
+|---|---:|
+| QoS Data | 401 |
+| Block Ack Request | 401 |
+| Block Ack | 401 |
+| Ack | 12 |
+| Action | 8 |
+| Record displayed by TShark as `PV1 QoS Data - with one SID` | 1 |
+| **Total PCAP records** | **1224** |
+
+### `UlSuMultiTidBlockAck`
+
+Source:
+[`UlSuMultiTidBlockAck AP PCAP`](results/packet-statistics/20260724T175025Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-%230Lan80211AxUlOfdma.ap.wlan[0].pcap)
+
+| Decoded frame label | Observations |
+|---|---:|
+| QoS Data | 510 |
+| Block Ack Request | 33 |
+| Block Ack | 33 |
+| Ack | 343 |
+| Action | 2 |
+| **Total PCAP records** | **921** |
+
+### `UlMuMultiTidBlockAck`
+
+Source:
+[`UlMuMultiTidBlockAck AP PCAP`](results/packet-statistics/20260724T175025Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-%230Lan80211AxUlOfdma.ap.wlan[0].pcap)
+
+| Decoded frame label | Observations |
+|---|---:|
+| QoS Data | 1176 |
+| QoS Null | 45 |
+| Trigger | 16 |
+| Block Ack | 15 |
+| Ack | 16 |
+| **Total PCAP records** | **1268** |
+
+## What remains inconclusive
+
+The retained scalar files and the frame-label tables show application
+counters and the presence of BAR/BA or Trigger/BA exchanges. They do not prove
+that one response acknowledged multiple TIDs, identify the BA Control variant,
+show decoded per-AID/TID entries, or quantify an airtime benefit. Those
+conclusions require queryable decoded fields or dedicated vectors that are not
+presented by these retained summaries.

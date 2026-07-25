@@ -16,44 +16,44 @@
       "metadata": {},
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#0.sca",
-          "sha256": "1a4535762d14d69695c345bd63f1399cac2ca6a77f65d0c28ca4ae6163fe3fbb"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#0.sca",
+          "sha256": "d51fa0829f252c9caccea150bbb8f8a2fc8212cc622236f4b83238b595cf7ad6"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#0.vec",
-          "sha256": "e55d0ca21ed268e7d8ca82d52ca8fbefcf59df10d4a8f4cf3f8e2ce7c1b6fa54"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#0.vec",
+          "sha256": "28930d8350f9237f33e912a269440447f413e2414884e8e780eabc4e67edf1a9"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#1.sca",
-          "sha256": "5cc9214a995f049fea51202626856223ba3f45d6d3169125fee0d7cd2bf99abd"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#1.sca",
+          "sha256": "025dad09ee102843e61e7d1f9acc99db1e7c6b91bac4a08168afd1769b6fe566"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#1.vec",
-          "sha256": "fb5108c0ed80758092c33b552d20d1d409d70204c9ad6a03b290a9574c7e64c6"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#1.vec",
+          "sha256": "6d854e02218dec08f0e01fb18d89198212463810b3741a5a37a9aab56c53d632"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#2.sca",
-          "sha256": "83cd8db5f379f0e82c12f195836a554fa439345ed6c1a6ad524980ccad0eb9c1"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#2.sca",
+          "sha256": "e0430d908929006414ab6e8f0175a6fae1866e1a8346fe2dfc14401fa3e28b01"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#2.vec",
-          "sha256": "1f3f9529fe9ec07c2806a216cfe872627a84242f3718289df8414272067bbd5d"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#2.vec",
+          "sha256": "3f491fa9edd020d9ca6a813079d54d085a166358d1520ac6a73046315d449c7e"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#3.sca",
-          "sha256": "0000e4a26ecf0e2435d43025c0b572655864fd62ed5023a988ce84aa61f601a9"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#3.sca",
+          "sha256": "e718f5d175a029aa49652b91f2bbc2303b4d3169740f64b6e127a30589c55604"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#3.vec",
-          "sha256": "3814ebca4937a713634a5bec90567c09bf490afe4d12105bb3fb6792774e00d2"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#3.vec",
+          "sha256": "d1e836111ddfdbd3226c9189b776790fd28df7d45ade53c15a1ee1d880050663"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#4.sca",
-          "sha256": "da9b38acdba13cd439bcb2d18dec9cdaf580825dae0ec093382afde46cefb190"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#4.sca",
+          "sha256": "c8744fafe164a09ca09505b5cc17ea207279433d29b95db70d1a54988e106f2f"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/CleanChannelBaseline-#4.vec",
-          "sha256": "6701fa137acced841d4c0f032c49062141fa4b6a443cc4627d5a824ab870da85"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/CleanChannelBaseline/CleanChannelBaseline-#4.vec",
+          "sha256": "fd1b1b492a26bfe26ce37e496b9a4ff401c5e198a7a32bb81bae9434f26b5a70"
         }
       ]
     },
@@ -69,44 +69,44 @@
       "metadata": {},
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#0.sca",
-          "sha256": "b05d41923e7be67c83032b78e0d48c047eac5330653759e5b53ee73e926a2640"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#0.sca",
+          "sha256": "e3ca79ea415b5a2afa9dbc687e9691e9c756c39a61957ff4b33d7aa0abcbb528"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#0.vec",
-          "sha256": "65328d9cb3d99cd61a15d16d6ac176496f1d96dcf650cb1ba4030b6aeb3b9cc5"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#0.vec",
+          "sha256": "62edc02a088f0e83ec3ee9ca3c91b8fd6cf9bbedde21850c0a13bacc76ce917d"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#1.sca",
-          "sha256": "c9110e01b7741da6997c5c6b529c2afa66d4808e1f6b583ecce9c5dfeea5e26f"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#1.sca",
+          "sha256": "db90788f9cd085a205dcdf062bfca960d1a3c66a41e6eb967e8b4a27a2808b1e"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#1.vec",
-          "sha256": "0326d0280398a16ffbfa3fe2a78f8479039eeee26e903d6feaf744fe5913d48e"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#1.vec",
+          "sha256": "19a2f2c8b4a56a174f822211afeed61375ffba8cb6823245455df1c048d8372a"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#2.sca",
-          "sha256": "58ce3fff3c5d1b0039c62d18b7c1d4e82a67d8f5fdc8eff81621253117cae0bd"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#2.sca",
+          "sha256": "38b9a6e9778deaf02eec28b8a027c33cd5d170437a58130facce00d993822e86"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#2.vec",
-          "sha256": "0aa1309cd881c283503340c5bf463df0784a0e68c46cb69f74d3f207b7b825bf"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#2.vec",
+          "sha256": "517927bb60ac3e358e9ab42969403ea55bed5baa036ff9239cc57cc27e8ed97c"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#3.sca",
-          "sha256": "af67988ceb4b8a9a6429d17d29b6136e31818bd5b841ec7beaf762fda8f2612b"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#3.sca",
+          "sha256": "ca9a7511852b4647c592121cfd26a1ba9bf8bb7697bde075873e7d9f7248efb5"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#3.vec",
-          "sha256": "16bdd2e24fb2cabb62d3173359b39517e5f28109a29360d691ba1c2728848119"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#3.vec",
+          "sha256": "abc993bb0ee05866299bb0e9d2a6329ac6fa48150028b062c34b3c26f9b36b43"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#4.sca",
-          "sha256": "2caf981e546df752ad1ff9b605a36deb4eb3fa87079dbecdb0d2abcfbe19e217"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#4.sca",
+          "sha256": "c92c2aa1860f93ed5b84b08c4fe117cb3d6b48330d8249191fc11a417a645636"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/LegacyInterferenceWithoutPuncturing-#4.vec",
-          "sha256": "c81850d02d831d4af3230855e8058ea587d964fc8eba8eca863a629704678bc0"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/LegacyInterferenceWithoutPuncturing/LegacyInterferenceWithoutPuncturing-#4.vec",
+          "sha256": "bd330378194b0574a9f688de1523351ba5bad84f9e42702ca6af8dd65a8e806d"
         }
       ]
     },
@@ -122,44 +122,44 @@
       "metadata": {},
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#0.sca",
-          "sha256": "3aa5d5b14a1b0be95bac33594c804ce39f2000d7141cc0a8e5c9c4ee39a7c359"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#0.sca",
+          "sha256": "e70a6e315bed1a0a56e1cbc2bc823e056865a92515603df66c525e84775cccb2"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#0.vec",
-          "sha256": "7d4f4a24e55d4f88005f4af0a6a6df8326d5c014cf079219e845ff65adee5a5d"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#0.vec",
+          "sha256": "0a5d57e24450018d303576d9363caa1ffb9da346c74728bc147a48b01d3adb9a"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#1.sca",
-          "sha256": "f60252e2bc0239856a8b2edb4e2f6d69f332715b3a2d8a9ad14eca3b0f0078b9"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#1.sca",
+          "sha256": "daf14c36ba111ad5bcafe7a034141b683749bc8ff8521cfbc62e37b51767259f"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#1.vec",
-          "sha256": "95b1bad0022516359684d4f9f4cb2b4e16b6c208ae8150506308db180e59a78c"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#1.vec",
+          "sha256": "18161426e87fc9dd859d1c705ac00c457d7f4d9b9bd3ba467d7bdacf878d8677"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#2.sca",
-          "sha256": "444190bba684b0366e9226d6a3e89fd98f38055979300ac821088342b5a321b0"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#2.sca",
+          "sha256": "57bfd585f622e757574044118598ae90eb5ae60757d7a5a8eedf10d9a71f063f"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#2.vec",
-          "sha256": "eff46fe148be420763a18835c8833e1cba3e262a1a3ee0c19d4cedb5e4dd0502"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#2.vec",
+          "sha256": "7a8880d531f15964b688b3d74cdf85782aa9bc3c433c60963297c52ab6ecde6a"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#3.sca",
-          "sha256": "afd85a3904ef963f8db16992ac71f03c9b389bc94ae9f21bc407bb658de32cf5"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#3.sca",
+          "sha256": "5b87ecad5854c7136871ed90c55a8473ca4e6a2e936b1e309f3c71018e102994"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#3.vec",
-          "sha256": "3b99818f537d9393bf26424e82c0b973faea8f12ab67cfbcd60ac117fb1f733d"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#3.vec",
+          "sha256": "597d945e835771a023a3534226cfba21be2d07942e944f3eb9998114f44ce990"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#4.sca",
-          "sha256": "8c16bb728691694182c9be95c1dfb37897ead13ffeb6cddf0941119b1b41aa28"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#4.sca",
+          "sha256": "358ea58b84b1f50d0171c0c10d6843642b9f63253bfb599f9a42060a5ac5391b"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/PreamblePuncturingUnderInterference-#4.vec",
-          "sha256": "e18ec34c56690f4f7da93090cdac6e7b7a675feb831523731a713c1852215323"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/PreamblePuncturingUnderInterference/PreamblePuncturingUnderInterference-#4.vec",
+          "sha256": "624291de01af8f48528d5f00c33a8660b591171ccbd7355f98100d5ff2d54fc2"
         }
       ]
     },
@@ -175,51 +175,51 @@
       "metadata": {},
       "result_files": [
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#0.sca",
-          "sha256": "2bef87296d0a3a1a8329564a3585c9f5d9e7214a8d29e094f6e29e6f68d55cfb"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#0.sca",
+          "sha256": "bb02ef5c469008f339eea37d3bc709dc1c06c4ccc3452d383e4b60084631c4f6"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#0.vec",
-          "sha256": "64d6bbd4eeb6fc6a284f9b4684635056b73ff7ff15200d080bca5f1c694823f3"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#0.vec",
+          "sha256": "22c6decd8ecfa85406774fd7f47c1c577ea284e5cad8812cc36b9014ac435f5e"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#1.sca",
-          "sha256": "b0a87b2fd2912200ff531cce0a1e5642cfdd23665a5f07f74defac4306468a12"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#1.sca",
+          "sha256": "a65901f8b803a2ed1eaff3e29355392ca32c4379cbefe96be7dac639fc3e34c1"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#1.vec",
-          "sha256": "720931134b34d36c475e69d7b690b4bd443275bd2c8dc8fee5fc59030d7cb54a"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#1.vec",
+          "sha256": "82387c6d44c52cc1391efc5dfd3ca8dee9b7271adb8863e5386afe8eb994f839"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#2.sca",
-          "sha256": "1b131d9ac67adbfe8e92bc089192a8938fe7887bdd31ac263763486fef17940b"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#2.sca",
+          "sha256": "16538c88d5ea785712ca3670a6c1181bc674a52c392901c123f51d38d37e7a0e"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#2.vec",
-          "sha256": "cccd479f024fdff46eaba4be3143287f535d61329dc922984e32f03b5be5f443"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#2.vec",
+          "sha256": "9cd0aadac9daad4153506efc471ceca13eb47f62729163e8a671aa2a3852cc85"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#3.sca",
-          "sha256": "b51cf0ed0612f220880f363a52835db2c4a9d238cc639db486d187e6a04f35cf"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#3.sca",
+          "sha256": "120a9cc6e01a71eb144ef30c2a04d103cae5ae3722496ca8f8a368f53b10acbf"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#3.vec",
-          "sha256": "8f16ff3a32c0438b11289562358d273c2d2aec3fd82cdc032fe534210bb32e20"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#3.vec",
+          "sha256": "8f4971fda3d27aa69c2b7b35c13b4558d2ec1150bc2037abcb5591e0d1b396c8"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#4.sca",
-          "sha256": "46b4a3f583e775faa0b823905333da8863930ee2a7d60a946a366508916801cc"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#4.sca",
+          "sha256": "8ec3c429873314ca8a9e6513ed03f4cd7553104e3b54dea03aeabd6b82117390"
         },
         {
-          "path": "examples/ieee80211ax/he_features/results/DynamicPuncturing-#4.vec",
-          "sha256": "9bb4e1ea7cc167b94008e611cea4bac88b69206f0de3641f58247070c4fbb262"
+          "path": "examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/DynamicPuncturing/DynamicPuncturing-#4.vec",
+          "sha256": "a7cb6662f7c6ddd8f383a491bf9b03d1a062cd2993f61057748d65354b114f50"
         }
       ]
     }
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/puncturing/puncturing-frequency-allocation.png",
-  "git_revision": "a78b9cea58daa2d8d871956c98798c8462219e60",
+  "git_revision": "5e76f58368c96a0ed746024b5b152189c196a85c",
   "result_filters": [
     {
       "module": "**.app[*]",

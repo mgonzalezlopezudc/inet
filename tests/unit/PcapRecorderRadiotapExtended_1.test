@@ -2,7 +2,9 @@
 Test that PcapRecorder dynamically sizes the Radiotap present bitmap and populates the Rate, MCS, A-MPDU, VHT, HE, and 0-length-PSDU fields.
 
 %includes:
+#include <algorithm>
 #include <vector>
+#include "inet/common/packet/chunk/BitCountChunk.h"
 #include "inet/common/packet/chunk/ByteCountChunk.h"
 #include "inet/common/packet/chunk/BytesChunk.h"
 #include "inet/common/packet/recorder/PcapRecorder.h"
@@ -103,6 +105,23 @@ static uint16_t readUint16(const std::vector<uint8_t>& bytes, size_t offset)
     return bytes.at(offset) | bytes.at(offset + 1) << 8;
 }
 
+static uint32_t readUint32(const std::vector<uint8_t>& bytes, size_t offset)
+{
+    uint32_t value = 0;
+    for (size_t i = 0; i < 4; i++)
+        value |= static_cast<uint32_t>(bytes.at(offset + i)) << (8 * i);
+    return value;
+}
+
+static uint32_t makeExpectedAmpduReference(const Packet& packet, int heMuUserIndex)
+{
+    auto treeId = static_cast<uint64_t>(packet.getTreeId());
+    uint32_t reference = static_cast<uint32_t>(treeId) ^ static_cast<uint32_t>(treeId >> 32);
+    if (heMuUserIndex >= 0)
+        reference ^= static_cast<uint32_t>(heMuUserIndex + 1) * 0x9E3779B9U;
+    return reference;
+}
+
 static Ieee80211HeTxVectorValidationResult attachCanonicalHeVector(Packet& packet,
         const Ieee80211HeTxVectorRequest& request)
 {
@@ -113,6 +132,33 @@ static Ieee80211HeTxVectorValidationResult attachCanonicalHeVector(Packet& packe
     packet.addTag<Ieee80211HeTxVectorReq>()->setCanonicalPair(
             result.getTxVector(), result.getPpduLayout());
     return result;
+}
+
+static void attachCanonicalHeMuVector(Packet& packet, B firstPsduLength, B secondPsduLength)
+{
+    Ieee80211HeTxVectorRequest request;
+    request.centerFrequency = GHz(5.18);
+    request.channelBandwidth = MHz(20);
+    request.ppduFormat = HE_MU_DOWNLINK;
+    request.guardInterval = HE_GI_0_8_US;
+    request.ltfType = HE_LTF_4X;
+    auto rus = getHeEqualRuLayout(request.centerFrequency, request.channelBandwidth, 2);
+    Ieee80211HeUserTxVectorRequest firstUser;
+    firstUser.ru = rus[0];
+    firstUser.staId = 37;
+    firstUser.mcs = 1;
+    firstUser.numberOfSpatialStreams = 1;
+    firstUser.coding = HE_CODING_BCC;
+    firstUser.psduLength = firstPsduLength;
+    Ieee80211HeUserTxVectorRequest secondUser;
+    secondUser.ru = rus[1];
+    secondUser.staId = 91;
+    secondUser.mcs = 3;
+    secondUser.numberOfSpatialStreams = 1;
+    secondUser.coding = HE_CODING_BCC;
+    secondUser.psduLength = secondPsduLength;
+    request.users = {firstUser, secondUser};
+    attachCanonicalHeVector(packet, request);
 }
 
 Define_Module(TestablePcapRecorder);
@@ -133,7 +179,8 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     EV << "Test " << idx << " Size: " << rec.size() << ", Bytes: " << hexDump << "\n";
 };
 
-// Test 1: EHT Packet
+// Test 1: EHT Packet with no data mode. The radiotap EHT field still has its
+// mandatory known + data[9] body, but contains no fabricated PHY values.
 {
     Packet packet("eht-packet");
     packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
@@ -147,15 +194,46 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     const auto& record = writer->records[0];
     printRecord(1, record);
 
-    REQUIRE(record.size() >= 20);
+    REQUIRE(record.size() >= 68);
     REQUIRE(record[0] == 0); // version
     REQUIRE(record[1] == 0); // pad
-    REQUIRE(record[2] == 20 && record[3] == 0); // length (20)
+    REQUIRE(readUint16(record, 2) == 68);
     REQUIRE(record[4] == 0x02 && record[5] == 0 && record[6] == 0 && record[7] == 0x80); // Word 0 (flags + extension bit)
-    REQUIRE(record[8] == 0x08 && record[9] == 0 && record[10] == 0 && record[11] == 0); // Word 1 (EHT bit)
+    REQUIRE(record[8] == 0x06 && record[9] == 0 && record[10] == 0 && record[11] == 0); // Word 1 (U-SIG + EHT)
     REQUIRE(record[12] == 0x10); // flags (RADIOTAP_F_FCS)
     REQUIRE(record[13] == 0 && record[14] == 0 && record[15] == 0); // padding to 4-byte boundary
-    REQUIRE(record[16] == 0 && record[17] == 0 && record[18] == 0 && record[19] == 0); // EHT known u32 (0)
+    REQUIRE(readUint32(record, 16) == 0x00000001); // U-SIG: EHT PHY version known
+    REQUIRE(readUint32(record, 20) == 0 && readUint32(record, 24) == 0); // U-SIG value/mask unknown
+    REQUIRE(readUint32(record, 28) == 0); // EHT known u32
+    for (size_t offset = 32; offset < 68; offset += 4)
+        REQUIRE(readUint32(record, offset) == 0); // mandatory EHT data[9]
+}
+
+// Test 1b: authoritative EHT SU mode facts are projected into U-SIG and EHT.
+{
+    writer->records.clear();
+    Packet packet("eht-su-packet");
+    packet.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{1, 2, 3, 4}));
+    auto mode = Ieee80211EhtCompliantModes::getCompliantMode(
+            &Ieee80211EhtmcsTable::ehtMcs13BW160MHzNss2,
+            Ieee80211EhtMode::BAND_6GHZ,
+            Ieee80211EhtPreambleMode::EHT_PREAMBLE_SU,
+            Ieee80211EhtModeBase::EHT_GUARD_INTERVAL_MEDIUM);
+    packet.addTag<Ieee80211ModeReq>()->setMode(mode);
+
+    recorder->writeIeee80211(&packet);
+
+    REQUIRE(writer->records.size() == 1);
+    const auto& record = writer->records[0];
+    printRecord(2, record);
+    REQUIRE(readUint16(record, 2) == 72);
+    REQUIRE(readUint32(record, 16) == 0x00018003); // PHY version + 160 MHz known
+    REQUIRE(readUint32(record, 20) == 0 && readUint32(record, 24) == 0);
+    REQUIRE(readUint32(record, 28) == 0x00080004); // GI + one non-OFDMA user known
+    REQUIRE(readUint32(record, 32) == 0x00000080); // 1.6 us GI
+    for (size_t offset = 36; offset < 68; offset += 4)
+        REQUIRE(readUint32(record, offset) == 0);
+    REQUIRE(readUint32(record, 68) == 0x01D00096); // MCS 13, BCC, NSS 2, captured user
 }
 
 // Test 2: HT Packet
@@ -217,20 +295,22 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
     const std::vector<uint8_t> secondMpdu = {0x88, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16};
 
     Packet aggregate("ampdu");
-    aggregate.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xAA, 0xBB}));
+    aggregate.insertAtBack(makeShared<BitCountChunk>(b(100)));
     appendMpdu(aggregate, firstMpdu, true);
     appendMpdu(aggregate, secondMpdu, false);
-    aggregate.insertAtBack(makeShared<BytesChunk>(std::vector<uint8_t>{0xCC, 0xDD, 0xEE}));
+    aggregate.insertAtBack(makeShared<BitCountChunk>(b(28)));
 
-    recorder->writeIeee80211(&aggregate, B(2), B(3));
+    recorder->writeIeee80211(&aggregate, b(100), b(28));
 
     REQUIRE(writer->records.size() == 2);
     for (size_t i = 0; i < writer->records.size(); i++) {
         const auto& record = writer->records[i];
         printRecord(4 + i, record);
         const auto& expectedMpdu = (i == 0 ? firstMpdu : secondMpdu);
-        REQUIRE(record.size() == 20 + expectedMpdu.size());
-        REQUIRE(record[2] == 20 && record[3] == 0);
+        auto radiotapLength = readUint16(record, 2);
+        REQUIRE(radiotapLength == 20);
+        REQUIRE(record.size() == radiotapLength + expectedMpdu.size());
+        REQUIRE(std::equal(expectedMpdu.begin(), expectedMpdu.end(), record.begin() + radiotapLength));
         REQUIRE(record[4] == 0x02 && record[5] == 0 && record[6] == 0x10 && record[7] == 0);
         REQUIRE(record[8] == 0x10);
         if (i == 0) {
@@ -238,6 +318,76 @@ auto printRecord = [this](int idx, const std::vector<uint8_t>& rec) {
         } else {
             REQUIRE(record[16] == 0x0C && record[17] == 0);
         }
+    }
+}
+
+// Test 4b: HE DL MU container with one independently padded A-MPDU per user.
+// The first terminal MPDU omits the padding that would precede another
+// subframe, so parsing the concatenated container as one A-MPDU must fail.
+{
+    writer->records.clear();
+    const std::vector<uint8_t> firstUserMpdu = {0x88, 0x21, 0x22, 0x23, 0x24};
+    const std::vector<uint8_t> secondUserMpdu = {0x88, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36};
+
+    Packet aggregate("he-dl-mu-ampdu-container");
+    aggregate.insertAtBack(makeShared<BitCountChunk>(b(100)));
+    appendMpdu(aggregate, firstUserMpdu, false);
+    appendMpdu(aggregate, secondUserMpdu, false);
+    aggregate.insertAtBack(makeShared<BitCountChunk>(b(28)));
+    attachCanonicalHeMuVector(aggregate, B(4 + firstUserMpdu.size()), B(4 + secondUserMpdu.size()));
+
+    recorder->writeIeee80211(&aggregate, b(100), b(28));
+
+    REQUIRE(writer->records.size() == 2);
+    std::vector<uint32_t> ampduReferences;
+    for (size_t i = 0; i < writer->records.size(); i++) {
+        const auto& record = writer->records[i];
+        printRecord(6 + i, record);
+        const auto& expectedMpdu = (i == 0 ? firstUserMpdu : secondUserMpdu);
+        auto radiotapLength = readUint16(record, 2);
+        REQUIRE(radiotapLength == 32);
+        REQUIRE(record.size() == radiotapLength + expectedMpdu.size());
+        REQUIRE(std::equal(expectedMpdu.begin(), expectedMpdu.end(), record.begin() + radiotapLength));
+        REQUIRE(record[4] == 0x02 && record[5] == 0 && record[6] == 0x90 && record[7] == 0);
+        REQUIRE(record[16] == 0x0C && record[17] == 0);
+        auto ampduReference = readUint32(record, 12);
+        REQUIRE(ampduReference == makeExpectedAmpduReference(aggregate, static_cast<int>(i)));
+        ampduReferences.push_back(ampduReference);
+        REQUIRE(readUint16(record, 20) == 0x4CF2);
+        REQUIRE(readUint16(record, 24) == (i == 0 ? 0x0100 : 0x0300));
+        REQUIRE(readUint16(record, 26) == (i == 0 ? 0x0250 : 0x05B0));
+        REQUIRE(readUint16(record, 28) == 0x0006);
+        REQUIRE(readUint16(record, 30) == 0x0001);
+    }
+    REQUIRE(ampduReferences[0] != ampduReferences[1]);
+}
+
+// Test 4c: a naturally aligned boundary is also a user PSDU boundary, not an
+// inter-subframe boundary of one aggregate. Both singleton MPDUs are LAST.
+{
+    writer->records.clear();
+    const std::vector<uint8_t> firstUserMpdu = {0x88, 0x41, 0x42, 0x43};
+    const std::vector<uint8_t> secondUserMpdu = {0x88, 0x51, 0x52, 0x53, 0x54, 0x55};
+
+    Packet aggregate("he-dl-mu-aligned-ampdu-container");
+    aggregate.insertAtBack(makeShared<BitCountChunk>(b(100)));
+    appendMpdu(aggregate, firstUserMpdu, false);
+    appendMpdu(aggregate, secondUserMpdu, false);
+    aggregate.insertAtBack(makeShared<BitCountChunk>(b(28)));
+    attachCanonicalHeMuVector(aggregate, B(4 + firstUserMpdu.size()), B(4 + secondUserMpdu.size()));
+
+    recorder->writeIeee80211(&aggregate, b(100), b(28));
+
+    REQUIRE(writer->records.size() == 2);
+    auto firstReference = readUint32(writer->records[0], 12);
+    auto secondReference = readUint32(writer->records[1], 12);
+    REQUIRE(firstReference == makeExpectedAmpduReference(aggregate, 0));
+    REQUIRE(secondReference == makeExpectedAmpduReference(aggregate, 1));
+    REQUIRE(firstReference != secondReference);
+    for (const auto& record : writer->records) {
+        REQUIRE(readUint16(record, 16) == 0x000C);
+        auto radiotapLength = readUint16(record, 2);
+        REQUIRE(record.at(radiotapLength) == 0x88);
     }
 }
 

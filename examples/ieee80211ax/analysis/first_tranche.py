@@ -15,6 +15,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("group", choices=sorted(PLOTS) + ["all"])
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument(
+        "--session-id",
+        help="use this YYYYMMDDTHHMMSSZ result session instead of the latest complete one",
+    )
     parser.add_argument("--check", action="store_true", help="render to a temporary directory and compare checked-in PNGs")
     args = parser.parse_args()
     manifest = load_manifest(args.manifest)
@@ -25,12 +29,18 @@ def main() -> None:
         if args.check:
             with tempfile.TemporaryDirectory(prefix="inet-80211ax-analysis-") as directory:
                 output = Path(directory) / checked_output.name
-                PLOTS[group_name](conditions_for_group(manifest, group_name), output)
+                PLOTS[group_name](
+                    conditions_for_group(manifest, group_name, args.session_id),
+                    output,
+                )
                 if not checked_output.exists() or sha256(output) != sha256(checked_output):
                     raise RuntimeError(f"stale checked-in figure: {checked_output}")
                 print(f"VERIFIED {checked_output}")
         else:
-            PLOTS[group_name](conditions_for_group(manifest, group_name), checked_output)
+            PLOTS[group_name](
+                conditions_for_group(manifest, group_name, args.session_id),
+                checked_output,
+            )
 
 
 if __name__ == "__main__":

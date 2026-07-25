@@ -2,17 +2,17 @@
 
 This example compares a Wi-Fi 6 treatment with a matched Wi-Fi 5 baseline in
 one dense infrastructure BSS. A wired server communicates through one AP with
-64, 128, 256, or 512 stationary IoT stations.
+8, 16, 32, or 64 stationary IoT stations.
 
 The three workloads are:
 
 - `UL`: every STA sends one 100-byte UDP payload per second.
-- `DL`: the server sends one 100-byte UDP payload per second to every STA.
-- `Mixed`: every STA sends once per second and receives once per 10 seconds.
+- `DL`: the server sends one 100-byte UDP payload every 100 ms to every STA.
+- `Mixed`: every STA sends once per second and receives once every 100 ms.
 
 Each source receives an independently randomized phase within its period. The
 STA agents also start across a common randomized 0–15 s window so association
-does not become a synchronized 512-device burst. Traffic starts during warm-up,
+does not become a synchronized 64-device burst. Traffic starts during warm-up,
 so association, Block Ack setup, and initial rate selection do not become part
 of the 20–120 s performance interval.
 
@@ -64,7 +64,12 @@ Run it from the repository root with:
 python3 examples/ieee80211ax/dense_iot/run_campaign.py
 ```
 
-Dense 512-STA runs are memory intensive, so the runner is serial by default.
+Each invocation stores its files under
+`results/scalar-vector/YYYYMMDDTHHMMSSZ/<configuration>/`. The analyzer
+selects the newest complete session by default; both commands accept
+`--session-id YYYYMMDDTHHMMSSZ` to select an explicit result set.
+
+Dense 64-STA runs are memory intensive, so the runner is serial by default.
 Use `-j N` only when the machine has enough memory. A single condition can be
 selected, for example:
 

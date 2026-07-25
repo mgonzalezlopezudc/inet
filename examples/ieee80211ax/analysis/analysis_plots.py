@@ -182,6 +182,7 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
     successes: list[pd.DataFrame] = []
     successful_transmissions: list[pd.DataFrame] = []
     fairness: list[pd.DataFrame] = []
+    zero_success_counts: dict[str, int] = {}
     for condition in conditions:
         attempts = condition.scalars("heUlRandomAccessAttempt:count")
         success = condition.scalars("heUlRandomAccessSuccess:count")
@@ -198,8 +199,15 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
         successes.append(merged[["runID", "probability"]])
         successful_transmissions.append(merged[["runID", "successes"]])
         fairness_records = []
+        zero_success_count = 0
         for run_id, rows in success.groupby("runID"):
-            fairness_records.append({"runID": run_id, "fairness": jain(rows.value)})
+            values = rows.value.to_numpy(dtype=float)
+            score = jain(values)
+            if math.isnan(score):
+                zero_success_count += 1
+            else:
+                fairness_records.append({"runID": run_id, "fairness": score})
+        zero_success_counts[condition.config] = zero_success_count
         fairness.append(pd.DataFrame.from_records(fairness_records))
     labels = [condition.label for condition in conditions]
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.8))
@@ -209,7 +217,7 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
     axes[0].set_ylabel("UORA success probability")
     axes[0].set_ylim(0, 1.05)
     axes[1].set_ylabel("Successful UORA transmissions per run")
-    axes[2].set_ylabel("Jain fairness of per-STA successes")
+    axes[2].set_ylabel("Jain fairness of per-STA successes\n(defined runs only)")
     axes[2].set_ylim(0, 1.05)
     fig.suptitle("UORA load and random-access RU comparison")
     save(fig, output)
@@ -220,7 +228,12 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
             {"type": "scalar", "name": "heUlRandomAccessAttempt:count"},
             {"type": "scalar", "name": "heUlRandomAccessSuccess:count"},
         ],
-        aggregation={"observation": "one value per run", "uncertainty": "95% Student-t CI"},
+        aggregation={
+            "observation": "one value per run",
+            "zero_success_runs": zero_success_counts,
+            "fairness": "Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined",
+            "uncertainty": "95% Student-t CI",
+        },
     )
 
 

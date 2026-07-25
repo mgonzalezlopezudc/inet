@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "suite": "ax",
+  "example_root": "examples/ieee80211ax",
+  "generated_marker": "ieee80211ax-pcap-statistics",
+  "capture": {
+    "interface_patterns": ["**.wlan[*]"],
+    "observer_selector": "all-wireless-interfaces"
+  },
+  "scenarios": {
+    "twt": {
+      "ini": "twt/omnetpp.ini",
+      "configurations": ["Baseline", "IndividualUnannounced", "IndividualAnnounced", "Broadcast"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["twt"]
+    },
+    "mac_features/dynamic_fragmentation": {
+      "ini": "mac_features/dynamic_fragmentation/omnetpp.ini",
+      "configurations": ["DynamicFragmentation"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["fragmentation"]
+    },
+    "mac_features/multi_tid_block_ack": {
+      "ini": "mac_features/multi_tid_block_ack/omnetpp.ini",
+      "configurations": ["MultiTidBlockAck", "UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["block-ack"]
+    },
+    "mac_features/operating_mode_indication": {
+      "ini": "mac_features/operating_mode_indication/omnetpp.ini",
+      "configurations": ["OperatingModeIndication"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["operating-mode"]
+    },
+    "bss_coloring": {
+      "ini": "bss_coloring/omnetpp.ini",
+      "configurations": ["BssColoringDisabled", "BssColoringEnabled", "ObssPdConservative", "ObssPdAggressive", "BssColoringCollision", "TwoNav"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["spatial-reuse"]
+    },
+    "frequency_selective_channel": {
+      "ini": "frequency_selective_channel/omnetpp.ini",
+      "configurations": ["FlatChannelOFDMA", "TgaxModelBOFDMA"],
+      "phy_profiles": ["legacy", "he"]
+    },
+    "he_features": {
+      "ini": "he_features/omnetpp.ini",
+      "configurations": ["BccBaseline", "PreamblePuncturing"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["puncturing"]
+    },
+    "he_channel_widths": {
+      "ini": "he_channel_widths/omnetpp.ini",
+      "configurations": ["Width20MHz", "Width40MHz", "Width80MHz", "Width160MHz"],
+      "phy_profiles": ["legacy", "he"]
+    },
+    "multi_user/ndp_feedback": {
+      "ini": "multi_user/ndp_feedback/omnetpp.ini",
+      "configurations": ["NdpFeedbackReport"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["sounding"]
+    },
+    "multi_user/mu_mimo": {
+      "ini": "multi_user/mu_mimo/omnetpp.ini",
+      "configurations": ["DlMuMimo", "UlMuMimo"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["mu-mimo"]
+    },
+    "dl_ofdma": {
+      "ini": "dl_ofdma/omnetpp.ini",
+      "configurations": ["EqualSizedRUs_fBW", "EqualSizedRUs_fBW_ACVO", "EqualSizedRUs_fHoL", "EqualSizedRUs_fHoL_ACVO", "SuEdcaBaseline", "EqualSizedRUs80MHz_fBW", "EqualSizedRUs80MHz_fHoL", "SuEdcaBaseline80MHz", "BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms", "MultiTidBlockAck"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["ofdma"]
+    },
+    "he_rate_adaptation": {
+      "ini": "he_rate_adaptation/omnetpp.ini",
+      "configurations": ["HeMinstrel", "FixedMcs", "HeMinstrelMobile"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["rate-adaptation"]
+    },
+    "he_bsr": {
+      "ini": "he_bsr/omnetpp.ini",
+      "configurations": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["buffer-status"]
+    },
+    "dense_iot": {
+      "ini": "dense_iot/omnetpp.ini",
+      "configurations": ["AxUl", "AcUl", "AxDl", "AcDl", "AxMixed", "AcMixed"],
+      "phy_profiles": ["legacy", "vht", "he"],
+      "capture": {
+        "interface_patterns": ["**.ap.wlan[*]"]
+      }
+    },
+    "ul_ofdma": {
+      "ini": "ul_ofdma/omnetpp.ini",
+      "configurations": ["ScheduledOnly", "MixedUora", "EqualRus", "EdcaBaseline", "UoraLightContention", "UoraMoreRandomAccessRus"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["ofdma", "uora"],
+      "capture": {
+        "interface_patterns": ["**.ap.wlan[*]"]
+      }
+    },
+    "he_er_su": {
+      "ini": "he_er_su/omnetpp.ini",
+      "configurations": ["ErBss", "CellBoundaryHeSu", "CellBoundaryHeErSu"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["extended-range"]
+    }
+  }
+}

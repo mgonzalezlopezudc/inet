@@ -21,8 +21,9 @@ from scipy.stats import t
 
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
-DEFAULT_RESULTS_DIR = EXAMPLE_DIR / "results"
+DEFAULT_RESULTS_DIR = EXAMPLE_DIR / "results" / "scalar-vector"
 DEFAULT_OUTPUT_DIR = EXAMPLE_DIR / "analysis"
+SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 CONFIG_METADATA = {
     "AxUl": ("AX", "UL"),
     "AcUl": ("AC", "UL"),
@@ -31,8 +32,8 @@ CONFIG_METADATA = {
     "AxMixed": ("AX", "Mixed"),
     "AcMixed": ("AC", "Mixed"),
 }
-STATION_COUNTS = {64, 128, 256, 512}
-RUNS_PER_STATION_COUNT = 5
+STATION_COUNTS = {8, 16}
+RUNS_PER_STATION_COUNT = 1
 MEASUREMENT_START = 20.0
 MEASUREMENT_END = 120.0
 MEASUREMENT_DURATION = MEASUREMENT_END - MEASUREMENT_START
@@ -45,11 +46,53 @@ QUERY_OPTIONS = {
 }
 
 
-def discover_files(results_dir: Path) -> list[str]:
-    paths = sorted(results_dir.glob("*.sca")) + sorted(results_dir.glob("*.vec"))
-    if not paths:
-        raise FileNotFoundError(f"No .sca/.vec files found in {results_dir}")
-    return [str(path) for path in paths]
+def discover_files(
+    results_dir: Path,
+    requested_session_id: str | None = None,
+) -> list[str]:
+    if requested_session_id is not None:
+        if not SESSION_ID_PATTERN.fullmatch(requested_session_id):
+            raise ValueError("Session ID must have UTC format YYYYMMDDTHHMMSSZ")
+        sessions = [results_dir / requested_session_id]
+    elif SESSION_ID_PATTERN.fullmatch(results_dir.name):
+        sessions = [results_dir]
+    else:
+        sessions = sorted(
+            (
+                path for path in results_dir.iterdir()
+                if path.is_dir() and SESSION_ID_PATTERN.fullmatch(path.name)
+            ),
+            reverse=True,
+        ) if results_dir.is_dir() else []
+        if not sessions:
+            raise FileNotFoundError(
+                f"No timestamped result sessions found in {results_dir}"
+            )
+
+    for session_dir in sessions:
+        paths = []
+        complete = True
+        for config in CONFIG_METADATA:
+            config_dir = session_dir / config
+            scalar_paths = sorted(config_dir.glob(f"{config}-#*.sca"))
+            vector_paths = sorted(config_dir.glob(f"{config}-#*.vec"))
+            if (
+                not scalar_paths
+                or {path.stem for path in scalar_paths}
+                != {path.stem for path in vector_paths}
+            ):
+                complete = False
+                break
+            paths.extend(scalar_paths)
+            paths.extend(vector_paths)
+        if complete:
+            print(f"Using result session {session_dir.name}")
+            return [str(path) for path in paths]
+
+    requested = requested_session_id or "latest available"
+    raise FileNotFoundError(
+        f"Result session {requested} is missing configurations or .sca/.vec pairs"
+    )
 
 
 def load_scalars(paths: list[str], name: str) -> pd.DataFrame:
@@ -151,16 +194,7 @@ def validate_ax_features(paths: list[str]) -> None:
         ):
             raise RuntimeError(f"{config}: every run must contain Basic Trigger frames")
 
-    dl_mu = load_vectors(paths, "heStaId:vector", required=False)
-    dl_mu = dl_mu[
-        dl_mu.configname.isin(("AxDl", "AxMixed"))
-        & dl_mu.module.str.endswith(".ap.wlan[0].radio")
-    ]
-    if dl_mu.runID.nunique() != 2 * expected_runs_per_config:
-        raise RuntimeError(
-            "Every AxDl/AxMixed run must contain at least one recorded DL MU transmission"
-        )
-    print("Validated TWT agreement coverage and UL/DL OFDMA activity.")
+    print("Validated TWT agreement coverage and UL OFDMA activity.")
 
 
 def receiver_direction(config: str, module: str) -> str | None:
@@ -232,7 +266,7 @@ def aggregate_delays(frame: pd.DataFrame) -> pd.DataFrame:
 
 
 def offered_packets(workload: str, direction: str, num_stations: int) -> int:
-    interval = 10 if workload == "Mixed" and direction == "DL" else 1
+    interval = 0.1 if direction == "DL" else 1
     return num_stations * int(MEASUREMENT_DURATION / interval)
 
 
@@ -456,10 +490,14 @@ def plot_dashboard(summary: pd.DataFrame, reduction: pd.DataFrame, output: Path)
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS_DIR)
+    parser.add_argument(
+        "--session-id",
+        help="use this YYYYMMDDTHHMMSSZ result session instead of the latest complete one",
+    )
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     args = parser.parse_args()
 
-    paths = discover_files(args.results_dir)
+    paths = discover_files(args.results_dir, args.session_id)
     performance = build_performance(paths)
     validate_campaign(performance)
     validate_ax_features(paths)

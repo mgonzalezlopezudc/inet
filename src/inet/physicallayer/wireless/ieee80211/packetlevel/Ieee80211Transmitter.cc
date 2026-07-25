@@ -339,9 +339,22 @@ const ITransmission *Ieee80211Transmitter::createTransmission(const IRadio *tran
         hePpduLayout = handoff->getPpduLayout();
         if (!hePpduLayout->matches(*heTxVector))
             throw cRuntimeError("HE transmission has a mismatched canonical TXVECTOR/PPDU-layout handoff");
-        for (const auto& user : hePpduLayout->getUsers())
-            requiredSpatialStreams = std::max(requiredSpatialStreams,
-                    user.streamStartIndex + user.numberOfSpatialStreams);
+        const auto& users = hePpduLayout->getUsers();
+        if (hePpduLayout->getPpduFormat() == HE_TRIGGER_BASED_UPLINK) {
+            // An HE-TB packet is emitted by one responding STA. The first
+            // layout user is that local user; any following zero-PSDU users
+            // retain peer stream geometry only for common MU timing. Starting
+            // Spatial Stream places the local STSs within the shared RU and
+            // does not increase this transmitter's antenna requirement.
+            if (!users.empty())
+                requiredSpatialStreams = std::max(requiredSpatialStreams,
+                        users.front().numberOfSpatialStreams);
+        }
+        else {
+            for (const auto& user : users)
+                requiredSpatialStreams = std::max(requiredSpatialStreams,
+                        user.streamStartIndex + user.numberOfSpatialStreams);
+        }
     }
     if (requiredSpatialStreams > transmitter->getAntenna()->getNumAntennas())
         throw cRuntimeError("Number of spatial streams is higher than the number of antennas");

@@ -25,6 +25,7 @@
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRecoveryProcedure.h"
 #include "inet/linklayer/ieee80211/mac/contract/IRateControl.h"
+#include "inet/linklayer/ieee80211/mac/contract/IIeee80211HeRateControl.h"
 #include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
 #include "inet/linklayer/ieee80211/mac/contract/IOriginatorBlockAckAgreementHandler.h"
@@ -41,6 +42,33 @@
 
 namespace inet {
 namespace ieee80211 {
+
+static bool isHeNdpPacket(const Packet *packet)
+{
+    auto request = packet == nullptr ? nullptr :
+            packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
+    return packet != nullptr && packet->getDataLength() == B(0) &&
+            request != nullptr && request->getPpduLayout() != nullptr &&
+            request->getPpduLayout()->isNdp();
+}
+
+static bool isHeTbPacket(const Packet *packet)
+{
+    if (packet == nullptr)
+        return false;
+    auto request = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>();
+    if (request != nullptr && request->getTxVector() != nullptr &&
+            request->getTxVector()->getCommon().getParameters().ppduFormat ==
+                    physicallayer::HE_TRIGGER_BASED_UPLINK)
+        return true;
+    // Preserve the Trigger correlation as the canonical fallback for the two
+    // headerless HE-TB representations: an A-MPDU starts with a delimiter and
+    // an NDP feedback report is empty.
+    return packet->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>() != nullptr &&
+            (packet->getDataLength() == B(0) ||
+             dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
+                     packet->peekAtFront()) != nullptr);
+}
 
 void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
@@ -91,18 +119,14 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
 
 void HeHcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
-    if (auto request = packet->findTag<physicallayer::Ieee80211HeTxVectorReq>()) {
-        if (request->getTxVector() != nullptr &&
-                request->getTxVector()->getCommon().getParameters().ppduFormat ==
-                        physicallayer::HE_TRIGGER_BASED_UPLINK) {
-            if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
-                AccessCategory ac = edca->mapTidToAc(dataHeader->getTid());
-                if (ac >= 0 && ac < 4) {
-                    edca->getEdcaf(ac)->startMuEdcaTimer();
-                }
+    if (isHeTbPacket(packet)) {
+        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+            AccessCategory ac = edca->mapTidToAc(dataHeader->getTid());
+            if (ac >= 0 && ac < 4) {
+                edca->getEdcaf(ac)->startMuEdcaTimer();
             }
-            return;
         }
+        return;
     }
     Hcf::transmissionComplete(packet, header);
 }
@@ -111,6 +135,12 @@ void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
 {
     Enter_Method("originatorProcessTransmittedFrame");
     ASSERT(frameSequenceHandler != nullptr);
+    if (isHeNdpPacket(packet)) {
+        // IEEE 802.11-2024 26.7.3: the sounding NDP has a PHY preamble but no
+        // PSDU, hence no MAC header to enter acknowledgement, BA, or
+        // content-derived packet statistics.
+        return;
+    }
     if (dynamic_cast<const HeUlMuTxOpFs *>(frameSequenceHandler->getFrameSequence()) != nullptr) {
         auto edcaf = edca->getChannelOwner();
         if (edcaf != nullptr)
@@ -161,6 +191,82 @@ void HeHcf::originatorProcessTransmittedControlFrame(const Ptr<const Ieee80211Ma
     Hcf::originatorProcessTransmittedControlFrame(controlHeader, ac);
 }
 
+bool HeHcf::reportHeDlMuTxResult(Packet *packet, AccessCategory ac, bool success)
+{
+    auto heMuTxop = frameSequenceHandler == nullptr ? nullptr :
+            dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence());
+    auto heRateControl = dynamic_cast<IIeee80211HeRateControl *>(dataAndMgmtRateControl);
+    if (packet == nullptr || heMuTxop == nullptr || heRateControl == nullptr)
+        return false;
+
+    if (ac < 0 || ac >= 4)
+        return false;
+    auto edcaf = edca->getEdcaf(ac);
+    for (const auto& allocation : heMuTxop->getActiveAllocations()) {
+        if (std::find(allocation.packets.begin(), allocation.packets.end(), packet) ==
+                allocation.packets.end())
+            continue;
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                packet->peekAtFront<Ieee80211MacHeader>());
+        if (dataHeader == nullptr)
+            return false;
+        int retryCount = dataHeader->getRetry() ?
+                edcaf->getRecoveryProcedure()->getRetryCount(packet, dataHeader) : 0;
+        heRateControl->reportHeTxResult(allocation.staAddress, allocation.mcs,
+                allocation.numberOfSpatialStreams, allocation.ru.toneSize,
+                retryCount, success, success ? packet->getByteLength() : 0);
+        return true;
+    }
+    return false;
+}
+
+void HeHcf::originatorProcessBlockAckResult(
+        const Ptr<const Ieee80211BlockAck>& blockAck,
+        const std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>& ackedFrames,
+        AccessCategory ac)
+{
+    auto heMuTxop = frameSequenceHandler == nullptr ? nullptr :
+            dynamic_cast<const HeDlMuTxOpFs *>(frameSequenceHandler->getFrameSequence());
+    if (heMuTxop == nullptr)
+        return;
+
+    for (const auto& allocation : heMuTxop->getActiveAllocations()) {
+        if (allocation.staAddress != blockAck->getTransmitterAddress())
+            continue;
+        for (auto packet : allocation.packets) {
+            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                    packet->peekAtFront<Ieee80211MacHeader>());
+            if (dataHeader == nullptr)
+                continue;
+            auto key = std::make_pair(dataHeader->getReceiverAddress(),
+                    std::make_pair(dataHeader->getTid(),
+                            SequenceControlField(dataHeader->getSequenceNumber().get(),
+                                    dataHeader->getFragmentNumber())));
+            bool tidCovered = false;
+            if (auto basic = dynamicPtrCast<const Ieee80211BasicBlockAck>(blockAck))
+                tidCovered = dataHeader->getTid() == basic->getTidInfo();
+            else if (auto compressed = dynamicPtrCast<const Ieee80211CompressedBlockAck>(blockAck))
+                tidCovered = dataHeader->getTid() == compressed->getTidInfo();
+            else if (auto multiTid = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(blockAck))
+                for (unsigned int i = 0; i < multiTid->getRecordsArraySize(); ++i)
+                    tidCovered |= dataHeader->getTid() == multiTid->getRecords(i).tid;
+            if (!tidCovered)
+                continue;
+            if (ackedFrames.count(key) != 0)
+                reportHeDlMuTxResult(packet, ac, true);
+            else {
+                // A zero bitmap bit is an unsuccessful MPDU attempt, not an
+                // absence of feedback. Create/increment its retry state before
+                // reporting the exact transmitted HE tuple.
+                auto edcaf = edca->getEdcaf(ac);
+                edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(
+                        packet, dataHeader);
+                reportHeDlMuTxResult(packet, ac, false);
+            }
+        }
+    }
+}
+
 void HeHcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket)
 {
     Enter_Method("originatorProcessReceivedFrame");
@@ -196,7 +302,9 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
             if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(failedHeader)) {
                 edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(failedPacket, dataHeader);
                 retryLimitReached = edcaf->getRecoveryProcedure()->isRetryLimitReached(failedPacket, dataHeader);
-                if (dataAndMgmtRateControl) {
+                bool heResultReported = reportHeDlMuTxResult(
+                        failedPacket, edcaf->getAccessCategory(), false);
+                if (dataAndMgmtRateControl && !heResultReported) {
                     int retryCount = edcaf->getRecoveryProcedure()->getRetryCount(failedPacket, dataHeader);
                     dataAndMgmtRateControl->frameTransmitted(failedPacket, retryCount, false, retryLimitReached);
                 }
@@ -249,6 +357,21 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
 void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
 {
     Enter_Method("transmitFrame");
+    if (isHeNdpPacket(packet)) {
+        // Frame-sequence transmission normally derives the Tx header by
+        // peeking packet content. A sounding NDP is intentionally empty, so
+        // retain a detached header only for the local Tx callback/address
+        // contract, as is already done for triggered NDP feedback.
+        auto ndpHeader = makeShared<Ieee80211DataHeader>();
+        ndpHeader->setType(ST_QOS_NULL);
+        ndpHeader->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+        ndpHeader->setTransmitterAddress(mac->getAddress());
+        ndpHeader->setAddress3(mac->getMib()->bssData.bssid);
+        ndpHeader->setDurationField(SIMTIME_ZERO);
+        ndpHeader->setChunkLength(B(30));
+        tx->transmitFrame(packet, ndpHeader, ifs, this);
+        return;
+    }
     if (mac->getMib()->bssStationData.associationId > 0) {
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {

@@ -255,6 +255,10 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
         }
         if (packet->getDataLength() == b(0)) {
             auto rxVectorInd = packet->findTag<Ieee80211HeRxVectorInd>();
+            const bool soundingNdp = rxVectorInd != nullptr &&
+                    rxVectorInd->getRxVector() != nullptr &&
+                    rxVectorInd->getRxVector()->getCommon().getPpduFormat() ==
+                            HE_SINGLE_USER;
             auto recipientContext = packet->findTag<Ieee80211HeTbRecipientContextInd>();
             const bool nfrpFeedbackNdp = rxVectorInd != nullptr &&
                     rxVectorInd->getRxVector() != nullptr &&
@@ -263,11 +267,10 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
                     recipientContext != nullptr &&
                     recipientContext->getRecipientParameters() != nullptr &&
                     recipientContext->getRecipientParameters()->ndpFeedbackReport;
-            if (nfrpFeedbackNdp && mib->qos) {
-                // NFRP feedback is intentionally headerless: its responder
-                // identity and status are carried by RXVECTOR metadata. Route
-                // it to the active HCF receive collection before the generic
-                // empty-packet discard path.
+            if ((soundingNdp || nfrpFeedbackNdp) && mib->qos) {
+                // HE sounding and NFRP feedback NDPs are intentionally
+                // headerless. Route their RXVECTOR metadata to HCF before the
+                // generic empty-packet discard path.
                 processLowerFrame(packet, nullptr);
                 return;
             }
