@@ -35,23 +35,25 @@ the common warm-up definition.
 
 | Analysis | Evidence required before accepting the plot | Interpretation |
 |---|---|---|
-| [Dynamic fragmentation](fragmentation.md) | MAC-frame bytes and measured ACK airtime | Fragmentation changes the transmitted-size distribution and acknowledgment work; dynamic and static policies can be identical when given the same threshold. |
-| [UORA](uora.md) | Nonzero per-STA attempts and successes for every condition | MixedUora is reported as a separate three-STA reference; under the matched heavy load, five RA-RUs record about 9× the successful UORA transmissions and higher success fairness than one RA-RU. |
-| [TWT](twt.md) | Integrated radio power and TWT delivery at least 95% of baseline | Energy savings are accepted only when they are not obtained by dropping the workload. |
-| [Rate adaptation](rate-adaptation.md) | Selected MCS/NSS, EWMA probability, and actual TX outcome | A changing MCS is adaptation evidence only when paired with transmission outcomes. |
-| [Preamble puncturing](puncturing.md) | Runtime mask 0 → 2 → 0 and aligned RU placement | Puncturing avoids a busy secondary 20 MHz channel but sacrifices usable spectrum. |
-| [MU-MIMO](mu-mimo.md) | Multiple users in a PPDU and disjoint spatial-stream ranges | Concurrent streams, not throughput alone, establish that MU-MIMO occurred. |
-| [BSS coloring](bss-coloring.md) | Correct color classification, OBSS/PD decisions, and concurrent AP airtime | A moving OBSS makes nearby thresholds yield a strict disabled < conservative < enabled < aggressive goodput ladder (6.83–7.61 Mbit/s), while the same-color control reproduces disabled. |
-| [Channel width](channel-width.md) | Saturated workload and per-run goodput/delay | Wider channels increase capacity here, but scaling is not expected to be perfectly linear. |
-| [DL schedulers](dl-schedulers.md) | Separate symmetric/asymmetric workloads | Scheduler conclusions depend on load shape; asymmetric fairness is normalized by offered load. |
-| [BSR](bsr.md) | AP-reported and AP-scheduled backlog timelines | BSR is scheduling state, not application goodput; freshness controls whether the AP view is usable. |
+| [Dynamic fragmentation](../mac_features/dynamic_fragmentation/walkthrough.md) | MAC-frame bytes and measured ACK airtime | Fragmentation changes the transmitted-size distribution and acknowledgment work; dynamic and static policies can be identical when given the same threshold. |
+| [UORA](../ul_ofdma/walkthrough.md) | Nonzero per-STA attempts and successes for every condition | MixedUora is reported as a separate three-STA reference; under the matched heavy load, five RA-RUs record about 9× the successful UORA transmissions and higher success fairness than one RA-RU. |
+| [TWT](../twt/walkthrough.md) | Integrated radio power and TWT delivery at least 95% of baseline | Energy savings are accepted only when they are not obtained by dropping the workload. |
+| [Rate adaptation](../he_rate_adaptation/walkthrough.md) | Selected MCS/NSS, EWMA probability, and actual TX outcome | A changing MCS is adaptation evidence only when paired with transmission outcomes. |
+| [Preamble puncturing](../he_features/walkthrough.md) | Runtime mask 0 → 2 → 0 and aligned RU placement | Puncturing avoids a busy secondary 20 MHz channel but sacrifices usable spectrum. |
+| [MU-MIMO](../multi_user/mu_mimo/walkthrough.md) | Multiple users in a PPDU and disjoint spatial-stream ranges | Concurrent streams, not throughput alone, establish that MU-MIMO occurred. |
+| [BSS coloring](../bss_coloring/walkthrough.md) | Correct color classification, OBSS/PD decisions, and concurrent AP airtime | A moving OBSS makes nearby thresholds yield more spatial reuse in the retained scenario, while the same-color control reproduces disabled. |
+| [Channel width](../he_channel_widths/walkthrough.md) | Saturated workload and per-run goodput/delay | Wider channels increase capacity here, but scaling is not expected to be perfectly linear. |
+| [DL schedulers](../dl_ofdma/walkthrough.md) | Separate symmetric/asymmetric workloads | Scheduler conclusions depend on load shape; asymmetric fairness is normalized by offered load. |
+| [BSR](../he_bsr/walkthrough.md) | AP-reported and AP-scheduled backlog timelines | BSR is scheduling state, not application goodput; freshness controls whether the AP view is usable. |
 | [Dense IoT](../dense_iot/README.md) | Matched AX/AC campaigns across station counts, workloads, delivery, delay, and energy | This broader campaign has its own runner and result analyzer because each configuration combines station-count iterations with repetitions. |
 
 Machine-readable plotted summaries are in [`metrics.json`](metrics.json). Each PNG has a `.png.json` provenance sidecar containing the exact inputs, SHA-256 hashes, filters, measurement window, aggregation rule, and source revision.
 `render_walkthrough_results.py` turns those session-bound metrics and figures
 into a compact marker-bounded table and plot link inside each walkthrough's
 scalar/vector section; it does not replace the authored query, aggregation,
-and interpretation text.
+and interpretation text. The feature-specific analysis narratives are
+consolidated into those walkthroughs so the configuration, evidence, verdict,
+and debugging guidance remain together.
 
 ## Reproduce and verify
 

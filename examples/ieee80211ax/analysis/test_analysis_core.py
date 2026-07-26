@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import math
 import sys
 import tempfile
@@ -29,6 +30,7 @@ from run_campaign import (
     run_jobs,
     session_id,
 )
+import summarize_results
 
 
 class AnalysisCoreTest(unittest.TestCase):
@@ -91,6 +93,57 @@ class AnalysisCoreTest(unittest.TestCase):
         manifest["evidence_contracts"] = {}
         with self.assertRaises(RuntimeError):
             validate_evidence_contracts(manifest)
+
+    def test_summarizer_accepts_manifest_and_group(self):
+        manifest_path = Path("/tmp/scenario-manifest.json")
+        manifest = {
+            "groups": {"sample": {}},
+            "evidence_contracts": {"sample": []},
+        }
+        with (
+            patch.object(
+                sys,
+                "argv",
+                [
+                    "summarize_results.py",
+                    "--manifest",
+                    str(manifest_path),
+                    "--group",
+                    "sample",
+                    "--session-id",
+                    "20260725T120000Z",
+                ],
+            ),
+            patch.object(
+                summarize_results,
+                "load_manifest",
+                return_value=manifest,
+            ) as load_manifest,
+            patch.object(
+                summarize_results,
+                "resolve_manifest_sessions",
+                return_value=({}, {"sample": "not run"}),
+            ) as resolve_sessions,
+            patch.object(
+                summarize_results,
+                "atomic_write_text",
+            ) as atomic_write,
+        ):
+            summarize_results.main()
+
+        load_manifest.assert_called_once_with(manifest_path)
+        self.assertEqual(
+            set(resolve_sessions.call_args.args[0]["groups"]), {"sample"}
+        )
+        payload = json.loads(atomic_write.call_args.args[1])
+        self.assertEqual(
+            payload["_provenance"]["requested_session_id"],
+            "20260725T120000Z",
+        )
+        self.assertEqual(
+            payload["_provenance"]["groups"]["sample"]["status"],
+            "NOT RUN",
+        )
 
 
 class CampaignRunnerTest(unittest.TestCase):

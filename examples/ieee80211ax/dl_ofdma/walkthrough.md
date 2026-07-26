@@ -160,6 +160,10 @@ observations: the scheduler results separate at 1.5 and 2 ms, while the paired
 aggregate goodput and pooled p95 values are equal at 2.5 ms and longer
 intervals. Pooled p95 combines samples from flows with different packet sizes
 and must not be read as a per-flow percentile.
+For the asymmetric workload, Jain fairness is computed after dividing each
+station's goodput by its offered rate. This prevents a scheduler from appearing
+unfair merely because it respects unequal demand; it does not make one
+scheduling objective universally preferable.
 
 ### Regeneration and result inspection
 

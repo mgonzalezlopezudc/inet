@@ -123,6 +123,8 @@ opp_scavetool query -l \
 Vector samples are not independent repetitions. Retry diagnosis must include
 the AP HCF `packetSentToPeerWithRetry` and retry-limit drop vectors at matched
 timestamps; control-frame counts are not a substitute.
+The analysis window begins at 0.5 s, after normal traffic starts at 0.3 s, so
+the representative controller timeline excludes its initial settling phase.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-rate -->
 ### Generated scalar/vector plot and table

@@ -186,6 +186,15 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 patch.object(wifi_analysis, "run_command") as run,
             ):
                 wifi_analysis.report_command(args)
+            summarizer = run.call_args_list[0].args[0]
+            self.assertIn("summarize_results.py", summarizer[1])
+            self.assertNotIn("_ax_scalar_adapter.py", summarizer[1])
+            self.assertEqual(
+                summarizer[summarizer.index("--manifest") + 1], str(filtered)
+            )
+            self.assertEqual(
+                summarizer[summarizer.index("--group") + 1], "twt"
+            )
             evaluator = run.call_args_list[2].args[0]
             self.assertEqual(
                 evaluator[evaluator.index("--manifest") + 1], str(filtered)

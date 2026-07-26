@@ -128,6 +128,9 @@ Each station's piecewise-constant `powerConsumption:vector` is integrated over
 `[10,100)` s, station integrals are summed per run, and the sum is divided by
 server-delivered bits. Statistics are computed per run before the five-run
 mean and two-sided 95% Student-t interval.
+The state raster uses the recorded radio-mode enumeration—off, sleep,
+receiver, transmitter, transceiver, and switching—rather than treating its
+numeric values as an arbitrary continuous quantity.
 
 | Configuration | Energy per delivered bit | Delivered bytes | Goodput |
 |---|---:|---:|---:|

@@ -123,6 +123,11 @@ opp_scavetool query -l \
 The plot provenance lists all input hashes. Interpret tone offset, tone size,
 STA ID, and mask only at aligned timestamps. Five runs support variability of
 goodput; vector samples within a run are not repetitions.
+For the runtime treatment, the HCF resolves the mask when scheduling: the AP
+records mask 0 before the secondary-channel interferer, mask 2 while it is
+active, and mask 0 afterward. The retained PCAP does not expose enough HE PHY
+state to establish that transition, so mask timing and RU placement remain
+model-vector evidence.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-puncturing -->
 ### Generated scalar/vector plot and table

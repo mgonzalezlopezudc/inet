@@ -28,6 +28,9 @@ at `0.2 s`, then offers downlink UDP traffic from `0.3 s`; the analyzed window
 is `0.3–0.43 s`. [omnetpp.ini](omnetpp.ini) changes channel number, band name,
 receiver bandwidth, sensitivity, and fixed bitrate as a consistent width
 bundle. There is no mobility or external interferer.
+The measured flows use 1,000-byte packets at 0.25 ms intervals. This keeps all
+widths backlogged while reducing the tiny-packet overhead that would otherwise
+obscure width scaling.
 
 ```text
 server -- AP ~~ {host[0], host[1], host[2], host[3]}

@@ -452,9 +452,7 @@ def report_command(args: argparse.Namespace) -> None:
         ax_analysis = scalar_manifest.parent
         run_command([
             sys.executable,
-            str(ANALYSIS_ROOT / "_ax_scalar_adapter.py"),
-            "--analysis-dir",
-            str(ax_analysis),
+            str(ax_analysis / "summarize_results.py"),
             "--manifest",
             str(filtered_manifest),
             "--group",

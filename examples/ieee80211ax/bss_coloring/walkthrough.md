@@ -33,6 +33,13 @@ through the configured thresholds. Both servers offer jittered downlink UDP
 traffic after a Block Ack warm-up. All material assignments are in
 [omnetpp.ini](omnetpp.ini).
 
+More precisely, AP 1 stays at `(200,250)` m while AP 2 starts at
+`(260,250)` m and moves at 200 m/s, increasing AP separation from 120 m to
+250 m during the measurement window. The moving stations keep their wanted
+AP-to-STA distances fixed. The radio-medium transmission-duration cache is
+raised to 100 ms because this load can produce aggregates longer than the
+generic 10 ms default.
+
 ```text
 server1 -- AP1 ~~ sta1[0..1]     sta2[0..1] ~~ AP2 -- server2
                   stationary       moving BSS 2 →
@@ -142,6 +149,8 @@ Values are per-run means ± two-sided 95% Student-t CIs over five independent
 seeds. Goodput is summed application bytes per window; fairness is calculated
 per run before the CI; concurrent airtime is integrated per run. Overlapping
 goodput intervals do not establish a strict goodput order.
+Concurrent AP airtime selects `transmissionState == 2`, the recorded
+`TRANSMITTING` enumeration value; it is not inferred from packet counts.
 
 For the dual-NAV boundary:
 

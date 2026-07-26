@@ -146,6 +146,11 @@ other conditions have eight stations and 100-byte packets. Only
 load, packet size, scheduler, seeds, and run duration fixed while changing the
 RA-RU count.
 
+The plot generator fails closed if any retained run records no attempts, or if
+all runs of a condition record zero successes. This makes missing UORA
+instrumentation or a completely inactive condition a generation error rather
+than an empty-looking chart.
+
 ### Scalar and vector interpretation by configuration
 
 The UORA attempt/success signals have `count` scalar recorders but no

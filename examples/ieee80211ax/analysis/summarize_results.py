@@ -54,12 +54,31 @@ def time_weighted_step_mean(times, values, measurement) -> float:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument(
+        "--group",
+        help="summarize one manifest group (default: every group)",
+    )
     parser.add_argument(
         "--session-id",
         help="use this YYYYMMDDTHHMMSSZ result session instead of the latest complete one",
     )
     args = parser.parse_args()
-    manifest = load_manifest(DEFAULT_MANIFEST)
+    manifest = load_manifest(args.manifest)
+    if args.group is not None and args.group not in manifest["groups"]:
+        parser.error(
+            f"unknown group {args.group!r}; choose from: "
+            + ", ".join(sorted(manifest["groups"]))
+        )
+    if args.group is not None:
+        manifest = {
+            **manifest,
+            "groups": {args.group: manifest["groups"][args.group]},
+            "evidence_contracts": {
+                args.group: manifest["evidence_contracts"][args.group]
+            },
+        }
+    selected_groups = list(manifest["groups"])
     output = REPOSITORY_ROOT / "examples/ieee80211ax/analysis/metrics.json"
     selected_sessions, unavailable_sessions = resolve_manifest_sessions(
         manifest, args.session_id
@@ -73,7 +92,7 @@ def main() -> None:
             "groups": {},
         }
     }
-    for group_name in manifest["groups"]:
+    for group_name in selected_groups:
         if group_name not in selected_sessions:
             reason = unavailable_sessions[group_name]
             payload["_provenance"]["groups"][group_name] = {

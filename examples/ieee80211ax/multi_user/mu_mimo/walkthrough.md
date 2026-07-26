@@ -148,6 +148,10 @@ population-level real-world capacity claim.
 In run 0, each of the four AP allocation vectors has 727 records:
 `heRuToneSize=242` throughout; station IDs are 1-3; each user has one stream;
 starting indices are 0-2. These directly expose the modeled spatial allocation.
+The performance comparison is accepted only together with the structural
+gate: at least one PPDU must serve multiple users, and every user's half-open
+spatial-stream interval must be disjoint. Goodput alone is not evidence that
+MU-MIMO occurred.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-mimo -->
 ### Generated scalar/vector plot and table

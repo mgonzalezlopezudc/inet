@@ -133,6 +133,11 @@ for time weighting. These are five independent run summaries, not confidence
 intervals over vector samples. The comparison proves different AP-recorded
 queue-state trajectories, not a throughput effect or a report-to-allocation
 join.
+The two bursts make the fresh-condition backlog fill, drain, and refill.
+Scheduled bytes should follow nonzero reports, while quiet gaps should allow
+the reported state to drain. These AP telemetry vectors are scheduling-state
+observations, not delivered-payload counts or exact queue occupancy between
+events.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bsr -->
 ### Generated scalar/vector plot and table

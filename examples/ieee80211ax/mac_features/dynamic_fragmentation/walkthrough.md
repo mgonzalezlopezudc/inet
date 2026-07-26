@@ -125,6 +125,12 @@ five runs, not from vector samples. Fragmentation reduces frame size and adds
 ACK overhead; the fragmented rows deliver four or five fewer packets per run.
 The equality of dynamic and static rows is direct negative evidence for this
 scenario's ability to demonstrate opportunity-dependent sizing.
+The unfragmented row is therefore the essential contrast: it demonstrates
+that the smaller transmitted frames and changed acknowledgment work come from
+fragmentation. The retained comparison exercises the configured
+capability-gated path and validates fragmentation mechanics; it does not prove
+that level-1 support was negotiated or demonstrate channel-adaptive fragment
+sizing.
 The declared measurement window is 0.3--2.0 s; the initial setup period is
 excluded as warm-up.
 
