@@ -21,7 +21,6 @@ import subprocess
 import math
 import argparse
 import hashlib
-import shlex
 import sys
 import tempfile
 from pathlib import Path
@@ -49,13 +48,13 @@ MANIFEST_PATH = None
 MANIFEST_HISTORY_DIR = None
 SUITE_NAME = None
 SUITE_DESCRIPTOR_PATH = None
+SCALAR_VECTOR_MANIFEST = None
 GENERATED_MARKER = None
 GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
 GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
-CAPTURE_INTERFACE_PATTERNS = None
 SUITE_SCENARIOS = {}
 MANIFEST_SCHEMA_VERSION = 2
-SUPPORTED_MANIFEST_SCHEMAS = {1, 2}
+SUPPORTED_MANIFEST_SCHEMAS = {2}
 EVIDENCE_STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT RUN"}
 TIMELINE_LIMIT = 16
 
@@ -66,18 +65,19 @@ def configure_suite(suite, output_dir):
     """Configure the analyzer from a declarative suite descriptor."""
     global EXAMPLE_ROOT, ANALYSIS_OUTPUT_DIR, MANIFEST_PATH
     global MANIFEST_HISTORY_DIR, GENERATED_MARKER, GENERATED_BEGIN
-    global GENERATED_END, CAPTURE_INTERFACE_PATTERNS, SUITE_SCENARIOS
-    global SUITE_NAME, SUITE_DESCRIPTOR_PATH, subdirs_configs
+    global GENERATED_END, SUITE_SCENARIOS
+    global SUITE_NAME, SUITE_DESCRIPTOR_PATH, SCALAR_VECTOR_MANIFEST
+    global subdirs_configs
     EXAMPLE_ROOT = Path(suite.example_root)
     ANALYSIS_OUTPUT_DIR = Path(output_dir)
-    MANIFEST_PATH = ANALYSIS_OUTPUT_DIR / "pcap_statistics_manifest.json"
-    MANIFEST_HISTORY_DIR = ANALYSIS_OUTPUT_DIR / "pcapmanifests"
+    MANIFEST_PATH = ANALYSIS_OUTPUT_DIR / "capture_manifest.json"
+    MANIFEST_HISTORY_DIR = ANALYSIS_OUTPUT_DIR / "capture_manifests"
     SUITE_NAME = suite.suite
     SUITE_DESCRIPTOR_PATH = Path(suite.descriptor_path)
+    SCALAR_VECTOR_MANIFEST = suite.scalar_vector_manifest
     GENERATED_MARKER = suite.generated_marker
     GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
     GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
-    CAPTURE_INTERFACE_PATTERNS = tuple(suite.capture["interface_patterns"])
     SUITE_SCENARIOS = dict(suite.scenarios)
     subdirs_configs = {
         name: list(scenario["configurations"])
@@ -727,61 +727,95 @@ def scalar_metadata(path):
     }
 
 
-def run_simulation(config_name, subdir, run_number, session_id):
-    print(f"Generating fresh PCAPng input for {subdir} - {config_name}, run {run_number}...")
-    ini_file = find_ini_file_for_config(subdir, config_name)
-    res_dir = (EXAMPLE_ROOT / subdir / "results" /
-               "packet-statistics" / session_id / config_name)
-    res_dir.mkdir(parents=True, exist_ok=True)
-
-    # UL-OFDMA and dense-IoT packet statistics use the AP observation point
-    # exclusively. Avoid recording the same dense exchange at every STA.
-    scenario_capture = SUITE_SCENARIOS.get(subdir, {}).get("capture", {})
-    interface_patterns = scenario_capture.get(
-        "interface_patterns", CAPTURE_INTERFACE_PATTERNS
-    )
-    if interface_patterns:
-        pcap_recording = [
-            f"--{pattern}.recordPcap=true"
-            for pattern in interface_patterns
-        ]
+def scalar_vector_result_directory(subdir, config_name, session_id):
+    """Return the shared campaign directory for a mapped scenario/config."""
+    scenario = SUITE_SCENARIOS.get(subdir, {})
+    group_name = scenario.get("scalar_vector_group")
+    manifest_path = scenario.get("scalar_vector_manifest")
+    if manifest_path is not None:
+        manifest_path = REPOSITORY_ROOT / manifest_path
     else:
-        pcap_recording = [
-            "--**.ap.wlan[*].recordPcap=true"
-            if subdir in {"ul_ofdma", "dense_iot"}
-            else "--**.wlan[*].recordPcap=true"
-        ]
-    relative_ini = ini_file.relative_to(REPOSITORY_ROOT)
-    cmd = [
-        "bin/inet", "-u", "Cmdenv", "-f", str(relative_ini), "-c", config_name, "-r", str(run_number),
-        *pcap_recording,
-        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
-        "--**.wlan[*].pcapRecorder[*].verbose=false",
-        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
-        "--**.checksumMode=\"computed\"", "--**.fcsMode=\"computed\"",
-        "--**.scalar-recording=true",
-        "--**.vector-recording=false",
-        f"--result-dir={res_dir}"
-    ]
-    print("RUN", shlex.join(cmd), flush=True)
-    proc = subprocess.run(cmd, cwd=str(REPOSITORY_ROOT), check=False,
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    (res_dir / "cmdenv.stdout").write_text(proc.stdout)
-    (res_dir / "cmdenv.stderr").write_text(proc.stderr)
-    if proc.returncode != 0:
-        raise RuntimeError(f"Simulation failed for {subdir}/{config_name} with exit status {proc.returncode}; "
-                           f"see {res_dir.relative_to(REPOSITORY_ROOT)}/cmdenv.stderr")
+        manifest_path = SCALAR_VECTOR_MANIFEST
+    if not group_name or manifest_path is None:
+        raise RuntimeError(
+            f"{subdir}: no scalar/vector result mapping is available"
+        )
+    document = load_json_without_duplicates(Path(manifest_path))
+    group = document["groups"][group_name]
+    entry = next(
+        (
+            item for item in group["conditions"]
+            if item["config"] == config_name
+        ),
+        None,
+    )
+    if entry is None:
+        raise RuntimeError(
+            f"{subdir}/{config_name}: configuration is not in scalar/vector "
+            f"group {group_name}"
+        )
+    return (
+        REPOSITORY_ROOT
+        / entry.get("result_dir", group["result_dir"])
+        / session_id
+        / config_name
+    )
 
-    pcap_files = sorted(path for path in res_dir.iterdir()
-                        if path.is_file() and path.suffix in (".pcap", ".pcapng") and ".wlan" in path.name)
-    scalar_files = sorted(res_dir.glob("*.sca"))
+
+def discover_run_captures(result_directory, config_name, run_number):
+    all_captures = sorted(
+        path for path in Path(result_directory).iterdir()
+        if path.is_file()
+        and path.suffix in (".pcap", ".pcapng")
+        and ".wlan" in path.name
+    )
+    run_pattern = re.compile(
+        rf"^{re.escape(config_name)}(?:-[^#]+)?-#{run_number}"
+    )
+    captures = [
+        path for path in all_captures
+        if run_pattern.match(path.name)
+    ]
+    unexpected = [
+        path.name for path in all_captures
+        if path not in captures
+    ]
+    if unexpected:
+        raise RuntimeError(
+            f"Unexpected captures from another run in {result_directory}: "
+            + ", ".join(unexpected)
+        )
+    return captures
+
+
+def index_simulation_result(config_name, subdir, run_number, session_id):
+    """Index captures already produced by the shared multi-run campaign."""
+    res_dir = scalar_vector_result_directory(
+        subdir, config_name, session_id
+    )
+    if not res_dir.is_dir():
+        raise RuntimeError(
+            f"Shared campaign result directory does not exist: {res_dir}"
+        )
+    pcap_files = discover_run_captures(
+        res_dir, config_name, run_number
+    )
+    scalar_files = sorted(
+        res_dir.glob(f"{config_name}*-#{run_number}.sca")
+    )
     if not pcap_files or len(scalar_files) != 1:
-        raise RuntimeError(f"Expected wireless captures and one scalar file in {res_dir}")
+        raise RuntimeError(
+            f"Expected run-{run_number} wireless captures and one scalar "
+            f"file in {res_dir}"
+        )
     for path in pcap_files:
         validate_capture_decode(path)
     scalar = scalar_metadata(scalar_files[0])
     if scalar["configname"] != config_name or scalar["runnumber"] != run_number:
-        raise RuntimeError(f"Scalar metadata does not match {config_name} run {run_number}")
+        raise RuntimeError(
+            f"Scalar metadata does not match {config_name} run {run_number}"
+        )
+    ini_file = find_ini_file_for_config(subdir, config_name)
     return {
         "subdir": subdir,
         "config": config_name,
@@ -790,9 +824,9 @@ def run_simulation(config_name, subdir, run_number, session_id):
         "simulation_time_limit_s": get_sim_time_limit(subdir, config_name),
         "ini_file": str(ini_file.relative_to(REPOSITORY_ROOT)),
         "ini_sha256": sha256_file(ini_file),
-        "command": cmd,
-        "command_shell": shlex.join(cmd),
-        "exit_status": proc.returncode,
+        "command": None,
+        "command_shell": None,
+        "exit_status": 0,
         "result_directory": str(res_dir.relative_to(REPOSITORY_ROOT)),
         "scalar_file": scalar["path"],
         "scalar": scalar,
@@ -843,7 +877,11 @@ def publish_capture_manifest(manifest):
     return history
 
 
-def build_capture_manifest(selected_subdirs, run_number, requested_session_id=None):
+def build_capture_manifest(
+    selected_subdirs,
+    run_number,
+    requested_session_id=None,
+):
     revision, source_diff_sha256 = capture_source_state()
     session_id = requested_session_id or datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     if not SESSION_ID_PATTERN.fullmatch(session_id):
@@ -851,10 +889,15 @@ def build_capture_manifest(selected_subdirs, run_number, requested_session_id=No
     if _history_path(session_id).exists():
         raise FileExistsError(f"Capture manifest session already exists: {session_id}")
     for subdir in selected_subdirs:
-        result_root = (EXAMPLE_ROOT / subdir /
-                       "results" / "packet-statistics" / session_id)
-        if result_root.exists():
-            raise FileExistsError(f"Capture result session already exists: {result_root}")
+        result_root = (
+            scalar_vector_result_directory(
+                subdir, subdirs_configs[subdir][0], session_id
+            ).parent
+        )
+        if not result_root.exists():
+            raise FileNotFoundError(
+                f"Shared campaign result session does not exist: {result_root}"
+            )
     manifest = {
         "schema_version": MANIFEST_SCHEMA_VERSION,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -872,7 +915,11 @@ def build_capture_manifest(selected_subdirs, run_number, requested_session_id=No
     }
     for subdir in selected_subdirs:
         for config_name in subdirs_configs[subdir]:
-            manifest["entries"].append(run_simulation(config_name, subdir, run_number, session_id))
+            manifest["entries"].append(
+                index_simulation_result(
+                    config_name, subdir, run_number, session_id
+                )
+            )
     publish_capture_manifest(manifest)
     return manifest
 
@@ -932,14 +979,9 @@ def validate_entry_binding(entry, manifest_session):
     subdir = entry.get("subdir")
     config = entry.get("config")
     run_number = entry.get("run_number")
-    expected = (
-        EXAMPLE_ROOT.relative_to(REPOSITORY_ROOT)
-        / str(subdir)
-        / "results"
-        / "packet-statistics"
-        / str(manifest_session)
-        / str(config)
-    )
+    expected = scalar_vector_result_directory(
+        subdir, config, manifest_session
+    ).relative_to(REPOSITORY_ROOT)
     declared = Path(str(entry.get("result_directory", "")))
     if declared != expected:
         errors.append(
@@ -948,7 +990,7 @@ def validate_entry_binding(entry, manifest_session):
 
     scalar = entry.get("scalar", {})
     scalar_path = Path(str(scalar.get("path", "")))
-    if scalar_path.parent != expected:
+    if scalar_path.parent != declared:
         errors.append("scalar path is outside the declared result directory")
     if scalar.get("configname") != config:
         errors.append("scalar configname does not match entry config")
@@ -959,7 +1001,7 @@ def validate_entry_binding(entry, manifest_session):
 
     for capture in entry.get("captures", []):
         capture_path = Path(str(capture.get("path", "")))
-        if capture_path.parent != expected:
+        if capture_path.parent != declared:
             errors.append(
                 "capture path is outside the declared result directory: "
                 f"{capture_path}"
@@ -973,7 +1015,7 @@ def load_and_validate_manifest(selected_subdirs, run_number, requested_session_i
         raise RuntimeError(f"Reuse requested but {manifest_path.relative_to(REPOSITORY_ROOT)} does not exist")
     manifest = load_json_without_duplicates(manifest_path)
     errors = []
-    schema_version = manifest_schema_version(manifest)
+    manifest_schema_version(manifest)
     if requested_session_id is not None and manifest.get("session_id") != requested_session_id:
         errors.append("manifest session does not match --session-id")
     if not SESSION_ID_PATTERN.fullmatch(str(manifest.get("session_id", ""))):
@@ -988,8 +1030,7 @@ def load_and_validate_manifest(selected_subdirs, run_number, requested_session_i
         "inet_library_sha256": sha256_file(inet_library_path()),
         "tshark_version": tshark_version(),
     }
-    if schema_version == 2:
-        current_values["capinfos_version"] = capinfos_version()
+    current_values["capinfos_version"] = capinfos_version()
     for field, current in current_values.items():
         if manifest.get(field) != current:
             errors.append(f"{field} is stale")
@@ -1017,19 +1058,18 @@ def load_and_validate_manifest(selected_subdirs, run_number, requested_session_i
             captures = entry.get("captures", [])
             if not captures:
                 errors.append(f"empty capture list for {subdir}/{config_name}")
-            if schema_version == 2:
-                errors.extend(validate_entry_binding(
-                    entry, manifest.get("session_id")
-                ))
-                scalar = entry.get("scalar", {})
-                try:
-                    scalar_path = repository_path(scalar.get("path", ""))
-                    actual_scalar = scalar_metadata(scalar_path)
-                    for field in ("sha256", "configname", "runnumber", "seedset", "replication"):
-                        if scalar.get(field) != actual_scalar[field]:
-                            errors.append(f"scalar {field} changed for {subdir}/{config_name}")
-                except (OSError, RuntimeError, TypeError, ValueError) as error:
-                    errors.append(str(error))
+            errors.extend(validate_entry_binding(
+                entry, manifest.get("session_id")
+            ))
+            scalar = entry.get("scalar", {})
+            try:
+                scalar_path = repository_path(scalar.get("path", ""))
+                actual_scalar = scalar_metadata(scalar_path)
+                for field in ("sha256", "configname", "runnumber", "seedset", "replication"):
+                    if scalar.get(field) != actual_scalar[field]:
+                        errors.append(f"scalar {field} changed for {subdir}/{config_name}")
+            except (OSError, RuntimeError, TypeError, ValueError) as error:
+                errors.append(str(error))
             for capture in captures:
                 try:
                     path = repository_path(capture["path"])
@@ -1041,10 +1081,9 @@ def load_and_validate_manifest(selected_subdirs, run_number, requested_session_i
                     continue
                 try:
                     validate_capture_decode(path)
-                    if schema_version == 2:
-                        actual_metadata = capture_metadata(path)
-                        if capture.get("metadata") != actual_metadata:
-                            errors.append(f"capture metadata changed: {capture['path']}")
+                    actual_metadata = capture_metadata(path)
+                    if capture.get("metadata") != actual_metadata:
+                        errors.append(f"capture metadata changed: {capture['path']}")
                 except RuntimeError as error:
                     errors.append(str(error))
     if errors:
@@ -1835,7 +1874,7 @@ def get_packet_color(pt):
     r, g, b = colorsys.hls_to_rgb(h / 360.0, l / 100.0, s / 100.0)
     return matplotlib.colors.to_hex((r, g, b))
 
-def generate_stacked_bar_plot(config_results, subdir, color_map):
+def generate_stacked_bar_plot(config_results, subdir, color_map, output_dir):
     # Filter configs that have global stats
     valid_configs = []
     for cfg_name in sorted(config_results.keys()):
@@ -1917,56 +1956,35 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
 
     plt.tight_layout(rect=[0.02, 0.27, 0.98, 0.95])
 
-    # Publish PCAP figures in the suite's shared analysis figure tree.
-    plot_path = (
-        EXAMPLE_ROOT / "analysis" / "figures" / subdir /
-        "packet_statistics.png"
-    )
+    plot_path = Path(output_dir) / "packet_statistics.png"
     plot_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(str(plot_path), dpi=150, bbox_inches='tight')
     plt.close()
     return plot_path
 
 
-def walkthrough_packet_plot_path(subdir):
-    """Return the shared PCAP figure path relative to its walkthrough."""
+def walkthrough_packet_plot_path(subdir, plot_path):
+    """Return a generated PCAP figure path relative to its walkthrough."""
     walkthrough_dir = EXAMPLE_ROOT / subdir
-    analysis_plot_path = (
-        EXAMPLE_ROOT / "analysis" / "figures" / subdir /
-        "packet_statistics.png"
-    )
     return Path(os.path.relpath(
-        analysis_plot_path,
+        plot_path,
         start=walkthrough_dir,
     )).as_posix()
 
 
 def write_packet_plot_provenance(plot_path, config_results, subdir, manifest):
     """Bind a packet-statistics figure to its capture session and semantics."""
-    entries = [
-        {
-            "config": entry["config"],
-            "run_number": entry["run_number"],
-            "seed_set": entry["seed_set"],
-            "captures": entry["captures"],
-        }
-        for entry in manifest["entries"]
-        if entry["subdir"] == subdir
-    ]
     payload = {
         "schema_version": 1,
-        "figure": str(plot_path.relative_to(REPOSITORY_ROOT)),
         "figure_sha256": sha256_file(plot_path),
         "capture_session_id": manifest["session_id"],
         "repository_revision": manifest["repository_revision"],
         "suite": manifest["suite"],
         "suite_descriptor": manifest["suite_descriptor"],
         "analysis_script_sha256": manifest["analysis_script_sha256"],
-        "capture_manifest": manifest["_selected_manifest"],
         "tshark_version": manifest["tshark_version"],
         "capinfos_version": manifest.get("capinfos_version"),
         "scenario": subdir,
-        "entries": entries,
         "configuration_observation_counts": {
             config: result["global"]["total"]
             for config, result in sorted(config_results.items())
@@ -2276,11 +2294,15 @@ def timeline_markdown(timeline):
     return "".join(lines)
 
 
-def generate_markdown_tables(config_results, subdir, checks, manifest):
+def generate_markdown_tables(
+    config_results, subdir, checks, manifest, generated_plot_path
+):
     if not config_results:
         return ""
 
-    plot_path = walkthrough_packet_plot_path(subdir)
+    plot_path = walkthrough_packet_plot_path(
+        subdir, generated_plot_path
+    )
     md = []
     md.append("### Generated PCAP plots and tables\n")
     md.append(
@@ -2559,7 +2581,7 @@ def update_walkthrough_file(subdir, md_content):
 
 def build_argument_parser(subdir_choices=None):
     parser = argparse.ArgumentParser(
-        description="Generate reproducible IEEE 802.11 packet statistics"
+        description="Analyze PCAPs recorded by a shared IEEE 802.11 campaign"
     )
     parser.add_argument(
         "--suite",
@@ -2568,7 +2590,11 @@ def build_argument_parser(subdir_choices=None):
         help="suite descriptor under examples/ieee80211/analysis/suites",
     )
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--generate", action="store_true", help="run fresh Cmdenv simulations and write a manifest")
+    mode.add_argument(
+        "--index",
+        action="store_true",
+        help="index PCAPs already recorded by the shared multi-run campaign",
+    )
     mode.add_argument("--reuse", action="store_true", help="reuse only inputs validated by the existing manifest")
     parser.add_argument("--subdir", action="append", choices=subdir_choices,
                         help="analyze one group; repeat for multiple groups (default: all)")
@@ -2580,7 +2606,7 @@ def build_argument_parser(subdir_choices=None):
     parser.add_argument("--run", type=int, default=0, help="OMNeT++ run number (default: 0)")
     parser.add_argument(
         "--session-id",
-        help="generate or reuse this immutable YYYYMMDDTHHMMSSZ capture session",
+        help="index or reuse this immutable YYYYMMDDTHHMMSSZ capture session",
     )
     parser.add_argument(
         "--allow-failed-evidence",
@@ -2590,7 +2616,7 @@ def build_argument_parser(subdir_choices=None):
     parser.add_argument(
         "--capture-only",
         action="store_true",
-        help="generate raw captures and their immutable manifest, then stop",
+        help="index captures and their immutable manifest, then stop",
     )
     parser.add_argument(
         "--update-walkthrough",
@@ -2619,8 +2645,8 @@ def parse_args(argv=None):
 
 def main():
     args = parse_args()
-    if args.capture_only and not args.generate:
-        raise ValueError("--capture-only requires --generate")
+    if args.capture_only and not args.index:
+        raise ValueError("--capture-only requires --index")
     selected_subdirs = args.subdir or list(subdirs_configs)
     if args.config:
         selected_configs = set(args.config)
@@ -2644,11 +2670,16 @@ def main():
         selected_subdirs = [
             subdir for subdir in selected_subdirs if subdirs_configs[subdir]
         ]
-    manifest = (
-        build_capture_manifest(selected_subdirs, args.run, args.session_id)
-        if args.generate else
-        load_and_validate_manifest(selected_subdirs, args.run, args.session_id)
-    )
+    if args.index:
+        manifest = build_capture_manifest(
+            selected_subdirs,
+            args.run,
+            args.session_id,
+        )
+    else:
+        manifest = load_and_validate_manifest(
+            selected_subdirs, args.run, args.session_id
+        )
     if args.capture_only:
         print(
             f"CAPTURED session {manifest['session_id']}; "
@@ -2657,7 +2688,8 @@ def main():
         return
     selected_manifest = (
         _history_path(manifest["session_id"])
-        if args.generate or args.session_id is not None else MANIFEST_PATH
+        if args.index or args.session_id is not None
+        else MANIFEST_PATH
     )
     manifest["_selected_manifest"] = manifest_provenance(selected_manifest)
     capture_map = capture_map_from_manifest(manifest, selected_subdirs, args.run)
@@ -2689,15 +2721,29 @@ def main():
     global_color_map = {pt: get_packet_color(pt) for pt in global_packet_types}
 
     for subdir, res in all_results.items():
-        plot_path = generate_stacked_bar_plot(res, subdir, global_color_map)
+        result_directories = {
+            (REPOSITORY_ROOT / entry["result_directory"]).parent
+            for entry in manifest["entries"]
+            if entry["subdir"] == subdir
+        }
+        if len(result_directories) != 1:
+            raise RuntimeError(
+                f"{subdir}: capture inputs do not share one result session"
+            )
+        output_dir = result_directories.pop()
+        plot_path = generate_stacked_bar_plot(
+            res, subdir, global_color_map, output_dir
+        )
         if plot_path is None:
             raise RuntimeError(f"{subdir}: no packet statistics plot generated")
         write_packet_plot_provenance(plot_path, res, subdir, manifest)
-        md_table = generate_markdown_tables(res, subdir, all_checks[subdir], manifest)
+        md_table = generate_markdown_tables(
+            res, subdir, all_checks[subdir], manifest, plot_path
+        )
         if md_table and args.update_walkthrough:
             update_walkthrough_file(subdir, md_table)
 
-    summary_json_path = ANALYSIS_OUTPUT_DIR / "summary_results_pcap.json"
+    summary_json_path = ANALYSIS_OUTPUT_DIR / "packet_metrics.json"
     serialized = {
         "_provenance": {
             "schema_version": 1,

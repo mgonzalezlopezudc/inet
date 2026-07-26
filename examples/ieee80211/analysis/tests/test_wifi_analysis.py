@@ -26,12 +26,11 @@ class WifiAnalysisCliTest(unittest.TestCase):
         suite = wifi_analysis.load_suite(
             AX_SUITE, wifi_analysis.REPOSITORY_ROOT
         )
-        self.assertEqual(
-            sum(
+        self.assertTrue(
+            all(
                 "scalar_vector_group" in scenario
                 for scenario in suite.scenarios.values()
-            ),
-            11,
+            )
         )
         for scenario_name, scenario in suite.scenarios.items():
             if "scalar_vector_group" not in scenario:
@@ -116,10 +115,13 @@ class WifiAnalysisCliTest(unittest.TestCase):
             commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual(len(commands), 2)
             self.assertIn("run_campaign.py", commands[0][1])
+            self.assertIn("--pcap-run", commands[0])
             self.assertEqual(
                 Path(commands[1][1]),
                 ANALYSIS_ROOT / "analyze_pcap.py",
             )
+            self.assertIn("--index", commands[1])
+            self.assertNotIn("--generate", commands[1])
             self.assertIn("--capture-only", commands[1])
             self.assertTrue(
                 all(
@@ -275,16 +277,16 @@ class WifiAnalysisCliTest(unittest.TestCase):
                     logical, manifest, "twt"
                 )
 
-    def test_unknown_and_unmapped_scenarios_are_diagnostic(self):
+    def test_unknown_scenario_and_eht_mapping(self):
         with self.assertRaisesRegex(wifi_analysis.CliError, "Unknown scenario"):
             wifi_analysis.scenario_record(AX_SUITE, "not-a-scenario")
         suite, scenario = wifi_analysis.scenario_record(
             BE_SUITE, "eht_features"
         )
-        with self.assertRaisesRegex(
-            wifi_analysis.CliError, "no scalar/vector analysis mapping"
-        ):
-            wifi_analysis.scalar_mapping(suite, "eht_features", scenario)
+        _, group = wifi_analysis.scalar_mapping(
+            suite, "eht_features", scenario
+        )
+        self.assertEqual(group, "eht_features")
 
 
 if __name__ == "__main__":

@@ -29,7 +29,10 @@ from analysis_plots import _ap_overlap, _energy_per_run, _per_run_fairness
 
 
 def ci(values) -> dict:
-    return summarize_ci95(np.asarray(values, dtype=float))
+    summary = summarize_ci95(np.asarray(values, dtype=float))
+    if not math.isfinite(float(summary["ci95"])):
+        summary["ci95"] = None
+    return summary
 
 
 def time_weighted_step_mean(times, values, measurement) -> float:

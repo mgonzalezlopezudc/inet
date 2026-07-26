@@ -41,6 +41,24 @@
     ],
     "bsr": [
       {"id": "bsr-reported-scheduled-join", "kind": "normative", "requirement": "Reported backlog is joined to scheduler-consumed backlog", "results": ["heUlBufferStatusReportedBytes", "heUlBufferStatusScheduledBytes"], "evaluation": {"handler": "unimplemented", "reason": "The retained vectors lack a stable scheduling-decision identifier for joining reported and consumed backlog."}}
+    ],
+    "multi_tid": [
+      {"id": "multi-tid-ba-exchange-attribution", "kind": "normative", "requirement": "Acknowledgment exchanges identify the TIDs covered by each Multi-STA Block Ack", "results": ["packetReceived", "Block Ack fields"], "evaluation": {"handler": "unimplemented", "reason": "Application delivery is retained for the five-run comparison, while decisive per-TID Block Ack fields remain PCAP evidence."}}
+    ],
+    "operating_mode": [
+      {"id": "operating-mode-state-transition", "kind": "normative", "requirement": "The peer applies the announced operating-mode change", "results": ["packetReceived", "operating-mode state"], "evaluation": {"handler": "unimplemented", "reason": "Application delivery is retained, but no scalar/vector result exposes the peer operating-mode state transition."}}
+    ],
+    "frequency_selective": [
+      {"id": "frequency-selective-delivery-comparison", "kind": "metric", "requirement": "Flat and TGax Model B channels are compared using delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The delivery comparison has no manifest-defined acceptance threshold."}}
+    ],
+    "ndp_feedback": [
+      {"id": "ndp-feedback-response-attribution", "kind": "normative", "requirement": "Feedback responses are attributed to the stations polled by the NDP Feedback Report Poll", "results": ["packetReceived", "NDP feedback frames"], "evaluation": {"handler": "unimplemented", "reason": "Application delivery is retained, while preamble-only feedback response identity remains PCAP evidence."}}
+    ],
+    "dense_iot": [
+      {"id": "dense-iot-eight-station-delivery", "kind": "metric", "requirement": "AX and AC delivery is compared under matched eight-station workloads", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The five-run shared campaign records the eight-station stratum, but no acceptance threshold is defined for AX versus AC delivery."}}
+    ],
+    "eht_features": [
+      {"id": "eht-features-delivery-comparison", "kind": "metric", "requirement": "The EHT and HE baselines are compared using delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The five-run delivery comparison has no manifest-defined acceptance threshold."}}
     ]
   },
   "groups": {
@@ -50,7 +68,6 @@
       "result_dir": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
-      "output": "examples/ieee80211ax/analysis/figures/mac_features/dynamic_fragmentation/fragmentation-and-ack-overhead.png",
       "conditions": [
         {"label": "Dynamic", "config": "DynamicFragmentation"},
         {"label": "Static", "config": "StaticFragmentation"},
@@ -63,7 +80,6 @@
       "result_dir": "examples/ieee80211ax/ul_ofdma/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
-      "output": "examples/ieee80211ax/analysis/figures/ul_ofdma/uora-dashboard.png",
       "conditions": [
         {"label": "Mixed, adaptive 1–3 RA-RUs", "config": "MixedUora"},
         {"label": "Light, 1 RA-RU", "config": "UoraLightContention"},
@@ -77,7 +93,6 @@
       "result_dir": "examples/ieee80211ax/twt/results",
       "expected_repetitions": 5,
       "measurement": {"start": 10.0, "end": 100.0},
-      "output": "examples/ieee80211ax/analysis/figures/twt/twt-state-and-energy.png",
       "conditions": [
         {"label": "Baseline", "config": "BaselineEnergy", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
         {"label": "TWT", "config": "TwtEnergySaving", "metadata": {"minimum_delivery_ratio": 0.95, "sink_module_regex": "\\.server\\.app\\["}}
@@ -89,7 +104,6 @@
       "result_dir": "examples/ieee80211ax/he_rate_adaptation/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.5, "end": 1.7},
-      "output": "examples/ieee80211ax/analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png",
       "conditions": [
         {"label": "Mobile HE Minstrel", "config": "HeMinstrelMobile"}
       ]
@@ -100,7 +114,6 @@
       "result_dir": "examples/ieee80211ax/he_er_su/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
-      "output": "examples/ieee80211ax/analysis/figures/he_er_su/he-er-su-boundary.png",
       "conditions": [
         {"label": "HE-SU", "config": "CellBoundaryHeSu"},
         {"label": "HE-ER-SU", "config": "CellBoundaryHeErSu"}
@@ -112,7 +125,6 @@
       "result_dir": "examples/ieee80211ax/he_features/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.95},
-      "output": "examples/ieee80211ax/analysis/figures/he_features/puncturing-frequency-allocation.png",
       "conditions": [
         {"label": "Clean", "config": "CleanChannelBaseline"},
         {"label": "Interference, unpunctured", "config": "LegacyInterferenceWithoutPuncturing"},
@@ -126,7 +138,6 @@
       "result_dir": "examples/ieee80211ax/multi_user/mu_mimo/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.55, "end": 0.88},
-      "output": "examples/ieee80211ax/analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-stream-matrix.png",
       "conditions": [
         {"label": "20 MHz OFDMA", "config": "EqualSizedRUs_fBW"},
         {"label": "20 MHz MU-MIMO", "config": "DlMuMimo"}
@@ -138,7 +149,6 @@
       "result_dir": "examples/ieee80211ax/bss_coloring/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.95},
-      "output": "examples/ieee80211ax/analysis/figures/bss_coloring/bss-coloring-comparison.png",
       "conditions": [
         {"label": "Disabled", "config": "BssColoringDisabled", "metadata": {"spatial_reuse_evidence": "disabled"}},
         {"label": "Conservative", "config": "ObssPdConservative", "metadata": {"spatial_reuse_evidence": "enabled", "obss_pd_dbm": -81}},
@@ -153,7 +163,6 @@
       "result_dir": "examples/ieee80211ax/he_channel_widths/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.43},
-      "output": "examples/ieee80211ax/analysis/figures/he_channel_widths/channel-width-dashboard.png",
       "conditions": [
         {"label": "20 MHz", "config": "Width20MHz", "metadata": {"bandwidth_mhz": 20}},
         {"label": "40 MHz", "config": "Width40MHz", "metadata": {"bandwidth_mhz": 40}},
@@ -167,7 +176,6 @@
       "result_dir": "examples/ieee80211ax/dl_ofdma/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.88},
-      "output": "examples/ieee80211ax/analysis/figures/dl_ofdma/dl-scheduler-dashboard.png",
       "conditions": [
         {"label": "EDCA", "config": "SuEdcaBaseline", "metadata": {"workload": "symmetric"}},
         {"label": "fBW", "config": "EqualSizedRUs_fBW", "metadata": {"workload": "symmetric"}},
@@ -192,10 +200,78 @@
       "result_dir": "examples/ieee80211ax/he_bsr/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
-      "output": "examples/ieee80211ax/analysis/figures/he_bsr/bsr-reported-vs-scheduled.png",
       "conditions": [
         {"label": "Fresh BSR", "config": "BurstyTraffic"},
         {"label": "Stale BSR", "config": "StaleBsr"}
+      ]
+    },
+    "multi_tid": {
+      "walkthrough": "examples/ieee80211ax/mac_features/multi_tid_block_ack/walkthrough.md",
+      "ini": "examples/ieee80211ax/mac_features/multi_tid_block_ack/downlink.ini",
+      "result_dir": "examples/ieee80211ax/mac_features/multi_tid_block_ack/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.88},
+      "conditions": [
+        {"label": "Downlink Multi-TID BA", "config": "MultiTidBlockAck"},
+        {"label": "Uplink MU Multi-TID BA", "config": "UlMuMultiTidBlockAck", "ini": "examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Uplink SU Multi-TID BA", "config": "UlSuMultiTidBlockAck", "ini": "examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
+      ]
+    },
+    "operating_mode": {
+      "walkthrough": "examples/ieee80211ax/mac_features/operating_mode_indication/walkthrough.md",
+      "ini": "examples/ieee80211ax/mac_features/operating_mode_indication/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/mac_features/operating_mode_indication/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 1.9},
+      "conditions": [
+        {"label": "Operating Mode Indication", "config": "OperatingModeIndication", "metadata": {"sink_module_regex": "(?:\\.server\\.app\\[|\\.host\\[\\d+\\]\\.app\\[)"}}
+      ]
+    },
+    "frequency_selective": {
+      "walkthrough": "examples/ieee80211ax/frequency_selective_channel/walkthrough.md",
+      "ini": "examples/ieee80211ax/frequency_selective_channel/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/frequency_selective_channel/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 1.15},
+      "conditions": [
+        {"label": "Flat channel", "config": "FlatChannelOFDMA"},
+        {"label": "TGax Model B", "config": "TgaxModelBOFDMA"}
+      ]
+    },
+    "ndp_feedback": {
+      "walkthrough": "examples/ieee80211ax/multi_user/ndp_feedback/walkthrough.md",
+      "ini": "examples/ieee80211ax/multi_user/ndp_feedback/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/multi_user/ndp_feedback/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 1.9},
+      "conditions": [
+        {"label": "NDP Feedback Report", "config": "NdpFeedbackReport", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
+      ]
+    },
+    "dense_iot": {
+      "walkthrough": "examples/ieee80211ax/dense_iot/walkthrough.md",
+      "ini": "examples/ieee80211ax/dense_iot/omnetpp.ini",
+      "result_dir": "examples/ieee80211ax/dense_iot/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 20.0, "end": 120.0},
+      "conditions": [
+        {"label": "AX uplink (8 STAs)", "config": "AxUl", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "AC uplink (8 STAs)", "config": "AcUl", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "AX downlink (8 STAs)", "config": "AxDl", "metadata": {"sink_module_regex": "\\.sta\\[\\d+\\]\\.app\\["}},
+        {"label": "AC downlink (8 STAs)", "config": "AcDl", "metadata": {"sink_module_regex": "\\.sta\\[\\d+\\]\\.app\\["}},
+        {"label": "AX mixed (8 STAs)", "config": "AxMixed", "metadata": {"sink_module_regex": "(?:\\.server\\.app\\[|\\.sta\\[\\d+\\]\\.app\\[)"}},
+        {"label": "AC mixed (8 STAs)", "config": "AcMixed", "metadata": {"sink_module_regex": "(?:\\.server\\.app\\[|\\.sta\\[\\d+\\]\\.app\\[)"}}
+      ]
+    },
+    "eht_features": {
+      "walkthrough": "examples/ieee80211be/eht_features/walkthrough.md",
+      "ini": "examples/ieee80211be/eht_features/omnetpp.ini",
+      "result_dir": "examples/ieee80211be/eht_features/results",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.1, "end": 0.5},
+      "conditions": [
+        {"label": "HE baseline", "config": "BaselineAx", "command_overrides": ["--**.server.app[*].sendInterval=1ms"]},
+        {"label": "EHT features", "config": "EhtFeatures", "command_overrides": ["--**.server.app[*].sendInterval=1ms"]}
       ]
     }
   }

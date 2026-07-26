@@ -369,17 +369,22 @@ def run_command_handler(args: argparse.Namespace) -> None:
         ]
         for config in effective_configs or []:
             command.extend(["--config", config])
+        if args.evidence == "both":
+            command.extend(["--pcap-run", "0"])
+            capture = scenario.get("capture", suite.capture)
+            for pattern in capture["interface_patterns"]:
+                command.extend(["--pcap-interface-pattern", pattern])
         if args.jobs is not None:
             command.extend(["--jobs", str(args.jobs)])
         run_command(command)
 
-    if args.evidence in {"pcap", "both"}:
+    if args.evidence == "both":
         command = [
             sys.executable,
             str(ANALYSIS_ROOT / "analyze_pcap.py"),
             "--suite",
             str(suite_path),
-            "--generate",
+            "--index",
             "--capture-only",
             "--subdir",
             args.scenario,
@@ -578,7 +583,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--suite", default="ax")
     run_parser.add_argument(
         "--evidence",
-        choices=("scalar-vector", "pcap", "both"),
+        choices=("scalar-vector", "both"),
         default="both",
     )
     run_parser.add_argument(

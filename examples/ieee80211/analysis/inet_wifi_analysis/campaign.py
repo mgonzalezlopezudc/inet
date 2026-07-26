@@ -27,6 +27,8 @@ def build_cmdenv_command(
     repetitions: int,
     vector_statistics: Iterable[str] = (),
     scalar_statistics: Iterable[str] = (),
+    pcap_interface_patterns: Iterable[str] = (),
+    config_overrides: Iterable[str] = (),
 ) -> tuple[str, ...]:
     command = [
         str(repository_root / "bin/inet"),
@@ -52,6 +54,20 @@ def build_cmdenv_command(
         f"--**.{statistic}*.vector-recording=true"
         for statistic in vector_statistics
     )
+    interface_patterns = tuple(pcap_interface_patterns)
+    if interface_patterns:
+        command.extend(
+            f"--{pattern}.recordPcap=true"
+            for pattern in interface_patterns
+        )
+        command.extend((
+            '--**.wlan[*].pcapRecorder[*].moduleNamePatterns="mac"',
+            "--**.wlan[*].pcapRecorder[*].verbose=false",
+            '--**.wlan[*].pcapRecorder[*].fileFormat="pcapng"',
+            '--**.checksumMode="computed"',
+            '--**.fcsMode="computed"',
+        ))
+    command.extend(config_overrides)
     return tuple(command)
 
 
@@ -64,6 +80,8 @@ def collect_campaign_jobs(
     scalar_statistics: Iterable[str] = (),
     repetitions_override: int | None = None,
     selected_configs: set[str] | None = None,
+    pcap_run: int | None = None,
+    pcap_interface_patterns: Iterable[str] = (),
 ) -> list[CampaignJob]:
     group_names = (
         sorted(manifest["groups"])
@@ -81,7 +99,6 @@ def collect_campaign_jobs(
             result_dir = (
                 repository_root
                 / entry.get("result_dir", group["result_dir"])
-                / "scalar-vector"
                 / session_id
                 / entry["config"]
             )
@@ -100,7 +117,12 @@ def collect_campaign_jobs(
                         repetitions,
                         vector_statistics,
                         scalar_statistics,
+                        (
+                            pcap_interface_patterns
+                            if run == pcap_run
+                            else ()
+                        ),
+                        entry.get("command_overrides", ()),
                     ),
                 ))
     return jobs
-

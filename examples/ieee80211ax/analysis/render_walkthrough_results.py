@@ -13,9 +13,11 @@ from typing import Any
 
 from analysis_core import (
     DEFAULT_MANIFEST,
+    FIGURE_FILENAMES,
     REPOSITORY_ROOT,
     atomic_write_text,
     load_manifest,
+    result_session_directory,
 )
 
 
@@ -27,6 +29,8 @@ def escape_cell(value: object) -> str:
 
 
 def format_number(value: object) -> str:
+    if value is None:
+        return "N/A"
     if isinstance(value, bool):
         return str(value)
     if isinstance(value, int):
@@ -112,6 +116,7 @@ def validate_bundle_provenance(
     group_name: str,
     metrics_document: dict[str, Any],
     sidecar_document: dict[str, Any],
+    figure: Path | None = None,
 ) -> str:
     provenance = metrics_document.get("_provenance", {})
     group_provenance = provenance.get("groups", {}).get(group_name, {})
@@ -130,12 +135,16 @@ def validate_bundle_provenance(
     metric_conditions = group_provenance.get("conditions")
     if not isinstance(metric_conditions, list) or not metric_conditions:
         raise RuntimeError(
-            f"{group_name}: metrics provenance has no condition/input hashes"
+            f"{group_name}: metrics provenance has no conditions"
         )
-    if metric_conditions != conditions:
+    metric_summaries = [
+        {key: value for key, value in condition.items()
+         if key != "result_files"}
+        for condition in metric_conditions
+    ]
+    if metric_summaries != conditions:
         raise RuntimeError(
-            f"{group_name}: metric and figure condition provenance differs "
-            "(configurations, windows, inputs, or hashes)"
+            f"{group_name}: metric and figure condition metadata differs"
         )
     for condition in conditions:
         if condition.get("group") != group_name:
@@ -143,30 +152,32 @@ def validate_bundle_provenance(
                 f"{group_name}: figure sidecar contains group "
                 f"{condition.get('group')!r}"
             )
-        files = condition.get("result_files")
-        if not isinstance(files, list) or not files:
-            raise RuntimeError(
-                f"{group_name}: figure sidecar condition has no result files"
-            )
-        for result_file in files:
-            path = f"/{result_file.get('path', '').strip('/')}/"
-            if f"/{session_id}/" not in path:
-                raise RuntimeError(
-                    f"{group_name}: figure and metrics sessions differ; "
-                    f"{result_file.get('path')} is not from {session_id}"
-                )
+    if figure is not None and figure.parent.name != session_id:
+        raise RuntimeError(
+            f"{group_name}: figure and metrics sessions differ; "
+            f"{figure.parent.name!r} != {session_id!r}"
+        )
     return session_id
 
 
 def render_group(
     group_name: str,
     group: dict[str, Any],
-    metrics: dict[str, Any],
+    metrics_document: dict[str, Any],
     metrics_path: Path = DEFAULT_METRICS,
     sidecar_document: dict[str, Any] | None = None,
 ) -> str:
     walkthrough = REPOSITORY_ROOT / group["walkthrough"]
-    figure = REPOSITORY_ROOT / group["output"]
+    provenance = metrics_document.get("_provenance", {}).get("groups", {}).get(
+        group_name, {}
+    )
+    session_id = provenance.get("session_id")
+    if not session_id:
+        raise RuntimeError(f"{group_name}: metrics provenance has no session_id")
+    figure = (
+        result_session_directory(group, session_id)
+        / FIGURE_FILENAMES[group_name]
+    )
     sidecar = figure.with_suffix(figure.suffix + ".json")
     figure_link = relative_link(figure, walkthrough)
     sidecar_link = relative_link(sidecar, walkthrough)
@@ -178,6 +189,9 @@ def render_group(
         )
     if sidecar_document is None:
         sidecar_document = json.loads(sidecar.read_text(encoding="utf-8"))
+    validate_bundle_provenance(
+        group_name, metrics_document, sidecar_document, figure
+    )
     metrics_link = relative_link(metrics_path.resolve(), walkthrough)
     source_summary = source_filter_summary(sidecar_document)
     aggregation_summary = window_aggregation_summary(sidecar_document)
@@ -192,7 +206,7 @@ def render_group(
         "Independent runs (n) | Mean or direct value | 95% CI half-width |\n",
         "|---|---|---|---|---:|---:|---:|\n",
     ]
-    for row in metric_rows(metrics):
+    for row in metric_rows(metrics_document[group_name]):
         expanded = [row[0], row[1], source_summary, aggregation_summary, *row[2:]]
         lines.append(
             "| " + " | ".join(escape_cell(cell) for cell in expanded) + " |\n"
@@ -275,21 +289,11 @@ def main() -> None:
             raise RuntimeError(f"{group_name}: manifest has no walkthrough path")
         if group_name not in metrics:
             raise RuntimeError(f"{group_name}: metrics are NOT RUN or missing")
-        sidecar = (
-            REPOSITORY_ROOT / group["output"]
-        ).with_suffix(Path(group["output"]).suffix + ".json")
-        if not sidecar.is_file():
-            raise RuntimeError(
-                f"{group_name}: figure provenance does not exist: {sidecar}"
-            )
-        sidecar_document = json.loads(sidecar.read_text(encoding="utf-8"))
-        validate_bundle_provenance(group_name, metrics, sidecar_document)
         markdown = render_group(
             group_name,
             group,
-            metrics[group_name],
+            metrics,
             args.metrics,
-            sidecar_document,
         )
         marker = f"ieee80211-scalar-vector-{group_name}"
         walkthrough = REPOSITORY_ROOT / group["walkthrough"]

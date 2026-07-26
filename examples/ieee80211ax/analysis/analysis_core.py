@@ -23,6 +23,25 @@ from scipy.stats import t
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 ANALYSIS_DIR = Path(__file__).resolve().parent
 DEFAULT_MANIFEST = ANALYSIS_DIR / "experiments.json"
+FIGURE_FILENAMES = {
+    "fragmentation": "fragmentation-and-ack-overhead.png",
+    "uora": "uora-dashboard.png",
+    "twt": "twt-state-and-energy.png",
+    "rate": "rate-adaptation-timeline.png",
+    "er": "he-er-su-boundary.png",
+    "puncturing": "puncturing-frequency-allocation.png",
+    "mimo": "mu-mimo-spatial-stream-matrix.png",
+    "bss": "bss-coloring-comparison.png",
+    "width": "channel-width-dashboard.png",
+    "dl": "dl-scheduler-dashboard.png",
+    "bsr": "bsr-reported-vs-scheduled.png",
+    "multi_tid": "multi-tid-delivery.png",
+    "operating_mode": "operating-mode-delivery.png",
+    "frequency_selective": "frequency-selective-delivery.png",
+    "ndp_feedback": "ndp-feedback-delivery.png",
+    "dense_iot": "dense-iot-delivery.png",
+    "eht_features": "eht-features-delivery.png",
+}
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 EVIDENCE_HANDLERS = {
     "unimplemented",
@@ -198,11 +217,10 @@ class Condition:
             group=group_name,
             label=entry["label"],
             config=entry["config"],
-            ini=root / group["ini"],
+            ini=root / entry.get("ini", group["ini"]),
             result_dir=(
                 root
                 / entry.get("result_dir", group["result_dir"])
-                / "scalar-vector"
                 / session_id
                 / entry["config"]
             ),
@@ -219,7 +237,8 @@ class Condition:
         if not self.result_dir.is_dir():
             raise FileNotFoundError(self.result_dir)
         pattern = re.compile(
-            rf"^{re.escape(self.config)}-#(?P<run>\d+)\.(?P<extension>sca|vec)$"
+            rf"^{re.escape(self.config)}(?:-[^#]+)?-#"
+            rf"(?P<run>\d+)\.(?P<extension>sca|vec)$"
         )
         discovered: dict[int, dict[str, Path]] = {}
         for path in self.result_dir.iterdir():
@@ -386,7 +405,6 @@ def _session_is_complete(
         result_dir = (
             root
             / entry.get("result_dir", group["result_dir"])
-            / "scalar-vector"
             / session_id
             / entry["config"]
         )
@@ -394,11 +412,14 @@ def _session_is_complete(
             "expected_repetitions", group["expected_repetitions"]
         ))
         for run in range(repetitions):
-            stem = f"{entry['config']}-#{run}"
-            if not (result_dir / f"{stem}.sca").is_file():
-                return False
-            if not (result_dir / f"{stem}.vec").is_file():
-                return False
+            for extension in ("sca", "vec"):
+                matches = list(
+                    result_dir.glob(
+                        f"{entry['config']}*-#{run}.{extension}"
+                    )
+                )
+                if len(matches) != 1:
+                    return False
     return True
 
 
@@ -419,7 +440,6 @@ def resolve_session_id(
         result_roots = {
             root
             / entry.get("result_dir", group["result_dir"])
-            / "scalar-vector"
             for entry in group["conditions"]
         }
         candidate_sets = []
@@ -443,7 +463,7 @@ def resolve_session_id(
         )
     raise FileNotFoundError(
         "No complete timestamped result session found; "
-        "expected results/scalar-vector/YYYYMMDDTHHMMSSZ/<configuration>"
+        "expected results/YYYYMMDDTHHMMSSZ/<configuration>"
     )
 
 
@@ -472,6 +492,25 @@ def resolve_manifest_sessions(
             f"analysis group: {details}"
         )
     return selected, unavailable
+
+
+def result_session_directory(
+    group: dict[str, Any],
+    session_id: str,
+    *,
+    root: Path = REPOSITORY_ROOT,
+) -> Path:
+    directories = {
+        root
+        / entry.get("result_dir", group["result_dir"])
+        / session_id
+        for entry in group["conditions"]
+    }
+    if len(directories) != 1:
+        raise RuntimeError(
+            "An analysis group must use one shared result session directory"
+        )
+    return directories.pop()
 
 
 def conditions_for_group(
@@ -666,15 +705,15 @@ def write_provenance(
     aggregation: dict[str, Any],
     extra: dict[str, Any] | None = None,
 ) -> Path:
-    try:
-        figure_name = str(output.relative_to(REPOSITORY_ROOT))
-    except ValueError:
-        figure_name = str(output)
+    condition_summaries = []
+    for condition in conditions:
+        item = condition.provenance()
+        item.pop("result_files", None)
+        condition_summaries.append(item)
     payload = {
         "schema_version": 1,
-        "figure": figure_name,
         "git_revision": git_revision(),
-        "conditions": [condition.provenance() for condition in conditions],
+        "conditions": condition_summaries,
         "result_filters": result_filters,
         "aggregation": aggregation,
         "extra": extra or {},

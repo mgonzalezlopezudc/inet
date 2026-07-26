@@ -768,6 +768,36 @@ def plot_mimo(conditions: list[Condition], output: Path) -> None:
     )
 
 
+def plot_delivery(conditions: list[Condition], output: Path) -> None:
+    """Plot the shared five-run application-delivery baseline."""
+    goodputs = [per_run_goodput(condition) for condition in conditions]
+    fig, axis = plt.subplots(figsize=(max(8, len(conditions) * 1.4), 4.8))
+    bar_with_ci(
+        axis,
+        [condition.label for condition in conditions],
+        goodputs,
+        "goodput_bps",
+        scale=1e-6,
+    )
+    axis.set_ylabel("Aggregate goodput [Mbit/s]")
+    axis.set_title("Five-run application delivery")
+    save(fig, output)
+    write_provenance(
+        output,
+        conditions=conditions,
+        result_filters=[{
+            "type": "vector",
+            "module": "**.app[*]",
+            "name": "packetReceived:vector(packetBytes)",
+            "value_semantics": "delivered application bytes",
+        }],
+        aggregation={
+            "observation": "one aggregate goodput value per run",
+            "uncertainty": "95% Student-t CI",
+        },
+    )
+
+
 PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "fragmentation": plot_fragmentation,
     "uora": plot_uora,
@@ -780,4 +810,10 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "width": plot_width,
     "dl": plot_dl,
     "bsr": plot_bsr,
+    "multi_tid": plot_delivery,
+    "operating_mode": plot_delivery,
+    "frequency_selective": plot_delivery,
+    "ndp_feedback": plot_delivery,
+    "dense_iot": plot_delivery,
+    "eht_features": plot_delivery,
 }

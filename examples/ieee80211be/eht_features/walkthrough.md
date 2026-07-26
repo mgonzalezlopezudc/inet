@@ -92,20 +92,16 @@ effect of either 320 MHz or 4096-QAM.
 
 ## Reproduction
 
-Run from the INET repository root. This exact shared-pipeline command was
-executed on 2026-07-25:
+Run the shared five-run pipeline from the INET repository root:
 
 ```sh
-MPLCONFIGDIR=/tmp/inet-walkthrough-mpl \
-python3 examples/ieee80211/analysis/analyze_pcap.py \
+python3 examples/ieee80211/analysis/wifi_analysis.py run eht_features \
   --suite examples/ieee80211/analysis/suites/be-eht-features.json \
-  --generate --subdir eht_features --run 0
+  --evidence both --runs 5
 ```
 
-Observed exit status: 1. `BaselineAx` failed at simulation time
-0.107913906544 s, event 55521, so `EhtFeatures` was not started. The session is
-`examples/ieee80211be/eht_features/results/packet-statistics/20260725T202934Z`.
-The pipeline used the release `bin/inet` Cmdenv runner and run 0/seed set 0.
+Scalar/vector analysis uses all five runs. PCAP analysis uses run 0 from that
+same result session.
 
 For a minimal direct reproduction, use the following illustrative command
 (`NOT RUN` during this authoring pass):

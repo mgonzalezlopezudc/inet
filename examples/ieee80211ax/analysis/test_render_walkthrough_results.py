@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from render_walkthrough_results import (
     metric_rows,
@@ -55,12 +56,7 @@ class ProvenanceTest(unittest.TestCase):
     def test_accepts_matching_metric_and_figure_sessions(self):
         condition = {
             "group": "width",
-            "result_files": [{
-                "path": (
-                    "examples/results/scalar-vector/"
-                    "20260725T120411Z/Width20MHz/result.sca"
-                )
-            }],
+            "configuration": "Width20MHz",
         }
         metrics = {
             "_provenance": {
@@ -75,7 +71,12 @@ class ProvenanceTest(unittest.TestCase):
         }
         sidecar = {"conditions": [condition]}
         self.assertEqual(
-            validate_bundle_provenance("width", metrics, sidecar),
+            validate_bundle_provenance(
+                "width",
+                metrics,
+                sidecar,
+                Path("results/20260725T120411Z/width.png"),
+            ),
             "20260725T120411Z",
         )
 
@@ -84,12 +85,7 @@ class ProvenanceTest(unittest.TestCase):
             validate_bundle_provenance("width", {}, {"conditions": []})
         condition = {
             "group": "width",
-            "result_files": [{
-                "path": (
-                    "examples/results/scalar-vector/"
-                    "20260724T000000Z/Width20MHz/result.sca"
-                )
-            }],
+            "configuration": "Width20MHz",
         }
         metrics = {
             "_provenance": {
@@ -104,25 +100,21 @@ class ProvenanceTest(unittest.TestCase):
         }
         sidecar = {"conditions": [condition]}
         with self.assertRaisesRegex(RuntimeError, "sessions differ"):
-            validate_bundle_provenance("width", metrics, sidecar)
+            validate_bundle_provenance(
+                "width",
+                metrics,
+                sidecar,
+                Path("results/20260724T000000Z/width.png"),
+            )
 
-    def test_rejects_different_condition_hashes(self):
+    def test_rejects_different_condition_metadata(self):
         metric_condition = {
             "group": "width",
-            "result_files": [{
-                "path": (
-                    "examples/results/scalar-vector/"
-                    "20260725T120411Z/Width20MHz/result.sca"
-                ),
-                "sha256": "a" * 64,
-            }],
+            "configuration": "Width20MHz",
         }
         figure_condition = {
             **metric_condition,
-            "result_files": [{
-                **metric_condition["result_files"][0],
-                "sha256": "b" * 64,
-            }],
+            "configuration": "Width40MHz",
         }
         metrics = {
             "_provenance": {
@@ -135,7 +127,7 @@ class ProvenanceTest(unittest.TestCase):
                 }
             }
         }
-        with self.assertRaisesRegex(RuntimeError, "condition provenance differs"):
+        with self.assertRaisesRegex(RuntimeError, "condition metadata differs"):
             validate_bundle_provenance(
                 "width", metrics, {"conditions": [figure_condition]}
             )

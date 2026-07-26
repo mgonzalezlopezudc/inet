@@ -9,6 +9,8 @@
   },
   "scenarios": {
     "eht_features": {
+      "scalar_vector_group": "eht_features",
+      "scalar_vector_manifest": "examples/ieee80211ax/analysis/experiments.json",
       "ini": "eht_features/omnetpp.ini",
       "configurations": ["BaselineAx", "EhtFeatures"],
       "phy_profiles": ["legacy", "he", "eht"],
@@ -16,4 +18,3 @@
     }
   }
 }
-

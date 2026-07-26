@@ -13,17 +13,19 @@ python3 examples/ieee80211/analysis/wifi_analysis.py publish twt \
   --session-id <YYYYMMDDTHHMMSSZ> --update
 ```
 
-`inspect` is fully read-only. `run` creates raw scalar/vector results and/or
-PCAP captures and binds them to one logical session ID; it does not analyze
-them or edit a walkthrough. `report` reuses that exact session to create
+`inspect` is fully read-only. With the default `--evidence both`, `run`
+creates one multi-run result set. All runs record the selected scalar/vector
+data, and run 0 additionally records PCAPng files in the same configuration
+directory. It does not analyze the results or edit a walkthrough. `report`
+reuses that exact result set to create
 metrics, figures, an evidence ledger, and a PCAP report, but never edits a
 walkthrough. `publish` is the only walkthrough-mutating command and requires
 the explicit `--update` flag.
 
-Scalar/vector and PCAP use separate recording profiles. Sharing a logical
-session, configuration, run number, and seed makes their provenance
-comparable, but does not by itself establish event-level causality between
-the two simulation trajectories.
+Scalar/vector and PCAP therefore share the same run-0 simulation trajectory;
+the PCAP indexer does not launch a second simulation. Generated scalar/vector
+and PCAP figures are stored at the root of that timestamped result set, above
+its per-configuration directories.
 
 Pass `--session-id <YYYYMMDDTHHMMSSZ>` to `inspect` to display the selected
 logical session and whether it meets the publication run-count policy.
@@ -43,13 +45,15 @@ with configuration-derived defaults.
 
 Suite descriptors live in `suites/`. They declare example roots,
 configurations, capture interface patterns, the walkthrough generated-section
-marker, and optional scalar/vector manifest and group mappings. AX and the
-initial EHT feature example both use the shared PCAP implementation. The AX
-directory retains generation-specific scalar/vector analysis tools.
+marker, and scalar/vector manifest and group mappings. Every declared AX and
+BE/EHT scenario has a mapping, so the analyzer only indexes captures from the
+shared campaign; it has no standalone simulation mode.
 
 Walkthrough-facing analyses publish presentation bundles: a compact Markdown
 table, a deterministic figure (or an explicit no-plot rationale), and a JSON
-provenance sidecar. Scalar/vector bundles belong under `## Scalar and vector
+provenance sidecar. The figure's parent directory identifies its raw result
+session, so sidecars retain analysis semantics without repeating raw input
+paths and hashes. Scalar/vector bundles belong under `## Scalar and vector
 analysis`; PCAP bundles belong under `## PCAP statistics`. Exhaustive
 packet-type rows stay subordinate to the compact explanatory summary.
 

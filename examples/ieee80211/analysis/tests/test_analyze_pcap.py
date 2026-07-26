@@ -219,9 +219,10 @@ class GeneratedSectionTest(unittest.TestCase):
 
 class PacketPlotStorageTest(unittest.TestCase):
 
-    def test_stores_only_shared_analysis_copy(self):
+    def test_stores_plot_in_shared_result_session(self):
         with tempfile.TemporaryDirectory() as directory:
             example_root = Path(directory)
+            result_session = example_root / "results" / "20260726T120000Z"
             statistics = {
                 ("0", "0", False): {
                     "count": 1,
@@ -244,40 +245,63 @@ class PacketPlotStorageTest(unittest.TestCase):
                     config_results,
                     "mac_features/dynamic_fragmentation",
                     {packet_type: "#336699"},
+                    result_session,
                 )
 
             self.assertEqual(
                 plot_path,
-                example_root / "analysis" / "figures" / "mac_features" /
-                "dynamic_fragmentation" / "packet_statistics.png",
+                result_session / "packet_statistics.png",
             )
             self.assertTrue(plot_path.is_file())
-            self.assertFalse(
-                (
-                    example_root / "mac_features" /
-                    "dynamic_fragmentation" / "packet_statistics.png"
-                ).exists()
-            )
 
-    def test_walkthrough_references_shared_analysis_copy(self):
+    def test_walkthrough_references_result_session_copy(self):
         with patch(
             "analyze_pcap.EXAMPLE_ROOT",
             Path("/repository/examples/ieee80211ax"),
         ):
             self.assertEqual(
-                analyze_pcap.walkthrough_packet_plot_path("ul_ofdma"),
-                "../analysis/figures/ul_ofdma/packet_statistics.png",
+                analyze_pcap.walkthrough_packet_plot_path(
+                    "ul_ofdma",
+                    Path(
+                        "/repository/examples/ieee80211ax/ul_ofdma/results/"
+                        "20260726T120000Z/packet_statistics.png"
+                    ),
+                ),
+                "results/20260726T120000Z/packet_statistics.png",
             )
             self.assertEqual(
                 analyze_pcap.walkthrough_packet_plot_path(
-                    "mac_features/dynamic_fragmentation"
+                    "mac_features/dynamic_fragmentation",
+                    Path(
+                        "/repository/examples/ieee80211ax/mac_features/"
+                        "dynamic_fragmentation/results/20260726T120000Z/"
+                        "packet_statistics.png"
+                    ),
                 ),
-                "../../analysis/figures/mac_features/"
-                "dynamic_fragmentation/packet_statistics.png",
+                "results/20260726T120000Z/packet_statistics.png",
             )
 
 
 class CaptureValidationTest(unittest.TestCase):
+
+    def test_shared_result_index_rejects_capture_from_another_run(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result_dir = Path(directory)
+            selected = result_dir / "Config-#0Network.ap.wlan[0].pcapng"
+            selected.touch()
+            self.assertEqual(
+                analyze_pcap.discover_run_captures(
+                    result_dir, "Config", 0
+                ),
+                [selected],
+            )
+            (result_dir / "Config-#1Network.ap.wlan[0].pcapng").touch()
+            with self.assertRaisesRegex(
+                RuntimeError, "another run"
+            ):
+                analyze_pcap.discover_run_captures(
+                    result_dir, "Config", 0
+                )
 
     def test_empty_capture_fails_closed(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -563,9 +587,12 @@ class CaptureManifestTest(unittest.TestCase):
                 patch("analyze_pcap.tshark_version", return_value="TShark"),
                 patch("analyze_pcap.capinfos_version", return_value="Capinfos"),
                 patch("analyze_pcap._history_path", return_value=history),
-                patch("analyze_pcap.EXAMPLE_ROOT", root / "example"),
                 patch(
-                    "analyze_pcap.run_simulation",
+                    "analyze_pcap.scalar_vector_result_directory",
+                    return_value=root / "session" / "Baseline",
+                ),
+                patch(
+                    "analyze_pcap.index_simulation_result",
                     return_value={"subdir": "twt", "config": "Baseline"},
                 ),
                 patch("analyze_pcap.publish_capture_manifest"),
@@ -575,6 +602,7 @@ class CaptureManifestTest(unittest.TestCase):
                     clear=True,
                 ),
             ):
+                (root / "session" / "Baseline").mkdir(parents=True)
                 manifest = analyze_pcap.build_capture_manifest(
                     ["twt"], 0, "20260726T120000Z"
                 )
@@ -666,7 +694,7 @@ class CaptureManifestTest(unittest.TestCase):
                 [
                     "analyze_pcap.py",
                     *SUITE_ARGUMENTS,
-                    "--generate",
+                    "--index",
                     "--capture-only",
                     "--subdir",
                     "twt",
@@ -768,16 +796,17 @@ class CaptureManifestTest(unittest.TestCase):
                 )
             )
 
-    def test_session_selection_duplicate_keys_and_legacy_schema(self):
-        self.assertEqual(SUPPORTED_MANIFEST_SCHEMAS, {1, 2})
-        self.assertEqual(manifest_schema_version({"schema_version": 1}), 1)
+    def test_session_selection_duplicate_keys_and_current_schema(self):
+        self.assertEqual(SUPPORTED_MANIFEST_SCHEMAS, {2})
+        with self.assertRaisesRegex(RuntimeError, "Unsupported"):
+            manifest_schema_version({"schema_version": 1})
         self.assertEqual(manifest_schema_version({"schema_version": 2}), 2)
         with self.assertRaisesRegex(RuntimeError, "Unsupported"):
             manifest_schema_version({"schema_version": 3})
         self.assertEqual(selected_manifest_path(), MANIFEST_PATH)
         self.assertTrue(
             str(selected_manifest_path("20260725T120000Z")).endswith(
-                "pcapmanifests/20260725T120000Z.json"
+                "capture_manifests/20260725T120000Z.json"
             )
         )
         with tempfile.TemporaryDirectory(
@@ -815,7 +844,7 @@ class CaptureManifestTest(unittest.TestCase):
 
     def test_schema2_entry_binds_artifacts_to_session_config_run_and_seed(self):
         base = (
-            "examples/ieee80211ax/dl_ofdma/results/packet-statistics/"
+            "examples/ieee80211ax/dl_ofdma/results/"
             "20260725T120000Z/EqualSizedRUs_fBW"
         )
         entry = {
@@ -836,7 +865,7 @@ class CaptureManifestTest(unittest.TestCase):
             validate_entry_binding(entry, "20260725T120000Z"), []
         )
         entry["captures"][0]["path"] = (
-            "examples/ieee80211ax/dl_ofdma/results/packet-statistics/"
+            "examples/ieee80211ax/dl_ofdma/results/"
             "20260724T120000Z/EqualSizedRUs_fBW/ap.wlan0.pcap"
         )
         entry["seed_set"] = 8

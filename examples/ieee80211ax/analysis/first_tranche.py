@@ -7,7 +7,13 @@ import argparse
 import tempfile
 from pathlib import Path
 
-from analysis_core import DEFAULT_MANIFEST, REPOSITORY_ROOT, conditions_for_group, load_manifest, sha256
+from analysis_core import (
+    DEFAULT_MANIFEST,
+    FIGURE_FILENAMES,
+    conditions_for_group,
+    load_manifest,
+    sha256,
+)
 from analysis_plots import PLOTS
 
 
@@ -25,12 +31,24 @@ def main() -> None:
     groups = sorted(PLOTS) if args.group == "all" else [args.group]
     for group_name in groups:
         group = manifest["groups"][group_name]
-        checked_output = REPOSITORY_ROOT / group["output"]
+        conditions = conditions_for_group(
+            manifest, group_name, args.session_id
+        )
+        result_directories = {
+            condition.result_dir.parent for condition in conditions
+        }
+        if len(result_directories) != 1:
+            raise RuntimeError(
+                f"{group_name}: conditions do not share one result session"
+            )
+        checked_output = (
+            result_directories.pop() / FIGURE_FILENAMES[group_name]
+        )
         if args.check:
             with tempfile.TemporaryDirectory(prefix="inet-80211ax-analysis-") as directory:
                 output = Path(directory) / checked_output.name
                 PLOTS[group_name](
-                    conditions_for_group(manifest, group_name, args.session_id),
+                    conditions,
                     output,
                 )
                 if not checked_output.exists() or sha256(output) != sha256(checked_output):
@@ -38,7 +56,7 @@ def main() -> None:
                 print(f"VERIFIED {checked_output}")
         else:
             PLOTS[group_name](
-                conditions_for_group(manifest, group_name, args.session_id),
+                conditions,
                 checked_output,
             )
 

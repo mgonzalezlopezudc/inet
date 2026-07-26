@@ -11,6 +11,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from analysis_core import (
+    Condition,
     MeasurementWindow,
     atomic_write_text,
     crop_vector,
@@ -34,6 +35,27 @@ import summarize_results
 
 
 class AnalysisCoreTest(unittest.TestCase):
+    def test_condition_accepts_iteration_suffixes_in_result_filenames(self):
+        with tempfile.TemporaryDirectory() as directory:
+            result_dir = Path(directory)
+            for run in range(2):
+                stem = f"AxUl-numStations=8-#{run}"
+                (result_dir / f"{stem}.sca").touch()
+                (result_dir / f"{stem}.vec").touch()
+            condition = Condition(
+                group="dense_iot",
+                label="AX UL",
+                config="AxUl",
+                ini=Path("omnetpp.ini"),
+                result_dir=result_dir,
+                expected_repetitions=2,
+                measurement=MeasurementWindow(20, 120),
+            )
+            self.assertEqual(
+                [pair.run_number for pair in condition.result_files],
+                [0, 1],
+            )
+
     def test_window_and_crop_are_explicit(self):
         window = MeasurementWindow(1, 3)
         times, values = crop_vector([0, 1, 2, 3, 4], [10, 11, 12, 13, 14], window)
@@ -177,8 +199,23 @@ class CampaignRunnerTest(unittest.TestCase):
             if value.startswith("--result-dir=")
         )
         self.assertIn(
-            f"other/results/scalar-vector/{self.SESSION_ID}/Second",
+            f"other/results/{self.SESSION_ID}/Second",
             result_argument,
+        )
+
+    def test_campaign_records_pcap_only_for_selected_run(self):
+        jobs = collect_jobs(
+            self.MANIFEST,
+            "sample",
+            campaign_session_id=self.SESSION_ID,
+            pcap_run=0,
+            pcap_interface_patterns=("**.wlan[*]",),
+        )
+        first = next(job for job in jobs if job.config == "First" and job.run == 0)
+        second = next(job for job in jobs if job.config == "First" and job.run == 1)
+        self.assertIn("--**.wlan[*].recordPcap=true", first.command)
+        self.assertFalse(
+            any("recordPcap=true" in argument for argument in second.command)
         )
 
     def test_campaign_filters_configs_and_overrides_repetitions(self):
@@ -221,7 +258,6 @@ class CampaignRunnerTest(unittest.TestCase):
                     result_dir = (
                         root
                         / base
-                        / "scalar-vector"
                         / selected_session
                         / config
                     )

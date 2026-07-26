@@ -14,7 +14,8 @@ python3 examples/ieee80211/analysis/wifi_analysis.py publish bss_coloring \
   --session-id <YYYYMMDDTHHMMSSZ> --update
 ```
 
-The scripts in this directory are AX-specific scalar/vector analysis tools.
+The scalar/vector drivers currently live in this directory and serve the AX
+suite plus the mapped `eht_features` scenario.
 The generation-neutral PCAP implementation lives under
 `examples/ieee80211/analysis`. Only `publish ... --update` is intended to edit
 walkthroughs. A one-run session is diagnostic; publication requires at least
@@ -47,11 +48,12 @@ the common warm-up definition.
 | [BSR](../he_bsr/walkthrough.md) | AP-reported and AP-scheduled backlog timelines | BSR is scheduling state, not application goodput; freshness controls whether the AP view is usable. |
 | [Dense IoT](../dense_iot/README.md) | Matched AX/AC campaigns across station counts, workloads, delivery, delay, and energy | This broader campaign has its own runner and result analyzer because each configuration combines station-count iterations with repetitions. |
 
-Machine-readable plotted summaries are in [`metrics.json`](metrics.json). Each PNG has a `.png.json` provenance sidecar containing the exact inputs, SHA-256 hashes, filters, measurement window, aggregation rule, and source revision.
-Figure subdirectories mirror the examples' paths relative to
-`examples/ieee80211ax` (for example, `bss_coloring` and
-`multi_user/mu_mimo`); scalar/vector and PCAP figures for a scenario share
-that directory.
+Machine-readable plotted summaries are in [`metrics.json`](metrics.json).
+Each timestamped result directory contains both the scalar/vector figure and
+the PCAP figure, plus their `.png.json` provenance sidecars. The directory
+itself identifies the exact raw result session, so figure sidecars retain
+filters, measurement windows, aggregation rules, and tool/source metadata
+without repeating every raw input path and hash.
 `render_walkthrough_results.py` turns those session-bound metrics and figures
 into a compact marker-bounded table and plot link inside each walkthrough's
 scalar/vector section; it does not replace the authored query, aggregation,
@@ -80,14 +82,14 @@ MPLCONFIGDIR=/tmp/matplotlib python3 -m unittest discover \
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/first_tranche.py all --check
 ```
 
-Generate fresh packet evidence for one feature group, or reanalyze the
+Index packet evidence recorded by a shared campaign, or reanalyze the
 manifest-validated captures, with:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
   python3 examples/ieee80211/analysis/analyze_pcap.py \
   --suite examples/ieee80211/analysis/suites/ax.json \
-  --generate --capture-only --session-id 20260725T120000Z \
+  --index --capture-only --session-id 20260725T120000Z \
   --subdir dl_ofdma --run 0
 MPLCONFIGDIR=/tmp/matplotlib \
   python3 examples/ieee80211/analysis/analyze_pcap.py \
@@ -95,24 +97,23 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --reuse --session-id 20260725T120000Z --subdir dl_ofdma --run 0
 ```
 
-New PCAP manifests use schema 2. The analyzer publishes immutable history at
-`examples/ieee80211/analysis/generated/ax/pcapmanifests/<session-id>.json`
+Capture indexes use schema 2. The analyzer publishes immutable history at
+`examples/ieee80211/analysis/generated/ax/capture_manifests/<session-id>.json`
 before atomically replacing
-`examples/ieee80211/analysis/generated/ax/pcap_statistics_manifest.json`
+`examples/ieee80211/analysis/generated/ax/capture_manifest.json`
 with the same full latest-session mirror.
 `--reuse --session-id ...` selects exact history; omitting the ID selects the
-latest mirror. Legacy schema-1 mirrors remain structurally readable for
-diagnostics, but current source/tool staleness checks are intentionally not
-bypassed. Each schema-2 entry
+latest mirror. The old standalone packet-statistics manifests and generator
+are removed. Each schema-2 entry
 records the scalar hash and run attributes plus `capinfos` file, link,
 size/count, timestamp-order, precision, snapshot, and interface metadata.
 
 The PCAP analyzer validates every capture before parsing and writes a bounded
-frame-exchange timeline, compact cross-configuration table, count-versus-
-airtime plot, figure provenance, and `summary_results_pcap.json`. Each PCAP
-plot and provenance sidecar is stored only at
-`analysis/figures/<scenario>/packet_statistics.png[.json]`, and generated
-walkthrough sections reference that centralized copy. Reuse mode
+frame-exchange timeline, compact cross-configuration table, and
+count-versus-airtime plot. The plot and provenance sidecar are stored at
+`results/<session-id>/packet_statistics.png[.json]`, alongside the raw
+configuration result directories. Generated walkthrough sections reference
+that session-local copy. Reuse mode
 does not edit walkthroughs by default; `--update-walkthrough` is explicit and
 is reserved for the facade's publish step. It exits nonzero when an evidence
 check is `FAIL`. `--allow-failed-evidence` is intended only for preserving an
@@ -135,14 +136,15 @@ plus relevant non-ignored, untracked inputs. Generated walkthroughs, figures,
 report outputs, and immutable manifest-history files are excluded so
 publishing evidence does not stale itself.
 
-The dense-IoT campaign uses its own iteration-aware runner and analyzer; run
-it alongside the manifest-driven suite:
+The shared facade maps Dense IoT to a five-run, eight-station comparison so
+its run-0 PCAP comes from the same result set. The broader 8/16-station
+campaign retains its iteration-aware runner and analyzer:
 
 ```sh
 python3 examples/ieee80211ax/dense_iot/run_campaign.py
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/dense_iot/analyze.py
 ```
 
-The campaign runner uses Cmdenv and executes independent configuration/run pairs in parallel. Each invocation stores one result set as `results/scalar-vector/YYYYMMDDTHHMMSSZ/<configuration>/`; pass `--session-id` to reuse an explicit UTC session identifier. The analysis commands select the newest complete session by default, or accept the same `--session-id` explicitly. `summarize_results.py` rebuilds `metrics.json` atomically instead of retaining stale groups, records the selected session and input hashes per group, and requires an explicitly requested session to be complete for the entire manifest. By default the runner uses all CPUs available to the process, equivalent to `$(nproc)`; pass `-j N` to tune concurrency for the machine or `-j 1` for serial execution. Each run sets `seed-set` to its repetition number and records only the vectors/scalars needed by these analyses. Successful Cmdenv output is suppressed to keep parallel logs readable, while output from failed runs is replayed in full. Raw `.sca`, `.vec`, and `.vci` files stay ignored because they are large; the checked-in artifacts are the figures, provenance sidecars, and `metrics.json`. CI regenerates the five-seed campaign before running the stale-figure and metric checks.
+The campaign runner uses Cmdenv and executes independent configuration/run pairs in parallel. Each invocation stores one result set as `results/YYYYMMDDTHHMMSSZ/<configuration>/`; pass `--session-id` to reuse an explicit UTC session identifier. A combined campaign enables PCAP recording only for run 0, so scalar/vector analysis uses runs 0–4 while PCAP analysis uses the captures from run 0 of that same set. The analysis commands select the newest complete session by default, or accept the same `--session-id` explicitly. `summarize_results.py` rebuilds `metrics.json` atomically instead of retaining stale groups, records the selected session and input hashes per group, and requires an explicitly requested session to be complete for the entire manifest. By default the runner uses all CPUs available to the process, equivalent to `$(nproc)`; pass `-j N` to tune concurrency for the machine or `-j 1` for serial execution. Each run sets `seed-set` to its repetition number and records only the vectors/scalars needed by these analyses. Successful Cmdenv output is suppressed to keep parallel logs readable, while output from failed runs is replayed in full. Raw result sets and their generated figures remain ignored together.
 
 The normative reference is IEEE Std 802.11-2024 in the repository corpus (`80211ax-2024`). Relevant clause/chunk identifiers are listed on each analysis page. These experiments validate selected observable consequences of those procedures; they are not a conformance certification.

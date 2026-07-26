@@ -83,6 +83,7 @@ def build_command(
     config: str,
     run: int,
     repetitions: int,
+    pcap_interface_patterns: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
     return build_cmdenv_command(
         REPOSITORY_ROOT,
@@ -93,6 +94,7 @@ def build_command(
         repetitions,
         VECTOR_STATISTICS,
         ("heUlRandomAccessAttempt", "heUlRandomAccessSuccess"),
+        pcap_interface_patterns,
     )
 
 
@@ -102,6 +104,8 @@ def collect_jobs(
     repetitions_override: int | None = None,
     selected_configs: set[str] | None = None,
     campaign_session_id: str | None = None,
+    pcap_run: int | None = None,
+    pcap_interface_patterns: tuple[str, ...] = (),
 ) -> list[CampaignJob]:
     return collect_campaign_jobs(
         manifest,
@@ -112,6 +116,8 @@ def collect_jobs(
         ("heUlRandomAccessAttempt", "heUlRandomAccessSuccess"),
         repetitions_override,
         selected_configs,
+        pcap_run,
+        pcap_interface_patterns,
     )
 
 
@@ -162,6 +168,17 @@ def main() -> None:
     parser.add_argument("--runs", type=positive_int, help="override repetition count for a diagnostic campaign")
     parser.add_argument("--config", action="append", help="run only the named configuration")
     parser.add_argument(
+        "--pcap-run",
+        type=int,
+        help="record PCAPng files for this run number (normally 0)",
+    )
+    parser.add_argument(
+        "--pcap-interface-pattern",
+        action="append",
+        default=[],
+        help="module pattern whose WLAN interfaces record PCAPng; repeat as needed",
+    )
+    parser.add_argument(
         "--session-id",
         type=session_id,
         help="UTC result-set ID (default: current time as YYYYMMDDTHHMMSSZ)",
@@ -176,6 +193,15 @@ def main() -> None:
         parser.error(f"unknown group {args.group!r}; choose from: all, {', '.join(sorted(manifest['groups']))}")
 
     campaign_session_id = args.session_id or new_session_id()
+    repetitions = args.runs or max(
+        int(group["expected_repetitions"])
+        for group in manifest["groups"].values()
+    )
+    if args.pcap_run is not None:
+        if not args.pcap_interface_pattern:
+            parser.error("--pcap-run requires --pcap-interface-pattern")
+        if args.pcap_run < 0 or args.pcap_run >= repetitions:
+            parser.error(f"--pcap-run must be in [0, {repetitions})")
     print(f"Campaign session: {campaign_session_id}", flush=True)
     jobs = collect_jobs(
         manifest,
@@ -183,6 +209,8 @@ def main() -> None:
         repetitions_override=args.runs,
         selected_configs=set(args.config) if args.config else None,
         campaign_session_id=campaign_session_id,
+        pcap_run=args.pcap_run,
+        pcap_interface_patterns=tuple(args.pcap_interface_pattern),
     )
     if not run_jobs(jobs, args.jobs):
         raise SystemExit(1)

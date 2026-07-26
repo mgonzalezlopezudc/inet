@@ -24,12 +24,19 @@
       "feature_plugins": ["fragmentation"]
     },
     "mac_features/multi_tid_block_ack": {
-      "ini": "mac_features/multi_tid_block_ack/omnetpp.ini",
+      "scalar_vector_group": "multi_tid",
+      "ini": "mac_features/multi_tid_block_ack/downlink.ini",
       "configurations": ["MultiTidBlockAck", "UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
+      "configuration_inis": {
+        "MultiTidBlockAck": "mac_features/multi_tid_block_ack/downlink.ini",
+        "UlMuMultiTidBlockAck": "mac_features/multi_tid_block_ack/uplink.ini",
+        "UlSuMultiTidBlockAck": "mac_features/multi_tid_block_ack/uplink.ini"
+      },
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["block-ack"]
     },
     "mac_features/operating_mode_indication": {
+      "scalar_vector_group": "operating_mode",
       "ini": "mac_features/operating_mode_indication/omnetpp.ini",
       "configurations": ["OperatingModeIndication"],
       "phy_profiles": ["legacy", "he"],
@@ -43,6 +50,7 @@
       "feature_plugins": ["spatial-reuse"]
     },
     "frequency_selective_channel": {
+      "scalar_vector_group": "frequency_selective",
       "ini": "frequency_selective_channel/omnetpp.ini",
       "configurations": ["FlatChannelOFDMA", "TgaxModelBOFDMA"],
       "phy_profiles": ["legacy", "he"]
@@ -61,6 +69,7 @@
       "phy_profiles": ["legacy", "he"]
     },
     "multi_user/ndp_feedback": {
+      "scalar_vector_group": "ndp_feedback",
       "ini": "multi_user/ndp_feedback/omnetpp.ini",
       "configurations": ["NdpFeedbackReport"],
       "phy_profiles": ["legacy", "he"],
@@ -100,6 +109,7 @@
       "feature_plugins": ["buffer-status"]
     },
     "dense_iot": {
+      "scalar_vector_group": "dense_iot",
       "ini": "dense_iot/omnetpp.ini",
       "configurations": ["AxUl", "AcUl", "AxDl", "AcDl", "AxMixed", "AcMixed"],
       "phy_profiles": ["legacy", "vht", "he"],
