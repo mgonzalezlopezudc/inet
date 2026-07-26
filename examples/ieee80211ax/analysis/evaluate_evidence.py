@@ -268,6 +268,7 @@ def build_ledger(
     manifest: dict[str, Any],
     requested_session_id: str | None,
     selected_groups: list[str],
+    manifest_path: Path = DEFAULT_MANIFEST,
 ) -> dict[str, Any]:
     groups: dict[str, Any] = {}
     all_checks: list[dict[str, Any]] = []
@@ -329,7 +330,11 @@ def build_ledger(
         "schema_version": 1,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "repository_revision": git_revision(),
-        "manifest": str(DEFAULT_MANIFEST.relative_to(REPOSITORY_ROOT)),
+        "manifest": (
+            str(manifest_path.relative_to(REPOSITORY_ROOT))
+            if manifest_path.is_relative_to(REPOSITORY_ROOT)
+            else str(manifest_path)
+        ),
         "requested_session_id": requested_session_id,
         "groups": groups,
         "status_summary": summary,
@@ -338,6 +343,7 @@ def build_ledger(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--session-id", help="evaluate this YYYYMMDDTHHMMSSZ result session")
     parser.add_argument("--group", action="append", help="evaluate one group; repeat as needed")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
@@ -353,12 +359,14 @@ def main() -> None:
     args = parse_args()
     if args.session_id is not None and not SESSION_ID_PATTERN.fullmatch(args.session_id):
         raise ValueError("Session ID must use YYYYMMDDTHHMMSSZ")
-    manifest = load_manifest()
+    manifest = load_manifest(args.manifest)
     selected_groups = args.group or list(manifest["groups"])
     unknown = set(selected_groups) - set(manifest["groups"])
     if unknown:
         raise ValueError(f"Unknown analysis groups: {sorted(unknown)}")
-    ledger = build_ledger(manifest, args.session_id, selected_groups)
+    ledger = build_ledger(
+        manifest, args.session_id, selected_groups, args.manifest
+    )
     output = args.output if args.output.is_absolute() else REPOSITORY_ROOT / args.output
     atomic_write_text(
         output, json.dumps(ledger, indent=2, sort_keys=True, allow_nan=False) + "\n"

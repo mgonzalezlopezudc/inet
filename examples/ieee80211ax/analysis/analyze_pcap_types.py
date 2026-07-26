@@ -430,6 +430,20 @@ def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=
         return 20e-6 + (size * 8) / 6e6
 
 def find_ini_file_for_config(subdir, config_name):
+    configured_ini = (
+        SUITE_SCENARIOS.get(subdir, {})
+        .get("configuration_inis", {})
+        .get(config_name)
+    )
+    if configured_ini is not None:
+        ini_path = EXAMPLE_ROOT / configured_ini
+        if not ini_path.is_file():
+            raise RuntimeError(
+                f"{subdir}/{config_name}: configured INI does not exist: "
+                f"{ini_path}"
+            )
+        return ini_path
+
     def has_config(ini_path, cfg_name, visited=None):
         if visited is None:
             visited = set()
@@ -2555,11 +2569,23 @@ def parse_args():
         action="store_true",
         help="write reports but return success even when an evidence check is FAIL",
     )
+    parser.add_argument(
+        "--capture-only",
+        action="store_true",
+        help="generate raw captures and their immutable manifest, then stop",
+    )
+    parser.add_argument(
+        "--update-walkthrough",
+        action="store_true",
+        help="explicitly update marker-bounded walkthrough sections",
+    )
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
+    if args.capture_only and not args.generate:
+        raise ValueError("--capture-only requires --generate")
     selected_subdirs = args.subdir or list(subdirs_configs)
     if args.config:
         selected_configs = set(args.config)
@@ -2588,6 +2614,12 @@ def main():
         if args.generate else
         load_and_validate_manifest(selected_subdirs, args.run, args.session_id)
     )
+    if args.capture_only:
+        print(
+            f"CAPTURED session {manifest['session_id']}; "
+            "analysis and walkthrough publication were not run"
+        )
+        return
     selected_manifest = (
         _history_path(manifest["session_id"])
         if args.generate or args.session_id is not None else MANIFEST_PATH
@@ -2627,7 +2659,7 @@ def main():
             raise RuntimeError(f"{subdir}: no packet statistics plot generated")
         write_packet_plot_provenance(plot_path, res, subdir, manifest)
         md_table = generate_markdown_tables(res, subdir, all_checks[subdir], manifest)
-        if md_table:
+        if md_table and args.update_walkthrough:
             update_walkthrough_file(subdir, md_table)
 
     summary_json_path = ANALYSIS_OUTPUT_DIR / "summary_results_pcap.json"

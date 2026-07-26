@@ -82,16 +82,20 @@ the `server`, `ap`, `host[]`, `radioMedium`, and `configurator` paths stable, so
 scenario INI files remain explicit. Examples with materially different
 topology or management behavior retain dedicated networks.
 
-## 802.11 Packet Statistics Analysis
+## 802.11 analysis
 
-To analyze the 802.11 frame type counts, size distribution, and physical airtime occupancy across the examples:
+Use the generation-neutral interface one scenario at a time. For example:
 
 ```sh
-python3 examples/ieee80211ax/analysis/analyze_pcap_types.py
+python3 examples/ieee80211/analysis/wifi_analysis.py inspect ul_ofdma
+python3 examples/ieee80211/analysis/wifi_analysis.py run ul_ofdma \
+  --evidence both --runs 5
+python3 examples/ieee80211/analysis/wifi_analysis.py report ul_ofdma \
+  --session-id <YYYYMMDDTHHMMSSZ>
+python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_ofdma \
+  --session-id <YYYYMMDDTHHMMSSZ> --update
 ```
 
-This script will:
-- Discover all considered configurations in the examples.
-- Automatically execute the simulation for any configuration missing its packet capture (PCAP) results.
-- Apply MAC display filters in TShark to separate heavy, medium, and light destination traffic flows in asymmetric configurations.
-- Regenerate the packet statistics tables directly inside each example's `walkthrough.md`.
+`inspect` is read-only, `run` creates raw evidence, and `report` generates
+scalar/vector and PCAP analyses without editing walkthroughs. Only the
+explicit `publish --update` step replaces marker-bounded generated sections.

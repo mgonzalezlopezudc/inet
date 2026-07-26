@@ -2,6 +2,7 @@
   "schema_version": 1,
   "suite": "ax",
   "example_root": "examples/ieee80211ax",
+  "scalar_vector_manifest": "examples/ieee80211ax/analysis/experiments.json",
   "generated_marker": "ieee80211ax-pcap-statistics",
   "capture": {
     "interface_patterns": ["**.wlan[*]"],
@@ -9,14 +10,16 @@
   },
   "scenarios": {
     "twt": {
+      "scalar_vector_group": "twt",
       "ini": "twt/omnetpp.ini",
-      "configurations": ["Baseline", "IndividualUnannounced", "IndividualAnnounced", "Broadcast"],
+      "configurations": ["Baseline", "IndividualUnannounced", "IndividualAnnounced", "Broadcast", "BaselineEnergy", "TwtEnergySaving"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["twt"]
     },
     "mac_features/dynamic_fragmentation": {
+      "scalar_vector_group": "fragmentation",
       "ini": "mac_features/dynamic_fragmentation/omnetpp.ini",
-      "configurations": ["DynamicFragmentation"],
+      "configurations": ["DynamicFragmentation", "StaticFragmentation", "NoFragmentation"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["fragmentation"]
     },
@@ -33,6 +36,7 @@
       "feature_plugins": ["operating-mode"]
     },
     "bss_coloring": {
+      "scalar_vector_group": "bss",
       "ini": "bss_coloring/omnetpp.ini",
       "configurations": ["BssColoringDisabled", "BssColoringEnabled", "ObssPdConservative", "ObssPdAggressive", "BssColoringCollision", "TwoNav"],
       "phy_profiles": ["legacy", "he"],
@@ -44,12 +48,14 @@
       "phy_profiles": ["legacy", "he"]
     },
     "he_features": {
+      "scalar_vector_group": "puncturing",
       "ini": "he_features/omnetpp.ini",
-      "configurations": ["BccBaseline", "PreamblePuncturing"],
+      "configurations": ["BccBaseline", "PreamblePuncturing", "CleanChannelBaseline", "LegacyInterferenceWithoutPuncturing", "PreamblePuncturingUnderInterference", "DynamicPuncturing"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["puncturing"]
     },
     "he_channel_widths": {
+      "scalar_vector_group": "width",
       "ini": "he_channel_widths/omnetpp.ini",
       "configurations": ["Width20MHz", "Width40MHz", "Width80MHz", "Width160MHz"],
       "phy_profiles": ["legacy", "he"]
@@ -61,26 +67,35 @@
       "feature_plugins": ["sounding"]
     },
     "multi_user/mu_mimo": {
-      "ini": "multi_user/mu_mimo/omnetpp.ini",
-      "configurations": ["DlMuMimo", "UlMuMimo"],
+      "scalar_vector_group": "mimo",
+      "ini": "multi_user/mu_mimo/downlink.ini",
+      "configurations": ["DlMuMimo", "UlMuMimo", "EqualSizedRUs_fBW"],
+      "configuration_inis": {
+        "DlMuMimo": "multi_user/mu_mimo/downlink.ini",
+        "UlMuMimo": "multi_user/mu_mimo/uplink.ini",
+        "EqualSizedRUs_fBW": "multi_user/mu_mimo/downlink.ini"
+      },
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["mu-mimo"]
     },
     "dl_ofdma": {
+      "scalar_vector_group": "dl",
       "ini": "dl_ofdma/omnetpp.ini",
       "configurations": ["EqualSizedRUs_fBW", "EqualSizedRUs_fBW_ACVO", "EqualSizedRUs_fHoL", "EqualSizedRUs_fHoL_ACVO", "SuEdcaBaseline", "EqualSizedRUs80MHz_fBW", "EqualSizedRUs80MHz_fHoL", "SuEdcaBaseline80MHz", "BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms", "MultiTidBlockAck"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"]
     },
     "he_rate_adaptation": {
+      "scalar_vector_group": "rate",
       "ini": "he_rate_adaptation/omnetpp.ini",
       "configurations": ["HeMinstrel", "FixedMcs", "HeMinstrelMobile"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["rate-adaptation"]
     },
     "he_bsr": {
+      "scalar_vector_group": "bsr",
       "ini": "he_bsr/omnetpp.ini",
-      "configurations": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting"],
+      "configurations": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting", "BurstyTraffic"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["buffer-status"]
     },
@@ -93,8 +108,9 @@
       }
     },
     "ul_ofdma": {
+      "scalar_vector_group": "uora",
       "ini": "ul_ofdma/omnetpp.ini",
-      "configurations": ["ScheduledOnly", "MixedUora", "EqualRus", "EdcaBaseline", "UoraLightContention", "UoraMoreRandomAccessRus"],
+      "configurations": ["ScheduledOnly", "MixedUora", "EqualRus", "EdcaBaseline", "UoraLightContention", "UoraHeavyContention", "UoraMoreRandomAccessRus"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma", "uora"],
       "capture": {
@@ -102,6 +118,7 @@
       }
     },
     "he_er_su": {
+      "scalar_vector_group": "er",
       "ini": "he_er_su/omnetpp.ini",
       "configurations": ["ErBss", "CellBoundaryHeSu", "CellBoundaryHeErSu"],
       "phy_profiles": ["legacy", "he"],

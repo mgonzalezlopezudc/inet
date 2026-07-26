@@ -55,6 +55,7 @@ CLAUDE.md
 /examples/*/results/
 /examples/*/*/results/
 /examples/*/*/*/results/
+/examples/ieee80211/analysis/generated/sessions/
 /examples/*/cache/
 /examples/*/*/cache/
 /tutorials/*/cache/

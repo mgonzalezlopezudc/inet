@@ -1,5 +1,24 @@
 # IEEE 802.11ax result analysis
 
+The authoritative user interface is now the generation-neutral
+[`wifi_analysis.py`](../../ieee80211/analysis/wifi_analysis.py) facade. For
+example:
+
+```sh
+python3 examples/ieee80211/analysis/wifi_analysis.py inspect bss_coloring
+python3 examples/ieee80211/analysis/wifi_analysis.py run bss_coloring \
+  --evidence both --runs 5
+python3 examples/ieee80211/analysis/wifi_analysis.py report bss_coloring \
+  --session-id <YYYYMMDDTHHMMSSZ>
+python3 examples/ieee80211/analysis/wifi_analysis.py publish bss_coloring \
+  --session-id <YYYYMMDDTHHMMSSZ> --update
+```
+
+The scripts in this directory are retained as AX-specific internal adapters.
+Only `publish ... --update` is intended to edit walkthroughs. A one-run
+session is diagnostic; publication requires at least five independent runs.
+Measurement windows use `[start, end)` notation.
+
 These figures are evidence checks for the INET HE implementation, not generic claims that a feature always improves throughput. Every bar is computed from five independent simulation runs; error bars are two-sided 95% Student-t confidence intervals over run-level observations. Timelines and ECDFs use run 0 only and are labeled accordingly, so packet samples are never treated as independent repetitions.
 
 The schema-2 experiment manifest is [`experiments.json`](experiments.json). It fixes the configuration names, result directories, repetition count, measurement windows, workload metadata, output paths, and uniquely identified evidence contracts. Each contract names an evaluator. `mimo_disjoint_streams` and `matched_delivery_ratio` are authoritative; declarations whose decisive evidence is not yet executable explicitly use `unimplemented` and evaluate `INCONCLUSIVE`. The loader rejects missing `.sca`/`.vec` pairs, extra or mixed configurations, missing runs, non-monotonic vectors, misaligned telemetry, and unit mismatches where OMNeT++ records a unit. `packetBytes` recorder values are bytes even though OMNeT++ currently leaves their unit attribute empty; the exact recorder name is used as that contract.
@@ -41,7 +60,7 @@ These AX commands are retained as compatibility entry points and now use the
 shared campaign and PHY-decoding machinery. The neutral PCAP launcher can run
 the complete AX suite descriptor or an EHT suite without changing the analyzer.
 
-From the repository root:
+For adapter development and compatibility testing, from the repository root:
 
 ```sh
 python3 examples/ieee80211ax/analysis/run_campaign.py all
@@ -59,7 +78,7 @@ manifest-validated captures, with:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/analyze_pcap_types.py \
-    --generate --session-id 20260725T120000Z --subdir dl_ofdma --run 0
+    --generate --capture-only --session-id 20260725T120000Z --subdir dl_ofdma --run 0
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/analyze_pcap_types.py \
     --reuse --session-id 20260725T120000Z --subdir dl_ofdma --run 0
 ```
@@ -74,11 +93,12 @@ bypassed. Each schema-2 entry
 records the scalar hash and run attributes plus `capinfos` file, link,
 size/count, timestamp-order, precision, snapshot, and interface metadata.
 
-The PCAP analyzer validates every capture before parsing, writes a bounded
+The PCAP analyzer validates every capture before parsing and writes a bounded
 frame-exchange timeline, compact cross-configuration table, count-versus-
-airtime plot, and figure provenance into the generated walkthrough section
-and `summary_results_pcap.json`. It exits nonzero when an evidence check is
-`FAIL`. `--allow-failed-evidence` is intended only for preserving an
+airtime plot, figure provenance, and `summary_results_pcap.json`. Reuse mode
+does not edit walkthroughs by default; `--update-walkthrough` is explicit and
+is reserved for the facade's publish step. It exits nonzero when an evidence
+check is `FAIL`. `--allow-failed-evidence` is intended only for preserving an
 exploratory report whose failed checks will be investigated.
 
 `evaluate_evidence.py` atomically writes `evidence-ledger.json`. Its normal

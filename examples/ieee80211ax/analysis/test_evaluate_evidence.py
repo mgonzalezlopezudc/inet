@@ -1,6 +1,12 @@
 import unittest
+from pathlib import Path
+from unittest.mock import patch
 
-from evaluate_evidence import evaluate_matched_delivery, evaluate_mimo_triplets
+from evaluate_evidence import (
+    build_ledger,
+    evaluate_matched_delivery,
+    evaluate_mimo_triplets,
+)
 
 
 class MimoEvidenceTest(unittest.TestCase):
@@ -41,6 +47,31 @@ class MatchedDeliveryEvidenceTest(unittest.TestCase):
         self.assertEqual(mismatch.status, "INCONCLUSIVE")
         zero = evaluate_matched_delivery({(0, 10): 0}, {(0, 10): 0}, 0.95)
         self.assertEqual(zero.status, "INCONCLUSIVE")
+
+
+class EvidenceLedgerProvenanceTest(unittest.TestCase):
+    def test_ledger_records_the_loaded_manifest_path(self):
+        manifest = {
+            "groups": {"diagnostic": {"measurement": {"start": 0, "end": 1}}},
+            "evidence_contracts": {
+                "diagnostic": [{
+                    "id": "not-run",
+                    "kind": "metric",
+                    "requirement": "diagnostic",
+                    "results": ["missing"],
+                    "evaluation": {"handler": "unimplemented"},
+                }]
+            },
+        }
+        path = Path("/tmp/session-filtered-experiments.json")
+        with patch(
+            "evaluate_evidence.resolve_session_id",
+            side_effect=FileNotFoundError("not retained"),
+        ):
+            ledger = build_ledger(
+                manifest, "20260726T120000Z", ["diagnostic"], path
+            )
+        self.assertEqual(ledger["manifest"], str(path))
 
 
 if __name__ == "__main__":

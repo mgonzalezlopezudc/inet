@@ -25,6 +25,8 @@ from analyze_pcap_types import (
     load_json_without_duplicates,
     manifest_provenance,
     manifest_schema_version,
+    main,
+    parse_args,
     parse_capinfos_interfaces,
     parse_capinfos_table,
     publish_capture_manifest,
@@ -446,6 +448,53 @@ class CaptureManifestTest(unittest.TestCase):
                 with self.assertRaises(FileExistsError):
                     publish_capture_manifest(manifest)
                 self.assertEqual(json.loads(latest.read_text()), manifest)
+
+    def test_walkthrough_update_is_explicit_and_disabled_by_default(self):
+        with patch(
+            "sys.argv",
+            ["analyze_pcap_types.py", "--reuse", "--subdir", "twt"],
+        ):
+            args = parse_args()
+        self.assertFalse(args.update_walkthrough)
+        self.assertFalse(args.capture_only)
+        with patch(
+            "sys.argv",
+            [
+                "analyze_pcap_types.py",
+                "--reuse",
+                "--subdir",
+                "twt",
+                "--update-walkthrough",
+            ],
+        ):
+            self.assertTrue(parse_args().update_walkthrough)
+
+    def test_capture_only_stops_before_analysis_and_walkthrough_updates(self):
+        manifest = {"session_id": "20260726T120000Z"}
+        with (
+            patch(
+                "sys.argv",
+                [
+                    "analyze_pcap_types.py",
+                    "--generate",
+                    "--capture-only",
+                    "--subdir",
+                    "twt",
+                    "--session-id",
+                    manifest["session_id"],
+                ],
+            ),
+            patch(
+                "analyze_pcap_types.build_capture_manifest",
+                return_value=manifest,
+            ) as build,
+            patch("analyze_pcap_types.analyze_subdirectory") as analyze,
+            patch("analyze_pcap_types.update_walkthrough_file") as update,
+        ):
+            main()
+        build.assert_called_once_with(["twt"], 0, manifest["session_id"])
+        analyze.assert_not_called()
+        update.assert_not_called()
 
     def test_source_digest_includes_head_diff_and_untracked_content(self):
         with tempfile.TemporaryDirectory(
