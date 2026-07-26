@@ -105,7 +105,15 @@ bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
   --result-dir=/tmp/inet-uora-more-ra-rus-r0
 ```
 
-The retained sessions completed historically; no new exit status is claimed.
+The scalar/vector session is historical. The suite-owned packet command below
+was executed with exit status 0 and created session `20260725T233546Z`:
+
+```sh
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir ul_ofdma --run 0 --allow-failed-evidence
+```
 
 ## Scalar and vector analysis
 
@@ -186,6 +194,39 @@ packets still queued at 2 s do not contribute.
   random-access RUs also leaves fewer RUs for scheduled service, and the
   workload remains overloaded. The evidence supports increased UORA capacity
   in this sample, not an optimal RA-RU count.
+
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-uora -->
+### Generated scalar/vector plot and table
+
+![uora scalar/vector analysis](../analysis/figures/uora/uora-dashboard.png)
+
+Figure provenance: [`../analysis/figures/uora/uora-dashboard.png.json`](../analysis/figures/uora/uora-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+
+| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
+|---|---|---|---|---:|---:|---:|
+| Heavy, 1 RA-RU | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 9.4 | 5.08931 |
+| Heavy, 1 RA-RU | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 4 | 0.125 | 0 |
+| Heavy, 1 RA-RU | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.119658 | 0.156692 |
+| Heavy, 1 RA-RU | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.8 | 0.555289 |
+| Heavy, 1 RA-RU | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 1 | — |
+| Heavy, 5 RA-RUs | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 19.2 | 7.77405 |
+| Heavy, 5 RA-RUs | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.543333 | 0.184415 |
+| Heavy, 5 RA-RUs | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.370399 | 0.122753 |
+| Heavy, 5 RA-RUs | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 7.2 | 3.96556 |
+| Heavy, 5 RA-RUs | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 0 | — |
+| Light, 1 RA-RU | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 213.4 | 55.5539 |
+| Light, 1 RA-RU | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.475238 | 0.181105 |
+| Light, 1 RA-RU | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.0775811 | 0.0291306 |
+| Light, 1 RA-RU | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 16.2 | 5.07414 |
+| Light, 1 RA-RU | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 0 | — |
+| Mixed, adaptive 1–3 RA-RUs | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 68.6 | 11.7336 |
+| Mixed, adaptive 1–3 RA-RUs | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.661106 | 0.00273725 |
+| Mixed, adaptive 1–3 RA-RUs | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 1 | 0 |
+| Mixed, adaptive 1–3 RA-RUs | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 68.6 | 11.7336 |
+| Mixed, adaptive 1–3 RA-RUs | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 0 | — |
+
+The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+<!-- END GENERATED: ieee80211-scalar-vector-uora -->
 
 ## PCAP statistics
 
@@ -287,7 +328,7 @@ For a direct decode of the retained five-RA-RU capture:
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260724T175025Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -c 20
 ```
 
@@ -298,6 +339,263 @@ row, while `EqualRus`, `MixedUora`, `ScheduledOnly`, `UoraLightContention`, and
 not distinguish scheduled from random access. The Trigger's AID12 fields expose
 advertised AID-0 RA-RUs, while the UORA scalar counters above remain the
 evidence for attempts and successes.
+
+<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
+### Generated PCAP plots and tables
+![802.11 Packet Type Statistics](packet_statistics.png)
+
+Figure provenance: [`packet_statistics.png.json`](packet_statistics.png.json).
+
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
+
+Capture session `20260725T233546Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T233546Z.json` (SHA-256 `634ac37a601cc1ef7817d988dd0c0dda98e6c7bf66660dcf60747910089dce4d`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+
+Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
+
+#### Compact cross-configuration summary
+
+| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---|---:|---|---:|---|
+| `EdcaBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2483 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023) | 46.62% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualRus` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus/EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `MixedUora` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 5085 | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1367), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1281), Control: Ack (1021) | 70.86% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ScheduledOnly` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UoraLightContention` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 11466 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (8111), Control: Block Ack (BA) (903), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (771) | 60.50% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UoraMoreRandomAccessRus` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 14027 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (12709), Control: Block Ack (BA) (341), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (323) | 67.13% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+
+### Evidence checks
+
+| Status | Requirement | Observed evidence |
+|---|---|---|
+| **PASS** | EdcaBaseline produced protocol-visible wireless observations | 2483 AP/global transmission observations |
+| **PASS** | EqualRus produced protocol-visible wireless observations | 2877 AP/global transmission observations |
+| **PASS** | MixedUora produced protocol-visible wireless observations | 5085 AP/global transmission observations |
+| **PASS** | ScheduledOnly produced protocol-visible wireless observations | 2877 AP/global transmission observations |
+| **PASS** | UoraLightContention produced protocol-visible wireless observations | 11466 AP/global transmission observations |
+| **PASS** | UoraMoreRandomAccessRus produced protocol-visible wireless observations | 14027 AP/global transmission observations |
+
+### Configuration: `EdcaBaseline`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2483**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1460 | 58.80% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -62.9 dBm | - | 97.29% | 45.35% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1023 | 41.20% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.71% | 1.26% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.200644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.201370000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.201418000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.202105000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.202153000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.202849000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.202897000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.300644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.301370000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:10` | 0.301418000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.302105000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.302831000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.302879000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.303620000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.303668000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.305644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Configuration: `EqualRus`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1029 | 35.77% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 73.22% | 31.97% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 492 | 17.10% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 22.46% | 9.81% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 168 | 5.84% | 46.3 B | 2.9 B | 35.4 us | 1.0 us | 5010 MHz | - | 10.0 dBm | 0.68% | 0.30% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 168 | 5.84% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.76% | 0.33% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1020 | 35.45% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.88% | 1.26% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=222 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=228 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.002133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.103048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.104064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=387 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.104064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=393 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.104064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=399 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:10` | 0.104133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.200644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.201388000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.201436000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.202123000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.202171000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.202272000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Configuration: `MixedUora`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5085**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1281 | 25.19% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.3 dBm | - | 56.16% | 39.79% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 1367 | 26.88% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 38.45% | 27.25% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 708 | 13.92% | 49.9 B | 9.5 B | 36.6 us | 3.2 us | 5010 MHz | - | 10.0 dBm | 1.83% | 1.30% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 708 | 13.92% | 47.2 B | 3.6 B | 35.7 us | 1.2 us | 5010 MHz | - | 10.0 dBm | 1.79% | 1.27% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1021 | 20.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.78% | 1.26% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=224 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.002129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.003048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.004064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=344 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.004064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=352 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.004129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.005048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:10` | 0.006064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=472 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.006064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=480 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.006129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.007048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.008064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=600 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.008064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=608 | Carries protocol-visible MAC payload in the representative exchange. |
+| `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.008129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Configuration: `ScheduledOnly`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1029 | 35.77% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 73.22% | 31.97% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 492 | 17.10% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 22.46% | 9.81% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 168 | 5.84% | 46.3 B | 2.9 B | 35.4 us | 1.0 us | 5010 MHz | - | 10.0 dBm | 0.68% | 0.30% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 168 | 5.84% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.76% | 0.33% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1020 | 35.45% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.88% | 1.26% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=222 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=228 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.002133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.103048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.104064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=387 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.104064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=393 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.104064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=399 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:10` | 0.104133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.200644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.201388000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.201436000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.202123000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.202171000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.202272000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Configuration: `UoraLightContention`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **11466**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 8111 | 70.74% | 167.2 B | 1.8 B | 95.0 us | 11.3 us | 5010 MHz | -59.2 dBm | - | 63.71% | 38.54% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 438 | 3.82% | 188.5 B | 127.7 B | 139.1 us | 69.8 us | 5010 MHz | -56.4 dBm | - | 5.04% | 3.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 771 | 6.72% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 25.40% | 15.37% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 562 | 4.90% | 50.9 B | 10.4 B | 37.0 us | 3.5 us | 5010 MHz | - | 10.0 dBm | 1.72% | 1.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 622 | 5.42% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -57.5 dBm | - | 1.44% | 0.87% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 903 | 7.88% | 41.0 B | 7.3 B | 33.7 us | 2.4 us | 5010 MHz | - | 10.0 dBm | 2.51% | 1.52% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 26 | 0.23% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.05% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 16 | 0.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.03% | 0.02% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 17 | 0.15% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.10% | 0.06% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=451 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=457 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.002129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.003048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.004064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=719 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.004064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=725 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.004129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.005048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:10` | 0.006064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=987 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.006064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=993 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.006129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.007048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.008064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1255 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.008064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1261 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.008129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Configuration: `UoraMoreRandomAccessRus`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **14027**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 12709 | 90.60% | 166.1 B | 0.7 B | 91.8 us | 6.1 us | 5010 MHz | -57.6 dBm | - | 86.91% | 58.35% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 101 | 0.72% | 250.2 B | 256.4 B | 172.9 us | 140.3 us | 5010 MHz | -58.3 dBm | - | 1.30% | 0.87% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 323 | 2.30% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz | -75.0 dBm | - | 9.59% | 6.44% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 151 | 1.08% | 72.0 B | 1.4 B | 44.0 us | 0.5 us | 5010 MHz | - | 10.0 dBm | 0.49% | 0.33% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 319 | 2.27% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -56.8 dBm | - | 0.67% | 0.45% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 341 | 2.43% | 38.5 B | 7.8 B | 32.8 us | 2.6 us | 5010 MHz | - | 10.0 dBm | 0.83% | 0.56% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 51 | 0.36% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.09% | 0.06% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 16 | 0.11% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.03% | 0.02% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 16 | 0.11% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.08% | 0.06% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=451 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=457 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.002129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.003048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.004064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=719 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.004064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=725 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.004129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.005048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:10` | 0.006064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=987 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.006064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=993 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.006129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.007048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.008064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1255 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.008064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1261 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.008129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Analysis of Packet Distribution
+`EdcaBaseline` provides the non-triggered control. The scheduled and mixed-access configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). The three UORA configurations expose load and RA-RU-count effects, but frame-subtype counts alone cannot distinguish an AID-0 random-access attempt from scheduled access or prove a collision. Use the per-STA `heUlRandomAccessAttempt` and `heUlRandomAccessSuccess` scalars for that decision evidence.
+<!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
 ## Frame exchange analysis
 
@@ -373,119 +671,6 @@ that could otherwise be scheduled.
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T181500Z` | four UORA configs, runs 0–4 | scalar counters; delay `[0.3,2)` s | hashes retained in figure JSON |
-| PCAP | `results/packet-statistics/20260724T175025Z` | six configs, run 0 | TShark 4.6.4, AP point | generated block preserved |
+| PCAP | `results/packet-statistics/20260725T233546Z` | six configs, run 0 | TShark 4.6.4, AP point | manifest and hashes in generated block |
 | Supplemental PCAP | `results/packet-statistics/20260725T182100Z` | heavy 1-RU, run 0 | timeline above | separate from generated block |
 | Figure | `../analysis/figures/uora/uora-dashboard.png` | four configs | one observation/run, 95% t CI | provenance retained |
-
-<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-## 802.11 Packet Type Statistics
-![802.11 Packet Type Statistics](packet_statistics.png)
-
-This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
-
-Capture session `20260724T175025Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
-
-Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
-- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
-- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
-
-### Evidence checks
-
-| Status | Requirement | Observed evidence |
-|---|---|---|
-| **PASS** | EdcaBaseline produced protocol-visible wireless observations | 2483 AP/global transmission observations |
-| **PASS** | EqualRus produced protocol-visible wireless observations | 2797 AP/global transmission observations |
-| **PASS** | MixedUora produced protocol-visible wireless observations | 4375 AP/global transmission observations |
-| **PASS** | ScheduledOnly produced protocol-visible wireless observations | 2797 AP/global transmission observations |
-| **PASS** | UoraLightContention produced protocol-visible wireless observations | 11619 AP/global transmission observations |
-| **PASS** | UoraMoreRandomAccessRus produced protocol-visible wireless observations | 14027 AP/global transmission observations |
-
-### Configuration: `EdcaBaseline`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2483**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1460 | 58.80% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -62.9 dBm | - | 97.29% | 45.35% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1023 | 41.20% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.71% | 1.26% |
-
-### Configuration: `EqualRus`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2797**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1054 | 37.68% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 76.23% | 32.74% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 435 | 15.55% | 34.0 B | 0.0 B | 386.6 us | 17.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 19.58% | 8.41% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 146 | 5.22% | 46.4 B | 3.1 B | 35.5 us | 1.0 us | 5010 MHz | - | 10.0 dBm | 0.60% | 0.26% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 146 | 5.22% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.67% | 0.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1016 | 36.32% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.92% | 1.25% |
-
-### Configuration: `MixedUora`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4375**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1462 | 33.42% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.5 dBm | - | 68.24% | 45.42% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 960 | 21.94% | 34.0 B | 0.0 B | 378.4 us | 17.9 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 27.29% | 18.16% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 481 | 10.99% | 51.8 B | 11.1 B | 37.3 us | 3.7 us | 5010 MHz | - | 10.0 dBm | 1.35% | 0.90% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 480 | 10.97% | 47.6 B | 4.1 B | 35.9 us | 1.4 us | 5010 MHz | - | 10.0 dBm | 1.29% | 0.86% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 992 | 22.67% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.84% | 1.22% |
-
-### Configuration: `ScheduledOnly`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2797**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1054 | 37.68% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 76.22% | 32.74% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 435 | 15.55% | 34.0 B | 0.0 B | 387.1 us | 16.8 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 19.60% | 8.42% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 146 | 5.22% | 46.4 B | 3.1 B | 35.5 us | 1.0 us | 5010 MHz | - | 10.0 dBm | 0.60% | 0.26% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 146 | 5.22% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.67% | 0.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1016 | 36.32% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.92% | 1.25% |
-
-### Configuration: `UoraLightContention`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **11619**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 7890 | 67.91% | 167.5 B | 1.9 B | 94.7 us | 10.5 us | 5010 MHz | -58.9 dBm | - | 61.01% | 37.35% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 569 | 4.90% | 184.2 B | 112.3 B | 136.8 us | 61.4 us | 5010 MHz | -56.3 dBm | - | 6.36% | 3.89% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 832 | 7.16% | 34.0 B | 0.0 B | 389.2 us | 15.8 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 26.45% | 16.19% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 541 | 4.66% | 51.0 B | 10.5 B | 37.0 us | 3.5 us | 5010 MHz | - | 10.0 dBm | 1.64% | 1.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 834 | 7.18% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -57.7 dBm | - | 1.91% | 1.17% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 894 | 7.69% | 40.8 B | 7.4 B | 33.6 us | 2.5 us | 5010 MHz | - | 10.0 dBm | 2.45% | 1.50% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 26 | 0.22% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.05% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 16 | 0.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.03% | 0.02% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 17 | 0.15% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.10% | 0.06% |
-
-### Configuration: `UoraMoreRandomAccessRus`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **14027**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 12709 | 90.60% | 166.1 B | 0.7 B | 91.7 us | 5.9 us | 5010 MHz | -57.6 dBm | - | 87.20% | 58.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 101 | 0.72% | 250.2 B | 256.4 B | 172.9 us | 140.3 us | 5010 MHz | -58.3 dBm | - | 1.31% | 0.87% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 323 | 2.30% | 34.0 B | 0.0 B | 384.6 us | 17.6 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz | -75.0 dBm | - | 9.29% | 6.21% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 151 | 1.08% | 72.0 B | 1.4 B | 44.0 us | 0.5 us | 5010 MHz | - | 10.0 dBm | 0.50% | 0.33% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 319 | 2.27% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -56.8 dBm | - | 0.67% | 0.45% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 341 | 2.43% | 38.5 B | 7.8 B | 32.8 us | 2.6 us | 5010 MHz | - | 10.0 dBm | 0.84% | 0.56% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 51 | 0.36% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.09% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 16 | 0.11% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.03% | 0.02% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 16 | 0.11% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.08% | 0.06% |
-
-### Analysis of Packet Distribution
-The `EdcaBaseline` table has no Trigger row. The scheduled and mixed-access
-tables record **Trigger**, HE-TB, and AP **Block Ack** observations. Frame
-subtype counts alone do not distinguish an AID-0 random-access attempt from
-scheduled access or prove a collision. The Trigger user-info AID12 fields do
-identify advertised AID-0 RA-RUs, and same-time/same-frequency HE-TB responses
-expose overlapping use of an RU; the per-STA
-`heUlRandomAccessAttempt:count` and `heUlRandomAccessSuccess:count` scalars are
-the attempt and success evidence.
-<!-- END GENERATED: ieee80211ax-pcap-statistics -->

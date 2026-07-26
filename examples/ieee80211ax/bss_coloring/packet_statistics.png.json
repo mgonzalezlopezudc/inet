@@ -1,0 +1,1082 @@
+{
+  "airtime_limitations": "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB user-dependent signaling that radiotap does not expose remains approximate",
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_manifest": {
+    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230151Z.json",
+    "sha256": "ecd8361db0d2008a1aa04484e869754bb290ae82d5354737bd8ef56168f3b10f"
+  },
+  "capture_session_id": "20260725T230151Z",
+  "configuration_observation_counts": {
+    "BssColoringCollision": 2983,
+    "BssColoringDisabled": 2983,
+    "BssColoringEnabled": 2668,
+    "ObssPdAggressive": 2700,
+    "ObssPdConservative": 2951,
+    "TwoNav": 2039
+  },
+  "counting_semantics": "capture observations of over-the-air frames/MPDUs; observations are not application deliveries or de-duplicated transmissions",
+  "decode_limitations": "typed PHY profiles fail closed; absent, unsupported, or unknown radiotap fields remain unknown",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 811573,
+            "duration_seconds": 0.798422,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999658,
+            "file_size_bytes": 879172,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap1.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1491,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "4d20cc4ca03840a8eda6d348aa91436602579a530802ea1eaf417f943375e805",
+          "size_bytes": 879172
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 808443,
+            "duration_seconds": 0.798421,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 876092,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap2.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1492,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "c6b50a7dd9d9722c882ec32cf5ec3f3c4512b55cd91288741c8b0ffcc9330152",
+          "size_bytes": 876092
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 808487,
+            "duration_seconds": 0.798422,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999658,
+            "file_size_bytes": 876176,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1493,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "e2042057279cf1a29c13529c449fce826798e3cd83969dfdca3ea1d1c27edf1d",
+          "size_bytes": 876176
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 808487,
+            "duration_seconds": 0.798422,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999658,
+            "file_size_bytes": 876176,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1493,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "6b7781d8f3c35c9b31a14533e597b1f030332e8ca445d032601636d01c7e1b75",
+          "size_bytes": 876176
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 807341,
+            "duration_seconds": 0.798421,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 874984,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1492,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "d3c3875df50e336879c66314c542e36790db7e7f5de19e796d0293456cd8b9eb",
+          "size_bytes": 874984
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 807341,
+            "duration_seconds": 0.798421,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 874984,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1492,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "bd44a7381d861e3e628ea278d42bf1fd368c01705be5219a8853799ac881b701",
+          "size_bytes": 874984
+        }
+      ],
+      "config": "BssColoringDisabled",
+      "run_number": 0,
+      "seed_set": 0
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 719927,
+            "duration_seconds": 0.798124,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99936,
+            "file_size_bytes": 780108,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap1.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1332,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "e2e3d5d0eb5026ae72bcdc4fe76cca16e74ba17ea2ba026f37701219dd872fac",
+          "size_bytes": 780108
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 737231,
+            "duration_seconds": 0.797353,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998589,
+            "file_size_bytes": 797704,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap2.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1336,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "e5d6af6f0509c79a38e667a684cb09eaa46dc5bfc4b4f910fc99c3c84818e0ac",
+          "size_bytes": 797704
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 669511,
+            "duration_seconds": 0.798124,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99936,
+            "file_size_bytes": 727588,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1285,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "b47ccd54aceab793d7445eef0a9be279b25d0bb04791559537bfe014aa043fdb",
+          "size_bytes": 727588
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 669511,
+            "duration_seconds": 0.798124,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99936,
+            "file_size_bytes": 727588,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1285,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "2d8205b349e9d435149aec45230818d75af8feac526c8cd00c7b81d788576e1e",
+          "size_bytes": 727588
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 718207,
+            "duration_seconds": 0.797353,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998589,
+            "file_size_bytes": 778072,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1322,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "7cf65f1eeb611af6b393eb1c4c8a0e697c1b19b4bca93023b4bde3989ee787d0",
+          "size_bytes": 778072
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 718163,
+            "duration_seconds": 0.797353,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998589,
+            "file_size_bytes": 777984,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1321,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "3e1300f7a9394cb02d510a28e339218a2dd98759aa0cdc9d0ae3e9e35f93c326",
+          "size_bytes": 777984
+        }
+      ],
+      "config": "BssColoringEnabled",
+      "run_number": 0,
+      "seed_set": 0
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 797419,
+            "duration_seconds": 0.797972,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999208,
+            "file_size_bytes": 864304,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap1.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1476,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "83fef24c1458e476a5dc51cd62873914f25b8eb110493016fc296288a7e2dae0",
+          "size_bytes": 864304
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 800919,
+            "duration_seconds": 0.79812,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999356,
+            "file_size_bytes": 867764,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap2.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1475,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "e50ba1386a28ac8c0814a2b88d929e30375b4c899a2e8a0c4d08a00a9403153c",
+          "size_bytes": 867764
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 764083,
+            "duration_seconds": 0.797972,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999208,
+            "file_size_bytes": 828876,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1429,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "f1544cc66140c259328c8812a648f222fd0eb851f4087f99570176df2c51b05b",
+          "size_bytes": 828876
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 763901,
+            "duration_seconds": 0.797972,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999208,
+            "file_size_bytes": 828648,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1428,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "60dad2475f0ec1e8bf364d69d40be287439804705b168a250836182691517cbb",
+          "size_bytes": 828648
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 750805,
+            "duration_seconds": 0.79812,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999356,
+            "file_size_bytes": 814668,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1408,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "508bcc908417ef7c1c6c213bcf25358e88c7afb9ed72ca67335449e06f921d20",
+          "size_bytes": 814668
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 750805,
+            "duration_seconds": 0.79812,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999356,
+            "file_size_bytes": 814668,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1408,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "78e4862ce981b2673bbd4b792df0180e09e468c69479ca4a4571dc3bec50fd29",
+          "size_bytes": 814668
+        }
+      ],
+      "config": "ObssPdConservative",
+      "run_number": 0,
+      "seed_set": 0
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 733985,
+            "duration_seconds": 0.797868,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999104,
+            "file_size_bytes": 794972,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap1.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1349,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "f847adb4084c981c1fc6942b45c3dc8d6390d52451fca2473734853452b72487",
+          "size_bytes": 794972
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 732773,
+            "duration_seconds": 0.796855,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998091,
+            "file_size_bytes": 793888,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap2.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1351,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "73c98efe9b060e72bb95fbdef3ebd57386a4c984fb4f2bb9e12c01c889be2490",
+          "size_bytes": 793888
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 657811,
+            "duration_seconds": 0.797868,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999104,
+            "file_size_bytes": 714908,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1263,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "3c0e5b99ce2202bfb0201fe2c9c04a6c334e7b8cbcf60ed6ca063451feff4031",
+          "size_bytes": 714908
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 657979,
+            "duration_seconds": 0.797868,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999104,
+            "file_size_bytes": 715212,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1266,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "4949d6b97d86075a3488049e0192e193afc821f9434db649176c09fc98f8304a",
+          "size_bytes": 715212
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 582239,
+            "duration_seconds": 0.796855,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998091,
+            "file_size_bytes": 634624,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1158,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "d9dae0c6d639d233aa83c49997fff75e053dd35b72e4fa48b1efa68be7d584fd",
+          "size_bytes": 634624
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 582239,
+            "duration_seconds": 0.796855,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998091,
+            "file_size_bytes": 634624,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1158,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "b648b6dbc912ab996654e9e83bbf05265641177fa5b58332612e395e68f42d99",
+          "size_bytes": 634624
+        }
+      ],
+      "config": "ObssPdAggressive",
+      "run_number": 0,
+      "seed_set": 0
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 811573,
+            "duration_seconds": 0.798422,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999658,
+            "file_size_bytes": 879172,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap1.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1491,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "4d20cc4ca03840a8eda6d348aa91436602579a530802ea1eaf417f943375e805",
+          "size_bytes": 879172
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 808443,
+            "duration_seconds": 0.798421,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 876092,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap2.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1492,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "c6b50a7dd9d9722c882ec32cf5ec3f3c4512b55cd91288741c8b0ffcc9330152",
+          "size_bytes": 876092
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 808487,
+            "duration_seconds": 0.798422,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999658,
+            "file_size_bytes": 876176,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1493,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "e2042057279cf1a29c13529c449fce826798e3cd83969dfdca3ea1d1c27edf1d",
+          "size_bytes": 876176
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 808487,
+            "duration_seconds": 0.798422,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999658,
+            "file_size_bytes": 876176,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1493,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "6b7781d8f3c35c9b31a14533e597b1f030332e8ca445d032601636d01c7e1b75",
+          "size_bytes": 876176
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 807341,
+            "duration_seconds": 0.798421,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 874984,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1492,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "d3c3875df50e336879c66314c542e36790db7e7f5de19e796d0293456cd8b9eb",
+          "size_bytes": 874984
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 807341,
+            "duration_seconds": 0.798421,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 874984,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1492,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "bd44a7381d861e3e628ea278d42bf1fd368c01705be5219a8853799ac881b701",
+          "size_bytes": 874984
+        }
+      ],
+      "config": "BssColoringCollision",
+      "run_number": 0,
+      "seed_set": 0
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 441412,
+            "duration_seconds": 0.7901,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.991336,
+            "file_size_bytes": 479288,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap1.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 835,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap1.wlan[0].pcap",
+          "sha256": "1b8c4a0ff6a7e66f66b63a79372ffa1c0ed89fa4b90c0c0a23ecd4696eb65405",
+          "size_bytes": 479288
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 651686,
+            "duration_seconds": 0.798482,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999718,
+            "file_size_bytes": 705952,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap2.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1204,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap2.wlan[0].pcap",
+          "sha256": "70bc86d6c48bc3b012f11bf9641482b8e769758e2dc3aa27897e0b8db233ba1b",
+          "size_bytes": 705952
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 407114,
+            "duration_seconds": 0.7901,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.991336,
+            "file_size_bytes": 442584,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 780,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.sta1[0].wlan[0].pcap",
+          "sha256": "0526c445d38aea8f641f86b34caa4e0d498efce5b154d5090e078e95853cdaa2",
+          "size_bytes": 442584
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 407486,
+            "duration_seconds": 0.7901,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.991336,
+            "file_size_bytes": 443232,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta1[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 786,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.sta1[1].wlan[0].pcap",
+          "sha256": "68f79aa2a99e6492363ec945eaaaef6089fb7ef38d6bad6eade300fe7fc674b4",
+          "size_bytes": 443232
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 642868,
+            "duration_seconds": 0.798482,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999718,
+            "file_size_bytes": 696604,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1192,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.sta2[0].wlan[0].pcap",
+          "sha256": "43c35600cea094b4a5e7c68bc4db7981e09d4b93432f849ed7b1257836fd4ada",
+          "size_bytes": 696604
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 641768,
+            "duration_seconds": 0.798482,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999718,
+            "file_size_bytes": 695460,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta2[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1191,
+            "snapshot_length": null,
+            "start_seconds": 0.201236,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.sta2[1].wlan[0].pcap",
+          "sha256": "9996ced68da29405ab403e3617d79f3011708f898b29f551bd12e0b9620fd8df",
+          "size_bytes": 695460
+        }
+      ],
+      "config": "TwoNav",
+      "run_number": 0,
+      "seed_set": 0
+    }
+  ],
+  "figure": "examples/ieee80211ax/bss_coloring/packet_statistics.png",
+  "figure_sha256": "d2fbb1e64a5f6aac8a3300a067bf22df2c7c65d64df72f4e806fb40f057de860",
+  "plot_semantics": {
+    "left": "frame-type share of capture observation count",
+    "right": "frame-type share of summed estimated airtime"
+  },
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "scenario": "bss_coloring",
+  "schema_version": 1,
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

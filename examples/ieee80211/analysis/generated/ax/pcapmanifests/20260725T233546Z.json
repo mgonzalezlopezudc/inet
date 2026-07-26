@@ -1,0 +1,440 @@
+{
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "35d21e7dd11bcd30ea83b4b4062ef2f5b12e27d7fb92b665862ba8c2ce100648",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1224522,
+            "duration_seconds": 1.998534,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999582,
+            "file_size_bytes": 1352204,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2877,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "9ba4b7b7a5ca6368f9ae66b59440aa48c304b8663bf74b617fa00848cd7aafbd",
+          "size_bytes": 1352204
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+        "-c",
+        "ScheduledOnly",
+        "-r",
+        "0",
+        "--**.ap.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini -c ScheduledOnly -r 0 '--**.ap.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly",
+      "config": "ScheduledOnly",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "5e006ccd4fe9ccf3eebfb407699d68328123387c36f538894091d95c5723fadd",
+      "result_directory": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly",
+      "run_number": 0,
+      "scalar": {
+        "configname": "ScheduledOnly",
+        "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly/ScheduledOnly-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "cb9bd624e8ca216c603ceea302efdb908fda31697a0d6a0ec7645c266c7ab564"
+      },
+      "scalar_file": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly/ScheduledOnly-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1637187,
+            "duration_seconds": 1.998349,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999397,
+            "file_size_bytes": 1863872,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 5085,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "aad97f46ef451695a54cb13c4ecdd0e45aa9ee22f498c8baa67b5023b964434a",
+          "size_bytes": 1863872
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+        "-c",
+        "MixedUora",
+        "-r",
+        "0",
+        "--**.ap.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini -c MixedUora -r 0 '--**.ap.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora",
+      "config": "MixedUora",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "5e006ccd4fe9ccf3eebfb407699d68328123387c36f538894091d95c5723fadd",
+      "result_directory": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora",
+      "run_number": 0,
+      "scalar": {
+        "configname": "MixedUora",
+        "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora/MixedUora-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "a4bf0395179738e19014fe80d44e4ad956203ff3916d83bc83364b4d98f6ff0b"
+      },
+      "scalar_file": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora/MixedUora-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1224522,
+            "duration_seconds": 1.998534,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999582,
+            "file_size_bytes": 1352204,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2877,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus/EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "9ba4b7b7a5ca6368f9ae66b59440aa48c304b8663bf74b617fa00848cd7aafbd",
+          "size_bytes": 1352204
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+        "-c",
+        "EqualRus",
+        "-r",
+        "0",
+        "--**.ap.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini -c EqualRus -r 0 '--**.ap.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus",
+      "config": "EqualRus",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "5e006ccd4fe9ccf3eebfb407699d68328123387c36f538894091d95c5723fadd",
+      "result_directory": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EqualRus",
+        "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus/EqualRus-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "69a42cf30fe9ac5ab3de75f07fb726c8df9ecc7db93b25a9f06a0624583ef226"
+      },
+      "scalar_file": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus/EqualRus-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1638736,
+            "duration_seconds": 1.79728,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.997924,
+            "file_size_bytes": 1748096,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2483,
+            "snapshot_length": null,
+            "start_seconds": 0.200644,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "fabdf6b8b0251f485adf4c91afe4b0601f8c97ba545ad1de0690e2b975031a54",
+          "size_bytes": 1748096
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+        "-c",
+        "EdcaBaseline",
+        "-r",
+        "0",
+        "--**.ap.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini -c EdcaBaseline -r 0 '--**.ap.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline",
+      "config": "EdcaBaseline",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "5e006ccd4fe9ccf3eebfb407699d68328123387c36f538894091d95c5723fadd",
+      "result_directory": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EdcaBaseline",
+        "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline/EdcaBaseline-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "880585d7dd37ebc056c19d71438dfe94e2f001547e2b2c897a5d4f593e3692a3"
+      },
+      "scalar_file": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline/EdcaBaseline-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1954000,
+            "duration_seconds": 1.997545,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.998593,
+            "file_size_bytes": 2478420,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 11466,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "0534f108aba294752f23f4afe3c9bad4c0adf077a5e35b45e7732484c508a344",
+          "size_bytes": 2478420
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+        "-c",
+        "UoraLightContention",
+        "-r",
+        "0",
+        "--**.ap.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini -c UoraLightContention -r 0 '--**.ap.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention",
+      "config": "UoraLightContention",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "5e006ccd4fe9ccf3eebfb407699d68328123387c36f538894091d95c5723fadd",
+      "result_directory": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UoraLightContention",
+        "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention/UoraLightContention-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "e536d369f8402066393886478d34286ceb824d5e6aebab094d0a943328d98ea3"
+      },
+      "scalar_file": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention/UoraLightContention-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 2721077,
+            "duration_seconds": 1.997587,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.998635,
+            "file_size_bytes": 3365572,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 14027,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "215fcd8dbb03c8ca67d7efebe6fec3c1d45290f84698e13df1b50d1eefb89d4f",
+          "size_bytes": 3365572
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+        "-c",
+        "UoraMoreRandomAccessRus",
+        "-r",
+        "0",
+        "--**.ap.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini -c UoraMoreRandomAccessRus -r 0 '--**.ap.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus",
+      "config": "UoraMoreRandomAccessRus",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "5e006ccd4fe9ccf3eebfb407699d68328123387c36f538894091d95c5723fadd",
+      "result_directory": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UoraMoreRandomAccessRus",
+        "path": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "02eae7a6cccbf0d6b00d15078ce5620f4feb3e7957b2f60fe1f66299dfe84f64"
+      },
+      "scalar_file": "examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "ul_ofdma"
+    }
+  ],
+  "generated_at_utc": "2026-07-25T23:35:46.030231+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "4af023e06f1fb603b5581c7d7af3e121ddfd572868e71f3d982972158f3791cb",
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "schema_version": 2,
+  "session_id": "20260725T233546Z",
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

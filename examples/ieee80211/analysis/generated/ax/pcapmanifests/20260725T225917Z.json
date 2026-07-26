@@ -1,0 +1,522 @@
+{
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "2247a0413b69089b245faf16c32339a95ffd06137660066c820c2af38868deb7",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 132344,
+            "duration_seconds": 99.9,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.931472,
+            "file_size_bytes": 185044,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1148,
+            "snapshot_length": null,
+            "start_seconds": 0.031472,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline/Baseline-#0TwtRegression.ap.wlan[0].pcap",
+          "sha256": "93785a86057e53ddb34fcce495e7a11ea8022dc2f8dd7b6b6949665aea27a4bf",
+          "size_bytes": 185044
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 132344,
+            "duration_seconds": 99.9,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.931473,
+            "file_size_bytes": 185048,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1148,
+            "snapshot_length": null,
+            "start_seconds": 0.031473,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline/Baseline-#0TwtRegression.sta[0].wlan[0].pcap",
+          "sha256": "3186182019a36e74368e47118aa163cd39a5b49152bc44ff0b8e86bd7f601b57",
+          "size_bytes": 185048
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 132344,
+            "duration_seconds": 99.9,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.931473,
+            "file_size_bytes": 185048,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1148,
+            "snapshot_length": null,
+            "start_seconds": 0.031473,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline/Baseline-#0TwtRegression.sta[1].wlan[0].pcap",
+          "sha256": "ee56d28bb47290418355a57f8d3ab9119e49d274d0d88dbc46c1407f6bc13703",
+          "size_bytes": 185048
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/twt/omnetpp.ini",
+        "-c",
+        "Baseline",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/twt/omnetpp.ini -c Baseline -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline",
+      "config": "Baseline",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/twt/omnetpp.ini",
+      "ini_sha256": "4c67a3f1612fcafbd8a33a33471709da68449a77c3009f7fa4733c2eee7c0dc1",
+      "result_directory": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Baseline",
+        "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline/Baseline-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 20260623,
+        "sha256": "164049061006f067f6a8eb8c69fc625f443ff1772bce8dd2546efeb2965819a7"
+      },
+      "scalar_file": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline/Baseline-#0.sca",
+      "seed_set": 20260623,
+      "simulation_time_limit_s": 100.0,
+      "subdir": "twt"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 132736,
+            "duration_seconds": 99.9,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.931472,
+            "file_size_bytes": 185796,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1156,
+            "snapshot_length": null,
+            "start_seconds": 0.031472,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap",
+          "sha256": "1debb7c72ee123dfaed6613a08aca7e268e193db1fd3c919d9046f37616d4f60",
+          "size_bytes": 185796
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 14011,
+            "duration_seconds": 88.500382,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 88.531855,
+            "file_size_bytes": 17920,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 85,
+            "snapshot_length": null,
+            "start_seconds": 0.031473,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.sta[0].wlan[0].pcap",
+          "sha256": "f13e5a543c06bd175c5bb7294f5baa442948d3b3f2afd352b7d0c2ea3e9ee72f",
+          "size_bytes": 17920
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 14896,
+            "duration_seconds": 88.429756,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 88.461229,
+            "file_size_bytes": 19564,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 102,
+            "snapshot_length": null,
+            "start_seconds": 0.031473,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.sta[1].wlan[0].pcap",
+          "sha256": "a252c5f7981c3a415c08e82955a4fd986452bcec550f12686e13f4a1d7ead4a9",
+          "size_bytes": 19564
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/twt/omnetpp.ini",
+        "-c",
+        "IndividualUnannounced",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/twt/omnetpp.ini -c IndividualUnannounced -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced",
+      "config": "IndividualUnannounced",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/twt/omnetpp.ini",
+      "ini_sha256": "4c67a3f1612fcafbd8a33a33471709da68449a77c3009f7fa4733c2eee7c0dc1",
+      "result_directory": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced",
+      "run_number": 0,
+      "scalar": {
+        "configname": "IndividualUnannounced",
+        "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 20260623,
+        "sha256": "279cdab0ae561a620e5a8ce25861f71e9e9c72d6288d4c35ecd9b4b227f8a28c"
+      },
+      "scalar_file": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0.sca",
+      "seed_set": 20260623,
+      "simulation_time_limit_s": 100.0,
+      "subdir": "twt"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 208432,
+            "duration_seconds": 99.929663,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.961135,
+            "file_size_bytes": 353124,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3148,
+            "snapshot_length": null,
+            "start_seconds": 0.031472,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap",
+          "sha256": "b5b107a2d707823a3ee94a3aef9a48795caa5b1c4eb012517bf41d45ab5793a0",
+          "size_bytes": 353124
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 51859,
+            "duration_seconds": 99.900288,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.931761,
+            "file_size_bytes": 101584,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1081,
+            "snapshot_length": null,
+            "start_seconds": 0.031473,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.sta[0].wlan[0].pcap",
+          "sha256": "fec9a65aa252188ab11c9fbd050ec881d4b875b30a4ac0d92b9f398bff745e93",
+          "size_bytes": 101584
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 52782,
+            "duration_seconds": 99.929662,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.961135,
+            "file_size_bytes": 103312,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1099,
+            "snapshot_length": null,
+            "start_seconds": 0.031473,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.sta[1].wlan[0].pcap",
+          "sha256": "1fefbab7fa745e66dd0c156ba077b0dd383b16532dd019d2c7fa601c39c96066",
+          "size_bytes": 103312
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/twt/omnetpp.ini",
+        "-c",
+        "IndividualAnnounced",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/twt/omnetpp.ini -c IndividualAnnounced -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced",
+      "config": "IndividualAnnounced",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/twt/omnetpp.ini",
+      "ini_sha256": "4c67a3f1612fcafbd8a33a33471709da68449a77c3009f7fa4733c2eee7c0dc1",
+      "result_directory": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced",
+      "run_number": 0,
+      "scalar": {
+        "configname": "IndividualAnnounced",
+        "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 20260623,
+        "sha256": "ac350e84051a1c33b56a653bb7f9be088a336baed9ee56ffa84fe6906612c705"
+      },
+      "scalar_file": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0.sca",
+      "seed_set": 20260623,
+      "simulation_time_limit_s": 100.0,
+      "subdir": "twt"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 150736,
+            "duration_seconds": 99.9,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.93148,
+            "file_size_bytes": 201796,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1156,
+            "snapshot_length": null,
+            "start_seconds": 0.03148,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast/Broadcast-#0TwtRegression.ap.wlan[0].pcap",
+          "sha256": "67617bca2b04285ce8f01715866710617867e675c6d88a4803f88262c3ad9b6c",
+          "size_bytes": 201796
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 38849,
+            "duration_seconds": 99.3,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.331481,
+            "file_size_bytes": 49948,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 248,
+            "snapshot_length": null,
+            "start_seconds": 0.031481,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast/Broadcast-#0TwtRegression.sta[0].wlan[0].pcap",
+          "sha256": "044d0e31076055fb4bf0b989ad206573bf441f8c2bc3c1cd3fd4c87519b89890",
+          "size_bytes": 49948
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 29870,
+            "duration_seconds": 99.4,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 99.431481,
+            "file_size_bytes": 39636,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "sta[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 218,
+            "snapshot_length": null,
+            "start_seconds": 0.031481,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast/Broadcast-#0TwtRegression.sta[1].wlan[0].pcap",
+          "sha256": "7058b08b74e8ab0774d1700968946cb30f0b1ac49552951093aa4254b48c78ce",
+          "size_bytes": 39636
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/twt/omnetpp.ini",
+        "-c",
+        "Broadcast",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/twt/omnetpp.ini -c Broadcast -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast",
+      "config": "Broadcast",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/twt/omnetpp.ini",
+      "ini_sha256": "4c67a3f1612fcafbd8a33a33471709da68449a77c3009f7fa4733c2eee7c0dc1",
+      "result_directory": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast",
+      "run_number": 0,
+      "scalar": {
+        "configname": "Broadcast",
+        "path": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast/Broadcast-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 20260623,
+        "sha256": "a4aca6eefffacaa75696cc7c057b8c9019a5dea4c383bc6bbc81f636d51b1cd3"
+      },
+      "scalar_file": "examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast/Broadcast-#0.sca",
+      "seed_set": 20260623,
+      "simulation_time_limit_s": 100.0,
+      "subdir": "twt"
+    }
+  ],
+  "generated_at_utc": "2026-07-25T22:59:17.301659+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "4af023e06f1fb603b5581c7d7af3e121ddfd572868e71f3d982972158f3791cb",
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "schema_version": 2,
+  "session_id": "20260725T225917Z",
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

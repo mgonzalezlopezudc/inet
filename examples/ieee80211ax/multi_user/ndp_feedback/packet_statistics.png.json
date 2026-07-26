@@ -1,0 +1,146 @@
+{
+  "airtime_limitations": "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB user-dependent signaling that radiotap does not expose remains approximate",
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_manifest": {
+    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230505Z.json",
+    "sha256": "9bc5a139a0fd90e3b776fcd383ed68c20d2206b20062c282b66c01b520c85cb5"
+  },
+  "capture_session_id": "20260725T230505Z",
+  "configuration_observation_counts": {
+    "NdpFeedbackReport": 2543
+  },
+  "counting_semantics": "capture observations of over-the-air frames/MPDUs; observations are not application deliveries or de-duplicated transmissions",
+  "decode_limitations": "typed PHY profiles fail closed; absent, unsupported, or unknown radiotap fields remain unknown",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1559293,
+            "duration_seconds": 1.977888,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.997924,
+            "file_size_bytes": 1671332,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2543,
+            "snapshot_length": null,
+            "start_seconds": 0.020036,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "8e60e2015b3ef805955f08a90ac16952aed066532f5a5bde1a966d13acb64cbc",
+          "size_bytes": 1671332
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1649421,
+            "duration_seconds": 1.977888,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.997924,
+            "file_size_bytes": 1761468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2543,
+            "snapshot_length": null,
+            "start_seconds": 0.020036,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "92f73a7a0e401035b5cdb2c8ea3232c25bc7b1fc954b69fccf91a09625750889",
+          "size_bytes": 1761468
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1649421,
+            "duration_seconds": 1.977888,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.997924,
+            "file_size_bytes": 1761468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2543,
+            "snapshot_length": null,
+            "start_seconds": 0.020036,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "00966dc8417a08bbe97a28c4ea9187794af38f98cd7c535e0ccfcf2be9c0216a",
+          "size_bytes": 1761468
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1649421,
+            "duration_seconds": 1.977888,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.997924,
+            "file_size_bytes": 1761468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 2543,
+            "snapshot_length": null,
+            "start_seconds": 0.020036,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "2a003edc00385efb21c1f57c4f774269a5dd3724f19bd0c2707311c3f5c2ba5d",
+          "size_bytes": 1761468
+        }
+      ],
+      "config": "NdpFeedbackReport",
+      "run_number": 0,
+      "seed_set": 0
+    }
+  ],
+  "figure": "examples/ieee80211ax/multi_user/ndp_feedback/packet_statistics.png",
+  "figure_sha256": "ce93e9b13ea6d35f66b9bd3ed02185a15e3a9d1824411bb1c0f67173e2f67458",
+  "plot_semantics": {
+    "left": "frame-type share of capture observation count",
+    "right": "frame-type share of summed estimated airtime"
+  },
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "scenario": "multi_user/ndp_feedback",
+  "schema_version": 1,
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

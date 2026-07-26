@@ -1,0 +1,380 @@
+{
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "f0794f058e183fa0c63397825eeadba8c1a47a070c79b1934232e09098e6ce74",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505348,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap",
+          "sha256": "6d65903ea80579f39aeadbc8da0d3f776b60f4d22e4ca06659863fc9206d2cb4",
+          "size_bytes": 4505348
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.host[0].wlan[0].pcap",
+          "sha256": "873f7251c9eb0220cb920c233c0b24fb25923b68a3c25d6258917b154a881bcc",
+          "size_bytes": 4505356
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.host[1].wlan[0].pcap",
+          "sha256": "cc1745b930f48d2973c7db1f1c818d57a1dbc55befdbedff9b8342f5dd424f29",
+          "size_bytes": 4505356
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.host[2].wlan[0].pcap",
+          "sha256": "2b919937e6382230a4d437823d952ad943ff9c10143c9765d81c5192d8601521",
+          "size_bytes": 4505356
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[3].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.host[3].wlan[0].pcap",
+          "sha256": "2dfa0c8c3fd51f3b0451226801946bcf68a07d831e9b2645fefe0fdabc943595",
+          "size_bytes": 4505356
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/frequency_selective_channel/omnetpp.ini",
+        "-c",
+        "FlatChannelOFDMA",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/frequency_selective_channel/omnetpp.ini -c FlatChannelOFDMA -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA",
+      "config": "FlatChannelOFDMA",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/frequency_selective_channel/omnetpp.ini",
+      "ini_sha256": "b3c375b9a4463d138232757a7902b9791b2a941a9920a7378f0433048c83c19c",
+      "result_directory": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA",
+      "run_number": 0,
+      "scalar": {
+        "configname": "FlatChannelOFDMA",
+        "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "aebcc14a38df0bc3d3f1dee565216934c823a67ef450bee5ae2f35be30b6e67c"
+      },
+      "scalar_file": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.2,
+      "subdir": "frequency_selective_channel"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505348,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap",
+          "sha256": "40477577ede4683941706f7f3ceb6e37550f333c5c75a742a87570ed1a6a1042",
+          "size_bytes": 4505348
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.host[0].wlan[0].pcap",
+          "sha256": "699ad5a8fcbaf34d0e33eeb9ac46114ae3597a1dc8f677409ce15d45a57330dc",
+          "size_bytes": 4505356
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.host[1].wlan[0].pcap",
+          "sha256": "7444ef6b553eb6eb7ad5f9f8b6d530eb2a1a28154cbb13556d48215e33c758ba",
+          "size_bytes": 4505356
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.host[2].wlan[0].pcap",
+          "sha256": "20f7a773b9ab6612b46ae6a2cf2a641551fe075b91a14a5c7ae607fa318f2526",
+          "size_bytes": 4505356
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3482866,
+            "duration_seconds": 1.11958,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.199664,
+            "file_size_bytes": 4505356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[3].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 22227,
+            "snapshot_length": null,
+            "start_seconds": 0.080084,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.host[3].wlan[0].pcap",
+          "sha256": "e79b6b882ae2284c42b8e3a65384b00dae7253ace509690715b0691ec82a327d",
+          "size_bytes": 4505356
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/frequency_selective_channel/omnetpp.ini",
+        "-c",
+        "TgaxModelBOFDMA",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/frequency_selective_channel/omnetpp.ini -c TgaxModelBOFDMA -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA",
+      "config": "TgaxModelBOFDMA",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/frequency_selective_channel/omnetpp.ini",
+      "ini_sha256": "b3c375b9a4463d138232757a7902b9791b2a941a9920a7378f0433048c83c19c",
+      "result_directory": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA",
+      "run_number": 0,
+      "scalar": {
+        "configname": "TgaxModelBOFDMA",
+        "path": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "e13cb9de8b0ce649793a8a3260c5463178228e090c9b2d37110ef7ac8f4c3c59"
+      },
+      "scalar_file": "examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.2,
+      "subdir": "frequency_selective_channel"
+    }
+  ],
+  "generated_at_utc": "2026-07-25T23:02:24.713959+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "4af023e06f1fb603b5581c7d7af3e121ddfd572868e71f3d982972158f3791cb",
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "schema_version": 2,
+  "session_id": "20260725T230224Z",
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

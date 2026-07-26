@@ -1,0 +1,563 @@
+{
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "e68871f0a3c55e8313c7943139979fcca1a4bfc7a5747e438c15e2b3575e6cb9",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3293507,
+            "duration_seconds": 1.70762,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.908744,
+            "file_size_bytes": 3586216,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6364,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.ap.wlan[0].pcap",
+          "sha256": "c0ccff90db1d1d28cb9476ceb90579ec07a81bfa3ecef89619a616175e9adb98",
+          "size_bytes": 3586216
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3292566,
+            "duration_seconds": 1.70762,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.908744,
+            "file_size_bytes": 3585284,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6364,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.host[0].wlan[0].pcap",
+          "sha256": "84c9bcff027296c1b975af38f1d2ea2e64534a8f53270e3e4d35542a00f36cc6",
+          "size_bytes": 3585284
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3292566,
+            "duration_seconds": 1.707621,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.908745,
+            "file_size_bytes": 3585284,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6364,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.host[1].wlan[0].pcap",
+          "sha256": "afd2fd0853b314bbe88698acf68bd595e064fc28c840b88a4533f725aabcf1a2",
+          "size_bytes": 3585284
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3292566,
+            "duration_seconds": 1.707621,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.908745,
+            "file_size_bytes": 3585284,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6364,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.host[2].wlan[0].pcap",
+          "sha256": "7fcd9cc81f8dd80aa58691fc56e66efc24995ceba2fdac5fd567fcbda17e90cf",
+          "size_bytes": 3585284
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3292566,
+            "duration_seconds": 1.707621,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.908745,
+            "file_size_bytes": 3585284,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[3].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6364,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.host[3].wlan[0].pcap",
+          "sha256": "3836691c8a016aa61377d3b6db2fac77ad2303f79d8f04e7eee4d49460ef5e05",
+          "size_bytes": 3585284
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+        "-c",
+        "HeMinstrel",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/he_rate_adaptation/omnetpp.ini -c HeMinstrel -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel",
+      "config": "HeMinstrel",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+      "ini_sha256": "a62e2ff9eb3a12899857e9404c05f03595f4bd5144976c3b7e9df612993e5cf0",
+      "result_directory": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel",
+      "run_number": 0,
+      "scalar": {
+        "configname": "HeMinstrel",
+        "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "413e8c86d47f4584c0254c2a8ce7d9f3ed511819beaf969c6a4699bc18887b40"
+      },
+      "scalar_file": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "he_rate_adaptation"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1437867,
+            "duration_seconds": 1.798763,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999887,
+            "file_size_bytes": 1509776,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1624,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.ap.wlan[0].pcap",
+          "sha256": "7553cbed94d27b3d2d881af32a12fec0986e173d4398cc7a07ee81273c004338",
+          "size_bytes": 1509776
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1436926,
+            "duration_seconds": 1.798763,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999887,
+            "file_size_bytes": 1508844,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1624,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.host[0].wlan[0].pcap",
+          "sha256": "be311a6ef4099a021b7a13c3b5f55081718fe5a4a60028a84a17c119e94598d3",
+          "size_bytes": 1508844
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1436926,
+            "duration_seconds": 1.798763,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999887,
+            "file_size_bytes": 1508844,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1624,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.host[1].wlan[0].pcap",
+          "sha256": "c22a99797b98270ed080acea218a2aa9929877dff7f5a60b8b2fe148e69c453d",
+          "size_bytes": 1508844
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1436926,
+            "duration_seconds": 1.798763,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999887,
+            "file_size_bytes": 1508844,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1624,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.host[2].wlan[0].pcap",
+          "sha256": "9a0bb0401cccc632d7bc6dd2896b671b44037419e856ea36b00519599a17ed2a",
+          "size_bytes": 1508844
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1436926,
+            "duration_seconds": 1.798763,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999887,
+            "file_size_bytes": 1508844,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[3].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 1624,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.host[3].wlan[0].pcap",
+          "sha256": "20497a316e14adec23f5e0d51555233900c0ff25f0c8ace68924487b68f33efc",
+          "size_bytes": 1508844
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+        "-c",
+        "FixedMcs",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/he_rate_adaptation/omnetpp.ini -c FixedMcs -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs",
+      "config": "FixedMcs",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+      "ini_sha256": "a62e2ff9eb3a12899857e9404c05f03595f4bd5144976c3b7e9df612993e5cf0",
+      "result_directory": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs",
+      "run_number": 0,
+      "scalar": {
+        "configname": "FixedMcs",
+        "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "a97d99e29b459022ce42e780d3c3e5207a62b860fc2534d1ffafb889f9954b3d"
+      },
+      "scalar_file": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "he_rate_adaptation"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3569267,
+            "duration_seconds": 1.681621,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.882745,
+            "file_size_bytes": 3892460,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 7018,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap",
+          "sha256": "75fa1891470b7fc344b74db5a092484a6deef1e920e1a87e2d5ab46881579105",
+          "size_bytes": 3892460
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3569267,
+            "duration_seconds": 1.681621,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.882745,
+            "file_size_bytes": 3892468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 7018,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.host[0].wlan[0].pcap",
+          "sha256": "e0a6479148efd2629ae28e5cb49d817a7e1883cf1d6f15115d84e41987e5ef49",
+          "size_bytes": 3892468
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3569267,
+            "duration_seconds": 1.681621,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.882745,
+            "file_size_bytes": 3892468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 7018,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.host[1].wlan[0].pcap",
+          "sha256": "5a269feea9446f59abe7da48400af283686ae5303e3c2b56a927297dbc4b2661",
+          "size_bytes": 3892468
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3569267,
+            "duration_seconds": 1.681622,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.882746,
+            "file_size_bytes": 3892468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 7018,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.host[2].wlan[0].pcap",
+          "sha256": "c8623fd109f65336a4a3a51663a3180ac5a4a717d510f1a346ae0418e095dd89",
+          "size_bytes": 3892468
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 3569267,
+            "duration_seconds": 1.681622,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.882746,
+            "file_size_bytes": 3892468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[3].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 7018,
+            "snapshot_length": null,
+            "start_seconds": 0.201124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.host[3].wlan[0].pcap",
+          "sha256": "6d3f28ce5915346cba6b312fa1d739bdcdf0c03badcefc58e1eb11ddc1d535dd",
+          "size_bytes": 3892468
+        }
+      ],
+      "command": [
+        "bin/inet",
+        "-u",
+        "Cmdenv",
+        "-f",
+        "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+        "-c",
+        "HeMinstrelMobile",
+        "-r",
+        "0",
+        "--**.wlan[*].recordPcap=true",
+        "--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"",
+        "--**.wlan[*].pcapRecorder[*].verbose=false",
+        "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
+        "--**.checksumMode=\"computed\"",
+        "--**.fcsMode=\"computed\"",
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        "--result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile"
+      ],
+      "command_shell": "bin/inet -u Cmdenv -f examples/ieee80211ax/he_rate_adaptation/omnetpp.ini -c HeMinstrelMobile -r 0 '--**.wlan[*].recordPcap=true' '--**.wlan[*].pcapRecorder[*].moduleNamePatterns=\"mac\"' '--**.wlan[*].pcapRecorder[*].verbose=false' '--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"' '--**.checksumMode=\"computed\"' '--**.fcsMode=\"computed\"' '--**.scalar-recording=true' '--**.vector-recording=false' --result-dir=/home/user/omnetpp_ws/inet/examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile",
+      "config": "HeMinstrelMobile",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+      "ini_sha256": "a62e2ff9eb3a12899857e9404c05f03595f4bd5144976c3b7e9df612993e5cf0",
+      "result_directory": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile",
+      "run_number": 0,
+      "scalar": {
+        "configname": "HeMinstrelMobile",
+        "path": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "e22f189f26fdcd8736bb65408d085fab6ce0ff1b31055130d4c708243c10bd80"
+      },
+      "scalar_file": "examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0.sca",
+      "seed_set": 0,
+      "simulation_time_limit_s": 2.0,
+      "subdir": "he_rate_adaptation"
+    }
+  ],
+  "generated_at_utc": "2026-07-25T23:07:05.865661+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "4af023e06f1fb603b5581c7d7af3e121ddfd572868e71f3d982972158f3791cb",
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "schema_version": 2,
+  "session_id": "20260725T230705Z",
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

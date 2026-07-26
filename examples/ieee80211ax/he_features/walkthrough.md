@@ -91,15 +91,14 @@ bin/inet -u Cmdenv -f examples/ieee80211ax/he_features/omnetpp.ini \
   --result-dir=examples/ieee80211ax/he_features/results/manual/DynamicPuncturing
 ```
 
-Status: `NOT RUN` during this rewrite. The retained
-`results/packet-statistics/20260724T175025Z/PreamblePuncturing/cmdenv.stdout`
-reached 1 s and `End.`, but the original process exit status and exact command
-were not retained. Suite regeneration, also `NOT RUN` here:
+The direct `DynamicPuncturing` command was not executed and remains `NOT RUN`.
+The suite-owned `BccBaseline`/`PreamblePuncturing` packet command below was
+executed with exit status 0 and created session `20260725T230436Z`:
 
 ```sh
 python3 examples/ieee80211/analysis/analyze_pcap.py \
   --suite examples/ieee80211/analysis/suites/ax.json \
-  --generate --subdir he_features --run 0
+  --generate --subdir he_features --run 0 --allow-failed-evidence
 ```
 
 ## Scalar and vector analysis
@@ -125,19 +124,37 @@ The plot provenance lists all input hashes. Interpret tone offset, tone size,
 STA ID, and mask only at aligned timestamps. Five runs support variability of
 goodput; vector samples within a run are not repetitions.
 
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-puncturing -->
+### Generated scalar/vector plot and table
+
+![puncturing scalar/vector analysis](../analysis/figures/puncturing/puncturing-frequency-allocation.png)
+
+Figure provenance: [`../analysis/figures/puncturing/puncturing-frequency-allocation.png.json`](../analysis/figures/puncturing/puncturing-frequency-allocation.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+
+| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
+|---|---|---|---|---:|---:|---:|
+| Clean | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 16 | 0 |
+| Interference, punctured | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 63.9015 | 0.0432241 |
+| Interference, unpunctured | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 63.9311 | 0.0334812 |
+| Runtime puncturing | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 63.9212 | 0.0334812 |
+| Runtime puncturing | observed masks | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | — | [0, 2] | — |
+
+The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+<!-- END GENERATED: ieee80211-scalar-vector-puncturing -->
+
 ## PCAP statistics
 
 Capture point: `Lan80211AxHeFeatures.ap.wlan[0]`
 
 Capture:
-`results/packet-statistics/20260724T175025Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap`
+`results/packet-statistics/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap`
 
 Scope: legacy PCAP AP observations, simulation timestamps, TShark 4.6.4;
 FCS/checksum settings are not retained.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/he_features/results/packet-statistics/20260724T175025Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/he_features/results/packet-statistics/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' \
   -Y 'frame.number <= 8' -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
   -e wlan.fc.type_subtype -e radiotap.he.data_1.data_mcs_known \
@@ -151,63 +168,118 @@ preserved verbatim; it is subordinate to the mechanism vectors.
 
 <!-- REWRITE-PREFIX-END -->
 
-
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-## 802.11 Packet Type Statistics
+### Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](packet_statistics.png)
+
+Figure provenance: [`packet_statistics.png.json`](packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260724T175025Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260725T230436Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230436Z.json` (SHA-256 `8f10d5f0a1625b4fab5cf5e8e5c39883699d96589306b181cbdc4dacfc264a86`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
+#### Compact cross-configuration summary
+
+| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---|---:|---|---:|---|
+| `BccBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/packet-statistics/20260725T230436Z/BccBaseline/BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 8, 52-tone RU, GI 3.2 us, BCC, A-MPDU] (700), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] (700), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] (354) | 85.57% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `PreamblePuncturing` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/packet-statistics/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1050), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1050), Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] (354) | 54.41% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+
 ### Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | BccBaseline produced protocol-visible wireless observations | 2264 AP/global transmission observations |
-| **PASS** | PreamblePuncturing produced protocol-visible wireless observations | 2264 AP/global transmission observations |
+| **PASS** | BccBaseline produced protocol-visible wireless observations | 2964 AP/global transmission observations |
+| **PASS** | PreamblePuncturing produced protocol-visible wireless observations | 2964 AP/global transmission observations |
 | **INCONCLUSIVE** | Puncturing mask transitions and RU allocations do not overlap punctured subchannels | Subtype counts cannot establish the puncturing mask; result vectors remain authoritative |
 
 ### Configuration: `BccBaseline`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2264**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 354 | 15.64% | 1066.0 B | 0.0 B | 619.1 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 13.28% | 21.92% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#23af25" /></svg> | Data: QoS Data [HE-MU, HE-MCS 8, 106-tone RU, GI 3.2 us, BCC, A-MPDU] | 350 | 11.81% | 1066.0 B | 0.0 B | 259.0 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 10.59% | 9.06% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#38cc24" /></svg> | Data: QoS Data [HE-MU, HE-MCS 8, 52-tone RU, GI 3.2 us, BCC, A-MPDU] | 700 | 23.62% | 1066.0 B | 0.0 B | 509.8 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 41.70% | 35.68% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24c219" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] | 354 | 11.94% | 1066.0 B | 0.0 B | 619.1 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 25.61% | 21.92% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 350 | 15.46% | 55.0 B | 0.0 B | 38.3 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 0.81% | 1.34% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 69 | 3.05% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 0.12% | 0.19% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 69 | 3.05% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5050 MHz | -67.0 dBm | - | 0.13% | 0.21% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#184baa" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, BCC] | 350 | 15.46% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5045 MHz | -67.0 dBm | - | 2.30% | 3.79% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0842a6" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] | 700 | 30.92% | 32.0 B | 0.0 B | 189.6 us | 0.0 us | 5053 MHz, 5057 MHz | -67.0 dBm | - | 8.04% | 13.27% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 4 | 0.18% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -67.0 dBm | - | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 8 | 0.35% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -67.0 dBm | 20.0 dBm | 0.01% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 350 | 11.81% | 55.0 B | 0.0 B | 38.3 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 1.57% | 1.34% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 69 | 2.33% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 0.23% | 0.19% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 69 | 2.33% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5050 MHz | -67.0 dBm | - | 0.25% | 0.21% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#184baa" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, BCC] | 350 | 11.81% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5045 MHz | -67.0 dBm | - | 4.43% | 3.79% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0842a6" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] | 700 | 23.62% | 32.0 B | 0.0 B | 189.6 us | 0.0 us | 5053 MHz, 5057 MHz | -67.0 dBm | - | 15.51% | 13.27% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 4 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -67.0 dBm | - | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 8 | 0.27% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5050 MHz | -67.0 dBm | 20.0 dBm | 0.02% | 0.02% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.44% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -67.0 dBm | 20.0 dBm | 0.04% | 0.07% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33cc52" /></svg> | Control: Subtype 0 [HE-MU, HE, GI 3.2 us] | 350 | 15.46% | 3210.0 B | 0.0 B | 3547.8 us | 0.0 us | 5050 MHz | - | 20.0 dBm | 75.26% | 124.17% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.34% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -67.0 dBm | 20.0 dBm | 0.08% | 0.07% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:1` | 0.200644000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, BCC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:2` | 0.200692000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:3` | 0.200744000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:4` | 0.200789000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:5` | 0.201467000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, BCC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:6` | 0.201516000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:7` | 0.201568000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:8` | 0.201612000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:9` | 0.202290000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, BCC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:10` | 0.202339000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:11` | 0.202391000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:12` | 0.202436000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:13` | 0.203123000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, BCC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:14` | 0.203171000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:15` | 0.203223000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:16` | 0.203268000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### Configuration: `PreamblePuncturing`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2264**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#27a52f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] | 354 | 15.64% | 1066.0 B | 0.0 B | 175.2 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 4.32% | 6.20% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#23a429" /></svg> | Data: QoS Data [HE-MU, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 1050 | 35.43% | 1066.0 B | 0.0 B | 333.3 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 64.31% | 34.99% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#27a52f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] | 354 | 11.94% | 1066.0 B | 0.0 B | 175.2 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 11.40% | 6.20% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 350 | 15.46% | 55.0 B | 0.0 B | 38.3 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.93% | 1.34% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 69 | 3.05% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.13% | 0.19% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 69 | 3.05% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5200 MHz | -67.0 dBm | - | 0.15% | 0.21% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | 1050 | 46.38% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5165 MHz, 5176 MHz, 5206 MHz | -67.0 dBm | - | 7.92% | 11.37% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 12 | 0.53% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.02% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 350 | 11.81% | 55.0 B | 0.0 B | 38.3 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 2.47% | 1.34% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 69 | 2.33% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 0.36% | 0.19% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 69 | 2.33% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5200 MHz | -67.0 dBm | - | 0.39% | 0.21% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0933be" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] | 1050 | 35.43% | 32.0 B | 0.0 B | 108.3 us | 0.0 us | 5165 MHz, 5176 MHz, 5206 MHz | -67.0 dBm | - | 20.90% | 11.37% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 12 | 0.40% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.05% | 0.03% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.44% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.05% | 0.07% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#33cc52" /></svg> | Control: Subtype 0 [HE-MU, HE, GI 3.2 us] | 350 | 15.46% | 3210.0 B | 0.0 B | 3547.8 us | 0.0 us | 5200 MHz | - | 20.0 dBm | 86.48% | 124.17% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.34% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.13% | 0.07% |
 
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:1` | 0.200196000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 80 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:2` | 0.200240000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:3` | 0.200292000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:4` | 0.200337000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:5` | 0.200567000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-SU, HE-MCS 1, 80 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:6` | 0.200612000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:7` | 0.200664000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:8` | 0.200708000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:9` | 0.200938000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-SU, HE-MCS 1, 80 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:10` | 0.200983000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:11` | 0.201035000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:12` | 0.201080000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:13` | 0.201319000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Data: QoS Data / HE-SU, HE-MCS 1, 80 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:14` | 0.201363000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:15` | 0.201415000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap:16` | 0.201460000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Analysis of Packet Distribution
+`BccBaseline` and `PreamblePuncturing` have identical frame counts in this run. That is not a standards violation and does not mean the PHY configuration was identical: preamble puncturing changes the usable subchannels/RU placement, while a fully served offered load can leave packet totals unchanged. Validate the mask and puncture-aware RU allocation with the vectors documented above; packet totals alone cannot prove them.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
 ## Frame exchange analysis
@@ -274,4 +346,4 @@ mask-to-frame link is an **inference**.
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
 | scalar/vector | `results/scalar-vector/20260725T120411Z` | four comparison configs, 0--4 | figure JSON and named vectors | hashes in JSON; separate from PCAP |
-| PCAP/results/log | `results/packet-statistics/20260724T175025Z` | `BccBaseline`, `PreamblePuncturing`, run 0 | shared analyzer; TShark 4.6.4 | AP and STA captures retained |
+| PCAP/results/log | `results/packet-statistics/20260725T230436Z` | `BccBaseline`, `PreamblePuncturing`, run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block |

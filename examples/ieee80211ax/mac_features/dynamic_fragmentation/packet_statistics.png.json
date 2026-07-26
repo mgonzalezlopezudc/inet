@@ -1,0 +1,146 @@
+{
+  "airtime_limitations": "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB user-dependent signaling that radiotap does not expose remains approximate",
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_manifest": {
+    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T225941Z.json",
+    "sha256": "334ea1a4182fe3e8b8d3ca97a62b4d09c72e2323e8146c940c81c69681f8bbe4"
+  },
+  "capture_session_id": "20260725T225941Z",
+  "configuration_observation_counts": {
+    "DynamicFragmentation": 6667
+  },
+  "counting_semantics": "capture observations of over-the-air frames/MPDUs; observations are not application deliveries or de-duplicated transmissions",
+  "decode_limitations": "typed PHY profiles fail closed; absent, unsupported, or unknown radiotap fields remain unknown",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 2539456,
+            "duration_seconds": 1.798011,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.998351,
+            "file_size_bytes": 2838288,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6667,
+            "snapshot_length": null,
+            "start_seconds": 0.20034,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "2cb85b0d9236c6f4ba875349dd2290d4ea66c5dea4c1b597e6c85871a7e1915e",
+          "size_bytes": 2838288
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 2539456,
+            "duration_seconds": 1.798011,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.998351,
+            "file_size_bytes": 2838296,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6667,
+            "snapshot_length": null,
+            "start_seconds": 0.20034,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "2610f0f5479bd67830e38bc95780f7037813b4fdff386293b08df5c12732e4f2",
+          "size_bytes": 2838296
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 2552268,
+            "duration_seconds": 1.797387,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.997727,
+            "file_size_bytes": 2852908,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[1].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6707,
+            "snapshot_length": null,
+            "start_seconds": 0.20034,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "50014abd74f898b02b2c6e39e50b3cb243da326fcb2ddea3b4b92669b65e7433",
+          "size_bytes": 2852908
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 2550806,
+            "duration_seconds": 1.797387,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.997727,
+            "file_size_bytes": 2851036,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[2].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 6698,
+            "snapshot_length": null,
+            "start_seconds": 0.20034,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "c9357ac8402ea95d6dbca6c200569e065cbde326d77859eaf0e4568b10ca3eab",
+          "size_bytes": 2851036
+        }
+      ],
+      "config": "DynamicFragmentation",
+      "run_number": 0,
+      "seed_set": 0
+    }
+  ],
+  "figure": "examples/ieee80211ax/mac_features/dynamic_fragmentation/packet_statistics.png",
+  "figure_sha256": "2ffaf56ecbe8922f369df2ce84c08971dcb3511ade9dfe46ed40fc8d0b3f6b0d",
+  "plot_semantics": {
+    "left": "frame-type share of capture observation count",
+    "right": "frame-type share of summed estimated airtime"
+  },
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "scenario": "mac_features/dynamic_fragmentation",
+  "schema_version": 1,
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

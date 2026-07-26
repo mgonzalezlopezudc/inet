@@ -65,7 +65,7 @@ stream-allocation fact.
 | DL sounding feedback polling occurs | `PASS` | decoded BFRP Triggers | DL 0/0 | Packet-visible polling, not CSI validity |
 | UL Trigger assigns AIDs 1-3 common RU 61 and streams 0-2 | `PASS` | decoded Basic Trigger fields | UL 0/0 | Representative exchange |
 | UL goodput benefit versus EDCA | `NOT RUN` | no retained matched result set | none | Mechanism only |
-| Shared AX analyzer can regenerate scenario | `FAIL` | `ax.json` names nonexistent `mu_mimo/omnetpp.ini` | none | Tooling descriptor gap |
+| Shared AX analyzer regenerates the split scenario | `PASS` | session `20260725T230510Z` manifest resolves `downlink.ini` and `uplink.ini` by configuration | run 0/seed 0 | DL and UL treatments completed |
 
 ## Configuration matrix
 
@@ -106,12 +106,16 @@ bin/inet -u Cmdenv -f examples/ieee80211ax/multi_user/mu_mimo/downlink.ini \
 ```
 
 Repeat runs 1-4 into distinct directories for the retained comparison design.
-The packet-session logs end normally; original full commands/exit codes were
-not retained.
+The shared launcher resolved the split downlink/uplink INI files by
+configuration. This command was executed with exit status 0 and created
+session `20260725T230510Z`:
 
-The shared launcher is currently `NOT RUN` and expected to fail before
-simulation because `ax.json` maps this split scenario to nonexistent
-`multi_user/mu_mimo/omnetpp.ini`.
+```sh
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir multi_user/mu_mimo --run 0 --allow-failed-evidence
+```
 
 ## Scalar and vector analysis
 
@@ -145,6 +149,21 @@ In run 0, each of the four AP allocation vectors has 727 records:
 `heRuToneSize=242` throughout; station IDs are 1-3; each user has one stream;
 starting indices are 0-2. These directly expose the modeled spatial allocation.
 
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-mimo -->
+### Generated scalar/vector plot and table
+
+![mimo scalar/vector analysis](../../analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png)
+
+Figure provenance: [`../../analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png.json`](../../analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png.json). Run-level metric source: [`../../analysis/metrics.json`](../../analysis/metrics.json).
+
+| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
+|---|---|---|---|---:|---:|---:|
+| 20 MHz MU-MIMO | goodput mbps | vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / heSpatialStreams:vector<br>vector / **.ap.wlan[0].radio / heStreamStartIndex:vector<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [0.55, 0.88) s; goodput=per run with 95% Student-t CI; telemetry=all PPDUs validated; representative run 0 plotted | 5 | 25.2897 | 0.0392468 |
+| 20 MHz OFDMA | goodput mbps | vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / heSpatialStreams:vector<br>vector / **.ap.wlan[0].radio / heStreamStartIndex:vector<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [0.55, 0.88) s; goodput=per run with 95% Student-t CI; telemetry=all PPDUs validated; representative run 0 plotted | 5 | 10.6667 | 0 |
+
+The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+<!-- END GENERATED: ieee80211-scalar-vector-mimo -->
+
 ## PCAP statistics
 
 Retained captures are AP `wlan[0]` PCAPng/radiotap observations with
@@ -157,11 +176,123 @@ microsecond precision; decode used TShark 4.6.4.
 
 Rows count AP-interface observations, not de-duplicated application packets.
 
+<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
+### Generated PCAP plots and tables
+![802.11 Packet Type Statistics](packet_statistics.png)
+
+Figure provenance: [`packet_statistics.png.json`](packet_statistics.png.json).
+
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
+
+Capture session `20260725T230510Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230510Z.json` (SHA-256 `a8715becb4a1c69d7cf152a992b7a1abbfbdceedaa4ec2f25999e462603aa256`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+
+Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
+
+#### Compact cross-configuration summary
+
+| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---|---:|---|---:|---|
+| `DlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/packet-statistics/20260725T230510Z/DlMuMimo/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3597 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (2089), Control: Block Ack Request (BAR) (724), Control: Block Ack (BA) (724) | 132.19% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/packet-statistics/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3777 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1786), Control: Ack (1736), Data: QoS Null [HE-TB, HE, GI 3.2 us, A-MPDU] (147) | 58.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+
+### Evidence checks
+
+| Status | Requirement | Observed evidence |
+|---|---|---|
+| **PASS** | DlMuMimo produced protocol-visible wireless observations | 3597 AP/global transmission observations |
+| **PASS** | UlMuMimo produced protocol-visible wireless observations | 3777 AP/global transmission observations |
+| **INCONCLUSIVE** | Multiple users with disjoint stream allocations in one PPDU | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
+
+### Configuration: `DlMuMimo`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3597**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#37de21" /></svg> | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 2089 | 58.08% | 1066.0 B | 0.0 B | 595.6 us | 17.1 us | 5010 MHz | - | 20.0 dBm | 94.12% | 124.42% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 4 | 0.11% | 391.0 B | 389.7 B | 249.9 us | 213.2 us | 5010 MHz | - | 20.0 dBm | 0.08% | 0.10% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 7 | 0.19% | 45.1 B | 2.1 B | 35.0 us | 0.7 us | 5010 MHz | - | 20.0 dBm | 0.02% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 724 | 20.13% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 1.53% | 2.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 724 | 20.13% | 152.0 B | 0.0 B | 70.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 3.87% | 5.12% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | - | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.17% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.01% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 13 | 0.36% | 36.8 B | 0.5 B | 69.1 us | 0.7 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.07% | 0.09% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cb1a20" /></svg> | Management: Action [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, BCC] | 2 | 0.06% | 34.0 B | 0.0 B | 112.8 us | 0.0 us | 5005 MHz, 5015 MHz | -65.0 dBm | - | 0.02% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#de1c12" /></svg> | Management: Action [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] | 18 | 0.50% | 34.0 B | 0.0 B | 199.2 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz | -65.3 dBm | - | 0.27% | 0.36% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#82cc33" /></svg> | A-MPDU Delimiter / Aggregation Overhead | 7 | 0.19% | 0.0 B | 0.0 B | 20.0 us | 0.0 us | 5010 MHz | - | - | 0.01% | 0.01% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:18` | 0.201550000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:19` | 0.300644000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:22` | 0.300989000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:25` | 0.302466000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=2654435906 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:26` | 0.302466000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=2654435906 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:27` | 0.302466000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=1013903497 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:28` | 0.302466000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=1013903497 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:29` | 0.302514000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Control: Block Ack Request (BAR) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:30` | 0.302602000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:31` | 0.302650000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Control: Block Ack Request (BAR) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:32` | 0.302739000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:33` | 0.304363000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=2654436726 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:34` | 0.304363000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0, A-MPDU=2654436726 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:35` | 0.304363000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1013905341 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:36` | 0.304363000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 1, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=4, frag=0, more-frag=0, TID=0, A-MPDU=1013905341 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap:37` | 0.304411000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Control: Block Ack Request (BAR) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Configuration: `UlMuMimo`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3777**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1786 | 47.29% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.0 dBm | - | 94.89% | 55.48% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#135011" /></svg> | Data: QoS Null [HE-TB, HE, GI 3.2 us, A-MPDU] | 147 | 3.89% | 34.0 B | 0.0 B | 73.2 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.92% | 0.54% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 6 | 0.16% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.20% | 0.12% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 51 | 1.35% | 47.1 B | 5.2 B | 35.7 us | 1.7 us | 5010 MHz | - | 10.0 dBm | 0.16% | 0.09% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 51 | 1.35% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.17% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1736 | 45.96% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.66% | 2.14% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.002564000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=218 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.002564000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=226 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.002564000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=234 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.002633000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.103048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.104564000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=419 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.104564000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=427 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.104564000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=435 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:10` | 0.104633000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.200644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.201388000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.201436000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.202123000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.202171000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.202272000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Analysis of Packet Distribution
+Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2.5 identifies each HE-MU user and its spatial streams; the direct evidence is multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above; the radiotap suffix establishes the PPDU format but not all users' stream allocations.
+<!-- END GENERATED: ieee80211ax-pcap-statistics -->
+
 ## Frame exchange analysis
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/multi_user/mu_mimo/results/packet-statistics/20260724T175025Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/multi_user/mu_mimo/results/packet-statistics/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'frame.number >= 16 && frame.number <= 20' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
@@ -229,5 +360,5 @@ are separate, so their event-level causality is inference.
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T120411Z/` | DL treatment/control runs 0-4 | `opp_scavetool`; `[0.55,0.88)` outcome window | per-run aggregation; split INI in metadata |
-| PCAP/log | `results/packet-statistics/20260724T175025Z/` | DL/UL treatment run 0 | TShark 4.6.4, AP `wlan[0]` | separate session |
+| PCAP/log | `results/packet-statistics/20260725T230510Z/` | DL/UL treatment run 0 | TShark 4.6.4, AP `wlan[0]` | manifest and hashes in generated block |
 | Standards | `80211ax-2024` corpus | IEEE Std 802.11-2024 | chunks named above | PDF not needed |

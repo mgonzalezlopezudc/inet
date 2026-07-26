@@ -63,7 +63,7 @@ interoperability.
 |---|---|---|---|---|
 | TWT preserves the measured workload | `PASS` | delivered-byte vectors and paired ratio | energy session `20260725T120411Z`, runs/seeds 0–4 | ratio 1.0, above 0.95 gate |
 | TWT reduces modeled energy per delivered bit | `PASS` | time-integrated power vectors | same five paired runs | 44.89% reduction |
-| Announced mode signals wake presence | `PASS` | PS-Poll frames in AP capture | packet session `20260724T175025Z`, run 0 | 1,992 observations |
+| Announced mode signals wake presence | `PASS` | PS-Poll frames in AP capture | packet session `20260725T225917Z`, run 0 | 1,992 observations |
 | Other modes omit PS-Poll in retained captures | `PASS` | generated subtype tables | run 0 | absence is bounded to these captures |
 | Frame-level wake event caused a power-vector transition | `INCONCLUSIVE` | sessions are separate | — | no co-recorded packet/power correlation |
 
@@ -102,8 +102,15 @@ bin/inet -u Cmdenv -f examples/ieee80211ax/twt/omnetpp.ini \
   --result-dir=/tmp/inet-twt-energy-r0
 ```
 
-Historical scalar/vector and packet sessions completed and retained their
-artifacts; no new exit status is claimed.
+The scalar/vector session is historical. The suite-owned packet command below
+was executed with exit status 0 and created session `20260725T225917Z`:
+
+```sh
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir twt --run 0 --allow-failed-evidence
+```
 
 ## Scalar and vector analysis
 
@@ -130,17 +137,39 @@ mean and two-sided 95% Student-t interval.
 The derived reduction is 44.89%, with paired delivery ratio 1.0. This is a
 five-run model result, not a hardware-energy claim.
 
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-twt -->
+### Generated scalar/vector plot and table
+
+![twt scalar/vector analysis](../analysis/figures/twt/twt-state-and-energy.png)
+
+Figure provenance: [`../analysis/figures/twt/twt-state-and-energy.png.json`](../analysis/figures/twt/twt-state-and-energy.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+
+| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
+|---|---|---|---|---:|---:|---:|
+| Baseline | delivered bytes | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 16000 | 0 |
+| Baseline | energy per bit j | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 2.82633e-06 | 6.70349e-21 |
+| Baseline | goodput mbps | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 0.00142222 | 0 |
+| TWT | delivered bytes | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 16000 | 0 |
+| TWT | energy per bit j | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 1.55761e-06 | 4.04527e-11 |
+| TWT | goodput mbps | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 0.00142222 | 0 |
+| delivery_ratio_twt_over_baseline | ci95 | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | — | 0 | — |
+| delivery_ratio_twt_over_baseline | count | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | — | 5 | — |
+| delivery_ratio_twt_over_baseline | mean | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | — | 1 | — |
+
+The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+<!-- END GENERATED: ieee80211-scalar-vector-twt -->
+
 ## PCAP statistics
 
 Capture points: AP and both station WLAN interfaces.
-Session: `results/packet-statistics/20260724T175025Z`.
+Session: `results/packet-statistics/20260725T225917Z`.
 Format/decode: retained PCAP captures produced through the PCAPng campaign
 path, computed checksum/FCS, TShark 4.6.4. Generated rows count captured MPDU
 transmission observations.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/twt/results/packet-statistics/20260724T175025Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
   -q -z io,stat,0,'wlan.fc.type_subtype == 0x1a','wlan.fc.retry == 1'
 ```
 
@@ -151,11 +180,264 @@ tshark -n -r \
 | `IndividualAnnounced` | 80 / 0 | 1,992 | direct announced-presence behavior |
 | `Broadcast` | 80 / 0 | 0 | shared schedule, not individual announced mode |
 
+<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
+### Generated PCAP plots and tables
+![802.11 Packet Type Statistics](packet_statistics.png)
+
+Figure provenance: [`packet_statistics.png.json`](packet_statistics.png.json).
+
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
+
+Capture session `20260725T225917Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T225917Z.json` (SHA-256 `09bc81c16b9e8e5d17486a127b153c4383aed84fd1b7b051660b56142341f769`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+
+Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
+
+#### Compact cross-configuration summary
+
+| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---|---:|---|---:|---|
+| `Baseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline/Baseline-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1148 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (20) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Broadcast` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast/Broadcast-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `IndividualAnnounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 3148 | Control: PS-Poll (1992), Management: Beacon (1000), Data: QoS Data (80) | 0.20% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `IndividualUnannounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+
+### Evidence checks
+
+| Status | Requirement | Observed evidence |
+|---|---|---|
+| **PASS** | Baseline produced protocol-visible wireless observations | 1148 AP/global transmission observations |
+| **PASS** | Broadcast produced protocol-visible wireless observations | 1156 AP/global transmission observations |
+| **PASS** | IndividualAnnounced produced protocol-visible wireless observations | 3148 AP/global transmission observations |
+| **PASS** | IndividualUnannounced produced protocol-visible wireless observations | 1156 AP/global transmission observations |
+
+### Configuration: `Baseline`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1148**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 6.97% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 5.90% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 1.22% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.26% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 1.22% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.29% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 20 | 1.74% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.33% | 0.00% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 87.11% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 92.04% | 0.14% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.17% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.14% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.17% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.18% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.17% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.15% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.70% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 4 | 0.35% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.19% | 0.00% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:33` | 0.450838000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:35` | 0.450991000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:131` | 10.021112000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:132` | 10.021156000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:134` | 10.021252000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:136` | 10.021393000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:137` | 10.026112000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:138` | 10.026156000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:140` | 10.026252000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:142` | 10.026384000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:164` | 12.032112000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:165` | 12.037112000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:186` | 14.043112000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:187` | 14.048112000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:208` | 16.054112000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Baseline-#0TwtRegression.ap.wlan[0].pcap:209` | 16.059112000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+#### MPDU observation semantics
+
+| Metric | Value |
+|---|---:|
+| Total data MPDU transmission observations | 80 |
+| Unique `(TA, TID, sequence, fragment)` identities | 80 |
+| Repeated identity observations | 0 |
+| Observations with Retry bit set | 0 |
+| Unique A-MPDU references | 0 |
+
+Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
+
+### Configuration: `Broadcast`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 5.07% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.23% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.25% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.34% | 0.00% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 86.51% | 106.0 B | 0.0 B | 161.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 92.91% | 0.16% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.17% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.12% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.17% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.17% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.13% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.14% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.30% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:41` | 0.451127000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:43` | 0.451273000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:141` | 10.131645000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:142` | 10.131689000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:144` | 10.131785000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:146` | 10.131927000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:148` | 10.231645000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:149` | 10.231689000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:151` | 10.231785000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:153` | 10.231900000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:172` | 12.032112000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:173` | 12.037112000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:200` | 14.631627000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:202` | 14.731654000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:220` | 16.431636000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Broadcast-#0TwtRegression.ap.wlan[0].pcap:222` | 16.531645000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+#### MPDU observation semantics
+
+| Metric | Value |
+|---|---:|
+| Total data MPDU transmission observations | 80 |
+| Unique `(TA, TID, sequence, fragment)` identities | 80 |
+| Repeated identity observations | 0 |
+| Observations with Retry bit set | 0 |
+| Unique A-MPDU references | 0 |
+
+Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
+
+### Configuration: `IndividualAnnounced`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3148**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 2.54% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 4.34% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#63c7e9" /></svg> | Control: PS-Poll | 1992 | 63.28% | 20.0 B | 0.0 B | 26.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 26.20% | 0.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 0.44% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.19% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 0.44% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.21% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 24 | 0.76% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.29% | 0.00% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 31.77% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 67.73% | 0.14% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.06% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.10% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.06% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.14% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.06% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.11% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.06% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.12% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.25% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.26% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.25% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.30% | 0.00% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:330` | 9.961135000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:332` | 10.031761000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:333` | 10.031925000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:334` | 10.031969000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:336` | 10.032065000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:338` | 10.032206000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:339` | 10.061135000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:340` | 10.061299000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:341` | 10.061343000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:343` | 10.061439000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:345` | 10.061580000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:347` | 10.131761000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:348` | 10.161135000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:350` | 10.231761000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:351` | 10.261135000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+| `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap:353` | 10.331761000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+#### MPDU observation semantics
+
+| Metric | Value |
+|---|---:|
+| Total data MPDU transmission observations | 80 |
+| Unique `(TA, TID, sequence, fragment)` identities | 80 |
+| Repeated identity observations | 0 |
+| Observations with Retry bit set | 0 |
+| Unique A-MPDU references | 0 |
+
+Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
+
+### Configuration: `IndividualUnannounced`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 5.88% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.26% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.29% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.40% | 0.00% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 86.51% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 91.78% | 0.14% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.17% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.14% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.17% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.18% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.17% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.15% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.41% | 0.00% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:41` | 0.451127000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:43` | 0.451273000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:140` | 10.031873000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:141` | 10.031917000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:143` | 10.032013000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:145` | 10.032154000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:146` | 10.061247000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:147` | 10.061291000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:149` | 10.061387000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:151` | 10.061528000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:172` | 12.032112000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:173` | 12.061238000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:194` | 14.061256000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:196` | 14.131855000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:216` | 16.061247000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap:218` | 16.131864000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+#### MPDU observation semantics
+
+| Metric | Value |
+|---|---:|
+| Total data MPDU transmission observations | 80 |
+| Unique `(TA, TID, sequence, fragment)` identities | 80 |
+| Repeated identity observations | 0 |
+| Observations with Retry bit set | 0 |
+| Unique A-MPDU references | 0 |
+
+Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
+
+### Analysis of Packet Distribution
+Only `IndividualAnnounced` contains the large **PS-Poll** population. This is consistent with the announced-TWT procedure: the requester signals that it is awake with PS-Poll or an APSD trigger before the responder sends a non-Trigger frame (IEEE Std 802.11-2024, Table 9-347 and Clause 10.46). Unannounced TWT does not require that presence signal. The QoS Data totals are transmitted MPDU observations, not delivered application-packet counts; aggregation and repeated sequence numbers can make them much larger than the workload. Validate TWT delivery with sink scalars and energy with the recorded radio-power vectors.
+<!-- END GENERATED: ieee80211ax-pcap-statistics -->
+
 ## Frame exchange analysis
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/twt/results/packet-statistics/20260724T175025Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
   -Y 'frame.number >= 331 && frame.number <= 345' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
@@ -222,156 +504,7 @@ standards/model-consistent inference, not a co-recorded causal chain.
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T120411Z` | energy pair, runs 0–4 | `[10,100)` s; figure provenance | SHA-256s retained in JSON |
-| PCAP | `results/packet-statistics/20260724T175025Z` | four packet configs, run 0 | TShark 4.6.4, AP/STA points | generated block preserved |
+| PCAP | `results/packet-statistics/20260725T225917Z` | four packet configs, run 0 | TShark 4.6.4, AP/STA points | manifest and hashes in generated block |
 | Figure | `../analysis/figures/twt/twt-state-and-energy.png` | energy pair | paired delivery gate 0.95 | metrics in `../analysis/metrics.json` |
 
 <!-- REWRITE-PREFIX-END -->
-
-
-<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-## 802.11 Packet Type Statistics
-![802.11 Packet Type Statistics](packet_statistics.png)
-
-This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
-
-Capture session `20260724T175025Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
-
-Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
-- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
-- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
-
-### Evidence checks
-
-| Status | Requirement | Observed evidence |
-|---|---|---|
-| **PASS** | Baseline produced protocol-visible wireless observations | 1148 AP/global transmission observations |
-| **PASS** | Broadcast produced protocol-visible wireless observations | 1156 AP/global transmission observations |
-| **PASS** | IndividualAnnounced produced protocol-visible wireless observations | 3148 AP/global transmission observations |
-| **PASS** | IndividualUnannounced produced protocol-visible wireless observations | 1156 AP/global transmission observations |
-
-### Configuration: `Baseline`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1148**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 6.97% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 5.90% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 1.22% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.26% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 1.22% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.29% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 20 | 1.74% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.33% | 0.00% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 87.11% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 92.04% | 0.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.17% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.14% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.17% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.18% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.17% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.15% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.70% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 4 | 0.35% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.19% | 0.00% |
-
-#### MPDU observation semantics
-
-| Metric | Value |
-|---|---:|
-| Total data MPDU transmission observations | 80 |
-| Unique `(TA, TID, sequence, fragment)` identities | 80 |
-| Repeated identity observations | 0 |
-| Observations with Retry bit set | 0 |
-| Unique A-MPDU references | 0 |
-
-Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
-
-### Configuration: `Broadcast`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 5.07% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.23% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.25% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.34% | 0.00% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 86.51% | 106.0 B | 0.0 B | 161.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 92.91% | 0.16% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.17% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.12% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.17% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.17% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.13% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.14% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.30% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
-
-#### MPDU observation semantics
-
-| Metric | Value |
-|---|---:|
-| Total data MPDU transmission observations | 80 |
-| Unique `(TA, TID, sequence, fragment)` identities | 80 |
-| Repeated identity observations | 0 |
-| Observations with Retry bit set | 0 |
-| Unique A-MPDU references | 0 |
-
-Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
-
-### Configuration: `IndividualAnnounced`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3148**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 2.54% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 4.34% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#63c7e9" /></svg> | Control: PS-Poll | 1992 | 63.28% | 20.0 B | 0.0 B | 26.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 26.20% | 0.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 0.44% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.19% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 0.44% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.21% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 24 | 0.76% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.29% | 0.00% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 31.77% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 67.73% | 0.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.06% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.10% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.06% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.14% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.06% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.11% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.06% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.12% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.25% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.26% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.25% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.30% | 0.00% |
-
-#### MPDU observation semantics
-
-| Metric | Value |
-|---|---:|
-| Total data MPDU transmission observations | 80 |
-| Unique `(TA, TID, sequence, fragment)` identities | 80 |
-| Repeated identity observations | 0 |
-| Observations with Retry bit set | 0 |
-| Unique A-MPDU references | 0 |
-
-Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
-
-### Configuration: `IndividualUnannounced`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#22c322" /></svg> | Data: QoS Data | 80 | 6.92% | 270.0 B | 0.0 B | 110.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 5.88% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 14 | 1.21% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.26% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 14 | 1.21% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.29% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 24 | 2.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.40% | 0.00% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#9b0821" /></svg> | Management: Beacon | 1000 | 86.51% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 91.78% | 0.14% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f2805a" /></svg> | Management: Probe Request | 2 | 0.17% | 63.0 B | 0.0 B | 104.0 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.14% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f5a489" /></svg> | Management: Probe Response | 2 | 0.17% | 88.0 B | 0.0 B | 137.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.18% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e830c9" /></svg> | Management: Association Request | 2 | 0.17% | 71.0 B | 0.0 B | 114.7 us | 0.0 us | 5010 MHz | -69.0 dBm | - | 0.15% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cc4ce6" /></svg> | Management: Association Response | 2 | 0.17% | 76.0 B | 0.0 B | 121.3 us | 0.0 us | 5010 MHz | - | 13.0 dBm | 0.16% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.41% | 0.00% |
-
-#### MPDU observation semantics
-
-| Metric | Value |
-|---|---:|
-| Total data MPDU transmission observations | 80 |
-| Unique `(TA, TID, sequence, fragment)` identities | 80 |
-| Repeated identity observations | 0 |
-| Observations with Retry bit set | 0 |
-| Unique A-MPDU references | 0 |
-
-Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
-
-<!-- END GENERATED: ieee80211ax-pcap-statistics -->

@@ -99,8 +99,16 @@ bin/inet -u Cmdenv -f examples/ieee80211ax/multi_user/ndp_feedback/omnetpp.ini \
   '--**.checksumMode="computed"' '--**.fcsMode="computed"'
 ```
 
-The retained packet-session log ends normally; its original process exit code
-was not retained.
+The suite-owned packet command below was executed with exit status 0 and
+created session `20260725T230505Z`:
+
+```sh
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir multi_user/ndp_feedback --run 0 \
+  --allow-failed-evidence
+```
 
 ## Scalar and vector analysis
 
@@ -127,6 +135,10 @@ the application staging (warm-up packets at 0.2 s and regular traffic from
 0.3 s) is described rather than silently removed. The NFRP timeline query also
 uses the full capture because the feature starts at 0.020036 s.
 
+No plot: the retained scalar totals do not identify NDP feedback responses or
+their station identities, so they cannot support a mechanism-focused
+comparison.
+
 ## PCAP statistics
 
 Capture: AP `wlan[0]`, PCAPng/radiotap, microsecond precision, computed
@@ -139,11 +151,76 @@ checksum/FCS session; TShark 4.6.4. SHA-256:
 
 Counts are capture observations. A radiotap-only record is not an MPDU.
 
+<!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
+### Generated PCAP plots and tables
+![802.11 Packet Type Statistics](packet_statistics.png)
+
+Figure provenance: [`packet_statistics.png.json`](packet_statistics.png.json).
+
+This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
+
+Capture session `20260725T230505Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230505Z.json` (SHA-256 `9bc5a139a0fd90e3b776fcd383ed68c20d2206b20062c282b66c01b520c85cb5`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+
+Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
+- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
+- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
+
+#### Compact cross-configuration summary
+
+| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---|---:|---|---:|---|
+| `NdpFeedbackReport` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2543 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1382), Control: Ack (1023), Control: Trigger (99) | 44.49% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+
+### Evidence checks
+
+| Status | Requirement | Observed evidence |
+|---|---|---|
+| **PASS** | NdpFeedbackReport produced protocol-visible wireless observations | 2543 AP/global transmission observations |
+| **INCONCLUSIVE** | Trigger Type 7 and matching NDP feedback allocation | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
+
+### Configuration: `NdpFeedbackReport`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2543**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1382 | 54.35% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.0 dBm | - | 96.50% | 42.93% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 99 | 3.89% | 34.0 B | 0.0 B | 31.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.35% | 0.16% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f9ee1f" /></svg> | Control: HE TB feedback NDP [NDP Sounding] | 39 | 1.53% | 0.0 B | 0.0 B | 72.0 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.32% | 0.14% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1023 | 40.23% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.84% | 1.26% |
+
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:1` | 0.020036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.040036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.060036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.080036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:17` | 0.100036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:21` | 0.120036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:25` | 0.140036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:29` | 0.160036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:33` | 0.180036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:37` | 0.200036000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:38` | 0.201379000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:39` | 0.202105000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:40` | 0.202153000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:41` | 0.202894000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:42` | 0.203638000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:43` | 0.203686000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Analysis of Packet Distribution
+The capture contains both **Trigger** frames and zero-length HE TB feedback NDP observations, consistent with the NDP Feedback Report Poll exchange defined by IEEE Std 802.11-2024 Clause 26.5.7 and Annex G.5. One NFRP Trigger can allocate multiple feedback resources, so the counts need not be one-to-one. The generic Control-subtype label does not by itself prove Trigger Type 7; verify the Trigger field or simulator NFRP telemetry when conformance detail matters.
+<!-- END GENERATED: ieee80211ax-pcap-statistics -->
+
 ## Frame exchange analysis
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260724T175025Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'wlan.trigger.he.trigger_type == 7 || frame.len == 31' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e frame.len -e wlan.sa -e wlan.da \
@@ -212,5 +289,5 @@ timing/group structure, and `INCONCLUSIVE` for response identity and content.
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T120411Z/` | run 0/seed 0 | `opp_scavetool`, full run | wrapper/network bound in `.sca` |
-| PCAP/log | `results/packet-statistics/20260724T175025Z/` | run 0 | TShark 4.6.4, filter above | separate session; hash recorded |
+| PCAP/log | `results/packet-statistics/20260725T230505Z/` | run 0 | TShark 4.6.4, filter above | manifest and hashes in generated block |
 | Standards | `80211ax-2024` corpus | IEEE Std 802.11-2024 | chunks named above | PDF not needed |

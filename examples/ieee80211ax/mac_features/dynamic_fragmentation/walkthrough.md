@@ -89,14 +89,15 @@ bin/inet -u Cmdenv \
   --result-dir=examples/ieee80211ax/mac_features/dynamic_fragmentation/results/manual/DynamicFragmentation
 ```
 
-Status: `NOT RUN` during this rewrite. The retained packet run reached 2 s and
-`End.` in `cmdenv.stdout`; its process exit status and exact original command
-were not retained. Suite regeneration (`NOT RUN` here):
+The direct minimal command was not executed and remains `NOT RUN`. The
+suite-owned packet command below was executed with exit status 0 and created
+session `20260725T225941Z`:
 
 ```sh
 python3 examples/ieee80211/analysis/analyze_pcap.py \
   --suite examples/ieee80211/analysis/suites/ax.json \
-  --generate --subdir mac_features/dynamic_fragmentation --run 0
+  --generate --subdir mac_features/dynamic_fragmentation --run 0 \
+  --allow-failed-evidence
 ```
 
 ## Scalar and vector analysis
@@ -127,19 +128,38 @@ scenario's ability to demonstrate opportunity-dependent sizing.
 The declared measurement window is 0.3--2.0 s; the initial setup period is
 excluded as warm-up.
 
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-fragmentation -->
+### Generated scalar/vector plot and table
+
+![fragmentation scalar/vector analysis](../../analysis/figures/fragmentation/fragmentation-and-ack-overhead.png)
+
+Figure provenance: [`../../analysis/figures/fragmentation/fragmentation-and-ack-overhead.png.json`](../../analysis/figures/fragmentation/fragmentation-and-ack-overhead.png.json). Run-level metric source: [`../../analysis/metrics.json`](../../analysis/metrics.json).
+
+| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
+|---|---|---|---|---:|---:|---:|
+| Dynamic | ack airtime total ms | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 42.2048 | 0.536886 |
+| Dynamic | mac frame size mean bytes | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 293.002 | 0.792239 |
+| Static | ack airtime total ms | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 42.2048 | 0.536886 |
+| Static | mac frame size mean bytes | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 293.002 | 0.792239 |
+| Unfragmented | ack airtime total ms | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 32.64 | 0 |
+| Unfragmented | mac frame size mean bytes | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 1070 | 0 |
+
+The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+<!-- END GENERATED: ieee80211-scalar-vector-fragmentation -->
+
 ## PCAP statistics
 
 Capture point: `Lan80211AxUlOfdma.ap.wlan[0]`
 
 Capture:
-`results/packet-statistics/20260724T175025Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`
+`results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`
 
 Scope: AP packet observations in legacy PCAP, simulation timestamps,
 TShark 4.6.4; FCS/checksum settings not retained.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260724T175025Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'wlan.fc.type == 2 AND (wlan.frag > 0 OR wlan.fc.more_fragments == 1)' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
@@ -151,18 +171,25 @@ de-duplicated MSDUs or delivered application packets.
 
 <!-- REWRITE-PREFIX-END -->
 
-
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-## 802.11 Packet Type Statistics
+### Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](packet_statistics.png)
+
+Figure provenance: [`packet_statistics.png.json`](packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260724T175025Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260725T225941Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T225941Z.json` (SHA-256 `334ea1a4182fe3e8b8d3ca97a62b4d09c72e2323e8146c940c81c69681f8bbe4`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
+
+#### Compact cross-configuration summary
+
+| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---|---:|---|---:|---|
+| `DynamicFragmentation` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 6667 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (5937), Control: Block Ack Request (BAR) (429), Control: Block Ack (BA) (264) | 64.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -176,16 +203,41 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6667*
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 5937 | 89.05% | 376.0 B | 176.8 B | 208.6 us | 99.3 us | 5010 MHz | -63.4 dBm | - | 97.26% | 61.91% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 5937 | 89.05% | 376.0 B | 176.8 B | 210.3 us | 100.7 us | 5010 MHz | -63.4 dBm | - | 97.28% | 62.41% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 13 | 0.19% | 401.5 B | 187.1 B | 255.6 us | 102.3 us | 5010 MHz | -63.5 dBm | - | 0.26% | 0.17% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 429 | 6.43% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -62.8 dBm | - | 0.94% | 0.60% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 264 | 3.96% | 152.0 B | 0.0 B | 70.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.47% | 0.93% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 264 | 3.96% | 152.0 B | 0.0 B | 70.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.45% | 0.93% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 12 | 0.18% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.02% | 0.01% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.09% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -63.7 dBm | 10.0 dBm | 0.01% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.09% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -63.7 dBm | 10.0 dBm | 0.03% | 0.02% |
 
+#### Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:2` | 0.201150000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:3` | 0.201198000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:4` | 0.201554000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=1, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:5` | 0.201602000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:6` | 0.201958000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=2, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:7` | 0.202006000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:8` | 0.202122000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=3, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:9` | 0.202170000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:11` | 0.202266000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:12` | 0.202650000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:13` | 0.202698000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:14` | 0.203054000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=1, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:15` | 0.203102000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:16` | 0.203458000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=2, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:17` | 0.203506000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap:18` | 0.203622000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=3, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### Analysis of Packet Distribution
+IEEE Std 802.11-2024 Clause 26.3 gates dynamic fragmentation on negotiated peer capability; it does not require fragment size to adapt to channel conditions. In this implementation the dynamic and static policies use the same 500-byte sizing policy after the capability gate, so their detailed result-analysis traces are expected to overlap. This packet table contains only `DynamicFragmentation`; it cannot establish a higher fragment count without the static and unfragmented controls, nor can Block Ack subtype counts alone establish the fragment bitmap.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
 ## Frame exchange analysis
@@ -259,4 +311,4 @@ capability-to-fragment causal link is an **inference** pending correlation.
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
 | scalar/vector | `results/scalar-vector/20260725T120411Z` | dynamic/static/none, 0--4 | figure JSON; 0.3--2.0 s | hashes retained in JSON |
-| PCAP/results/log | `results/packet-statistics/20260724T175025Z` | dynamic, run 0 | shared analyzer; TShark 4.6.4 | AP and host captures retained |
+| PCAP/results/log | `results/packet-statistics/20260725T225941Z` | dynamic, run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block |

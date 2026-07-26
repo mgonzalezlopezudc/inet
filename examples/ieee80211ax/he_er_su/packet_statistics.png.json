@@ -1,0 +1,218 @@
+{
+  "airtime_limitations": "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB user-dependent signaling that radiotap does not expose remains approximate",
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_manifest": {
+    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T234448Z.json",
+    "sha256": "c6f4ed39e6b636fb77033c5c062ee61147b4b80751e836e58baa14243d90cedf"
+  },
+  "capture_session_id": "20260725T234448Z",
+  "configuration_observation_counts": {
+    "CellBoundaryHeErSu": 8669,
+    "CellBoundaryHeSu": 7007,
+    "ErBss": 240
+  },
+  "counting_semantics": "capture observations of over-the-air frames/MPDUs; observations are not application deliveries or de-duplicated transmissions",
+  "decode_limitations": "typed PHY profiles fail closed; absent, unsupported, or unknown radiotap fields remain unknown",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 27360,
+            "duration_seconds": 1.19005,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.990174,
+            "file_size_bytes": 38028,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 240,
+            "snapshot_length": null,
+            "start_seconds": 0.800124,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/ErBss/ErBss-#0HeErSuNetwork.ap.wlan[0].pcap",
+          "sha256": "df8c0d1ac45a1b350fa6a6084b8ff39fd528644d90bba6863f7f0dc03acc2abd",
+          "size_bytes": 38028
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 27360,
+            "duration_seconds": 1.190048,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.990173,
+            "file_size_bytes": 38036,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 240,
+            "snapshot_length": null,
+            "start_seconds": 0.800125,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/ErBss/ErBss-#0HeErSuNetwork.host[0].wlan[0].pcap",
+          "sha256": "a755972dfb2c8cb1f3b475912df408957fe11f87a6dcacb4a010bc19d2f6b080",
+          "size_bytes": 38036
+        }
+      ],
+      "config": "ErBss",
+      "run_number": 0,
+      "seed_set": 0
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 981084,
+            "duration_seconds": 1.699702,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999946,
+            "file_size_bytes": 1289500,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 7007,
+            "snapshot_length": null,
+            "start_seconds": 0.300244,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeSu/CellBoundaryHeSu-#0HeErSuNetwork.ap.wlan[0].pcap",
+          "sha256": "139ae4f32988b0420e1d5a7f2410ceecb30ba3aac2d44103d377d3bdc99d3825",
+          "size_bytes": 1289500
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 981084,
+            "duration_seconds": 1.6997,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999945,
+            "file_size_bytes": 1289508,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 7007,
+            "snapshot_length": null,
+            "start_seconds": 0.300245,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeSu/CellBoundaryHeSu-#0HeErSuNetwork.host[0].wlan[0].pcap",
+          "sha256": "cbde72e609f6c376ddf47b7ba47005b48ea2ea662b1e96acbe6fdaa380e06118",
+          "size_bytes": 1289508
+        }
+      ],
+      "config": "CellBoundaryHeSu",
+      "run_number": 0,
+      "seed_set": 0
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1017540,
+            "duration_seconds": 1.699527,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999779,
+            "file_size_bytes": 1399084,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 8669,
+            "snapshot_length": null,
+            "start_seconds": 0.300252,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap",
+          "sha256": "ddc8086b7d1d99b81deb5c6ecf725617e0bc0421902f43e69f5b60dd289018d9",
+          "size_bytes": 1399084
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1017540,
+            "duration_seconds": 1.699525,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 1.999778,
+            "file_size_bytes": 1399092,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 8669,
+            "snapshot_length": null,
+            "start_seconds": 0.300253,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.host[0].wlan[0].pcap",
+          "sha256": "e5abfec44d2dad7206aa5f8ab742240519edd9e0161bb8f45ba62915c18791a4",
+          "size_bytes": 1399092
+        }
+      ],
+      "config": "CellBoundaryHeErSu",
+      "run_number": 0,
+      "seed_set": 0
+    }
+  ],
+  "figure": "examples/ieee80211ax/he_er_su/packet_statistics.png",
+  "figure_sha256": "f815407282409f72e5ebb952a8ebc31893832f249513f3c08139a0ea93e74b04",
+  "plot_semantics": {
+    "left": "frame-type share of capture observation count",
+    "right": "frame-type share of summed estimated airtime"
+  },
+  "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "scenario": "he_er_su",
+  "schema_version": 1,
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

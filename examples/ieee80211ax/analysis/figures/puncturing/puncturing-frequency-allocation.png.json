@@ -219,7 +219,7 @@
   ],
   "extra": {},
   "figure": "examples/ieee80211ax/analysis/figures/puncturing/puncturing-frequency-allocation.png",
-  "git_revision": "5e76f58368c96a0ed746024b5b152189c196a85c",
+  "git_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
   "result_filters": [
     {
       "module": "**.app[*]",

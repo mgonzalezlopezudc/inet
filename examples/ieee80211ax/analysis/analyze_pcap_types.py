@@ -755,7 +755,6 @@ def run_simulation(config_name, subdir, run_number, session_id):
             else "--**.wlan[*].recordPcap=true"
         ]
     relative_ini = ini_file.relative_to(REPOSITORY_ROOT)
-    relative_result_dir = res_dir.relative_to(REPOSITORY_ROOT)
     cmd = [
         "bin/inet", "-u", "Cmdenv", "-f", str(relative_ini), "-c", config_name, "-r", str(run_number),
         *pcap_recording,
@@ -763,8 +762,11 @@ def run_simulation(config_name, subdir, run_number, session_id):
         "--**.wlan[*].pcapRecorder[*].verbose=false",
         "--**.wlan[*].pcapRecorder[*].fileFormat=\"pcapng\"",
         "--**.checksumMode=\"computed\"", "--**.fcsMode=\"computed\"",
-        f"--result-dir={relative_result_dir}"
+        "--**.scalar-recording=true",
+        "--**.vector-recording=false",
+        f"--result-dir={res_dir}"
     ]
+    print("RUN", shlex.join(cmd), flush=True)
     proc = subprocess.run(cmd, cwd=str(REPOSITORY_ROOT), check=False,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     (res_dir / "cmdenv.stdout").write_text(proc.stdout)
@@ -2538,6 +2540,11 @@ def parse_args():
     mode.add_argument("--reuse", action="store_true", help="reuse only inputs validated by the existing manifest")
     parser.add_argument("--subdir", action="append", choices=sorted(subdirs_configs),
                         help="analyze one group; repeat for multiple groups (default: all)")
+    parser.add_argument(
+        "--config",
+        action="append",
+        help="analyze only the named configuration; repeat for multiple configurations",
+    )
     parser.add_argument("--run", type=int, default=0, help="OMNeT++ run number (default: 0)")
     parser.add_argument(
         "--session-id",
@@ -2554,6 +2561,28 @@ def parse_args():
 def main():
     args = parse_args()
     selected_subdirs = args.subdir or list(subdirs_configs)
+    if args.config:
+        selected_configs = set(args.config)
+        available_configs = {
+            config
+            for subdir in selected_subdirs
+            for config in subdirs_configs[subdir]
+        }
+        unknown_configs = sorted(selected_configs - available_configs)
+        if unknown_configs:
+            raise ValueError(
+                "Unknown configuration(s) for the selected scenarios: "
+                + ", ".join(unknown_configs)
+            )
+        for subdir in selected_subdirs:
+            subdirs_configs[subdir] = [
+                config
+                for config in subdirs_configs[subdir]
+                if config in selected_configs
+            ]
+        selected_subdirs = [
+            subdir for subdir in selected_subdirs if subdirs_configs[subdir]
+        ]
     manifest = (
         build_capture_manifest(selected_subdirs, args.run, args.session_id)
         if args.generate else
