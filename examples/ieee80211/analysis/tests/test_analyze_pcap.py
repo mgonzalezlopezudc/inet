@@ -490,11 +490,10 @@ class CaptureValidationTest(unittest.TestCase):
             }
         })
         self.assertIn(
-            "AP interface(s); capture observations<br>"
-            "`examples/ieee80211ax/sample/results/ap.wlan0.pcapng`",
+            "Observation point: Access Point (AP) wireless interfaces.",
             markdown,
         )
-        self.assertIn("| `wlan.fc.type == 2` | 4 |", markdown)
+        self.assertIn("| `Treatment` | `wlan.fc.type == 2` | 4 |", markdown)
         self.assertIn("Data: QoS Data [HE-SU", markdown)
         self.assertIn("Not delivery or de-duplicated transmissions", markdown)
 

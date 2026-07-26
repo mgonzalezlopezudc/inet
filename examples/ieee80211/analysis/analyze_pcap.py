@@ -1974,9 +1974,10 @@ def count_frames(config_results, config_name, frame_type=None, frame_subtype=Non
 
 def compact_statistics_markdown(config_results):
     lines = [
-        "| Configuration | Observation point / counting unit | Selection/filter | Observations | "
+        "Observation point: Access Point (AP) wireless interfaces.\n\n",
+        "| Configuration | Selection/filter | Observations | "
         "Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |\n",
-        "|---|---|---|---:|---|---:|---|\n",
+        "|---|---|---:|---|---:|---|\n",
     ]
     for config_name, result in sorted(config_results.items(), key=lambda item: config_sort_key(item[0])):
         global_result = result.get("global", {})
@@ -2000,17 +2001,8 @@ def compact_statistics_markdown(config_results):
             f"{sum(item.get('airtime_sim_pct', 0) for item in available_airtime):.2f}%"
             if available_airtime else "N/A"
         )
-        point = (
-            "AP interface(s); capture observations"
-            if global_result.get("used_ap_only")
-            else "active WLAN interfaces; capture observations"
-        )
-        capture_paths = global_result.get("captures", [])
-        if capture_paths:
-            point += "<br>" + "<br>".join(f"`{path}`" for path in capture_paths)
         cells = [
             f"`{config_name}`",
-            point,
             f"`{global_result.get('display_filter', 'not recorded')}`",
             str(total),
             dominant_text,

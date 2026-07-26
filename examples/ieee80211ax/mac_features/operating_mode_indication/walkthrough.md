@@ -173,9 +173,11 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `OperatingModeIndication` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/operating_mode_indication/results/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2489 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023), Control: Trigger (3) | 46.63% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `OperatingModeIndication` | `none (all decoded frames)` | 2489 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023), Control: Trigger (3) | 46.63% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

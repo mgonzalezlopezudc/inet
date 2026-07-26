@@ -204,10 +204,12 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `BccBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/20260725T230436Z/BccBaseline/BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 8, 52-tone RU, GI 3.2 us, BCC, A-MPDU] (700), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] (700), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] (354) | 85.57% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `PreamblePuncturing` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1050), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1050), Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] (354) | 54.41% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `BccBaseline` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 8, 52-tone RU, GI 3.2 us, BCC, A-MPDU] (700), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] (700), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] (354) | 85.57% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `PreamblePuncturing` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1050), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1050), Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] (354) | 54.41% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

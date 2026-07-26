@@ -238,12 +238,14 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `AcDl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AcDl/AcDl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 10598 | Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (8686), Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (276) | 0.53% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `AcUl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AcUl/AcUl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2563 | Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (871), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (166) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `AxDl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AxDl/AxDl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 265600 | Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (212159), Control: Block Ack Request (BAR) (35191), Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC] (8414) | 5.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `AxUl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AxUl/AxUl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 26551 | Control: Block Ack (BA) (12067), Control: Trigger (11921), Management: Beacon [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1200) | 0.94% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `AcDl` | `none (all decoded frames)` | 10598 | Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (8686), Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (276) | 0.53% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AcUl` | `none (all decoded frames)` | 2563 | Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (871), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (166) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AxDl` | `none (all decoded frames)` | 265600 | Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (212159), Control: Block Ack Request (BAR) (35191), Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC] (8414) | 5.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AxUl` | `none (all decoded frames)` | 26551 | Control: Block Ack (BA) (12067), Control: Trigger (11921), Management: Beacon [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1200) | 0.94% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

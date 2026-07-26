@@ -263,11 +263,13 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `EqualSizedRUs_fBW` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 4414 | Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1378), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1378), Control: Trigger (689) | 60.54% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `EqualSizedRUs_fHoL` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/EqualSizedRUs_fHoL/EqualSizedRUs_fHoL-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 4668 | Data: QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (852), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (852), Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (832) | 94.69% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `SuEdcaBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/SuEdcaBaseline/SuEdcaBaseline-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 1790 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1487), Control: Block Ack Request (BAR) (130), Control: Block Ack (BA) (130) | 20.06% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `EqualSizedRUs_fBW` | `none (all decoded frames)` | 4414 | Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1378), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1378), Control: Trigger (689) | 60.54% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs_fHoL` | `none (all decoded frames)` | 4668 | Data: QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (852), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (852), Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (832) | 94.69% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `SuEdcaBaseline` | `none (all decoded frames)` | 1790 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1487), Control: Block Ack Request (BAR) (130), Control: Block Ack (BA) (130) | 20.06% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

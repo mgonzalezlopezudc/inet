@@ -208,9 +208,11 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `DynamicFragmentation` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/dynamic_fragmentation/results/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 6667 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (5937), Control: Block Ack Request (BAR) (429), Control: Block Ack (BA) (264) | 64.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `DynamicFragmentation` | `none (all decoded frames)` | 6667 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (5937), Control: Block Ack Request (BAR) (429), Control: Block Ack (BA) (264) | 64.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

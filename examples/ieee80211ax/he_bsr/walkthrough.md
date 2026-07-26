@@ -211,11 +211,13 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `FullBsrAccounting` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/FullBsrAccounting/FullBsrAccounting-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 3049 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1525), Control: Ack (976), Control: Block Ack (BA) (161) | 60.85% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ImplicitBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/ImplicitBsr/ImplicitBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2808 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1511), Control: Ack (970), Control: Block Ack Request (BAR) (113) | 60.09% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `StaleBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 3107 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1529), Control: Ack (977), Control: Block Ack (BA) (172) | 61.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `FullBsrAccounting` | `none (all decoded frames)` | 3049 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1525), Control: Ack (976), Control: Block Ack (BA) (161) | 60.85% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ImplicitBsr` | `none (all decoded frames)` | 2808 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1511), Control: Ack (970), Control: Block Ack Request (BAR) (113) | 60.09% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `StaleBsr` | `none (all decoded frames)` | 3107 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1529), Control: Ack (977), Control: Block Ack (BA) (172) | 61.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

@@ -199,11 +199,13 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `FixedMcs` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1624 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1435), Control: Block Ack Request (BAR) (84), Control: Block Ack (BA) (84) | 78.70% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `HeMinstrel` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 6364 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1339), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1207), Control: Trigger (811) | 146.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `HeMinstrelMobile` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7018 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1610), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1141), Control: Trigger (916) | 157.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `FixedMcs` | `none (all decoded frames)` | 1624 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1435), Control: Block Ack Request (BAR) (84), Control: Block Ack (BA) (84) | 78.70% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `HeMinstrel` | `none (all decoded frames)` | 6364 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1339), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1207), Control: Trigger (811) | 146.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `HeMinstrelMobile` | `none (all decoded frames)` | 7018 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1610), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1141), Control: Trigger (916) | 157.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

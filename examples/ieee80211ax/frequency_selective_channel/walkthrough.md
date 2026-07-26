@@ -194,10 +194,12 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `FlatChannelOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `TgaxModelBOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `FlatChannelOFDMA` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `TgaxModelBOFDMA` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

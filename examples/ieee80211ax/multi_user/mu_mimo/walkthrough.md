@@ -211,10 +211,12 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `DlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/20260725T230510Z/DlMuMimo/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3597 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (2089), Control: Block Ack Request (BAR) (724), Control: Block Ack (BA) (724) | 132.19% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3777 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1786), Control: Ack (1736), Data: QoS Null [HE-TB, HE, GI 3.2 us, A-MPDU] (147) | 58.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `DlMuMimo` | `none (all decoded frames)` | 3597 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (2089), Control: Block Ack Request (BAR) (724), Control: Block Ack (BA) (724) | 132.19% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlMuMimo` | `none (all decoded frames)` | 3777 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1786), Control: Ack (1736), Data: QoS Null [HE-TB, HE, GI 3.2 us, A-MPDU] (147) | 58.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

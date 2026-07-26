@@ -197,11 +197,13 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `CellBoundaryHeErSu` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 8669 | Data: QoS Data [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] (4513), Control: Ack (4156) | 56.03% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `CellBoundaryHeSu` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeSu/CellBoundaryHeSu-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7007 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (4615), Control: Ack (2392) | 53.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ErBss` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/ErBss/ErBss-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 240 | Control: Ack (117), Data: QoS Data [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC] (112), Data: QoS Data [HE-ER-SU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC] (5) | 0.80% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `CellBoundaryHeErSu` | `none (all decoded frames)` | 8669 | Data: QoS Data [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] (4513), Control: Ack (4156) | 56.03% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `CellBoundaryHeSu` | `none (all decoded frames)` | 7007 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (4615), Control: Ack (2392) | 53.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ErBss` | `none (all decoded frames)` | 240 | Control: Ack (117), Data: QoS Data [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC] (112), Data: QoS Data [HE-ER-SU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC] (5) | 0.80% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

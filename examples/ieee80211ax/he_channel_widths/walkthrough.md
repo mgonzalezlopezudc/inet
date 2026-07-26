@@ -271,12 +271,14 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `Width20MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1160 | Data: QoS Data [HE-MU, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (504), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (504), Control: Trigger (126) | 106.91% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Width40MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1559 | Data: QoS Data [HE-MU, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (943), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (472), Control: Trigger (118) | 110.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Width80MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2187 | Data: QoS Data [HE-MU, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1521), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (508), Control: Trigger (128) | 111.91% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Width160MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2939 | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] (2213), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] (556), Control: Trigger (140) | 108.11% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `Width20MHz` | `none (all decoded frames)` | 1160 | Data: QoS Data [HE-MU, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (504), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (504), Control: Trigger (126) | 106.91% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width40MHz` | `none (all decoded frames)` | 1559 | Data: QoS Data [HE-MU, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (943), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (472), Control: Trigger (118) | 110.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width80MHz` | `none (all decoded frames)` | 2187 | Data: QoS Data [HE-MU, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1521), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (508), Control: Trigger (128) | 111.91% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width160MHz` | `none (all decoded frames)` | 2939 | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] (2213), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] (556), Control: Trigger (140) | 108.11% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 

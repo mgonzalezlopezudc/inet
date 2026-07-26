@@ -214,12 +214,14 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 #### [script] Compact cross-configuration summary
 
-| Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
-|---|---|---|---:|---|---:|---|
-| `Baseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/Baseline/Baseline-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1148 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (20) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Broadcast` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/Broadcast/Broadcast-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `IndividualAnnounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 3148 | Control: PS-Poll (1992), Management: Beacon (1000), Data: QoS Data (80) | 0.20% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `IndividualUnannounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+Observation point: Access Point (AP) wireless interfaces.
+
+| Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
+|---|---|---:|---|---:|---|
+| `Baseline` | `none (all decoded frames)` | 1148 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (20) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Broadcast` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `IndividualAnnounced` | `none (all decoded frames)` | 3148 | Control: PS-Poll (1992), Management: Beacon (1000), Data: QoS Data (80) | 0.20% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `IndividualUnannounced` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
