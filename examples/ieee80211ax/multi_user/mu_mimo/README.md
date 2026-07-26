@@ -11,7 +11,7 @@ bin/inet -u Cmdenv -c DlMuMimo80MHz examples/ieee80211ax/multi_user/mu_mimo/down
 bin/inet -u Cmdenv -c UlMuMimo examples/ieee80211ax/multi_user/mu_mimo/uplink.ini
 ```
 
-The canonical parameter blocks currently remain in `dl_ofdma/omnetpp.ini` and
+The canonical parameter blocks currently remain in `dl_ofdma_sched/omnetpp.ini` and
 `ul_ofdma/omnetpp.ini` to keep their established entry points compatible.
 
 In the downlink case the AP is the beamformer: it performs NDP sounding,

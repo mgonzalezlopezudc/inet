@@ -20,7 +20,8 @@ for the exact contract and migration table.
 
 | Area | Example | Main mechanisms |
 |------|---------|-----------------|
-| Downlink multi-user access | [dl_ofdma](dl_ofdma/walkthrough.md) | RU scheduling, SU baseline, wide channels, DL MU-MIMO, Multi-TID Block Ack |
+| Downlink multi-user access | [dl_ofdma_sched](dl_ofdma_sched/walkthrough.md) | RU scheduling, SU baseline, wide channels, DL MU-MIMO, Multi-TID Block Ack |
+| Asymmetric downlink scheduling | [dl_ofdma_asym](dl_ofdma_asym/walkthrough.md) | Backlog-based and head-of-line minimum-delay scheduling under asymmetric load |
 | Uplink multi-user access | [ul_ofdma](ul_ofdma/walkthrough.md) | Scheduled OFDMA, UORA, UL MU-MIMO, fragmentation, NDP feedback, OM Control |
 | Buffer reporting | [he_bsr](he_bsr/walkthrough.md) | Explicit, stale, and implicit Buffer Status Reports |
 | Channel bandwidth | [he_channel_widths](he_channel_widths/walkthrough.md) | 20, 40, 80, and 160 MHz operation |

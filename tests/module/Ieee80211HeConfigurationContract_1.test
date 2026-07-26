@@ -64,7 +64,7 @@ Define_Module(ContractObserver);
 
 %file: TestNetwork.ned
 
-import inet.examples.ieee80211ax.dl_ofdma.Lan80211AxDlOfdma;
+import inet.examples.ieee80211ax.dl_ofdma_sched.Lan80211AxDlOfdma;
 
 simple ContractObserver
 {
@@ -90,7 +90,7 @@ cmdenv-event-banners = false
 *.visualizer.typename = ""
 **.numLoInterfaces = 0
 
-include ../../../../examples/ieee80211ax/dl_ofdma/omnetpp.ini
+include ../../../../examples/ieee80211ax/dl_ofdma_sched/omnetpp.ini
 
 %contains-regex: stdout
 HE configuration contract: PASS aid=[1-9][0-9]*

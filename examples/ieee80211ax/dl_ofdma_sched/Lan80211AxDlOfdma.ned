@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
-package inet.examples.ieee80211ax.dl_ofdma;
+package inet.examples.ieee80211ax.dl_ofdma_sched;
 
 import inet.examples.ieee80211ax.common.HeSingleBssNetwork;
 

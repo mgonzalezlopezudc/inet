@@ -36,7 +36,7 @@ transmissions.
 ## [agent] Scenario description
 
 There is no local `omnetpp.ini`. [downlink.ini](downlink.ini) includes
-[`../../dl_ofdma/omnetpp.ini`](../../dl_ofdma/omnetpp.ini), while
+[`../../dl_ofdma_sched/omnetpp.ini`](../../dl_ofdma_sched/omnetpp.ini), while
 [uplink.ini](uplink.ini) includes
 [`../../ul_ofdma/omnetpp.ini`](../../ul_ofdma/omnetpp.ini).
 

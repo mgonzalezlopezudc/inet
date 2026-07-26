@@ -34,9 +34,13 @@
       {"id": "width-txvector-match", "kind": "normative", "requirement": "TXVECTOR channel width matches the configured 20/40/80/160 MHz mode", "results": ["configured channel width", "HE bandwidth metadata"], "evaluation": {"handler": "unimplemented", "reason": "The scalar/vector session does not retain decoded per-PPDU HE bandwidth metadata."}},
       {"id": "width-capacity-comparison", "kind": "metric", "requirement": "Capacity comparison uses goodput and delay", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "No executable goodput-and-delay acceptance envelope is specified for the width sweep."}}
     ],
-    "dl": [
+    "dl_sched": [
       {"id": "dl-staid-scheduling-attribution", "kind": "model", "requirement": "Per-user scheduling is keyed by STA ID without MAC-address filtering", "results": ["heStaId", "heScheduledPsduBytes", "heUserPpduDuration"], "evaluation": {"handler": "unimplemented", "reason": "The evaluator does not yet correlate each STA ID with its same-PPDU scheduled bytes and duration."}},
       {"id": "dl-application-delivery-delay", "kind": "metric", "requirement": "Per-user delivery and delay come from application results", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "No manifest-defined acceptance criterion exists for the per-user delivery and delay matrix."}}
+    ],
+    "dl_asym": [
+      {"id": "dl-asym-staid-scheduling-attribution", "kind": "model", "requirement": "Asymmetric per-user scheduling is attributable to STA IDs", "results": ["heStaId", "heScheduledPsduBytes", "heUserPpduDuration"], "evaluation": {"handler": "unimplemented", "reason": "The evaluator does not yet correlate asymmetric per-STA scheduling telemetry with each application flow."}},
+      {"id": "dl-asym-application-delivery-delay", "kind": "metric", "requirement": "Asymmetric per-user delivery and delay come from application results", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "No manifest-defined acceptance criterion exists for the asymmetric per-user delivery and delay matrix."}}
     ],
     "bsr": [
       {"id": "bsr-reported-scheduled-join", "kind": "normative", "requirement": "Reported backlog is joined to scheduler-consumed backlog", "results": ["heUlBufferStatusReportedBytes", "heUlBufferStatusScheduledBytes"], "evaluation": {"handler": "unimplemented", "reason": "The retained vectors lack a stable scheduling-decision identifier for joining reported and consumed backlog."}}
@@ -160,15 +164,23 @@
         {"label": "160 MHz", "config": "Width160MHz", "metadata": {"bandwidth_mhz": 160}}
       ]
     },
-    "dl": {
-      "walkthrough": "examples/ieee80211ax/dl_ofdma/walkthrough.md",
-      "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
+    "dl_sched": {
+      "walkthrough": "examples/ieee80211ax/dl_ofdma_sched/walkthrough.md",
+      "ini": "examples/ieee80211ax/dl_ofdma_sched/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.88},
       "conditions": [
         {"label": "EDCA", "config": "SuEdcaBaseline", "metadata": {"workload": "symmetric"}},
         {"label": "fBW", "config": "EqualSizedRUs_fBW", "metadata": {"workload": "symmetric"}},
-        {"label": "fHoL", "config": "EqualSizedRUs_fHoL", "metadata": {"workload": "symmetric"}},
+        {"label": "fHoL", "config": "EqualSizedRUs_fHoL", "metadata": {"workload": "symmetric"}}
+      ]
+    },
+    "dl_asym": {
+      "walkthrough": "examples/ieee80211ax/dl_ofdma_asym/walkthrough.md",
+      "ini": "examples/ieee80211ax/dl_ofdma_asym/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.88},
+      "conditions": [
         {"label": "Backlog", "config": "BacklogBased", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
         {"label": "HoL min delay", "config": "HoLMinDelay", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
         {"label": "Backlog (4ms)", "config": "BacklogBased4ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2000000, 800000, 200000]}},

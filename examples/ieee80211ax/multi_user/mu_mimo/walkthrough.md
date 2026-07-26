@@ -36,7 +36,7 @@ assigns a common full-bandwidth RU with different starting stream indices.
 
 There is no local `omnetpp.ini`.
 [downlink.ini](downlink.ini) includes
-[`../../dl_ofdma/omnetpp.ini`](../../dl_ofdma/omnetpp.ini), and
+[`../../dl_ofdma_sched/omnetpp.ini`](../../dl_ofdma_sched/omnetpp.ini), and
 [uplink.ini](uplink.ini) includes
 [`../../ul_ofdma/omnetpp.ini`](../../ul_ofdma/omnetpp.ini).
 

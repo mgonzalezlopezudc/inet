@@ -133,7 +133,7 @@ Cmdenv invocation per configuration and run, using release-mode INET and
 `seed-set = run number`.
 
 ```sh
-python3 examples/ieee80211/analysis/wifi_analysis.py run dl_ofdma \
+python3 examples/ieee80211/analysis/wifi_analysis.py run dl_ofdma_sched \
   --evidence both --runs 5 \
   --config SuEdcaBaseline \
   --config EqualSizedRUs_fBW \
@@ -148,7 +148,7 @@ stations in the same trajectories as its scalar/vector data.
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
-python3 examples/ieee80211/analysis/wifi_analysis.py report dl_ofdma \
+python3 examples/ieee80211/analysis/wifi_analysis.py report dl_ofdma_sched \
   --session-id 20260726T150000Z
 ```
 
@@ -174,8 +174,8 @@ Inspect the exact result names and modules with:
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "packetReceived:vector(packetBytes)" OR name =~ "endToEndDelay:vector" OR name =~ "heStaId:vector" OR name =~ "heScheduledPsduBytes:vector" OR name =~ "heUserPpduDuration:vector"' \
-  examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/*/*.sca \
-  examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/*/*.vec
+  examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/*/*.sca \
+  examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/*/*.vec
 ```
 
 The evidence ledger leaves both its STA-ID correlation rule and its
@@ -224,7 +224,7 @@ HE fields are reported only when radiotap marks them known.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
   -Y 'radiotap.he.data_1.ppdu_format == 2 && wlan.fc.type == 2 && wlan.fc.subtype == 8' \
   -T fields -e frame.number
 ```
@@ -259,9 +259,9 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `EqualSizedRUs_fBW` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 4414 | Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1378), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1378), Control: Trigger (689) | 60.54% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `EqualSizedRUs_fHoL` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/EqualSizedRUs_fHoL/EqualSizedRUs_fHoL-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 4668 | Data: QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (852), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (852), Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (832) | 94.69% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `SuEdcaBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/SuEdcaBaseline/SuEdcaBaseline-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 1790 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1487), Control: Block Ack Request (BAR) (130), Control: Block Ack (BA) (130) | 20.06% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs_fBW` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 4414 | Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1378), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1378), Control: Trigger (689) | 60.54% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs_fHoL` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/EqualSizedRUs_fHoL/EqualSizedRUs_fHoL-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 4668 | Data: QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (852), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (852), Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (832) | 94.69% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `SuEdcaBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/SuEdcaBaseline/SuEdcaBaseline-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 1790 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1487), Control: Block Ack Request (BAR) (130), Control: Block Ack (BA) (130) | 20.06% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
@@ -404,7 +404,7 @@ The packet tables verify the protocol-visible exchange structure and the correct
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/dl_ofdma_sched/results/20260726T150000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
   -Y 'frame.number >= 19 && frame.number <= 24' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \

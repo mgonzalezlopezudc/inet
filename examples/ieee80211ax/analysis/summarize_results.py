@@ -121,10 +121,10 @@ def main() -> None:
                 item["goodput_mbps"] = ci(goodput.goodput_bps / 1e6)
             except RuntimeError:
                 pass
-            if group_name in {"width", "dl"}:
+            if group_name in {"width", "dl_sched", "dl_asym"}:
                 item["delay_p95_ms"] = ci(per_run_delay_percentile(condition, 95).delay_s * 1e3)
-            if group_name in {"bss", "dl"}:
-                normalized = group_name == "dl" and condition.condition_metadata.get("workload") == "asymmetric"
+            if group_name in {"bss", "dl_sched", "dl_asym"}:
+                normalized = group_name == "dl_asym" or condition.condition_metadata.get("workload") == "asymmetric"
                 item["jain_fairness"] = ci(_per_run_fairness(condition, normalized=normalized).fairness)
             if group_name == "bss":
                 item["concurrent_ap_airtime_percent"] = ci(_ap_overlap(condition).overlap * 100)

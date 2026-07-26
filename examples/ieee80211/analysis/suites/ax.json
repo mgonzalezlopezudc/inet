@@ -87,10 +87,17 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["mu-mimo"]
     },
-    "dl_ofdma": {
-      "scalar_vector_group": "dl",
-      "ini": "dl_ofdma/omnetpp.ini",
-      "configurations": ["EqualSizedRUs_fBW", "EqualSizedRUs_fBW_ACVO", "EqualSizedRUs_fHoL", "EqualSizedRUs_fHoL_ACVO", "SuEdcaBaseline", "EqualSizedRUs80MHz_fBW", "EqualSizedRUs80MHz_fHoL", "SuEdcaBaseline80MHz", "BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms", "MultiTidBlockAck"],
+    "dl_ofdma_sched": {
+      "scalar_vector_group": "dl_sched",
+      "ini": "dl_ofdma_sched/omnetpp.ini",
+      "configurations": ["EqualSizedRUs_fBW", "EqualSizedRUs_fBW_ACVO", "EqualSizedRUs_fHoL", "EqualSizedRUs_fHoL_ACVO", "SuEdcaBaseline", "EqualSizedRUs80MHz_fBW", "EqualSizedRUs80MHz_fHoL", "SuEdcaBaseline80MHz", "MultiTidBlockAck"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["ofdma"]
+    },
+    "dl_ofdma_asym": {
+      "scalar_vector_group": "dl_asym",
+      "ini": "dl_ofdma_asym/omnetpp.ini",
+      "configurations": ["BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"]
     },

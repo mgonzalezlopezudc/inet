@@ -44,7 +44,7 @@ the common warm-up definition.
 | [MU-MIMO](../multi_user/mu_mimo/walkthrough.md) | Multiple users in a PPDU and disjoint spatial-stream ranges | Concurrent streams, not throughput alone, establish that MU-MIMO occurred. |
 | [BSS coloring](../bss_coloring/walkthrough.md) | Correct color classification, OBSS/PD decisions, and concurrent AP airtime | A moving OBSS makes nearby thresholds yield more spatial reuse in the retained scenario, while the same-color control reproduces disabled. |
 | [Channel width](../he_channel_widths/walkthrough.md) | Saturated workload and per-run goodput/delay | Wider channels increase capacity here, but scaling is not expected to be perfectly linear. |
-| [DL schedulers](../dl_ofdma/walkthrough.md) | Separate symmetric/asymmetric workloads | Scheduler conclusions depend on load shape; asymmetric fairness is normalized by offered load. |
+| [DL schedulers](../dl_ofdma_sched/walkthrough.md) and [asymmetric DL](../dl_ofdma_asym/walkthrough.md) | Separate symmetric/asymmetric workloads | Scheduler conclusions depend on load shape; asymmetric fairness is normalized by offered load. |
 | [BSR](../he_bsr/walkthrough.md) | AP-reported and AP-scheduled backlog timelines | BSR is scheduling state, not application goodput; freshness controls whether the AP view is usable. |
 | [Dense IoT](../dense_iot/README.md) | Matched AX/AC campaigns across station counts, workloads, delivery, delay, and energy | This broader campaign has its own runner and result analyzer because each configuration combines station-count iterations with repetitions. |
 
@@ -93,11 +93,11 @@ MPLCONFIGDIR=/tmp/matplotlib \
   python3 examples/ieee80211/analysis/analyze_pcap.py \
   --suite examples/ieee80211/analysis/suites/ax.json \
   --index --capture-only --session-id 20260725T120000Z \
-  --subdir dl_ofdma --run 0
+  --subdir dl_ofdma_sched --run 0
 MPLCONFIGDIR=/tmp/matplotlib \
   python3 examples/ieee80211/analysis/analyze_pcap.py \
   --suite examples/ieee80211/analysis/suites/ax.json \
-  --reuse --session-id 20260725T120000Z --subdir dl_ofdma --run 0
+  --reuse --session-id 20260725T120000Z --subdir dl_ofdma_sched --run 0
 ```
 
 The analyzer publishes immutable capture-index history at

@@ -355,7 +355,7 @@ class CaptureValidationTest(unittest.TestCase):
     def test_feature_timeline_filters_select_decisive_frames(self):
         self.assertIn("wlan.fc.subtype == 10", timeline_filter_for_subdir("twt"))
         self.assertIn(
-            "wlan.fc.subtype == 2", timeline_filter_for_subdir("dl_ofdma")
+            "wlan.fc.subtype == 2", timeline_filter_for_subdir("dl_ofdma_sched")
         )
 
     def test_twt_timeline_keeps_ps_poll_before_responder_data(self):
@@ -445,7 +445,7 @@ class CaptureValidationTest(unittest.TestCase):
                 side_effect=[validation, decode],
             ):
                 timeline = extract_frame_timeline(
-                    [capture], "dl_ofdma", limit=2
+                    [capture], "dl_ofdma_sched", limit=2
                 )
         self.assertEqual(
             [frame["frame_number"] for frame in timeline], [7, 8]
@@ -511,7 +511,7 @@ class DlOfdmaEvidenceTest(unittest.TestCase):
 
         checks = {
             check["id"]: check
-            for check in evaluate_evidence(config_results, "dl_ofdma")
+            for check in evaluate_evidence(config_results, "dl_ofdma_sched")
         }
 
         check = checks["dl-ofdma-per-user-attribution"]
@@ -534,7 +534,7 @@ class DlOfdmaEvidenceTest(unittest.TestCase):
 
         checks = {
             check["id"]: check
-            for check in evaluate_evidence(config_results, "dl_ofdma")
+            for check in evaluate_evidence(config_results, "dl_ofdma_asym")
         }
 
         self.assertEqual(checks["dl-ofdma-he-mu-payload-decode"]["status"], "PASS")
@@ -869,25 +869,25 @@ class CaptureManifestTest(unittest.TestCase):
     def test_capture_map_preserves_requested_session_coverage(self):
         manifest = {
             "entries": [{
-                "subdir": "dl_ofdma",
+                "subdir": "dl_ofdma_sched",
                 "config": "EqualSizedRUs_fBW",
                 "run_number": 0,
                 "captures": [{"path": "examples/capture.pcapng"}],
             }]
         }
-        mapping = capture_map_from_manifest(manifest, ["dl_ofdma"], 0)
+        mapping = capture_map_from_manifest(manifest, ["dl_ofdma_sched"], 0)
         self.assertEqual(
-            mapping["dl_ofdma"]["EqualSizedRUs_fBW"][0].name,
+            mapping["dl_ofdma_sched"]["EqualSizedRUs_fBW"][0].name,
             "capture.pcapng",
         )
 
     def test_manifest_entry_binds_artifacts_to_session_config_run_and_seed(self):
         base = (
-            "examples/ieee80211ax/dl_ofdma/results/"
+            "examples/ieee80211ax/dl_ofdma_sched/results/"
             "20260725T120000Z/EqualSizedRUs_fBW"
         )
         entry = {
-            "subdir": "dl_ofdma",
+            "subdir": "dl_ofdma_sched",
             "config": "EqualSizedRUs_fBW",
             "run_number": 0,
             "seed_set": 7,
@@ -903,7 +903,7 @@ class CaptureManifestTest(unittest.TestCase):
             validate_entry_binding(entry, "20260725T120000Z"), []
         )
         entry["captures"][0]["path"] = (
-            "examples/ieee80211ax/dl_ofdma/results/"
+            "examples/ieee80211ax/dl_ofdma_sched/results/"
             "20260724T120000Z/EqualSizedRUs_fBW/ap.wlan0.pcap"
         )
         entry["seed_set"] = 8

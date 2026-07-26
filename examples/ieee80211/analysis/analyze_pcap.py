@@ -59,6 +59,13 @@ EVIDENCE_STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT RUN"}
 TIMELINE_LIMIT = 16
 
 subdirs_configs = {}
+DL_OFDMA_SUBDIRS = {"dl_ofdma_sched", "dl_ofdma_asym"}
+DL_OFDMA_ASYM_CONFIGS = {
+    "BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms",
+    "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms",
+    "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms",
+    "BacklogBased1_5ms", "HoLMinDelay1_5ms",
+}
 
 
 def configure_suite(suite, output_dir):
@@ -1047,7 +1054,7 @@ def timeline_filter_for_subdir(subdir):
             "wlan.fc.subtype == 13))"
         )
     if subdir in {
-        "dl_ofdma", "ul_ofdma", "multi_user/mu_mimo",
+        "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "multi_user/mu_mimo",
         "multi_user/ndp_feedback", "he_bsr",
     }:
         return data_and_responses
@@ -1087,7 +1094,7 @@ def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
             # signal and the following acknowledgment fit in the same window.
             return row["frame_name"].startswith("Data:")
         if subdir in {
-            "dl_ofdma", "ul_ofdma", "multi_user/mu_mimo",
+            "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "multi_user/mu_mimo",
             "multi_user/ndp_feedback", "he_bsr",
         }:
             return "Trigger" in row["frame_name"]
@@ -1649,7 +1656,7 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
         if subdir == "twt":
             config_results[config_name]["mpdu_observations"] = get_mpdu_observation_stats(target_pcaps)
 
-        if subdir == "dl_ofdma" and config_name in ["BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms"]:
+        if subdir == "dl_ofdma_asym" and config_name in DL_OFDMA_ASYM_CONFIGS:
             config_results[config_name]["per_flow"] = {}
             hosts_info = {
                 "host[0]": "wlan.ra == 0a:aa:00:00:00:01",
@@ -2067,7 +2074,7 @@ def evaluate_evidence(config_results, subdir):
                          "All five frame-distribution signatures are identical; decision telemetry is required"),
         })
 
-    elif subdir == "dl_ofdma":
+    elif subdir in DL_OFDMA_SUBDIRS:
         he_mu_total = 0
         he_mu_qos_ampdu = 0
         for result in config_results.values():
@@ -2084,7 +2091,7 @@ def evaluate_evidence(config_results, subdir):
             "evidence": f"{he_mu_qos_ampdu} of {he_mu_total} HE-MU observations",
         })
         per_flow_he_mu = {}
-        for config_name in ("BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms"):
+        for config_name in DL_OFDMA_ASYM_CONFIGS:
             if config_name in config_results and "per_flow" in config_results[config_name]:
                 for host_name, flow_result in config_results[config_name]["per_flow"].items():
                     count = sum(
@@ -2349,7 +2356,7 @@ def generate_markdown_tables(
             "but frame-subtype counts alone cannot distinguish an AID-0 random-access attempt from scheduled access or prove a collision. "
             "Use the per-STA `heUlRandomAccessAttempt` and `heUlRandomAccessSuccess` scalars for that decision evidence."
         )
-    elif "dl_ofdma" in subdir:
+    elif subdir in DL_OFDMA_SUBDIRS:
         he_mu_check = next(check for check in checks if check["id"] == "dl-ofdma-he-mu-payload-decode")
         analysis_text = (
             "The scheduled downlink captures contain the expected **Trigger** frames and HE-TB **Block Ack** responses for the DL-MU acknowledgment exchange "

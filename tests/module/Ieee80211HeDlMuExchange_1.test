@@ -70,7 +70,7 @@ Define_Module(DlMuFaultController);
 
 %file: TestNetwork.ned
 
-import inet.examples.ieee80211ax.dl_ofdma.Lan80211AxDlOfdma;
+import inet.examples.ieee80211ax.dl_ofdma_sched.Lan80211AxDlOfdma;
 
 simple DlMuFaultController
 {
@@ -99,7 +99,7 @@ cmdenv-event-banners = false
 *.visualizer.typename = ""
 **.numLoInterfaces = 0
 
-include ../../../../examples/ieee80211ax/dl_ofdma/omnetpp.ini
+include ../../../../examples/ieee80211ax/dl_ofdma_sched/omnetpp.ini
 
 %subst: /\x1B\[[0-9;]*m//
 
