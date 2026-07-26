@@ -134,19 +134,19 @@ status. The retained scalar/vector files identify repetitions and seed sets
 ## Scalar and vector analysis
 
 Inputs are the 20 `.sca` and 20 `.vec` files under
-`results/scalar-vector/20260725T120411Z/{AxUl,AcUl}/`. Query only the receiving
+`results/20260725T120411Z/{AxUl,AcUl}/`. Query only the receiving
 application and named mechanism results:
 
 ```sh
 opp_scavetool query -l \
   -f 'module =~ "*.server.app[0]" AND (name =~ "packetReceived:count" OR name =~ "endToEndDelay:vector")' \
-  examples/ieee80211ax/dense_iot/results/scalar-vector/20260725T120411Z/AxUl/*.{sca,vec} \
-  examples/ieee80211ax/dense_iot/results/scalar-vector/20260725T120411Z/AcUl/*.{sca,vec}
+  examples/ieee80211ax/dense_iot/results/20260725T120411Z/AxUl/*.{sca,vec} \
+  examples/ieee80211ax/dense_iot/results/20260725T120411Z/AcUl/*.{sca,vec}
 
 opp_scavetool query -l \
   -f 'name =~ "residualEnergyCapacity:last" OR name =~ "twtAgreementCount" OR name =~ "twtAwakeTime" OR name =~ "twtSleepTime" OR name =~ "heUlBasicTriggerSent:count"' \
-  examples/ieee80211ax/dense_iot/results/scalar-vector/20260725T120411Z/AxUl/*.sca \
-  examples/ieee80211ax/dense_iot/results/scalar-vector/20260725T120411Z/AcUl/*.sca
+  examples/ieee80211ax/dense_iot/results/20260725T120411Z/AxUl/*.sca \
+  examples/ieee80211ax/dense_iot/results/20260725T120411Z/AcUl/*.sca
 ```
 
 Receive count is `DenseIotNetwork.server.app[0] packetReceived:count`; delay is
@@ -192,7 +192,7 @@ an unverifiable or incomplete comparison.
 
 ## PCAP statistics
 
-Session `results/packet-statistics/20260725T234519Z` records the AP `wlan[0]`
+Session `results/20260725T234519Z` records the AP `wlan[0]`
 MAC observation point for the four requested UL/DL configurations. The files
 are PCAPng despite the compatibility `.pcap` suffix, use microsecond
 timestamps and computed checksum/FCS settings, and decode with TShark 4.6.4.
@@ -231,10 +231,10 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `AcDl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AcDl/AcDl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 10598 | Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (8686), Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (276) | 0.53% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `AcUl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AcUl/AcUl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2563 | Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (871), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (166) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `AxDl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AxDl/AxDl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 265600 | Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (212159), Control: Block Ack Request (BAR) (35191), Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC] (8414) | 5.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `AxUl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AxUl/AxUl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 26551 | Control: Block Ack (BA) (12067), Control: Trigger (11921), Management: Beacon [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1200) | 0.94% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AcDl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AcDl/AcDl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 10598 | Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (8686), Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (276) | 0.53% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AcUl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AcUl/AcUl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2563 | Management: Beacon [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] (1200), Data: QoS Data [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (871), Control: Block Ack Request (BAR) [VHT, VHT-MCS 8, 20 MHz, GI 0.8 us, BCC] (166) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AxDl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AxDl/AxDl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 265600 | Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (212159), Control: Block Ack Request (BAR) (35191), Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC] (8414) | 5.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AxUl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AxUl/AxUl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 26551 | Control: Block Ack (BA) (12067), Control: Trigger (11921), Management: Beacon [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1200) | 0.94% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -509,6 +509,6 @@ separate-session design still prevent a complete OFDMA/TWT causal chain.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z` | `AxUl`, `AcUl`; 8/16 STAs; seeds 0–4 | queries above; warm-up 20 s | 20 matched `.sca`/`.vec` pairs per technology/size set |
-| PCAP | `results/packet-statistics/20260725T234519Z` | `AxUl`, `AcUl`, `AxDl`, `AcDl`; run/seed 0 | TShark 4.6.4; AP MAC observations | manifest and hashes in generated block; mixed cases excluded |
+| Scalar/vector | `results/20260725T120411Z` | `AxUl`, `AcUl`; 8/16 STAs; seeds 0–4 | queries above; warm-up 20 s | 20 matched `.sca`/`.vec` pairs per technology/size set |
+| PCAP | `results/20260725T234519Z` | `AxUl`, `AcUl`, `AxDl`, `AcDl`; run/seed 0 | TShark 4.6.4; AP MAC observations | manifest and hashes in generated block; mixed cases excluded |
 | Configuration | `omnetpp.ini`, `DenseIotNetwork.ned` | all declared configs | inheritance described above | configuration input, not runtime proof |

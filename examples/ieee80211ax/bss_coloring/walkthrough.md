@@ -127,14 +127,14 @@ MPLCONFIGDIR=/tmp/matplotlib \
 ## Scalar and vector analysis
 
 Inputs are the `.sca`/`.vec` pairs under each configuration directory in
-`results/scalar-vector/20260725T120411Z/`. The provenance
+`results/20260725T120411Z/`. The provenance
 [bss-coloring-comparison.png.json](../analysis/figures/bss_coloring/bss-coloring-comparison.png.json)
 records hashes, run binding, filters, and the `0.3–0.95 s` window.
 
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector AND (name =~ "packetReceived:vector(packetBytes)" OR name =~ "transmissionState:vector" OR name =~ "obssPd*:vector")' \
-  examples/ieee80211ax/bss_coloring/results/scalar-vector/20260725T120411Z/*/*.vec
+  examples/ieee80211ax/bss_coloring/results/20260725T120411Z/*/*.vec
 ```
 
 | Configuration | Aggregate goodput | Jain fairness | Concurrent AP airtime |
@@ -157,7 +157,7 @@ For the dual-NAV boundary:
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector AND (name =~ "nav:vector" OR name =~ "intraBssNavChanged:vector")' \
-  examples/ieee80211ax/bss_coloring/results/packet-statistics/20260724T175025Z/TwoNav/TwoNav-#0.vec
+  examples/ieee80211ax/bss_coloring/results/20260724T175025Z/TwoNav/TwoNav-#0.vec
 ```
 
 The six `nav:vector` streams contain 524, 1380, 1169, 1240, 1452, and 1287
@@ -194,11 +194,11 @@ The table is a presentation view of the session-bound run-level summary. The sou
 ## PCAP statistics
 
 Capture session:
-`results/packet-statistics/20260725T230151Z`; PCAPng, `mac` observation
+`results/20260725T230151Z`; PCAPng, `mac` observation
 at every `wlan[0]`, run/seed 0. TShark 4.6.4 decodes the retained files.
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' \
   -q -z io,stat,0,'wlan'
 ```
 
@@ -226,12 +226,12 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `BssColoringCollision` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2983 | Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (766), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (764), Control: Trigger [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (395) | 137.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `BssColoringDisabled` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2983 | Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (766), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (764), Control: Trigger [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (395) | 137.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `BssColoringEnabled` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2668 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (622), Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (614), Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (444) | 127.40% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ObssPdAggressive` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2700 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (628), Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (616), Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (437) | 128.36% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ObssPdConservative` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2951 | Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (768), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (766), Control: Trigger [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (396) | 135.18% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `TwoNav` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2039 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (486), Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (458), Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (389) | 97.28% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `BssColoringCollision` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringCollision/BssColoringCollision-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2983 | Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (766), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (764), Control: Trigger [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (395) | 137.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `BssColoringDisabled` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringDisabled/BssColoringDisabled-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2983 | Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (766), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (764), Control: Trigger [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (395) | 137.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `BssColoringEnabled` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2668 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (622), Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (614), Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (444) | 127.40% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ObssPdAggressive` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/ObssPdAggressive/ObssPdAggressive-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2700 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (628), Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (616), Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (437) | 128.36% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ObssPdConservative` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2951 | Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (768), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (766), Control: Trigger [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (396) | 135.18% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `TwoNav` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2039 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (486), Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (458), Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (389) | 97.28% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -504,7 +504,7 @@ Frame numbers are local to the named capture, not OMNeT++ event numbers. For rea
 ## Frame exchange analysis
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/bss_coloring/results/packet-statistics/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' \
   -Y 'frame.number <= 2' -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
   -e wlan.fc.type_subtype -e radiotap.he.data_1.ppdu_format
@@ -563,6 +563,6 @@ moving two-BSS experiment and `INCONCLUSIVE` for dual NAV.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z` | five configs, runs/seeds `0–4` | figure provenance, `0.3–0.95 s` | SHA-256 per input |
-| PCAP/results | `results/packet-statistics/20260725T230151Z` | six configs, run/seed `0` | TShark 4.6.4; MAC captures | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z` | five configs, runs/seeds `0–4` | figure provenance, `0.3–0.95 s` | SHA-256 per input |
+| PCAP/results | `results/20260725T230151Z` | six configs, run/seed `0` | TShark 4.6.4; MAC captures | manifest and hashes in generated block |
 | Figure | `../analysis/figures/bss_coloring/bss-coloring-comparison.png` | five configs | per-run aggregation | provenance sidecar |

@@ -13,6 +13,7 @@ ANALYSIS_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ANALYSIS_ROOT))
 
 import wifi_analysis
+from inet_wifi_analysis import scenario_configuration_ini
 
 
 AX_SUITE = ANALYSIS_ROOT / "suites" / "ax.json"
@@ -21,6 +22,25 @@ SESSION = "20260726T120000Z"
 
 
 class WifiAnalysisCliTest(unittest.TestCase):
+
+    def test_configuration_ini_mapping_preserves_multi_ini_and_eht_examples(self):
+        ax = wifi_analysis.load_suite(AX_SUITE, wifi_analysis.REPOSITORY_ROOT)
+        multi_tid = ax.scenarios["mac_features/multi_tid_block_ack"]
+        self.assertEqual(
+            scenario_configuration_ini(
+                ax.example_root, multi_tid, "UlMuMultiTidBlockAck"
+            ),
+            ax.example_root
+            / "mac_features/multi_tid_block_ack/uplink.ini",
+        )
+        be = wifi_analysis.load_suite(BE_SUITE, wifi_analysis.REPOSITORY_ROOT)
+        eht = be.scenarios["eht_features"]
+        self.assertEqual(
+            scenario_configuration_ini(
+                be.example_root, eht, "EhtFeatures"
+            ).parent,
+            be.example_root / "eht_features",
+        )
 
     def test_ax_mapped_groups_are_available_to_both_pipelines(self):
         suite = wifi_analysis.load_suite(
@@ -74,6 +94,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
             (session_dir / "session.json").write_text(json.dumps({
                 "suite": "ax",
                 "scenario": "twt",
+                "evidence": "scalar-vector",
                 "runs": 1,
                 "classification": "diagnostic",
             }))
@@ -144,13 +165,16 @@ class WifiAnalysisCliTest(unittest.TestCase):
             generated = Path(directory) / "generated"
             session_dir = generated / "sessions" / SESSION
             session_dir.mkdir(parents=True)
+            filtered = session_dir / "scalar-vector-manifest.json"
+            filtered.write_text("{}")
             (session_dir / "session.json").write_text(json.dumps({
                 "suite": "ax",
                 "scenario": "twt",
-                "evidence": "pcap",
+                "evidence": "both",
                 "runs": 5,
                 "pcap_run": 0,
                 "configurations": ["BaselineEnergy"],
+                "scalar_vector_manifest": str(filtered),
             }))
             args = SimpleNamespace(
                 suite=str(AX_SUITE), scenario="twt", session_id=SESSION
@@ -219,7 +243,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
             (session_dir / "session.json").write_text(json.dumps({
                 "suite": "ax",
                 "scenario": "twt",
-                "evidence": "pcap",
+                "evidence": "scalar-vector",
                 "runs": 1,
                 "pcap_run": 0,
                 "configurations": None,
@@ -231,7 +255,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 ):
                     wifi_analysis.publish_command(args)
 
-    def test_pcap_only_session_cannot_pass_publication_gate(self):
+    def test_legacy_pcap_only_session_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
             generated = Path(directory) / "generated"
             session_dir = generated / "sessions" / SESSION
@@ -253,7 +277,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
             )
             with patch.object(wifi_analysis, "GENERATED_ROOT", generated):
                 with self.assertRaisesRegex(
-                    wifi_analysis.CliError, "PCAP-only sessions"
+                    wifi_analysis.CliError, "unsupported evidence mode"
                 ):
                     wifi_analysis.publish_command(args)
 

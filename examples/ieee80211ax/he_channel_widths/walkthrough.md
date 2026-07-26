@@ -110,14 +110,14 @@ MPLCONFIGDIR=/tmp/matplotlib \
 ## Scalar and vector analysis
 
 Inputs are the `.sca` and `.vec` files in each configuration directory under
-`results/scalar-vector/20260725T120411Z/`. The sidecar
+`results/20260725T120411Z/`. The sidecar
 [channel-width-dashboard.png.json](../analysis/figures/he_channel_widths/channel-width-dashboard.png.json)
 binds all hashes, filters, runs, and the `0.3–0.43 s` window.
 
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector AND module =~ "**.app[*]" AND (name =~ "packetReceived:vector(packetBytes)" OR name =~ "endToEndDelay:vector")' \
-  examples/ieee80211ax/he_channel_widths/results/scalar-vector/20260725T120411Z/*/*.vec
+  examples/ieee80211ax/he_channel_widths/results/20260725T120411Z/*/*.vec
 ```
 
 | Configuration | Aggregate goodput | p95 end-to-end delay |
@@ -156,11 +156,11 @@ The table is a presentation view of the session-bound run-level summary. The sou
 
 ## PCAP statistics
 
-Capture session `results/packet-statistics/20260725T230447Z` records run/seed 0
+Capture session `results/20260725T230447Z` records run/seed 0
 MAC observations at each `wlan[0]` in legacy PCAP. TShark 4.6.4 decodes it.
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/he_channel_widths/results/packet-statistics/20260725T230447Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/he_channel_widths/results/20260725T230447Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap' \
   -q -z io,stat,0,'wlan.fc.type_subtype==0x28'
 ```
 
@@ -191,10 +191,10 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `Width160MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/packet-statistics/20260725T230447Z/Width160MHz/Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2955 | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] (2229), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] (556), Control: Trigger (141) | 108.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Width20MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/packet-statistics/20260725T230447Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1159 | Data: QoS Data [HE-MU, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (504), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (504), Control: Trigger (126) | 106.90% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Width40MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/packet-statistics/20260725T230447Z/Width40MHz/Width40MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1566 | Data: QoS Data [HE-MU, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (951), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (472), Control: Trigger (118) | 111.04% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Width80MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/packet-statistics/20260725T230447Z/Width80MHz/Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2186 | Data: QoS Data [HE-MU, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1521), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (508), Control: Trigger (128) | 111.89% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width160MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260725T230447Z/Width160MHz/Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2955 | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] (2229), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] (556), Control: Trigger (141) | 108.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width20MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260725T230447Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1159 | Data: QoS Data [HE-MU, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (504), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (504), Control: Trigger (126) | 106.90% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width40MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260725T230447Z/Width40MHz/Width40MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1566 | Data: QoS Data [HE-MU, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (951), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (472), Control: Trigger (118) | 111.04% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width80MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260725T230447Z/Width80MHz/Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2186 | Data: QoS Data [HE-MU, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1521), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (508), Control: Trigger (128) | 111.89% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -365,7 +365,7 @@ IEEE Std 802.11-2024 Table 27-1 defines 20, 40, 80, and 160 MHz HE channel-width
 ## Frame exchange analysis
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/he_channel_widths/results/packet-statistics/20260725T230447Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/he_channel_widths/results/20260725T230447Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap' \
   -Y 'frame.number <= 2' -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
   -e wlan.fc.type_subtype -e radiotap.he.data_1.ppdu_format \
@@ -414,6 +414,6 @@ coverage is experimental, not a demonstrated model gap.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z` | four configs, runs/seeds `0–4` | sidecar filters; `0.3–0.43 s` | SHA-256 per input |
-| PCAP | `results/packet-statistics/20260725T230447Z` | four configs, run/seed `0` | TShark 4.6.4, MAC observation | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z` | four configs, runs/seeds `0–4` | sidecar filters; `0.3–0.43 s` | SHA-256 per input |
+| PCAP | `results/20260725T230447Z` | four configs, run/seed `0` | TShark 4.6.4, MAC observation | manifest and hashes in generated block |
 | Figure | `../analysis/figures/he_channel_widths/channel-width-dashboard.png` | four configs | per-run CI; run-0 ECDF | provenance sidecar |

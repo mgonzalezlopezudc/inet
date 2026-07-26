@@ -113,13 +113,13 @@ MPLCONFIGDIR=/tmp/matplotlib \
 ## Scalar and vector analysis
 
 Inputs:
-`results/scalar-vector/20260725T120411Z/NdpFeedbackReport/NdpFeedbackReport-#0.sca`
+`results/20260725T120411Z/NdpFeedbackReport/NdpFeedbackReport-#0.sca`
 and `.vec`.
 
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "packetSent:count" or name =~ "packetReceived:count" or name =~ "packetSentToPeer:count"' \
-  examples/ieee80211ax/multi_user/ndp_feedback/results/scalar-vector/20260725T120411Z/NdpFeedbackReport/NdpFeedbackReport-\#0.sca
+  examples/ieee80211ax/multi_user/ndp_feedback/results/20260725T120411Z/NdpFeedbackReport/NdpFeedbackReport-\#0.sca
 ```
 
 | Metric or invariant | Source | Window/aggregation | Observation | Interpretation |
@@ -169,7 +169,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `NdpFeedbackReport` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2543 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1382), Control: Ack (1023), Control: Trigger (99) | 44.49% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `NdpFeedbackReport` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/ndp_feedback/results/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2543 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1382), Control: Ack (1023), Control: Trigger (99) | 44.49% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -220,7 +220,7 @@ The capture contains both **Trigger** frames and zero-length HE TB feedback NDP 
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/multi_user/ndp_feedback/results/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'wlan.trigger.he.trigger_type == 7 || frame.len == 31' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e frame.len -e wlan.sa -e wlan.da \
@@ -288,6 +288,6 @@ timing/group structure, and `INCONCLUSIVE` for response identity and content.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z/` | run 0/seed 0 | `opp_scavetool`, full run | wrapper/network bound in `.sca` |
-| PCAP/log | `results/packet-statistics/20260725T230505Z/` | run 0 | TShark 4.6.4, filter above | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z/` | run 0/seed 0 | `opp_scavetool`, full run | wrapper/network bound in `.sca` |
+| PCAP/log | `results/20260725T230505Z/` | run 0 | TShark 4.6.4, filter above | manifest and hashes in generated block |
 | Standards | `80211ax-2024` corpus | IEEE Std 802.11-2024 | chunks named above | PDF not needed |

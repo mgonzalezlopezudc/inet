@@ -65,7 +65,7 @@ python3 examples/ieee80211ax/dense_iot/run_campaign.py
 ```
 
 Each invocation stores its files under
-`results/scalar-vector/YYYYMMDDTHHMMSSZ/<configuration>/`. The analyzer
+`results/YYYYMMDDTHHMMSSZ/<configuration>/`. The analyzer
 selects the newest complete session by default; both commands accept
 `--session-id YYYYMMDDTHHMMSSZ` to select an explicit result set.
 

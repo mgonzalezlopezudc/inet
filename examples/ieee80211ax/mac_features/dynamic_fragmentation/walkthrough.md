@@ -103,15 +103,15 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 ## Scalar and vector analysis
 
 Inputs:
-`results/scalar-vector/20260725T120411Z/{configuration}/*.{sca,vec}`.
+`results/20260725T120411Z/{configuration}/*.{sca,vec}`.
 Figure provenance:
 [fragmentation-and-ack-overhead.png.json](../../analysis/figures/mac_features/dynamic_fragmentation/fragmentation-and-ack-overhead.png.json).
 
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "packetSentToPeer:vector(packetBytes)" OR name =~ "acknowledgmentFrameType:vector" OR name =~ "acknowledgmentAirtime:vector" OR name =~ "packetReceived:vector(packetBytes)"' \
-  examples/ieee80211ax/mac_features/dynamic_fragmentation/results/scalar-vector/20260725T120411Z/*/*.sca \
-  examples/ieee80211ax/mac_features/dynamic_fragmentation/results/scalar-vector/20260725T120411Z/*/*.vec
+  examples/ieee80211ax/mac_features/dynamic_fragmentation/results/20260725T120411Z/*/*.sca \
+  examples/ieee80211ax/mac_features/dynamic_fragmentation/results/20260725T120411Z/*/*.vec
 ```
 
 | Configuration | mean transmitted frame size | total ACK airtime | server packets received, runs 0--4 |
@@ -158,14 +158,14 @@ The table is a presentation view of the session-bound run-level summary. The sou
 Capture point: `Lan80211AxUlOfdma.ap.wlan[0]`
 
 Capture:
-`results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`
+`results/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`
 
 Scope: AP packet observations in legacy PCAP, simulation timestamps,
 TShark 4.6.4; FCS/checksum settings not retained.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/mac_features/dynamic_fragmentation/results/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'wlan.fc.type == 2 AND (wlan.frag > 0 OR wlan.fc.more_fragments == 1)' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
@@ -195,7 +195,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `DynamicFragmentation` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 6667 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (5937), Control: Block Ack Request (BAR) (429), Control: Block Ack (BA) (264) | 64.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `DynamicFragmentation` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/dynamic_fragmentation/results/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 6667 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (5937), Control: Block Ack Request (BAR) (429), Control: Block Ack (BA) (264) | 64.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -316,5 +316,5 @@ capability-to-fragment causal link is an **inference** pending correlation.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| scalar/vector | `results/scalar-vector/20260725T120411Z` | dynamic/static/none, 0--4 | figure JSON; 0.3--2.0 s | hashes retained in JSON |
-| PCAP/results/log | `results/packet-statistics/20260725T225941Z` | dynamic, run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block |
+| scalar/vector | `results/20260725T120411Z` | dynamic/static/none, 0--4 | figure JSON; 0.3--2.0 s | hashes retained in JSON |
+| PCAP/results/log | `results/20260725T225941Z` | dynamic, run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block |

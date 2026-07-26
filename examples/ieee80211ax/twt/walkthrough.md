@@ -115,13 +115,13 @@ MPLCONFIGDIR=/tmp/matplotlib \
 ## Scalar and vector analysis
 
 Inputs are `.sca`/`.vec` pairs under
-`results/scalar-vector/20260725T120411Z/{BaselineEnergy,TwtEnergySaving}`.
+`results/20260725T120411Z/{BaselineEnergy,TwtEnergySaving}`.
 
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "radioMode:vector" OR name =~ "powerConsumption:vector" OR name =~ "packetReceived:vector(packetBytes)"' \
-  examples/ieee80211ax/twt/results/scalar-vector/20260725T120411Z/BaselineEnergy/*.{sca,vec} \
-  examples/ieee80211ax/twt/results/scalar-vector/20260725T120411Z/TwtEnergySaving/*.{sca,vec}
+  examples/ieee80211ax/twt/results/20260725T120411Z/BaselineEnergy/*.{sca,vec} \
+  examples/ieee80211ax/twt/results/20260725T120411Z/TwtEnergySaving/*.{sca,vec}
 ```
 
 Each station's piecewise-constant `powerConsumption:vector` is integrated over
@@ -165,14 +165,14 @@ The table is a presentation view of the session-bound run-level summary. The sou
 ## PCAP statistics
 
 Capture points: AP and both station WLAN interfaces.
-Session: `results/packet-statistics/20260725T225917Z`.
+Session: `results/20260725T225917Z`.
 Format/decode: retained PCAP captures produced through the PCAPng campaign
 path, computed checksum/FCS, TShark 4.6.4. Generated rows count captured MPDU
 transmission observations.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
   -q -z io,stat,0,'wlan.fc.type_subtype == 0x1a','wlan.fc.retry == 1'
 ```
 
@@ -201,10 +201,10 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `Baseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Baseline/Baseline-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1148 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (20) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `Broadcast` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/Broadcast/Broadcast-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `IndividualAnnounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 3148 | Control: PS-Poll (1992), Management: Beacon (1000), Data: QoS Data (80) | 0.20% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `IndividualUnannounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Baseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/Baseline/Baseline-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1148 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (20) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Broadcast` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/Broadcast/Broadcast-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `IndividualAnnounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 3148 | Control: PS-Poll (1992), Management: Beacon (1000), Data: QoS Data (80) | 0.20% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `IndividualUnannounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -440,7 +440,7 @@ Only `IndividualAnnounced` contains the large **PS-Poll** population. This is co
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/twt/results/packet-statistics/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
   -Y 'frame.number >= 331 && frame.number <= 345' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
@@ -506,8 +506,8 @@ standards/model-consistent inference, not a co-recorded causal chain.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z` | energy pair, runs 0–4 | `[10,100)` s; figure provenance | SHA-256s retained in JSON |
-| PCAP | `results/packet-statistics/20260725T225917Z` | four packet configs, run 0 | TShark 4.6.4, AP/STA points | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z` | energy pair, runs 0–4 | `[10,100)` s; figure provenance | SHA-256s retained in JSON |
+| PCAP | `results/20260725T225917Z` | four packet configs, run 0 | TShark 4.6.4, AP/STA points | manifest and hashes in generated block |
 | Figure | `../analysis/figures/twt/twt-state-and-energy.png` | energy pair | paired delivery gate 0.95 | metrics in `../analysis/metrics.json` |
 
 <!-- REWRITE-PREFIX-END -->

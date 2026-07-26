@@ -9,6 +9,7 @@ import math
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +23,16 @@ from scipy.stats import t
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 ANALYSIS_DIR = Path(__file__).resolve().parent
+GENERAL_ANALYSIS_ROOT = ANALYSIS_DIR.parents[1] / "ieee80211" / "analysis"
+if str(GENERAL_ANALYSIS_ROOT) not in sys.path:
+    sys.path.insert(0, str(GENERAL_ANALYSIS_ROOT))
+
+from inet_wifi_analysis import (
+    result_configuration_directory,
+    result_root,
+    result_session_directory as shared_result_session_directory,
+)
+
 DEFAULT_MANIFEST = ANALYSIS_DIR / "experiments.json"
 FIGURE_FILENAMES = {
     "fragmentation": "fragmentation-and-ack-overhead.png",
@@ -60,8 +71,35 @@ QUERY_OPTIONS = {
 def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
         manifest = json.load(stream)
+    validate_result_layout(manifest)
     validate_evidence_contracts(manifest)
     return manifest
+
+
+def validate_result_layout(manifest: dict[str, Any]) -> None:
+    """Require every group to use its simulation example's canonical results root."""
+    for group_name, group in manifest.get("groups", {}).items():
+        if "result_dir" in group:
+            raise RuntimeError(
+                f"{group_name}: result_dir is obsolete; results are derived from ini"
+            )
+        if "ini" not in group:
+            raise RuntimeError(f"{group_name}: missing ini")
+        roots = {result_root(REPOSITORY_ROOT, group["ini"])}
+        for entry in group.get("conditions", []):
+            if "result_dir" in entry:
+                raise RuntimeError(
+                    f"{group_name}/{entry.get('config')}: result_dir is obsolete"
+                )
+            roots.add(result_root(
+                REPOSITORY_ROOT,
+                entry.get("ini", group["ini"]),
+            ))
+        if len(roots) != 1:
+            raise RuntimeError(
+                f"{group_name}: all condition INI files must belong to one "
+                "simulation example results directory"
+            )
 
 
 def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
@@ -211,16 +249,17 @@ class Condition:
     ) -> "Condition":
         root = REPOSITORY_ROOT
         window_data = entry.get("measurement", group["measurement"])
+        ini = root / entry.get("ini", group["ini"])
         return cls(
             group=group_name,
             label=entry["label"],
             config=entry["config"],
-            ini=root / entry.get("ini", group["ini"]),
-            result_dir=(
-                root
-                / entry.get("result_dir", group["result_dir"])
-                / session_id
-                / entry["config"]
+            ini=ini,
+            result_dir=result_configuration_directory(
+                root,
+                ini,
+                session_id,
+                entry["config"],
             ),
             expected_repetitions=int(entry.get(
                 "expected_repetitions", group["expected_repetitions"]
@@ -400,11 +439,11 @@ def _session_is_complete(
     session_id: str,
 ) -> bool:
     for entry in group["conditions"]:
-        result_dir = (
-            root
-            / entry.get("result_dir", group["result_dir"])
-            / session_id
-            / entry["config"]
+        result_dir = result_configuration_directory(
+            root,
+            entry.get("ini", group["ini"]),
+            session_id,
+            entry["config"],
         )
         repetitions = int(entry.get(
             "expected_repetitions", group["expected_repetitions"]
@@ -436,17 +475,16 @@ def resolve_session_id(
         candidates = [requested_session_id]
     else:
         result_roots = {
-            root
-            / entry.get("result_dir", group["result_dir"])
+            result_root(root, entry.get("ini", group["ini"]))
             for entry in group["conditions"]
         }
         candidate_sets = []
-        for result_root in result_roots:
+        for candidate_root in result_roots:
             candidate_sets.append({
                 path.name
-                for path in result_root.iterdir()
+                for path in candidate_root.iterdir()
                 if path.is_dir() and SESSION_ID_PATTERN.fullmatch(path.name)
-            } if result_root.is_dir() else set())
+            } if candidate_root.is_dir() else set())
         candidates = sorted(
             set.intersection(*candidate_sets) if candidate_sets else set(),
             reverse=True,
@@ -499,9 +537,11 @@ def result_session_directory(
     root: Path = REPOSITORY_ROOT,
 ) -> Path:
     directories = {
-        root
-        / entry.get("result_dir", group["result_dir"])
-        / session_id
+        shared_result_session_directory(
+            root,
+            entry.get("ini", group["ini"]),
+            session_id,
+        )
         for entry in group["conditions"]
     }
     if len(directories) != 1:

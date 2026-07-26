@@ -64,7 +64,6 @@
     "fragmentation": {
       "walkthrough": "examples/ieee80211ax/mac_features/dynamic_fragmentation/walkthrough.md",
       "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
       "conditions": [
@@ -76,7 +75,6 @@
     "uora": {
       "walkthrough": "examples/ieee80211ax/ul_ofdma/walkthrough.md",
       "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/ul_ofdma/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
       "conditions": [
@@ -89,7 +87,6 @@
     "twt": {
       "walkthrough": "examples/ieee80211ax/twt/walkthrough.md",
       "ini": "examples/ieee80211ax/twt/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/twt/results",
       "expected_repetitions": 5,
       "measurement": {"start": 10.0, "end": 100.0},
       "conditions": [
@@ -100,7 +97,6 @@
     "rate": {
       "walkthrough": "examples/ieee80211ax/he_rate_adaptation/walkthrough.md",
       "ini": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/he_rate_adaptation/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.5, "end": 1.7},
       "conditions": [
@@ -110,7 +106,6 @@
     "er": {
       "walkthrough": "examples/ieee80211ax/he_er_su/walkthrough.md",
       "ini": "examples/ieee80211ax/he_er_su/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/he_er_su/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
       "conditions": [
@@ -121,7 +116,6 @@
     "puncturing": {
       "walkthrough": "examples/ieee80211ax/he_features/walkthrough.md",
       "ini": "examples/ieee80211ax/he_features/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/he_features/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.95},
       "conditions": [
@@ -134,7 +128,6 @@
     "mimo": {
       "walkthrough": "examples/ieee80211ax/multi_user/mu_mimo/walkthrough.md",
       "ini": "examples/ieee80211ax/multi_user/mu_mimo/downlink.ini",
-      "result_dir": "examples/ieee80211ax/multi_user/mu_mimo/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.55, "end": 0.88},
       "conditions": [
@@ -145,7 +138,6 @@
     "bss": {
       "walkthrough": "examples/ieee80211ax/bss_coloring/walkthrough.md",
       "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/bss_coloring/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.95},
       "conditions": [
@@ -159,7 +151,6 @@
     "width": {
       "walkthrough": "examples/ieee80211ax/he_channel_widths/walkthrough.md",
       "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/he_channel_widths/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.43},
       "conditions": [
@@ -172,7 +163,6 @@
     "dl": {
       "walkthrough": "examples/ieee80211ax/dl_ofdma/walkthrough.md",
       "ini": "examples/ieee80211ax/dl_ofdma/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/dl_ofdma/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.88},
       "conditions": [
@@ -196,7 +186,6 @@
     "bsr": {
       "walkthrough": "examples/ieee80211ax/he_bsr/walkthrough.md",
       "ini": "examples/ieee80211ax/he_bsr/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/he_bsr/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
@@ -207,7 +196,6 @@
     "multi_tid": {
       "walkthrough": "examples/ieee80211ax/mac_features/multi_tid_block_ack/walkthrough.md",
       "ini": "examples/ieee80211ax/mac_features/multi_tid_block_ack/downlink.ini",
-      "result_dir": "examples/ieee80211ax/mac_features/multi_tid_block_ack/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.88},
       "conditions": [
@@ -219,7 +207,6 @@
     "operating_mode": {
       "walkthrough": "examples/ieee80211ax/mac_features/operating_mode_indication/walkthrough.md",
       "ini": "examples/ieee80211ax/mac_features/operating_mode_indication/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/mac_features/operating_mode_indication/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
@@ -229,7 +216,6 @@
     "frequency_selective": {
       "walkthrough": "examples/ieee80211ax/frequency_selective_channel/walkthrough.md",
       "ini": "examples/ieee80211ax/frequency_selective_channel/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/frequency_selective_channel/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.15},
       "conditions": [
@@ -240,7 +226,6 @@
     "ndp_feedback": {
       "walkthrough": "examples/ieee80211ax/multi_user/ndp_feedback/walkthrough.md",
       "ini": "examples/ieee80211ax/multi_user/ndp_feedback/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/multi_user/ndp_feedback/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
@@ -250,7 +235,6 @@
     "dense_iot": {
       "walkthrough": "examples/ieee80211ax/dense_iot/walkthrough.md",
       "ini": "examples/ieee80211ax/dense_iot/omnetpp.ini",
-      "result_dir": "examples/ieee80211ax/dense_iot/results",
       "expected_repetitions": 5,
       "measurement": {"start": 20.0, "end": 120.0},
       "conditions": [
@@ -265,7 +249,6 @@
     "eht_features": {
       "walkthrough": "examples/ieee80211be/eht_features/walkthrough.md",
       "ini": "examples/ieee80211be/eht_features/omnetpp.ini",
-      "result_dir": "examples/ieee80211be/eht_features/results",
       "expected_repetitions": 5,
       "measurement": {"start": 0.1, "end": 0.5},
       "conditions": [

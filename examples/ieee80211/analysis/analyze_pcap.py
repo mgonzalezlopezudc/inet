@@ -13,7 +13,6 @@ Requirements:
 
 import os
 import re
-import glob
 import json
 import csv
 import io
@@ -38,6 +37,8 @@ from inet_wifi_analysis import (
     decode_phy_observation,
     extract_eht_radiotap,
     load_suite,
+    result_configuration_directory,
+    scenario_configuration_ini,
 )
 
 ANALYSIS_ROOT = Path(__file__).resolve().parent
@@ -48,7 +49,6 @@ MANIFEST_PATH = None
 MANIFEST_HISTORY_DIR = None
 SUITE_NAME = None
 SUITE_DESCRIPTOR_PATH = None
-SCALAR_VECTOR_MANIFEST = None
 GENERATED_MARKER = None
 GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
 GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
@@ -64,7 +64,7 @@ def configure_suite(suite, output_dir):
     global EXAMPLE_ROOT, ANALYSIS_OUTPUT_DIR, MANIFEST_PATH
     global MANIFEST_HISTORY_DIR, GENERATED_MARKER, GENERATED_BEGIN
     global GENERATED_END, SUITE_SCENARIOS
-    global SUITE_NAME, SUITE_DESCRIPTOR_PATH, SCALAR_VECTOR_MANIFEST
+    global SUITE_NAME, SUITE_DESCRIPTOR_PATH
     global subdirs_configs
     EXAMPLE_ROOT = Path(suite.example_root)
     ANALYSIS_OUTPUT_DIR = Path(output_dir)
@@ -72,7 +72,6 @@ def configure_suite(suite, output_dir):
     MANIFEST_HISTORY_DIR = ANALYSIS_OUTPUT_DIR / "capture_manifests"
     SUITE_NAME = suite.suite
     SUITE_DESCRIPTOR_PATH = Path(suite.descriptor_path)
-    SCALAR_VECTOR_MANIFEST = suite.scalar_vector_manifest
     GENERATED_MARKER = suite.generated_marker
     GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
     GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
@@ -396,53 +395,23 @@ def estimate_airtime(fc_type, fc_subtype, size, config_name, subdir, fc_version=
         return 20e-6 + (size * 8) / 6e6
 
 def find_ini_file_for_config(subdir, config_name):
-    configured_ini = (
-        SUITE_SCENARIOS.get(subdir, {})
-        .get("configuration_inis", {})
-        .get(config_name)
-    )
-    if configured_ini is not None:
-        ini_path = EXAMPLE_ROOT / configured_ini
-        if not ini_path.is_file():
-            raise RuntimeError(
-                f"{subdir}/{config_name}: configured INI does not exist: "
-                f"{ini_path}"
-            )
-        return ini_path
-
-    def has_config(ini_path, cfg_name, visited=None):
-        if visited is None:
-            visited = set()
-        ini_path = Path(ini_path).resolve()
-        if ini_path in visited:
-            return False
-        visited.add(ini_path)
-        if not ini_path.exists():
-            return False
-        try:
-            with open(ini_path, "r") as f:
-                content = f.read()
-                if f"[Config {cfg_name}]" in content:
-                    return True
-                for line in content.splitlines():
-                    line = line.strip()
-                    if line.startswith("include "):
-                        inc_file = line[len("include "):].strip()
-                        inc_path = (ini_path.parent / inc_file).resolve()
-                        if has_config(inc_path, cfg_name, visited):
-                            return True
-        except Exception:
-            pass
-        return False
-
-    dir_path = EXAMPLE_ROOT / subdir
-    ini_files = glob.glob(str(dir_path / "*.ini"))
-    for ini in ini_files:
-        if has_config(ini, config_name):
-            return Path(ini)
-    if ini_files:
-        return Path(ini_files[0])
-    return dir_path / "omnetpp.ini"
+    scenario = SUITE_SCENARIOS.get(subdir)
+    if scenario is None:
+        raise RuntimeError(f"{subdir}: scenario is not in the selected suite")
+    try:
+        ini_path = scenario_configuration_ini(
+            EXAMPLE_ROOT,
+            scenario,
+            config_name,
+        )
+    except (KeyError, ValueError) as error:
+        raise RuntimeError(f"{subdir}/{config_name}: {error}") from error
+    if not ini_path.is_file():
+        raise RuntimeError(
+            f"{subdir}/{config_name}: configured INI does not exist: "
+            f"{ini_path}"
+        )
+    return ini_path
 
 def get_sim_time_limit(subdir, config_name):
     ini_file = find_ini_file_for_config(subdir, config_name)
@@ -725,38 +694,16 @@ def scalar_metadata(path):
     }
 
 
-def scalar_vector_result_directory(subdir, config_name, session_id):
-    """Return the shared campaign directory for a mapped scenario/config."""
-    scenario = SUITE_SCENARIOS.get(subdir, {})
-    group_name = scenario.get("scalar_vector_group")
-    manifest_path = scenario.get("scalar_vector_manifest")
-    if manifest_path is not None:
-        manifest_path = REPOSITORY_ROOT / manifest_path
-    else:
-        manifest_path = SCALAR_VECTOR_MANIFEST
-    if not group_name or manifest_path is None:
-        raise RuntimeError(
-            f"{subdir}: no scalar/vector result mapping is available"
-        )
-    document = load_json_without_duplicates(Path(manifest_path))
-    group = document["groups"][group_name]
-    entry = next(
-        (
-            item for item in group["conditions"]
-            if item["config"] == config_name
-        ),
-        None,
-    )
-    if entry is None:
-        raise RuntimeError(
-            f"{subdir}/{config_name}: configuration is not in scalar/vector "
-            f"group {group_name}"
-        )
-    return (
-        REPOSITORY_ROOT
-        / entry.get("result_dir", group["result_dir"])
-        / session_id
-        / config_name
+def campaign_result_directory(subdir, config_name, session_id):
+    """Return the canonical raw-artifact directory for a scenario/config."""
+    if subdir not in SUITE_SCENARIOS:
+        raise RuntimeError(f"{subdir}: scenario is not in the selected suite")
+    ini_file = find_ini_file_for_config(subdir, config_name)
+    return result_configuration_directory(
+        REPOSITORY_ROOT,
+        ini_file,
+        session_id,
+        config_name,
     )
 
 
@@ -788,7 +735,7 @@ def discover_run_captures(result_directory, config_name, run_number):
 
 def index_simulation_result(config_name, subdir, run_number, session_id):
     """Index captures already produced by the shared multi-run campaign."""
-    res_dir = scalar_vector_result_directory(
+    res_dir = campaign_result_directory(
         subdir, config_name, session_id
     )
     if not res_dir.is_dir():
@@ -825,8 +772,6 @@ def index_simulation_result(config_name, subdir, run_number, session_id):
         "command": None,
         "command_shell": None,
         "exit_status": 0,
-        "result_directory": str(res_dir.relative_to(REPOSITORY_ROOT)),
-        "scalar_file": scalar["path"],
         "scalar": scalar,
         "captures": [
             {
@@ -888,7 +833,7 @@ def build_capture_manifest(
         raise FileExistsError(f"Capture manifest session already exists: {session_id}")
     for subdir in selected_subdirs:
         result_root = (
-            scalar_vector_result_directory(
+            campaign_result_directory(
                 subdir, subdirs_configs[subdir][0], session_id
             ).parent
         )
@@ -969,19 +914,14 @@ def validate_entry_binding(entry, manifest_session):
     subdir = entry.get("subdir")
     config = entry.get("config")
     run_number = entry.get("run_number")
-    expected = scalar_vector_result_directory(
+    expected = campaign_result_directory(
         subdir, config, manifest_session
     ).relative_to(REPOSITORY_ROOT)
-    declared = Path(str(entry.get("result_directory", "")))
-    if declared != expected:
-        errors.append(
-            f"result directory does not match session/config: {declared}"
-        )
 
     scalar = entry.get("scalar", {})
     scalar_path = Path(str(scalar.get("path", "")))
-    if scalar_path.parent != declared:
-        errors.append("scalar path is outside the declared result directory")
+    if scalar_path.parent != expected:
+        errors.append("scalar path is outside the canonical result directory")
     if scalar.get("configname") != config:
         errors.append("scalar configname does not match entry config")
     if scalar.get("runnumber") != run_number:
@@ -991,9 +931,9 @@ def validate_entry_binding(entry, manifest_session):
 
     for capture in entry.get("captures", []):
         capture_path = Path(str(capture.get("path", "")))
-        if capture_path.parent != declared:
+        if capture_path.parent != expected:
             errors.append(
-                "capture path is outside the declared result directory: "
+                "capture path is outside the canonical result directory: "
                 f"{capture_path}"
             )
     return errors
@@ -2710,16 +2650,11 @@ def main():
     global_color_map = {pt: get_packet_color(pt) for pt in global_packet_types}
 
     for subdir, res in all_results.items():
-        result_directories = {
-            (REPOSITORY_ROOT / entry["result_directory"]).parent
-            for entry in manifest["entries"]
-            if entry["subdir"] == subdir
-        }
-        if len(result_directories) != 1:
-            raise RuntimeError(
-                f"{subdir}: capture inputs do not share one result session"
-            )
-        output_dir = result_directories.pop()
+        output_dir = campaign_result_directory(
+            subdir,
+            subdirs_configs[subdir][0],
+            manifest["session_id"],
+        ).parent
         plot_path = generate_stacked_bar_plot(
             res, subdir, global_color_map, output_dir
         )
@@ -2752,7 +2687,6 @@ def main():
                     "config": entry["config"],
                     "run_number": entry["run_number"],
                     "seed_set": entry["seed_set"],
-                    "result_directory": entry["result_directory"],
                     "captures": entry["captures"],
                 }
                 for entry in manifest["entries"]
@@ -2760,9 +2694,9 @@ def main():
                 and entry["run_number"] == args.run
             ],
             "cross_layer_session_alignment": (
-                "NOT ASSESSED: this artifact identifies the PCAP session only; "
-                "compare its run/seed and source hashes with scalar/vector "
-                "provenance before making a cross-layer causal claim"
+                "ASSESSED: every capture is bound to the scalar metadata from "
+                "the same result directory, configuration, run, seed, and "
+                "simulation trajectory"
             ),
         }
     }

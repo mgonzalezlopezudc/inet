@@ -135,7 +135,7 @@ radiotap EHT fields decoded by the shared typed-PHY profile.
 
 ```sh
 tshark -n \
-  -r examples/ieee80211be/eht_dl_ofdma/results/packet-statistics/SESSION_ID/CONFIG_NAME/*.pcap \
+  -r examples/ieee80211be/eht_dl_ofdma/results/SESSION_ID/CONFIG_NAME/*.pcap \
   -q -z io,stat,0,'wlan'
 ```
 

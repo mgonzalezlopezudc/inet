@@ -18,7 +18,7 @@ from pathlib import Path
 EXAMPLE_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = EXAMPLE_DIR.parents[2]
 INI = EXAMPLE_DIR / "omnetpp.ini"
-RESULTS_DIR = EXAMPLE_DIR / "results" / "scalar-vector"
+RESULTS_DIR = EXAMPLE_DIR / "results"
 CONFIGS = ("AxUl", "AcUl", "AxDl", "AcDl", "AxMixed", "AcMixed")
 STATION_COUNTS = (8, 16)
 RUNS_PER_STATION_COUNT = 5

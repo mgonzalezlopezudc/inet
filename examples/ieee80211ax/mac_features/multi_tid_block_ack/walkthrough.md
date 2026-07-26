@@ -116,12 +116,12 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 
 ## Scalar and vector analysis
 
-Inputs are under `results/scalar-vector/20260725T120411Z/`.
+Inputs are under `results/20260725T120411Z/`.
 
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector and module =~ "*.app[*]" and (name =~ "packetSent:vector(packetBytes)" or name =~ "packetReceived:vector(packetBytes)")' \
-  examples/ieee80211ax/mac_features/multi_tid_block_ack/results/scalar-vector/20260725T120411Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-\#0.vec
+  examples/ieee80211ax/mac_features/multi_tid_block_ack/results/20260725T120411Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-\#0.vec
 ```
 
 | Configuration | Per-run application observation | Interpretation |
@@ -168,9 +168,9 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `MultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/packet-statistics/20260725T230138Z/MultiTidBlockAck/MultiTidBlockAck-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 1225 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (401), Control: Block Ack Request (BAR) (401), Control: Block Ack (BA) (401) | 21.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlMuMultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/packet-statistics/20260725T230138Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2355 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (696), Control: Ack (680), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (573) | 34.64% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlSuMultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/packet-statistics/20260725T230138Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 921 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (510), Control: Ack (341), Control: Block Ack Request (BAR) (33) | 12.65% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `MultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/20260725T230138Z/MultiTidBlockAck/MultiTidBlockAck-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 1225 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (401), Control: Block Ack Request (BAR) (401), Control: Block Ack (BA) (401) | 21.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlMuMultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/20260725T230138Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2355 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (696), Control: Ack (680), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (573) | 34.64% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlSuMultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/20260725T230138Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 921 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (510), Control: Ack (341), Control: Block Ack Request (BAR) (33) | 12.65% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -299,7 +299,7 @@ BAR and Block Ack subtype counts show acknowledgment exchanges, but they do not 
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/mac_features/multi_tid_block_ack/results/packet-statistics/20260725T230138Z/MultiTidBlockAck/MultiTidBlockAck-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/mac_features/multi_tid_block_ack/results/20260725T230138Z/MultiTidBlockAck/MultiTidBlockAck-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
   -Y 'wlan.fc.type_subtype == 0x28 || wlan.fc.type_subtype == 0x18 || wlan.fc.type_subtype == 0x19' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
@@ -366,6 +366,6 @@ multi-TID acknowledgment content.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z/` | three configs, run 0/seed 0 | `opp_scavetool` application filters; full run | `.sca` binds each real split INI |
-| PCAP/log | `results/packet-statistics/20260725T230138Z/` | three configs, run 0 | TShark 4.6.4; AP `wlan[0]` | manifest and hashes in generated block; separate from scalar/vector evidence |
+| Scalar/vector | `results/20260725T120411Z/` | three configs, run 0/seed 0 | `opp_scavetool` application filters; full run | `.sca` binds each real split INI |
+| PCAP/log | `results/20260725T230138Z/` | three configs, run 0 | TShark 4.6.4; AP `wlan[0]` | manifest and hashes in generated block; separate from scalar/vector evidence |
 | Standards | corpus `80211ax-2024` | IEEE Std 802.11-2024 | clauses/chunks named above | PDF not needed |

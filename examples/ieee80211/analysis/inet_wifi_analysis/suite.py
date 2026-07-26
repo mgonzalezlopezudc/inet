@@ -17,6 +17,21 @@ class Suite:
     scalar_vector_manifest: Path | None = None
 
 
+def scenario_configuration_ini(
+    example_root: str | Path,
+    scenario: dict,
+    config: str,
+) -> Path:
+    """Return the declared INI file for one scenario configuration."""
+    if config not in scenario.get("configurations", ()):
+        raise ValueError(f"Unknown scenario configuration {config!r}")
+    relative_ini = scenario.get("configuration_inis", {}).get(
+        config,
+        scenario["ini"],
+    )
+    return Path(example_root) / relative_ini
+
+
 def load_suite(path: str | Path, repository_root: str | Path) -> Suite:
     repository_root = Path(repository_root).resolve()
     path = Path(path)
@@ -67,6 +82,17 @@ def load_suite(path: str | Path, repository_root: str | Path) -> Suite:
             raise ValueError(
                 f"{path}: scenario {scenario_name!r} configuration_inis "
                 f"contains unknown configurations: {sorted(unknown_ini_configs)}"
+            )
+        scenario_parent = Path(scenario["ini"]).parent
+        split_configs = sorted(
+            config
+            for config, ini in configuration_inis.items()
+            if Path(ini).parent != scenario_parent
+        )
+        if split_configs:
+            raise ValueError(
+                f"{path}: scenario {scenario_name!r} maps configurations "
+                f"outside one simulation example: {split_configs}"
             )
         scalar_vector_manifest = scenario.get("scalar_vector_manifest")
         if scalar_vector_manifest is not None and not isinstance(

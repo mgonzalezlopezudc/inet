@@ -112,14 +112,14 @@ MPLCONFIGDIR=/tmp/matplotlib \
 ## Scalar and vector analysis
 
 Inputs are the `.sca`/`.vec` pairs in each configuration directory under
-`results/scalar-vector/20260725T120411Z/`. The sidecar
+`results/20260725T120411Z/`. The sidecar
 [he-er-su-boundary.png.json](../analysis/figures/he_er_su/he-er-su-boundary.png.json)
 records all hashes, filters, seeds, and the `0.3–2.0 s` window.
 
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector AND ((module =~ "**.app[*]" AND name =~ "packetReceived:vector(packetBytes)") OR (module =~ "**.mac" AND name =~ "packetDropIncorrectlyReceived:vector(packetBytes)"))' \
-  examples/ieee80211ax/he_er_su/results/scalar-vector/20260725T120411Z/*/*.vec
+  examples/ieee80211ax/he_er_su/results/20260725T120411Z/*/*.vec
 ```
 
 | Configuration | Application goodput |
@@ -149,11 +149,11 @@ The table is a presentation view of the session-bound run-level summary. The sou
 
 ## PCAP statistics
 
-Session `results/packet-statistics/20260725T234448Z` contains run/seed 0 legacy
+Session `results/20260725T234448Z` contains run/seed 0 legacy
 PCAPs at AP and host MAC observation points. TShark 4.6.4 decodes them.
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
   -q -z io,stat,0,'wlan.fc.type_subtype==0x28'
 ```
 
@@ -184,9 +184,9 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `CellBoundaryHeErSu` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 8669 | Data: QoS Data [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] (4513), Control: Ack (4156) | 56.03% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `CellBoundaryHeSu` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeSu/CellBoundaryHeSu-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7007 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (4615), Control: Ack (2392) | 53.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ErBss` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/ErBss/ErBss-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 240 | Control: Ack (117), Data: QoS Data [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC] (112), Data: QoS Data [HE-ER-SU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC] (5) | 0.80% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `CellBoundaryHeErSu` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 8669 | Data: QoS Data [HE-ER-SU, HE-MCS 0, 242-tone RU, GI 3.2 us, LDPC] (4513), Control: Ack (4156) | 56.03% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `CellBoundaryHeSu` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeSu/CellBoundaryHeSu-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7007 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (4615), Control: Ack (2392) | 53.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ErBss` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/ErBss/ErBss-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 240 | Control: Ack (117), Data: QoS Data [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC] (112), Data: QoS Data [HE-ER-SU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC] (5) | 0.80% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -307,7 +307,7 @@ Frame numbers are local to the named capture, not OMNeT++ event numbers. For rea
 ## Frame exchange analysis
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/he_er_su/results/packet-statistics/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
   -Y 'frame.number <= 2' -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
   -e wlan.fc.type_subtype -e radiotap.he.data_1.ppdu_format \
@@ -367,6 +367,6 @@ goodput at this configured boundary, with per-packet causal attribution
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z` | boundary pair, runs/seeds `0–4` | sidecar; `0.3–2.0 s` | SHA-256 per input |
-| PCAP | `results/packet-statistics/20260725T234448Z` | three configs, run/seed `0` | TShark 4.6.4; MAC | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z` | boundary pair, runs/seeds `0–4` | sidecar; `0.3–2.0 s` | SHA-256 per input |
+| PCAP | `results/20260725T234448Z` | three configs, run/seed `0` | TShark 4.6.4; MAC | manifest and hashes in generated block |
 | Figure | `../analysis/figures/he_er_su/he-er-su-boundary.png` | boundary pair | per-run CI | provenance sidecar |

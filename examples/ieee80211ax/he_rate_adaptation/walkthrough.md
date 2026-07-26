@@ -100,15 +100,15 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 ## Scalar and vector analysis
 
 Inputs:
-`results/scalar-vector/20260725T120411Z/HeMinstrelMobile/*.{sca,vec}`.
+`results/20260725T120411Z/HeMinstrelMobile/*.{sca,vec}`.
 Figure provenance:
 [rate-adaptation-timeline.png.json](../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png.json).
 
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "heRateSelectedMcs:vector" OR name =~ "heRateSelectedNss:vector" OR name =~ "heRateSuccessProbability:vector" OR name =~ "heRateTxSuccess:vector" OR name =~ "heRateRetryCount:vector" OR name =~ "packetSentToPeerWithRetry:vector(packetBytes)" OR name =~ "packetDropRetryLimitReached:vector(packetBytes)" OR name =~ "packetReceived:vector(packetBytes)"' \
-  examples/ieee80211ax/he_rate_adaptation/results/scalar-vector/20260725T120411Z/HeMinstrelMobile/*.sca \
-  examples/ieee80211ax/he_rate_adaptation/results/scalar-vector/20260725T120411Z/HeMinstrelMobile/*.vec
+  examples/ieee80211ax/he_rate_adaptation/results/20260725T120411Z/HeMinstrelMobile/*.sca \
+  examples/ieee80211ax/he_rate_adaptation/results/20260725T120411Z/HeMinstrelMobile/*.vec
 ```
 
 | Metric | Source/units | Aggregation | Five-run result | Interpretation |
@@ -148,14 +148,14 @@ The table is a presentation view of the session-bound run-level summary. The sou
 Capture point: `HeRateAdaptationNetwork.ap.wlan[0]`
 
 Capture:
-`results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap`
+`results/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap`
 
 Scope: AP packet-signal observations in legacy PCAP with simulation
 timestamps; TShark 4.6.4; FCS/checksum settings not retained.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap' \
   -Y 'wlan.fc.type_subtype == 0x0028' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
@@ -186,9 +186,9 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `FixedMcs` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1624 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1435), Control: Block Ack Request (BAR) (84), Control: Block Ack (BA) (84) | 78.70% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `HeMinstrel` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 6364 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1339), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1207), Control: Trigger (811) | 146.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `HeMinstrelMobile` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/packet-statistics/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7018 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1610), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1141), Control: Trigger (916) | 157.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `FixedMcs` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/FixedMcs/FixedMcs-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1624 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1435), Control: Block Ack Request (BAR) (84), Control: Block Ack (BA) (84) | 78.70% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `HeMinstrel` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 6364 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1339), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1207), Control: Trigger (811) | 146.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `HeMinstrelMobile` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7018 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1610), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1141), Control: Trigger (916) | 157.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -420,5 +420,5 @@ would be an **inference**.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| scalar/vector | `results/scalar-vector/20260725T120411Z` | mobile 0--4 | figure JSON and named vectors | hashes retained in JSON |
-| PCAP/results/log | `results/packet-statistics/20260725T230705Z` | fixed, Minstrel, mobile; run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block; separate from five-run campaign |
+| scalar/vector | `results/20260725T120411Z` | mobile 0--4 | figure JSON and named vectors | hashes retained in JSON |
+| PCAP/results/log | `results/20260725T230705Z` | fixed, Minstrel, mobile; run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block; separate from five-run campaign |

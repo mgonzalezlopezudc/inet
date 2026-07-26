@@ -22,7 +22,13 @@ from analysis_core import (
     time_weighted_integral,
     validate_disjoint_streams,
     validate_evidence_contracts,
+    validate_result_layout,
     validate_unpunctured_ru,
+)
+from inet_wifi_analysis import (
+    result_configuration_directory,
+    result_root,
+    result_session_directory,
 )
 from run_campaign import (
     available_cpu_count,
@@ -174,11 +180,10 @@ class CampaignRunnerTest(unittest.TestCase):
         "groups": {
             "sample": {
                 "ini": "sample/omnetpp.ini",
-                "result_dir": "sample/results",
                 "expected_repetitions": 2,
                 "conditions": [
                     {"config": "First"},
-                    {"config": "Second", "result_dir": "other/results"},
+                    {"config": "Second", "ini": "sample/alternate.ini"},
                 ],
             }
         }
@@ -199,9 +204,56 @@ class CampaignRunnerTest(unittest.TestCase):
             if value.startswith("--result-dir=")
         )
         self.assertIn(
-            f"other/results/{self.SESSION_ID}/Second",
+            f"sample/results/{self.SESSION_ID}/Second",
             result_argument,
         )
+
+    def test_canonical_result_paths_are_derived_from_the_ini_directory(self):
+        root = Path("/repository")
+        ini = Path("examples/sample/omnetpp.ini")
+        self.assertEqual(
+            result_root(root, ini),
+            root / "examples/sample/results",
+        )
+        self.assertEqual(
+            result_session_directory(root, ini, self.SESSION_ID),
+            root / "examples/sample/results" / self.SESSION_ID,
+        )
+        self.assertEqual(
+            result_configuration_directory(
+                root, ini, self.SESSION_ID, "First"
+            ),
+            root / "examples/sample/results" / self.SESSION_ID / "First",
+        )
+        absolute_ini = Path("/external/example/omnetpp.ini")
+        self.assertEqual(
+            result_root(root, absolute_ini),
+            Path("/external/example/results"),
+        )
+
+    def test_manifest_rejects_result_root_overrides_and_split_examples(self):
+        with self.assertRaisesRegex(RuntimeError, "result_dir is obsolete"):
+            validate_result_layout({
+                "groups": {
+                    "sample": {
+                        "ini": "sample/omnetpp.ini",
+                        "result_dir": "elsewhere",
+                        "conditions": [],
+                    }
+                }
+            })
+        with self.assertRaisesRegex(RuntimeError, "one simulation example"):
+            validate_result_layout({
+                "groups": {
+                    "sample": {
+                        "ini": "sample/omnetpp.ini",
+                        "conditions": [{
+                            "config": "Second",
+                            "ini": "other/omnetpp.ini",
+                        }],
+                    }
+                }
+            })
 
     def test_campaign_records_pcap_only_for_selected_run(self):
         jobs = collect_jobs(
@@ -217,6 +269,26 @@ class CampaignRunnerTest(unittest.TestCase):
         self.assertFalse(
             any("recordPcap=true" in argument for argument in second.command)
         )
+
+    def test_campaign_rejects_configurations_from_different_examples(self):
+        manifest = {
+            "groups": {
+                "sample": {
+                    "ini": "sample/omnetpp.ini",
+                    "expected_repetitions": 1,
+                    "conditions": [
+                        {"config": "First"},
+                        {"config": "Second", "ini": "other/omnetpp.ini"},
+                    ],
+                }
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "one simulation example"):
+            collect_jobs(
+                manifest,
+                "sample",
+                campaign_session_id=self.SESSION_ID,
+            )
 
     def test_campaign_filters_configs_and_overrides_repetitions(self):
         jobs = collect_jobs(
@@ -254,10 +326,9 @@ class CampaignRunnerTest(unittest.TestCase):
                 ("20260725T120000Z", ("First",)),
             ):
                 for config in configs:
-                    base = "other/results" if config == "Second" else "sample/results"
                     result_dir = (
                         root
-                        / base
+                        / "sample/results"
                         / selected_session
                         / config
                     )

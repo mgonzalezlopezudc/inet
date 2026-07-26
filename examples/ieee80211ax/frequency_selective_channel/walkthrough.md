@@ -120,16 +120,16 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 ## Scalar and vector analysis
 
 Inputs:
-`results/scalar-vector/20260725T120411Z/{FlatChannelOFDMA,TgaxModelBOFDMA}/*.{sca,vec}`.
+`results/20260725T120411Z/{FlatChannelOFDMA,TgaxModelBOFDMA}/*.{sca,vec}`.
 
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "packetReceived:count" AND module =~ "*.host[*].app[0]"' \
-  examples/ieee80211ax/frequency_selective_channel/results/scalar-vector/20260725T120411Z/*/*.sca
+  examples/ieee80211ax/frequency_selective_channel/results/20260725T120411Z/*/*.sca
 
 opp_scavetool query -l \
   -f 'type =~ vector AND (name =~ "heRuToneSize:vector" OR name =~ "heRuToneOffset:vector" OR name =~ "hePuncturedSubchannelMask:vector")' \
-  examples/ieee80211ax/frequency_selective_channel/results/scalar-vector/20260725T120411Z/*/*.vec
+  examples/ieee80211ax/frequency_selective_channel/results/20260725T120411Z/*/*.vec
 ```
 
 | Configuration | host[0] | host[1] | host[2] | host[3] | Aggregate |
@@ -149,12 +149,12 @@ comparison were not run.
 
 ## PCAP statistics
 
-Session `results/packet-statistics/20260725T230224Z` contains run/seed 0 legacy
+Session `results/20260725T230224Z` contains run/seed 0 legacy
 PCAPs at all WLAN MAC observation points. Each retained AP capture has 9401
 observations from `0.080084 s` through `1.199664 s`; TShark 4.6.4 decodes it.
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap' \
   -q -z io,stat,0,'wlan.fc.type==1 && (wlan.fc.subtype==2 || wlan.fc.subtype==9)'
 ```
 
@@ -187,8 +187,8 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `FlatChannelOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `TgaxModelBOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `FlatChannelOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `TgaxModelBOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -283,7 +283,7 @@ The different frame mixtures show that the two configured access paths executed 
 ## Frame exchange analysis
 
 ```sh
-tshark -n -r 'examples/ieee80211ax/frequency_selective_channel/results/packet-statistics/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap' \
+tshark -n -r 'examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap' \
   -Y 'frame.number >= 39 && frame.number <= 41' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.fc.type -e wlan.fc.subtype \
@@ -355,6 +355,6 @@ and AP/receiver PCAP; then repeat across seeds only after the mechanism appears.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z` | flat and TGax OFDMA, run/seed `0` | exact queries above | single-run only |
-| PCAP/results | `results/packet-statistics/20260725T230224Z` | same configs, run/seed `0` | TShark 4.6.4; MAC | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z` | flat and TGax OFDMA, run/seed `0` | exact queries above | single-run only |
+| PCAP/results | `results/20260725T230224Z` | same configs, run/seed `0` | TShark 4.6.4; MAC | manifest and hashes in generated block |
 | Config catalogue | `omnetpp.ini` | all declared cases | input inspection | not runtime evidence |

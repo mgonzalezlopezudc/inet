@@ -110,13 +110,13 @@ MPLCONFIGDIR=/tmp/matplotlib \
 ## Scalar and vector analysis
 
 Inputs:
-`results/scalar-vector/20260725T120411Z/OperatingModeIndication/OperatingModeIndication-#0.sca`
+`results/20260725T120411Z/OperatingModeIndication/OperatingModeIndication-#0.sca`
 and `.vec`.
 
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector and module =~ "*.app[*]" and (name =~ "packetSent:vector(packetBytes)" or name =~ "packetReceived:vector(packetBytes)")' \
-  examples/ieee80211ax/mac_features/operating_mode_indication/results/scalar-vector/20260725T120411Z/OperatingModeIndication/OperatingModeIndication-\#0.vec
+  examples/ieee80211ax/mac_features/operating_mode_indication/results/20260725T120411Z/OperatingModeIndication/OperatingModeIndication-\#0.vec
 ```
 
 | Metric or invariant | Source result and module | Window/aggregation | Observation | Interpretation |
@@ -138,7 +138,7 @@ checksum/FCS session; TShark 4.6.4.
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/mac_features/operating_mode_indication/results/packet-statistics/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/mac_features/operating_mode_indication/results/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -q -z io,stat,0
 ```
 
@@ -166,7 +166,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `OperatingModeIndication` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/operating_mode_indication/results/packet-statistics/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2489 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023), Control: Trigger (3) | 46.63% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `OperatingModeIndication` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/operating_mode_indication/results/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2489 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023), Control: Trigger (3) | 46.63% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -217,7 +217,7 @@ The data and acknowledgment counts show traffic before and after the configured 
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/mac_features/operating_mode_indication/results/packet-statistics/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/mac_features/operating_mode_indication/results/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'frame.number <= 10' -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
   -e wlan.fc.type_subtype -e _ws.col.Info
@@ -275,6 +275,6 @@ retained packet and application sessions do not close the mechanism chain.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z/` | treatment 0/0 | `opp_scavetool`, full run | `.sca` names wrapper INI/network |
-| PCAP/log | `results/packet-statistics/20260725T230146Z/` | treatment run 0 | TShark 4.6.4, AP `wlan[0]` | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z/` | treatment 0/0 | `opp_scavetool`, full run | `.sca` names wrapper INI/network |
+| PCAP/log | `results/20260725T230146Z/` | treatment run 0 | TShark 4.6.4, AP `wlan[0]` | manifest and hashes in generated block |
 | Standards | `80211ax-2024` corpus | IEEE Std 802.11-2024 | chunks `01495`, `09883` | PDF not needed |

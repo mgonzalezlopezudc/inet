@@ -111,7 +111,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 ## Scalar and vector analysis
 
 Inputs are
-`results/scalar-vector/20260725T120411Z/{BurstyTraffic,StaleBsr}/*.{sca,vec}`;
+`results/20260725T120411Z/{BurstyTraffic,StaleBsr}/*.{sca,vec}`;
 the figure and its JSON provenance are
 [bsr-reported-vs-scheduled.png](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png)
 and
@@ -120,7 +120,7 @@ and
 ```sh
 opp_scavetool query -l \
   -f 'type =~ vector AND (name =~ "heUlBufferStatusReportedBytes:vector" OR name =~ "heUlBufferStatusScheduledBytes:vector")' \
-  examples/ieee80211ax/he_bsr/results/scalar-vector/20260725T120411Z/*/*.vec
+  examples/ieee80211ax/he_bsr/results/20260725T120411Z/*/*.vec
 ```
 
 | Metric or invariant | Source | Window/aggregation | `BurstyTraffic` | `StaleBsr` | Interpretation |
@@ -159,7 +159,7 @@ The table is a presentation view of the session-bound run-level summary. The sou
 Capture point: `HeBsrNetwork.ap.wlan[0]`
 
 Capture:
-`results/packet-statistics/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap`
+`results/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap`
 
 Scope: legacy PCAP, simulation timestamps, AP packet-signal observations;
 TShark 4.6.4 per retained analyzer output. FCS/checksum settings were not
@@ -167,7 +167,7 @@ retained.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/he_bsr/results/packet-statistics/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/he_bsr/results/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap' \
   -Y 'wlan.trigger.he.trigger_type == 4' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
@@ -198,9 +198,9 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `FullBsrAccounting` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/packet-statistics/20260725T230736Z/FullBsrAccounting/FullBsrAccounting-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 3049 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1525), Control: Ack (976), Control: Block Ack (BA) (161) | 60.85% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ImplicitBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/packet-statistics/20260725T230736Z/ImplicitBsr/ImplicitBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2808 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1511), Control: Ack (970), Control: Block Ack Request (BAR) (113) | 60.09% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `StaleBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/packet-statistics/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 3107 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1529), Control: Ack (977), Control: Block Ack (BA) (172) | 61.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `FullBsrAccounting` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/FullBsrAccounting/FullBsrAccounting-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 3049 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1525), Control: Ack (976), Control: Block Ack (BA) (161) | 60.85% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ImplicitBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/ImplicitBsr/ImplicitBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2808 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1511), Control: Ack (970), Control: Block Ack Request (BAR) (113) | 60.09% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `StaleBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 3107 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1529), Control: Ack (977), Control: Block Ack (BA) (172) | 61.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -402,5 +402,5 @@ executed and not authorization to modify production code.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| scalar/vector | `results/scalar-vector/20260725T120411Z` | `BurstyTraffic`, `StaleBsr`; 0--4 | JSON provenance; 0.3--1.9 s | hashes retained in figure JSON |
-| PCAP/results/log | `results/packet-statistics/20260725T230736Z` | full, implicit, stale; run 0 | shared AX analyzer; TShark 4.6.4 | manifest and hashes in generated block; separate from five-run campaign |
+| scalar/vector | `results/20260725T120411Z` | `BurstyTraffic`, `StaleBsr`; 0--4 | JSON provenance; 0.3--1.9 s | hashes retained in figure JSON |
+| PCAP/results/log | `results/20260725T230736Z` | full, implicit, stale; run 0 | shared AX analyzer; TShark 4.6.4 | manifest and hashes in generated block; separate from five-run campaign |

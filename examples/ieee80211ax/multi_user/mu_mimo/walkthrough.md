@@ -120,12 +120,12 @@ MPLCONFIGDIR=/tmp/matplotlib \
 ## Scalar and vector analysis
 
 Inputs are the ten `.vec` files in
-`results/scalar-vector/20260725T120411Z/{DlMuMimo,EqualSizedRUs_fBW}/`.
+`results/20260725T120411Z/{DlMuMimo,EqualSizedRUs_fBW}/`.
 
 ```sh
 opp_scavetool query -l \
   -f 'module =~ "*.ap.wlan[0].radio" and (name =~ "heRuToneSize:vector" or name =~ "heStaId:vector" or name =~ "heSpatialStreams:vector" or name =~ "heStreamStartIndex:vector")' \
-  examples/ieee80211ax/multi_user/mu_mimo/results/scalar-vector/20260725T120411Z/DlMuMimo/DlMuMimo-\#0.vec
+  examples/ieee80211ax/multi_user/mu_mimo/results/20260725T120411Z/DlMuMimo/DlMuMimo-\#0.vec
 ```
 
 Goodput is the sum of three station `packetReceived:vector(packetBytes)`
@@ -198,8 +198,8 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `DlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/packet-statistics/20260725T230510Z/DlMuMimo/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3597 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (2089), Control: Block Ack Request (BAR) (724), Control: Block Ack (BA) (724) | 132.19% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/packet-statistics/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3777 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1786), Control: Ack (1736), Data: QoS Null [HE-TB, HE, GI 3.2 us, A-MPDU] (147) | 58.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `DlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/20260725T230510Z/DlMuMimo/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3597 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (2089), Control: Block Ack Request (BAR) (724), Control: Block Ack (BA) (724) | 132.19% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3777 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1786), Control: Ack (1736), Data: QoS Null [HE-TB, HE, GI 3.2 us, A-MPDU] (147) | 58.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -296,7 +296,7 @@ Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/multi_user/mu_mimo/results/packet-statistics/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/multi_user/mu_mimo/results/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'frame.number >= 16 && frame.number <= 20' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e wlan.sa -e wlan.da \
@@ -363,6 +363,6 @@ are separate, so their event-level causality is inference.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T120411Z/` | DL treatment/control runs 0-4 | `opp_scavetool`; `[0.55,0.88)` outcome window | per-run aggregation; split INI in metadata |
-| PCAP/log | `results/packet-statistics/20260725T230510Z/` | DL/UL treatment run 0 | TShark 4.6.4, AP `wlan[0]` | manifest and hashes in generated block |
+| Scalar/vector | `results/20260725T120411Z/` | DL treatment/control runs 0-4 | `opp_scavetool`; `[0.55,0.88)` outcome window | per-run aggregation; split INI in metadata |
+| PCAP/log | `results/20260725T230510Z/` | DL/UL treatment run 0 | TShark 4.6.4, AP `wlan[0]` | manifest and hashes in generated block |
 | Standards | `80211ax-2024` corpus | IEEE Std 802.11-2024 | chunks named above | PDF not needed |

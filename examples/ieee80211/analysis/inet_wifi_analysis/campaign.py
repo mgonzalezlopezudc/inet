@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+from .paths import result_configuration_directory, result_root
+
 
 @dataclass(frozen=True)
 class CampaignJob:
@@ -91,16 +93,35 @@ def collect_campaign_jobs(
     jobs = []
     for group_name in group_names:
         group = manifest["groups"][group_name]
+        if "result_dir" in group or any(
+            "result_dir" in entry for entry in group["conditions"]
+        ):
+            raise ValueError(
+                f"{group_name}: result_dir is obsolete; results are derived "
+                "from the effective INI"
+            )
+        result_roots = {
+            result_root(
+                repository_root,
+                entry.get("ini", group["ini"]),
+            )
+            for entry in group["conditions"]
+        }
+        if len(result_roots) != 1:
+            raise ValueError(
+                f"{group_name}: all configurations must belong to one "
+                "simulation example"
+            )
         repetitions = repetitions_override or int(group["expected_repetitions"])
         for entry in group["conditions"]:
             if selected_configs and entry["config"] not in selected_configs:
                 continue
             ini = repository_root / entry.get("ini", group["ini"])
-            result_dir = (
-                repository_root
-                / entry.get("result_dir", group["result_dir"])
-                / session_id
-                / entry["config"]
+            result_dir = result_configuration_directory(
+                repository_root,
+                ini,
+                session_id,
+                entry["config"],
             )
             for run in range(repetitions):
                 jobs.append(CampaignJob(

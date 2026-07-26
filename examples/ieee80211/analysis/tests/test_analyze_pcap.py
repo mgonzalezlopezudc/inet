@@ -586,7 +586,7 @@ class CaptureManifestTest(unittest.TestCase):
                 patch("analyze_pcap.capinfos_version", return_value="Capinfos"),
                 patch("analyze_pcap._history_path", return_value=history),
                 patch(
-                    "analyze_pcap.scalar_vector_result_directory",
+                    "analyze_pcap.campaign_result_directory",
                     return_value=root / "session" / "Baseline",
                 ),
                 patch(
@@ -611,6 +611,8 @@ class CaptureManifestTest(unittest.TestCase):
         )
         self.assertEqual(len(manifest["suite_descriptor"]["sha256"]), 64)
         self.assertNotIn("schema_version", manifest)
+        self.assertNotIn("result_directory", manifest["entries"][0])
+        self.assertNotIn("scalar_file", manifest["entries"][0])
 
     def test_shared_analyzer_has_no_ax_analysis_core_dependency(self):
         source = Path(analyze_pcap.__file__).read_text(encoding="utf-8")
@@ -835,7 +837,7 @@ class CaptureManifestTest(unittest.TestCase):
             "capture.pcapng",
         )
 
-    def test_schema2_entry_binds_artifacts_to_session_config_run_and_seed(self):
+    def test_manifest_entry_binds_artifacts_to_session_config_run_and_seed(self):
         base = (
             "examples/ieee80211ax/dl_ofdma/results/"
             "20260725T120000Z/EqualSizedRUs_fBW"
@@ -845,7 +847,6 @@ class CaptureManifestTest(unittest.TestCase):
             "config": "EqualSizedRUs_fBW",
             "run_number": 0,
             "seed_set": 7,
-            "result_directory": base,
             "scalar": {
                 "path": f"{base}/result.sca",
                 "configname": "EqualSizedRUs_fBW",

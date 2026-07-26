@@ -22,7 +22,7 @@ SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 PUBLICATION_RUNS = 5
 
 sys.path.insert(0, str(ANALYSIS_ROOT))
-from inet_wifi_analysis import Suite, load_suite
+from inet_wifi_analysis import Suite, load_suite, scenario_configuration_ini
 
 
 class CliError(RuntimeError):
@@ -113,10 +113,18 @@ def scalar_document(
     suite: Suite, scenario_name: str, scenario: dict[str, Any]
 ) -> tuple[Path, str, dict[str, Any]]:
     manifest_path, group = scalar_mapping(suite, scenario_name, scenario)
+    document = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validate_result_mapping(
+        suite,
+        scenario_name,
+        scenario,
+        document,
+        group,
+    )
     return (
         manifest_path,
         group,
-        json.loads(manifest_path.read_text(encoding="utf-8")),
+        document,
     )
 
 
@@ -169,6 +177,37 @@ def scalar_configs(document: dict[str, Any], group: str) -> set[str]:
     }
 
 
+def validate_result_mapping(
+    suite: Suite,
+    scenario_name: str,
+    scenario: dict[str, Any],
+    scalar_manifest: dict[str, Any],
+    scalar_group: str,
+) -> None:
+    """Require suite and scalar mappings to resolve each config to one example."""
+    group = scalar_manifest["groups"][scalar_group]
+    conditions = {
+        condition["config"]: condition
+        for condition in group["conditions"]
+    }
+    for config in scenario["configurations"]:
+        condition = conditions.get(config)
+        if condition is None:
+            continue
+        scalar_ini = REPOSITORY_ROOT / condition.get("ini", group["ini"])
+        suite_ini = scenario_configuration_ini(
+            suite.example_root,
+            scenario,
+            config,
+        )
+        if scalar_ini.resolve() != suite_ini.resolve():
+            raise CliError(
+                f"{scenario_name}/{config}: suite and scalar mappings use "
+                f"different INI files: {relative_path(suite_ini)} != "
+                f"{relative_path(scalar_ini)}"
+            )
+
+
 def check_configs(
     selected: list[str] | None,
     evidence: str,
@@ -180,7 +219,7 @@ def check_configs(
         return
     requested = set(selected)
     errors = []
-    if evidence in {"pcap", "both"}:
+    if evidence == "both":
         unknown = sorted(requested - set(scenario["configurations"]))
         if unknown:
             errors.append("PCAP: " + ", ".join(unknown))
@@ -245,7 +284,6 @@ def inspect_command(args: argparse.Namespace) -> None:
             "manifest": relative_path(path),
             "publication_ready": (
                 int(logical_session.get("runs", 0)) >= PUBLICATION_RUNS
-                and logical_session.get("evidence") != "pcap"
             ),
         }
     print(json.dumps({
@@ -283,6 +321,11 @@ def validate_session_selection(
             f"Session belongs to scenario {document.get('scenario')!r}, "
             f"not {scenario!r}"
         )
+    if document.get("evidence") not in {"scalar-vector", "both"}:
+        raise CliError(
+            f"Session has unsupported evidence mode "
+            f"{document.get('evidence')!r}"
+        )
 
 
 def validate_scalar_report_session(
@@ -316,18 +359,12 @@ def run_command_handler(args: argparse.Namespace) -> None:
             f"Logical analysis session path already exists: {selected_session}"
         )
 
-    scalar_path = None
-    scalar_group = None
-    scalar_source = None
-    if args.evidence in {"scalar-vector", "both"}:
-        scalar_source, scalar_group, scalar_document_value = scalar_document(
-            suite, args.scenario, scenario
-        )
-        scalar_path = (
-            session_directory(selected_session) / "scalar-vector-manifest.json"
-        )
-    else:
-        scalar_document_value = None
+    scalar_source, scalar_group, scalar_document_value = scalar_document(
+        suite, args.scenario, scenario
+    )
+    scalar_path = (
+        session_directory(selected_session) / "scalar-vector-manifest.json"
+    )
     check_configs(
         args.config,
         args.evidence,
@@ -346,37 +383,36 @@ def run_command_handler(args: argparse.Namespace) -> None:
             scalar_configs(scalar_document_value, scalar_group)
         )
 
-    if scalar_path is not None:
-        write_json(
-            scalar_path,
-            filtered_scalar_manifest(
-                scalar_document_value,
-                scalar_group,
-                args.runs,
-                effective_configs,
-            ),
-        )
-        command = [
-            sys.executable,
-            str(scalar_source.parent / "run_campaign.py"),
+    write_json(
+        scalar_path,
+        filtered_scalar_manifest(
+            scalar_document_value,
             scalar_group,
-            "--manifest",
-            str(scalar_path),
-            "--runs",
-            str(args.runs),
-            "--session-id",
-            selected_session,
-        ]
-        for config in effective_configs or []:
-            command.extend(["--config", config])
-        if args.evidence == "both":
-            command.extend(["--pcap-run", "0"])
-            capture = scenario.get("capture", suite.capture)
-            for pattern in capture["interface_patterns"]:
-                command.extend(["--pcap-interface-pattern", pattern])
-        if args.jobs is not None:
-            command.extend(["--jobs", str(args.jobs)])
-        run_command(command)
+            args.runs,
+            effective_configs,
+        ),
+    )
+    command = [
+        sys.executable,
+        str(scalar_source.parent / "run_campaign.py"),
+        scalar_group,
+        "--manifest",
+        str(scalar_path),
+        "--runs",
+        str(args.runs),
+        "--session-id",
+        selected_session,
+    ]
+    for config in effective_configs or []:
+        command.extend(["--config", config])
+    if args.evidence == "both":
+        command.extend(["--pcap-run", "0"])
+        capture = scenario.get("capture", suite.capture)
+        for pattern in capture["interface_patterns"]:
+            command.extend(["--pcap-interface-pattern", pattern])
+    if args.jobs is not None:
+        command.extend(["--jobs", str(args.jobs)])
+    run_command(command)
 
     if args.evidence == "both":
         command = [
@@ -413,31 +449,24 @@ def run_command_handler(args: argparse.Namespace) -> None:
         },
         "classification": (
             "publication"
-            if args.runs >= PUBLICATION_RUNS and args.evidence != "pcap"
+            if args.runs >= PUBLICATION_RUNS
             else "diagnostic"
         ),
         "configurations": effective_configs,
         "scalar_vector_group": scalar_group,
-        "scalar_vector_manifest": (
-            relative_path(scalar_path) if scalar_path is not None else None
-        ),
-        "pcap_run": 0 if args.evidence in {"pcap", "both"} else None,
+        "scalar_vector_manifest": relative_path(scalar_path),
+        "pcap_run": 0 if args.evidence == "both" else None,
         "pcap_scope": (
             "representative run 0 mechanism evidence"
-            if args.evidence in {"pcap", "both"} else None
+            if args.evidence == "both" else None
         ),
     }
     write_json(logical_manifest, document)
     print(f"CREATED {relative_path(logical_manifest)}")
     if document["classification"] == "diagnostic":
-        reason = (
-            "PCAP-only evidence is representative run-0 mechanism evidence"
-            if args.evidence == "pcap"
-            else f"publication requires at least {PUBLICATION_RUNS} runs"
-        )
         print(
             f"DIAGNOSTIC: {args.runs} run(s) cover [0, {args.runs}); "
-            f"{reason}."
+            f"publication requires at least {PUBLICATION_RUNS} runs."
         )
 
 
@@ -487,7 +516,7 @@ def report_command(args: argparse.Namespace) -> None:
             str(session_directory(args.session_id) / "evidence-ledger.json"),
         ])
 
-    if evidence in {"pcap", "both"}:
+    if evidence == "both":
         command = [
             sys.executable,
             str(ANALYSIS_ROOT / "analyze_pcap.py"),
@@ -519,12 +548,6 @@ def publish_command(args: argparse.Namespace) -> None:
             f"run(s)); publication requires at least {PUBLICATION_RUNS}"
         )
     evidence = logical["evidence"]
-    if evidence == "pcap":
-        raise CliError(
-            "PCAP-only sessions contain representative single-run mechanism "
-            "evidence and cannot be published without a five-run "
-            "scalar/vector campaign"
-        )
     configurations = logical.get("configurations") or []
 
     if evidence in {"scalar-vector", "both"}:
@@ -544,7 +567,7 @@ def publish_command(args: argparse.Namespace) -> None:
             str(scalar_manifest.parent / "metrics.json"),
             "--update",
         ])
-    if evidence in {"pcap", "both"}:
+    if evidence == "both":
         command = [
             sys.executable,
             str(ANALYSIS_ROOT / "analyze_pcap.py"),

@@ -21,7 +21,7 @@ from scipy.stats import t
 
 
 EXAMPLE_DIR = Path(__file__).resolve().parent
-DEFAULT_RESULTS_DIR = EXAMPLE_DIR / "results" / "scalar-vector"
+DEFAULT_RESULTS_DIR = EXAMPLE_DIR / "results"
 DEFAULT_OUTPUT_DIR = EXAMPLE_DIR / "analysis"
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 CONFIG_METADATA = {

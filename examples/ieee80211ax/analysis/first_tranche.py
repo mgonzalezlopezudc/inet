@@ -34,15 +34,8 @@ def main() -> None:
         conditions = conditions_for_group(
             manifest, group_name, args.session_id
         )
-        result_directories = {
-            condition.result_dir.parent for condition in conditions
-        }
-        if len(result_directories) != 1:
-            raise RuntimeError(
-                f"{group_name}: conditions do not share one result session"
-            )
         checked_output = (
-            result_directories.pop() / FIGURE_FILENAMES[group_name]
+            conditions[0].result_dir.parent / FIGURE_FILENAMES[group_name]
         )
         if args.check:
             with tempfile.TemporaryDirectory(prefix="inet-80211ax-analysis-") as directory:

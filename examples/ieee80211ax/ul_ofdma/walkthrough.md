@@ -307,10 +307,10 @@ Query the completed scalar evidence directly:
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "heUlRandomAccessAttempt:count" OR name =~ "heUlRandomAccessSuccess:count"' \
-  examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/MixedUora/*.sca \
-  examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraLightContention/*.sca \
-  examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraHeavyContention/*.sca \
-  examples/ieee80211ax/ul_ofdma/results/scalar-vector/20260725T181500Z/UoraMoreRandomAccessRus/*.sca
+  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/MixedUora/*.sca \
+  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/UoraLightContention/*.sca \
+  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/UoraHeavyContention/*.sca \
+  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/UoraMoreRandomAccessRus/*.sca
 ```
 
 Regenerate the four-condition dashboard with:
@@ -334,7 +334,7 @@ For a direct decode of the retained five-RA-RU capture:
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -c 20
 ```
 
@@ -364,12 +364,12 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `EdcaBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2483 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023) | 46.62% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `EqualRus` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/EqualRus/EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `MixedUora` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 5085 | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1367), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1281), Control: Ack (1021) | 70.86% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ScheduledOnly` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UoraLightContention` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 11466 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (8111), Control: Block Ack (BA) (903), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (771) | 60.50% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UoraMoreRandomAccessRus` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 14027 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (12709), Control: Block Ack (BA) (341), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (323) | 67.13% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EdcaBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2483 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023) | 46.62% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualRus` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/EqualRus/EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `MixedUora` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 5085 | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1367), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1281), Control: Ack (1021) | 70.86% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `ScheduledOnly` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UoraLightContention` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 11466 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (8111), Control: Block Ack (BA) (903), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (771) | 60.50% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UoraMoreRandomAccessRus` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 14027 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (12709), Control: Block Ack (BA) (341), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (323) | 67.13% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -607,7 +607,7 @@ Frame numbers are local to the named capture, not OMNeT++ event numbers. For rea
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/ul_ofdma/results/packet-statistics/20260725T182100Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/ul_ofdma/results/20260725T182100Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
   -Y 'frame.number >= 620 && frame.number <= 625' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
@@ -676,7 +676,7 @@ that could otherwise be scheduled.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/scalar-vector/20260725T181500Z` | four UORA configs, runs 0–4 | scalar counters; delay `[0.3,2)` s | hashes retained in figure JSON |
-| PCAP | `results/packet-statistics/20260725T233546Z` | six configs, run 0 | TShark 4.6.4, AP point | manifest and hashes in generated block |
-| Supplemental PCAP | `results/packet-statistics/20260725T182100Z` | heavy 1-RU, run 0 | timeline above | separate from generated block |
+| Scalar/vector | `results/20260725T181500Z` | four UORA configs, runs 0–4 | scalar counters; delay `[0.3,2)` s | hashes retained in figure JSON |
+| PCAP | `results/20260725T233546Z` | six configs, run 0 | TShark 4.6.4, AP point | manifest and hashes in generated block |
+| Supplemental PCAP | `results/20260725T182100Z` | heavy 1-RU, run 0 | timeline above | separate from generated block |
 | Figure | `../analysis/figures/ul_ofdma/uora-dashboard.png` | four configs | one observation/run, 95% t CI | provenance retained |

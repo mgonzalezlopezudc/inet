@@ -58,7 +58,7 @@ radiotap EHT observation can establish the transmitted PHY facts.
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
-| HE control completes | `FAIL` | `results/packet-statistics/20260725T202934Z/BaselineAx/cmdenv.stderr` | run 0, seed set 0 | Aborted at 0.107913906544 s: maximum transmission duration exceeded |
+| HE control completes | `FAIL` | `results/20260725T202934Z/BaselineAx/cmdenv.stderr` | run 0, seed set 0 | Aborted at 0.107913906544 s: maximum transmission duration exceeded |
 | HE frames were emitted before failure | `PASS` | Two retained BaselineAx PCAPng files, eight observations each | run 0, seed set 0 | Partial failed run only |
 | EHT 320 MHz/MCS 13 is transmitted | `NOT RUN` | No EHT capture or result session | none | The shared campaign stopped after the HE control failed |
 | End-to-end HE/EHT outcome comparison | `NOT RUN` | No completed `.sca`/`.vec` pair | none | No comparable completed runs |
@@ -143,7 +143,7 @@ the host capture SHA-256 is
 
 ```sh
 capinfos \
-  examples/ieee80211be/eht_features/results/packet-statistics/20260725T202934Z/BaselineAx/*.pcap
+  examples/ieee80211be/eht_features/results/20260725T202934Z/BaselineAx/*.pcap
 ```
 
 | Configuration | Observation count | Relevant frame summary | Interpretation limit |
@@ -155,7 +155,7 @@ capinfos \
 
 ```sh
 tshark -n \
-  -r examples/ieee80211be/eht_features/results/packet-statistics/20260725T202934Z/BaselineAx/BaselineAx-\#0Lan80211BeEhtFeatures.ap.wlan[0].pcap \
+  -r examples/ieee80211be/eht_features/results/20260725T202934Z/BaselineAx/BaselineAx-\#0Lan80211BeEhtFeatures.ap.wlan[0].pcap \
   -Y 'wlan' -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
   -e wlan.sa -e wlan.da
@@ -218,6 +218,6 @@ acknowledgments before aborting. All EHT performance claims remain untested.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Logs | `results/packet-statistics/20260725T202934Z/BaselineAx/cmdenv.{stdout,stderr}` | BaselineAx/run 0/seed 0 | Cmdenv, 0–0.107913906544 s | Failed run, co-recorded |
-| PCAP | `results/packet-statistics/20260725T202934Z/BaselineAx/*.pcap` | BaselineAx/run 0/seed 0 | TShark 4.6.4, 0.100380–0.107879 s | Two observation points; partial run |
+| Logs | `results/20260725T202934Z/BaselineAx/cmdenv.{stdout,stderr}` | BaselineAx/run 0/seed 0 | Cmdenv, 0–0.107913906544 s | Failed run, co-recorded |
+| PCAP | `results/20260725T202934Z/BaselineAx/*.pcap` | BaselineAx/run 0/seed 0 | TShark 4.6.4, 0.100380–0.107879 s | Two observation points; partial run |
 | Scalar/vector | No completed `.sca`/`.vec` | none | `NOT RUN` | Missing by failure |

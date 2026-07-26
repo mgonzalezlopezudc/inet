@@ -104,15 +104,15 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 ## Scalar and vector analysis
 
 Inputs:
-`results/scalar-vector/20260725T120411Z/{configuration}/*.{sca,vec}`.
+`results/20260725T120411Z/{configuration}/*.{sca,vec}`.
 Figure provenance:
 [puncturing-frequency-allocation.png.json](../analysis/figures/he_features/puncturing-frequency-allocation.png.json).
 
 ```sh
 opp_scavetool query -l \
   -f 'name =~ "hePuncturedSubchannelMask:vector" OR name =~ "heRuToneOffset:vector" OR name =~ "heRuToneSize:vector" OR name =~ "heStaId:vector" OR name =~ "packetReceived:vector(packetBytes)"' \
-  examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/*/*.sca \
-  examples/ieee80211ax/he_features/results/scalar-vector/20260725T120411Z/*/*.vec
+  examples/ieee80211ax/he_features/results/20260725T120411Z/*/*.sca \
+  examples/ieee80211ax/he_features/results/20260725T120411Z/*/*.vec
 ```
 
 | Metric | Window/aggregation | Clean | unpunctured interference | punctured interference | dynamic | Interpretation |
@@ -152,14 +152,14 @@ The table is a presentation view of the session-bound run-level summary. The sou
 Capture point: `Lan80211AxHeFeatures.ap.wlan[0]`
 
 Capture:
-`results/packet-statistics/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap`
+`results/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap`
 
 Scope: legacy PCAP AP observations, simulation timestamps, TShark 4.6.4;
 FCS/checksum settings are not retained.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/he_features/results/packet-statistics/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/he_features/results/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap' \
   -Y 'frame.number <= 8' -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
   -e wlan.fc.type_subtype -e radiotap.he.data_1.data_mcs_known \
@@ -191,8 +191,8 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `BccBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/packet-statistics/20260725T230436Z/BccBaseline/BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 8, 52-tone RU, GI 3.2 us, BCC, A-MPDU] (700), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] (700), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] (354) | 85.57% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `PreamblePuncturing` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/packet-statistics/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1050), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1050), Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] (354) | 54.41% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `BccBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/20260725T230436Z/BccBaseline/BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 8, 52-tone RU, GI 3.2 us, BCC, A-MPDU] (700), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] (700), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] (354) | 85.57% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `PreamblePuncturing` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1050), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1050), Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] (354) | 54.41% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### Evidence checks
 
@@ -350,5 +350,5 @@ mask-to-frame link is an **inference**.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| scalar/vector | `results/scalar-vector/20260725T120411Z` | four comparison configs, 0--4 | figure JSON and named vectors | hashes in JSON; separate from PCAP |
-| PCAP/results/log | `results/packet-statistics/20260725T230436Z` | `BccBaseline`, `PreamblePuncturing`, run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block |
+| scalar/vector | `results/20260725T120411Z` | four comparison configs, 0--4 | figure JSON and named vectors | hashes in JSON; separate from PCAP |
+| PCAP/results/log | `results/20260725T230436Z` | `BccBaseline`, `PreamblePuncturing`, run 0 | shared analyzer; TShark 4.6.4 | manifest and hashes in generated block |

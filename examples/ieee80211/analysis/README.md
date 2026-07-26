@@ -33,8 +33,7 @@ logical session and whether it meets the publication run-count policy.
 Publication sessions use five independent runs by default. `--runs 1` is
 allowed for diagnosis and is labeled diagnostic; any session with fewer than
 five scalar/vector runs is rejected by `publish`. PCAP is representative
-run-0 mechanism evidence; a PCAP-only session is diagnostic and cannot be
-published on its own. Run selection follows `[start, end)`
+run-0 mechanism evidence within a combined result session. Run selection follows `[start, end)`
 notation, so `--runs 5` covers run numbers `[0, 5)`. `--config` may be
 repeated to focus a diagnostic run.
 
