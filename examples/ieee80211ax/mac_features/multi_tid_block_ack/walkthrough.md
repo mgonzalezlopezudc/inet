@@ -103,7 +103,7 @@ bin/inet -u Cmdenv -f examples/ieee80211ax/mac_features/multi_tid_block_ack/upli
   --result-dir=examples/ieee80211ax/mac_features/multi_tid_block_ack/results/validation/ul-mu
 ```
 
-The shared launcher resolved the real split INI entry points by configuration.
+The shared analyzer resolved the real split INI entry points by configuration.
 The command below was executed with exit status 0 and created session
 `20260725T230138Z`:
 

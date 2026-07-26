@@ -106,7 +106,7 @@ bin/inet -u Cmdenv -f examples/ieee80211ax/multi_user/mu_mimo/downlink.ini \
 ```
 
 Repeat runs 1-4 into distinct directories for the retained comparison design.
-The shared launcher resolved the split downlink/uplink INI files by
+The shared analyzer resolved the split downlink/uplink INI files by
 configuration. This command was executed with exit status 0 and created
 session `20260725T230510Z`:
 

@@ -320,8 +320,9 @@ Regenerate the packet appendix:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
-  python3 examples/ieee80211ax/analysis/analyze_pcap_types.py \
-  --generate --subdir ul_ofdma
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir ul_ofdma --run 0 --update-walkthrough
 ```
 
 For a direct decode of the retained five-RA-RU capture:

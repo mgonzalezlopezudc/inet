@@ -116,6 +116,10 @@ class WifiAnalysisCliTest(unittest.TestCase):
             commands = [call.args[0] for call in run.call_args_list]
             self.assertEqual(len(commands), 2)
             self.assertIn("run_campaign.py", commands[0][1])
+            self.assertEqual(
+                Path(commands[1][1]),
+                ANALYSIS_ROOT / "analyze_pcap.py",
+            )
             self.assertIn("--capture-only", commands[1])
             self.assertTrue(
                 all(

@@ -14,10 +14,11 @@ python3 examples/ieee80211/analysis/wifi_analysis.py publish bss_coloring \
   --session-id <YYYYMMDDTHHMMSSZ> --update
 ```
 
-The scripts in this directory are retained as AX-specific internal adapters.
-Only `publish ... --update` is intended to edit walkthroughs. A one-run
-session is diagnostic; publication requires at least five independent runs.
-Measurement windows use `[start, end)` notation.
+The scripts in this directory are AX-specific scalar/vector analysis tools.
+The generation-neutral PCAP implementation lives under
+`examples/ieee80211/analysis`. Only `publish ... --update` is intended to edit
+walkthroughs. A one-run session is diagnostic; publication requires at least
+five independent runs. Measurement windows use `[start, end)` notation.
 
 These figures are evidence checks for the INET HE implementation, not generic claims that a feature always improves throughput. Every bar is computed from five independent simulation runs; error bars are two-sided 95% Student-t confidence intervals over run-level observations. Timelines and ECDFs use run 0 only and are labeled accordingly, so packet samples are never treated as independent repetitions.
 
@@ -56,11 +57,11 @@ and interpretation text.
 
 The generation-neutral campaign, suite, and typed PHY-profile primitives live
 under [`examples/ieee80211/analysis`](../../ieee80211/analysis/README.md).
-These AX commands are retained as compatibility entry points and now use the
-shared campaign and PHY-decoding machinery. The neutral PCAP launcher can run
-the complete AX suite descriptor or an EHT suite without changing the analyzer.
+These AX scalar/vector commands use the shared campaign primitives. The shared
+PCAP implementation runs the complete AX suite descriptor or an EHT suite
+without changing the analyzer.
 
-For adapter development and compatibility testing, from the repository root:
+For AX scalar/vector development and testing, from the repository root:
 
 ```sh
 python3 examples/ieee80211ax/analysis/run_campaign.py all
@@ -77,15 +78,22 @@ Generate fresh packet evidence for one feature group, or reanalyze the
 manifest-validated captures, with:
 
 ```sh
-MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/analyze_pcap_types.py \
-    --generate --capture-only --session-id 20260725T120000Z --subdir dl_ofdma --run 0
-MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211ax/analysis/analyze_pcap_types.py \
-    --reuse --session-id 20260725T120000Z --subdir dl_ofdma --run 0
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --capture-only --session-id 20260725T120000Z \
+  --subdir dl_ofdma --run 0
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --reuse --session-id 20260725T120000Z --subdir dl_ofdma --run 0
 ```
 
 New PCAP manifests use schema 2. The analyzer publishes immutable history at
-`analysis/pcapmanifests/<session-id>.json` before atomically replacing
-`pcap_statistics_manifest.json` with the same full latest-session mirror.
+`examples/ieee80211/analysis/generated/ax/pcapmanifests/<session-id>.json`
+before atomically replacing
+`examples/ieee80211/analysis/generated/ax/pcap_statistics_manifest.json`
+with the same full latest-session mirror.
 `--reuse --session-id ...` selects exact history; omitting the ID selects the
 latest mirror. Legacy schema-1 mirrors remain structurally readable for
 diagnostics, but current source/tool staleness checks are intentionally not
@@ -115,7 +123,7 @@ python3 examples/ieee80211ax/analysis/evaluate_evidence.py --require-conclusive
 
 Source hashing covers staged and unstaged tracked changes relative to `HEAD`
 plus relevant non-ignored, untracked inputs. Generated walkthroughs, figures,
-compatibility outputs, and immutable manifest-history files are excluded so
+report outputs, and immutable manifest-history files are excluded so
 publishing evidence does not stale itself.
 
 The dense-IoT campaign uses its own iteration-aware runner and analyzer; run

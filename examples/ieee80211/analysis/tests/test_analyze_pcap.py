@@ -1,11 +1,33 @@
 import tempfile
 import unittest
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from analyze_pcap_types import (
+ANALYSIS_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ANALYSIS_ROOT))
+
+import analyze_pcap
+
+
+AX_SUITE = ANALYSIS_ROOT / "suites" / "ax.json"
+BE_SUITE = ANALYSIS_ROOT / "suites" / "be-eht-features.json"
+SUITE_ARGUMENTS = ["--suite", str(AX_SUITE)]
+
+
+def configure_ax_suite():
+    suite = analyze_pcap.load_suite(AX_SUITE, analyze_pcap.REPOSITORY_ROOT)
+    analyze_pcap.configure_suite(
+        suite,
+        ANALYSIS_ROOT / "generated" / suite.suite,
+    )
+
+
+configure_ax_suite()
+
+from analyze_pcap import (
     GENERATED_BEGIN,
     GENERATED_END,
     MANIFEST_PATH,
@@ -21,6 +43,7 @@ from analyze_pcap_types import (
     evaluate_evidence,
     extract_frame_timeline,
     get_config_pcap_stats,
+    is_generated_analysis_artifact,
     replace_generated_section,
     load_json_without_duplicates,
     manifest_provenance,
@@ -129,10 +152,10 @@ class DecodeLegacyFieldsTest(unittest.TestCase):
             stdout="\t".join(fields) + "\n",
             stderr="",
         )
-        with patch("analyze_pcap_types.get_sim_time_limit", return_value=1):
-            with patch("analyze_pcap_types.validate_capture_decode"):
+        with patch("analyze_pcap.get_sim_time_limit", return_value=1):
+            with patch("analyze_pcap.validate_capture_decode"):
                 with patch(
-                    "analyze_pcap_types.subprocess.run", return_value=result
+                    "analyze_pcap.subprocess.run", return_value=result
                 ):
                     statistics, total = get_config_pcap_stats(
                         ["capture.pcapng"], "Config", "legacy"
@@ -208,7 +231,7 @@ class CaptureValidationTest(unittest.TestCase):
             capture = Path(directory) / "capture.pcapng"
             capture.write_bytes(b"not-empty")
             result = SimpleNamespace(returncode=2, stdout="", stderr="bad capture")
-            with patch("analyze_pcap_types.subprocess.run", return_value=result):
+            with patch("analyze_pcap.subprocess.run", return_value=result):
                 with self.assertRaisesRegex(RuntimeError, "exit 2: bad capture"):
                     validate_capture_decode(capture)
 
@@ -217,7 +240,7 @@ class CaptureValidationTest(unittest.TestCase):
             capture = Path(directory) / "capture.pcapng"
             capture.write_bytes(b"capture")
             result = SimpleNamespace(returncode=0, stdout="1\t0\t\n", stderr="")
-            with patch("analyze_pcap_types.subprocess.run", return_value=result):
+            with patch("analyze_pcap.subprocess.run", return_value=result):
                 with self.assertRaisesRegex(RuntimeError, "First frame lacks"):
                     validate_capture_decode(capture)
 
@@ -310,7 +333,7 @@ class CaptureValidationTest(unittest.TestCase):
                 returncode=0, stdout="\n".join(rows) + "\n", stderr=""
             )
             with patch(
-                "analyze_pcap_types.subprocess.run",
+                "analyze_pcap.subprocess.run",
                 side_effect=[validation, decode],
             ):
                 timeline = extract_frame_timeline(
@@ -402,6 +425,111 @@ class CaptureManifestTest(unittest.TestCase):
         "3,128,64,0.5,0.25,0.75,True\n"
     )
 
+    def setUp(self):
+        configure_ax_suite()
+
+    def test_suite_is_required_and_configured_before_scenario_validation(self):
+        with self.assertRaises(SystemExit) as help_exit:
+            parse_args(["--help"])
+        self.assertEqual(help_exit.exception.code, 0)
+        with self.assertRaises(SystemExit):
+            parse_args(["--reuse"])
+        with self.assertRaises(SystemExit):
+            parse_args([
+                "--suite",
+                str(BE_SUITE),
+                "--reuse",
+                "--subdir",
+                "twt",
+            ])
+        self.assertEqual(analyze_pcap.SUITE_NAME, "be-eht-features")
+        self.assertEqual(
+            set(analyze_pcap.subdirs_configs),
+            {"eht_features"},
+        )
+
+    def test_ax_and_eht_suites_bind_descriptor_output_and_marker(self):
+        expectations = (
+            (AX_SUITE, "ax", "ieee80211ax-pcap-statistics"),
+            (
+                BE_SUITE,
+                "be-eht-features",
+                "ieee80211-pcap-statistics",
+            ),
+        )
+        for descriptor, suite_name, marker in expectations:
+            args = parse_args([
+                "--suite",
+                str(descriptor),
+                "--reuse",
+                "--subdir",
+                next(iter(
+                    analyze_pcap.load_suite(
+                        descriptor, analyze_pcap.REPOSITORY_ROOT
+                    ).scenarios
+                )),
+            ])
+            self.assertEqual(args.suite, descriptor)
+            self.assertEqual(analyze_pcap.SUITE_NAME, suite_name)
+            self.assertEqual(
+                analyze_pcap.SUITE_DESCRIPTOR_PATH,
+                descriptor.resolve(),
+            )
+            self.assertEqual(
+                analyze_pcap.ANALYSIS_OUTPUT_DIR,
+                ANALYSIS_ROOT / "generated" / suite_name,
+            )
+            self.assertEqual(analyze_pcap.GENERATED_MARKER, marker)
+            provenance = analyze_pcap.suite_provenance()
+            self.assertEqual(
+                provenance["path"],
+                descriptor.relative_to(
+                    analyze_pcap.REPOSITORY_ROOT
+                ).as_posix(),
+            )
+            self.assertEqual(len(provenance["sha256"]), 64)
+
+    def test_new_manifest_records_selected_suite_descriptor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            library = Path(analyze_pcap.__file__)
+            history = root / "history.json"
+            with (
+                patch(
+                    "analyze_pcap.capture_source_state",
+                    return_value=("revision", "source-hash"),
+                ),
+                patch("analyze_pcap.inet_library_path", return_value=library),
+                patch("analyze_pcap.tshark_version", return_value="TShark"),
+                patch("analyze_pcap.capinfos_version", return_value="Capinfos"),
+                patch("analyze_pcap._history_path", return_value=history),
+                patch("analyze_pcap.EXAMPLE_ROOT", root / "example"),
+                patch(
+                    "analyze_pcap.run_simulation",
+                    return_value={"subdir": "twt", "config": "Baseline"},
+                ),
+                patch("analyze_pcap.publish_capture_manifest"),
+                patch.dict(
+                    analyze_pcap.subdirs_configs,
+                    {"twt": ["Baseline"]},
+                    clear=True,
+                ),
+            ):
+                manifest = analyze_pcap.build_capture_manifest(
+                    ["twt"], 0, "20260726T120000Z"
+                )
+        self.assertEqual(manifest["suite"], "ax")
+        self.assertEqual(
+            manifest["suite_descriptor"]["path"],
+            "examples/ieee80211/analysis/suites/ax.json",
+        )
+        self.assertEqual(len(manifest["suite_descriptor"]["sha256"]), 64)
+
+    def test_shared_analyzer_has_no_ax_analysis_core_dependency(self):
+        source = Path(analyze_pcap.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("analysis_core", source)
+        self.assertNotIn("ieee80211ax/analysis", source)
+
     def test_capinfos_parser_and_validation(self):
         metadata = parse_capinfos_table(self.CAPINFOS)
         metadata["interfaces"] = parse_capinfos_interfaces(
@@ -439,8 +567,8 @@ class CaptureManifestTest(unittest.TestCase):
             latest = root / "latest.json"
             history = root / "history"
             with (
-                patch("analyze_pcap_types.MANIFEST_PATH", latest),
-                patch("analyze_pcap_types.MANIFEST_HISTORY_DIR", history),
+                patch("analyze_pcap.MANIFEST_PATH", latest),
+                patch("analyze_pcap.MANIFEST_HISTORY_DIR", history),
             ):
                 published = publish_capture_manifest(manifest)
                 self.assertEqual(json.loads(published.read_text()), manifest)
@@ -452,7 +580,7 @@ class CaptureManifestTest(unittest.TestCase):
     def test_walkthrough_update_is_explicit_and_disabled_by_default(self):
         with patch(
             "sys.argv",
-            ["analyze_pcap_types.py", "--reuse", "--subdir", "twt"],
+            ["analyze_pcap.py", *SUITE_ARGUMENTS, "--reuse", "--subdir", "twt"],
         ):
             args = parse_args()
         self.assertFalse(args.update_walkthrough)
@@ -460,7 +588,8 @@ class CaptureManifestTest(unittest.TestCase):
         with patch(
             "sys.argv",
             [
-                "analyze_pcap_types.py",
+                "analyze_pcap.py",
+                *SUITE_ARGUMENTS,
                 "--reuse",
                 "--subdir",
                 "twt",
@@ -475,7 +604,8 @@ class CaptureManifestTest(unittest.TestCase):
             patch(
                 "sys.argv",
                 [
-                    "analyze_pcap_types.py",
+                    "analyze_pcap.py",
+                    *SUITE_ARGUMENTS,
                     "--generate",
                     "--capture-only",
                     "--subdir",
@@ -485,11 +615,11 @@ class CaptureManifestTest(unittest.TestCase):
                 ],
             ),
             patch(
-                "analyze_pcap_types.build_capture_manifest",
+                "analyze_pcap.build_capture_manifest",
                 return_value=manifest,
             ) as build,
-            patch("analyze_pcap_types.analyze_subdirectory") as analyze,
-            patch("analyze_pcap_types.update_walkthrough_file") as update,
+            patch("analyze_pcap.analyze_subdirectory") as analyze,
+            patch("analyze_pcap.update_walkthrough_file") as update,
         ):
             main()
         build.assert_called_once_with(["twt"], 0, manifest["session_id"])
@@ -503,22 +633,38 @@ class CaptureManifestTest(unittest.TestCase):
             source = Path(directory) / "input.ned"
             source.write_text("first")
             relative = source.relative_to(
-                Path(__file__).resolve().parents[3]
+                analyze_pcap.REPOSITORY_ROOT
             ).as_posix()
 
             def digest():
                 with (
                     patch(
-                        "analyze_pcap_types.command_output",
+                        "analyze_pcap.command_output",
                         side_effect=["revision", relative],
                     ),
                     patch(
-                        "analyze_pcap_types.subprocess.run",
+                        "analyze_pcap.subprocess.run",
                         return_value=SimpleNamespace(stdout=b"tracked diff"),
                     ) as run,
                 ):
                     result = capture_source_state()
-                self.assertIn("HEAD", run.call_args.args[0])
+                command = run.call_args.args[0]
+                self.assertIn("HEAD", command)
+                self.assertIn(
+                    "examples/ieee80211/analysis/analyze_pcap.py",
+                    command,
+                )
+                self.assertIn(
+                    "examples/ieee80211/analysis/inet_wifi_analysis",
+                    command,
+                )
+                self.assertIn(
+                    "examples/ieee80211/analysis/suites/ax.json",
+                    command,
+                )
+                self.assertFalse(
+                    any("/generated/" in argument for argument in command)
+                )
                 return result
 
             first = digest()
@@ -526,6 +672,41 @@ class CaptureManifestTest(unittest.TestCase):
             second = digest()
             self.assertEqual(first[0], "revision")
             self.assertNotEqual(first[1], second[1])
+
+            generated = Path(directory) / "packet_statistics.png.json"
+            generated.write_text("first")
+            generated_relative = generated.relative_to(
+                analyze_pcap.REPOSITORY_ROOT
+            ).as_posix()
+
+            def generated_digest():
+                with (
+                    patch(
+                        "analyze_pcap.command_output",
+                        side_effect=["revision", generated_relative],
+                    ),
+                    patch(
+                        "analyze_pcap.subprocess.run",
+                        return_value=SimpleNamespace(stdout=b"tracked diff"),
+                    ) as run,
+                ):
+                    result = capture_source_state()
+                self.assertIn(
+                    ":(exclude)examples/ieee80211ax/**/*.png.json",
+                    run.call_args.args[0],
+                )
+                return result
+
+            generated_first = generated_digest()
+            generated.write_text("second")
+            generated_second = generated_digest()
+            self.assertEqual(generated_first, generated_second)
+            self.assertTrue(
+                is_generated_analysis_artifact(
+                    "examples/ieee80211ax/twt/packet_statistics.png.json",
+                    "examples/ieee80211ax",
+                )
+            )
 
     def test_session_selection_duplicate_keys_and_legacy_schema(self):
         self.assertEqual(SUPPORTED_MANIFEST_SCHEMAS, {1, 2})

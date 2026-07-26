@@ -3,7 +3,8 @@
 Use the generation-neutral machinery under `examples/ieee80211/analysis`
 before creating scenario-local scripts. It provides a stable MAC observation
 envelope with typed Legacy, HT, VHT, HE, and EHT PHY profiles. The existing AX
-analysis commands are compatibility entry points over this shared layer.
+scalar/vector commands are compatibility entry points over this shared layer;
+the PCAP implementation itself is shared by AX and EHT suites.
 
 ## Contents
 
@@ -76,14 +77,16 @@ produce the deterministic figure and sidecar, then render the bounded
 Markdown fragment. Do not make a plotting function edit prose or make a
 Markdown renderer reinterpret raw vector samples as repetitions.
 
-## Shared PCAP entry point
+## Shared PCAP workflow
 
 Run from the repository root:
 
 ```sh
-python3 examples/ieee80211/analysis/analyze_pcap.py \
-  --suite examples/ieee80211/analysis/suites/<suite>.json \
-  --generate --subdir <scenario> --run <run>
+python3 examples/ieee80211/analysis/wifi_analysis.py run <scenario> \
+  --suite <suite> --evidence pcap --runs 1 \
+  --session-id <YYYYMMDDTHHMMSSZ>
+python3 examples/ieee80211/analysis/wifi_analysis.py report <scenario> \
+  --suite <suite> --session-id <YYYYMMDDTHHMMSSZ>
 ```
 
 Start with one configuration and run when the command supports selecting
@@ -91,8 +94,9 @@ them. Record the exact command, suite descriptor, scenario, configuration,
 run, seed, result directory, capture points, exit status, and generated
 artifacts in the walkthrough.
 
-The shared launcher configures the compatibility analyzer with suite-owned
-paths and markers. Do not duplicate its campaign construction, capture
+The shared analyzer loads suite-owned paths, configurations, capture patterns,
+and generated-section markers before validating the selected scenario. Do not
+duplicate its campaign construction, capture
 discovery, provenance binding, generated-block handling, or common PCAP
 statistics in a scenario-local script. The generated PCAP bundle contains a
 compact cross-configuration table, the packet count-versus-airtime plot, a
@@ -179,7 +183,7 @@ python3 -m unittest discover \
   -p 'test_*.py'
 ```
 
-When AX compatibility code changes, also run:
+When AX-specific scalar/vector analysis code changes, also run:
 
 ```sh
 python3 -m unittest discover \

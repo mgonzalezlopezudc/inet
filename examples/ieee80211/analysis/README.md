@@ -43,9 +43,9 @@ with configuration-derived defaults.
 
 Suite descriptors live in `suites/`. They declare example roots,
 configurations, capture interface patterns, the walkthrough generated-section
-marker, and optional scalar/vector manifest and group mappings. AX is the first
-migrated suite. Scripts under `examples/ieee80211ax/analysis` are internal
-compatibility adapters for the facade.
+marker, and optional scalar/vector manifest and group mappings. AX and the
+initial EHT feature example both use the shared PCAP implementation. The AX
+directory retains generation-specific scalar/vector analysis tools.
 
 Walkthrough-facing analyses publish presentation bundles: a compact Markdown
 table, a deterministic figure (or an explicit no-plot rationale), and a JSON
@@ -53,21 +53,9 @@ provenance sidecar. Scalar/vector bundles belong under `## Scalar and vector
 analysis`; PCAP bundles belong under `## PCAP statistics`. Exhaustive
 packet-type rows stay subordinate to the compact explanatory summary.
 
-The lower-level shared PCAP adapter remains available for development:
-
-```sh
-python3 examples/ieee80211/analysis/analyze_pcap.py \
-  --suite examples/ieee80211/analysis/suites/be-eht-features.json \
-  --generate --capture-only --subdir eht_features --run 0
-```
-
-Use `--reuse` to generate the report. It does not update walkthroughs unless
-the explicit lower-level `--update-walkthrough` flag is supplied by
-`wifi_analysis.py publish`.
-
 The existing AX scalar/vector suite uses the shared campaign primitives and a
-manifest-driven presentation renderer. These are adapter-level commands; new
-workflows should use `wifi_analysis.py`:
+manifest-driven presentation renderer. New workflows should use
+`wifi_analysis.py`:
 
 ```sh
 python3 examples/ieee80211ax/analysis/summarize_results.py

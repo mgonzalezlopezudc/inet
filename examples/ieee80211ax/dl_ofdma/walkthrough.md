@@ -184,8 +184,9 @@ Regenerate the run-0 capture appendix:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
-  python3 examples/ieee80211ax/analysis/analyze_pcap_types.py \
-  --generate --subdir dl_ofdma
+  python3 examples/ieee80211/analysis/analyze_pcap.py \
+  --suite examples/ieee80211/analysis/suites/ax.json \
+  --generate --subdir dl_ofdma --run 0 --update-walkthrough
 ```
 
 The packet tables are observation-point evidence. A Trigger or Multi-STA Block

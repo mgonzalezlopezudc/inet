@@ -9,6 +9,7 @@ from pathlib import Path
 class Suite:
     schema_version: int
     suite: str
+    descriptor_path: Path
     example_root: Path
     scenarios: dict
     capture: dict
@@ -17,7 +18,11 @@ class Suite:
 
 
 def load_suite(path: str | Path, repository_root: str | Path) -> Suite:
+    repository_root = Path(repository_root).resolve()
     path = Path(path)
+    if not path.is_absolute():
+        path = repository_root / path
+    path = path.resolve()
     document = json.loads(path.read_text(encoding="utf-8"))
     required = {
         "schema_version",
@@ -74,17 +79,18 @@ def load_suite(path: str | Path, repository_root: str | Path) -> Suite:
     interface_patterns = document["capture"].get("interface_patterns")
     if not isinstance(interface_patterns, list) or not interface_patterns:
         raise ValueError(f"{path}: capture.interface_patterns must be non-empty")
-    root = Path(repository_root) / document["example_root"]
+    root = repository_root / document["example_root"]
     scalar_vector_manifest = document.get("scalar_vector_manifest")
     if scalar_vector_manifest is not None:
         if not isinstance(scalar_vector_manifest, str):
             raise ValueError(f"{path}: scalar_vector_manifest must be a string")
         scalar_vector_manifest = (
-            Path(repository_root) / scalar_vector_manifest
+            repository_root / scalar_vector_manifest
         )
     return Suite(
         schema_version=document["schema_version"],
         suite=document["suite"],
+        descriptor_path=path,
         example_root=root,
         scenarios=scenarios,
         capture=document["capture"],
