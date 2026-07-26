@@ -150,16 +150,22 @@ excluded as warm-up.
 
 Figure provenance: [`../../analysis/figures/mac_features/dynamic_fragmentation/fragmentation-and-ack-overhead.png.json`](../../analysis/figures/mac_features/dynamic_fragmentation/fragmentation-and-ack-overhead.png.json). Run-level metric source: [`../../analysis/metrics.json`](../../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| Dynamic | ack airtime total ms | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 42.2048 | 0.536886 |
-| Dynamic | mac frame size mean bytes | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 293.002 | 0.792239 |
-| Static | ack airtime total ms | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 42.2048 | 0.536886 |
-| Static | mac frame size mean bytes | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 293.002 | 0.792239 |
-| Unfragmented | ack airtime total ms | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 32.64 | 0 |
-| Unfragmented | mac frame size mean bytes | vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s | [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0 | 5 | 1070 | 0 |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / **.host[*].wlan[0].mac.hcf / packetSentToPeer:vector(packetBytes)<br>vector / **.radio / acknowledgmentFrameType:vector<br>vector / **.radio / acknowledgmentAirtime:vector / unit=s
+- Window / per-run aggregation / exclusions: [0.3, 2.0) s; airtime=per-run sums with 95% t CI; frame_sizes=ECDF from run 0
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Dynamic / ack airtime total ms | 42.2048 | 0.536886 |
+| Dynamic / mac frame size mean bytes | 293.002 | 0.792239 |
+| Static / ack airtime total ms | 42.2048 | 0.536886 |
+| Static / mac frame size mean bytes | 293.002 | 0.792239 |
+| Unfragmented / ack airtime total ms | 32.64 | 0 |
+| Unfragmented / mac frame size mean bytes | 1070 | 0 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-fragmentation -->
 
 ## [agent] PCAP statistics

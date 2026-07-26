@@ -155,12 +155,18 @@ events.
 
 Figure provenance: [`../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json`](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| Fresh BSR | reported backlog time weighted mean bytes | vector / heUlBufferStatusReportedBytes:vector<br>vector / heUlBufferStatusScheduledBytes:vector | [0.3, 1.9) s; timeline=representative run 0; event-driven step observations | 5 | 27144.6 | 704.18 |
-| Stale BSR | reported backlog time weighted mean bytes | vector / heUlBufferStatusReportedBytes:vector<br>vector / heUlBufferStatusScheduledBytes:vector | [0.3, 1.9) s; timeline=representative run 0; event-driven step observations | 5 | 72370.5 | 151.22 |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / heUlBufferStatusReportedBytes:vector<br>vector / heUlBufferStatusScheduledBytes:vector
+- Window / per-run aggregation / exclusions: [0.3, 1.9) s; timeline=representative run 0; event-driven step observations
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Fresh BSR / reported backlog time weighted mean bytes | 27144.6 | 704.18 |
+| Stale BSR / reported backlog time weighted mean bytes | 72370.5 | 151.22 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-bsr -->
 
 ## [agent] PCAP statistics

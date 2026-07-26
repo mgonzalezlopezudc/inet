@@ -169,12 +169,18 @@ MU-MIMO occurred.
 
 Figure provenance: [`../../analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-stream-matrix.png.json`](../../analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-stream-matrix.png.json). Run-level metric source: [`../../analysis/metrics.json`](../../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| 20 MHz MU-MIMO | goodput mbps | vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / heSpatialStreams:vector<br>vector / **.ap.wlan[0].radio / heStreamStartIndex:vector<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [0.55, 0.88) s; goodput=per run with 95% Student-t CI; telemetry=all PPDUs validated; representative run 0 plotted | 5 | 25.2897 | 0.0392468 |
-| 20 MHz OFDMA | goodput mbps | vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / heSpatialStreams:vector<br>vector / **.ap.wlan[0].radio / heStreamStartIndex:vector<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [0.55, 0.88) s; goodput=per run with 95% Student-t CI; telemetry=all PPDUs validated; representative run 0 plotted | 5 | 10.6667 | 0 |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / heSpatialStreams:vector<br>vector / **.ap.wlan[0].radio / heStreamStartIndex:vector<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B
+- Window / per-run aggregation / exclusions: [0.55, 0.88) s; goodput=per run with 95% Student-t CI; telemetry=all PPDUs validated; representative run 0 plotted
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| 20 MHz MU-MIMO / goodput mbps | 25.2897 | 0.0392468 |
+| 20 MHz OFDMA / goodput mbps | 10.6667 | 0 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-mimo -->
 
 ## [agent] PCAP statistics

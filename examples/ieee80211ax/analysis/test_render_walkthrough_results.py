@@ -2,6 +2,7 @@ import unittest
 from pathlib import Path
 
 from render_walkthrough_results import (
+    independent_runs_summary,
     metric_rows,
     replace_generated_section,
     update_walkthrough,
@@ -23,6 +24,17 @@ class MetricRowsTest(unittest.TestCase):
             ["Treatment", "goodput mbps", "5", "12.5", "0.75"],
         )
         self.assertEqual(rows[1][2:], ["—", "[0, 2]", "—"])
+
+    def test_summarizes_common_run_counts_and_direct_values(self):
+        self.assertEqual(
+            independent_runs_summary({
+                "Treatment": {
+                    "goodput": {"count": 5, "mean": 1},
+                    "masks": [0, 2],
+                }
+            }),
+            "run-level summaries: n=5; direct observations: no independent-run estimate",
+        )
 
 
 class GeneratedSectionTest(unittest.TestCase):

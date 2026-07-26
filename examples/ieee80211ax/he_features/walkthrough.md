@@ -145,15 +145,21 @@ model-vector evidence.
 
 Figure provenance: [`../analysis/figures/he_features/puncturing-frequency-allocation.png.json`](../analysis/figures/he_features/puncturing-frequency-allocation.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| Clean | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 16 | 0 |
-| Interference, punctured | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 63.9015 | 0.0432241 |
-| Interference, unpunctured | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 63.9311 | 0.0334812 |
-| Runtime puncturing | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | 5 | 63.9212 | 0.0334812 |
-| Runtime puncturing | observed masks | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector | [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0 | — | [0, 2] | — |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.ap.wlan[0].radio / heRuToneOffset:vector<br>vector / **.ap.wlan[0].radio / heRuToneSize:vector<br>vector / **.ap.wlan[0].radio / heStaId:vector<br>vector / **.ap.wlan[0].radio / hePuncturedSubchannelMask:vector
+- Window / per-run aggregation / exclusions: [0.3, 0.95) s; goodput=per run with 95% Student-t CI; telemetry=representative run 0
+- Independent runs: run-level summaries: n=5; direct observations: no independent-run estimate
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Clean / goodput mbps | 16 | 0 |
+| Interference, punctured / goodput mbps | 63.9015 | 0.0432241 |
+| Interference, unpunctured / goodput mbps | 63.9311 | 0.0334812 |
+| Runtime puncturing / goodput mbps | 63.9212 | 0.0334812 |
+| Runtime puncturing / observed masks | [0, 2] | — |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-puncturing -->
 
 ## [agent] PCAP statistics

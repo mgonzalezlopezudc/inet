@@ -156,19 +156,25 @@ five-run model result, not a hardware-energy claim.
 
 Figure provenance: [`../analysis/figures/twt/twt-state-and-energy.png.json`](../analysis/figures/twt/twt-state-and-energy.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| Baseline | delivered bytes | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 16000 | 0 |
-| Baseline | energy per bit j | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 2.82633e-06 | 6.70349e-21 |
-| Baseline | goodput mbps | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 0.00142222 | 0 |
-| TWT | delivered bytes | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 16000 | 0 |
-| TWT | energy per bit j | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 1.55761e-06 | 4.04527e-11 |
-| TWT | goodput mbps | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | 5 | 0.00142222 | 0 |
-| delivery_ratio_twt_over_baseline | ci95 | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | — | 0 | — |
-| delivery_ratio_twt_over_baseline | count | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | — | 5 | — |
-| delivery_ratio_twt_over_baseline | mean | vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B | [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI | — | 1 | — |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / **.radio / radioMode:vector<br>vector / **.sta[*].wlan[0].radio.energyConsumer / powerConsumption:vector / unit=W<br>vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B
+- Window / per-run aggregation / exclusions: [10.0, 100.0) s; delivery_threshold=0.95; energy=time-weighted integral per run; uncertainty=95% Student-t CI
+- Independent runs: run-level summaries: n=5; direct observations: no independent-run estimate
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Baseline / delivered bytes | 16000 | 0 |
+| Baseline / energy per bit j | 2.82633e-06 | 6.70349e-21 |
+| Baseline / goodput mbps | 0.00142222 | 0 |
+| TWT / delivered bytes | 16000 | 0 |
+| TWT / energy per bit j | 1.55761e-06 | 4.04527e-11 |
+| TWT / goodput mbps | 0.00142222 | 0 |
+| delivery_ratio_twt_over_baseline / ci95 | 0 | — |
+| delivery_ratio_twt_over_baseline / count | 5 | — |
+| delivery_ratio_twt_over_baseline / mean | 1 | — |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-twt -->
 
 ## [agent] PCAP statistics

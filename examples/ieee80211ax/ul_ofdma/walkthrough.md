@@ -216,30 +216,36 @@ packets still queued at 2 s do not contribute.
 
 Figure provenance: [`../analysis/figures/ul_ofdma/uora-dashboard.png.json`](../analysis/figures/ul_ofdma/uora-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| Heavy, 1 RA-RU | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 9.4 | 5.08931 |
-| Heavy, 1 RA-RU | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 4 | 0.125 | 0 |
-| Heavy, 1 RA-RU | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.119658 | 0.156692 |
-| Heavy, 1 RA-RU | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.8 | 0.555289 |
-| Heavy, 1 RA-RU | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 1 | — |
-| Heavy, 5 RA-RUs | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 19.2 | 7.77405 |
-| Heavy, 5 RA-RUs | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.543333 | 0.184415 |
-| Heavy, 5 RA-RUs | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.370399 | 0.122753 |
-| Heavy, 5 RA-RUs | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 7.2 | 3.96556 |
-| Heavy, 5 RA-RUs | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 0 | — |
-| Light, 1 RA-RU | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 213.4 | 55.5539 |
-| Light, 1 RA-RU | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.475238 | 0.181105 |
-| Light, 1 RA-RU | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.0775811 | 0.0291306 |
-| Light, 1 RA-RU | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 16.2 | 5.07414 |
-| Light, 1 RA-RU | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 0 | — |
-| Mixed, adaptive 1–3 RA-RUs | attempts | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 68.6 | 11.7336 |
-| Mixed, adaptive 1–3 RA-RUs | success fairness | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 0.661106 | 0.00273725 |
-| Mixed, adaptive 1–3 RA-RUs | success probability | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 1 | 0 |
-| Mixed, adaptive 1–3 RA-RUs | successful transmissions | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | 5 | 68.6 | 11.7336 |
-| Mixed, adaptive 1–3 RA-RUs | zero success run count | scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count | [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0} | — | 0 | — |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count
+- Window / per-run aggregation / exclusions: [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0}
+- Independent runs: run-level summaries: n=5, 4; direct observations: no independent-run estimate
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Heavy, 1 RA-RU / attempts | 9.4 | 5.08931 |
+| Heavy, 1 RA-RU / success fairness | 0.125 | 0 |
+| Heavy, 1 RA-RU / success probability | 0.119658 | 0.156692 |
+| Heavy, 1 RA-RU / successful transmissions | 0.8 | 0.555289 |
+| Heavy, 1 RA-RU / zero success run count | 1 | — |
+| Heavy, 5 RA-RUs / attempts | 19.2 | 7.77405 |
+| Heavy, 5 RA-RUs / success fairness | 0.543333 | 0.184415 |
+| Heavy, 5 RA-RUs / success probability | 0.370399 | 0.122753 |
+| Heavy, 5 RA-RUs / successful transmissions | 7.2 | 3.96556 |
+| Heavy, 5 RA-RUs / zero success run count | 0 | — |
+| Light, 1 RA-RU / attempts | 213.4 | 55.5539 |
+| Light, 1 RA-RU / success fairness | 0.475238 | 0.181105 |
+| Light, 1 RA-RU / success probability | 0.0775811 | 0.0291306 |
+| Light, 1 RA-RU / successful transmissions | 16.2 | 5.07414 |
+| Light, 1 RA-RU / zero success run count | 0 | — |
+| Mixed, adaptive 1–3 RA-RUs / attempts | 68.6 | 11.7336 |
+| Mixed, adaptive 1–3 RA-RUs / success fairness | 0.661106 | 0.00273725 |
+| Mixed, adaptive 1–3 RA-RUs / success probability | 1 | 0 |
+| Mixed, adaptive 1–3 RA-RUs / successful transmissions | 68.6 | 11.7336 |
+| Mixed, adaptive 1–3 RA-RUs / zero success run count | 0 | — |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-uora -->
 
 ## [agent] PCAP statistics

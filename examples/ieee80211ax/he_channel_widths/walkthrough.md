@@ -204,18 +204,24 @@ encode a numerical acceptance envelope.
 
 Figure provenance: [`results/20260726T160000Z/channel-width-dashboard.png.json`](results/20260726T160000Z/channel-width-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| 160 MHz | delay p95 ms | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 9.40625 | 0.0750894 |
-| 160 MHz | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 118.646 | 0 |
-| 20 MHz | delay p95 ms | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 97.253 | 0.0573092 |
-| 20 MHz | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 26.8923 | 0 |
-| 40 MHz | delay p95 ms | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 63.809 | 0.0766852 |
-| 40 MHz | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 50.7077 | 0 |
-| 80 MHz | delay p95 ms | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 40.0602 | 0.075074 |
-| 80 MHz | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s | [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI | 5 | 81.4277 | 0.334812 |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.app[*] / endToEndDelay:vector / unit=s
+- Window / per-run aggregation / exclusions: [0.3, 0.43) s; ECDF=representative run 0; bars=per-run values with 95% Student-t CI
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| 160 MHz / delay p95 ms | 9.40625 | 0.0750894 |
+| 160 MHz / goodput mbps | 118.646 | 0 |
+| 20 MHz / delay p95 ms | 97.253 | 0.0573092 |
+| 20 MHz / goodput mbps | 26.8923 | 0 |
+| 40 MHz / delay p95 ms | 63.809 | 0.0766852 |
+| 40 MHz / goodput mbps | 50.7077 | 0 |
+| 80 MHz / delay p95 ms | 40.0602 | 0.075074 |
+| 80 MHz / goodput mbps | 81.4277 | 0.334812 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-width -->
 
 ## [agent] PCAP statistics

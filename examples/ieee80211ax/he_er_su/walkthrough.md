@@ -148,12 +148,18 @@ zero. This supports a bounded delivery comparison, not a general range claim.
 
 Figure provenance: [`../analysis/figures/he_er_su/he-er-su-boundary.png.json`](../analysis/figures/he_er_su/he-er-su-boundary.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| HE-ER-SU | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.mac / packetDropIncorrectlyReceived:vector(packetBytes) / unit=B | [0.3, 2.0) s; interpretation=diagnostic delivery comparison; the standard does not guarantee a gain for this channel/error model; observation=per-run 0.3-2.0 s measurement window; uncertainty=95% Student-t CI over five seeds | 5 | 0.443482 | 0.00975644 |
-| HE-SU | goodput mbps | vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.mac / packetDropIncorrectlyReceived:vector(packetBytes) / unit=B | [0.3, 2.0) s; interpretation=diagnostic delivery comparison; the standard does not guarantee a gain for this channel/error model; observation=per-run 0.3-2.0 s measurement window; uncertainty=95% Student-t CI over five seeds | 5 | 0.387012 | 0.00588098 |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes) / unit=B<br>vector / **.mac / packetDropIncorrectlyReceived:vector(packetBytes) / unit=B
+- Window / per-run aggregation / exclusions: [0.3, 2.0) s; interpretation=diagnostic delivery comparison; the standard does not guarantee a gain for this channel/error model; observation=per-run 0.3-2.0 s measurement window; uncertainty=95% Student-t CI over five seeds
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| HE-ER-SU / goodput mbps | 0.443482 | 0.00975644 |
+| HE-SU / goodput mbps | 0.387012 | 0.00588098 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-er -->
 
 ## [agent] PCAP statistics

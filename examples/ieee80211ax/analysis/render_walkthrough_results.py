@@ -116,6 +116,27 @@ def window_aggregation_summary(sidecar: dict[str, Any]) -> str:
     ) or "See figure provenance sidecar"
 
 
+def independent_runs_summary(group_metrics: dict[str, Any]) -> str:
+    counts = set()
+    direct = False
+    for metrics in group_metrics.values():
+        if not isinstance(metrics, dict):
+            direct = True
+            continue
+        for summary in metrics.values():
+            if isinstance(summary, dict) and "count" in summary:
+                counts.add(summary["count"])
+            else:
+                direct = True
+    parts = []
+    if counts:
+        count_text = ", ".join(format_number(count) for count in sorted(counts))
+        parts.append(f"run-level summaries: n={count_text}")
+    if direct:
+        parts.append("direct observations: no independent-run estimate")
+    return "; ".join(parts) or "See figure provenance sidecar"
+
+
 def validate_bundle_provenance(
     group_name: str,
     metrics_document: dict[str, Any],
@@ -199,27 +220,29 @@ def render_group(
     metrics_link = relative_link(metrics_path.resolve(), walkthrough)
     source_summary = source_filter_summary(sidecar_document)
     aggregation_summary = window_aggregation_summary(sidecar_document)
+    runs_summary = independent_runs_summary(metrics_document[group_name])
 
     lines = [
         "### [script] Generated scalar/vector plot and table\n\n",
         f"![{group_name} scalar/vector analysis]({figure_link})\n\n",
         f"Figure provenance: [`{sidecar_link}`]({sidecar_link}). "
         f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
-        "| Configuration or comparison | Metric | Source result filters / "
-        "modules / units | Window / per-run aggregation / exclusions | "
-        "Independent runs (n) | Mean or direct value | 95% CI half-width |\n",
-        "|---|---|---|---|---:|---:|---:|\n",
+        "Common table provenance:\n\n",
+        f"- Source result filters / modules / units: {source_summary}\n",
+        f"- Window / per-run aggregation / exclusions: {aggregation_summary}\n",
+        f"- Independent runs: {runs_summary}\n\n",
+        "| Configuration / observation | Mean or direct value | "
+        "95% CI half-width |\n",
+        "|---|---:|---:|\n",
     ]
     for row in metric_rows(metrics_document[group_name]):
-        expanded = [row[0], row[1], source_summary, aggregation_summary, *row[2:]]
+        expanded = [f"{row[0]} / {row[1]}", row[3], row[4]]
         lines.append(
             "| " + " | ".join(escape_cell(cell) for cell in expanded) + " |\n"
         )
     lines.append(
         "\nThe table is a presentation view of the session-bound run-level "
-        "summary. The source and aggregation columns reproduce the bundle-level "
-        "figure provenance; the authored analysis identifies which source "
-        "supports each metric and supplies the interpretation.\n"
+        "summary; the common provenance applies to every row.\n"
     )
     return "".join(lines)
 

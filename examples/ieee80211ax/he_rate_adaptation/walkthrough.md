@@ -142,14 +142,20 @@ the representative controller timeline excludes its initial settling phase.
 
 Figure provenance: [`../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png.json`](../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
-| Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
-|---|---|---|---|---:|---:|---:|
-| Mobile HE Minstrel | goodput mbps | vector / **.rateControl / heRateSelectedMcs:vector<br>vector / **.rateControl / heRateSelectedNss:vector<br>vector / **.rateControl / heRateSuccessProbability:vector<br>vector / **.rateControl / heRateTxSuccess:vector | [0.5, 1.7) s; timeline=representative run 0; no cross-peer inference | 5 | 13.338 | 1.05252 |
-| Mobile HE Minstrel | selected mcs max | vector / **.rateControl / heRateSelectedMcs:vector<br>vector / **.rateControl / heRateSelectedNss:vector<br>vector / **.rateControl / heRateSuccessProbability:vector<br>vector / **.rateControl / heRateTxSuccess:vector | [0.5, 1.7) s; timeline=representative run 0; no cross-peer inference | — | 9 | — |
-| Mobile HE Minstrel | selected mcs min | vector / **.rateControl / heRateSelectedMcs:vector<br>vector / **.rateControl / heRateSelectedNss:vector<br>vector / **.rateControl / heRateSuccessProbability:vector<br>vector / **.rateControl / heRateTxSuccess:vector | [0.5, 1.7) s; timeline=representative run 0; no cross-peer inference | — | 0 | — |
-| Mobile HE Minstrel | tx success fraction | vector / **.rateControl / heRateSelectedMcs:vector<br>vector / **.rateControl / heRateSelectedNss:vector<br>vector / **.rateControl / heRateSuccessProbability:vector<br>vector / **.rateControl / heRateTxSuccess:vector | [0.5, 1.7) s; timeline=representative run 0; no cross-peer inference | 5 | 0.998445 | 0.00198003 |
+Common table provenance:
 
-The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
+- Source result filters / modules / units: vector / **.rateControl / heRateSelectedMcs:vector<br>vector / **.rateControl / heRateSelectedNss:vector<br>vector / **.rateControl / heRateSuccessProbability:vector<br>vector / **.rateControl / heRateTxSuccess:vector
+- Window / per-run aggregation / exclusions: [0.5, 1.7) s; timeline=representative run 0; no cross-peer inference
+- Independent runs: run-level summaries: n=5; direct observations: no independent-run estimate
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Mobile HE Minstrel / goodput mbps | 13.338 | 1.05252 |
+| Mobile HE Minstrel / selected mcs max | 9 | — |
+| Mobile HE Minstrel / selected mcs min | 0 | — |
+| Mobile HE Minstrel / tx success fraction | 0.998445 | 0.00198003 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-rate -->
 
 ## [agent] PCAP statistics
