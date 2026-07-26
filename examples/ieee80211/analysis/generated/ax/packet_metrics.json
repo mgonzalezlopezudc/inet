@@ -1,13 +1,13 @@
 {
   "_provenance": {
-    "analysis_script_sha256": "8c6883dddf7845be62bd11ecc5a1c075968d8388914e142f37392281ce48659c",
+    "analysis_script_sha256": "3abc80bb2c18097fad44da24cee7ecef942674ac5a93eb968e13fa515c11d200",
     "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
     "capture_manifest": {
       "path": "examples/ieee80211/analysis/generated/ax/capture_manifests/20260726T160000Z.json",
-      "sha256": "dfc51aa88408fccf72834eaefdc39fc20db21560f2907c4874f2e70d501c9e35"
+      "sha256": "e80eb51917f6c13d4cf3e1e683aa8cf3e154711cc5f284ffd8a3d93fe5d57aca"
     },
     "capture_session_id": "20260726T160000Z",
-    "capture_source_diff_sha256": "c5f5df3ce54594a1ee757f3417b08153b2ac0a8c8b783c8283b79df26dac1362",
+    "capture_source_diff_sha256": "daa7d0c40eca433444d373841e2243659d6bfff71482e8b8cf456c9376f7c7e0",
     "cross_layer_session_alignment": "ASSESSED: every capture is bound to the scalar metadata from the same result directory, configuration, run, seed, and simulation trajectory",
     "entries": [
       {
@@ -603,13 +603,13 @@
         "subdir": "he_channel_widths"
       }
     ],
-    "repository_revision": "ecd5b292ef9fe0a222cab3ee3bd6ae7b1d62fd61",
+    "repository_revision": "55004c2141bfc4917619cc4f2a630dc9694c9ac4",
     "run_number": 0,
     "schema_version": 1,
     "suite": "ax",
     "suite_descriptor": {
       "path": "examples/ieee80211/analysis/suites/ax.json",
-      "sha256": "9d2bf9d850ae7f3f659feabaf10bb836432114344a644ab9624c94c71792d756"
+      "sha256": "a21c850a080a2e99458a229197611beba0e8c9ab642c539b91fb67e9ae8e3c99"
     },
     "tshark_version": "TShark (Wireshark) 4.6.4."
   },
@@ -2905,12 +2905,6 @@
     },
     "_evidence_checks": [
       {
-        "evidence": "2939 AP/global transmission observations",
-        "id": "capture-Width160MHz",
-        "requirement": "Width160MHz produced protocol-visible wireless observations",
-        "status": "PASS"
-      },
-      {
         "evidence": "1160 AP/global transmission observations",
         "id": "capture-Width20MHz",
         "requirement": "Width20MHz produced protocol-visible wireless observations",
@@ -2926,6 +2920,12 @@
         "evidence": "2187 AP/global transmission observations",
         "id": "capture-Width80MHz",
         "requirement": "Width80MHz produced protocol-visible wireless observations",
+        "status": "PASS"
+      },
+      {
+        "evidence": "2939 AP/global transmission observations",
+        "id": "capture-Width160MHz",
+        "requirement": "Width160MHz produced protocol-visible wireless observations",
         "status": "PASS"
       }
     ]

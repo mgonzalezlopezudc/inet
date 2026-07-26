@@ -50,9 +50,13 @@ def metric_label(name: str) -> str:
     return name.replace("_", " ")
 
 
+def natural_sort_key(s: str) -> list[object]:
+    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
+
+
 def metric_rows(group_metrics: dict[str, Any]) -> list[list[str]]:
     rows: list[list[str]] = []
-    for condition, metrics in group_metrics.items():
+    for condition, metrics in sorted(group_metrics.items(), key=lambda item: natural_sort_key(item[0])):
         if not isinstance(metrics, dict):
             rows.append([
                 condition, "direct value", "—", format_number(metrics), "—",

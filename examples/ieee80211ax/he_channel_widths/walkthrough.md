@@ -212,14 +212,14 @@ Common table provenance:
 
 | Configuration / observation | Mean or direct value | 95% CI half-width |
 |---|---:|---:|
-| 160 MHz / delay p95 ms | 9.40625 | 0.0750894 |
-| 160 MHz / goodput mbps | 118.646 | 0 |
 | 20 MHz / delay p95 ms | 97.253 | 0.0573092 |
 | 20 MHz / goodput mbps | 26.8923 | 0 |
 | 40 MHz / delay p95 ms | 63.809 | 0.0766852 |
 | 40 MHz / goodput mbps | 50.7077 | 0 |
 | 80 MHz / delay p95 ms | 40.0602 | 0.075074 |
 | 80 MHz / goodput mbps | 81.4277 | 0.334812 |
+| 160 MHz / delay p95 ms | 9.40625 | 0.0750894 |
+| 160 MHz / goodput mbps | 118.646 | 0 |
 
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 <!-- END GENERATED: ieee80211-scalar-vector-width -->
@@ -263,7 +263,7 @@ Figure provenance: [`packet_statistics.png.json`](results/20260726T160000Z/packe
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260726T160000Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260726T160000Z.json` (SHA-256 `dfc51aa88408fccf72834eaefdc39fc20db21560f2907c4874f2e70d501c9e35`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260726T160000Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260726T160000Z.json` (SHA-256 `e80eb51917f6c13d4cf3e1e683aa8cf3e154711cc5f284ffd8a3d93fe5d57aca`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -273,58 +273,19 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
-| `Width160MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2939 | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] (2213), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] (556), Control: Trigger (140) | 108.11% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `Width20MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1160 | Data: QoS Data [HE-MU, HE-MCS 5, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (504), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (504), Control: Trigger (126) | 106.91% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `Width40MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1559 | Data: QoS Data [HE-MU, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (943), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (472), Control: Trigger (118) | 110.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `Width80MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2187 | Data: QoS Data [HE-MU, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1521), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (508), Control: Trigger (128) | 111.91% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `Width160MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2939 | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] (2213), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] (556), Control: Trigger (140) | 108.11% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | Width160MHz produced protocol-visible wireless observations | 2939 AP/global transmission observations |
 | **PASS** | Width20MHz produced protocol-visible wireless observations | 1160 AP/global transmission observations |
 | **PASS** | Width40MHz produced protocol-visible wireless observations | 1559 AP/global transmission observations |
 | **PASS** | Width80MHz produced protocol-visible wireless observations | 2187 AP/global transmission observations |
-
-### [script] Configuration: `Width160MHz`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2939**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21a130" /></svg> | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] | 2213 | 75.30% | 1066.0 B | 0.0 B | 203.4 us | 15.6 us | 5240 MHz | - | 15.0 dBm | 92.53% | 100.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#26ab26" /></svg> | Data: QoS Data [HE-MU, HE-MCS 2, 996-tone RU, GI 3.2 us, LDPC, A-MPDU] | 2 | 0.07% | 1066.0 B | 0.0 B | 128.8 us | 0.0 us | 5240 MHz | - | 15.0 dBm | 0.05% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bd02d" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 160 MHz, GI 3.2 us, LDPC] | 5 | 0.17% | 1066.0 B | 0.0 B | 105.6 us | 0.0 us | 5240 MHz | - | 15.0 dBm | 0.11% | 0.12% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 140 | 4.76% | 63.9 B | 1.5 B | 41.3 us | 0.5 us | 5240 MHz | - | 15.0 dBm | 1.19% | 1.28% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#194eb8" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] | 556 | 18.92% | 32.0 B | 0.0 B | 51.8 us | 0.0 us | 5180 MHz, 5220 MHz, 5260 MHz, 5300 MHz | -71.8 dBm | - | 5.91% | 6.39% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#053c94" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 996-tone RU, GI 1.6 us, LDPC] | 2 | 0.07% | 32.0 B | 0.0 B | 43.5 us | 0.0 us | 5200 MHz, 5280 MHz | -71.5 dBm | - | 0.02% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 12 | 0.41% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5240 MHz | -72.0 dBm | 15.0 dBm | 0.06% | 0.07% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.31% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5240 MHz | -72.0 dBm | 15.0 dBm | 0.13% | 0.14% |
-
-#### [script] Representative frame-exchange timeline
-
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:1` | 0.200132000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:2` | 0.200176000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:3` | 0.200228000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:4` | 0.200273000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:5` | 0.200439000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:6` | 0.200484000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:7` | 0.200536000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:8` | 0.200580000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:9` | 0.200746000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:10` | 0.200791000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:11` | 0.200843000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:12` | 0.200887000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:13` | 0.201062000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:14` | 0.201107000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:15` | 0.201159000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
-| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:16` | 0.201204000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-
-Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+| **PASS** | Width160MHz produced protocol-visible wireless observations | 2939 AP/global transmission observations |
 
 ### [script] Configuration: `Width20MHz`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1160**
@@ -437,6 +398,45 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2187*
 | `Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:14` | 0.201363000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
 | `Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:15` | 0.201415000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
 | `Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:16` | 0.201460000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+
+Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### [script] Configuration: `Width160MHz`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2939**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#21a130" /></svg> | Data: QoS Data [HE-MU, HE-MCS 2, 484-tone RU, GI 3.2 us, LDPC, A-MPDU] | 2213 | 75.30% | 1066.0 B | 0.0 B | 203.4 us | 15.6 us | 5240 MHz | - | 15.0 dBm | 92.53% | 100.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#26ab26" /></svg> | Data: QoS Data [HE-MU, HE-MCS 2, 996-tone RU, GI 3.2 us, LDPC, A-MPDU] | 2 | 0.07% | 1066.0 B | 0.0 B | 128.8 us | 0.0 us | 5240 MHz | - | 15.0 dBm | 0.05% | 0.06% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1bd02d" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 160 MHz, GI 3.2 us, LDPC] | 5 | 0.17% | 1066.0 B | 0.0 B | 105.6 us | 0.0 us | 5240 MHz | - | 15.0 dBm | 0.11% | 0.12% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 140 | 4.76% | 63.9 B | 1.5 B | 41.3 us | 0.5 us | 5240 MHz | - | 15.0 dBm | 1.19% | 1.28% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#194eb8" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 484-tone RU, GI 1.6 us, LDPC] | 556 | 18.92% | 32.0 B | 0.0 B | 51.8 us | 0.0 us | 5180 MHz, 5220 MHz, 5260 MHz, 5300 MHz | -71.8 dBm | - | 5.91% | 6.39% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#053c94" /></svg> | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 996-tone RU, GI 1.6 us, LDPC] | 2 | 0.07% | 32.0 B | 0.0 B | 43.5 us | 0.0 us | 5200 MHz, 5280 MHz | -71.5 dBm | - | 0.02% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 12 | 0.41% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5240 MHz | -72.0 dBm | 15.0 dBm | 0.06% | 0.07% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.31% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5240 MHz | -72.0 dBm | 15.0 dBm | 0.13% | 0.14% |
+
+#### [script] Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:1` | 0.200132000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:2` | 0.200176000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:3` | 0.200228000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:4` | 0.200273000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:5` | 0.200439000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:6` | 0.200484000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:7` | 0.200536000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:8` | 0.200580000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:9` | 0.200746000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:10` | 0.200791000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:11` | 0.200843000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:12` | 0.200887000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:13` | 0.201062000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Data: QoS Data / HE-SU, HE-MCS 1, 160 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:14` | 0.201107000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:15` | 0.201159000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:04 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| `Width160MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap:16` | 0.201204000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 

@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-26T13:18:08.550704+00:00",
+    "generated_at_utc": "2026-07-26T17:27:43.381888+00:00",
     "groups": {
       "width": {
         "conditions": [
@@ -229,23 +229,11 @@
         "status": "PASS"
       }
     },
-    "repository_revision": "ecd5b292ef9fe0a222cab3ee3bd6ae7b1d62fd61",
+    "repository_revision": "55004c2141bfc4917619cc4f2a630dc9694c9ac4",
     "requested_session_id": "20260726T160000Z",
     "schema_version": 1
   },
   "width": {
-    "160 MHz": {
-      "delay_p95_ms": {
-        "ci95": 0.07508936722650512,
-        "count": 5,
-        "mean": 9.406249004
-      },
-      "goodput_mbps": {
-        "ci95": 0.0,
-        "count": 5,
-        "mean": 118.64615384615384
-      }
-    },
     "20 MHz": {
       "delay_p95_ms": {
         "ci95": 0.05730921671679775,
@@ -280,6 +268,18 @@
         "ci95": 0.3348122489394574,
         "count": 5,
         "mean": 81.4276923076923
+      }
+    },
+    "160 MHz": {
+      "delay_p95_ms": {
+        "ci95": 0.07508936722650512,
+        "count": 5,
+        "mean": 9.406249004
+      },
+      "goodput_mbps": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 118.64615384615384
       }
     }
   }

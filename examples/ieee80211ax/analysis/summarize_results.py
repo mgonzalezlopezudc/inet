@@ -6,8 +6,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -53,6 +55,22 @@ def time_weighted_step_mean(times, values, measurement) -> float:
     states = np.concatenate(([values[initial_index]], following_values[inside]))
     return float(np.sum(states * np.diff(boundaries)) /
                  (measurement.end - measurement.start))
+
+
+def natural_sort_key(s: str) -> list[object]:
+    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
+
+
+def sort_payload_keys(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        sorted_keys = sorted(
+            obj.keys(),
+            key=lambda k: (0 if k == "_provenance" else 1, natural_sort_key(k)),
+        )
+        return {k: sort_payload_keys(obj[k]) for k in sorted_keys}
+    if isinstance(obj, list):
+        return [sort_payload_keys(item) for item in obj]
+    return obj
 
 
 def main() -> None:
@@ -203,7 +221,7 @@ def main() -> None:
         payload[group_name] = group_metrics
     atomic_write_text(
         output,
-        json.dumps(payload, indent=2, sort_keys=True, allow_nan=False) + "\n",
+        json.dumps(sort_payload_keys(payload), indent=2, sort_keys=False, allow_nan=False) + "\n",
     )
     print(f"CREATED {output}")
 

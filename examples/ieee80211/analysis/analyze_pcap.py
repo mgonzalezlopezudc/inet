@@ -460,7 +460,8 @@ def sha256_file(path):
 
 
 def command_output(command):
-    return subprocess.run(command, cwd=str(REPOSITORY_ROOT), check=True,
+    env = dict(os.environ, LC_ALL="C")
+    return subprocess.run(command, cwd=str(REPOSITORY_ROOT), env=env, check=True,
                           stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
 
 
@@ -1812,10 +1813,14 @@ def get_packet_color(pt):
     r, g, b = colorsys.hls_to_rgb(h / 360.0, l / 100.0, s / 100.0)
     return matplotlib.colors.to_hex((r, g, b))
 
+def config_sort_key(config_name: str) -> list[object]:
+    """Sort configuration names naturally (e.g., Width20MHz < Width40MHz < Width80MHz < Width160MHz)."""
+    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(config_name))]
+
 def generate_stacked_bar_plot(config_results, subdir, color_map, output_dir):
     # Filter configs that have global stats
     valid_configs = []
-    for cfg_name in sorted(config_results.keys()):
+    for cfg_name in sorted(config_results.keys(), key=config_sort_key):
         res = config_results[cfg_name]
         if "global" in res and res["global"]["total"] > 0:
             valid_configs.append(cfg_name)
@@ -1925,7 +1930,7 @@ def write_packet_plot_provenance(plot_path, config_results, subdir, manifest):
         "scenario": subdir,
         "configuration_observation_counts": {
             config: result["global"]["total"]
-            for config, result in sorted(config_results.items())
+            for config, result in sorted(config_results.items(), key=lambda item: config_sort_key(item[0]))
             if "global" in result
         },
         "counting_semantics": (
@@ -1973,7 +1978,7 @@ def compact_statistics_markdown(config_results):
         "Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |\n",
         "|---|---|---|---:|---|---:|---|\n",
     ]
-    for config_name, result in sorted(config_results.items()):
+    for config_name, result in sorted(config_results.items(), key=lambda item: config_sort_key(item[0])):
         global_result = result.get("global", {})
         stats = global_result.get("stats", {})
         total = global_result.get("total", 0)
@@ -2020,7 +2025,7 @@ def compact_statistics_markdown(config_results):
 
 def evaluate_evidence(config_results, subdir):
     checks = []
-    for config_name, result in sorted(config_results.items()):
+    for config_name, result in sorted(config_results.items(), key=lambda item: config_sort_key(item[0])):
         total = result.get("global", {}).get("total", 0)
         checks.append({
             "id": f"capture-{config_name}",
@@ -2290,7 +2295,7 @@ def generate_markdown_tables(
         md.append(f"| **{check['status']}** | {check['requirement']} | {check['evidence']} |\n")
     md.append("\n")
 
-    for config_name, res in sorted(config_results.items()):
+    for config_name, res in sorted(config_results.items(), key=lambda item: config_sort_key(item[0])):
         global_res = res.get("global")
         if not global_res or global_res["total"] == 0:
             continue
