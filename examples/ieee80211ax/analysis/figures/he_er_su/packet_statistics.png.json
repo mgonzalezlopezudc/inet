@@ -205,7 +205,7 @@
       "seed_set": 0
     }
   ],
-  "figure": "examples/ieee80211ax/he_er_su/packet_statistics.png",
+  "figure": "examples/ieee80211ax/analysis/figures/he_er_su/packet_statistics.png",
   "figure_sha256": "f815407282409f72e5ebb952a8ebc31893832f249513f3c08139a0ea93e74b04",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",

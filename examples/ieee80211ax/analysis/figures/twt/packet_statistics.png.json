@@ -381,7 +381,7 @@
       "seed_set": 20260623
     }
   ],
-  "figure": "examples/ieee80211ax/twt/packet_statistics.png",
+  "figure": "examples/ieee80211ax/analysis/figures/twt/packet_statistics.png",
   "figure_sha256": "387262c68bdf040c9c9a15fa98096dc8b98765e5f8588e4ed5bfbbc2427ecdd3",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",

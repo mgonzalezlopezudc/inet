@@ -348,9 +348,9 @@ evidence for attempts and successes.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### Generated PCAP plots and tables
-![802.11 Packet Type Statistics](packet_statistics.png)
+![802.11 Packet Type Statistics](../analysis/figures/ul_ofdma/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](../analysis/figures/ul_ofdma/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 

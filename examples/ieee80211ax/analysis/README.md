@@ -105,7 +105,10 @@ size/count, timestamp-order, precision, snapshot, and interface metadata.
 
 The PCAP analyzer validates every capture before parsing and writes a bounded
 frame-exchange timeline, compact cross-configuration table, count-versus-
-airtime plot, figure provenance, and `summary_results_pcap.json`. Reuse mode
+airtime plot, figure provenance, and `summary_results_pcap.json`. Each PCAP
+plot and provenance sidecar is stored only at
+`analysis/figures/<scenario>/packet_statistics.png[.json]`, and generated
+walkthrough sections reference that centralized copy. Reuse mode
 does not edit walkthroughs by default; `--update-walkthrough` is explicit and
 is reserved for the facade's publish step. It exits nonzero when an evidence
 check is `FAIL`. `--allow-failed-evidence` is intended only for preserving an

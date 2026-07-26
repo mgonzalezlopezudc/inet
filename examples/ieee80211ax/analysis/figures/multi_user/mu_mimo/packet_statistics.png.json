@@ -253,7 +253,7 @@
       "seed_set": 0
     }
   ],
-  "figure": "examples/ieee80211ax/multi_user/mu_mimo/packet_statistics.png",
+  "figure": "examples/ieee80211ax/analysis/figures/multi_user/mu_mimo/packet_statistics.png",
   "figure_sha256": "fb18f2da83e80afed1ae2f8527692b6c70352826079c680f5961aa4cbf64e10a",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",

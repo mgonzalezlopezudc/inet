@@ -1069,7 +1069,7 @@
       "seed_set": 0
     }
   ],
-  "figure": "examples/ieee80211ax/bss_coloring/packet_statistics.png",
+  "figure": "examples/ieee80211ax/analysis/figures/bss_coloring/packet_statistics.png",
   "figure_sha256": "d2fbb1e64a5f6aac8a3300a067bf22df2c7c65d64df72f4e806fb40f057de860",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",

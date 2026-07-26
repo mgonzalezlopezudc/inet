@@ -3,12 +3,12 @@
   "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
   "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
   "capture_manifest": {
-    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230505Z.json",
-    "sha256": "9bc5a139a0fd90e3b776fcd383ed68c20d2206b20062c282b66c01b520c85cb5"
+    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230146Z.json",
+    "sha256": "0d035ac61814b337adac2d40e6ed117ad0905f17be8cd5db6d653540c5b3a9b7"
   },
-  "capture_session_id": "20260725T230505Z",
+  "capture_session_id": "20260725T230146Z",
   "configuration_observation_counts": {
-    "NdpFeedbackReport": 2543
+    "OperatingModeIndication": 2489
   },
   "counting_semantics": "capture observations of over-the-air frames/MPDUs; observations are not application deliveries or de-duplicated transmissions",
   "decode_limitations": "typed PHY profiles fail closed; absent, unsupported, or unknown radiotap fields remain unknown",
@@ -18,11 +18,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1559293,
-            "duration_seconds": 1.977888,
+            "data_size_bytes": 1639102,
+            "duration_seconds": 1.79728,
             "encapsulation": "ieee-802-11-radiotap",
             "end_seconds": 1.997924,
-            "file_size_bytes": 1671332,
+            "file_size_bytes": 1748732,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -33,24 +33,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 2543,
+            "packet_count": 2489,
             "snapshot_length": null,
-            "start_seconds": 0.020036,
+            "start_seconds": 0.200644,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
-          "sha256": "8e60e2015b3ef805955f08a90ac16952aed066532f5a5bde1a966d13acb64cbc",
-          "size_bytes": 1671332
+          "path": "examples/ieee80211ax/mac_features/operating_mode_indication/results/packet-statistics/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "917725b855480e5b70907fcd7e86d36a9d19ec2fe3094fc0a7e269278d502755",
+          "size_bytes": 1748732
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1649421,
-            "duration_seconds": 1.977888,
+            "data_size_bytes": 1642228,
+            "duration_seconds": 1.79728,
             "encapsulation": "ieee-802-11-radiotap",
             "end_seconds": 1.997924,
-            "file_size_bytes": 1761468,
+            "file_size_bytes": 1751860,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -61,24 +61,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 2543,
+            "packet_count": 2489,
             "snapshot_length": null,
-            "start_seconds": 0.020036,
+            "start_seconds": 0.200644,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
-          "sha256": "92f73a7a0e401035b5cdb2c8ea3232c25bc7b1fc954b69fccf91a09625750889",
-          "size_bytes": 1761468
+          "path": "examples/ieee80211ax/mac_features/operating_mode_indication/results/packet-statistics/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "9780e15eff6f9406d736d2073e01148426b8d8fbe08c069b96414ddd8ed42be7",
+          "size_bytes": 1751860
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1649421,
-            "duration_seconds": 1.977888,
+            "data_size_bytes": 1642228,
+            "duration_seconds": 1.79728,
             "encapsulation": "ieee-802-11-radiotap",
             "end_seconds": 1.997924,
-            "file_size_bytes": 1761468,
+            "file_size_bytes": 1751860,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -89,24 +89,24 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 2543,
+            "packet_count": 2489,
             "snapshot_length": null,
-            "start_seconds": 0.020036,
+            "start_seconds": 0.200644,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
-          "sha256": "00966dc8417a08bbe97a28c4ea9187794af38f98cd7c535e0ccfcf2be9c0216a",
-          "size_bytes": 1761468
+          "path": "examples/ieee80211ax/mac_features/operating_mode_indication/results/packet-statistics/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "0ef584f814acf87e9d0fc45bdf627ea94e030a9ddc27415f6f82950de944a831",
+          "size_bytes": 1751860
         },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1649421,
-            "duration_seconds": 1.977888,
+            "data_size_bytes": 1642228,
+            "duration_seconds": 1.79728,
             "encapsulation": "ieee-802-11-radiotap",
             "end_seconds": 1.997924,
-            "file_size_bytes": 1761468,
+            "file_size_bytes": 1751860,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -117,30 +117,30 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 2543,
+            "packet_count": 2489,
             "snapshot_length": null,
-            "start_seconds": 0.020036,
+            "start_seconds": 0.200644,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/multi_user/ndp_feedback/results/packet-statistics/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
-          "sha256": "2a003edc00385efb21c1f57c4f774269a5dd3724f19bd0c2707311c3f5c2ba5d",
-          "size_bytes": 1761468
+          "path": "examples/ieee80211ax/mac_features/operating_mode_indication/results/packet-statistics/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "ba0608289b858c28c96b44e4b1100061590c3bee02438056980ef8ccf10b9a0f",
+          "size_bytes": 1751860
         }
       ],
-      "config": "NdpFeedbackReport",
+      "config": "OperatingModeIndication",
       "run_number": 0,
       "seed_set": 0
     }
   ],
-  "figure": "examples/ieee80211ax/multi_user/ndp_feedback/packet_statistics.png",
-  "figure_sha256": "ce93e9b13ea6d35f66b9bd3ed02185a15e3a9d1824411bb1c0f67173e2f67458",
+  "figure": "examples/ieee80211ax/analysis/figures/mac_features/operating_mode_indication/packet_statistics.png",
+  "figure_sha256": "49e05fd6897add6fd143d1e42f6aa4f82ef0c1120d2c7509b48ccb0cf068d3d2",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",
     "right": "frame-type share of summed estimated airtime"
   },
   "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
-  "scenario": "multi_user/ndp_feedback",
+  "scenario": "mac_features/operating_mode_indication",
   "schema_version": 1,
   "tshark_version": "TShark (Wireshark) 4.6.4."
 }

@@ -2533,7 +2533,7 @@
       "seed_set": 0
     }
   ],
-  "figure": "examples/ieee80211ax/dl_ofdma/packet_statistics.png",
+  "figure": "examples/ieee80211ax/analysis/figures/dl_ofdma/packet_statistics.png",
   "figure_sha256": "9fe800ec0664d09087b0e8f6de4fb3ec98709d787d8a5dbe648b7da09125c3c6",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",

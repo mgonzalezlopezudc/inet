@@ -317,7 +317,7 @@
       "seed_set": 0
     }
   ],
-  "figure": "examples/ieee80211ax/mac_features/multi_tid_block_ack/packet_statistics.png",
+  "figure": "examples/ieee80211ax/analysis/figures/mac_features/multi_tid_block_ack/packet_statistics.png",
   "figure_sha256": "bae2b9a92c4565a874ebb5a82e284529db5fb4c44b04eb01f22f2e72567d3e85",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",

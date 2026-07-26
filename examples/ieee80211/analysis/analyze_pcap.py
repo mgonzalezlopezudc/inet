@@ -1917,12 +1917,28 @@ def generate_stacked_bar_plot(config_results, subdir, color_map):
 
     plt.tight_layout(rect=[0.02, 0.27, 0.98, 0.95])
 
-    # Save path
-    plot_dir = EXAMPLE_ROOT / subdir
-    plot_path = plot_dir / "packet_statistics.png"
+    # Publish PCAP figures in the suite's shared analysis figure tree.
+    plot_path = (
+        EXAMPLE_ROOT / "analysis" / "figures" / subdir /
+        "packet_statistics.png"
+    )
+    plot_path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(str(plot_path), dpi=150, bbox_inches='tight')
     plt.close()
     return plot_path
+
+
+def walkthrough_packet_plot_path(subdir):
+    """Return the shared PCAP figure path relative to its walkthrough."""
+    walkthrough_dir = EXAMPLE_ROOT / subdir
+    analysis_plot_path = (
+        EXAMPLE_ROOT / "analysis" / "figures" / subdir /
+        "packet_statistics.png"
+    )
+    return Path(os.path.relpath(
+        analysis_plot_path,
+        start=walkthrough_dir,
+    )).as_posix()
 
 
 def write_packet_plot_provenance(plot_path, config_results, subdir, manifest):
@@ -2264,12 +2280,15 @@ def generate_markdown_tables(config_results, subdir, checks, manifest):
     if not config_results:
         return ""
 
+    plot_path = walkthrough_packet_plot_path(subdir)
     md = []
     md.append("### Generated PCAP plots and tables\n")
-    md.append("![802.11 Packet Type Statistics](packet_statistics.png)\n\n")
+    md.append(
+        f"![802.11 Packet Type Statistics]({plot_path})\n\n"
+    )
     md.append(
         "Figure provenance: "
-        "[`packet_statistics.png.json`](packet_statistics.png.json).\n\n"
+        f"[`packet_statistics.png.json`]({plot_path}.json).\n\n"
     )
     md.append("This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. ")
 

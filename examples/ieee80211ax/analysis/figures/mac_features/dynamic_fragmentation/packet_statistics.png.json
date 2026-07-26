@@ -1,17 +1,14 @@
 {
   "airtime_limitations": "HE-SU and HE-ER-SU use modeled preambles; HE MU/TB user-dependent signaling that radiotap does not expose remains approximate",
-  "analysis_script_sha256": "d51adebb76c1a49bde618761d958385c3dfcbef0fcb737fcec01456561318359",
+  "analysis_script_sha256": "d5029745cd48ff3e08f9135087af2ce094e8e76eb274f60aed6bf5e285f0d96f",
   "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
   "capture_manifest": {
-    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T234519Z.json",
-    "sha256": "5002d629772d1f12e94751bf446a48eb62b9e9b708710f842d37418a8c4f49bf"
+    "path": "examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T225941Z.json",
+    "sha256": "334ea1a4182fe3e8b8d3ca97a62b4d09c72e2323e8146c940c81c69681f8bbe4"
   },
-  "capture_session_id": "20260725T234519Z",
+  "capture_session_id": "20260725T225941Z",
   "configuration_observation_counts": {
-    "AcDl": 10598,
-    "AcUl": 2563,
-    "AxDl": 265600,
-    "AxUl": 26551
+    "DynamicFragmentation": 6667
   },
   "counting_semantics": "capture observations of over-the-air frames/MPDUs; observations are not application deliveries or de-duplicated transmissions",
   "decode_limitations": "typed PHY profiles fail closed; absent, unsupported, or unknown radiotap fields remain unknown",
@@ -21,11 +18,11 @@
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1966811,
-            "duration_seconds": 119.943914,
+            "data_size_bytes": 2539456,
+            "duration_seconds": 1.798011,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 119.996125,
-            "file_size_bytes": 3150724,
+            "end_seconds": 1.998351,
+            "file_size_bytes": 2838288,
             "file_type": "pcapng",
             "interfaces": [
               {
@@ -36,135 +33,114 @@
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 26551,
+            "packet_count": 6667,
             "snapshot_length": null,
-            "start_seconds": 0.052211,
+            "start_seconds": 0.20034,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AxUl/AxUl-#0DenseIotNetwork.ap.wlan[0].pcap",
-          "sha256": "47eb914744bb459dba8f51e43b8b2db45ec384349755876c12983d73e8a5555f",
-          "size_bytes": 3150724
-        }
-      ],
-      "config": "AxUl",
-      "run_number": 0,
-      "seed_set": 0
-    },
-    {
-      "captures": [
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "2cb85b0d9236c6f4ba875349dd2290d4ea66c5dea4c1b597e6c85871a7e1915e",
+          "size_bytes": 2838288
+        },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 302276,
-            "duration_seconds": 119.9,
+            "data_size_bytes": 2539456,
+            "duration_seconds": 1.798011,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 119.962472,
-            "file_size_bytes": 418300,
+            "end_seconds": 1.998351,
+            "file_size_bytes": 2838296,
             "file_type": "pcapng",
             "interfaces": [
               {
-                "description": "ap.wlan0",
+                "description": "host[0].wlan0",
                 "interface_id": 0,
                 "name": "wlan0",
                 "snapshot_length": 0,
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 2563,
+            "packet_count": 6667,
             "snapshot_length": null,
-            "start_seconds": 0.062472,
+            "start_seconds": 0.20034,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AcUl/AcUl-#0DenseIotNetwork.ap.wlan[0].pcap",
-          "sha256": "34e5ebd21ea5c615171d52b34d6b00ab82a41e0df4dcf84b3314e9b214490222",
-          "size_bytes": 418300
-        }
-      ],
-      "config": "AcUl",
-      "run_number": 0,
-      "seed_set": 0
-    },
-    {
-      "captures": [
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "2610f0f5479bd67830e38bc95780f7037813b4fdff386293b08df5c12732e4f2",
+          "size_bytes": 2838296
+        },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 48581660,
-            "duration_seconds": 119.945951,
+            "data_size_bytes": 2552268,
+            "duration_seconds": 1.797387,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 119.998162,
-            "file_size_bytes": 60781640,
+            "end_seconds": 1.997727,
+            "file_size_bytes": 2852908,
             "file_type": "pcapng",
             "interfaces": [
               {
-                "description": "ap.wlan0",
+                "description": "host[1].wlan0",
                 "interface_id": 0,
                 "name": "wlan0",
                 "snapshot_length": 0,
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 265600,
+            "packet_count": 6707,
             "snapshot_length": null,
-            "start_seconds": 0.052211,
+            "start_seconds": 0.20034,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AxDl/AxDl-#0DenseIotNetwork.ap.wlan[0].pcap",
-          "sha256": "7c4fd067a07e9dd389f56d9d5f4c675a9db30c42f5d364e928b4e95553ea8180",
-          "size_bytes": 60781640
-        }
-      ],
-      "config": "AxDl",
-      "run_number": 0,
-      "seed_set": 0
-    },
-    {
-      "captures": [
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.host[1].wlan[0].pcap",
+          "sha256": "50014abd74f898b02b2c6e39e50b3cb243da326fcb2ddea3b4b92669b65e7433",
+          "size_bytes": 2852908
+        },
         {
           "format": "pcapng",
           "metadata": {
-            "data_size_bytes": 1846776,
-            "duration_seconds": 119.928492,
+            "data_size_bytes": 2550806,
+            "duration_seconds": 1.797387,
             "encapsulation": "ieee-802-11-radiotap",
-            "end_seconds": 119.990964,
-            "file_size_bytes": 2316780,
+            "end_seconds": 1.997727,
+            "file_size_bytes": 2851036,
             "file_type": "pcapng",
             "interfaces": [
               {
-                "description": "ap.wlan0",
+                "description": "host[2].wlan0",
                 "interface_id": 0,
                 "name": "wlan0",
                 "snapshot_length": 0,
                 "time_precision": "microseconds (6)"
               }
             ],
-            "packet_count": 10598,
+            "packet_count": 6698,
             "snapshot_length": null,
-            "start_seconds": 0.062472,
+            "start_seconds": 0.20034,
             "strict_time_order": true,
             "time_precision": "microseconds"
           },
-          "path": "examples/ieee80211ax/dense_iot/results/packet-statistics/20260725T234519Z/AcDl/AcDl-#0DenseIotNetwork.ap.wlan[0].pcap",
-          "sha256": "e8e2c03b3c8795e7c241f98972d49d9f163593a84d61bf5c2de4f5cafe6e8b61",
-          "size_bytes": 2316780
+          "path": "examples/ieee80211ax/mac_features/dynamic_fragmentation/results/packet-statistics/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.host[2].wlan[0].pcap",
+          "sha256": "c9357ac8402ea95d6dbca6c200569e065cbde326d77859eaf0e4568b10ca3eab",
+          "size_bytes": 2851036
         }
       ],
-      "config": "AcDl",
+      "config": "DynamicFragmentation",
       "run_number": 0,
       "seed_set": 0
     }
   ],
-  "figure": "examples/ieee80211ax/dense_iot/packet_statistics.png",
-  "figure_sha256": "d07ab83aa2e93e5c1b49ed9d950cd24bc750caf9512af45b7609fbc46048d4bc",
+  "figure": "examples/ieee80211ax/analysis/figures/mac_features/dynamic_fragmentation/packet_statistics.png",
+  "figure_sha256": "2ffaf56ecbe8922f369df2ce84c08971dcb3511ade9dfe46ed40fc8d0b3f6b0d",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",
     "right": "frame-type share of summed estimated airtime"
   },
   "repository_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
-  "scenario": "dense_iot",
+  "scenario": "mac_features/dynamic_fragmentation",
   "schema_version": 1,
   "tshark_version": "TShark (Wireshark) 4.6.4."
 }

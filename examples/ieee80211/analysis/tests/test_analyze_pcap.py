@@ -217,6 +217,66 @@ class GeneratedSectionTest(unittest.TestCase):
             replace_generated_section(f"prefix\n{GENERATED_BEGIN}\n", "new")
 
 
+class PacketPlotStorageTest(unittest.TestCase):
+
+    def test_stores_only_shared_analysis_copy(self):
+        with tempfile.TemporaryDirectory() as directory:
+            example_root = Path(directory)
+            statistics = {
+                ("0", "0", False): {
+                    "count": 1,
+                    "airtime_pct": 100.0,
+                }
+            }
+            config_results = {
+                "Baseline": {
+                    "global": {
+                        "total": 1,
+                        "stats": statistics,
+                    }
+                }
+            }
+            packet_type = analyze_pcap.unpack_key_to_name(
+                next(iter(statistics))
+            )
+            with patch("analyze_pcap.EXAMPLE_ROOT", example_root):
+                plot_path = analyze_pcap.generate_stacked_bar_plot(
+                    config_results,
+                    "mac_features/dynamic_fragmentation",
+                    {packet_type: "#336699"},
+                )
+
+            self.assertEqual(
+                plot_path,
+                example_root / "analysis" / "figures" / "mac_features" /
+                "dynamic_fragmentation" / "packet_statistics.png",
+            )
+            self.assertTrue(plot_path.is_file())
+            self.assertFalse(
+                (
+                    example_root / "mac_features" /
+                    "dynamic_fragmentation" / "packet_statistics.png"
+                ).exists()
+            )
+
+    def test_walkthrough_references_shared_analysis_copy(self):
+        with patch(
+            "analyze_pcap.EXAMPLE_ROOT",
+            Path("/repository/examples/ieee80211ax"),
+        ):
+            self.assertEqual(
+                analyze_pcap.walkthrough_packet_plot_path("ul_ofdma"),
+                "../analysis/figures/ul_ofdma/packet_statistics.png",
+            )
+            self.assertEqual(
+                analyze_pcap.walkthrough_packet_plot_path(
+                    "mac_features/dynamic_fragmentation"
+                ),
+                "../../analysis/figures/mac_features/"
+                "dynamic_fragmentation/packet_statistics.png",
+            )
+
+
 class CaptureValidationTest(unittest.TestCase):
 
     def test_empty_capture_fails_closed(self):

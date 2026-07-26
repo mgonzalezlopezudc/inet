@@ -605,7 +605,7 @@
       "seed_set": 20260711
     }
   ],
-  "figure": "examples/ieee80211ax/he_channel_widths/packet_statistics.png",
+  "figure": "examples/ieee80211ax/analysis/figures/he_channel_widths/packet_statistics.png",
   "figure_sha256": "3585e3d14af455bf76a6cb944bb635c0cf55edd55a7ad6c9a903095baaae2302",
   "plot_semantics": {
     "left": "frame-type share of capture observation count",
