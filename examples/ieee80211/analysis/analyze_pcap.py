@@ -2283,7 +2283,7 @@ def generate_markdown_tables(
 
     md.append("Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.\n")
     md.append("- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.\n")
-    md.append("- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.\n\n")
+    md.append("- **Air Time (Sim Time) %** (and **Estimated airtime / sim time** in the summary table): The sum of estimated frame airtimes divided by the simulation time limit. Parallel multi-user transmissions (e.g., OFDMA resource units or MU-MIMO spatial streams) and concurrent observations across multiple capture points are summed per transmission/RU, so this cumulative metric can exceed 100%; it is not the union of busy channel time.\n\n")
     md.append("#### [script] Compact cross-configuration summary\n\n")
     md.append(compact_statistics_markdown(config_results))
     md.append("\n")
