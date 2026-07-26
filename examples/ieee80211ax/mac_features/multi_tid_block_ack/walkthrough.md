@@ -1,12 +1,21 @@
 # Walkthrough: HE Multi-TID Block Ack
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `20260725T230138Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230138Z`.
+
 This example exercises downlink (DL) and uplink (UL) Block Ack arrangements
 involving multiple traffic identifiers (TIDs). Retained run-0 results establish
 the offered application flows and protocol-visible BAR/BA exchanges, but the
 available decode does not prove that a single acknowledgment contains multiple
 TID records. The feature verdict is therefore deliberately `INCONCLUSIVE`.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -24,7 +33,7 @@ relevant per-TID sequence state. In the UL multi-user case, one Multi-STA Block
 Ack may instead carry per-station AID/TID information after Trigger-based
 transmissions.
 
-## Scenario description
+## [agent] Scenario description
 
 There is no local `omnetpp.ini`. [downlink.ini](downlink.ini) includes
 [`../../dl_ofdma/omnetpp.ini`](../../dl_ofdma/omnetpp.ini), while
@@ -42,7 +51,7 @@ ports 5000 and 5001 (TIDs 6 and 7) to two stations. UL-SU sends two TIDs from
 one station; UL-MU sends one TID from each of two stations and disables
 `host[2]` traffic.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.6.3 defines multi-TID A-MPDU operation; Clause
 10.25.5 selects BlockAck/BlockAckReq variants; Clause 9.3.1.8.6 defines the
@@ -55,7 +64,7 @@ structures, but configuration and source availability are not runtime proof.
 The retained native MAC capture exposes QoS TIDs and generic BAR/BA labels but
 does not authoritatively expose all required per-TID records.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -66,7 +75,7 @@ does not authoritatively expose all required per-TID records.
 | Single-TID negative control | `NOT RUN` | `SingleTidBlockAckComparison` exists in the included DL INI | none | No retained matched artifacts |
 | Shared AX analyzer regenerates the split scenario | `PASS` | session `20260725T230138Z` manifest resolves `downlink.ini` and `uplink.ini` by configuration | run 0/seed 0 | Three configured treatments completed |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -78,7 +87,7 @@ does not authoritatively expose all required per-TID records.
 The assignments in the included DL/UL INIs are the winning feature settings;
 the one-line wrappers add no later overrides.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -87,7 +96,7 @@ the one-line wrappers add no later overrides.
 | UL-MU response covers scheduled stations | Trigger AIDs correlated with Multi-STA BA AID/TID entries | missing station/TID | UL scheduler/BA builder | co-record Trigger fields, BA fields, and HCF log |
 | Application outcome remains intact | sender/receiver application vectors | unexpected receive deficit | MAC retry/queue/upper path | correlate QoS sequence/retry fields and result vectors |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root. These illustrative commands were not
 executed during this documentation revision, so their exit status is
@@ -114,7 +123,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
   --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are under `results/20260725T120411Z/`.
 
@@ -138,7 +147,7 @@ No plot: these single-run application totals do not expose the multi-TID
 acknowledgment mechanism, so plotting them would not answer the feature
 question.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: AP `wlan[0]`; PCAPng with radiotap, microsecond precision;
 computed checksum/FCS settings are recorded by the session. Decode used TShark
@@ -151,7 +160,7 @@ computed checksum/FCS settings are recorded by the session. Decode used TShark
 | `UlMuMultiTidBlockAck` | 1,268 | 1,176 QoS Data, 45 QoS Null, 16 Trigger, 15 BA | no authoritative AID/TID BA table |
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../../analysis/figures/mac_features/multi_tid_block_ack/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../../analysis/figures/mac_features/multi_tid_block_ack/packet_statistics.png.json).
@@ -164,7 +173,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -172,7 +181,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `UlMuMultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/20260725T230138Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2355 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (696), Control: Ack (680), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (573) | 34.64% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `UlSuMultiTidBlockAck` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/multi_tid_block_ack/results/20260725T230138Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 921 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (510), Control: Ack (341), Control: Block Ack Request (BAR) (33) | 12.65% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -181,7 +190,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | UlSuMultiTidBlockAck produced protocol-visible wireless observations | 921 AP/global transmission observations |
 | **INCONCLUSIVE** | BA variant and per-AID/TID entries | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `MultiTidBlockAck`
+### [script] Configuration: `MultiTidBlockAck`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1225**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -196,7 +205,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1225*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.65% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -64.5 dBm | 20.0 dBm | 0.26% | 0.06% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -219,7 +228,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1225*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `UlMuMultiTidBlockAck`
+### [script] Configuration: `UlMuMultiTidBlockAck`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2355**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -231,7 +240,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2355*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 203 | 8.62% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.15% | 0.40% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 680 | 28.87% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.42% | 0.84% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -254,7 +263,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2355*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `UlSuMultiTidBlockAck`
+### [script] Configuration: `UlSuMultiTidBlockAck`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **921**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -268,7 +277,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **921**
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 2 | 0.22% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.05% | 0.01% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -291,11 +300,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **921**
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 BAR and Block Ack subtype counts show acknowledgment exchanges, but they do not identify the BA Control variant or its per-AID/TID entries. IEEE Std 802.11-2024 Clauses 9.3.1.8.6 and 10.25.5 require those contents to distinguish Multi-STA and Multi-TID operation. Treat this table as an exchange count; use decoded BA fields or simulator telemetry to prove that multiple TIDs were acknowledged.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n \
@@ -317,7 +326,7 @@ TShark frame numbers are capture indices, not OMNeT++ event numbers. A
 co-recorded model signal or richer serializer decode is required to correlate
 the TID data with the exact BAR/BA record array.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -329,7 +338,7 @@ The bounded verdict is `INCONCLUSIVE`: adjacent configuration, packet, and
 outcome evidence exists, but no retained direct observation proves the
 multi-TID acknowledgment content.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - No matched retained negative-control run exists.
 - Separate scalar/vector and packet sessions cannot establish event-level
@@ -340,7 +349,7 @@ multi-TID acknowledgment content.
   decisions, and application vectors for treatment and
   `SingleTidBlockAckComparison` with seed 0.
 
-## Further experiments
+## [agent] Further experiments
 
 - Run the DL negative control with identical seed/load and compare the number
   and record count of BAR/BA contexts.
@@ -349,7 +358,7 @@ multi-TID acknowledgment content.
 - Repeat several seeds after the deterministic record invariant is observable;
   aggregate application outcomes per run before estimating variability.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -362,7 +371,7 @@ multi-TID acknowledgment content.
 | Architecture and sealing | apply `inet-architectural-requirements` before any `src/inet` change; no source change is authorized here |
 | Next handoff | analysis-suite owner first; Wi-Fi MAC owner only if serializer observability is insufficient |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

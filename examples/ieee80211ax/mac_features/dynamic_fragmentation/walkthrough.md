@@ -1,12 +1,21 @@
 # HE dynamic-fragmentation walkthrough
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T225941Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T225941Z`.
+
 This walkthrough teaches how HE dynamic fragmentation differs from static
 MAC fragmentation and no fragmentation. The retained results prove smaller
 transmitted frames, increased acknowledgment airtime, and application
 delivery; a run-0 PCAP directly shows fragment-number sequences. Negotiated
 capability state and an opportunity-dependent size change are not retained.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -23,7 +32,7 @@ a `PASS` for actual fragment sequences and smaller frames, but
 `INCONCLUSIVE` for negotiated capability and truly opportunity-dependent
 dynamic sizing because dynamic and static outcomes are identical here.
 
-## Scenario description
+## [agent] Scenario description
 
 [omnetpp.ini](omnetpp.ini) includes the uplink OFDMA example's
 [configuration](../../ul_ofdma/omnetpp.ini); [README.md](README.md) describes
@@ -37,7 +46,7 @@ host[0..2] -- fragmented HE QoS data --> AP --> server
                 MPDU 0,1,2,3              reassembly
 ```
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.3 defines HE dynamic fragmentation; Clause
 26.3.1 defines its levels and nonuniform fragments, while Clause 26.3.2.2
@@ -48,7 +57,7 @@ Operation) for level 1 (`80211ax-2024:chunk:09757`,
 prove negotiation. `wlan.frag` in PCAP proves header fragment numbers; result
 vectors prove modeled sizes and ACK airtime.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -57,7 +66,7 @@ vectors prove modeled sizes and ACK airtime.
 | dynamic policy differs from static policy | `FAIL` | identical retained size and ACK-airtime summaries | 0--4 | treatment did not expose dynamic advantage |
 | level-1 capability was negotiated | `INCONCLUSIVE` | no capability-state result | retained sessions | configuration only |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -69,7 +78,7 @@ All rows inherit the same topology and traffic and disable UL MU-OFDMA. The
 retained scenario provides no varying TXOP/PPDU budget, so dynamic and static
 policies have no demonstrated causal opportunity to diverge.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -78,7 +87,7 @@ policies have no demonstrated causal opportunity to diverge.
 | fragmented rows use smaller frames | sender `packetSentToPeer` vector | mean remains 1070 B | policy selection | verify effective typename and threshold |
 | delivery remains close to control | server receive vector | large deficit/drop | reassembly / retry | correlate drops and final fragment |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the repository root:
 
@@ -100,7 +109,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
   --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs:
 `results/20260725T120411Z/{configuration}/*.{sca,vec}`.
@@ -135,7 +144,7 @@ The declared measurement window is 0.3--2.0 s; the initial setup period is
 excluded as warm-up.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-fragmentation -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![fragmentation scalar/vector analysis](../../analysis/figures/mac_features/dynamic_fragmentation/fragmentation-and-ack-overhead.png)
 
@@ -153,7 +162,7 @@ Figure provenance: [`../../analysis/figures/mac_features/dynamic_fragmentation/f
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-fragmentation -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: `Lan80211AxUlOfdma.ap.wlan[0]`
 
@@ -178,7 +187,7 @@ de-duplicated MSDUs or delivered application packets.
 <!-- REWRITE-PREFIX-END -->
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../../analysis/figures/mac_features/dynamic_fragmentation/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../../analysis/figures/mac_features/dynamic_fragmentation/packet_statistics.png.json).
@@ -191,20 +200,20 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
 | `DynamicFragmentation` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/dynamic_fragmentation/results/20260725T225941Z/DynamicFragmentation/DynamicFragmentation-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 6667 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (5937), Control: Block Ack Request (BAR) (429), Control: Block Ack (BA) (264) | 64.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
 | **PASS** | DynamicFragmentation produced protocol-visible wireless observations | 6667 AP/global transmission observations |
 | **INCONCLUSIVE** | Capability gate, fragment numbers, sizes, More Fragments and acknowledgment | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `DynamicFragmentation`
+### [script] Configuration: `DynamicFragmentation`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6667**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -219,7 +228,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6667*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.09% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -63.7 dBm | 10.0 dBm | 0.03% | 0.02% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -242,11 +251,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6667*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 IEEE Std 802.11-2024 Clause 26.3 gates dynamic fragmentation on negotiated peer capability; it does not require fragment size to adapt to channel conditions. In this implementation the dynamic and static policies use the same 500-byte sizing policy after the capability gate, so their detailed result-analysis traces are expected to overlap. This packet table contains only `DynamicFragmentation`; it cannot establish a higher fragment count without the static and unfragmented controls, nor can Block Ack subtype counts alone establish the fragment bitmap.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 | Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -265,7 +274,7 @@ the negotiated HE capability state. Capture `frame.len` includes recorded
 link-layer bytes and is not identical to the sender result vector's packet
 size definition.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -281,7 +290,7 @@ Evidence basis: fragment headers and result values are **direct
 observations**, five-run summaries are **derived measurements**, and a
 capability-to-fragment causal link is an **inference** pending correlation.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - No retained result exposes negotiated peer fragmentation capability.
 - No stable join ties an MSDU, fragment sequence, ACK state, and reassembly.
@@ -290,7 +299,7 @@ capability-to-fragment causal link is an **inference** pending correlation.
 - A resolving test needs a constrained, varied PPDU/TXOP budget plus
   co-recorded capability, fragment, acknowledgment, and delivery telemetry.
 
-## Further experiments
+## [agent] Further experiments
 
 - Sweep the available PPDU duration while holding the MSDU at 1400 B; predict
   dynamic fragment sizes change while static sizes remain threshold-bound.
@@ -299,7 +308,7 @@ capability-to-fragment causal link is an **inference** pending correlation.
 - Inject loss of a middle fragment and verify retry/reassembly behavior and
   final application delivery.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -312,7 +321,7 @@ capability-to-fragment causal link is an **inference** pending correlation.
 | Architecture and sealing | apply architectural requirements and seal check before any `src/inet` edit |
 | Next handoff | MAC data-service owner and independent Wi-Fi regression reviewer |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

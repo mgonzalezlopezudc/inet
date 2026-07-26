@@ -1,11 +1,20 @@
 # Walkthrough: HE extended-range single-user
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T234448Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T234448Z`.
+
 This walkthrough compares matched cell-boundary HE single-user (HE-SU) and HE
 extended-range single-user (HE-ER-SU) transmissions. Run-0 radiotap fields
 distinguish the PPDU formats; five-run application vectors measure the bounded
 delivery outcome under the configured error model.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -20,7 +29,7 @@ The extra signaling time trades efficiency for robustness. A format label in
 a sender-side capture proves what was transmitted, not that the receiver
 decoded it or that range improved.
 
-## Scenario description
+## [agent] Scenario description
 
 [HeErSuNetwork.ned](HeErSuNetwork.ned) extends the common single-BSS network
 with one AP and one station; a wired server sends downlink UDP. In the boundary
@@ -38,7 +47,7 @@ server -- AP  ~~~~~~~~~ 340 m ~~~~~~~~~  host[0]
 `ErBss` is a separate management/rate-control example and is not part of the
 cell-boundary outcome comparison.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clauses 27.1.4 and 27.3.4 define HE-SU and HE-ER-SU PPDU
 formats; Table 27-13 gives the longer HE-SIG-A-R duration for HE-ER-SU. These
@@ -49,7 +58,7 @@ INET's `enableExtendedRangeSu` rate-control choice, error model, path loss,
 noise, and thresholds are modeling choices. The experiment does not decode
 HE-SIG-A success separately and does not certify a real-world range gain.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -59,7 +68,7 @@ HE-SIG-A success separately and does not certify a real-world range gain.
 | Repeated HE-SIG-A caused each delivery | `INCONCLUSIVE` | no per-frame signaling decode/outcome correlation | none | configuration-level inference |
 | General range extension | `NOT RUN` | no distance curve | none | one boundary point only |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -72,7 +81,7 @@ enables extended-range SU, clears the fixed data bitrate with `-1bps`, and
 caps MCS at 0. Those more specific assignments win over the general interface
 bitrate.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -80,7 +89,7 @@ bitrate.
 | ER frame duration is longer at equal payload | packet statistics | no signaling overhead | duration calculator | compare GI, NSS, coding, and size |
 | ER boundary goodput is higher | sink byte vectors | overlap/reversal | receiver error model | correlate reception/drop telemetry per seed |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the repository root. This command is illustrative and was **NOT RUN**
 during this rewrite:
@@ -109,7 +118,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --generate --subdir he_er_su --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are the `.sca`/`.vec` pairs in each configuration directory under
 `results/20260725T120411Z/`. The sidecar
@@ -133,7 +142,7 @@ the across-run CI. The optional incorrect-reception vector may be absent when
 zero. This supports a bounded delivery comparison, not a general range claim.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-er -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![er scalar/vector analysis](../analysis/figures/he_er_su/he-er-su-boundary.png)
 
@@ -147,7 +156,7 @@ Figure provenance: [`../analysis/figures/he_er_su/he-er-su-boundary.png.json`](.
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-er -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Session `results/20260725T234448Z` contains run/seed 0 legacy
 PCAPs at AP and host MAC observation points. TShark 4.6.4 decodes them.
@@ -167,7 +176,7 @@ Both boundary rows use 10 dBm transmit power. Counts are capture observations,
 not delivered application packets.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/he_er_su/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/he_er_su/packet_statistics.png.json).
@@ -180,7 +189,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -188,7 +197,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `CellBoundaryHeSu` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeSu/CellBoundaryHeSu-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7007 | Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (4615), Control: Ack (2392) | 53.16% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `ErBss` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_er_su/results/20260725T234448Z/ErBss/ErBss-#0HeErSuNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 240 | Control: Ack (117), Data: QoS Data [HE-ER-SU, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC] (112), Data: QoS Data [HE-ER-SU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC] (5) | 0.80% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -201,7 +210,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | QoS payload uses HE-ER-SU | 4513 of 4513 QoS Data observations decoded as HE-ER-SU |
 | **PASS** | HE-ER-SU uses one spatial stream, a 242-tone RU, and MCS 0-2 | HE-MCS 0/242-tone RU/NSTS 1 |
 
-### Configuration: `CellBoundaryHeErSu`
+### [script] Configuration: `CellBoundaryHeErSu`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **8669**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -210,7 +219,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **8669*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 4156 | 47.94% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 9.15% | 5.13% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -233,7 +242,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **8669*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `CellBoundaryHeSu`
+### [script] Configuration: `CellBoundaryHeSu`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7007**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -242,7 +251,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7007*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 2392 | 34.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 5.55% | 2.95% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -265,7 +274,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7007*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `ErBss`
+### [script] Configuration: `ErBss`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **240**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -277,7 +286,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **240**
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 117 | 48.75% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 18.02% | 0.14% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 1.25% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -87.0 dBm | - | 0.46% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -300,11 +309,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **240**
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 **PASS: HE-ER-SU payload selection.** 4513 of 4513 QoS Data observations decoded as HE-ER-SU. IEEE Std 802.11-2024 Clause 27.3.7 restricts HE ER SU to a single 242-tone or 106-tone RU and MCS 0–2 (242-tone) or MCS 0 (106-tone); DCM is optional. The standard does not guarantee a range gain on every channel, but a configuration claiming HE-ER-SU payload coverage must first select that PPDU format. The matched five-seed 340 m sweep in this walkthrough uses equal MCS 0 data fields and reports application delivery together with incorrect-reception observations, isolating the modeled HE-SIG-A repetition gain.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r 'examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundaryHeErSu/CellBoundaryHeErSu-#0HeErSuNetwork.ap.wlan[0].pcap' \
@@ -323,7 +332,7 @@ tshark -n -r 'examples/ieee80211ax/he_er_su/results/20260725T234448Z/CellBoundar
 The typed analyzer maps code 7 to the authoritative 242-tone HE-ER-SU
 observation after checking radiotap presence and known bits.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -335,7 +344,7 @@ The bounded verdict is `PASS` for PPDU-format selection and higher application
 goodput at this configured boundary, with per-packet causal attribution
 `INCONCLUSIVE`.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - Scalar/vector and packet evidence come from separate sessions.
 - The capture identifies transmitted format but not HE-SIG-A decode success.
@@ -344,13 +353,13 @@ goodput at this configured boundary, with per-packet causal attribution
 - Resolve causality by co-recording selected mode, signaling/header error
   outcome, receiver decision, and AP/host captures in one seed.
 
-## Further experiments
+## [agent] Further experiments
 
 - Sweep distance or noise around the boundary and compare matched delivery
   curves across several seeds.
 - Add a negative control with ER disabled but dynamic rate control retained.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -363,7 +372,7 @@ goodput at this configured boundary, with per-packet causal attribution
 | Architecture and sealing | apply architecture/sealing review before any `src/inet` edit |
 | Next handoff | HE PHY/error-model maintainer |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

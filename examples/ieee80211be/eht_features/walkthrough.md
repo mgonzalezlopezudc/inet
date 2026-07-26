@@ -1,5 +1,14 @@
 # Walkthrough: 802.11be EHT width and modulation features
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `NOT RUN`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T202934Z`.
+
 This example compares a 160 MHz IEEE 802.11ax (HE) link with a configured
 320 MHz IEEE 802.11be Extremely High Throughput (EHT) link. Its learning goal
 is to connect channel width, EHT Modulation and Coding Scheme (MCS) selection,
@@ -7,7 +16,7 @@ and protocol-visible PHY evidence. Its validation goal is stricter: a run
 passes only when the selected configuration completes, authoritative capture
 fields identify the requested PHY, and the receiver outcome is recorded.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -24,7 +33,7 @@ decisive evidence is a successfully decoded EHT PPDU with known bandwidth,
 MCS, number of spatial streams (NSS), and coding fields. Application goodput is
 an outcome, not mechanism evidence.
 
-## Scenario description
+## [agent] Scenario description
 
 The [NED network](Lan80211BeEhtFeatures.ned) contains a wired 10 Gbit/s server,
 one AP, one stationary wireless host, and an IEEE 802.11 scalar radio medium.
@@ -40,7 +49,7 @@ The nodes are one metre apart with no configured mobility or external
 interferer. See [omnetpp.ini](omnetpp.ini) for traffic, radio, aggregation, and
 rate-selection inputs.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11be-2024 Clause 36 defines the EHT PHY. Table 36-3 interprets
 `CH_BANDWIDTH`, Clause 35.14.3 covers MCS/NSS/bandwidth selection, and the
@@ -54,7 +63,7 @@ This example is a packet-level model, not a conformance test. Capability flags
 and requested rate parameters are configuration input; only a decoded
 radiotap EHT observation can establish the transmitted PHY facts.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -71,7 +80,7 @@ frames are **direct observations**; packet counts and rates would be
 **derived measurements**; explanations beyond those observations are
 **inference**.
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -82,7 +91,7 @@ The comparison intentionally changes generation, band, width, and selected
 rate together. It therefore demonstrates a feature bundle, not the isolated
 effect of either 320 MHz or 4096-QAM.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -90,7 +99,7 @@ effect of either 320 MHz or 4096-QAM.
 | EHT data uses known EHT/320 MHz/MCS 13/1 NSS fields | AP and host PCAPng typed EHT profile | Field absent, unknown, or different | Rate selection, EHT transmitter, or radiotap writer | Run shared typed-PHY analysis and inspect the first EHT data frame |
 | Receiver records delivered bytes | `host[0].app[0] packetReceived:sum(packetBytes)` | Empty result or zero bytes | MAC reception, bridge, or application path | Correlate receiver capture with MAC and UDP result records |
 
-## Reproduction
+## [agent] Reproduction
 
 Run the shared five-run pipeline from the INET repository root:
 
@@ -113,7 +122,7 @@ bin/inet -u Cmdenv \
   --result-dir=/tmp/inet-eht-features-baseline
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 The failed campaign produced no completed `.sca` or `.vec` artifact. Its
 intended measurement window was 0–0.5 s with traffic from 0.1 s; no explicit
@@ -131,7 +140,7 @@ Use the 0.1–0.5 s application interval, aggregate within each run, and compare
 matched seeds. One run can prove a deterministic exchange but not statistical
 robustness. No throughput value is reported here.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture points: `ap.wlan[0]` and `host[0].wlan[0]`. The retained files are
 PCAPng with radiotap, microsecond timestamps, one interface per file, and
@@ -151,7 +160,7 @@ capinfos \
 | `BaselineAx` | 8 per capture point | QoS data, acknowledgments, Block Ack Request, Block Ack | Partial failed run; duplicate AP/host observations are not independent transmissions |
 | `EhtFeatures` | 0 | `NOT RUN` | No EHT PHY fact is observable |
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n \
@@ -173,7 +182,7 @@ tshark -n \
 These frames directly establish a partial bidirectional HE exchange. They do
 not establish completed delivery, EHT operation, 320 MHz operation, or MCS 13.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -184,7 +193,7 @@ not establish completed delivery, EHT operation, 320 MHz operation, or MCS 13.
 The only direct protocol finding is that the HE control exchanged data and
 acknowledgments before aborting. All EHT performance claims remain untested.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - The control failure prevents the intended comparison.
 - The treatment changes band, generation, channel width, and MCS together.
@@ -193,7 +202,7 @@ acknowledgments before aborting. All EHT performance claims remain untested.
 - The smallest next step is to reproduce the duration exception with a
   bounded aggregate, then co-record AP/host PCAPng and results for both configs.
 
-## Further experiments
+## [agent] Further experiments
 
 - After the failure is fixed, hold EHT MCS/NSS constant and compare 160 versus
   320 MHz; predict a width-field change in the typed capture profile.
@@ -201,7 +210,7 @@ acknowledgments before aborting. All EHT performance claims remain untested.
   goodput change without a width change.
 - Run at least five matched seeds after the single-run exchange passes.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -214,7 +223,7 @@ acknowledgments before aborting. All EHT performance claims remain untested.
 | Architecture and sealing | Any future `src/inet` change requires the architectural-requirements and sealing workflow |
 | Next handoff | Simulation detective for event 55521, then one implementation owner if the mechanism is proven |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

@@ -23,6 +23,10 @@ REQUIRED_HEADINGS = (
     "cross-layer findings and verdict",
     "limitations and inconclusive claims",
 )
+OWNERSHIP_PREFIX = re.compile(r"^\[(agent|script)\]\s+", re.IGNORECASE)
+SESSION_ID = re.compile(r"^\d{8}T\d{6}Z$")
+SCRIPT_SESSIONS_BEGIN = "<!-- BEGIN SCRIPT RESULTS SESSIONS -->"
+SCRIPT_SESSIONS_END = "<!-- END SCRIPT RESULTS SESSIONS -->"
 
 PLACEHOLDER_PATTERNS = (
     re.compile(r"\bTODO\b", re.IGNORECASE),
@@ -65,7 +69,100 @@ def normalize_heading(line: str) -> str | None:
     if match is None:
         return None
     heading = re.sub(r"[`*_]", "", match.group(1))
+    heading = OWNERSHIP_PREFIX.sub("", heading.strip())
     return re.sub(r"\s+", " ", heading).strip().lower()
+
+
+def validate_heading_ownership(text: str) -> list[str]:
+    errors: list[str] = []
+    generated = False
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        if re.match(r"<!--\s*BEGIN GENERATED:", line, re.IGNORECASE):
+            generated = True
+            continue
+        if re.match(r"<!--\s*END GENERATED:", line, re.IGNORECASE):
+            generated = False
+            continue
+        match = re.match(r"^(#{2,6})\s+(.+?)\s*$", line)
+        if match is None:
+            continue
+        owner = OWNERSHIP_PREFIX.match(match.group(2))
+        if owner is None:
+            errors.append(
+                f"line {line_number}: section heading has no "
+                "[agent] or [script] prefix"
+            )
+            continue
+        expected = "script" if generated else "agent"
+        if owner.group(1).lower() != expected:
+            errors.append(
+                f"line {line_number}: [{owner.group(1).lower()}] heading "
+                f"is {'inside' if generated else 'outside'} a generated block; "
+                f"expected [{expected}]"
+            )
+    return errors
+
+
+def _valid_session_value(value: str, *, allow_not_recorded: bool) -> bool:
+    values = [item.strip() for item in value.split(",")]
+    allowed = {"NOT RUN"}
+    if allow_not_recorded:
+        allowed.add("NOT RECORDED")
+    return bool(values) and all(
+        item in allowed or SESSION_ID.fullmatch(item)
+        for item in values
+    )
+
+
+def validate_session_ledger(text: str) -> list[str]:
+    errors: list[str] = []
+    first_section = re.search(r"^##\s+", text, re.MULTILINE)
+    top = text[:first_section.start()] if first_section else text
+    if (
+        top.count(SCRIPT_SESSIONS_BEGIN) != 1
+        or top.count(SCRIPT_SESSIONS_END) != 1
+    ):
+        errors.append(
+            "top script results-session ledger is missing or malformed"
+        )
+        return errors
+    begin = top.index(SCRIPT_SESSIONS_BEGIN)
+    end = top.index(SCRIPT_SESSIONS_END, begin)
+    block = top[begin:end]
+    for family in ("Scalar/vector", "PCAP"):
+        match = re.search(
+            rf"^- {re.escape(family)}:\s+`([^`]+)`\s*$",
+            block,
+            re.MULTILINE,
+        )
+        if match is None:
+            errors.append(
+                f"script results-session ledger has no {family} entry"
+            )
+        elif not _valid_session_value(
+            match.group(1), allow_not_recorded=False
+        ):
+            errors.append(
+                f"script {family} results-session value is invalid: "
+                f"{match.group(1)}"
+            )
+    agent = re.search(
+        r"^`\[agent\]` results sessions:\s+(.+?)\.\s*$",
+        top,
+        re.MULTILINE,
+    )
+    if agent is None:
+        errors.append("top agent results-session line is missing")
+    else:
+        values = ", ".join(re.findall(r"`([^`]+)`", agent.group(1)))
+        if not values or not _valid_session_value(
+            values, allow_not_recorded=True
+        ):
+            errors.append(
+                "agent results-session line must contain session IDs, "
+                "NOT RUN, or NOT RECORDED"
+            )
+    return errors
 
 
 def section_body(text: str, label: str) -> str | None:
@@ -132,6 +229,9 @@ def main() -> int:
 
     errors: list[str] = []
     warnings: list[str] = []
+
+    errors.extend(validate_heading_ownership(text))
+    errors.extend(validate_session_ledger(text))
 
     for label in REQUIRED_HEADINGS:
         if label not in headings:

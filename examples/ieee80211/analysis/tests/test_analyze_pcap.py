@@ -44,6 +44,7 @@ from analyze_pcap import (
     get_config_pcap_stats,
     is_generated_analysis_artifact,
     replace_generated_section,
+    update_walkthrough,
     load_json_without_duplicates,
     manifest_provenance,
     main,
@@ -178,26 +179,28 @@ class GeneratedSectionTest(unittest.TestCase):
 
     def test_generated_bundle_is_inserted_inside_pcap_section(self):
         original = (
-            "# Walkthrough\n\n## **PCAP statistics**\n\nAuthored summary.\n\n"
-            "## Frame exchange analysis\n\nTimeline.\n"
+            "# Walkthrough\n\n"
+            "## [agent] **PCAP statistics**\n\nAuthored summary.\n\n"
+            "## [agent] Frame exchange analysis\n\nTimeline.\n"
         )
         updated = replace_generated_section(original, "generated")
         self.assertLess(
             updated.index("generated"),
-            updated.index("## Frame exchange analysis"),
+            updated.index("## [agent] Frame exchange analysis"),
         )
         self.assertIn("Authored summary.", updated)
 
     def test_tail_level_bundle_is_migrated_inside_pcap_section(self):
         original = (
-            "# Walkthrough\n\n## PCAP statistics\n\nAuthored summary.\n\n"
-            "## Frame exchange analysis\n\nTimeline.\n\n"
+            "# Walkthrough\n\n"
+            "## [agent] PCAP statistics\n\nAuthored summary.\n\n"
+            "## [agent] Frame exchange analysis\n\nTimeline.\n\n"
             f"{GENERATED_BEGIN}\nold\n{GENERATED_END}\n"
         )
         updated = replace_generated_section(original, "new")
         self.assertLess(
             updated.index(GENERATED_BEGIN),
-            updated.index("## Frame exchange analysis"),
+            updated.index("## [agent] Frame exchange analysis"),
         )
         self.assertNotIn("\nold\n", updated)
         self.assertIn("\nnew\n", updated)
@@ -213,6 +216,29 @@ class GeneratedSectionTest(unittest.TestCase):
     def test_rejects_unbalanced_markers(self):
         with self.assertRaises(ValueError):
             replace_generated_section(f"prefix\n{GENERATED_BEGIN}\n", "new")
+
+    def test_update_refreshes_pcap_session_and_preserves_agent_session(self):
+        original = (
+            "# Walkthrough\n\n"
+            "<!-- BEGIN SCRIPT RESULTS SESSIONS -->\n"
+            "`[script]` results sessions:\n\n"
+            "- Scalar/vector: `20260725T120411Z`\n"
+            "- PCAP: `20260725T230151Z`\n"
+            "<!-- END SCRIPT RESULTS SESSIONS -->\n\n"
+            "`[agent]` results sessions: `20260725T120411Z`.\n\n"
+            "## [agent] PCAP statistics\n"
+        )
+        updated = update_walkthrough(
+            original,
+            "### [script] Generated table",
+            "20260726T160000Z",
+        )
+        self.assertIn("- Scalar/vector: `20260725T120411Z`", updated)
+        self.assertIn("- PCAP: `20260726T160000Z`", updated)
+        self.assertIn(
+            "`[agent]` results sessions: `20260725T120411Z`.",
+            updated,
+        )
 
 
 class PacketPlotStorageTest(unittest.TestCase):

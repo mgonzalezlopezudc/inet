@@ -1,12 +1,21 @@
 # HE Buffer Status Report scheduling walkthrough
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T230736Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230736Z`.
+
 This walkthrough teaches how an access point (AP) obtains high-efficiency
 (HE) station queue information and uses it for uplink orthogonal
 frequency-division multiple access (OFDMA) scheduling. It validates only the
 retained BSR-poll exchange, AP backlog vectors, and the stated five-run
 comparison; the missing report-to-decision join remains explicit.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -25,7 +34,7 @@ is: a retained run passes the protocol-visible BSRP/HE-TB exchange check and
 the campaign passes the backlog-state comparison, but the causal
 report-to-scheduling invariant is `INCONCLUSIVE`.
 
-## Scenario description
+## [agent] Scenario description
 
 [HeBsrNetwork.ned](HeBsrNetwork.ned) extends the common single-BSS network
 with one wired UDP server, one stationary AP, and three stationary STAs.
@@ -44,7 +53,7 @@ host[0..2] -- 802.11ax uplink --> AP -- Ethernet --> server
 report maximum age, so it is a stress case rather than a clean
 single-parameter control for burstiness.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Table 9-47 assigns Trigger Type 4 to BSRP, and
 Clause 26.5.5 defines solicited BSR operation and queue-size reporting
@@ -56,7 +65,7 @@ The capture does not expose the scheduler's consumed-backlog decision key,
 and the model vectors do not retain one, so exact standards-to-decision
 causality is not claimed.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -65,7 +74,7 @@ causality is not claimed.
 | Reported backlog is joined to scheduler-consumed backlog | `INCONCLUSIVE` | experiment contract and the two AP vectors | retained campaigns | No stable scheduling-decision identifier |
 | Application delivery consequence | `NOT RUN` | no matched analysis retained | — | No stated acceptance criterion |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -80,7 +89,7 @@ workload and freshness policy, so it is not a causal estimate of either delta
 alone. Run numbers are retained; the seed values must be read from each result
 file's run attributes rather than inferred from the run number.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -88,7 +97,7 @@ file's run attributes rather than inferred from the run number.
 | AP records reported backlog | AP `heUlBufferStatusReportedBytes:vector` | empty result query | recorder path / BSR parsing | query result names and AP module paths |
 | A consumed decision can be tied to its report | reported and scheduled vectors joined by decision ID | ambiguous many-to-many timestamp join | scheduler observability | add a stable decision identifier before regression |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root:
 
@@ -108,7 +117,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
   --generate --subdir he_bsr --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are
 `results/20260725T120411Z/{BurstyTraffic,StaleBsr}/*.{sca,vec}`;
@@ -140,7 +149,7 @@ observations, not delivered-payload counts or exact queue occupancy between
 events.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bsr -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![bsr scalar/vector analysis](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png)
 
@@ -154,7 +163,7 @@ Figure provenance: [`../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.js
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-bsr -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: `HeBsrNetwork.ap.wlan[0]`
 
@@ -181,7 +190,7 @@ tshark -n -r \
 | `StaleBsr` | 3107 | 69 Trigger observations; 206 HE-TB QoS Null observations | not application delivery or freshness proof |
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/he_bsr/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/he_bsr/packet_statistics.png.json).
@@ -194,7 +203,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -202,7 +211,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `ImplicitBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/ImplicitBsr/ImplicitBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2808 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1511), Control: Ack (970), Control: Block Ack Request (BAR) (113) | 60.09% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `StaleBsr` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_bsr/results/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 3107 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1529), Control: Ack (977), Control: Block Ack (BA) (172) | 61.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -211,7 +220,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | StaleBsr produced protocol-visible wireless observations | 3107 AP/global transmission observations |
 | **INCONCLUSIVE** | Reported backlog and scheduler-consumed backlog | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `FullBsrAccounting`
+### [script] Configuration: `FullBsrAccounting`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3049**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -229,7 +238,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3049*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.20% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -252,7 +261,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3049*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `ImplicitBsr`
+### [script] Configuration: `ImplicitBsr`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2808**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -267,7 +276,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2808*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.21% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -290,7 +299,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2808*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `StaleBsr`
+### [script] Configuration: `StaleBsr`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3107**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -308,7 +317,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3107*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.19% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -331,11 +340,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3107*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 The scheduled conditions contain the expected Trigger/response activity, but a BSR is an A-Control scheduling input rather than a frame subtype. IEEE Std 802.11-2024 Clause 26.5.5 requires the report contents and capability conditions; use the AP-reported and scheduled-backlog telemetry documented above. QoS Data counts are not evidence that a BSR was fresh or that the reported bytes were delivered.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 | Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -348,7 +357,7 @@ The equal response timestamps directly demonstrate a trigger-based concurrent
 response exchange. They do not decode queue bytes or prove how a later
 scheduler decision consumed them; that link remains `INCONCLUSIVE`.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -364,7 +373,7 @@ Evidence basis: the timeline is a **direct observation**, the confidence
 intervals are **derived measurements**, and the proposed scheduler connection
 is an **inference** that remains inconclusive.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - The retained vectors cannot join one report to one scheduling decision.
 - The bursty/stale comparison has two causal deltas and is not a clean control.
@@ -373,7 +382,7 @@ is an **inference** that remains inconclusive.
 - One co-recorded run with report value, decision ID, scheduled bytes, Trigger
   allocation, and delivery would resolve the central causal gap.
 
-## Further experiments
+## [agent] Further experiments
 
 - Compare `FullBsrAccounting` and `StaleBsr` at matched saturated load and five
   paired seeds; predict more expired-report polls in the latter.
@@ -382,7 +391,7 @@ is an **inference** that remains inconclusive.
 - Sweep `reportMaxAge` around one exchange duration and record timeout state
   plus delivery to expose the boundary without changing workload.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -398,7 +407,7 @@ is an **inference** that remains inconclusive.
 This is a proposed development path, not evidence that a named source path
 executed and not authorization to modify production code.
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

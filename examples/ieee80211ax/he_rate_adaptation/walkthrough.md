@@ -1,11 +1,20 @@
 # HE rate-adaptation walkthrough
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T230705Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230705Z`.
+
 This walkthrough teaches how INET's HE Minstrel controller selects modulation
 and coding scheme (MCS) and spatial streams per peer. Retained five-run
 telemetry directly demonstrates changing selections and outcomes for a mobile
 edge STA; it does not retain a matched five-run fixed-rate control.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -22,7 +31,7 @@ updates a success estimate. The validation outcome is a `PASS` that the
 retained mobile run selected MCS 0--9 with valid outcome telemetry, and
 `INCONCLUSIVE` for any comparative performance advantage.
 
-## Scenario description
+## [agent] Scenario description
 
 [HeRateAdaptationNetwork.ned](HeRateAdaptationNetwork.ned) uses one wired UDP
 server, one stationary AP, and four STAs. [omnetpp.ini](omnetpp.ini) sends
@@ -36,7 +45,7 @@ server --> AP == HE downlink ==> host[0..2] stationary
                               ==> host[3] moving at 40 m/s
 ```
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.15.3 covers HE MCS, NSS, bandwidth, and DCM
 selection (`80211ax-2024:chunk:09938`). The standard constrains valid PHY
@@ -46,7 +55,7 @@ for internal choice; known radiotap HE bits are authoritative for captured
 MCS; application vectors are outcomes. None alone proves that Minstrel
 outperforms a fixed rate.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -55,7 +64,7 @@ outperforms a fixed rate.
 | selected-attempt success is high | `PASS` | `heRateTxSuccess:vector` | mobile 0--4 | 0.998445 ± 0.001980 |
 | Minstrel improves delivery | `INCONCLUSIVE` | only mobile five-run campaign | — | no matched five-run control |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -68,7 +77,7 @@ The packet session offers run-0 controls, while the five-run result campaign
 contains only `HeMinstrelMobile`; these sessions cannot support a five-run
 algorithm comparison. Seeds must be read from result attributes.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -77,7 +86,7 @@ algorithm comparison. Seeds must be read from result attributes.
 | captured MCS is known | AP PCAP known bit + value | value present without known bit | recorder / typed HE decoder | inspect `radiotap.he.data_1.data_mcs_known` |
 | retry outcome is consistent | controller plus MAC retry/drop vectors | contradictory counts/timestamps | rate control / HCF retry | correlate one attempt in co-recorded run |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the repository root:
 
@@ -97,7 +106,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
   --generate --subdir he_rate_adaptation --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs:
 `results/20260725T120411Z/HeMinstrelMobile/*.{sca,vec}`.
@@ -127,7 +136,7 @@ The analysis window begins at 0.5 s, after normal traffic starts at 0.3 s, so
 the representative controller timeline excludes its initial settling phase.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-rate -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![rate scalar/vector analysis](../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png)
 
@@ -143,7 +152,7 @@ Figure provenance: [`../analysis/figures/he_rate_adaptation/rate-adaptation-time
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-rate -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: `HeRateAdaptationNetwork.ap.wlan[0]`
 
@@ -169,7 +178,7 @@ controller check remains correctly `INCONCLUSIVE`.
 <!-- REWRITE-PREFIX-END -->
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/he_rate_adaptation/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/he_rate_adaptation/packet_statistics.png.json).
@@ -182,7 +191,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -190,7 +199,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `HeMinstrel` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/HeMinstrel/HeMinstrel-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 6364 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1339), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1207), Control: Trigger (811) | 146.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `HeMinstrelMobile` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_rate_adaptation/results/20260725T230705Z/HeMinstrelMobile/HeMinstrelMobile-#0HeRateAdaptationNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 7018 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 26-tone RU, GI 1.6 us, LDPC] (1610), Data: QoS Data [HE-MU, HE-MCS 9, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1141), Control: Trigger (916) | 157.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -199,7 +208,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | HeMinstrelMobile produced protocol-visible wireless observations | 7018 AP/global transmission observations |
 | **INCONCLUSIVE** | Selected MCS/NSS, EWMA outcome and retries | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `FixedMcs`
+### [script] Configuration: `FixedMcs`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1624**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -213,7 +222,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1624*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.55% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -75.0 dBm | 13.0 dBm | 0.04% | 0.03% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -236,7 +245,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1624*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `HeMinstrel`
+### [script] Configuration: `HeMinstrel`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6364**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -270,7 +279,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6364*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.14% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -75.0 dBm | 13.0 dBm | 0.02% | 0.03% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -293,7 +302,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6364*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `HeMinstrelMobile`
+### [script] Configuration: `HeMinstrelMobile`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7018**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -328,7 +337,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7018*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.11% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -76.2 dBm | 13.0 dBm | 0.02% | 0.03% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -351,11 +360,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7018*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 IEEE 802.11 constrains negotiated HE modes but does not mandate a Minstrel algorithm. These packet counts therefore cannot establish adaptation, and a control/data ratio is not reliable evidence of retransmission or probing. Use the aligned selected-MCS/NSS, EWMA probability, transmission-outcome, and retry vectors documented above. INET's HE Minstrel remains a simplified implementation without scheduler-context or localized-fading adaptation.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 | Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -369,7 +378,7 @@ These frames directly establish known captured MCS values and exchange order.
 They do not reveal Minstrel's probability or candidate-selection reason; those
 are internal vectors. TShark frame numbers are not OMNeT++ event numbers.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -386,7 +395,7 @@ observations**; success fractions and goodput intervals are **derived
 measurements**; a controller decision causing a separately captured frame
 would be an **inference**.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - No five-run `FixedMcs` or static `HeMinstrel` result set is retained.
 - The mobile campaign changes path geometry only for host 3, but the reported
@@ -395,7 +404,7 @@ would be an **inference**.
 - A matched three-configuration campaign with paired seeds and per-peer
   delivery would resolve the primary comparison gap.
 
-## Further experiments
+## [agent] Further experiments
 
 - Run `FixedMcs`, `HeMinstrel`, and `HeMinstrelMobile` with five paired seeds;
   predict selection variability only in adaptive rows.
@@ -403,7 +412,7 @@ would be an **inference**.
 - Run `HighCollisionRate` and predict nonzero failure/retry telemetry before
   interpreting throughput.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -416,7 +425,7 @@ would be an **inference**.
 | Architecture and sealing | apply architectural requirements before any production source change |
 | Next handoff | HE rate-control owner and independent regression reviewer |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

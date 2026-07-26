@@ -1,11 +1,20 @@
 # Walkthrough: 802.11ax Downlink OFDMA
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260726T150000Z`
+- PCAP: `20260726T150000Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260726T150000Z`.
+
 This walkthrough uses one co-recorded publication session to compare the
 single-user EDCA control with the two equal-resource-unit (RU) downlink OFDMA
 schedulers. Runs 0–4 provide application and scheduler results; run 0 also
 provides packet captures at the access point (AP) and all three stations.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -27,7 +36,7 @@ invariant is a run-0 HE-MU transmission with multiple same-time recipients,
 followed by the scheduled acknowledgment exchange. The SU control is the
 counterfactual.
 
-## Scenario description
+## [agent] Scenario description
 
 The [network](Lan80211AxDlOfdma.ned) extends the common single-BSS HE network
 with three fixed stations. The [configuration](omnetpp.ini) places the AP at
@@ -47,7 +56,7 @@ The geometry is stationary, close range, and has no external interferer. It
 isolates downlink scheduling and queueing; it is not a coverage, mobility, or
 coexistence experiment.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.5.1.1 permits an HE AP to transmit
 simultaneously to one or more non-AP stations using downlink OFDMA, downlink
@@ -72,7 +81,7 @@ observed HE format and RU facts, but not the scheduler objective. The SU
 control also changes queue organization, so outcome differences cannot be
 attributed to frequency partitioning alone.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -91,7 +100,7 @@ Reported uncertainty is a two-sided 95% Student-t confidence interval over runs
 `heStaId`, `heScheduledPsduBytes`, and `heUserPpduDuration`, but the current
 evaluator deliberately leaves per-user attribution `INCONCLUSIVE`.
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 The configuration facts in this table come from [the INI file](omnetpp.ini).
 They describe inputs, not measured outcomes.
@@ -108,7 +117,7 @@ other. `SuEdcaBaseline` changes the coordination function and uses one shared
 matches offered load, channel, aggregate configured buffer capacity, and seed
 policy, but does not isolate OFDMA from queue organization.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -117,7 +126,7 @@ policy, but does not isolate OFDMA from queue organization.
 | HE-MU data receives a response | QoS Data → MU-BAR/Block Ack timeline | missing response/retry | acknowledgment policy or reception | receiver PCAP and Block Ack logs |
 | Outcome comparison uses matched inputs | session manifest, hashes, result metadata, window | mismatched seed/window/load | campaign/analysis | inspect session JSON and figure sidecars |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root. The shared facade expands this into one
 Cmdenv invocation per configuration and run, using release-mode INET and
@@ -147,7 +156,7 @@ Observed status: exit 0. The asymmetric-only per-flow check is explicitly
 `NOT RUN` for this filtered core matrix; it is not converted into a feature
 `PASS`.
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 The plot and table below are bound to the fresh session. Goodput is the sum of
 received application bytes divided by the 0.58 s window. Delay is the pooled
@@ -185,7 +194,7 @@ summarization. This directly records how the model scheduled users, but the
 present ledger does not join each STA ID to application delivery.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-dl -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![dl scalar/vector analysis](results/20260726T150000Z/dl-scheduler-dashboard.png)
 
@@ -206,7 +215,7 @@ Figure provenance: [`results/20260726T150000Z/dl-scheduler-dashboard.png.json`](
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-dl -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: `Lan80211AxDlOfdma.ap.wlan[0]`, with per-host captures retained.
 Capture session: `results/20260726T150000Z`, run 0.
@@ -233,7 +242,7 @@ configuration was selected. It therefore makes no claim about per-flow
 attribution for this core matrix.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](results/20260726T150000Z/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](results/20260726T150000Z/packet_statistics.png.json).
@@ -246,7 +255,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -254,7 +263,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `EqualSizedRUs_fHoL` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/EqualSizedRUs_fHoL/EqualSizedRUs_fHoL-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 4668 | Data: QoS Data [HE-MU, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (852), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (852), Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (832) | 94.69% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `SuEdcaBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/dl_ofdma/results/20260726T150000Z/SuEdcaBaseline/SuEdcaBaseline-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 1790 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1487), Control: Block Ack Request (BAR) (130), Control: Block Ack (BA) (130) | 20.06% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -264,7 +273,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | HE-MU payload observations decode as QoS Data with A-MPDU status | 3062 of 3062 HE-MU observations |
 | **NOT RUN** | HE-MU recipient addresses support per-flow PCAP grouping | No asymmetric backlog/HoL configuration was selected |
 
-### Configuration: `EqualSizedRUs_fBW`
+### [script] Configuration: `EqualSizedRUs_fBW`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4414**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -282,7 +291,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4414*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.14% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.07% | 0.04% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -305,7 +314,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4414*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `EqualSizedRUs_fHoL`
+### [script] Configuration: `EqualSizedRUs_fHoL`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4668**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -324,7 +333,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4668*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.13% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.04% | 0.04% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -347,7 +356,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4668*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `SuEdcaBaseline`
+### [script] Configuration: `SuEdcaBaseline`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1790**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -362,7 +371,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1790*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.34% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -65.3 dBm | 20.0 dBm | 0.21% | 0.04% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -385,13 +394,13 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1790*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 The scheduled downlink captures contain the expected **Trigger** frames and HE-TB **Block Ack** responses for the DL-MU acknowledgment exchange described by IEEE Std 802.11-2024 Clauses 26.5.1 and 26.5.2.3.3. The radiotap suffixes also distinguish HE-MU transmissions from HE-TB responses. **PASS: HE-MU payload decoding.** 3062 of 3062 HE-MU observations decode as **QoS Data** with radiotap A-MPDU status; none are misclassified as Association Request or Control Subtype 0.
 
 The packet tables verify the protocol-visible exchange structure and the corrected aggregate serialization boundary, but scheduler telemetry remains authoritative for per-user RU allocation. The corrected MPDUs expose unicast receiver addresses, so the asymmetric tables can group observations by STA. These address-scoped counts include protocol observations rather than delivered application packets; measure scheduler priorities and offered-load satisfaction from aligned per-user scheduler and application results. IEEE 802.11 does not prescribe INET's backlog- or head-of-line scheduling policies.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r \
@@ -419,7 +428,7 @@ run-0 trajectory, but the current evaluator does not correlate this exact PPDU
 with its same-timestamp STA-ID/bytes/duration records; that final attribution
 remains an inference.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -433,7 +442,7 @@ representative exchange, model scheduling activity, and bounded application
 outcomes. It does not prove a universal scheduler ranking or isolate frequency
 partitioning from the queue-organization confounder.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - The automated ledger has no executable STA-ID-to-same-PPDU correlation or
   per-user delivery/delay acceptance criterion.
@@ -444,7 +453,7 @@ partitioning from the queue-organization confounder.
 - Per-flow HE-MU grouping for asymmetric Backlog/HoL workloads was not run in
   this core comparison.
 
-## Further experiments
+## [agent] Further experiments
 
 - Match per-destination queues in an SU control.
 - Add an executable same-timestamp join between PCAP PPDU identity and the
@@ -452,14 +461,14 @@ partitioning from the queue-organization confounder.
 - Sweep offered load until `fBW` changes its selected-user count, then check
   whether the RU distribution and delay change together.
 
-## Implementation plan
+## [agent] Implementation plan
 
 No production implementation work is proposed. The shared reporter now marks
 its asymmetric-only per-flow check `NOT RUN` when that matrix is not selected.
 The remaining `INCONCLUSIVE` ledger items require analysis acceptance criteria,
 not a demonstrated `src/inet` behavior change.
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

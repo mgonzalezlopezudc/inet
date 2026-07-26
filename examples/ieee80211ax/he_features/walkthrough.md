@@ -1,12 +1,21 @@
 # HE preamble puncturing walkthrough
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T230436Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230436Z`.
+
 This walkthrough teaches how an 802.11ax access point (AP) disables a
 20 MHz part of a wider channel and keeps scheduled resource units (RUs) out
 of that region. The retained evidence directly shows INET's mask and
 allocation telemetry and five-run delivery outcomes; the packet capture
 shows HE exchanges but does not export the puncturing mask.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -23,7 +32,7 @@ configured mask → recorded mask → RU placement → delivery. The validation
 outcome is a scoped `PASS` for recorded runtime mask changes and retained
 delivery, but only `INCONCLUSIVE` packet-level mask validation.
 
-## Scenario description
+## [agent] Scenario description
 
 [Lan80211AxHeFeatures.ned](Lan80211AxHeFeatures.ned) extends the common
 single-BSS topology with one wired UDP server, one AP, four stationary STAs,
@@ -38,7 +47,7 @@ server -- Ethernet --> AP == 80 MHz HE MU ==> host[0..3]
                          X second 20 MHz <== legacy interferer
 ```
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 describes HE PHY preamble puncturing in Clause 27 and
 enumerates 80/160 MHz punctured `CH_BANDWIDTH` values in Table 27-1
@@ -49,7 +58,7 @@ Radiotap HE fields authoritatively expose only known MCS/BW/RU facts; the
 retained analyzer explicitly reports that subtype counts cannot establish
 mask transitions or RU non-overlap.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -58,7 +67,7 @@ mask transitions or RU non-overlap.
 | capture directly decodes puncturing mask | `INCONCLUSIVE` | AP PCAP and generated evidence check | `PreamblePuncturing` run 0 | decisive mask absent from table |
 | puncturing improves goodput under interference | `INCONCLUSIVE` | five-run goodput CIs | four configs, 0--4 | interference CIs overlap |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -73,7 +82,7 @@ does not inherit the 0.5 ms interference workload override and its 16 Mbps
 goodput is therefore confounded; it is not a capacity control for the other
 three rows. Seeds are retained as result attributes, not inferred here.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -81,7 +90,7 @@ three rows. Seeds are retained as result attributes, not inferred here.
 | no RU overlaps masked 20 MHz region | aligned tone offset/size and mask vectors | allocation crosses disabled region | HE DL scheduler / RU allocator | export same-timestamp tuples |
 | HE frames remain protocol-visible | AP PCAP known HE fields | empty/undecoded capture | recorder / radiotap encoding | inspect `radiotap.he.data_*_known` |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the repository root:
 
@@ -101,7 +110,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
   --generate --subdir he_features --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs:
 `results/20260725T120411Z/{configuration}/*.{sca,vec}`.
@@ -130,7 +139,7 @@ state to establish that transition, so mask timing and RU placement remain
 model-vector evidence.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-puncturing -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![puncturing scalar/vector analysis](../analysis/figures/he_features/puncturing-frequency-allocation.png)
 
@@ -147,7 +156,7 @@ Figure provenance: [`../analysis/figures/he_features/puncturing-frequency-alloca
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-puncturing -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: `Lan80211AxHeFeatures.ap.wlan[0]`
 
@@ -174,7 +183,7 @@ preserved verbatim; it is subordinate to the mechanism vectors.
 <!-- REWRITE-PREFIX-END -->
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/he_features/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/he_features/packet_statistics.png.json).
@@ -187,14 +196,14 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
 | `BccBaseline` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/20260725T230436Z/BccBaseline/BccBaseline-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 8, 52-tone RU, GI 3.2 us, BCC, A-MPDU] (700), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] (700), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, BCC] (354) | 85.57% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `PreamblePuncturing` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_features/results/20260725T230436Z/PreamblePuncturing/PreamblePuncturing-#0Lan80211AxHeFeatures.ap.wlan[0].pcap` | `none (all decoded frames)` | 2964 | Data: QoS Data [HE-MU, HE-MCS 6, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (1050), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (1050), Data: QoS Data [HE-SU, HE-MCS 1, 80 MHz, GI 3.2 us, LDPC] (354) | 54.41% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -202,7 +211,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | PreamblePuncturing produced protocol-visible wireless observations | 2964 AP/global transmission observations |
 | **INCONCLUSIVE** | Puncturing mask transitions and RU allocations do not overlap punctured subchannels | Subtype counts cannot establish the puncturing mask; result vectors remain authoritative |
 
-### Configuration: `BccBaseline`
+### [script] Configuration: `BccBaseline`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -221,7 +230,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.34% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -67.0 dBm | 20.0 dBm | 0.08% | 0.07% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -244,7 +253,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `PreamblePuncturing`
+### [script] Configuration: `PreamblePuncturing`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -260,7 +269,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 10 | 0.34% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -67.0 dBm | 20.0 dBm | 0.13% | 0.07% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -283,11 +292,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2964*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 `BccBaseline` and `PreamblePuncturing` have identical frame counts in this run. That is not a standards violation and does not mean the PHY configuration was identical: preamble puncturing changes the usable subchannels/RU placement, while a fully served offered load can leave packet totals unchanged. Validate the mask and puncture-aware RU allocation with the vectors documented above; packet totals alone cannot prove them.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 | Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -301,7 +310,7 @@ capture authoritatively supplies known HE fields for frame 1, but no exported
 mask field ties it to a disabled 20 MHz region. The model vectors remain the
 decisive allocation evidence.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -317,7 +326,7 @@ Evidence basis: mask and known packet fields are **direct observations**,
 goodput and its intervals are **derived measurements**, and any uncorrelated
 mask-to-frame link is an **inference**.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - The retained radiotap export does not expose the puncturing mask.
 - `CleanChannelBaseline` has a different offered load and is confounded.
@@ -325,7 +334,7 @@ mask-to-frame link is an **inference**.
 - A minimal resolving run would co-record mask/tone vectors, scheduler
   decision ID, and AP PCAP for one static and one dynamic treatment.
 
-## Further experiments
+## [agent] Further experiments
 
 - Shift the dynamic interval while holding jammer timing fixed; predict mask
   transitions move but jammer frames do not.
@@ -333,7 +342,7 @@ mask-to-frame link is an **inference**.
 - Add a matched-load clean 80 MHz control and five paired seeds before making
   a capacity comparison.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -346,7 +355,7 @@ mask-to-frame link is an **inference**.
 | Architecture and sealing | required before any `src/inet` change; no production edit is authorized here |
 | Next handoff | HE scheduler/analysis owner and independent Wi-Fi regression reviewer |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

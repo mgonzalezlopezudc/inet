@@ -1,5 +1,14 @@
 # Walkthrough: HE operation on frequency-selective channels
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `20260725T230224Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230224Z`.
+
 This example uses INET's dimensional radio model to retain power spectral
 density across frequency and evaluate HE resource units (RUs) within their
 assigned bandwidth. Retained evidence covers only run 0 of the flat 80 MHz
@@ -7,7 +16,7 @@ OFDMA reference and static TGax Model B OFDMA case; the wider catalogue of
 notch, interferer, puncturing, SU-control, and sweep configurations is
 documented as `NOT RUN`.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -23,7 +32,7 @@ frequency, two RUs in the same wide channel can experience different
 signal-to-interference-plus-noise ratio (SINR). A dimensional model can retain
 that frequency dependence; a scalar wideband power cannot.
 
-## Scenario description
+## [agent] Scenario description
 
 [FrequencySelectiveChannelNetwork.ned](FrequencySelectiveChannelNetwork.ned)
 extends the common single-BSS topology with four stationary, equidistant
@@ -46,7 +55,7 @@ Equal 40 m AP distances prevent geometry from being the intended source of
 per-station differences. Energy detection is deliberately `-40 dBm` so the
 controlled cases emphasize receiver error decisions rather than CCA deferral.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 27.3.2.5 defines resource indication and user
 identification in HE MU PPDUs; Clause 27.3.2.6 describes HE-TB resource
@@ -60,7 +69,7 @@ RU. Synthetic notch gains, TGax realization, NIST/RBIR error models, scripted
 puncturing, and `-40 dBm` energy detection are modeling choices. A configured
 profile is input evidence until runtime telemetry demonstrates it.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -70,7 +79,7 @@ profile is input evidence until runtime telemetry demonstrates it.
 | Frequency-selective impairment changes per-RU reception | `INCONCLUSIVE` | no retained impaired/control pair | none | decisive SNIR/error comparison missing |
 | Notch, real interferer, puncturing, sweep, SU, SIMO/RBIR claims | `NOT RUN` | no retained result set | none | configuration input only |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -86,7 +95,7 @@ overrides width/channel. `TgaxModelBOFDMA` extends `Ofdma` and
 `TgaxIndoorModelB80MHz`; the latter's channel/error-model assignments are the
 effective delta. This matrix does not convert unexecuted rows into evidence.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -95,7 +104,7 @@ effective delta. This matrix does not convert unexecuted rows into evidence.
 | Local impairment affects overlapping RU only | per-RU SNIR/error vectors | all/no RUs affected | dimensional medium/receiver | co-record power, SNIR, RU offset, outcome |
 | Application comparison is matched | sink scalars and run attrs | unequal load/seed/window | traffic/config | query run metadata first |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the repository root. This minimal command is illustrative and was
 **NOT RUN** during this rewrite:
@@ -117,7 +126,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
   --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs:
 `results/20260725T120411Z/{FlatChannelOFDMA,TgaxModelBOFDMA}/*.{sca,vec}`.
@@ -147,7 +156,7 @@ No plot: the retained result pair contains only the two equal-delivery flat
 channel controls; the frequency-selective stress cases needed for a meaningful
 comparison were not run.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Session `results/20260725T230224Z` contains run/seed 0 legacy
 PCAPs at all WLAN MAC observation points. Each retained AP capture has 9401
@@ -170,7 +179,7 @@ Rows count capture observations, including multiple HE-TB user observations;
 they are not application delivery or scheduler-decision counts.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/frequency_selective_channel/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/frequency_selective_channel/packet_statistics.png.json).
@@ -183,14 +192,14 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
 | `FlatChannelOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `TgaxModelBOFDMA` | AP interface(s); capture observations<br>`examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/TgaxModelBOFDMA/TgaxModelBOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 22227 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (14385), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (6240), Control: Trigger (1561) | 168.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -198,7 +207,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | TgaxModelBOFDMA produced protocol-visible wireless observations | 22227 AP/global transmission observations |
 | **INCONCLUSIVE** | Per-RU SNIR/reception outcome and sink delivery | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `FlatChannelOFDMA`
+### [script] Configuration: `FlatChannelOFDMA`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **22227**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -214,7 +223,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **22227
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.04% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -59.0 dBm | 20.0 dBm | 0.03% | 0.05% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -237,7 +246,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **22227
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `TgaxModelBOFDMA`
+### [script] Configuration: `TgaxModelBOFDMA`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **22227**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -253,7 +262,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **22227
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.04% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -72.8 dBm | 20.0 dBm | 0.03% | 0.05% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -276,11 +285,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **22227
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 The different frame mixtures show that the two configured access paths executed different exchanges, but aggregate subtype counts cannot validate a frequency-selective channel or per-RU isolation. IEEE HE DL-MU behavior must be established with RU allocation and per-RU reception/SNIR outcomes together with sink delivery; the channel model is an implementation choice rather than an IEEE-mandated propagation model.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r 'examples/ieee80211ax/frequency_selective_channel/results/20260725T230224Z/FlatChannelOFDMA/FlatChannelOFDMA-#0FrequencySelectiveChannelNetwork.ap.wlan[0].pcap' \
@@ -302,7 +311,7 @@ The typed analyzer maps the known RU code to 242 tones. Empty transmitter
 addresses on control rows are a capture/dissector limitation, and equal
 timestamps can represent per-user observations of one multi-user exchange.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -315,7 +324,7 @@ but `INCONCLUSIVE` for the example's central frequency-selective impairment
 comparison. The retained pair happens to have equal delivery; it is not a
 failed standard invariant.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - Only one seed and two OFDMA configurations are retained.
 - The decisive impaired/control and matched SU pairs were not run.
@@ -329,7 +338,7 @@ The smallest resolving experiment is one matched
 RU offset, filtered signal/noise, minimum SNIR, reception outcome, sink count,
 and AP/receiver PCAP; then repeat across seeds only after the mechanism appears.
 
-## Further experiments
+## [agent] Further experiments
 
 - Move the 20 MHz impairment from lower to upper half and predict which RU
   offsets show reduced SNIR.
@@ -338,7 +347,7 @@ and AP/receiver PCAP; then repeat across seeds only after the mechanism appears.
 - Run clean/impaired punctured controls and verify the runtime mask and RU
   placement before comparing delivery.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -351,7 +360,7 @@ and AP/receiver PCAP; then repeat across seeds only after the mechanism appears.
 | Architecture and sealing | apply architecture/sealing review before any `src/inet` edit |
 | Next handoff | dimensional PHY/results specialist after a co-recorded reproduction |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

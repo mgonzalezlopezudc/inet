@@ -1,9 +1,18 @@
 # Walkthrough: <IEEE 802.11 feature>
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `NOT RUN`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `NOT RECORDED`.
+
 <One paragraph naming the feature, the comparison, and the evidence-backed
 scope of this walkthrough.>
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -15,18 +24,18 @@ After completing this walkthrough, the reader can:
 <Explain the protocol mechanism in plain language. Name the participating
 roles, expected exchange, decisive fields, and relevant state.>
 
-## Scenario description
+## [agent] Scenario description
 
 <Describe topology, node roles, traffic, timing, mobility, channel,
 interference, and why the scenario isolates or stresses the feature. Link the
 NED and INI files. Add a compact diagram if useful.>
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 <Name the IEEE revision and relevant clauses/tables/fields. Separate normative
 behavior, INET's abstraction, configured behavior, and observed behavior.>
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -34,7 +43,7 @@ behavior, INET's abstraction, configured behavior, and observed behavior.>
 | <representative exchange occurred> | `NOT RUN` | <PCAP and fields> | <runs> | <scope> |
 | <outcome changed as expected> | `NOT RUN` | <scalar/vector metric> | <runs> | <scope> |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -43,13 +52,13 @@ behavior, INET's abstraction, configured behavior, and observed behavior.>
 
 <Explain inherited settings, effective values, and material confounders.>
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
 | <specific check> | <artifact/result/field> | <observable mismatch> | <module area> | <focused command or skill> |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root:
 
@@ -63,7 +72,7 @@ bin/inet -u Cmdenv -f <example>/omnetpp.ini \
 output directory, build mode, and temporary command-line overrides. Add
 campaign/regeneration commands after the minimal run.>
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs: `<file.sca>` and `<file.vec>`.
 
@@ -86,7 +95,7 @@ or empty matches, and the distinction between mechanism and outcome metrics.
 If a plot is not useful, replace the image and provenance lines with
 `No plot: <concrete reason>.`>
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: `<node.interface>`  
 Capture: `<file.pcapng>`  
@@ -109,7 +118,7 @@ Figure provenance: [`<relative-pcap-figure.png.json>`](<relative-pcap-figure.png
 `No plot: <concrete reason>.` Keep exhaustive generated packet rows in a
 subordinate marker-bounded block.>
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r <file.pcapng> \
@@ -125,7 +134,7 @@ tshark -n -r <file.pcapng> \
 <Explain ordering, causal evidence, correlations with result vectors/logs, and
 what the capture cannot decode.>
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -135,17 +144,17 @@ what the capture cannot decode.>
 alignment, and the bounded conclusion. Do not claim event-level causality
 across separately instrumented sessions.>
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - <unsupported claim and missing evidence>
 - <model-fidelity or dissector limitation>
 - <smallest additional run, control, field, or recorder needed>
 
-## Further experiments
+## [agent] Further experiments
 
 - <Change one parameter or negative case; predict the invariant and artifact.>
 
-## Implementation plan
+## [agent] Implementation plan
 
 <Include when the walkthrough exposes a model gap, failed invariant, missing
 observability, or concrete development follow-up. Otherwise state that no
@@ -165,7 +174,7 @@ implementation work is proposed.>
 <Treat this as a proposed development path, not proof that the named code path
 executed and not authorization to edit production source.>
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

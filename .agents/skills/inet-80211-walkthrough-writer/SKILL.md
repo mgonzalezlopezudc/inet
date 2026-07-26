@@ -23,6 +23,19 @@ subordinate to the explanatory narrative. Include the recommended
 `Implementation plan` section when the walkthrough exposes a model gap,
 failed invariant, missing observability, or concrete development follow-up.
 
+Label every section and subsection heading from level 2 through level 6 with
+its owner. Use `[script]` for headings inside analysis-script generated
+blocks and `[agent]` for headings written or updated by an agent using this
+skill. Do not label the level-1 walkthrough title.
+
+Keep the results-session ledger directly below the title. Analysis publishers
+own the marker-bounded `[script]` ledger and update their scalar/vector or PCAP
+entry whenever they update a walkthrough. Agents must not hand-edit those
+entries. The agent owns the separate `[agent]` results-session line and must
+list every exact results session used to write or update agent-owned sections;
+use `NOT RECORDED` only for legacy unversioned evidence and `NOT RUN` only when
+the relevant evidence was not executed.
+
 Read [references/analysis-machinery.md](references/analysis-machinery.md) in
 full before creating or regenerating simulation artifacts. Use the shared
 IEEE 802.11 suite, campaign, typed-PHY, and PCAP machinery before writing
@@ -213,6 +226,8 @@ gate in the contract; the validator checks structure, not scientific truth.
 - Make commands directly runnable from their stated working directory.
 - Keep result-session identifiers, runs, seeds, windows, capture points, and
   provenance next to the claims they support.
+- Refresh the `[agent]` results-session line whenever agent-owned sections are
+  written or updated. Preserve the script-owned session block unchanged.
 - Label configuration text as input evidence, PCAP fields as observed packet
   evidence, result records as model telemetry or outcomes, and causal
   explanations as inference unless correlated evidence establishes them.

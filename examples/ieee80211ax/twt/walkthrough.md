@@ -1,11 +1,20 @@
 # Walkthrough: 802.11ax Target Wake Time
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T225917Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T225917Z`.
+
 This walkthrough validates Target Wake Time (TWT) with two complementary
 evidence sets: a five-seed energy/delivery comparison and a separate run-0
 packet session covering individual announced, individual unannounced,
 broadcast, and no-TWT modes.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -22,7 +31,7 @@ uses Power-Save Poll (PS-Poll). An unannounced station may receive service
 without that announcement. The outcome invariant is not simply “lower power”:
 the TWT treatment must retain at least 95% of its paired baseline delivery.
 
-## Scenario description
+## [agent] Scenario description
 
 The [network](TwtRegression.ned) and [configuration](omnetpp.ini) contain one
 fixed AP, two fixed wireless stations, and a wired server. Stations send
@@ -42,7 +51,7 @@ The 100 ms wake interval and 10 ms service period deliberately expose repeated
 wake/sleep behavior. Energy configurations use identical application inputs,
 seeds, and state-based radio power levels.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.8.1 says TWT concentrates exchanges into
 predefined service periods to reduce contention and required awake time
@@ -57,7 +66,7 @@ PS-Poll is direct frame evidence for this announced-mode implementation, but
 the capture does not prove all standard negotiation fields or real-device
 interoperability.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -67,7 +76,7 @@ interoperability.
 | Other modes omit PS-Poll in retained captures | `PASS` | generated subtype tables | run 0 | absence is bounded to these captures |
 | Frame-level wake event caused a power-vector transition | `INCONCLUSIVE` | sessions are separate | — | no co-recorded packet/power correlation |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -82,7 +91,7 @@ interoperability.
 delta is `agent.announced=true`. `TwtEnergySaving extends =
 IndividualUnannounced, EnergyBase`, matching the baseline energy model.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -91,7 +100,7 @@ IndividualUnannounced, EnergyBase`, matching the baseline energy model.
 | Announced STA signals presence | AP PS-Poll frames | missing/wrong-period PS-Poll | TWT agent/MAC | AP+STA PCAP and TWT logs |
 | Data follows presence signal | PS-Poll → QoS Data → Ack timeline | missing data/Ack or retry | buffering/reception/ack policy | correlate both capture points |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root. This command was **not executed during this
 rewrite**; status: `NOT RUN`.
@@ -112,7 +121,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --generate --subdir twt --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are `.sca`/`.vec` pairs under
 `results/20260725T120411Z/{BaselineEnergy,TwtEnergySaving}`.
@@ -141,7 +150,7 @@ The derived reduction is 44.89%, with paired delivery ratio 1.0. This is a
 five-run model result, not a hardware-energy claim.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-twt -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![twt scalar/vector analysis](../analysis/figures/twt/twt-state-and-energy.png)
 
@@ -162,7 +171,7 @@ Figure provenance: [`../analysis/figures/twt/twt-state-and-energy.png.json`](../
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-twt -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture points: AP and both station WLAN interfaces.
 Session: `results/20260725T225917Z`.
@@ -184,7 +193,7 @@ tshark -n -r \
 | `Broadcast` | 80 / 0 | 0 | shared schedule, not individual announced mode |
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/twt/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/twt/packet_statistics.png.json).
@@ -197,7 +206,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -206,7 +215,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `IndividualAnnounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 3148 | Control: PS-Poll (1992), Management: Beacon (1000), Data: QoS Data (80) | 0.20% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `IndividualUnannounced` | AP interface(s); capture observations<br>`examples/ieee80211ax/twt/results/20260725T225917Z/IndividualUnannounced/IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap` | `none (all decoded frames)` | 1156 | Management: Beacon (1000), Data: QoS Data (80), Control: Ack (24) | 0.15% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -215,7 +224,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | IndividualAnnounced produced protocol-visible wireless observations | 3148 AP/global transmission observations |
 | **PASS** | IndividualUnannounced produced protocol-visible wireless observations | 1156 AP/global transmission observations |
 
-### Configuration: `Baseline`
+### [script] Configuration: `Baseline`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1148**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -234,7 +243,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1148*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.70% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 4 | 0.35% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.19% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -257,7 +266,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1148*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-#### MPDU observation semantics
+#### [script] MPDU observation semantics
 
 | Metric | Value |
 |---|---:|
@@ -269,7 +278,7 @@ Frame numbers are local to the named capture, not OMNeT++ event numbers. For rea
 
 Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
 
-### Configuration: `Broadcast`
+### [script] Configuration: `Broadcast`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -288,7 +297,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.30% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -311,7 +320,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-#### MPDU observation semantics
+#### [script] MPDU observation semantics
 
 | Metric | Value |
 |---|---:|
@@ -323,7 +332,7 @@ Frame numbers are local to the named capture, not OMNeT++ event numbers. For rea
 
 Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
 
-### Configuration: `IndividualAnnounced`
+### [script] Configuration: `IndividualAnnounced`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3148**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -343,7 +352,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3148*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.25% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.26% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.25% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.30% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -366,7 +375,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3148*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-#### MPDU observation semantics
+#### [script] MPDU observation semantics
 
 | Metric | Value |
 |---|---:|
@@ -378,7 +387,7 @@ Frame numbers are local to the named capture, not OMNeT++ event numbers. For rea
 
 Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
 
-### Configuration: `IndividualUnannounced`
+### [script] Configuration: `IndividualUnannounced`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -397,7 +406,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f25aa6" /></svg> | Management: Authentication | 8 | 0.69% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.35% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 8 | 0.69% | 42.5 B | 5.5 B | 76.7 us | 7.3 us | 5010 MHz | -69.0 dBm | 13.0 dBm | 0.41% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -420,7 +429,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-#### MPDU observation semantics
+#### [script] MPDU observation semantics
 
 | Metric | Value |
 |---|---:|
@@ -432,11 +441,11 @@ Frame numbers are local to the named capture, not OMNeT++ event numbers. For rea
 
 Repeated observations are retained in airtime totals because every transmission consumes channel time; the unique count is provided only for workload/reliability interpretation.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 Only `IndividualAnnounced` contains the large **PS-Poll** population. This is consistent with the announced-TWT procedure: the requester signals that it is awake with PS-Poll or an APSD trigger before the responder sends a non-Trigger frame (IEEE Std 802.11-2024, Table 9-347 and Clause 10.46). Unannounced TWT does not require that presence signal. The QoS Data totals are transmitted MPDU observations, not delivered application-packet counts; aggregation and repeated sequence numbers can make them much larger than the workload. Validate TWT delivery with sink scalars and energy with the recorded radio-power vectors.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r \
@@ -460,7 +469,7 @@ tshark -n -r \
 This is direct packet ordering in the announced run. The energy outcome comes
 from a different session, so packet-to-power causality remains inference.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -472,7 +481,7 @@ The retained evidence directly proves the energy/delivery invariant and the
 announced packet sequence in their respective scopes. Their connection is a
 standards/model-consistent inference, not a co-recorded causal chain.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - Packet and energy sessions are separate.
 - Radiotap/802.11 captures do not directly expose radio sleep power.
@@ -481,7 +490,7 @@ standards/model-consistent inference, not a co-recorded causal chain.
 - One co-recorded announced and unannounced run with power, mode, AP/STA PCAP,
   and delivery would resolve the main causal gap.
 
-## Further experiments
+## [agent] Further experiments
 
 - Sweep 1, 5, 10, and 50 ms service periods; predict a monotonic awake-energy
   trend until queue delay/loss becomes binding.
@@ -489,7 +498,7 @@ standards/model-consistent inference, not a co-recorded causal chain.
 - Add a marginal-link condition and require the 95% delivery gate before
   accepting any energy reduction.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -502,7 +511,7 @@ standards/model-consistent inference, not a co-recorded causal chain.
 | Architecture and sealing | required before any future `src/inet` edit |
 | Next handoff | result/packet analyst for co-recording |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

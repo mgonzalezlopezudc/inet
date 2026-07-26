@@ -1,12 +1,21 @@
 # Walkthrough: Dense IoT with 802.11ax OFDMA and TWT
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `20260725T234519Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T234519Z`.
+
 This example compares an IEEE 802.11ax dense-IoT treatment that requests
 orthogonal frequency-division multiple access (OFDMA) and Target Wake Time
 (TWT) with a matched IEEE 802.11ac single-user control. The retained evidence
 supports a five-seed uplink comparison at 8 and 16 stations; the downlink and
 mixed campaigns, and packet-level mechanism checks, remain incomplete.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -26,7 +35,7 @@ Channel Access (EDCA) without TWT. The validation outcome is deliberately
 bounded: the treatment passes the retained energy comparison only as an
 outcome observation, while the OFDMA frame exchange remains inconclusive.
 
-## Scenario description
+## [agent] Scenario description
 
 The [network](DenseIotNetwork.ned) and [configuration](omnetpp.ini) define one
 infrastructure basic service set (BSS). A fixed AP at the center of a 500 m by
@@ -50,7 +59,7 @@ Station placement, association, and application phases use separate random
 number streams; paired AX/AC repetitions share those inputs, although their
 MAC paths can consume randomness differently.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.8.1 describes TWT as concentrating exchanges in
 predefined service periods to reduce contention and awake time
@@ -67,7 +76,7 @@ expose HE Basic and BSRP Trigger frames, their user-info RU allocations, and
 the following Block Ack observations. They do not expose a correlated TWT
 wake-state transition or an authoritative per-station response identity.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -80,7 +89,7 @@ wake-state transition or an authoritative per-station response identity.
 | Downlink AX/AC frames are observable | `PASS` | AP PCAP session `20260725T234519Z` | run/seed 0 | Packet-level single-run comparison only |
 | Mixed AX/AC outcomes | `NOT RUN` | excluded from the packet campaign | none | Skipped by request |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -96,7 +105,7 @@ The AC control changes several coupled mechanisms—PHY generation, rate
 control, queueing/access, OFDMA, and TWT—so it is a system treatment/control
 comparison, not an isolated estimate of either OFDMA or TWT.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -105,7 +114,7 @@ comparison, not an isolated estimate of either OFDMA or TWT.
 | Trigger contains intended RU allocations | Trigger AID12/RU fields | absent/undecoded allocation | scheduler/recorder/dissector | Typed-HE decode from retained AP PCAP |
 | Energy is not saved by suppressing work | residual energy plus sink receive/delay | lower energy with lower delivery/higher delay | TWT timing, queues, application window | Co-record radio mode, power, delivery, and queue state |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root. The bounded packet campaign below completed
 with exit status 0 and created session `20260725T234519Z`:
@@ -131,7 +140,7 @@ The scalar/vector regeneration command is a recipe, not a newly observed exit
 status. The retained scalar/vector files identify repetitions and seed sets
 0–4.
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are the 20 `.sca` and 20 `.vec` files under
 `results/20260725T120411Z/{AxUl,AcUl}/`. Query only the receiving
@@ -155,7 +164,7 @@ per-run station average of `1000 J - residualEnergyCapacity:last`. Each table
 entry is one run; the final row is the arithmetic mean of five independent
 seed-set repetitions. No confidence interval was retained for this analysis.
 
-### Eight stations
+### [agent] Eight stations
 
 | Repetition | AX received | AC received | AX mean delay | AC mean delay | AX mean station energy | AC mean station energy |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -166,7 +175,7 @@ seed-set repetitions. No confidence interval was retained for this analysis.
 | 4 | 800 | 800 | 0.047810 s | 0.000103 s | 0.135473 J | 0.242431 J |
 | Five-run mean | 780.0 | 800.0 | 0.036690 s | 0.000104 s | 0.135771 J | 0.242400 J |
 
-### Sixteen stations
+### [agent] Sixteen stations
 
 | Repetition | AX received | AC received | AX mean delay | AC mean delay | AX mean station energy | AC mean station energy |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -190,7 +199,7 @@ session-bound provenance sidecar, and the retained scalar/vector campaign
 covers only the uplink pair. It is therefore excluded instead of presenting
 an unverifiable or incomplete comparison.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Session `results/20260725T234519Z` records the AP `wlan[0]`
 MAC observation point for the four requested UL/DL configurations. The files
@@ -214,7 +223,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 | `AcDl` | 10,598 | 8,686 VHT QoS Data observations | Capture observations, not delivery |
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/dense_iot/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/dense_iot/packet_statistics.png.json).
@@ -227,7 +236,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -236,7 +245,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `AxDl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AxDl/AxDl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 265600 | Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (212159), Control: Block Ack Request (BAR) (35191), Data: QoS Data [HE-SU, HE-MCS 9, 20 MHz, GI 3.2 us, LDPC] (8414) | 5.17% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `AxUl` | AP interface(s); capture observations<br>`examples/ieee80211ax/dense_iot/results/20260725T234519Z/AxUl/AxUl-#0DenseIotNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 26551 | Control: Block Ack (BA) (12067), Control: Trigger (11921), Management: Beacon [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (1200) | 0.94% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -245,7 +254,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | AxDl produced protocol-visible wireless observations | 265600 AP/global transmission observations |
 | **PASS** | AxUl produced protocol-visible wireless observations | 26551 AP/global transmission observations |
 
-### Configuration: `AcDl`
+### [script] Configuration: `AcDl`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **10598**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -265,7 +274,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **10598
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#fa6bc1" /></svg> | Management: Authentication [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] | 32 | 0.30% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 0.33% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f72237" /></svg> | Management: Action [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] | 16 | 0.15% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 0.18% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -288,7 +297,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **10598
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `AcUl`
+### [script] Configuration: `AcUl`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2563**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -308,7 +317,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2563*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#fa6bc1" /></svg> | Management: Authentication [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] | 32 | 1.25% | 34.0 B | 0.0 B | 65.3 us | 0.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 1.16% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f72237" /></svg> | Management: Action [VHT, VHT-MCS 0, 20 MHz, GI 0.8 us, BCC] | 16 | 0.62% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 0.61% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -331,7 +340,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2563*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `AxDl`
+### [script] Configuration: `AxDl`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **265600**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -361,7 +370,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **26560
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#fa33a4" /></svg> | Management: Authentication [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 32 | 0.01% | 34.0 B | 0.0 B | 73.2 us | 0.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 0.04% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 32 | 0.01% | 42.5 B | 5.5 B | 82.5 us | 6.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 0.04% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -384,7 +393,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **26560
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `AxUl`
+### [script] Configuration: `AxUl`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **26551**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -406,7 +415,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **26551
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#fa33a4" /></svg> | Management: Authentication [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 32 | 0.12% | 34.0 B | 0.0 B | 73.2 us | 0.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 0.21% | 0.00% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 32 | 0.12% | 42.5 B | 5.5 B | 82.5 us | 6.0 us | 5010 MHz | -77.1 dBm | 13.0 dBm | 0.23% | 0.00% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -429,11 +438,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **26551
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 Across these configurations, **QoS Data** frames constitute the primary payload delivery mechanism, while **Block Ack (BA)** and **Block Ack Request (BAR)** control frames ensure reliable transport via the MAC-level acknowledgment protocol. Management frames, specifically **Beacons**, are transmitted periodically by the Access Point to maintain BSS time synchronization and broadcast network capabilities. The ratio of control/management overhead to actual data frames indicates the relative MAC efficiency of the chosen configurations.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 | Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -452,7 +461,7 @@ smallest remaining decisive run would co-record AP and at least one STA PCAP,
 `twtAgreementCount`, Basic Trigger counters, radio mode/power, and application
 delivery for one `AxUl` seed, then compare the same seed with `AcUl`.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -470,7 +479,7 @@ The fresh packet evidence closes the protocol-visibility gap for run 0, but
 intermittent trigger telemetry across the historical seeds and the
 separate-session design still prevent a complete OFDMA/TWT causal chain.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - AP PCAP now exposes Trigger/RU and acknowledgment observations, but TWT
   wake-state correlation and authoritative station attribution remain
@@ -483,7 +492,7 @@ separate-session design still prevent a complete OFDMA/TWT causal chain.
 - The smallest resolution is one co-recorded paired seed, followed by the
   remaining four seeds only if the mechanism is observed and stable.
 
-## Further experiments
+## [agent] Further experiments
 
 - Disable TWT while retaining AX/OFDMA; predict higher awake energy with
   similar Trigger telemetry.
@@ -492,7 +501,7 @@ separate-session design still prevent a complete OFDMA/TWT causal chain.
 - Repeat one 16-STA pair with AP/STA captures; require a decoded Trigger/RU
   exchange and aligned power/application telemetry before expanding seeds.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -505,7 +514,7 @@ separate-session design still prevent a complete OFDMA/TWT causal chain.
 | Architecture and sealing | No `src/inet` change is proposed; apply architectural/sealing review before any future production edit |
 | Next handoff | Wi-Fi simulation investigator after a co-recorded run establishes the first divergence |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

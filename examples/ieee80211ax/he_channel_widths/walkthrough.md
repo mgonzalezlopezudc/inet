@@ -1,5 +1,14 @@
 # Walkthrough: HE channel widths
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260726T160000Z`
+- PCAP: `20260726T160000Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260726T160000Z`.
+
 This example compares four contiguous High Efficiency (HE) channel-width
 configurations: 20, 40, 80, and 160 MHz. A fresh, co-recorded session combines
 five application-result runs per width with run-0 PCAPng evidence. It
@@ -7,7 +16,7 @@ demonstrates that the configured width bundle reaches the transmitted
 TXVECTOR and that this saturated four-station workload is served faster as the
 bundle widens. It does not isolate width from every other PHY parameter.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -33,7 +42,7 @@ The dominant measured cycle is AP HE multi-user (HE-MU) QoS Data, an AP
 multi-user Block Ack Request (MU-BAR) Trigger, and simultaneous HE
 trigger-based (HE-TB) Block Ack responses.
 
-## Scenario description
+## [agent] Scenario description
 
 [HeChannelWidthsNetwork.ned](HeChannelWidthsNetwork.ned) extends the shared
 single-BSS network with four wireless hosts. The topology contains one wired
@@ -50,7 +59,7 @@ the simulation ends at `0.45 s`.
 server -- AP ~~ {host[0], host[1], host[2], host[3]}
 ```
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 27.2.5 defines the HE
 `CHANNEL_WIDTH` PHY configuration parameter, including 20, 40, 80, and
@@ -68,7 +77,7 @@ when the recorder marks the corresponding HE field as present and known.
 Application vectors are model outcomes. The explanation connecting them is an
 inference unless the artifacts expose the same decision directly.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -79,7 +88,7 @@ inference unless the artifacts expose the same decision directly.
 | Width alone caused the outcome ordering | `INCONCLUSIVE` | configuration changes several PHY inputs together | same runs | no single-parameter counterfactual |
 | A wider channel improves coverage | `NOT RUN` | no matched distance/control pair in the analyzed suite | none | `WidthCellEdge` is 160 MHz only |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -96,7 +105,7 @@ common inputs remain inherited. This is a coordinated-width comparison, not a
 single raw-parameter toggle. The extra `WidthCellEdge` configuration is
 exploratory and is not part of the shared four-row analysis suite.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -105,7 +114,7 @@ exploratory and is not part of the shared four-row analysis suite.
 | Goodput rises and p95 delay falls across bundles | sink application vectors | empty match or reversed ordering | workload, queueing, MAC, or result filter | verify module/result/unit, `[0.3, 0.43)` window, and each run separately |
 | Results and PCAP share run-0 provenance | session manifest and capture manifest | different sessions or seeds | campaign plumbing | rerun `wifi_analysis.py run ... --evidence both` |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the repository root. This minimal release-mode Cmdenv command was
 executed during this rewrite and exited with status `0`:
@@ -138,7 +147,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   he_channel_widths --suite ax --session-id 20260726T160000Z --update
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are the five `.sca` and `.vec` pairs in each configuration directory
 under `results/20260726T160000Z/`. The sidecar
@@ -189,7 +198,7 @@ capacity contract as `INCONCLUSIVE` because the experiment manifest does not
 encode a numerical acceptance envelope.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-width -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![width scalar/vector analysis](results/20260726T160000Z/channel-width-dashboard.png)
 
@@ -209,7 +218,7 @@ Figure provenance: [`results/20260726T160000Z/channel-width-dashboard.png.json`]
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-width -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Run 0 of session `20260726T160000Z` records MAC observations at every
 `wlan[0]`; the compact comparison below uses the AP observation point. The
@@ -241,7 +250,7 @@ deliveries. Estimated HE MU/TB airtime remains approximate because radiotap
 does not expose every user-dependent signaling term.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](results/20260726T160000Z/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](results/20260726T160000Z/packet_statistics.png.json).
@@ -254,7 +263,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -263,7 +272,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `Width40MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 1559 | Data: QoS Data [HE-MU, HE-MCS 4, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (943), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, LDPC] (472), Control: Trigger (118) | 110.23% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `Width80MHz` | AP interface(s); capture observations<br>`examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap` | `none (all decoded frames)` | 2187 | Data: QoS Data [HE-MU, HE-MCS 3, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1521), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 242-tone RU, GI 1.6 us, LDPC] (508), Control: Trigger (128) | 111.91% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -272,7 +281,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | Width40MHz produced protocol-visible wireless observations | 1559 AP/global transmission observations |
 | **PASS** | Width80MHz produced protocol-visible wireless observations | 2187 AP/global transmission observations |
 
-### Configuration: `Width160MHz`
+### [script] Configuration: `Width160MHz`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2939**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -288,7 +297,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2939*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.31% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5240 MHz | -72.0 dBm | 15.0 dBm | 0.13% | 0.14% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -311,7 +320,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2939*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `Width20MHz`
+### [script] Configuration: `Width20MHz`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1160**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -326,7 +335,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1160*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.78% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5050 MHz | -71.0 dBm | 15.0 dBm | 0.13% | 0.14% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -349,7 +358,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1160*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `Width40MHz`
+### [script] Configuration: `Width40MHz`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1559**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -363,7 +372,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1559*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.58% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5100 MHz | -71.0 dBm | 15.0 dBm | 0.13% | 0.14% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -386,7 +395,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1559*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `Width80MHz`
+### [script] Configuration: `Width80MHz`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2187**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -402,7 +411,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2187*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 9 | 0.41% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5200 MHz | -71.0 dBm | 15.0 dBm | 0.12% | 0.14% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -425,11 +434,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2187*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 IEEE Std 802.11-2024 Table 27-1 defines 20, 40, 80, and 160 MHz HE channel-width encodings, but the standard does not require packet count or throughput to scale linearly with width. The run-0 frame totals here are non-monotonic because aggregation, RU scheduling, and fixed overhead change the number of transmitted frames. The five-run sink goodput and delay analysis above is the appropriate capacity comparison; the radiotap bandwidth suffix is not.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r 'examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#0HeChannelWidthsNetwork.ap.wlan[0].pcap' \
@@ -464,7 +473,7 @@ aggregate counts do not pair every cycle in the run. `wlan.ta`, `wlan.ra`,
 and trigger type directly identify the AP MU-BAR and the four station
 responses.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -480,7 +489,7 @@ the five-run outcome ordering is monotonic for this coordinated configuration
 bundle. The broader causal claim that channel width alone produces the
 observed goodput and delay ratios remains `INCONCLUSIVE`.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - Only run 0 has packet captures. It is representative mechanism evidence, not
   five-run packet-level coverage.
@@ -498,7 +507,7 @@ observed goodput and delay ratios remains `INCONCLUSIVE`.
 - This is one stationary topology, payload size, scheduler, offered-load
   regime, and five-seed set. Packet counts are not a capacity estimator.
 
-## Further experiments
+## [agent] Further experiments
 
 - Sweep offered load while retaining the four widths; the first saturation
   point should appear in sink goodput and the delay ECDF.
@@ -510,7 +519,7 @@ observed goodput and delay ratios remains `INCONCLUSIVE`.
 - Join every HE-MU transmission to its MU-BAR Trigger and HE-TB responses
   using a stable model decision identifier rather than aggregate counts.
 
-## Implementation plan
+## [agent] Implementation plan
 
 No production implementation change is proposed. The retained primary
 invariants pass. A future feature-test improvement could add an executable
@@ -518,7 +527,7 @@ goodput-and-delay acceptance envelope and a stable scheduler-decision
 identifier for HE-MU/MU-BAR/HE-TB correlation; those are observability and
 coverage improvements, not demonstrated protocol defects.
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

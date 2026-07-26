@@ -1,5 +1,14 @@
 # Walkthrough: HE NDP Feedback Report
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `20260725T230505Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230505Z`.
+
 This example isolates the Null Data Packet (NDP) Feedback Report procedure in a
 single-BSS HE uplink network. The retained AP capture directly decodes 99 NDP
 Feedback Report Poll (NFRP) Triggers and shows groups of three simultaneous
@@ -7,7 +16,7 @@ radiotap-only, zero-PSDU observations 88 microseconds later. The Trigger-type
 and timing invariant passes; station identity and feedback bits remain
 unavailable and are explicitly inconclusive.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -23,7 +32,7 @@ information. Selected non-AP stations respond after a short interframe space
 content but no MAC service data unit, so native MAC capture needs explicit
 empty-packet recording.
 
-## Scenario description
+## [agent] Scenario description
 
 [omnetpp.ini](omnetpp.ini) includes
 [`../../ul_ofdma/omnetpp.ini`](../../ul_ofdma/omnetpp.ini) and adds
@@ -41,7 +50,7 @@ The nodes are stationary in a 50 m square; host distances from the AP are
 and periodic 20 ms AP checks while ordinary UL application traffic is also
 active. The control exchange, not UDP delivery, is the feature under test.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Table 9-47 assigns Trigger Type value 7 to NFRP. Clause
 26.5.7 defines the NDP feedback report procedure and HE TB feedback NDP
@@ -56,7 +65,7 @@ identify station, feedback resource, or feedback bits. Timing/group size are
 direct observations; classifying each empty record as a particular station's
 valid report is inference.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -67,7 +76,7 @@ valid report is inference.
 | Application traffic runs | `PASS` | application vectors/scalars | 0/0 | Not feature proof |
 | Matched NFRP-disabled control | `NOT RUN` | none retained | none | Needed for outcome comparison |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -75,7 +84,7 @@ valid report is inference.
 | `ScheduledOnly` | Negative control | NFRP disabled | matched inherited network | `NOT RUN` | no type-7 Trigger/empty-response groups |
 | `FeedbackUnderInterference` | Stress case | host 0 transmit power reduced | otherwise inherited treatment | `NOT RUN` | fewer/changed response observations, with direct receiver evidence |
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -84,7 +93,7 @@ valid report is inference.
 | expected selected stations respond | per-station capture/model telemetry | wrong count/identity | UL plan/PHY reception | co-record station-side response signal and AP reception |
 | no acknowledgment follows NDP feedback | timeline | Ack/BA generated for feedback NDP | frame-sequence policy | inspect post-response HCF transition |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root. This command was `NOT RUN` during this
 documentation revision:
@@ -110,7 +119,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs:
 `results/20260725T120411Z/NdpFeedbackReport/NdpFeedbackReport-#0.sca`
@@ -139,7 +148,7 @@ No plot: the retained scalar totals do not identify NDP feedback responses or
 their station identities, so they cannot support a mechanism-focused
 comparison.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture: AP `wlan[0]`, PCAPng/radiotap, microsecond precision, computed
 checksum/FCS session; TShark 4.6.4. SHA-256:
@@ -152,7 +161,7 @@ checksum/FCS session; TShark 4.6.4. SHA-256:
 Counts are capture observations. A radiotap-only record is not an MPDU.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../../analysis/figures/multi_user/ndp_feedback/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../../analysis/figures/multi_user/ndp_feedback/packet_statistics.png.json).
@@ -165,20 +174,20 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
 | `NdpFeedbackReport` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/ndp_feedback/results/20260725T230505Z/NdpFeedbackReport/NdpFeedbackReport-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2543 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1382), Control: Ack (1023), Control: Trigger (99) | 44.49% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
 | **PASS** | NdpFeedbackReport produced protocol-visible wireless observations | 2543 AP/global transmission observations |
 | **INCONCLUSIVE** | Trigger Type 7 and matching NDP feedback allocation | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `NdpFeedbackReport`
+### [script] Configuration: `NdpFeedbackReport`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2543**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -189,7 +198,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2543*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f9ee1f" /></svg> | Control: HE TB feedback NDP [NDP Sounding] | 39 | 1.53% | 0.0 B | 0.0 B | 72.0 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.32% | 0.14% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1023 | 40.23% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.84% | 1.26% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -212,11 +221,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2543*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 The capture contains both **Trigger** frames and zero-length HE TB feedback NDP observations, consistent with the NDP Feedback Report Poll exchange defined by IEEE Std 802.11-2024 Clause 26.5.7 and Annex G.5. One NFRP Trigger can allocate multiple feedback resources, so the counts need not be one-to-one. The generic Control-subtype label does not by itself prove Trigger Type 7; verify the Trigger field or simulator NFRP telemetry when conformance detail matters.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n \
@@ -241,7 +250,7 @@ observation group. It does not expose SIFS as a named field, station identity,
 or successful feedback-bit interpretation. TShark frame numbers are not
 OMNeT++ event numbers.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -251,7 +260,7 @@ OMNeT++ event numbers.
 The bounded verdict is `PASS` for protocol-visible Trigger type and response
 timing/group structure, and `INCONCLUSIVE` for response identity and content.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - Only 39 radiotap-only records are retained despite 99 NFRP Triggers; the
   document does not infer loss, scheduling policy, or capture suppression from
@@ -262,7 +271,7 @@ timing/group structure, and `INCONCLUSIVE` for response identity and content.
 - A resolving run needs station-side response signals and AP receive outcome
   correlated with the existing type-7 timeline.
 
-## Further experiments
+## [agent] Further experiments
 
 - Run `ScheduledOnly` with empty-packet recording; expect zero type-7 polls and
   zero causally paired empty groups.
@@ -271,7 +280,7 @@ timing/group structure, and `INCONCLUSIVE` for response identity and content.
 - Sweep only `ulTriggerCheckInterval`; poll spacing should follow the value,
   while response offset remains protocol-timing constrained.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -284,7 +293,7 @@ timing/group structure, and `INCONCLUSIVE` for response identity and content.
 | Architecture and sealing | review required before any `src/inet` change; none authorized here |
 | Next handoff | analysis plugin owner, then PHY/HCF owner if runtime telemetry is required |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

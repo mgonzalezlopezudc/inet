@@ -47,6 +47,11 @@ The scalar/vector and PCAP bundles belong inside their canonical walkthrough
 sections. Exhaustive packet-type tables remain subordinate to the compact
 summary. Generated images and tables are evidence views, not new evidence;
 their provenance must bind them to the exact result or capture session.
+Every heading emitted inside a generated block starts with `[script]`.
+Whenever a publisher updates its generated block, it also updates its own
+entry in the marker-bounded results-session ledger directly below the
+walkthrough title. It must preserve the other script family and the separate
+agent-owned results-session line.
 
 ## Scalar and vector presentation
 

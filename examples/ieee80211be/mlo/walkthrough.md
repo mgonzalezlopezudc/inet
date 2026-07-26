@@ -1,5 +1,14 @@
 # Walkthrough: 802.11be Multi-Link Operation
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `NOT RUN`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `NOT RECORDED`.
+
 This example places one Multi-Link Device (MLD) access point and one MLD
 station over independent 5 GHz and 6 GHz links. It compares configured
 Simultaneous Transmit and Receive (STR) capability with configured
@@ -8,7 +17,7 @@ is to trace a packet from the upper MLD interface to a selected lower link.
 The validation outcome is to prove both-link use and, separately, a
 protocol-visible runtime difference between STR and NSTR.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -25,7 +34,7 @@ forwards them to `link[0]` or `link[1]`. STR and NSTR describe whether link
 activity may overlap in transmit/receive directions; proving NSTR therefore
 requires timing evidence, not merely capability flags or aggregate goodput.
 
-## Scenario description
+## [agent] Scenario description
 
 The [network](Lan80211BeMlo.ned) contains a wired server, an
 [MLD AP](MldAp.ned), an [MLD host](MldHost.ned), and separate scalar radio
@@ -43,7 +52,7 @@ the 5 GHz medium and link 1 uses the 6 GHz medium. Both nodes are stationary.
 The lower pending queues are local to each link. See
 [omnetpp.ini](omnetpp.ini).
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11be-2024 Clause 35.3 covers multi-link setup and operation;
 Clause 35.3.16 specifies ML channel access, including STR in 35.3.16.3 and
@@ -57,7 +66,7 @@ that cross-link channel-access restrictions, self-interference, or PPDU
 alignment are enforced. The checked-out source and correlated runtime evidence
 govern claims about implemented behavior.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -73,7 +82,7 @@ Evidence basis: the INI is **configuration input**; scalar/vector records are
 **direct observations**; payload rate and received/sent fraction are
 **derived measurements**; unobserved STR/NSTR causality is **inference**.
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -83,7 +92,7 @@ Evidence basis: the INI is **configuration input**; scalar/vector records are
 The only intended delta is the two capability flags. The unequal retained
 durations and missing NSTR scalar prevent an outcome comparison.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -91,7 +100,7 @@ durations and missing NSTR scalar prevent an outcome comparison.
 | STR/NSTR gate changes link concurrency | Co-recorded per-link radio-state vectors or event log | Identical forbidden overlaps | MLD channel-access coordination | Compute interval overlap by direction and link |
 | Receiver delivery is preserved | `host.app[0] packetReceived` | Missing/duplicate sequence numbers | MLD reordering/delivery | Correlate per-link frames with receive sequence vector |
 
-## Reproduction
+## [agent] Reproduction
 
 The exact historical command and exit statuses were not retained. Run from
 the repository root (`NOT RUN` during this authoring pass):
@@ -107,7 +116,7 @@ Repeat with `-c Nstr` into a separate directory. There is no shared suite
 descriptor for MLO, so automatic PCAP/provenance generation is not yet
 available.
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs: `results/Str-#0.{sca,vec}` and `results/Nstr-#0.vec`. The STR scalar
 records a 1.0 s run; the NSTR vector header records a command-line
@@ -136,7 +145,7 @@ traffic dominate the overloaded run. The 18,251 packet-delay samples have a
 15.404 ms mean (0.129–27.215 ms range), but packet samples are not independent
 repetitions.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 No `.pcap` or `.pcapng` file is retained. A resolving run should capture both
 lower interfaces at the AP and host with unique link-aware filenames and
@@ -152,7 +161,7 @@ tshark -n -r MLO_LINK_CAPTURE.pcapng -q \
 | `Str` | 0 retained | `NOT RUN` | Scalars prove link activity, not frame ordering |
 | `Nstr` | 0 retained | `NOT RUN` | No NSTR concurrency claim |
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r MLO_LINK_CAPTURE.pcapng \
@@ -170,7 +179,7 @@ Separate capture frame numbers cannot establish concurrency. Compare
 simulation timestamps and transmission intervals across links, preferably
 against co-recorded radio-state vectors.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -181,7 +190,7 @@ against co-recorded radio-state vectors.
 The retained STR session directly proves both-link use. It does not prove STR
 overlap semantics, and the current artifacts cannot assess NSTR.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - NSTR lacks a completed scalar file and matched duration.
 - No explicit MLD link-selection, concurrency, or NSTR-block telemetry exists.
@@ -190,7 +199,7 @@ overlap semantics, and the current artifacts cannot assess NSTR.
 - The smallest next run records both configurations for the same duration and
   seed with per-link radio intervals, MLD decisions, captures, and app results.
 
-## Further experiments
+## [agent] Further experiments
 
 - Use a deterministic bidirectional workload that creates a potential
   cross-link TX/RX overlap; predict that STR permits and NSTR suppresses it.
@@ -199,7 +208,7 @@ overlap semantics, and the current artifacts cannot assess NSTR.
 - After the invariant passes, add matched seeds and report per-run delivery,
   delay, and link airtime.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -212,7 +221,7 @@ overlap semantics, and the current artifacts cannot assess NSTR.
 | Architecture and sealing | Any future MLD C++/NED change requires architecture, WLAN-rule, and seal review |
 | Next handoff | Navigator for MLD control path, then simulation detective and one implementation owner if needed |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

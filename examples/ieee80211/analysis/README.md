@@ -20,7 +20,10 @@ directory. It does not analyze the results or edit a walkthrough. `report`
 reuses that exact result set to create
 metrics, figures, an evidence ledger, and a PCAP report, but never edits a
 walkthrough. `publish` is the only walkthrough-mutating command and requires
-the explicit `--update` flag.
+the explicit `--update` flag. It labels headings inside generated blocks
+`[script]` and refreshes the scalar/vector and PCAP entries in the
+script-owned results-session ledger below the title. The separate
+agent-owned session list is preserved.
 
 Scalar/vector and PCAP therefore share the same run-0 simulation trajectory;
 the PCAP indexer does not launch a second simulation. Generated scalar/vector
@@ -52,9 +55,10 @@ Walkthrough-facing analyses publish presentation bundles: a compact Markdown
 table, a deterministic figure (or an explicit no-plot rationale), and a JSON
 provenance sidecar. The figure's parent directory identifies its raw result
 session, so sidecars retain analysis semantics without repeating raw input
-paths and hashes. Scalar/vector bundles belong under `## Scalar and vector
-analysis`; PCAP bundles belong under `## PCAP statistics`. Exhaustive
-packet-type rows stay subordinate to the compact explanatory summary.
+paths and hashes. Scalar/vector bundles belong under `## [agent] Scalar and
+vector analysis`; PCAP bundles belong under `## [agent] PCAP statistics`.
+Exhaustive packet-type rows stay subordinate to the compact explanatory
+summary.
 
 The existing AX scalar/vector suite uses the shared campaign primitives and a
 manifest-driven presentation renderer. New workflows should use

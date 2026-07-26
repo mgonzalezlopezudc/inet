@@ -40,6 +40,41 @@ Use these canonical headings. When revising a legacy walkthrough, normalize
 equivalent headings to this contract so the structural validator and readers
 see the same predictable organization.
 
+### Ownership labels
+
+- Prefix every level-2 through level-6 Markdown heading with `[agent]` or
+  `[script]`.
+- Use `[script]` only for headings inside marker-bounded content emitted by an
+  analysis script.
+- Use `[agent]` for every heading written or updated by an agent using the
+  walkthrough skill, including authored analysis-section wrappers around
+  generated blocks.
+- Do not prefix the level-1 walkthrough title.
+
+### Results-session ledger
+
+Place this ledger immediately below the level-1 title:
+
+```text
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `<session-id-or-NOT-RUN>`
+- PCAP: `<session-id-or-NOT-RUN>`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `<session-id>`, `<session-id>`.
+```
+
+The scalar/vector and PCAP publishers update only their own entry whenever
+they update marker-bounded walkthrough content. They preserve the agent-owned
+line. Agents preserve the script-owned block and update the `[agent]` line
+with every exact results-session identifier used for their sections. Multiple
+sessions are allowed and must remain distinct. Use `NOT RECORDED` for legacy
+unversioned evidence and `NOT RUN` only when the relevant evidence was not
+executed. The ledger is an index; detailed per-claim provenance still belongs
+next to the claim and in `Artifact provenance`.
+
 ### Learning objectives and feature primer
 
 - Explain the feature in plain language before using INET-specific terms.
@@ -292,3 +327,6 @@ The walkthrough is ready only if all answers are yes:
 - Are observation-point duplication and capture limitations disclosed?
 - Are missing evidence and inconclusive claims prominent?
 - Are all paths relative and all generated sections clearly marked?
+- Does every section/subsection heading carry the correct ownership label?
+- Is the top results-session ledger complete, with script and agent ownership
+  kept separate?

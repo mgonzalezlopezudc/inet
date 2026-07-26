@@ -1,12 +1,21 @@
 # Walkthrough: HE BSS coloring and spatial reuse
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T230151Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260724T175025Z`, `20260725T120411Z`, `20260725T230151Z`.
+
 This walkthrough compares disabled spatial reuse, three overlapping basic
 service set packet-detect (OBSS/PD) thresholds, a same-color negative control,
 and a dual-NAV case. Its strongest evidence is a five-run outcome campaign plus
 feature-specific receiver-decision vectors; the retained MAC captures show the
 exchange but do not expose the internal OBSS/PD decision.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -23,7 +32,7 @@ receiver to ignore that occupancy and its transmitter to contend. A higher
 This is a receiver/carrier-sense decision, not something that frame counts
 alone prove.
 
-## Scenario description
+## [agent] Scenario description
 
 [BssColoringNetwork.ned](BssColoringNetwork.ned) contains two APs, two
 stations per AP, and a separate wired server per BSS. BSS 1 is stationary.
@@ -48,7 +57,7 @@ server1 -- AP1 ~~ sta1[0..1]     sta2[0..1] ~~ AP2 -- server2
 The two stations per BSS allow HE multi-user scheduling, while the same-color
 case is a negative control for inter-BSS classification.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.10 describes HE spatial reuse; Clause 26.10.2
 defines OBSS/PD-based operation, and Clause 26.2.3 defines spatial-reuse-group
@@ -61,7 +70,7 @@ medium, traffic, and `sameTransmissionStartTimeCheck="ignore"` are experiment
 choices. Observed receiver vectors establish modeled decisions; they are not a
 standards-conformance certification.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -71,7 +80,7 @@ standards-conformance certification.
 | MAC exchange is present | `PASS` | run-0 AP PCAPs | run/seed `0` | Capture observations, not decisions |
 | Two independent NAV transitions occur | `INCONCLUSIVE` | `TwoNav-#0.vec` | run/seed `0` | `nav:vector` exists; `intraBssNavChanged:vector` has no match |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -86,7 +95,7 @@ standards-conformance certification.
 `TwoNav` extend `BssColoringEnabled`; their later, configuration-specific
 assignments win. All APs and stations receive their local color explicitly.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -95,7 +104,7 @@ assignments win. All APs and stations receive their local color explicitly.
 | Same-color equals disabled | outcome vectors | collision case reuses medium | color classification | inspect effective colors at all six radios |
 | Dual NAV changes separately | `nav` and `intraBssNavChanged` | second vector absent | HE MAC NAV | targeted MAC log or add recorder |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the repository root. This command is illustrative and was **NOT RUN**
 during this rewrite; no historical exit status is inferred:
@@ -124,7 +133,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --generate --subdir bss_coloring --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are the `.sca`/`.vec` pairs under each configuration directory in
 `results/20260725T120411Z/`. The provenance
@@ -164,7 +173,7 @@ The six `nav:vector` streams contain 524, 1380, 1169, 1240, 1452, and 1287
 samples; the intra-BSS result is absent.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bss -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![bss scalar/vector analysis](../analysis/figures/bss_coloring/bss-coloring-comparison.png)
 
@@ -191,7 +200,7 @@ Figure provenance: [`../analysis/figures/bss_coloring/bss-coloring-comparison.pn
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-bss -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture session:
 `results/20260725T230151Z`; PCAPng, `mac` observation
@@ -209,7 +218,7 @@ tshark -n -r 'examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColo
 | `TwoNav` | 1805 | does not expose NAV state |
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/bss_coloring/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/bss_coloring/packet_statistics.png.json).
@@ -222,7 +231,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -233,7 +242,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `ObssPdConservative` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/ObssPdConservative/ObssPdConservative-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2951 | Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (768), Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (766), Control: Trigger [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (396) | 135.18% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `TwoNav` | AP interface(s); capture observations<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap1.wlan[0].pcap`<br>`examples/ieee80211ax/bss_coloring/results/20260725T230151Z/TwoNav/TwoNav-#0BssColoringNetwork.ap2.wlan[0].pcap` | `none (all decoded frames)` | 2039 | Control: Block Ack (BA) [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, LDPC] (486), Data: QoS Data [HE-MU, HE-MCS 7, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] (458), Data: QoS Data [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] (389) | 97.28% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -245,7 +254,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | TwoNav produced protocol-visible wireless observations | 2039 AP/global transmission observations |
 | **PASS** | The bounded scenario exposes a coloring/OBSS-PD decision difference | At least two frame-distribution signatures differ |
 
-### Configuration: `BssColoringCollision`
+### [script] Configuration: `BssColoringCollision`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2983**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -264,7 +273,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2983*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 14 | 0.47% | 37.0 B | 0.0 B | 76.5 us | 0.0 us | 5050 MHz | -70.8 dBm | 13.0 dBm | 0.08% | 0.11% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -287,7 +296,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2983*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `BssColoringDisabled`
+### [script] Configuration: `BssColoringDisabled`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2983**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -306,7 +315,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2983*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 14 | 0.47% | 37.0 B | 0.0 B | 76.5 us | 0.0 us | 5050 MHz | -70.8 dBm | 13.0 dBm | 0.08% | 0.11% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -329,7 +338,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2983*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `BssColoringEnabled`
+### [script] Configuration: `BssColoringEnabled`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2668**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -348,7 +357,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2668*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 14 | 0.52% | 37.0 B | 0.0 B | 76.5 us | 0.0 us | 5050 MHz | -70.8 dBm | 13.0 dBm | 0.08% | 0.11% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -371,7 +380,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2668*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `ObssPdAggressive`
+### [script] Configuration: `ObssPdAggressive`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2700**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -390,7 +399,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2700*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 14 | 0.52% | 37.0 B | 0.0 B | 76.5 us | 0.0 us | 5050 MHz | -70.8 dBm | 13.0 dBm | 0.08% | 0.11% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -413,7 +422,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2700*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `ObssPdConservative`
+### [script] Configuration: `ObssPdConservative`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2951**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -432,7 +441,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2951*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 14 | 0.47% | 37.0 B | 0.0 B | 76.5 us | 0.0 us | 5050 MHz | -70.8 dBm | 13.0 dBm | 0.08% | 0.11% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -455,7 +464,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2951*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `TwoNav`
+### [script] Configuration: `TwoNav`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2039**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -474,7 +483,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2039*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#db0614" /></svg> | Management: Action [HE-SU, HE-MCS 0, 20 MHz, GI 3.2 us, LDPC] | 16 | 0.78% | 37.0 B | 0.0 B | 76.5 us | 0.0 us | 5050 MHz | -70.8 dBm | 13.0 dBm | 0.13% | 0.12% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -497,11 +506,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2039*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 **PASS: BSS-coloring separation.** At least two frame-distribution signatures differ. IEEE Std 802.11-2024 Clause 26.10 permits eligible inter-BSS reuse after OBSS/PD classification; it does not guarantee a throughput improvement, and a more permissive threshold can increase interference. The differing distribution is only a screening signal; the separate five-seed result campaign validates direct OBSS classification, threshold, CCA, power-limit, and reuse-decision telemetry. The current model reports the standards-defined threshold/power coupling but does not dynamically adapt OBSS/PD or apply that limit to later transmissions.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r 'examples/ieee80211ax/bss_coloring/results/20260725T230151Z/BssColoringEnabled/BssColoringEnabled-#0BssColoringNetwork.ap1.wlan[0].pcap' \
@@ -519,7 +528,7 @@ This timeline directly proves a data/ACK exchange. It does not prove that an
 OBSS PPDU was ignored; that conclusion comes from separately recorded receiver
 telemetry, so event-level PCAP-to-vector causality remains an inference.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -530,7 +539,7 @@ telemetry, so event-level PCAP-to-vector causality remains an inference.
 The bounded verdict is `PASS` for modeled OBSS/PD spatial reuse in this
 moving two-BSS experiment and `INCONCLUSIVE` for dual NAV.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - Captures and scalar/vector outcomes are separate sessions; they cannot prove
   event-level causality or exact count agreement.
@@ -540,13 +549,13 @@ moving two-BSS experiment and `INCONCLUSIVE` for dual NAV.
 - The scalar radio model and one movement path do not establish real-world
   deployment performance.
 
-## Further experiments
+## [agent] Further experiments
 
 - Repeat the threshold sweep over additional movement speeds and verify that
   decision-transition timestamps move predictably.
 - Run a wrong-color-at-one-STA negative case and inspect its classification.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -559,7 +568,7 @@ moving two-BSS experiment and `INCONCLUSIVE` for dual NAV.
 | Architecture and sealing | apply architecture/sealing review before any `src/inet` change |
 | Next handoff | HE MAC maintainer after configuration/recorder verification |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

@@ -1,10 +1,19 @@
 # Walkthrough: 802.11ax Uplink OFDMA and UORA
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T181500Z`
+- PCAP: `20260725T233546Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T181500Z`, `20260725T182100Z`, `20260725T233546Z`.
+
 This example provides scheduled-uplink, mixed-access, and UORA configurations.
 The retained evidence includes a five-run UORA comparison and a separate run-0
 packet-exchange appendix.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -20,7 +29,7 @@ Eligible stations decrement an OFDMA backoff counter and may choose the same
 RA-RU; simultaneous same-frequency responses make contention visible. INET's
 coordinator counters, not frame totals alone, decide whether attempts succeed.
 
-## Scenario description
+## [agent] Scenario description
 
 The [network](Lan80211AxUlOfdma.ned) extends the common single-BSS topology
 with one AP, a wired server, and three or eight fixed stations. The
@@ -37,7 +46,7 @@ Three-STA configurations send 1000-byte payloads every 5 ms. Eight-STA UORA
 loads use 100-byte payloads every 4 ms (light) or 1 ms (heavy). This stresses
 contention and scheduled/random-access capacity, not mobility or coverage.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 26.5.4.1 permits a Basic Trigger to allocate
 RA-RUs and requires UORA-capable stations to maintain OFDMA contention-window
@@ -51,7 +60,7 @@ counters are authoritative for its classification. Captured same-RU responses
 are direct contention evidence, but absence of a decoded response is not by
 itself a modeled failure.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -67,7 +76,7 @@ counter values are not expected to match between them. Compare configurations
 within a session, and use PCAP for frame-level behavior rather than substituting
 its frame counts for the UORA outcome counters.
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 The configuration inputs in this table are defined by [the INI file](omnetpp.ini).
 
@@ -85,7 +94,7 @@ The last two rows have the same station count, packet size, packet interval,
 measurement window, and scheduler family; their configured RA-RU count differs.
 This makes them the matched heavy-load comparison documented below.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -94,7 +103,7 @@ This makes them the matched heavy-load comparison documented below.
 | Success counters match model decisions | per-STA attempt/success scalars | impossible ratio or empty matches | coordinator signals/recording | narrow scalar query and source trace |
 | Heavy 5-RU treatment exceeds heavy 1-RU success | paired run aggregation | no increase across seeds | RU allocation/contention | inspect per-run Trigger opportunities |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root. This command was **not executed during this
 rewrite**; status: `NOT RUN`.
@@ -115,7 +124,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --generate --subdir ul_ofdma --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 The evidence is the per-STA scalar pair
 `heUlRandomAccessAttempt:count` and `heUlRandomAccessSuccess:count` in the 15
@@ -151,7 +160,7 @@ all runs of a condition record zero successes. This makes missing UORA
 instrumentation or a completely inactive condition a generation error rather
 than an empty-looking chart.
 
-### Scalar and vector interpretation by configuration
+### [agent] Scalar and vector interpretation by configuration
 
 The UORA attempt/success signals have `count` scalar recorders but no
 attempt/success vectors. The temporal evidence therefore comes from
@@ -201,7 +210,7 @@ packets still queued at 2 s do not contribute.
   in this sample, not an optimal RA-RU count.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-uora -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![uora scalar/vector analysis](../analysis/figures/ul_ofdma/uora-dashboard.png)
 
@@ -233,7 +242,7 @@ Figure provenance: [`../analysis/figures/ul_ofdma/uora-dashboard.png.json`](../a
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-uora -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 The captures observe `ap.wlan[0]`. A Basic Trigger's decoded
 `wlan.trigger.he.user_info.aid12` values expose advertised random-access RUs:
@@ -293,7 +302,7 @@ tshark -n -r "$PCAP" \
   -e wlan.trigger.he.user_info.aid12 -e _ws.col.Info
 ```
 
-### Regeneration and inspection
+### [agent] Regeneration and inspection
 
 Run one configuration from the repository root:
 
@@ -347,7 +356,7 @@ advertised AID-0 RA-RUs, while the UORA scalar counters above remain the
 evidence for attempts and successes.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../analysis/figures/ul_ofdma/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../analysis/figures/ul_ofdma/packet_statistics.png.json).
@@ -360,7 +369,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
@@ -371,7 +380,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | `UoraLightContention` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 11466 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (8111), Control: Block Ack (BA) (903), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (771) | 60.50% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `UoraMoreRandomAccessRus` | AP interface(s); capture observations<br>`examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 14027 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (12709), Control: Block Ack (BA) (341), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (323) | 67.13% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -382,7 +391,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | UoraLightContention produced protocol-visible wireless observations | 11466 AP/global transmission observations |
 | **PASS** | UoraMoreRandomAccessRus produced protocol-visible wireless observations | 14027 AP/global transmission observations |
 
-### Configuration: `EdcaBaseline`
+### [script] Configuration: `EdcaBaseline`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2483**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -391,7 +400,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2483*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1023 | 41.20% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.71% | 1.26% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -414,7 +423,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2483*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `EqualRus`
+### [script] Configuration: `EqualRus`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -426,7 +435,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 168 | 5.84% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.76% | 0.33% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1020 | 35.45% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.88% | 1.26% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -449,7 +458,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `MixedUora`
+### [script] Configuration: `MixedUora`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5085**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -461,7 +470,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5085*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 708 | 13.92% | 47.2 B | 3.6 B | 35.7 us | 1.2 us | 5010 MHz | - | 10.0 dBm | 1.79% | 1.27% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1021 | 20.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.78% | 1.26% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -484,7 +493,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5085*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `ScheduledOnly`
+### [script] Configuration: `ScheduledOnly`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -496,7 +505,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 168 | 5.84% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.76% | 0.33% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1020 | 35.45% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.88% | 1.26% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -519,7 +528,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `UoraLightContention`
+### [script] Configuration: `UoraLightContention`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **11466**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -536,7 +545,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **11466
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 17 | 0.15% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.10% | 0.06% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -559,7 +568,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **11466
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `UoraMoreRandomAccessRus`
+### [script] Configuration: `UoraMoreRandomAccessRus`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **14027**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -576,7 +585,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **14027
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 16 | 0.11% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.08% | 0.06% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -599,11 +608,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **14027
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 `EdcaBaseline` provides the non-triggered control. The scheduled and mixed-access configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). The three UORA configurations expose load and RA-RU-count effects, but frame-subtype counts alone cannot distinguish an AID-0 random-access attempt from scheduled access or prove a collision. Use the per-STA `heUlRandomAccessAttempt` and `heUlRandomAccessSuccess` scalars for that decision evidence.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n -r \
@@ -630,7 +639,7 @@ frequency allocation after one Trigger. The scalar session is separate; it
 supplies the model's success classification but cannot be matched to these
 frame numbers.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -643,7 +652,7 @@ The matched heavy comparison directly supports increased random-access success
 in these five seeds, but not an optimal RU split. More RA-RUs consume capacity
 that could otherwise be scheduled.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - Scalar/vector and packet evidence are separate sessions.
 - Attempt/success counters have scalars but no temporal vectors.
@@ -652,14 +661,14 @@ that could otherwise be scheduled.
 - Co-record Trigger fields, UORA decisions, and sink delivery for one heavy
   pair to establish event-level causality and total-service impact.
 
-## Further experiments
+## [agent] Further experiments
 
 - Sweep 1–5 RA-RUs under the same heavy load and report both UORA success and
   total delivered goodput.
 - Vary the UORA contention window while keeping one RA-RU.
 - Add a scheduled-only eight-STA heavy control to quantify the capacity trade.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -672,7 +681,7 @@ that could otherwise be scheduled.
 | Architecture and sealing | required before any future `src/inet` edit |
 | Next handoff | simulation investigator to identify existing signal surface |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

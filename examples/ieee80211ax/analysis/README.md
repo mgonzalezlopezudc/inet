@@ -57,9 +57,12 @@ without repeating every raw input path and hash.
 `render_walkthrough_results.py` turns those session-bound metrics and figures
 into a compact marker-bounded table and plot link inside each walkthrough's
 scalar/vector section; it does not replace the authored query, aggregation,
-and interpretation text. The feature-specific analysis narratives are
-consolidated into those walkthroughs so the configuration, evidence, verdict,
-and debugging guidance remain together.
+and interpretation text. Generated headings are labeled `[script]`. With
+`--update`, the renderer also refreshes the scalar/vector entry in the
+script-owned results-session ledger below the walkthrough title while
+preserving the PCAP and agent-owned entries. The feature-specific analysis
+narratives are consolidated into those walkthroughs so the configuration,
+evidence, verdict, and debugging guidance remain together.
 
 ## Reproduce and verify
 
@@ -115,7 +118,10 @@ count-versus-airtime plot. The plot and provenance sidecar are stored at
 configuration result directories. Generated walkthrough sections reference
 that session-local copy. Reuse mode
 does not edit walkthroughs by default; `--update-walkthrough` is explicit and
-is reserved for the facade's publish step. It exits nonzero when an evidence
+is reserved for the facade's publish step. When enabled, it labels generated
+headings `[script]` and refreshes the PCAP entry in the script-owned
+results-session ledger without changing the scalar/vector or agent-owned
+entries. It exits nonzero when an evidence
 check is `FAIL`. `--allow-failed-evidence` is intended only for preserving an
 exploratory report whose failed checks will be investigated.
 

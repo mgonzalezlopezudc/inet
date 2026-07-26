@@ -1,5 +1,14 @@
 # Walkthrough: 802.11be downlink OFDMA with MRUs
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `NOT RUN`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `NOT RECORDED`.
+
 This example contrasts equal-sized Multiple Resource Unit (MRU) scheduling on
 a clean 320 MHz channel with the same scheduler under a configured puncturing
 mask. The learning outcome is to understand how an EHT access point (AP) can
@@ -7,7 +16,7 @@ divide frequency resources among several downlink recipients. The validation
 outcome is to observe a legal, decoded MRU allocation that avoids the
 punctured subchannels while delivering data to all four stations.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -22,7 +31,7 @@ assigning disjoint frequency resources. IEEE 802.11be adds MRUs, which combine
 permitted RU components. A valid feature test must observe the allocation
 itself; throughput or delivery counts alone cannot show which tones were used.
 
-## Scenario description
+## [agent] Scenario description
 
 The [NED network](Lan80211BeDlOfdma.ned) contains a wired server, one AP, and
 four stationary wireless hosts. Four 1000-byte UDP streams begin at 0.1 s and
@@ -39,7 +48,7 @@ The AP and hosts use a scalar radio medium with no external interferer.
 `sameTransmissionStartTimeCheck="ignore"` permits OFDMA sub-transmissions to
 start together. See [omnetpp.ini](omnetpp.ini).
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11be-2024 Clause 35.5.1.2 specifies RU allocation in an EHT MU
 PPDU. Tables 36-33 through 36-35 define the EHT-SIG OFDMA common field, RU
@@ -52,7 +61,7 @@ INET configures `EhtDlSchedulerEqualSizedMRUs`, a four-station limit,
 `0000 1100 0000 0000` is an INET scheduler/PHY input for the treatment. It is
 not itself proof that the transmitted EHT-SIG contained a legal allocation.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -66,7 +75,7 @@ input**; result records are **direct observations**; the payload rate is a
 **derived measurement**; any scheduler explanation without allocation
 telemetry is **inference**.
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -77,7 +86,7 @@ Both retained result headers contain a command-line `sim-time-limit=0.15s`
 that overrides the INI's 1.0 s value. The files are single-run diagnostic
 evidence, not a performance campaign.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -85,7 +94,7 @@ evidence, not a performance campaign.
 | Treatment excludes punctured subchannels | Typed EHT PCAP plus mask vector | Allocated tones overlap mask or remain unknown | Puncturing/allocation encoding | Co-record AP PCAPng and puncturing/allocation vectors |
 | Each scheduled user receives data | Host application scalars | Zero receiver count for a selected user | MU reception or address mapping | Correlate one allocation with receiver-side frames/results |
 
-## Reproduction
+## [agent] Reproduction
 
 The exact historical command that created the retained files was not
 preserved, so its exit status is not asserted. Run this minimal command from
@@ -101,7 +110,7 @@ bin/inet -u Cmdenv \
 There is currently no shared-suite entry for `eht_dl_ofdma`; consequently the
 generation-neutral PCAP command cannot yet bind captures to this walkthrough.
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are `results/EqualSizedMRUs-#0.{sca,vec}` and
 `results/PuncturedMRUs-#0.{sca,vec}`. Both record run 0, seed set 0, and a
@@ -127,7 +136,7 @@ repetitions. Each host delay vector contains 28 packets; the pooled
 equal-count mean is about 18.087 ms, but hosts and packet samples are not
 independent runs.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 No `.pcap` or `.pcapng` artifact is retained for either configuration. The
 intended capture points are `ap.wlan[0]` and each `host[*].wlan[0]`, with
@@ -144,7 +153,7 @@ tshark -n \
 | `EqualSizedMRUs` | 0 retained | `NOT RUN` | No protocol or PHY claim |
 | `PuncturedMRUs` | 0 retained | `NOT RUN` | No puncturing or MRU claim |
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 Use the following query after capture support is added:
 
@@ -164,7 +173,7 @@ TShark field availability varies by version. If EHT presence is known but
 values are not exported, use the shared raw-radiotap fallback; do not fill
 unknown fields from the INI.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -175,7 +184,7 @@ unknown fields from the INI.
 The retained results prove a matched, symmetric application outcome in a
 short single run. They do not prove the feature mechanism.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - No shared suite descriptor, PCAP manifest, or typed EHT decode covers this
   scenario.
@@ -184,7 +193,7 @@ short single run. They do not prove the feature mechanism.
 - The smallest resolving run co-records AP/host PCAPng, allocation telemetry,
   mask transitions, and application results for both configurations.
 
-## Further experiments
+## [agent] Further experiments
 
 - Add a no-puncturing/puncturing pair with one fixed seed and verify exact
   allocation legality before expanding seeds.
@@ -193,7 +202,7 @@ short single run. They do not prove the feature mechanism.
 - After mechanism evidence passes, run matched seeds and compare per-flow
   goodput and fairness.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -206,7 +215,7 @@ short single run. They do not prove the feature mechanism.
 | Architecture and sealing | Any future `src/inet` telemetry change requires architecture and seal checks |
 | Next handoff | Suite/plugin owner, then results/packet reviewer |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

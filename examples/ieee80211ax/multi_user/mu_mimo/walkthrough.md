@@ -1,5 +1,14 @@
 # Walkthrough: HE MU-MIMO
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `20260725T120411Z`
+- PCAP: `20260725T230510Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230510Z`.
+
 This example demonstrates IEEE 802.11ax multi-user multiple-input
 multiple-output (MU-MIMO): several stations use the same frequency resource
 with disjoint spatial streams. Five retained downlink runs directly expose
@@ -7,7 +16,7 @@ full-bandwidth stream allocations and a matched OFDMA outcome comparison;
 retained packet evidence also exposes sounding and a representative uplink
 Trigger assignment. Claims are bounded to INET's packet-level model.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -23,7 +32,7 @@ channel-state information (CSI), and assigns users non-overlapping spatial
 stream ranges. In uplink (UL), an AP Trigger aligns station transmissions and
 assigns a common full-bandwidth RU with different starting stream indices.
 
-## Scenario description
+## [agent] Scenario description
 
 There is no local `omnetpp.ini`.
 [downlink.ini](downlink.ini) includes
@@ -42,7 +51,7 @@ every 1 ms and use `dlMuAckMethod="sequentialBar"`. The UL scenario is 2 s,
 stationary, 20 MHz, and the wrapper raises offered load to one 1,000-byte
 packet per 0.5 ms while allowing a 1.5 ms HE TB PPDU.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 27.3.1.1 describes HE MU transmission; Clause
 27.3.2.5 defines resource/user indication for full-bandwidth DL MU-MIMO; Clause
@@ -55,7 +64,7 @@ channel matrix. AP result vectors are authoritative model telemetry for the
 allocation. Native capture exposes Trigger fields, but not every HE-SIG-B
 stream-allocation fact.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -67,7 +76,7 @@ stream-allocation fact.
 | UL goodput benefit versus EDCA | `NOT RUN` | no retained matched result set | none | Mechanism only |
 | Shared AX analyzer regenerates the split scenario | `PASS` | session `20260725T230510Z` manifest resolves `downlink.ini` and `uplink.ini` by configuration | run 0/seed 0 | DL and UL treatments completed |
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -81,7 +90,7 @@ stream-allocation fact.
 The wrapper's later assignments win over included defaults for payload,
 acknowledgment policy, send interval, PPDU limit, and wide-band warm-up.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -90,7 +99,7 @@ acknowledgment policy, send interval, PPDU limit, and wide-band warm-up.
 | UL Trigger assigns common RU/disjoint indices | Trigger User Info | differing RU or overlapping indices | UL scheduler/Trigger serialization | query exact User Info fields and HCF decision log |
 | MU outcome comparison is matched | metadata, inputs, receive vectors | workload/window/seed mismatch | experiment setup | inspect `.sca` run attrs before metrics |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET root. These illustrative commands were `NOT RUN` during
 this documentation revision:
@@ -117,7 +126,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --generate --subdir multi_user/mu_mimo --run 0 --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs are the ten `.vec` files in
 `results/20260725T120411Z/{DlMuMimo,EqualSizedRUs_fBW}/`.
@@ -154,7 +163,7 @@ spatial-stream interval must be disjoint. Goodput alone is not evidence that
 MU-MIMO occurred.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-mimo -->
-### Generated scalar/vector plot and table
+### [script] Generated scalar/vector plot and table
 
 ![mimo scalar/vector analysis](../../analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-stream-matrix.png)
 
@@ -168,7 +177,7 @@ Figure provenance: [`../../analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-s
 The table is a presentation view of the session-bound run-level summary. The source and aggregation columns reproduce the bundle-level figure provenance; the authored analysis identifies which source supports each metric and supplies the interpretation.
 <!-- END GENERATED: ieee80211-scalar-vector-mimo -->
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Retained captures are AP `wlan[0]` PCAPng/radiotap observations with
 microsecond precision; decode used TShark 4.6.4.
@@ -181,7 +190,7 @@ microsecond precision; decode used TShark 4.6.4.
 Rows count AP-interface observations, not de-duplicated application packets.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../../analysis/figures/multi_user/mu_mimo/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../../analysis/figures/multi_user/mu_mimo/packet_statistics.png.json).
@@ -194,14 +203,14 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
 | `DlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/20260725T230510Z/DlMuMimo/DlMuMimo-#0Lan80211AxDlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3597 | Data: QoS Data [HE-MU, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (2089), Control: Block Ack Request (BAR) (724), Control: Block Ack (BA) (724) | 132.19% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `UlMuMimo` | AP interface(s); capture observations<br>`examples/ieee80211ax/multi_user/mu_mimo/results/20260725T230510Z/UlMuMimo/UlMuMimo-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 3777 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1786), Control: Ack (1736), Data: QoS Null [HE-TB, HE, GI 3.2 us, A-MPDU] (147) | 58.47% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
@@ -209,7 +218,7 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 | **PASS** | UlMuMimo produced protocol-visible wireless observations | 3777 AP/global transmission observations |
 | **INCONCLUSIVE** | Multiple users with disjoint stream allocations in one PPDU | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `DlMuMimo`
+### [script] Configuration: `DlMuMimo`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3597**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -229,7 +238,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3597*
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#82cc33" /></svg> | A-MPDU Delimiter / Aggregation Overhead | 7 | 0.19% | 0.0 B | 0.0 B | 20.0 us | 0.0 us | 5010 MHz | - | - | 0.01% | 0.01% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -252,7 +261,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3597*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Configuration: `UlMuMimo`
+### [script] Configuration: `UlMuMimo`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3777**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -265,7 +274,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3777*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 51 | 1.35% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.17% | 0.10% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1736 | 45.96% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.66% | 2.14% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -288,11 +297,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3777*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2.5 identifies each HE-MU user and its spatial streams; the direct evidence is multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above; the radiotap suffix establishes the PPDU format but not all users' stream allocations.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n \
@@ -318,7 +327,7 @@ For DL sounding, `wlan.trigger.he.trigger_type==1` yields seven BFRP Triggers;
 frame 22 at 0.300989 s polls AIDs 2 and 3. This proves polling, while CSI
 validity and stream allocation remain separate telemetry claims.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -329,7 +338,7 @@ The verdict is `PASS` for the scoped DL and UL mechanism invariants. Only DL
 has retained matched multi-run outcome evidence. Mechanism and outcome sessions
 are separate, so their event-level causality is inference.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - DL results and packet captures were recorded in separate sessions.
 - No retained UL control/outcome campaign supports a throughput benefit.
@@ -338,7 +347,7 @@ are separate, so their event-level causality is inference.
   matrices.
 - Wide-band and SU-control cases are `NOT RUN` in retained evidence.
 
-## Further experiments
+## [agent] Further experiments
 
 - Run paired `UlMuMimo`/`EdcaBaseline` seeds and check Trigger stream indices
   before comparing goodput/fairness.
@@ -346,7 +355,7 @@ are separate, so their event-level causality is inference.
 - Sweep CSI validity while retaining sounding overhead, allocations, and
   per-run delivery.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -359,7 +368,7 @@ are separate, so their event-level causality is inference.
 | Architecture and sealing | apply architecture/seal rules before any `src/inet` proposal; none authorized here |
 | Next handoff | analysis-suite owner and results analyst |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|

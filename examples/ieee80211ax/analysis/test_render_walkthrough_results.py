@@ -4,6 +4,7 @@ from pathlib import Path
 from render_walkthrough_results import (
     metric_rows,
     replace_generated_section,
+    update_walkthrough,
     validate_bundle_provenance,
 )
 
@@ -28,19 +29,23 @@ class GeneratedSectionTest(unittest.TestCase):
 
     def test_inserts_before_next_level_two_heading(self):
         original = (
-            "# Walkthrough\n\n## **Scalar and vector analysis**\n\nAuthored.\n\n"
-            "## PCAP statistics\n\nPacket prose.\n"
+            "# Walkthrough\n\n"
+            "## [agent] **Scalar and vector analysis**\n\nAuthored.\n\n"
+            "## [agent] PCAP statistics\n\nPacket prose.\n"
         )
         updated = replace_generated_section(
             original, "ieee80211-scalar-vector-sample", "table"
         )
-        self.assertLess(updated.index("table"), updated.index("## PCAP statistics"))
+        self.assertLess(
+            updated.index("table"),
+            updated.index("## [agent] PCAP statistics"),
+        )
         self.assertIn("Authored.", updated)
 
     def test_marker_update_preserves_authored_text(self):
         marker = "ieee80211-scalar-vector-sample"
         original = (
-            "## Scalar and vector analysis\n\nBefore.\n\n"
+            "## [agent] Scalar and vector analysis\n\nBefore.\n\n"
             f"<!-- BEGIN GENERATED: {marker} -->\nold\n"
             f"<!-- END GENERATED: {marker} -->\n\nAfter.\n"
         )
@@ -49,6 +54,30 @@ class GeneratedSectionTest(unittest.TestCase):
         self.assertIn("After.", updated)
         self.assertNotIn("\nold\n", updated)
         self.assertIn("\nnew\n", updated)
+
+    def test_update_refreshes_scalar_session_and_preserves_agent_session(self):
+        content = (
+            "# Walkthrough\n\n"
+            "<!-- BEGIN SCRIPT RESULTS SESSIONS -->\n"
+            "`[script]` results sessions:\n\n"
+            "- Scalar/vector: `20260725T120411Z`\n"
+            "- PCAP: `20260725T230151Z`\n"
+            "<!-- END SCRIPT RESULTS SESSIONS -->\n\n"
+            "`[agent]` results sessions: `20260725T120411Z`.\n\n"
+            "## [agent] Scalar and vector analysis\n"
+        )
+        updated = update_walkthrough(
+            content,
+            "ieee80211-scalar-vector-sample",
+            "### [script] Generated table",
+            "20260726T160000Z",
+        )
+        self.assertIn("- Scalar/vector: `20260726T160000Z`", updated)
+        self.assertIn("- PCAP: `20260725T230151Z`", updated)
+        self.assertIn(
+            "`[agent]` results sessions: `20260725T120411Z`.",
+            updated,
+        )
 
 
 class ProvenanceTest(unittest.TestCase):

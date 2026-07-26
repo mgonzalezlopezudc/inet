@@ -19,6 +19,10 @@ from analysis_core import (
     load_manifest,
     result_session_directory,
 )
+from inet_wifi_analysis import (
+    normalize_heading_label,
+    update_script_results_session,
+)
 
 
 DEFAULT_METRICS = Path(__file__).resolve().parent / "metrics.json"
@@ -197,7 +201,7 @@ def render_group(
     aggregation_summary = window_aggregation_summary(sidecar_document)
 
     lines = [
-        "### Generated scalar/vector plot and table\n\n",
+        "### [script] Generated scalar/vector plot and table\n\n",
         f"![{group_name} scalar/vector analysis]({figure_link})\n\n",
         f"Figure provenance: [`{sidecar_link}`]({sidecar_link}). "
         f"Run-level metric source: [`{metrics_link}`]({metrics_link}).\n\n",
@@ -242,9 +246,7 @@ def replace_generated_section(
     heading_index = next(
         (
             index for index, match in enumerate(headings)
-            if re.sub(r"\s+", " ", re.sub(r"[`*_]", "", match.group(1)))
-            .strip()
-            .lower() == heading.lower()
+            if normalize_heading_label(match.group(1)) == heading.lower()
         ),
         None,
     )
@@ -259,6 +261,20 @@ def replace_generated_section(
     prefix = content[:section_end].rstrip()
     suffix = content[section_end:].lstrip("\n")
     return f"{prefix}\n\n{generated}\n{suffix}".rstrip() + "\n"
+
+
+def update_walkthrough(
+    content: str,
+    marker: str,
+    generated_markdown: str,
+    session_id: str,
+) -> str:
+    updated = replace_generated_section(content, marker, generated_markdown)
+    return update_script_results_session(
+        updated,
+        "Scalar/vector",
+        session_id,
+    )
 
 
 def parse_args() -> argparse.Namespace:
@@ -299,9 +315,17 @@ def main() -> None:
         walkthrough = REPOSITORY_ROOT / group["walkthrough"]
         if args.update:
             content = walkthrough.read_text(encoding="utf-8")
+            session_id = metrics["_provenance"]["groups"][group_name][
+                "session_id"
+            ]
             atomic_write_text(
                 walkthrough,
-                replace_generated_section(content, marker, markdown),
+                update_walkthrough(
+                    content,
+                    marker,
+                    markdown,
+                    session_id,
+                ),
             )
             print(f"UPDATED {walkthrough.relative_to(REPOSITORY_ROOT)}")
         else:

@@ -5,6 +5,10 @@ from .profiles import decode_phy_observation
 from .suite import Suite, load_suite, scenario_configuration_ini
 from .campaign import CampaignJob, build_cmdenv_command, collect_campaign_jobs
 from .io import SESSION_ID_PATTERN, atomic_write_text
+from .walkthrough import (
+    normalize_heading_label,
+    update_script_results_session,
+)
 from .paths import (
     result_configuration_directory,
     result_root,
@@ -18,6 +22,8 @@ __all__ = [
     "CampaignJob",
     "SESSION_ID_PATTERN",
     "atomic_write_text",
+    "normalize_heading_label",
+    "update_script_results_session",
     "build_cmdenv_command",
     "collect_campaign_jobs",
     "decode_phy_observation",

@@ -37,8 +37,10 @@ from inet_wifi_analysis import (
     decode_phy_observation,
     extract_eht_radiotap,
     load_suite,
+    normalize_heading_label,
     result_configuration_directory,
     scenario_configuration_ini,
+    update_script_results_session,
 )
 
 ANALYSIS_ROOT = Path(__file__).resolve().parent
@@ -2241,7 +2243,7 @@ def generate_markdown_tables(
         subdir, generated_plot_path
     )
     md = []
-    md.append("### Generated PCAP plots and tables\n")
+    md.append("### [script] Generated PCAP plots and tables\n")
     md.append(
         f"![802.11 Packet Type Statistics]({plot_path})\n\n"
     )
@@ -2270,11 +2272,11 @@ def generate_markdown_tables(
     md.append("Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.\n")
     md.append("- **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.\n")
     md.append("- **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.\n\n")
-    md.append("#### Compact cross-configuration summary\n\n")
+    md.append("#### [script] Compact cross-configuration summary\n\n")
     md.append(compact_statistics_markdown(config_results))
     md.append("\n")
 
-    md.append("### Evidence checks\n\n")
+    md.append("### [script] Evidence checks\n\n")
     md.append("| Status | Requirement | Observed evidence |\n")
     md.append("|---|---|---|\n")
     for check in checks:
@@ -2286,16 +2288,18 @@ def generate_markdown_tables(
         if not global_res or global_res["total"] == 0:
             continue
 
-        md.append(f"### Configuration: `{config_name}`\n")
+        md.append(f"### [script] Configuration: `{config_name}`\n")
         md.append(f"Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **{global_res['total']}**\n\n")
         md.append(make_table_md(global_res["stats"], global_res["total"]))
         md.append("\n")
-        md.append("#### Representative frame-exchange timeline\n\n")
+        md.append(
+            "#### [script] Representative frame-exchange timeline\n\n"
+        )
         md.append(timeline_markdown(global_res["timeline"]))
 
         if "mpdu_observations" in res:
             observation = res["mpdu_observations"]
-            md.append("#### MPDU observation semantics\n\n")
+            md.append("#### [script] MPDU observation semantics\n\n")
             md.append("| Metric | Value |\n|---|---:|\n")
             md.append(f"| Total data MPDU transmission observations | {observation['mpdu_transmission_observations']} |\n")
             md.append(f"| Unique `(TA, TID, sequence, fragment)` identities | {observation['unique_ta_tid_sequence_fragment']} |\n")
@@ -2306,7 +2310,10 @@ def generate_markdown_tables(
                       "the unique count is provided only for workload/reliability interpretation.\n\n")
 
         if "per_flow" in res:
-            md.append(f"#### Per-Flow Traffic Statistics for `{config_name}`\n\n")
+            md.append(
+                f"#### [script] Per-Flow Traffic Statistics for "
+                f"`{config_name}`\n\n"
+            )
 
             flows_desc = {
                 "host[0]": "Heavy Flow (destined to `host[0]`, offered load: 32 Mbps, size: 1000 B)",
@@ -2315,12 +2322,15 @@ def generate_markdown_tables(
             }
 
             for host_name, flow_res in sorted(res["per_flow"].items()):
-                md.append(f"##### {flows_desc.get(host_name, host_name)}\n")
+                md.append(
+                    f"##### [script] "
+                    f"{flows_desc.get(host_name, host_name)}\n"
+                )
                 md.append(f"Total packets captured for flow: **{flow_res['total']}**\n\n")
                 md.append(make_table_md(flow_res["stats"], flow_res["total"]))
                 md.append("\n")
 
-    md.append("### Analysis of Packet Distribution\n")
+    md.append("### [script] Analysis of Packet Distribution\n")
 
     analysis_text = ""
     if "twt" in subdir:
@@ -2453,9 +2463,7 @@ def find_level_two_section(content, label):
     index = next(
         (
             position for position, match in enumerate(headings)
-            if re.sub(r"\s+", " ", re.sub(r"[`*_]", "", match.group(1)))
-            .strip()
-            .lower() == label.lower()
+            if normalize_heading_label(match.group(1)) == label.lower()
         ),
         None,
     )
@@ -2500,7 +2508,12 @@ def replace_generated_section(content, md_content):
     return f"{prefix}\n\n{generated_content}\n{suffix}".rstrip() + "\n"
 
 
-def update_walkthrough_file(subdir, md_content):
+def update_walkthrough(content, md_content, session_id):
+    updated = replace_generated_section(content, md_content)
+    return update_script_results_session(updated, "PCAP", session_id)
+
+
+def update_walkthrough_file(subdir, md_content, session_id):
     walkthrough_path = EXAMPLE_ROOT / subdir / "walkthrough.md"
     if not walkthrough_path.exists():
         print(f"Walkthrough file not found: {walkthrough_path}")
@@ -2509,7 +2522,7 @@ def update_walkthrough_file(subdir, md_content):
     with open(walkthrough_path, "r") as f:
         content = f.read()
     try:
-        new_content = replace_generated_section(content, md_content)
+        new_content = update_walkthrough(content, md_content, session_id)
     except ValueError as error:
         raise RuntimeError(f"{error} in {walkthrough_path}") from error
 
@@ -2673,7 +2686,11 @@ def main():
             res, subdir, all_checks[subdir], manifest, plot_path
         )
         if md_table and args.update_walkthrough:
-            update_walkthrough_file(subdir, md_table)
+            update_walkthrough_file(
+                subdir,
+                md_table,
+                manifest["session_id"],
+            )
 
     summary_json_path = ANALYSIS_OUTPUT_DIR / "packet_metrics.json"
     serialized = {

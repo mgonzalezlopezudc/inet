@@ -1,12 +1,21 @@
 # Walkthrough: HE Operating Mode Indication
 
+<!-- BEGIN SCRIPT RESULTS SESSIONS -->
+`[script]` results sessions:
+
+- Scalar/vector: `NOT RUN`
+- PCAP: `20260725T230146Z`
+<!-- END SCRIPT RESULTS SESSIONS -->
+
+`[agent]` results sessions: `20260725T120411Z`, `20260725T230146Z`.
+
 This single-BSS uplink example requests an HE Operating Mode Indication (OMI)
 from `host[0]`: receive NSS 2, 20 MHz channel-width encoding 0, and UL MU
 Disable. Retained traffic and packet artifacts show that the run operated, but
 they do not expose the OM Control bits or the AP's updated peer state, so the
 central model invariant remains `INCONCLUSIVE`.
 
-## Learning objectives and feature primer
+## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
@@ -22,7 +31,7 @@ operating constraints; after successful reception, the responder updates how
 it addresses that peer in subsequent transmissions. This example also asks the
 AP not to select `host[0]` for uplink multi-user (UL MU) operation.
 
-## Scenario description
+## [agent] Scenario description
 
 [omnetpp.ini](omnetpp.ini) includes
 [`../../ul_ofdma/omnetpp.ini`](../../ul_ofdma/omnetpp.ini). The inherited
@@ -37,7 +46,7 @@ The 2 s, 5 GHz/20 MHz HE scenario starts warm-up traffic at 0.2 s and regular
 1,000-byte uplink flows at 0.3 s. `OperatingModeIndication` extends
 `ScheduledOnly`; the wrapper adds no overriding assignment.
 
-## Standards and INET model boundary
+## [agent] Standards and INET model boundary
 
 IEEE Std 802.11-2024 Clause 9.2.4.7.2 defines OM Control and its Rx NSS,
 Channel Width, and UL MU Disable fields; Clause 26.9.2 defines receive
@@ -50,7 +59,7 @@ explain the intended abstraction, not proof that this retained run executed
 each transition. Native capture decoding in this session does not expose the
 OM Control subfields.
 
-## Evidence status
+## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
@@ -66,7 +75,7 @@ decoded frames/results are **Direct observation**, computed counts are
 **Derived measurement**, and any proposed connection across the two retained
 sessions is **Inference**.
 
-## Configuration matrix
+## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
@@ -76,7 +85,7 @@ sessions is **Inference**.
 Confounder: there is no retained matched control, and the treatment's
 `ulTriggerCheckInterval=0.5s` is itself a delta from `ScheduledOnly`.
 
-## Expected invariants and diagnostic map
+## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
@@ -85,7 +94,7 @@ Confounder: there is no retained matched control, and the treatment's
 | UL scheduler excludes host 0 | Trigger User Info AIDs after update | host 0 remains selected | UL scheduler | decode Trigger AIDs and correlate decision log |
 | application delivery remains healthy | app send/receive vectors | unexplained deficit | MAC/upper path | correlate retries and app vectors |
 
-## Reproduction
+## [agent] Reproduction
 
 Run from the INET repository root. This command is illustrative and was
 `NOT RUN` during this revision:
@@ -107,7 +116,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --allow-failed-evidence
 ```
 
-## Scalar and vector analysis
+## [agent] Scalar and vector analysis
 
 Inputs:
 `results/20260725T120411Z/OperatingModeIndication/OperatingModeIndication-#0.sca`
@@ -131,7 +140,7 @@ No plot: the retained results contain application totals but no OM Control or
 peer-state telemetry, so a chart would not distinguish the operating-mode
 mechanism.
 
-## PCAP statistics
+## [agent] PCAP statistics
 
 Capture point: AP `wlan[0]`; PCAPng/radiotap, microsecond precision, computed
 checksum/FCS session; TShark 4.6.4.
@@ -149,7 +158,7 @@ tshark -n \
 Rows are AP-interface observations, not de-duplicated end-to-end packets.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
-### Generated PCAP plots and tables
+### [script] Generated PCAP plots and tables
 ![802.11 Packet Type Statistics](../../analysis/figures/mac_features/operating_mode_indication/packet_statistics.png)
 
 Figure provenance: [`packet_statistics.png.json`](../../analysis/figures/mac_features/operating_mode_indication/packet_statistics.png.json).
@@ -162,20 +171,20 @@ Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
 - **Air Time (Sim Time) %**: The sum of this frame type's estimated airtimes divided by the simulation time limit. Concurrent transmissions from multiple capture points are counted separately, so this value can exceed 100%; it is not the union of busy channel time.
 
-#### Compact cross-configuration summary
+#### [script] Compact cross-configuration summary
 
 | Configuration | Observation point / counting unit | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---|---:|---|---:|---|
 | `OperatingModeIndication` | AP interface(s); capture observations<br>`examples/ieee80211ax/mac_features/operating_mode_indication/results/20260725T230146Z/OperatingModeIndication/OperatingModeIndication-#0Lan80211AxUlOfdma.ap.wlan[0].pcap` | `none (all decoded frames)` | 2489 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023), Control: Trigger (3) | 46.63% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
-### Evidence checks
+### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
 | **PASS** | OperatingModeIndication produced protocol-visible wireless observations | 2489 AP/global transmission observations |
 | **INCONCLUSIVE** | OM Control value and receiver-applied width/NSS | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### Configuration: `OperatingModeIndication`
+### [script] Configuration: `OperatingModeIndication`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2489**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -186,7 +195,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2489*
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 3 | 0.12% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1023 | 41.10% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.71% | 1.26% |
 
-#### Representative frame-exchange timeline
+#### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
@@ -209,11 +218,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2489*
 
 Frame numbers are local to the named capture, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### Analysis of Packet Distribution
+### [script] Analysis of Packet Distribution
 The data and acknowledgment counts show traffic before and after the configured operating-mode change, but frame subtype statistics cannot expose the Operating Mode Indication element or OM Control subfield. Standard behavior must be checked from those fields and the receiver's applied channel-width/NSS state, not inferred from the packet total.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
-## Frame exchange analysis
+## [agent] Frame exchange analysis
 
 ```sh
 tshark -n \
@@ -232,7 +241,7 @@ tshark -n \
 The missing decisive field makes this timeline diagnostic rather than a
 passing feature exchange. TShark frame numbers are not simulator event numbers.
 
-## Cross-layer findings and verdict
+## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
@@ -242,7 +251,7 @@ passing feature exchange. TShark frame numbers are not simulator event numbers.
 The overall verdict is `INCONCLUSIVE`. Configuration proves intent; the
 retained packet and application sessions do not close the mechanism chain.
 
-## Limitations and inconclusive claims
+## [agent] Limitations and inconclusive claims
 
 - No decoded OM Control bits, AP peer-state transition, or scheduler-decision
   vector is retained.
@@ -251,14 +260,14 @@ retained packet and application sessions do not close the mechanism chain.
 - The smallest resolving run co-records outgoing OM fields, AP peer state,
   Trigger AIDs, and application vectors for treatment and `ScheduledOnly`.
 
-## Further experiments
+## [agent] Further experiments
 
 - Run an OMI-off control with the same seed and trigger interval.
 - Set only UL MU Disable false; host 0 should reappear in eligible Trigger AIDs.
 - Exercise `OmiRxNssReduction` and directly check AP stream allocation for host
   0, not aggregate throughput.
 
-## Implementation plan
+## [agent] Implementation plan
 
 | Item | Evidence-backed plan |
 |---|---|
@@ -271,7 +280,7 @@ retained packet and application sessions do not close the mechanism chain.
 | Architecture and sealing | architecture/seal review required before any `src/inet` change; none is authorized here |
 | Next handoff | analysis owner, then HCF owner if runtime signals are required |
 
-## Artifact provenance
+## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
