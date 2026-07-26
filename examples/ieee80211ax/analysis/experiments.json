@@ -1,5 +1,4 @@
 {
-  "schema_version": 2,
   "default_repetitions": 5,
   "evidence_contracts": {
     "fragmentation": [

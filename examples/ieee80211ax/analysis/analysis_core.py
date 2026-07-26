@@ -60,8 +60,6 @@ QUERY_OPTIONS = {
 def load_manifest(path: Path = DEFAULT_MANIFEST) -> dict[str, Any]:
     with path.open(encoding="utf-8") as stream:
         manifest = json.load(stream)
-    if manifest.get("schema_version") != 2:
-        raise RuntimeError(f"Unsupported analysis manifest schema in {path}")
     validate_evidence_contracts(manifest)
     return manifest
 
