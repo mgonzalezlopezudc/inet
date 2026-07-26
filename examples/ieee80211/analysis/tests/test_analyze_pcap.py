@@ -474,6 +474,24 @@ class CaptureValidationTest(unittest.TestCase):
 
 class DlOfdmaEvidenceTest(unittest.TestCase):
 
+    def test_per_flow_attribution_is_not_run_without_asymmetric_configs(self):
+        key = ("2", "8", "HE-MU", "HE-MCS 1", "106-tone RU",
+               "3.2 us", "1", "LDPC", True, False)
+        config_results = {
+            "EqualSizedRUs_fBW": {
+                "global": {"stats": {key: {"count": 2}}, "total": 2},
+            }
+        }
+
+        checks = {
+            check["id"]: check
+            for check in evaluate_evidence(config_results, "dl_ofdma")
+        }
+
+        check = checks["dl-ofdma-per-user-attribution"]
+        self.assertEqual(check["status"], "NOT RUN")
+        self.assertIn("No asymmetric backlog/HoL", check["evidence"])
+
     def test_he_mu_qos_ampdu_and_per_flow_attribution_pass(self):
         key = ("2", "8", "HE-MU", "HE-MCS 1", "52-tone RU",
                "3.2 us", "1", "LDPC", True, False)

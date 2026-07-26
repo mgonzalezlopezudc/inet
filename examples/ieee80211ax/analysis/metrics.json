@@ -1,0 +1,286 @@
+{
+  "_provenance": {
+    "generated_at_utc": "2026-07-26T13:18:08.550704+00:00",
+    "groups": {
+      "width": {
+        "conditions": [
+          {
+            "configuration": "Width20MHz",
+            "group": "width",
+            "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
+            "label": "20 MHz",
+            "measurement": {
+              "end_s": 0.43,
+              "start_s": 0.3
+            },
+            "metadata": {
+              "bandwidth_mhz": 20
+            },
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#0.sca",
+                "sha256": "9aac5c8107c3ce91086316722beac67a98a2530cb2c5a9a10aa4d68b36afa731"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#0.vec",
+                "sha256": "8f44f89b7ff55bd5121753f33e5c85d9e6d2d80bc912bf4c5da679f470d4b787"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#1.sca",
+                "sha256": "1026bf1dabb4fcddbc56d22cabeaa317b16fff50aa28dc4c8eb78c29a8fcc780"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#1.vec",
+                "sha256": "ed666ece8f8bce1aa4ddb6948a506eb25ec31116dfcfe1931e3ce9504a87999d"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#2.sca",
+                "sha256": "5619b45102ccb918a8823c4c1411d9e9ca8443173e91a83899cb5b43589c368b"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#2.vec",
+                "sha256": "ecbe1066772d6a52ababd149943f4ab2521834a1bf6da23103ce768cba2a29ae"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#3.sca",
+                "sha256": "1393a5e2b8fb9b9762ff55bba9259c45bf2446bd5b4608027a4b23c6589ee070"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#3.vec",
+                "sha256": "03fdd3a3704381d66cd641de99552d92ae5aceb3fbfde39f1cb61f7b7f709d35"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#4.sca",
+                "sha256": "fa8c01b15fd01be85141998db4c89fe11019902e30131257f55ef9b8d4945a04"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width20MHz/Width20MHz-#4.vec",
+                "sha256": "171e5aa8ea636cddc6cf07b42caabbc2c229c8999840037e76a320cf8460dcae"
+              }
+            ]
+          },
+          {
+            "configuration": "Width40MHz",
+            "group": "width",
+            "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
+            "label": "40 MHz",
+            "measurement": {
+              "end_s": 0.43,
+              "start_s": 0.3
+            },
+            "metadata": {
+              "bandwidth_mhz": 40
+            },
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#0.sca",
+                "sha256": "0b0cf53f7add9d8ad2eba51d2094cf0cea63e33e73b24515d8c6afa97c12fff5"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#0.vec",
+                "sha256": "231b3150263d2bc8e0a47bd6754dfc1a6b4b6dcd010b3c03caa28ae8ded813d0"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#1.sca",
+                "sha256": "213e7f941446f97f0e07b1116adea7dd8bfd0b95ee3079f571d0bba095f31e98"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#1.vec",
+                "sha256": "a72c78e9186cb3c7f113f9c1f42f324c27383823a5960ce1f655a6321a0494ee"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#2.sca",
+                "sha256": "32c06ce41ffefc0e789042a2ae68c82f264bf0f99e3d390b164da4fe57cea0b8"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#2.vec",
+                "sha256": "72f60611e31918b83dbbd7b140ad4f75b7f2400cf33da93e02ca9235113442f0"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#3.sca",
+                "sha256": "ce70d392c1b3d3833da317eb72aa2d337b926442db5c5a2b04f9e4afe3912902"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#3.vec",
+                "sha256": "5d071137fd453574713954676747a532f21208f7f2a44eeaca4b4811fbc17b2d"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#4.sca",
+                "sha256": "86c4ee044b39049039fb448ab9cfbc0659fb138673c9d64f71cfdd9ffe20a9e6"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width40MHz/Width40MHz-#4.vec",
+                "sha256": "d89e5fb7fde57165762df87f92dca0bba2bc653c547173e9c75c9091de5d9341"
+              }
+            ]
+          },
+          {
+            "configuration": "Width80MHz",
+            "group": "width",
+            "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
+            "label": "80 MHz",
+            "measurement": {
+              "end_s": 0.43,
+              "start_s": 0.3
+            },
+            "metadata": {
+              "bandwidth_mhz": 80
+            },
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#0.sca",
+                "sha256": "64773bd7c39cef3070295d316be12384704fc7a01938b33656687e369ba11c95"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#0.vec",
+                "sha256": "52b7c41b84efc441948b337ba36a6a9c2083e4a6d38da8aed9333e8d886231ce"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#1.sca",
+                "sha256": "f763d98e27dde16de394016fea75f62faf3ff69a861848994fe647f1ab47b98f"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#1.vec",
+                "sha256": "8a41b23203af71c1880c2ef80244dd95f2b22524034ea078b386a9d915a6e0d9"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#2.sca",
+                "sha256": "ad7c1ac7372315fdb8b391fc8608eb678c5e4b0e0ee492b0503709735456dab4"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#2.vec",
+                "sha256": "128bfeeb1d218d0c72e5a4afdd6bae6267aaae442dc30c0aa248030f39c7c9ef"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#3.sca",
+                "sha256": "51f04dabd91e2869d30824490ea26e5bba463818fcabe412eb3cc5d5e4406b52"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#3.vec",
+                "sha256": "9c6ddce2cc0239c99ddc82d75986d08f3ea482c0ef9046cca70d78cf216dd0e6"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#4.sca",
+                "sha256": "e741ee39d291f038b2c2b0893c545ccaa271b7b92937a990196cc06740d9ab79"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width80MHz/Width80MHz-#4.vec",
+                "sha256": "e189f9857a98f2f17780d9943bca9d9e15ee07bc93ea16854dcf2f9122631864"
+              }
+            ]
+          },
+          {
+            "configuration": "Width160MHz",
+            "group": "width",
+            "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
+            "label": "160 MHz",
+            "measurement": {
+              "end_s": 0.43,
+              "start_s": 0.3
+            },
+            "metadata": {
+              "bandwidth_mhz": 160
+            },
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#0.sca",
+                "sha256": "375770777dc294c46ba7902a6fd5748562aaeb305c9102f11375b7b0e2c324f2"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#0.vec",
+                "sha256": "09595e4a2eca233c92d453b269024c846b6e12b5c15edf86d64bbafa5cb14457"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#1.sca",
+                "sha256": "301365f3bdd2def01184830954f59f677a684e031742ae4618b02d6ac3a5e1ab"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#1.vec",
+                "sha256": "63a99ba49b6a742614cba41c5d1d2bb38de208aba1e92e3aa7f9e4798386d3a7"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#2.sca",
+                "sha256": "3ea3efbdf85b9b321e8441f57e26de73b88a357cc9133d693038be13830c16ec"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#2.vec",
+                "sha256": "3846d715f8c479838141b3c45fdc0867dae7ee632f31c71aecb21a8dd821451f"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#3.sca",
+                "sha256": "5baa38b8db5653a0103cc5acc551867a5fa7fa3a7c4907e5dc256113d87d05d9"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#3.vec",
+                "sha256": "f291fc21feefe3091b8726103dece680744bb6080da1708282491aa943c5866c"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#4.sca",
+                "sha256": "9c4a0a5c0eb6cdeb536aa184f0fba25db2f60fd177904cd3c23bbb85a209050e"
+              },
+              {
+                "path": "examples/ieee80211ax/he_channel_widths/results/20260726T160000Z/Width160MHz/Width160MHz-#4.vec",
+                "sha256": "e12e68da5cfa9314a4c60d32063252ae6fcfbc60b576d5ee95c6b407ca7a3b87"
+              }
+            ]
+          }
+        ],
+        "session_id": "20260726T160000Z",
+        "status": "PASS"
+      }
+    },
+    "repository_revision": "ecd5b292ef9fe0a222cab3ee3bd6ae7b1d62fd61",
+    "requested_session_id": "20260726T160000Z",
+    "schema_version": 1
+  },
+  "width": {
+    "160 MHz": {
+      "delay_p95_ms": {
+        "ci95": 0.07508936722650512,
+        "count": 5,
+        "mean": 9.406249004
+      },
+      "goodput_mbps": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 118.64615384615384
+      }
+    },
+    "20 MHz": {
+      "delay_p95_ms": {
+        "ci95": 0.05730921671679775,
+        "count": 5,
+        "mean": 97.25304900399999
+      },
+      "goodput_mbps": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 26.89230769230769
+      }
+    },
+    "40 MHz": {
+      "delay_p95_ms": {
+        "ci95": 0.07668519265465887,
+        "count": 5,
+        "mean": 63.809049003999995
+      },
+      "goodput_mbps": {
+        "ci95": 0.0,
+        "count": 5,
+        "mean": 50.707692307692305
+      }
+    },
+    "80 MHz": {
+      "delay_p95_ms": {
+        "ci95": 0.0750739667011808,
+        "count": 5,
+        "mean": 40.060249004
+      },
+      "goodput_mbps": {
+        "ci95": 0.3348122489394574,
+        "count": 5,
+        "mean": 81.4276923076923
+      }
+    }
+  }
+}

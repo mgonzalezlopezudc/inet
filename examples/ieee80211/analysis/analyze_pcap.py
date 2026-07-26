@@ -2095,9 +2095,17 @@ def evaluate_evidence(config_results, subdir):
         per_flow_passed = bool(per_flow_he_mu) and all(count > 0 for count in per_flow_he_mu.values())
         checks.append({
             "id": "dl-ofdma-per-user-attribution",
-            "status": "PASS" if per_flow_passed else "FAIL",
+            "status": (
+                "PASS" if per_flow_passed
+                else "FAIL" if per_flow_he_mu
+                else "NOT RUN"
+            ),
             "requirement": "HE-MU recipient addresses support per-flow PCAP grouping",
-            "evidence": ", ".join(f"{name}: {count}" for name, count in per_flow_he_mu.items()),
+            "evidence": (
+                ", ".join(f"{name}: {count}" for name, count in per_flow_he_mu.items())
+                if per_flow_he_mu
+                else "No asymmetric backlog/HoL configuration was selected"
+            ),
         })
 
     elif subdir == "he_features":
