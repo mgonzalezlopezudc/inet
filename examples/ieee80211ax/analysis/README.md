@@ -97,14 +97,14 @@ MPLCONFIGDIR=/tmp/matplotlib \
   --reuse --session-id 20260725T120000Z --subdir dl_ofdma --run 0
 ```
 
-Capture indexes use schema 2. The analyzer publishes immutable history at
+The analyzer publishes immutable capture-index history at
 `examples/ieee80211/analysis/generated/ax/capture_manifests/<session-id>.json`
 before atomically replacing
 `examples/ieee80211/analysis/generated/ax/capture_manifest.json`
 with the same full latest-session mirror.
 `--reuse --session-id ...` selects exact history; omitting the ID selects the
 latest mirror. The old standalone packet-statistics manifests and generator
-are removed. Each schema-2 entry
+are removed. Each capture-manifest entry
 records the scalar hash and run attributes plus `capinfos` file, link,
 size/count, timestamp-order, precision, snapshot, and interface metadata.
 

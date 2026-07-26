@@ -31,7 +31,6 @@ from analyze_pcap import (
     GENERATED_BEGIN,
     GENERATED_END,
     MANIFEST_PATH,
-    SUPPORTED_MANIFEST_SCHEMAS,
     capture_map_from_manifest,
     capture_source_state,
     calculate_phy_rate,
@@ -47,7 +46,6 @@ from analyze_pcap import (
     replace_generated_section,
     load_json_without_duplicates,
     manifest_provenance,
-    manifest_schema_version,
     main,
     parse_args,
     parse_capinfos_interfaces,
@@ -612,6 +610,7 @@ class CaptureManifestTest(unittest.TestCase):
             "examples/ieee80211/analysis/suites/ax.json",
         )
         self.assertEqual(len(manifest["suite_descriptor"]["sha256"]), 64)
+        self.assertNotIn("schema_version", manifest)
 
     def test_shared_analyzer_has_no_ax_analysis_core_dependency(self):
         source = Path(analyze_pcap.__file__).read_text(encoding="utf-8")
@@ -649,7 +648,7 @@ class CaptureManifestTest(unittest.TestCase):
             validate_capture_metadata(metadata)
 
     def test_history_is_published_before_latest_and_never_clobbered(self):
-        manifest = {"schema_version": 2, "session_id": "20260725T120000Z"}
+        manifest = {"session_id": "20260725T120000Z"}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             latest = root / "latest.json"
@@ -796,13 +795,7 @@ class CaptureManifestTest(unittest.TestCase):
                 )
             )
 
-    def test_session_selection_duplicate_keys_and_current_schema(self):
-        self.assertEqual(SUPPORTED_MANIFEST_SCHEMAS, {2})
-        with self.assertRaisesRegex(RuntimeError, "Unsupported"):
-            manifest_schema_version({"schema_version": 1})
-        self.assertEqual(manifest_schema_version({"schema_version": 2}), 2)
-        with self.assertRaisesRegex(RuntimeError, "Unsupported"):
-            manifest_schema_version({"schema_version": 3})
+    def test_session_selection_and_duplicate_keys(self):
         self.assertEqual(selected_manifest_path(), MANIFEST_PATH)
         self.assertTrue(
             str(selected_manifest_path("20260725T120000Z")).endswith(
@@ -813,7 +806,7 @@ class CaptureManifestTest(unittest.TestCase):
             dir=Path(__file__).resolve().parent
         ) as directory:
             duplicate = Path(directory) / "duplicate.json"
-            duplicate.write_text('{"schema_version": 1, "schema_version": 2}')
+            duplicate.write_text('{"session_id": "first", "session_id": "second"}')
             with self.assertRaisesRegex(RuntimeError, "Duplicate JSON key"):
                 load_json_without_duplicates(duplicate)
 

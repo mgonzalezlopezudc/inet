@@ -53,8 +53,6 @@ GENERATED_MARKER = None
 GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
 GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
 SUITE_SCENARIOS = {}
-MANIFEST_SCHEMA_VERSION = 2
-SUPPORTED_MANIFEST_SCHEMAS = {2}
 EVIDENCE_STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT RUN"}
 TIMELINE_LIMIT = 16
 
@@ -899,7 +897,6 @@ def build_capture_manifest(
                 f"Shared campaign result session does not exist: {result_root}"
             )
     manifest = {
-        "schema_version": MANIFEST_SCHEMA_VERSION,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "session_id": session_id,
         "repository_revision": revision,
@@ -937,13 +934,6 @@ def load_json_without_duplicates(path):
     return json.loads(path.read_text(), object_pairs_hook=_reject_duplicate_keys)
 
 
-def manifest_schema_version(manifest):
-    version = manifest.get("schema_version")
-    if version not in SUPPORTED_MANIFEST_SCHEMAS:
-        raise RuntimeError(f"Unsupported capture manifest schema {version!r}")
-    return version
-
-
 def selected_manifest_path(requested_session_id=None):
     if requested_session_id is not None:
         if not SESSION_ID_PATTERN.fullmatch(requested_session_id):
@@ -974,7 +964,7 @@ def suite_provenance():
 
 
 def validate_entry_binding(entry, manifest_session):
-    """Bind one schema-2 entry to its declared session/config/run artifacts."""
+    """Bind one capture-manifest entry to its declared session/config/run artifacts."""
     errors = []
     subdir = entry.get("subdir")
     config = entry.get("config")
@@ -1015,7 +1005,6 @@ def load_and_validate_manifest(selected_subdirs, run_number, requested_session_i
         raise RuntimeError(f"Reuse requested but {manifest_path.relative_to(REPOSITORY_ROOT)} does not exist")
     manifest = load_json_without_duplicates(manifest_path)
     errors = []
-    manifest_schema_version(manifest)
     if requested_session_id is not None and manifest.get("session_id") != requested_session_id:
         errors.append("manifest session does not match --session-id")
     if not SESSION_ID_PATTERN.fullmatch(str(manifest.get("session_id", ""))):
