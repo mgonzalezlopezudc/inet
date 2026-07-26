@@ -61,10 +61,9 @@ TIMELINE_LIMIT = 16
 subdirs_configs = {}
 DL_OFDMA_SUBDIRS = {"dl_ofdma_sched", "dl_ofdma_asym"}
 DL_OFDMA_ASYM_CONFIGS = {
-    "BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms",
-    "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms",
-    "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms",
-    "BacklogBased1_5ms", "HoLMinDelay1_5ms",
+    "BacklogBased", "HoLMinDelay", "BacklogBased2_0ms", "HoLMinDelay2_0ms",
+    "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms",
+    "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms",
 }
 
 

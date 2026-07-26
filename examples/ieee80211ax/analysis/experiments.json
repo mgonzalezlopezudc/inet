@@ -181,16 +181,10 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.88},
       "conditions": [
-        {"label": "Backlog", "config": "BacklogBased", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
-        {"label": "HoL min delay", "config": "HoLMinDelay", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
-        {"label": "Backlog (4ms)", "config": "BacklogBased4ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2000000, 800000, 200000]}},
-        {"label": "HoL min delay (4ms)", "config": "HoLMinDelay4ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2000000, 800000, 200000]}},
-        {"label": "Backlog (3ms)", "config": "BacklogBased3ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2666667, 1066667, 266667]}},
-        {"label": "HoL min delay (3ms)", "config": "HoLMinDelay3ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2666667, 1066667, 266667]}},
-        {"label": "Backlog (3.5ms)", "config": "BacklogBased3_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2285714, 914286, 228571]}},
-        {"label": "HoL min delay (3.5ms)", "config": "HoLMinDelay3_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [2285714, 914286, 228571]}},
         {"label": "Backlog (2.5ms)", "config": "BacklogBased2_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [3200000, 1280000, 320000]}},
         {"label": "HoL min delay (2.5ms)", "config": "HoLMinDelay2_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [3200000, 1280000, 320000]}},
+        {"label": "Backlog (2.0ms)", "config": "BacklogBased2_0ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
+        {"label": "HoL min delay (2.0ms)", "config": "HoLMinDelay2_0ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [4000000, 1600000, 400000]}},
         {"label": "Backlog (1.5ms)", "config": "BacklogBased1_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [5333333, 2133333, 533333]}},
         {"label": "HoL min delay (1.5ms)", "config": "HoLMinDelay1_5ms", "metadata": {"workload": "asymmetric", "offered_bps_by_index": [5333333, 2133333, 533333]}}
       ]

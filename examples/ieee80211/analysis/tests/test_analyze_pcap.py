@@ -522,7 +522,7 @@ class DlOfdmaEvidenceTest(unittest.TestCase):
         key = ("2", "8", "HE-MU", "HE-MCS 1", "52-tone RU",
                "3.2 us", "1", "LDPC", True, False)
         config_results = {}
-        for config_name in ("BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms"):
+        for config_name in ("BacklogBased", "HoLMinDelay", "BacklogBased2_0ms", "HoLMinDelay2_0ms", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms"):
             per_flow = {
                 host_name: {"stats": {key: {"count": 1}}, "total": 1}
                 for host_name in ("host[0]", "host[1]", "host[2]")

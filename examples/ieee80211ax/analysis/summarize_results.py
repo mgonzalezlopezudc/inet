@@ -61,11 +61,24 @@ def natural_sort_key(s: str) -> list[object]:
     return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(s))]
 
 
+def condition_sort_key(s: str) -> list[object]:
+    name = str(s)
+    if "2.5ms" in name:
+        rank = 1
+    elif "2.0ms" in name or "2ms" in name:
+        rank = 2
+    elif "1.5ms" in name:
+        rank = 3
+    else:
+        rank = 0
+    return [rank] + natural_sort_key(name)
+
+
 def sort_payload_keys(obj: Any) -> Any:
     if isinstance(obj, dict):
         sorted_keys = sorted(
             obj.keys(),
-            key=lambda k: (0 if k == "_provenance" else 1, natural_sort_key(k)),
+            key=lambda k: (0 if k == "_provenance" else 1, condition_sort_key(k)),
         )
         return {k: sort_payload_keys(obj[k]) for k in sorted_keys}
     if isinstance(obj, list):

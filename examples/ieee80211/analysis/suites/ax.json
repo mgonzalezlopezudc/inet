@@ -97,7 +97,7 @@
     "dl_ofdma_asym": {
       "scalar_vector_group": "dl_asym",
       "ini": "dl_ofdma_asym/omnetpp.ini",
-      "configurations": ["BacklogBased", "HoLMinDelay", "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms", "BacklogBased3_5ms", "HoLMinDelay3_5ms", "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms"],
+      "configurations": ["BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased2_0ms", "HoLMinDelay2_0ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"]
     },

@@ -600,8 +600,11 @@ def plot_dl(conditions: list[Condition], output: Path) -> None:
                 if np.any(np.asarray(byte_row.vecvalue) < 0) or np.any(np.asarray(duration_row.vecvalue) <= 0):
                     raise RuntimeError(f"{condition.config}/{run_id}: invalid scheduled bytes or airtime")
 
-    workloads = ["symmetric", "asymmetric"]
-    fig, axes = plt.subplots(2, 3, figsize=(15, 9))
+    workloads = [w for w in ["symmetric", "asymmetric"] if any(c.condition_metadata.get("workload") == w for c in conditions)]
+    if not workloads:
+        workloads = ["asymmetric"]
+    fig, axes = plt.subplots(len(workloads), 3, figsize=(15, 4.8 * len(workloads)))
+    axes = np.atleast_2d(axes)
     for row_index, workload in enumerate(workloads):
         selected = [condition for condition in conditions if condition.condition_metadata.get("workload") == workload]
         labels = [condition.label for condition in selected]
