@@ -102,7 +102,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 Inputs:
 `results/scalar-vector/20260725T120411Z/HeMinstrelMobile/*.{sca,vec}`.
 Figure provenance:
-[rate-adaptation-timeline.png.json](../analysis/figures/rate/rate-adaptation-timeline.png.json).
+[rate-adaptation-timeline.png.json](../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png.json).
 
 ```sh
 opp_scavetool query -l \
@@ -129,9 +129,9 @@ the representative controller timeline excludes its initial settling phase.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-rate -->
 ### Generated scalar/vector plot and table
 
-![rate scalar/vector analysis](../analysis/figures/rate/rate-adaptation-timeline.png)
+![rate scalar/vector analysis](../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png)
 
-Figure provenance: [`../analysis/figures/rate/rate-adaptation-timeline.png.json`](../analysis/figures/rate/rate-adaptation-timeline.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png.json`](../analysis/figures/he_rate_adaptation/rate-adaptation-timeline.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|

@@ -113,7 +113,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
 
 Inputs are the `.sca`/`.vec` pairs in each configuration directory under
 `results/scalar-vector/20260725T120411Z/`. The sidecar
-[he-er-su-boundary.png.json](../analysis/figures/er/he-er-su-boundary.png.json)
+[he-er-su-boundary.png.json](../analysis/figures/he_er_su/he-er-su-boundary.png.json)
 records all hashes, filters, seeds, and the `0.3–2.0 s` window.
 
 ```sh
@@ -135,9 +135,9 @@ zero. This supports a bounded delivery comparison, not a general range claim.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-er -->
 ### Generated scalar/vector plot and table
 
-![er scalar/vector analysis](../analysis/figures/er/he-er-su-boundary.png)
+![er scalar/vector analysis](../analysis/figures/he_er_su/he-er-su-boundary.png)
 
-Figure provenance: [`../analysis/figures/er/he-er-su-boundary.png.json`](../analysis/figures/er/he-er-su-boundary.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/he_er_su/he-er-su-boundary.png.json`](../analysis/figures/he_er_su/he-er-su-boundary.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|
@@ -369,4 +369,4 @@ goodput at this configured boundary, with per-packet causal attribution
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T120411Z` | boundary pair, runs/seeds `0–4` | sidecar; `0.3–2.0 s` | SHA-256 per input |
 | PCAP | `results/packet-statistics/20260725T234448Z` | three configs, run/seed `0` | TShark 4.6.4; MAC | manifest and hashes in generated block |
-| Figure | `../analysis/figures/er/he-er-su-boundary.png` | boundary pair | per-run CI | provenance sidecar |
+| Figure | `../analysis/figures/he_er_su/he-er-su-boundary.png` | boundary pair | per-run CI | provenance sidecar |

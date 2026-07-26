@@ -111,7 +111,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
 
 Inputs are the `.sca` and `.vec` files in each configuration directory under
 `results/scalar-vector/20260725T120411Z/`. The sidecar
-[channel-width-dashboard.png.json](../analysis/figures/width/channel-width-dashboard.png.json)
+[channel-width-dashboard.png.json](../analysis/figures/he_channel_widths/channel-width-dashboard.png.json)
 binds all hashes, filters, runs, and the `0.3–0.43 s` window.
 
 ```sh
@@ -136,9 +136,9 @@ window.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-width -->
 ### Generated scalar/vector plot and table
 
-![width scalar/vector analysis](../analysis/figures/width/channel-width-dashboard.png)
+![width scalar/vector analysis](../analysis/figures/he_channel_widths/channel-width-dashboard.png)
 
-Figure provenance: [`../analysis/figures/width/channel-width-dashboard.png.json`](../analysis/figures/width/channel-width-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/he_channel_widths/channel-width-dashboard.png.json`](../analysis/figures/he_channel_widths/channel-width-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|
@@ -416,4 +416,4 @@ coverage is experimental, not a demonstrated model gap.
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T120411Z` | four configs, runs/seeds `0–4` | sidecar filters; `0.3–0.43 s` | SHA-256 per input |
 | PCAP | `results/packet-statistics/20260725T230447Z` | four configs, run/seed `0` | TShark 4.6.4, MAC observation | manifest and hashes in generated block |
-| Figure | `../analysis/figures/width/channel-width-dashboard.png` | four configs | per-run CI; run-0 ECDF | provenance sidecar |
+| Figure | `../analysis/figures/he_channel_widths/channel-width-dashboard.png` | four configs | per-run CI; run-0 ECDF | provenance sidecar |

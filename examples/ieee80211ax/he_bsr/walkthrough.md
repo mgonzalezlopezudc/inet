@@ -113,9 +113,9 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 Inputs are
 `results/scalar-vector/20260725T120411Z/{BurstyTraffic,StaleBsr}/*.{sca,vec}`;
 the figure and its JSON provenance are
-[bsr-reported-vs-scheduled.png](../analysis/figures/bsr/bsr-reported-vs-scheduled.png)
+[bsr-reported-vs-scheduled.png](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png)
 and
-[bsr-reported-vs-scheduled.png.json](../analysis/figures/bsr/bsr-reported-vs-scheduled.png.json).
+[bsr-reported-vs-scheduled.png.json](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json).
 
 ```sh
 opp_scavetool query -l \
@@ -142,9 +142,9 @@ events.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bsr -->
 ### Generated scalar/vector plot and table
 
-![bsr scalar/vector analysis](../analysis/figures/bsr/bsr-reported-vs-scheduled.png)
+![bsr scalar/vector analysis](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png)
 
-Figure provenance: [`../analysis/figures/bsr/bsr-reported-vs-scheduled.png.json`](../analysis/figures/bsr/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json`](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|

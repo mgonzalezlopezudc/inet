@@ -128,7 +128,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
 
 ## Scalar and vector analysis
 
-![Downlink scheduler dashboard](../analysis/figures/dl/dl-scheduler-dashboard.png)
+![Downlink scheduler dashboard](../analysis/figures/dl_ofdma/dl-scheduler-dashboard.png)
 
 ### Symmetric workload
 
@@ -202,9 +202,9 @@ evidence.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-dl -->
 ### Generated scalar/vector plot and table
 
-![dl scalar/vector analysis](../analysis/figures/dl/dl-scheduler-dashboard.png)
+![dl scalar/vector analysis](../analysis/figures/dl_ofdma/dl-scheduler-dashboard.png)
 
-Figure provenance: [`../analysis/figures/dl/dl-scheduler-dashboard.png.json`](../analysis/figures/dl/dl-scheduler-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/dl_ofdma/dl-scheduler-dashboard.png.json`](../analysis/figures/dl_ofdma/dl-scheduler-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|
@@ -1738,4 +1738,4 @@ from the queue-organization confounder.
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T120411Z` | dashboard configs, runs 0–4 | provenance; `[0.3,0.88)` s | hashes retained in figure JSON |
 | PCAP | `results/packet-statistics/20260725T230519Z` | generated configs, run 0 | TShark 4.6.4, AP/host | manifest and hashes in generated block |
-| Figure | `../analysis/figures/dl/dl-scheduler-dashboard.png` | five-run groups | one observation/run, 95% t CI | provenance file retained |
+| Figure | `../analysis/figures/dl_ofdma/dl-scheduler-dashboard.png` | five-run groups | one observation/run, 95% t CI | provenance file retained |

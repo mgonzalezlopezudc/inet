@@ -285,8 +285,8 @@
     }
   ],
   "extra": {},
-  "figure": "examples/ieee80211ax/analysis/figures/bss/bss-coloring-comparison.png",
-  "git_revision": "4056b6507f266832f5412870a57076b3fd4eab1a",
+  "figure": "examples/ieee80211ax/analysis/figures/bss_coloring/bss-coloring-comparison.png",
+  "git_revision": "f8dde3636725df2c3e4685b883673ef8ba1b5e14",
   "result_filters": [
     {
       "module": "**.app[*]",

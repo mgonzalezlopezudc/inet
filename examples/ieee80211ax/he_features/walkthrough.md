@@ -106,7 +106,7 @@ python3 examples/ieee80211/analysis/analyze_pcap.py \
 Inputs:
 `results/scalar-vector/20260725T120411Z/{configuration}/*.{sca,vec}`.
 Figure provenance:
-[puncturing-frequency-allocation.png.json](../analysis/figures/puncturing/puncturing-frequency-allocation.png.json).
+[puncturing-frequency-allocation.png.json](../analysis/figures/he_features/puncturing-frequency-allocation.png.json).
 
 ```sh
 opp_scavetool query -l \
@@ -132,9 +132,9 @@ model-vector evidence.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-puncturing -->
 ### Generated scalar/vector plot and table
 
-![puncturing scalar/vector analysis](../analysis/figures/puncturing/puncturing-frequency-allocation.png)
+![puncturing scalar/vector analysis](../analysis/figures/he_features/puncturing-frequency-allocation.png)
 
-Figure provenance: [`../analysis/figures/puncturing/puncturing-frequency-allocation.png.json`](../analysis/figures/puncturing/puncturing-frequency-allocation.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/he_features/puncturing-frequency-allocation.png.json`](../analysis/figures/he_features/puncturing-frequency-allocation.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|

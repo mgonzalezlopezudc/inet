@@ -48,6 +48,10 @@ the common warm-up definition.
 | [Dense IoT](../dense_iot/README.md) | Matched AX/AC campaigns across station counts, workloads, delivery, delay, and energy | This broader campaign has its own runner and result analyzer because each configuration combines station-count iterations with repetitions. |
 
 Machine-readable plotted summaries are in [`metrics.json`](metrics.json). Each PNG has a `.png.json` provenance sidecar containing the exact inputs, SHA-256 hashes, filters, measurement window, aggregation rule, and source revision.
+Figure subdirectories mirror the examples' paths relative to
+`examples/ieee80211ax` (for example, `bss_coloring` and
+`multi_user/mu_mimo`); scalar/vector and PCAP figures for a scenario share
+that directory.
 `render_walkthrough_results.py` turns those session-bound metrics and figures
 into a compact marker-bounded table and plot link inside each walkthrough's
 scalar/vector section; it does not replace the authored query, aggregation,

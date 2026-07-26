@@ -127,7 +127,7 @@ Fairness is the Jain index over the per-STA success counts—three for
 all-zero-success run. These counters cover the complete `0–2 s` simulation;
 the INI file defines application phases but no OMNeT++ `warmup-period`.
 
-![Five-run UORA comparison](../analysis/figures/uora/uora-dashboard.png)
+![Five-run UORA comparison](../analysis/figures/ul_ofdma/uora-dashboard.png)
 
 | Condition | Mean attempts | Mean success probability | Mean successful transmissions | Success fairness |
 |---|---:|---:|---:|---:|
@@ -203,9 +203,9 @@ packets still queued at 2 s do not contribute.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-uora -->
 ### Generated scalar/vector plot and table
 
-![uora scalar/vector analysis](../analysis/figures/uora/uora-dashboard.png)
+![uora scalar/vector analysis](../analysis/figures/ul_ofdma/uora-dashboard.png)
 
-Figure provenance: [`../analysis/figures/uora/uora-dashboard.png.json`](../analysis/figures/uora/uora-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/ul_ofdma/uora-dashboard.png.json`](../analysis/figures/ul_ofdma/uora-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|
@@ -679,4 +679,4 @@ that could otherwise be scheduled.
 | Scalar/vector | `results/scalar-vector/20260725T181500Z` | four UORA configs, runs 0–4 | scalar counters; delay `[0.3,2)` s | hashes retained in figure JSON |
 | PCAP | `results/packet-statistics/20260725T233546Z` | six configs, run 0 | TShark 4.6.4, AP point | manifest and hashes in generated block |
 | Supplemental PCAP | `results/packet-statistics/20260725T182100Z` | heavy 1-RU, run 0 | timeline above | separate from generated block |
-| Figure | `../analysis/figures/uora/uora-dashboard.png` | four configs | one observation/run, 95% t CI | provenance retained |
+| Figure | `../analysis/figures/ul_ofdma/uora-dashboard.png` | four configs | one observation/run, 95% t CI | provenance retained |

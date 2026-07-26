@@ -156,9 +156,9 @@ MU-MIMO occurred.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-mimo -->
 ### Generated scalar/vector plot and table
 
-![mimo scalar/vector analysis](../../analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png)
+![mimo scalar/vector analysis](../../analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-stream-matrix.png)
 
-Figure provenance: [`../../analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png.json`](../../analysis/figures/mimo/mu-mimo-spatial-stream-matrix.png.json). Run-level metric source: [`../../analysis/metrics.json`](../../analysis/metrics.json).
+Figure provenance: [`../../analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-stream-matrix.png.json`](../../analysis/figures/multi_user/mu_mimo/mu-mimo-spatial-stream-matrix.png.json). Run-level metric source: [`../../analysis/metrics.json`](../../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|

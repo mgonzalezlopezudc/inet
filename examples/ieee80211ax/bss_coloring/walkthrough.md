@@ -128,7 +128,7 @@ MPLCONFIGDIR=/tmp/matplotlib \
 
 Inputs are the `.sca`/`.vec` pairs under each configuration directory in
 `results/scalar-vector/20260725T120411Z/`. The provenance
-[bss-coloring-comparison.png.json](../analysis/figures/bss/bss-coloring-comparison.png.json)
+[bss-coloring-comparison.png.json](../analysis/figures/bss_coloring/bss-coloring-comparison.png.json)
 records hashes, run binding, filters, and the `0.3–0.95 s` window.
 
 ```sh
@@ -166,9 +166,9 @@ samples; the intra-BSS result is absent.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bss -->
 ### Generated scalar/vector plot and table
 
-![bss scalar/vector analysis](../analysis/figures/bss/bss-coloring-comparison.png)
+![bss scalar/vector analysis](../analysis/figures/bss_coloring/bss-coloring-comparison.png)
 
-Figure provenance: [`../analysis/figures/bss/bss-coloring-comparison.png.json`](../analysis/figures/bss/bss-coloring-comparison.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`../analysis/figures/bss_coloring/bss-coloring-comparison.png.json`](../analysis/figures/bss_coloring/bss-coloring-comparison.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 | Configuration or comparison | Metric | Source result filters / modules / units | Window / per-run aggregation / exclusions | Independent runs (n) | Mean or direct value | 95% CI half-width |
 |---|---|---|---|---:|---:|---:|
@@ -565,4 +565,4 @@ moving two-BSS experiment and `INCONCLUSIVE` for dual NAV.
 |---|---|---|---|---|
 | Scalar/vector | `results/scalar-vector/20260725T120411Z` | five configs, runs/seeds `0–4` | figure provenance, `0.3–0.95 s` | SHA-256 per input |
 | PCAP/results | `results/packet-statistics/20260725T230151Z` | six configs, run/seed `0` | TShark 4.6.4; MAC captures | manifest and hashes in generated block |
-| Figure | `../analysis/figures/bss/bss-coloring-comparison.png` | five configs | per-run aggregation | provenance sidecar |
+| Figure | `../analysis/figures/bss_coloring/bss-coloring-comparison.png` | five configs | per-run aggregation | provenance sidecar |
