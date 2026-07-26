@@ -2220,8 +2220,7 @@ def timeline_markdown(timeline):
         address_pair = (
             f"{frame['transmitter'] or '?'} → {frame['receiver'] or '?'}"
         )
-        capture_name = Path(frame["capture"]).name
-        frame_id = f"`{capture_name}:{frame['frame_number']}`"
+        frame_id = str(frame["frame_number"])
         type_phy = frame["frame_name"]
         if phy_parts:
             type_phy += " / " + ", ".join(phy_parts)
@@ -2236,8 +2235,17 @@ def timeline_markdown(timeline):
         lines.append("| " + " | ".join(
             str(cell).replace("|", "\\|") for cell in cells
         ) + " |\n")
+    captures = sorted(list(dict.fromkeys(
+        Path(frame["capture"]).name for frame in timeline if "capture" in frame and frame["capture"]
+    )))
+    if len(captures) == 1:
+        capture_text = f"capture `{captures[0]}`"
+    elif len(captures) > 1:
+        capture_text = f"captures {', '.join(f'`{c}`' for c in captures)}"
+    else:
+        capture_text = "the named capture"
     lines.append(
-        "\nFrame numbers are local to the named capture, not OMNeT++ event "
+        f"\nFrame numbers are local to {capture_text}, not OMNeT++ event "
         "numbers. For readability, the table collapses observations with the "
         "same timestamp and MAC identity across capture interfaces; aggregate "
         "PCAP statistics retain the original observation counts.\n\n"

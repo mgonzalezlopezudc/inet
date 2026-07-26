@@ -413,7 +413,8 @@ class CaptureValidationTest(unittest.TestCase):
                 "coding": "LDPC",
             },
         }])
-        self.assertIn("`ap.wlan0.pcapng:7`", markdown)
+        self.assertIn("| 7 |", markdown)
+        self.assertIn("capture `ap.wlan0.pcapng`", markdown)
         self.assertIn(
             "direction=from DS, retry=1, seq=42, frag=0, more-frag=0, "
             "TID=5, A-MPDU=9",
