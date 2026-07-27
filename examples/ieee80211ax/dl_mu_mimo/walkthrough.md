@@ -434,11 +434,10 @@ cross-session count equality.
   requires AP result vectors.
 - The current parallel user vectors use timestamp and fixed emission order,
   not an explicit PPDU correlation ID.
-- The current scalar analyzer selects samples with `time <= 0.88 s` although
-  the manifest specifies `[0.55 s, 0.88 s)`. No retained receive or allocation
-  sample occurs exactly at 0.88 s, so this session's values and verdicts are
-  unchanged; the smallest machinery fix is to use a strict upper bound and
-  regenerate the presentation bundle.
+- The scalar analyzer now selects the manifest's half-open
+  `[0.55 s, 0.88 s)` window with a strict upper bound. Regenerating the
+  retained session confirmed that no receive or allocation sample occurs
+  exactly at 0.88 s, so its values and verdicts are unchanged.
 - Five seeds support repeatability in this deterministic stationary topology,
   not broad statistical claims about real deployments.
 - `DlMuMimo80MHz` is `NOT RUN`. Run it first with run 0 and verify sounding,
@@ -460,18 +459,19 @@ cross-session count equality.
 
 ## [agent] Implementation plan
 
-No production `src/inet` implementation is proposed. The configuration repair
+No production `src/inet` implementation was needed. The configuration repair
 was sufficient to exercise the existing scheduler, sounding, and telemetry
-paths.
+paths, and the analysis-window defect has been fixed in the shared AX
+analysis machinery.
 
-| Item | Evidence-backed plan |
+| Item | Implementation outcome |
 |---|---|
-| Demonstrated analysis gap | manifest specifies a half-open window, while `analysis_core.py` currently includes the end timestamp; this session has no boundary sample |
-| Smallest analysis change | replace the inclusive upper comparison with a strict comparison and add a boundary-sample unit test |
-| Validation | rerun AX analysis tests, regenerate this session's scalar bundle, and confirm unchanged values for this retained data |
+| Demonstrated analysis gap | manifest specifies a half-open window, while `analysis_core.py` included the end timestamp |
+| Smallest analysis change | `crop_vector()` now uses a strict upper comparison, with a boundary-sample unit test |
+| Validation | all 33 AX analysis tests pass; the regenerated scalar bundle and deterministic plot retain the published MIMO values |
 | Optional observability | consider an explicit PPDU correlation ID and `heMuMimoUsed` result to replace timestamp/order correlation |
-| Architecture and sealing | no `src/inet` change is authorized; any telemetry change there requires a separate requirements, sealing, implementation, and regression review |
-| Next handoff | analysis-maintainer follow-up for the window predicate; Wi-Fi implementation owner only if explicit telemetry is pursued |
+| Architecture and sealing | no `src/inet` change was required; any telemetry change there requires a separate requirements, sealing, implementation, and regression review |
+| Next handoff | Wi-Fi implementation owner only if explicit PPDU-correlation telemetry is pursued |
 
 ## [agent] Artifact provenance
 

@@ -576,7 +576,7 @@ def crop_vector(
     values_array = np.asarray(values, dtype=float)
     if len(times_array) != len(values_array):
         raise ValueError("Vector timestamps and values are unaligned")
-    selected = (times_array >= window.start) & (times_array <= window.end)
+    selected = (times_array >= window.start) & (times_array < window.end)
     return times_array[selected], values_array[selected]
 
 

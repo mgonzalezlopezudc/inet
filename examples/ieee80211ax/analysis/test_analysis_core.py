@@ -62,11 +62,11 @@ class AnalysisCoreTest(unittest.TestCase):
                 [0, 1],
             )
 
-    def test_window_and_crop_are_explicit(self):
+    def test_crop_vector_uses_half_open_measurement_window(self):
         window = MeasurementWindow(1, 3)
         times, values = crop_vector([0, 1, 2, 3, 4], [10, 11, 12, 13, 14], window)
-        self.assertEqual(times.tolist(), [1, 2, 3])
-        self.assertEqual(values.tolist(), [11, 12, 13])
+        self.assertEqual(times.tolist(), [1, 2])
+        self.assertEqual(values.tolist(), [11, 12])
 
     def test_piecewise_constant_energy_includes_window_edges(self):
         self.assertAlmostEqual(
