@@ -23,15 +23,15 @@ SESSION = "20260726T120000Z"
 
 class WifiAnalysisCliTest(unittest.TestCase):
 
-    def test_configuration_ini_mapping_preserves_multi_ini_and_eht_examples(self):
+    def test_configuration_ini_mapping_preserves_ax_and_eht_examples(self):
         ax = wifi_analysis.load_suite(AX_SUITE, wifi_analysis.REPOSITORY_ROOT)
-        multi_tid = ax.scenarios["mac_features/multi_tid_block_ack"]
+        multi_tid = ax.scenarios["ul_multitid"]
         self.assertEqual(
             scenario_configuration_ini(
                 ax.example_root, multi_tid, "UlMuMultiTidBlockAck"
             ),
             ax.example_root
-            / "mac_features/multi_tid_block_ack/uplink.ini",
+            / "ul_multitid/omnetpp.ini",
         )
         be = wifi_analysis.load_suite(BE_SUITE, wifi_analysis.REPOSITORY_ROOT)
         eht = be.scenarios["eht_features"]
@@ -55,6 +55,10 @@ class WifiAnalysisCliTest(unittest.TestCase):
         for scenario_name, scenario in suite.scenarios.items():
             if "scalar_vector_group" not in scenario:
                 continue
+            self.assertTrue(
+                (suite.example_root / scenario["ini"]).is_file(),
+                scenario_name,
+            )
             _, group, document = wifi_analysis.scalar_document(
                 suite, scenario_name, scenario
             )

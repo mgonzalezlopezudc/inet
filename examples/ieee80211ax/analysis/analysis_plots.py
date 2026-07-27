@@ -179,11 +179,14 @@ def plot_fragmentation(conditions: list[Condition], output: Path) -> None:
 
 
 def plot_uora(conditions: list[Condition], output: Path) -> None:
-    successes: list[pd.DataFrame] = []
+    goodputs: list[pd.DataFrame] = []
+    delays: list[pd.DataFrame] = []
+    attempts_per_run: list[pd.DataFrame] = []
     successful_transmissions: list[pd.DataFrame] = []
-    fairness: list[pd.DataFrame] = []
     zero_success_counts: dict[str, int] = {}
     for condition in conditions:
+        goodputs.append(per_run_goodput(condition))
+        delays.append(per_run_delay_percentile(condition, 95))
         attempts = condition.scalars("heUlRandomAccessAttempt:count")
         success = condition.scalars("heUlRandomAccessSuccess:count")
         attempts = attempts[attempts.module.str.contains(".host[", regex=False)]
@@ -191,49 +194,45 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
         attempt_totals = attempts.groupby("runID", as_index=False).value.sum().rename(columns={"value": "attempts"})
         success_totals = success.groupby("runID", as_index=False).value.sum().rename(columns={"value": "successes"})
         merged = attempt_totals.merge(success_totals, on="runID", validate="one_to_one")
-        if (merged.attempts <= 0).any():
-            raise RuntimeError(f"{condition.config}: UORA produced no attempts")
-        merged["probability"] = merged.successes / merged.attempts
-        if (merged.successes <= 0).all():
-            raise RuntimeError(f"{condition.config}: UORA produced no successful transmissions")
-        successes.append(merged[["runID", "probability"]])
+        attempts_per_run.append(merged[["runID", "attempts"]])
         successful_transmissions.append(merged[["runID", "successes"]])
-        fairness_records = []
-        zero_success_count = 0
-        for run_id, rows in success.groupby("runID"):
-            values = rows.value.to_numpy(dtype=float)
-            score = jain(values)
-            if math.isnan(score):
-                zero_success_count += 1
-            else:
-                fairness_records.append({"runID": run_id, "fairness": score})
-        zero_success_counts[condition.config] = zero_success_count
-        fairness.append(pd.DataFrame.from_records(fairness_records))
+        zero_success_counts[condition.config] = int(
+            (merged.successes == 0).sum()
+        )
     labels = [condition.label for condition in conditions]
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.8))
-    bar_with_ci(axes[0], labels, successes, "probability")
-    bar_with_ci(axes[1], labels, successful_transmissions, "successes")
-    bar_with_ci(axes[2], labels, fairness, "fairness")
-    axes[0].set_ylabel("UORA success probability")
-    axes[0].set_ylim(0, 1.05)
-    axes[1].set_ylabel("Successful UORA transmissions per run")
-    axes[2].set_ylabel("Jain fairness of per-STA successes\n(defined runs only)")
-    axes[2].set_ylim(0, 1.05)
-    fig.suptitle("UORA load and random-access RU comparison")
+    fig, axes = plt.subplots(2, 2, figsize=(15, 9.2))
+    bar_with_ci(axes[0, 0], labels, goodputs, "goodput_bps", scale=1e-6)
+    bar_with_ci(axes[0, 1], labels, delays, "delay_s", scale=1e3)
+    bar_with_ci(axes[1, 0], labels, attempts_per_run, "attempts")
+    bar_with_ci(
+        axes[1, 1],
+        labels,
+        successful_transmissions,
+        "successes",
+    )
+    axes[0, 0].set_ylabel("Aggregate goodput [Mbit/s]")
+    axes[0, 1].set_ylabel("95th-percentile end-to-end delay [ms]")
+    axes[1, 0].set_ylabel("UORA attempts per run")
+    axes[1, 1].set_ylabel("Successful UORA transmissions per run")
+    fig.suptitle("Scheduled uplink and UORA outcome comparison")
     save(fig, output)
     write_provenance(
         output,
         conditions=conditions,
         result_filters=[
+            {"type": "vector", "module": "**.server.app[*]", "name": "packetReceived:vector(packetBytes)", "value_semantics": "bytes from packetBytes recorder; unit attribute empty"},
+            {"type": "vector", "module": "**.server.app[*]", "name": "endToEndDelay:vector", "unit": "s"},
             {"type": "scalar", "name": "heUlRandomAccessAttempt:count"},
             {"type": "scalar", "name": "heUlRandomAccessSuccess:count"},
         ],
         aggregation={
-            "observation": "one value per run",
+            "goodput": "sum delivered application bytes over [0.3, 2.0) across sink vectors, convert to bit/s; one value per run",
+            "delay": "pool delivered-packet delays within each run over [0.3, 2.0), then take the 95th percentile; one value per run",
+            "mechanism": "terminal full-simulation [0, 2.0] scalar counters summed across stations; one value per run",
             "zero_success_runs": zero_success_counts,
-            "fairness": "Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined",
             "uncertainty": "95% Student-t CI",
         },
+        extra={"result_session_id": output.parent.name},
     )
 
 
@@ -834,4 +833,7 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "ndp_feedback": plot_delivery,
     "dense_iot": plot_delivery,
     "eht_features": plot_delivery,
+    "bcc_ldpc": plot_delivery,
+    "ul_mu_mimo": plot_delivery,
+    "ul_ofdma": plot_delivery,
 }

@@ -65,6 +65,15 @@
     "dense_iot": [
       {"id": "dense-iot-eight-station-delivery", "kind": "metric", "requirement": "AX and AC delivery is compared under matched eight-station workloads", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The five-run shared campaign records the eight-station stratum, but no acceptance threshold is defined for AX versus AC delivery."}}
     ],
+    "bcc_ldpc": [
+      {"id": "bcc-ldpc-coding-selection", "kind": "normative", "requirement": "The selected coding scheme respects the peer HE LDPC capability", "results": ["packetReceived", "radiotap HE coding"], "evaluation": {"handler": "unimplemented", "reason": "Application delivery is retained for the five-run comparison, while the decisive per-transmission coding field remains PCAP evidence."}}
+    ],
+    "ul_mu_mimo": [
+      {"id": "ul-mu-mimo-stream-allocation", "kind": "model", "requirement": "The uplink MU-MIMO treatment allocates simultaneous users to valid spatial streams", "results": ["packetReceived", "HE-TB user stream allocation"], "evaluation": {"handler": "unimplemented", "reason": "Application delivery is retained, while authoritative per-user uplink stream allocation remains packet evidence."}}
+    ],
+    "ul_ofdma": [
+      {"id": "ul-ofdma-scheduled-delivery", "kind": "metric", "requirement": "Scheduled uplink OFDMA and EDCA are compared using delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The five-run delivery comparison has no manifest-defined acceptance threshold."}}
+    ],
     "eht_features": [
       {"id": "eht-features-delivery-comparison", "kind": "metric", "requirement": "The EHT and HE baselines are compared using delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The five-run delivery comparison has no manifest-defined acceptance threshold."}}
     ]
@@ -87,10 +96,11 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
       "conditions": [
-        {"label": "Mixed, adaptive 1–3 RA-RUs", "config": "MixedUora"},
-        {"label": "Light, 1 RA-RU", "config": "UoraLightContention"},
-        {"label": "Heavy, 1 RA-RU", "config": "UoraHeavyContention"},
-        {"label": "Heavy, 5 RA-RUs", "config": "UoraMoreRandomAccessRus"}
+        {"label": "Scheduled only, 0 RA-RUs", "config": "ScheduledOnly", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Mixed, adaptive 1–3 RA-RUs", "config": "MixedUora", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Light, 1 RA-RU", "config": "UoraLightContention", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Heavy, 1 RA-RU", "config": "UoraHeavyContention", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Heavy, 5 RA-RUs", "config": "UoraMoreRandomAccessRus", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
       ]
     },
     "twt": {
@@ -263,6 +273,38 @@
         {"label": "AC downlink (8 STAs)", "config": "AcDl", "metadata": {"sink_module_regex": "\\.sta\\[\\d+\\]\\.app\\["}},
         {"label": "AX mixed (8 STAs)", "config": "AxMixed", "metadata": {"sink_module_regex": "(?:\\.server\\.app\\[|\\.sta\\[\\d+\\]\\.app\\[)"}},
         {"label": "AC mixed (8 STAs)", "config": "AcMixed", "metadata": {"sink_module_regex": "(?:\\.server\\.app\\[|\\.sta\\[\\d+\\]\\.app\\[)"}}
+      ]
+    },
+    "bcc_ldpc": {
+      "walkthrough": "examples/ieee80211ax/bcc_ldpc/walkthrough.md",
+      "ini": "examples/ieee80211ax/bcc_ldpc/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 0.95},
+      "conditions": [
+        {"label": "BCC baseline", "config": "BccBaseline"},
+        {"label": "HE LDPC", "config": "HeLdpc"},
+        {"label": "Mixed LDPC support", "config": "MixedLdpcSupport"}
+      ]
+    },
+    "ul_mu_mimo": {
+      "walkthrough": "examples/ieee80211ax/ul_mu_mimo/walkthrough.md",
+      "ini": "examples/ieee80211ax/ul_mu_mimo/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 2.0},
+      "conditions": [
+        {"label": "UL MU-MIMO", "config": "UlMuMimo", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "EDCA baseline", "config": "EdcaBaseline", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
+      ]
+    },
+    "ul_ofdma": {
+      "walkthrough": "examples/ieee80211ax/ul_ofdma/walkthrough.md",
+      "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 2.0},
+      "conditions": [
+        {"label": "Backlog scheduler", "config": "BacklogBased", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Equal-sized RUs", "config": "EqualSizedRUs", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "EDCA baseline", "config": "EdcaBaseline", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
       ]
     },
     "eht_features": {

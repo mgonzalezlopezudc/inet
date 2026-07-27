@@ -30,7 +30,6 @@ for the exact contract and migration table.
 | Channel bandwidth | [channel_widths](channel_widths/walkthrough.md) | 20, 40, 80, and 160 MHz operation |
 | Frequency-selective channels | [frequency_selective_channel](frequency_selective_channel/walkthrough.md) | Dimensional radio, per-RU isolation, TGax static/dynamic SISO and static matrix channels, opt-in RBIR |
 | Preamble puncturing | [preamble_puncturing](preamble_puncturing/walkthrough.md) | Subchannel puncturing, legacy interference avoidance, and dynamic puncturing |
-| Packet extension | [packet_extension](packet_extension/walkthrough.md) | HE packet-extension timing metadata and combined HE features |
 | BCC & LDPC coding | [bcc_ldpc](bcc_ldpc/walkthrough.md) | BCC baseline vs HE LDPC timing and mixed peer LDPC capability negotiation |
 | Rate selection | [rate_adaptation](rate_adaptation/walkthrough.md) | Fixed MCS and HE Minstrel, including mobility |
 | Extended range | [er_su](er_su/walkthrough.md) | HE SU and HE ER SU with DCM |

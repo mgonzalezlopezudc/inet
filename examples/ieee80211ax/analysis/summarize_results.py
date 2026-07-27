@@ -152,7 +152,7 @@ def main() -> None:
                 item["goodput_mbps"] = ci(goodput.goodput_bps / 1e6)
             except RuntimeError:
                 pass
-            if group_name in {"width", "dl_sched", "dl_asym"}:
+            if group_name in {"uora", "width", "dl_sched", "dl_asym"}:
                 item["delay_p95_ms"] = ci(per_run_delay_percentile(condition, 95).delay_s * 1e3)
             if group_name in {"bss", "dl_sched", "dl_asym"}:
                 normalized = group_name == "dl_asym" or condition.condition_metadata.get("workload") == "asymmetric"
@@ -172,7 +172,12 @@ def main() -> None:
                 success_totals = successes.groupby("runnumber").value.sum()
                 item["attempts"] = ci(attempt_totals)
                 item["successful_transmissions"] = ci(success_totals)
-                item["success_probability"] = ci(success_totals / attempt_totals)
+                positive_attempts = attempt_totals > 0
+                if positive_attempts.any():
+                    item["success_probability"] = ci(
+                        success_totals[positive_attempts]
+                        / attempt_totals[positive_attempts]
+                    )
                 fairness = [
                     jain(rows.value)
                     for _, rows in successes.groupby("runnumber")
@@ -180,9 +185,11 @@ def main() -> None:
                 item["zero_success_run_count"] = sum(
                     math.isnan(value) for value in fairness
                 )
-                item["success_fairness"] = ci([
+                defined_fairness = [
                     value for value in fairness if not math.isnan(value)
-                ])
+                ]
+                if defined_fairness:
+                    item["success_fairness"] = ci(defined_fairness)
             if group_name == "fragmentation":
                 sizes = condition.vectors(
                     "packetSentToPeer:vector(packetBytes)",

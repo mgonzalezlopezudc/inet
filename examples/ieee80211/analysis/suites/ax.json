@@ -57,12 +57,6 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["puncturing"]
     },
-    "packet_extension": {
-      "scalar_vector_group": "packet_extension",
-      "ini": "packet_extension/omnetpp.ini",
-      "configurations": ["PacketExtension", "CombinedHeFeatures"],
-      "phy_profiles": ["legacy", "he"]
-    },
     "bcc_ldpc": {
       "scalar_vector_group": "bcc_ldpc",
       "ini": "bcc_ldpc/omnetpp.ini",

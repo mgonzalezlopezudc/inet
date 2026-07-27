@@ -16,6 +16,7 @@ from analysis_core import (
     atomic_write_text,
     crop_vector,
     jain,
+    per_run_delay_percentile,
     resolve_session_id,
     resolve_manifest_sessions,
     summarize_ci95,
@@ -81,6 +82,33 @@ class AnalysisCoreTest(unittest.TestCase):
         self.assertGreater(result["ci95"], 0)
         self.assertAlmostEqual(jain([1, 1, 1]), 1)
         self.assertTrue(math.isnan(jain([0, 0])))
+
+    def test_delay_uses_manifest_sink_pattern(self):
+        condition = unittest.mock.Mock()
+        condition.config = "ScheduledOnly"
+        condition.condition_metadata = {
+            "sink_module_regex": r"\.server\.app\["
+        }
+        condition.measurement = MeasurementWindow(0.3, 2.0)
+        condition.vectors.return_value = __import__("pandas").DataFrame([
+            {
+                "runID": "run-0",
+                "module": "Network.server.app[0]",
+                "vectime": [0.2, 0.4, 1.0],
+                "vecvalue": [9.0, 0.001, 0.003],
+            },
+            {
+                "runID": "run-0",
+                "module": "Network.host[0].app[0]",
+                "vectime": [0.4],
+                "vecvalue": [1.0],
+            },
+        ])
+
+        result = per_run_delay_percentile(condition, 95)
+
+        self.assertEqual(result.runID.tolist(), ["run-0"])
+        self.assertAlmostEqual(result.delay_s.iloc[0], 0.0029)
 
     def test_stream_overlap_is_rejected(self):
         validate_disjoint_streams([1, 2], [0, 2], [2, 2])

@@ -53,6 +53,9 @@ FIGURE_FILENAMES = {
     "ndp_feedback": "ndp-feedback-delivery.png",
     "dense_iot": "dense-iot-delivery.png",
     "eht_features": "eht-features-delivery.png",
+    "bcc_ldpc": "bcc-ldpc-delivery.png",
+    "ul_mu_mimo": "ul-mu-mimo-delivery.png",
+    "ul_ofdma": "ul-ofdma-delivery.png",
 }
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 EVIDENCE_HANDLERS = {
@@ -645,9 +648,14 @@ def per_run_delay_percentile(
     frame = condition.vectors(
         "endToEndDelay:vector", module="**.app[*]", expected_unit="s"
     )
-    frame = frame[
-        frame.module.str.contains(r"\.(?:host|sta\d*|sta)\[\d+\]\.app\[", regex=True)
-    ]
+    sink_pattern = condition.condition_metadata.get(
+        "sink_module_regex", r"\.(?:host|sta\d*|sta)\[\d+\]\.app\["
+    )
+    frame = frame[frame.module.str.contains(sink_pattern, regex=True)]
+    if frame.empty:
+        raise RuntimeError(
+            f"{condition.config}: no delay sinks matched {sink_pattern!r}"
+        )
     records: list[dict[str, Any]] = []
     for run_id, rows in frame.groupby("runID"):
         samples = []
