@@ -24,7 +24,11 @@
       {"id": "puncturing-delivery-comparison", "kind": "metric", "requirement": "Interference comparison uses delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "No manifest acceptance threshold is defined for the multi-condition delivered-byte comparison."}}
     ],
     "mimo": [
-      {"id": "mimo-disjoint-multi-user-streams", "kind": "normative", "requirement": "A PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}}
+      {"id": "mimo-disjoint-multi-user-streams", "kind": "normative", "requirement": "The baseline MU-MIMO PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}},
+      {"id": "mimo-low-leakage-disjoint-multi-user-streams", "kind": "normative", "requirement": "The low-leakage 24 Mbit/s MU-MIMO PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo24MbpsLeakage001", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}},
+      {"id": "mimo-48mbps-disjoint-multi-user-streams", "kind": "normative", "requirement": "The 48 Mbit/s MU-MIMO PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo48MbpsLeakage01", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}},
+      {"id": "mimo-72mbps-disjoint-multi-user-streams", "kind": "normative", "requirement": "The 72 Mbit/s MU-MIMO PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo72MbpsLeakage01", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}},
+      {"id": "mimo-96mbps-disjoint-multi-user-streams", "kind": "normative", "requirement": "The 96 Mbit/s MU-MIMO PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo96MbpsLeakage01", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}}
     ],
     "bss": [
       {"id": "bss-obss-decision-observability", "kind": "normative", "requirement": "OBSS classification, OBSS/PD threshold, CCA, and power-limit decisions are observable", "results": ["OBSS classification", "OBSS/PD threshold", "reuse decision", "transmit power limit"], "evaluation": {"handler": "unimplemented", "reason": "The retained telemetry does not expose a correlated per-reception OBSS classification and reuse decision."}},
@@ -135,8 +139,15 @@
       "expected_repetitions": 5,
       "measurement": {"start": 0.55, "end": 0.88},
       "conditions": [
-        {"label": "20 MHz OFDMA", "config": "EqualSizedRUs_fBW"},
-        {"label": "20 MHz MU-MIMO", "config": "DlMuMimo"}
+        {"label": "OFDMA, 24 Mbps", "config": "EqualSizedRUs_fBW", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": null}},
+        {"label": "MU-MIMO, 24 Mbps, leakage 0.01", "config": "DlMuMimo", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": 0.01}},
+        {"label": "MU-MIMO, 24 Mbps, leakage 0.001", "config": "DlMuMimo24MbpsLeakage001", "metadata": {"offered_aggregate_mbps": 24, "csi_leakage": 0.001}},
+        {"label": "OFDMA, 48 Mbps", "config": "EqualSizedRUs48Mbps", "metadata": {"offered_aggregate_mbps": 48, "csi_leakage": null}},
+        {"label": "MU-MIMO, 48 Mbps, leakage 0.01", "config": "DlMuMimo48MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 48, "csi_leakage": 0.01}},
+        {"label": "OFDMA, 72 Mbps", "config": "EqualSizedRUs72Mbps", "metadata": {"offered_aggregate_mbps": 72, "csi_leakage": null}},
+        {"label": "MU-MIMO, 72 Mbps, leakage 0.01", "config": "DlMuMimo72MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 72, "csi_leakage": 0.01}},
+        {"label": "OFDMA, 96 Mbps", "config": "EqualSizedRUs96Mbps", "metadata": {"offered_aggregate_mbps": 96, "csi_leakage": null}},
+        {"label": "MU-MIMO, 96 Mbps, leakage 0.01", "config": "DlMuMimo96MbpsLeakage01", "metadata": {"offered_aggregate_mbps": 96, "csi_leakage": 0.01}}
       ]
     },
     "bss": {

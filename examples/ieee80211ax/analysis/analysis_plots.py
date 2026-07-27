@@ -287,7 +287,7 @@ def plot_twt(conditions: list[Condition], output: Path) -> None:
     if not raster:
         raise RuntimeError("TWT radio-mode raster has no usable rows")
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(15, 5))
     image = axes[0].imshow(
         raster,
         aspect="auto",
@@ -753,9 +753,19 @@ def plot_mimo(conditions: list[Condition], output: Path) -> None:
     axes[0].set(xlabel="PPDU time [s]", ylabel="STA ID", title=f"{measured.label}: NSS per PPDU (run 0)")
     fig.colorbar(image, ax=axes[0], label="Allocated NSS")
     goodputs = [per_run_goodput(condition) for condition in conditions]
-    bar_with_ci(axes[1], [condition.label for condition in conditions], goodputs, "goodput_bps", scale=1e-6)
+    plot_labels = []
+    for condition in conditions:
+        load = condition.condition_metadata.get("offered_aggregate_mbps")
+        method = "OFDMA" if "OFDMA" in condition.label else "MU-MIMO"
+        label = f"{method}\n{load:g}" if load is not None else method
+        if condition.condition_metadata.get("csi_leakage") == 0.001:
+            label += "\nleak .001"
+        plot_labels.append(label)
+    bar_with_ci(axes[1], plot_labels, goodputs, "goodput_bps", scale=1e-6)
+    axes[1].tick_params(axis="x", rotation=0)
+    axes[1].set_xlabel("Method and aggregate offered load [Mbit/s]")
     axes[1].set_ylabel("Aggregate goodput [Mbit/s]")
-    axes[1].set_title("Controlled 20 MHz comparison")
+    axes[1].set_title("20 MHz MU-MIMO/OFDMA offered-load sweep")
     fig.suptitle("MU-MIMO stream compatibility and delivery")
     save(fig, output)
     write_provenance(
