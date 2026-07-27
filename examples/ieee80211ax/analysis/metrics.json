@@ -1,479 +1,137 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-26T23:00:49.663382+00:00",
+    "generated_at_utc": "2026-07-27T09:42:34.797597+00:00",
     "groups": {
-      "dl_asym": {
+      "mimo": {
         "conditions": [
           {
-            "configuration": "BacklogBased2_5ms",
-            "group": "dl_asym",
-            "ini": "examples/ieee80211ax/dl_ofdma_asym/omnetpp.ini",
-            "label": "Backlog (2.5ms)",
+            "configuration": "EqualSizedRUs_fBW",
+            "group": "mimo",
+            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
+            "label": "20 MHz OFDMA",
             "measurement": {
               "end_s": 0.88,
-              "start_s": 0.3
+              "start_s": 0.55
             },
-            "metadata": {
-              "offered_bps_by_index": [
-                3200000,
-                1280000,
-                320000
-              ],
-              "workload": "asymmetric"
-            },
+            "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#0.sca",
-                "sha256": "392ad4506d425e8ab81ecd1d00d12446297323e84cd1b333fd46aa097c2e3928"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0.sca",
+                "sha256": "0321d3169cebf16785106d0f3a1d417070fd9e91431dfb5463fe4d3197f3a4c8"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#0.vec",
-                "sha256": "9f773b1b0d64f972aee30ac8252be12b8a9a904b2af432c426edbdb3d27ac915"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#0.vec",
+                "sha256": "33c4c5a7929a724e7f4c92a32eeed8e06e34c440d0d68b2cb2c3686a4bc2c011"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#1.sca",
-                "sha256": "e354144236c797e6d030c50851fe0bc845c723c9a664071999e0fb77050155fc"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#1.sca",
+                "sha256": "6cc0b98b8355192e80f4b9a959e36f0a8c0c154b366f31e31f20311fa20acbea"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#1.vec",
-                "sha256": "f651f2687f5f9de83a59d5110ffb22261fb20a30a784539cf1e7b0e80b982491"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#1.vec",
+                "sha256": "7f961bd8c3aa47d3f92c144a9ef8222079ec58362b83f8aa4db30acd07f36ac2"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#2.sca",
-                "sha256": "f2349264399b69bf759bf595849ba3c746707c7f905a946884a4a364bce2be72"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#2.sca",
+                "sha256": "0d3be454c85a81693167ab7d7727e44b10da4e2880153e3e7cb0e4561fd1d8f0"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#2.vec",
-                "sha256": "5426677a560d2bea3ff7bc19fdb52c7a72fe48ea8340c88f35249388fecfd62b"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#2.vec",
+                "sha256": "5d33c0b0126c177afba3fba26c1ef0cb86a570ee315babb7f2108a675f4fcea6"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#3.sca",
-                "sha256": "8367e10db63dceeacff1064e2a99b0c35258267b206382f74f517b4a5297bab4"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#3.sca",
+                "sha256": "b7f4c28e67a45a2aac4af87df0814a7cab46b34f5e0f4bdde5b9e96bec353ba3"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#3.vec",
-                "sha256": "201b6e781f04b628a2d452acc94e80a76a8999c8921999a5eca31ee2cc4f1d8c"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#3.vec",
+                "sha256": "1a89ac4a5d602869ee5b6c29503f5c2f24f64d39c2d521e2d2c8095025642181"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#4.sca",
-                "sha256": "2f4ec3585fef06f53b2e3c7ca6f7066894151dd0ffb76cce710c61823d6fbbd9"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#4.sca",
+                "sha256": "07337e888aca86cc696cc1cc5342b2936b1433180b1063d6eadc2d08b037e424"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_5ms/BacklogBased2_5ms-#4.vec",
-                "sha256": "9395af4466c20995b499d6d762e5ff8a46225b8c74813946a4e9563316c95ef8"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/EqualSizedRUs_fBW/EqualSizedRUs_fBW-#4.vec",
+                "sha256": "ef9eb87bbdc88ef823a4c840ec8e8a2fd3380bc899ebd230e8da1c34f11d81d6"
               }
             ]
           },
           {
-            "configuration": "HoLMinDelay2_5ms",
-            "group": "dl_asym",
-            "ini": "examples/ieee80211ax/dl_ofdma_asym/omnetpp.ini",
-            "label": "HoL min delay (2.5ms)",
+            "configuration": "DlMuMimo",
+            "group": "mimo",
+            "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
+            "label": "20 MHz MU-MIMO",
             "measurement": {
               "end_s": 0.88,
-              "start_s": 0.3
+              "start_s": 0.55
             },
-            "metadata": {
-              "offered_bps_by_index": [
-                3200000,
-                1280000,
-                320000
-              ],
-              "workload": "asymmetric"
-            },
+            "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#0.sca",
-                "sha256": "33b4167589972e9d4154a3cc842dcc8398c37dd3613c3554e34d4566701d21fc"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#0.sca",
+                "sha256": "aff6b6b9817b7645a15e6104bd8caf5aef0086023c5d02aa3b9340c33e4e4ea1"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#0.vec",
-                "sha256": "bfa1631c7dbac59e940a184987a107869f4aee899a15bda9137ebe2a17b163ac"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#0.vec",
+                "sha256": "7bc6ef3d437b8de541a01deaea2fa92f5fa72294bdb66aae6de28c3c0d79303e"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#1.sca",
-                "sha256": "b89fca4ff6ceffbed4aeb25d2b012ee7d2ba3454b8309b631b27ac24497d14f4"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#1.sca",
+                "sha256": "e4c5438080e5f06c864e21b7656b7750a75ff5c45fa9cca9f56be12b0a8098c8"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#1.vec",
-                "sha256": "6a80b40f76f4750107d2352c80ae89a6056e46cf6c1eefc144d96b48a45787ce"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#1.vec",
+                "sha256": "9210ca9516ad90a10aa49ec4f3074e4f8d1a9fb5a36aff29a08189ba68d95f59"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#2.sca",
-                "sha256": "f43398b7309c4a7a6f35a167595a4acbe7e1632faa8109e366f61d3e2bcd3076"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#2.sca",
+                "sha256": "a2485565c4a19edd6fe20b4e94e2735f01c2a2e1042e4fd0d0f073033ddb3808"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#2.vec",
-                "sha256": "6a161fc836504180368781a85609244ab187e7a19a4de1625d4bb6632d3bd062"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#2.vec",
+                "sha256": "78f41b66ac48314a236ee3ad176f1d6d2ce047c5dfb5e65f7110db47a43e68a2"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#3.sca",
-                "sha256": "98a497c99132ac35e2927ca7077fa7973e382cab6a7d87c71fd7dea6b743e8e1"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#3.sca",
+                "sha256": "0b85b1c36a6e2b57d74ffead746fd6192a897290a3a5f64159e8fc2338b92b41"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#3.vec",
-                "sha256": "1a76b6a45ec45648e82dc585c16c9bf1bd860f291ca0347dc4b81c2800b673ae"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#3.vec",
+                "sha256": "d60275ea55e98d251d2e77d68e75921309234373dde878cff9101af4ae09c72c"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#4.sca",
-                "sha256": "551221dcbacbfe3a171f3fa28ee46261f69afd5a25cdd5cba7cc29db6772fb36"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#4.sca",
+                "sha256": "7e0e54dd872df57cf394d7ceb3dbff01d8effcba6994cb4e2eb9e01b0af8da71"
               },
               {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_5ms/HoLMinDelay2_5ms-#4.vec",
-                "sha256": "ad5c7918474c9cb97b033d2743e61db3ccc0e745984e916147655761f5cce574"
-              }
-            ]
-          },
-          {
-            "configuration": "BacklogBased2_0ms",
-            "group": "dl_asym",
-            "ini": "examples/ieee80211ax/dl_ofdma_asym/omnetpp.ini",
-            "label": "Backlog (2.0ms)",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.3
-            },
-            "metadata": {
-              "offered_bps_by_index": [
-                4000000,
-                1600000,
-                400000
-              ],
-              "workload": "asymmetric"
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#0.sca",
-                "sha256": "9a620b8af315843b631da3e5271416106ae801f9d8b2a670b9ec9c07eedaa44e"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#0.vec",
-                "sha256": "07c562b34ad7869eb94a8519d93e56e34bf4302901d8f4f1594713569568fc6c"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#1.sca",
-                "sha256": "7b842ae73e16756e5f582a4bd17cfa1938817567bfabe3260420466e4c4962f1"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#1.vec",
-                "sha256": "3c5b94546dcac2a635bfc8c37f4aa44cab375f6eae328e2ff8a2b43a2dbe4837"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#2.sca",
-                "sha256": "cd5564b0696b910813cbfee186af7ceb89041247af912058a9583c442c697db3"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#2.vec",
-                "sha256": "ebeb59874d7aafb9fe3230eba553a755832aa902d60f6d5dbfd90a593bc04a6e"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#3.sca",
-                "sha256": "22b5a45f328b340a74f64ecb53af83d2335ec3f90434591d97e6877ba273516f"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#3.vec",
-                "sha256": "a1d094a2a57ca6f9842228acebff25e4644dcf546897f324f4065ea8198fdc20"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#4.sca",
-                "sha256": "66577c51e6516f6e69eeb2f34923b6f98a70e7bddca4a651ad03328d34ebc0f6"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased2_0ms/BacklogBased2_0ms-#4.vec",
-                "sha256": "60349bfec9572e19364ddaec07a4fcec877e189e462c80b311fc87cd3d32ed08"
-              }
-            ]
-          },
-          {
-            "configuration": "HoLMinDelay2_0ms",
-            "group": "dl_asym",
-            "ini": "examples/ieee80211ax/dl_ofdma_asym/omnetpp.ini",
-            "label": "HoL min delay (2.0ms)",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.3
-            },
-            "metadata": {
-              "offered_bps_by_index": [
-                4000000,
-                1600000,
-                400000
-              ],
-              "workload": "asymmetric"
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#0.sca",
-                "sha256": "eb2f50f78878e292d3d9118266fb05e02b73632330f3ec3df0cb7cfb9f317cb0"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#0.vec",
-                "sha256": "85999831138827b843c59d97b2d6550f987bd3a8f57e6143044050a440254470"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#1.sca",
-                "sha256": "db7e60ad66ea21daee91e31cf1d664c09584bbeaed8a213892174a48d2735740"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#1.vec",
-                "sha256": "307652dba35ed70d41892ad9f837083e2b5616437fb6c66a63fc82ee5dc81ae4"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#2.sca",
-                "sha256": "30df3f110f2215bb1520bb9522846f58cf6754d42e3304991af550c2fc14f3f2"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#2.vec",
-                "sha256": "27c66a0c9b6b0ea065da3207bf2cc000e9e7aa6234ce4637dc3ff7112275d48c"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#3.sca",
-                "sha256": "dfe29eedcee34048f51382f399d75df419f3f2e1414fd6e72ec7bb778d06b94e"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#3.vec",
-                "sha256": "a2e91c8689d0d9084f1028e4ec2a8ac9500353ed2c578dab7e851bae89037a6a"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#4.sca",
-                "sha256": "7b90a1bcd2a71bb57f28092b5942a17a4e84e8fb0d09837e2c552b2ddfca80f3"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay2_0ms/HoLMinDelay2_0ms-#4.vec",
-                "sha256": "26b8eb81aaa46ce98d146452653e96dd4dd767e9b50fdf0a9361400c00fcc4a9"
-              }
-            ]
-          },
-          {
-            "configuration": "BacklogBased1_5ms",
-            "group": "dl_asym",
-            "ini": "examples/ieee80211ax/dl_ofdma_asym/omnetpp.ini",
-            "label": "Backlog (1.5ms)",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.3
-            },
-            "metadata": {
-              "offered_bps_by_index": [
-                5333333,
-                2133333,
-                533333
-              ],
-              "workload": "asymmetric"
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#0.sca",
-                "sha256": "85f30e7d3545aabb0782913ff1c05f93bf97d98e4f0e2f4c294060200fd4baa2"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#0.vec",
-                "sha256": "95f0c5303e78ae878d55a3b000da6a2fc55e18dc4945d2a41047af26de7dcb19"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#1.sca",
-                "sha256": "7ddb2586b211b3bf448fb323b30c8dfc3235e7ef2022069c39f9debbc36fb8d8"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#1.vec",
-                "sha256": "27735f63d9242a5f2b5f2367d4d03a6a72b803634f6fd6395435786373dceaf9"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#2.sca",
-                "sha256": "687e721507b76b009a5a89a21f14e8a21d7a72fa670062405ea144d49aff19d2"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#2.vec",
-                "sha256": "a2a30539c89cd9617fcbae29b9546406db0e1c153a05811baff69cfc681fb374"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#3.sca",
-                "sha256": "d2b71eaab7ff023a8652b4e5a1b55216559180901327d70ca38da3bff7c3dd51"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#3.vec",
-                "sha256": "40c1dc36efc783fd0eb529db38531706d1bef090dc7be4d42640456f0fdd4113"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#4.sca",
-                "sha256": "fb0d0bc7efcdb244eca5ec5176393edaa813c8e661dc3119b66495ae630206b8"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/BacklogBased1_5ms/BacklogBased1_5ms-#4.vec",
-                "sha256": "1eb7ce4d2c2ad2c4c67435f233048328c6bb1b3e00c8abd09f1ebe9dc0f28350"
-              }
-            ]
-          },
-          {
-            "configuration": "HoLMinDelay1_5ms",
-            "group": "dl_asym",
-            "ini": "examples/ieee80211ax/dl_ofdma_asym/omnetpp.ini",
-            "label": "HoL min delay (1.5ms)",
-            "measurement": {
-              "end_s": 0.88,
-              "start_s": 0.3
-            },
-            "metadata": {
-              "offered_bps_by_index": [
-                5333333,
-                2133333,
-                533333
-              ],
-              "workload": "asymmetric"
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#0.sca",
-                "sha256": "2f80778c4f62d8133aefb48d77d41db9b9203a9b4487af84d411ec7449bc9c48"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#0.vec",
-                "sha256": "158043f32d8c13ae6ee80f6e41256345efa646ecc496c3760ac95efc50c840f6"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#1.sca",
-                "sha256": "1edf9c87ba95275ab3ee505c7021efa302410f6a5d611d3ffaaf955eef19b91c"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#1.vec",
-                "sha256": "44394ec0c031830ce168284497e73d9cb823fcc7164c9cf4b8a7d4d3ef7d1e72"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#2.sca",
-                "sha256": "b54879cb5dfeccbab9baa621ce02a30481dbc608cfbead56e8773d11ef190662"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#2.vec",
-                "sha256": "b9809a020fbda64bc55fcf50cac11eb9d1296fbe8d3f8d462f851b0e0d54e4a6"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#3.sca",
-                "sha256": "c07ac77a0c445ce1636a6199ff53a55eb7a31fc55cca333d04604f7134e4e93c"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#3.vec",
-                "sha256": "e5bb50cde5336d7b65b83432630999f2c9de896577f10353ca6eb2266e953cb7"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#4.sca",
-                "sha256": "17684be785e16655c8ef9573398fa57c98084b7105f7cac93c32e727465b15b3"
-              },
-              {
-                "path": "examples/ieee80211ax/dl_ofdma_asym/results/20260726T222811Z/HoLMinDelay1_5ms/HoLMinDelay1_5ms-#4.vec",
-                "sha256": "d52768e3fea0563038bb41b316895e6d9ed3be7e8b5a09af8eedb607d60690b9"
+                "path": "examples/ieee80211ax/dl_mu_mimo/results/20260727T100000Z/DlMuMimo/DlMuMimo-#4.vec",
+                "sha256": "6fc88c9d2b9e5074ee45340ecd4ce2ff250fc5100d18f033c809e257267b398f"
               }
             ]
           }
         ],
-        "session_id": "20260726T222811Z",
+        "session_id": "20260727T100000Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "12c64651ac8bf99e8b4a245a20fb6fe5fc2a40a9",
-    "requested_session_id": "20260726T222811Z",
+    "repository_revision": "575ec1c145faaacc152f738263e7581fd06ade91",
+    "requested_session_id": "20260727T100000Z",
     "schema_version": 1
   },
-  "dl_asym": {
-    "Backlog (2.5ms)": {
-      "delay_p95_ms": {
-        "ci95": 0.009278555115435386,
-        "count": 5,
-        "mean": 2.14725928115
-      },
+  "mimo": {
+    "20 MHz MU-MIMO": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.04946090041151043,
         "count": 5,
-        "mean": 4.799999999999999
-      },
-      "jain_fairness": {
-        "ci95": 0.0,
-        "count": 5,
-        "mean": 0.9999999999999998
+        "mean": 23.970909090909096
       }
     },
-    "HoL min delay (2.5ms)": {
-      "delay_p95_ms": {
-        "ci95": 0.009278555115435386,
-        "count": 5,
-        "mean": 2.14725928115
-      },
+    "20 MHz OFDMA": {
       "goodput_mbps": {
         "ci95": 0.0,
         "count": 5,
-        "mean": 4.799999999999999
-      },
-      "jain_fairness": {
-        "ci95": 0.0,
-        "count": 5,
-        "mean": 0.9999999999999998
-      }
-    },
-    "Backlog (2.0ms)": {
-      "delay_p95_ms": {
-        "ci95": 0.021522511809188984,
-        "count": 5,
-        "mean": 3.3874248964399998
-      },
-      "goodput_mbps": {
-        "ci95": 0.0,
-        "count": 5,
-        "mean": 5.979310344827585
-      },
-      "jain_fairness": {
-        "ci95": 0.0,
-        "count": 5,
-        "mean": 0.9999999999999998
-      }
-    },
-    "HoL min delay (2.0ms)": {
-      "delay_p95_ms": {
-        "ci95": 0.9081042624060386,
-        "count": 5,
-        "mean": 7.98526033073
-      },
-      "goodput_mbps": {
-        "ci95": 0.014070773392929002,
-        "count": 5,
-        "mean": 5.92551724137931
-      },
-      "jain_fairness": {
-        "ci95": 1.9495272797988745e-16,
-        "count": 5,
-        "mean": 1.0
-      }
-    },
-    "Backlog (1.5ms)": {
-      "delay_p95_ms": {
-        "ci95": 0.17557616826794178,
-        "count": 5,
-        "mean": 13.256287770819998
-      },
-      "goodput_mbps": {
-        "ci95": 0.029290650558254087,
-        "count": 5,
-        "mean": 7.833103448275862
-      },
-      "jain_fairness": {
-        "ci95": 1.0358570566864109e-07,
-        "count": 5,
-        "mean": 0.9999861038178663
-      }
-    },
-    "HoL min delay (1.5ms)": {
-      "delay_p95_ms": {
-        "ci95": 0.5640947014936669,
-        "count": 5,
-        "mean": 143.58447142747997
-      },
-      "goodput_mbps": {
-        "ci95": 0.014070773392929004,
-        "count": 5,
-        "mean": 5.92551724137931
-      },
-      "jain_fairness": {
-        "ci95": 9.747636398994373e-17,
-        "count": 5,
-        "mean": 0.9999999999999396
+        "mean": 24.000000000000004
       }
     }
   }
