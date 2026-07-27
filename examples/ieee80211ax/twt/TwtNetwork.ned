@@ -18,7 +18,7 @@ import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMed
 // protocol mechanisms (individual TWT agreements and broadcast TWT modes) under deterministic
 // scheduling constraints.
 //
-network TwtRegression
+network TwtNetwork
 {
     parameters:
         int numStations = default(2);

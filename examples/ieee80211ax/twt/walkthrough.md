@@ -33,7 +33,7 @@ the TWT treatment must retain at least 95% of its paired baseline delivery.
 
 ## [agent] Scenario description
 
-The [network](TwtRegression.ned) and [configuration](omnetpp.ini) contain one
+The [network](TwtNetwork.ned) and [configuration](omnetpp.ini) contain one
 fixed AP, two fixed wireless stations, and a wired server. Stations send
 200-byte UDP payloads every 2.011 s, offset by 5 ms. Traffic starts near 10 s,
 after setup, and stops at 90 s; analysis uses `[10,100)` s so queued traffic
@@ -187,7 +187,7 @@ transmission observations.
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtNetwork.ap.wlan[0].pcap' \
   -q -z io,stat,0,'wlan.fc.type_subtype == 0x1a','wlan.fc.retry == 1'
 ```
 
@@ -272,7 +272,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1148*
 | 208 | 16.054112000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 | 209 | 16.059112000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 
-Frame numbers are local to capture `Baseline-#0TwtRegression.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+Frame numbers are local to capture `Baseline-#0TwtNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 #### [script] MPDU observation semantics
 
@@ -326,7 +326,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156*
 | 220 | 16.431636000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 | 222 | 16.531645000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 
-Frame numbers are local to capture `Broadcast-#0TwtRegression.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+Frame numbers are local to capture `Broadcast-#0TwtNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 #### [script] MPDU observation semantics
 
@@ -381,7 +381,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3148*
 | 351 | 10.261135000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
 | 353 | 10.331761000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: PS-Poll / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Signals that the power-save station is awake for buffered traffic. |
 
-Frame numbers are local to capture `IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+Frame numbers are local to capture `IndividualAnnounced-#0TwtNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 #### [script] MPDU observation semantics
 
@@ -435,7 +435,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1156*
 | 216 | 16.061247000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 | 218 | 16.131864000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 
-Frame numbers are local to capture `IndividualUnannounced-#0TwtRegression.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+Frame numbers are local to capture `IndividualUnannounced-#0TwtNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 #### [script] MPDU observation semantics
 
@@ -457,7 +457,7 @@ Only `IndividualAnnounced` contains the large **PS-Poll** population. This is co
 
 ```sh
 tshark -n -r \
-  'examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtRegression.ap.wlan[0].pcap' \
+  'examples/ieee80211ax/twt/results/20260725T225917Z/IndividualAnnounced/IndividualAnnounced-#0TwtNetwork.ap.wlan[0].pcap' \
   -Y 'frame.number >= 331 && frame.number <= 345' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
