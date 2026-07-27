@@ -3,18 +3,19 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260727T121100Z`
-- PCAP: `20260727T121100Z`
+- Scalar/vector: `20260727T131100Z`
+- PCAP: `20260727T131100Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260727T121100Z`.
+`[agent]` results sessions: `20260727T131100Z`.
 
 This example contrasts downlink multi-user multiple-input multiple-output
 (DL MU-MIMO) with a matched orthogonal frequency-division multiple access
-(OFDMA) control, then varies CSI leakage and offered load. Five paired seeds
-per condition establish the modeled spatial-stream allocation and application
-outcome; co-recorded run-0 packet captures show the protocol-visible HE MU
-data and sequential Block Ack exchange.
+(OFDMA) control, then varies CSI leakage, offered load, and the station
+antenna count. Five paired seeds per condition establish the modeled
+spatial-stream allocation and application outcome; co-recorded run-0 packet
+captures show the protocol-visible HE MU data and sequential Block Ack
+exchange.
 
 ## [agent] Learning objectives and feature primer
 
@@ -52,9 +53,9 @@ the common [`HeSingleBssNetwork`](../common/HeSingleBssNetwork.ned).
 
 ```text
 server === 100 Gbit/s Ethernet === 4-antenna AP
-                                      ))) host[0], 4 antennas
-                                      ))) host[1], 4 antennas
-                                      ))) host[2], 4 antennas
+                                      ))) host[0], 4 or 1 antenna
+                                      ))) host[1], 4 or 1 antenna
+                                      ))) host[2], 4 or 1 antenna
 ```
 
 All wireless nodes are stationary in one basic service set (BSS). The channel
@@ -75,6 +76,10 @@ transients. All conditions use identical topology, capabilities, channel,
 acknowledgment policy, run numbers, and seeds. At each load the OFDMA/MU-MIMO
 pair changes only the MU gate. The extra 24 Mbit/s MU-MIMO row reduces CSI
 leakage from 0.01 to 0.001 as a separate PHY-selection sensitivity check.
+The final matched 24 Mbit/s pair gives every station one antenna and advertises
+one 20 MHz beamformee space-time stream; the AP remains four-antenna. This
+isolates receiver antenna capability while preserving the OFDMA/MU gate as
+the only difference within the pair.
 
 ## [agent] Standards and INET model boundary
 
@@ -106,9 +111,11 @@ result vectors are authoritative for non-overlapping stream allocation.
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
 | Treatment prerequisites, load, leakage, and feature gates are effective inputs | `PASS` | `omnetpp.ini` plus retained HCF/application parameters | all configs/runs | Configuration input; not alone proof of runtime use |
-| Every MU treatment serves multiple users on disjoint spatial streams | `PASS` | AP `heStaId`, `heSpatialStreams`, and `heStreamStartIndex` vectors; evidence ledger | five MU configs × runs 0-4 | 226-327 qualifying PPDUs per run depending on load; zero overlaps |
-| MU packet captures contain full-band HE MU data and sequential BAR/BA | `PASS` | AP PCAPng and packet report | all five MU configs, run 0 / seed 0 | Direct packet observation |
-| OFDMA controls use frequency-separated RUs | `PASS` | AP PCAPng: HE MU MPDUs decoded on 106-tone RUs | four matched loads, run 0 / seed 0 | Packet-visible RU geometry |
+| Every MU treatment serves multiple users on disjoint spatial streams | `PASS` | AP `heStaId`, `heSpatialStreams`, and `heStreamStartIndex` vectors; evidence ledger | six MU configs × runs 0-4 | 226-327 qualifying PPDUs per run depending on load; zero overlaps |
+| MU packet captures contain full-band HE MU data and sequential BAR/BA | `PASS` | AP PCAPng and packet report | all six MU configs, run 0 / seed 0 | Direct packet observation |
+| OFDMA controls use frequency-separated RUs | `PASS` | AP PCAPng: HE MU MPDUs decoded on 106-tone RUs | five OFDMA configs, run 0 / seed 0 | Packet-visible RU geometry |
+| One-antenna STAs preserve the intended OFDMA/MU allocation distinction | `PASS` | effective antenna/STS parameters, AP allocation vectors, and AP PCAPng | matched one-antenna pair, runs 0-4; PCAP run 0 | MU uses three disjoint one-stream users on one 242-tone RU; OFDMA uses 106-tone RUs |
+| Reducing each STA to one antenna leaves 24 Mbit/s goodput and selected PHY unchanged in this model | `PASS` | receive vectors and AP PCAPng | matched one-versus-four-antenna cases | all deliver 24 Mbit/s; each corresponding capture has identical dominant MCS/counts because the original allocations already used NSS 1 per STA |
 | Lower leakage changes MU PHY selection at matched load | `PASS` | AP PCAPng MCS and airtime summaries | paired 24 Mbit/s configs, run 0 | MCS 4/5 at leakage 0.01 versus MCS 6/7 at 0.001; estimated airtime 66.27% versus 55.81% |
 | Offered-load sweep exposes different saturation plateaus | `PASS` | application receive vectors in `[0.55,0.88)` | matched loads, runs 0-4 / seeds 0-4 | MU-MIMO plateaus at 49.309 Mbit/s; OFDMA at about 42.9-43.1 Mbit/s |
 | MU-MIMO improves saturated-load aggregate goodput | `PASS` | paired application receive vectors | 48/72/96 Mbit/s, runs 0-4 | approximately +5.0, +6.4, and +6.3 Mbit/s over OFDMA |
@@ -128,6 +135,8 @@ result vectors are authoritative for non-overlapping stream allocation.
 | `DlMuMimo72MbpsLeakage01` | Treatment | MU-MIMO; leakage 0.01; same interval | matched 72 Mbit/s load, 20 MHz | 0-4 / 0-4 | valid spatial grouping under overload |
 | `EqualSizedRUs96Mbps` | Control | OFDMA; interval 0.25 ms | three measured 32 Mbit/s flows, 20 MHz | 0-4 / 0-4 | stable OFDMA saturation plateau |
 | `DlMuMimo96MbpsLeakage01` | Treatment | MU-MIMO; leakage 0.01; same interval | matched 96 Mbit/s load, 20 MHz | 0-4 / 0-4 | stable MU-MIMO saturation plateau |
+| `EqualSizedRUs24MbpsSta1Antenna` | Antenna control | OFDMA; each STA has one antenna and advertises one 20 MHz beamformee STS | matched 24 Mbit/s load, 20 MHz | 0-4 / 0-4 | users occupy different 106-tone RUs with NSS 1 |
+| `DlMuMimo24MbpsLeakage001Sta1Antenna` | Antenna treatment | MU-MIMO; leakage 0.001; each STA has one antenna and one beamformee STS | matched 24 Mbit/s load, 20 MHz | 0-4 / 0-4 | three users share a 242-tone RU using disjoint single-stream ranges |
 | `DlMuMimo80MHz` | Stress case | treatment at 80 MHz | matched three-station traffic; warm-up period 0.7 s | `NOT RUN` | shared wide-band RU and disjoint streams |
 
 `[General]` supplies the common `HeHcf`,
@@ -136,7 +145,10 @@ four sounding dimensions, station beamformee/feedback capabilities, QoS,
 aggregation, and Block Ack support. Every concrete 20 MHz configuration uses
 `sequentialBar`. Each matched OFDMA/MU-MIMO pair changes only the MU gate;
 load changes only through the measured-flow interval. CSI leakage is explicit
-at 0.01 for every load-sweep MU treatment.
+at 0.01 for every load-sweep MU treatment. The two antenna-sensitivity
+configurations override only the STA antenna count and
+`heBeamformeeSts20Mhz` to 1; their AP retains four antennas and four sounding
+dimensions.
 
 ## [agent] Expected invariants and diagnostic map
 
@@ -151,20 +163,22 @@ at 0.01 for every load-sweep MU treatment.
 
 ## [agent] Reproduction
 
-Run from the INET repository root. The non-terminating 72 Mbit/s interval was
-first checked with release `bin/inet`, run 0/seed 0, and exit status 0:
+Run from the INET repository root. The new one-antenna MU-MIMO case was first
+checked with release `bin/inet`, run 0/seed 0, and exit status 0:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
   python3 examples/ieee80211/analysis/wifi_analysis.py run dl_mu_mimo \
   --suite ax --evidence scalar-vector --runs 1 \
-  --config DlMuMimo72MbpsLeakage01 --jobs 1 \
-  --session-id 20260727T121000Z
+  --config DlMuMimo24MbpsLeakage001Sta1Antenna --jobs 1 \
+  --session-id 20260727T131000Z
 ```
 
-Its `.sca` file records an effective per-flow interval of
-`0.00033333333333333294 s` and AP CSI leakage 0.01. The publication campaign
-then executed 45 simulations (nine configurations times five runs). Every
+Its `.sca` file records one antenna and one 20 MHz beamformee STS for every
+STA, four AP antennas, a per-flow interval of 1 ms, and AP CSI leakage 0.001.
+Its AP allocation telemetry contains only `heSpatialStreams=1` and groups
+stations on stream starts 0, 1, and 2. The publication campaign then executed
+55 simulations (11 configurations times five runs). Every
 simulation child exited 0 and retained scalar/vector results; run 0 also
 retained AP packet captures:
 
@@ -173,30 +187,30 @@ MPLCONFIGDIR=/tmp/matplotlib \
 XDG_CONFIG_HOME=/tmp/codex-wireshark-config \
   python3 examples/ieee80211/analysis/wifi_analysis.py run dl_mu_mimo \
   --suite ax --evidence both --runs 5 --jobs 10 \
-  --session-id 20260727T121100Z
+  --session-id 20260727T131100Z
 
 MPLCONFIGDIR=/tmp/matplotlib \
   python3 examples/ieee80211/analysis/wifi_analysis.py report dl_mu_mimo \
-  --suite ax --session-id 20260727T121100Z
+  --suite ax --session-id 20260727T131100Z
 ```
 
 The campaign wrapper exited 2 only when its sandboxed TShark post-processing
 could not traverse `/home/user`. Read-only copies of session
-`20260727T121100Z` were therefore decoded under
-`/tmp/dl-mu-mimo-analysis.4vATlm/inet`; capture indexing and the shared
+`20260727T131100Z` were therefore decoded under
+`/tmp/dl-mu-mimo-analysis.QUzjHN/inet`; capture indexing and the shared
 analyzer both exited 0. The retained manifest hashes refer to the original
 repository captures, not to the temporary copies.
 
 ## [agent] Scalar and vector analysis
 
-Inputs are the 45 `.sca`/`.vec` pairs under
-[`results/20260727T121100Z`](results/20260727T121100Z). The result query used
+Inputs are the 55 `.sca`/`.vec` pairs under
+[`results/20260727T131100Z`](results/20260727T131100Z). The result query used
 by the shared analysis is:
 
 ```sh
 opp_scavetool query -l \
   -f 'module =~ "**.ap.wlan[0].radio" and (name =~ "heRuToneSize:vector" or name =~ "heRuToneOffset:vector" or name =~ "heStaId:vector" or name =~ "heSpatialStreams:vector" or name =~ "heStreamStartIndex:vector")' \
-  'examples/ieee80211ax/dl_mu_mimo/results/20260727T121100Z/DlMuMimo96MbpsLeakage01/DlMuMimo96MbpsLeakage01-#0.vec'
+  'examples/ieee80211ax/dl_mu_mimo/results/20260727T131100Z/DlMuMimo24MbpsLeakage001Sta1Antenna/DlMuMimo24MbpsLeakage001Sta1Antenna-#0.vec'
 ```
 
 Goodput is calculated independently for each run by summing station
@@ -209,15 +223,18 @@ independent runs, never across vector samples.
 |---|---|---|---:|---:|
 | `DlMuMimo` goodput | `packetReceived:vector(packetBytes)`, `**.app[*]`; bytes inferred from `packetBytes`, native unit absent | target `[0.55,0.88)`; sum bytes × 8 / 0.33 s | 5, none excluded | 23.9709 ± 0.0495 Mbit/s |
 | `DlMuMimo24MbpsLeakage001` goodput | same | same | 5, none excluded | 24.0000 ± 0 Mbit/s |
+| `DlMuMimo24MbpsLeakage001Sta1Antenna` goodput | same | same | 5, none excluded | 24.0000 ± 0 Mbit/s |
 | `DlMuMimo48MbpsLeakage01` goodput | same | same | 5, none excluded | 48.0145 ± 0.0756 Mbit/s |
 | `DlMuMimo72MbpsLeakage01` goodput | same | same | 5, none excluded | 49.3091 ± 0 Mbit/s |
 | `DlMuMimo96MbpsLeakage01` goodput | same | same | 5, none excluded | 49.3091 ± 0 Mbit/s |
 | `EqualSizedRUs_fBW` goodput | same | same | 5, none excluded | 24.0000 ± 0 Mbit/s |
+| `EqualSizedRUs24MbpsSta1Antenna` goodput | same | same | 5, none excluded | 24.0000 ± 0 Mbit/s |
 | `EqualSizedRUs48Mbps` goodput | same | same | 5, none excluded | 43.0545 ± 0 Mbit/s |
 | `EqualSizedRUs72Mbps` goodput | same | same | 5, none excluded | 42.8994 ± 0.1077 Mbit/s |
 | `EqualSizedRUs96Mbps` goodput | same | same | 5, none excluded | 42.9770 ± 0.1319 Mbit/s |
 | Baseline MU disjoint streams | AP radio HE allocation vectors | group equal timestamps; test half-open stream intervals | 5, none excluded | 303, 303, 303, 304, 303 PPDUs; zero overlaps |
 | Low-leakage MU disjoint streams | same | same | 5, none excluded | 327 PPDUs in every run; zero overlaps |
+| One-antenna low-leakage MU disjoint streams | same | same | 5, none excluded | 327 PPDUs in every run; zero overlaps; NSS 1 per user |
 | 48 Mbit/s MU disjoint streams | same | same | 5, none excluded | 231, 230, 231, 231, 230 PPDUs; zero overlaps |
 | 72 Mbit/s MU disjoint streams | same | same | 5, none excluded | 227, 226, 227, 227, 227 PPDUs; zero overlaps |
 | 96 Mbit/s MU disjoint streams | same | same | 5, none excluded | 227 PPDUs in every run; zero overlaps |
@@ -235,6 +252,14 @@ a 95% Student-t confidence interval across the five runs:
 | 72 Mbit/s | +6.410 ± 0.108 Mbit/s | 0.999924 ± 0.000011 | 1.000000 ± 0 |
 | 96 Mbit/s | +6.332 ± 0.132 Mbit/s | 0.999917 ± 0.000013 | 1.000000 ± 0 |
 
+The antenna-sensitivity comparisons use the same pairing and window:
+
+| 24 Mbit/s comparison | Paired aggregate-goodput difference, 95% CI | First-condition Jain fairness | Second-condition Jain fairness |
+|---|---:|---:|---:|
+| one-antenna OFDMA minus four-antenna OFDMA | 0.000 ± 0 Mbit/s | 1.000000 ± 0 | 1.000000 ± 0 |
+| one-antenna MU-MIMO minus four-antenna MU-MIMO, both leakage 0.001 | 0.000 ± 0 Mbit/s | 1.000000 ± 0 | 1.000000 ± 0 |
+| one-antenna MU-MIMO minus one-antenna OFDMA | 0.000 ± 0 Mbit/s | 1.000000 ± 0 | 1.000000 ± 0 |
+
 Run-0 captures decode a full-band 242-tone RU for every MU treatment. The
 representative AP allocation vectors record station IDs 1-3, one stream per
 user, and stream-start indices 0-2. The executable five-run contracts assert
@@ -248,14 +273,20 @@ carries approximately its offered load. At 72 and 96 Mbit/s both are
 saturated: MU-MIMO plateaus at 49.3091 Mbit/s and OFDMA at about
 42.9-43.1 Mbit/s. Thus the sweep brackets both capacity knees and directly
 shows different modeled aggregate-goodput plateaus. The structural allocation
-invariant also passes in every MU run.
+invariant also passes in every MU run. Reducing the STA antenna count from four
+to one causes no measured change at 24 Mbit/s: both one-antenna configurations
+deliver exactly 24 Mbit/s, and their respective PCAP summaries match the
+four-antenna controls. This is expected for these observed allocations because
+each scheduled user already receives exactly one spatial stream; MU-MIMO gains
+come from the AP assigning three different one-stream users concurrently, not
+from assigning multiple streams to an individual STA.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-mimo -->
 ### [script] Generated scalar/vector plot and table
 
-![mimo scalar/vector analysis](results/20260727T121100Z/mu-mimo-spatial-stream-matrix.png)
+![mimo scalar/vector analysis](results/20260727T131100Z/mu-mimo-spatial-stream-matrix.png)
 
-Figure provenance: [`results/20260727T121100Z/mu-mimo-spatial-stream-matrix.png.json`](results/20260727T121100Z/mu-mimo-spatial-stream-matrix.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260727T131100Z/mu-mimo-spatial-stream-matrix.png.json`](results/20260727T131100Z/mu-mimo-spatial-stream-matrix.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -267,10 +298,12 @@ Common table provenance:
 |---|---:|---:|
 | MU-MIMO, 24 Mbps, leakage 0.01 / goodput mbps | 23.9709 | 0.0494609 |
 | MU-MIMO, 24 Mbps, leakage 0.001 / goodput mbps | 24 | 0 |
+| MU-MIMO, 24 Mbps, leakage 0.001, STA 1 antenna / goodput mbps | 24 | 0 |
 | MU-MIMO, 48 Mbps, leakage 0.01 / goodput mbps | 48.0145 | 0.0755528 |
 | MU-MIMO, 72 Mbps, leakage 0.01 / goodput mbps | 49.3091 | 0 |
 | MU-MIMO, 96 Mbps, leakage 0.01 / goodput mbps | 49.3091 | 0 |
 | OFDMA, 24 Mbps / goodput mbps | 24 | 0 |
+| OFDMA, 24 Mbps, STA 1 antenna / goodput mbps | 24 | 0 |
 | OFDMA, 48 Mbps / goodput mbps | 43.0545 | 0 |
 | OFDMA, 72 Mbps / goodput mbps | 42.8994 | 0.107692 |
 | OFDMA, 96 Mbps / goodput mbps | 42.977 | 0.131896 |
@@ -293,10 +326,12 @@ de-duplicated medium transmissions or application deliveries.
 |---|---|---:|---|---|
 | `DlMuMimo` | AP `wlan[0]`; all decoded frames | 5,801 | 2,065 HE-MU QoS MPDUs on 242-tone RU, mostly MCS 4; 1,804 BAR; 1,803 BA | stream-start indices come from vectors |
 | `DlMuMimo24MbpsLeakage001` | same | 6,102 | 2,061 HE-MU QoS MPDUs, mostly MCS 6; 1,952 BAR and BA | matched-load leakage treatment |
+| `DlMuMimo24MbpsLeakage001Sta1Antenna` | same | 6,102 | 2,061 HE-MU QoS MPDUs on a 242-tone RU with NSS 1, mostly MCS 6; 1,952 BAR and BA | matches the four-antenna low-leakage case at this load |
 | `DlMuMimo48MbpsLeakage01` | same | 7,180 | 4,190 HE-MU QoS MPDUs, all MCS 4; 1,464 BAR and BA | matched load-sweep treatment |
 | `DlMuMimo72MbpsLeakage01` | same | 7,256 | 4,320 HE-MU QoS MPDUs, all MCS 4; 1,437 BAR and BA | saturated MU treatment |
 | `DlMuMimo96MbpsLeakage01` | same | 7,257 | 4,320 HE-MU QoS MPDUs, all MCS 4; 1,438 BAR and 1,437 BA | saturated MU treatment |
 | `EqualSizedRUs_fBW` | AP `wlan[0]`; all decoded frames | 4,731 | 2,095 HE-MU QoS MPDUs on 106-tone RUs; 1,308 BAR and BA | HE-MU format alone does not distinguish OFDMA |
+| `EqualSizedRUs24MbpsSta1Antenna` | same | 4,731 | 2,095 HE-MU QoS MPDUs on 106-tone RUs with NSS 1, MCS 8; 1,308 BAR and BA | matches the four-antenna OFDMA case at this load |
 | `EqualSizedRUs48Mbps` | same | 5,652 | 3,752 HE-MU QoS MPDUs on 106-tone RUs, MCS 8; 940 BAR and BA | matched saturated OFDMA control |
 | `EqualSizedRUs72Mbps` | same | 5,657 | 3,757 HE-MU QoS MPDUs on 106-tone RUs, MCS 8; 940 BAR and BA | saturated OFDMA control |
 | `EqualSizedRUs96Mbps` | same | 5,658 | 3,758 HE-MU QoS MPDUs on 106-tone RUs, MCS 8; 940 BAR and BA | saturated OFDMA control |
@@ -307,19 +342,21 @@ reducing modeled CSI leakage from 0.01 to 0.001 raises the dominant MCS from 4
 to 6 and lowers estimated cumulative airtime from 66.27% to 55.81%. Increasing
 load at leakage 0.01 leaves the MU-MIMO MCS at 4 and the OFDMA MCS at 8. Frame
 counts flatten from 48 to 96 Mbit/s for OFDMA and from 72 to 96 Mbit/s for
-MU-MIMO, consistent with the scalar saturation plateaus. Airtime is estimated
+MU-MIMO, consistent with the scalar saturation plateaus. The one-antenna
+captures match their corresponding four-antenna cases because every decoded
+user allocation is already NSS 1. Airtime is estimated
 from radiotap fields; HE MU/TB user-dependent signaling remains approximate,
 and cumulative multi-user airtime can exceed 100%.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260727T121100Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260727T131100Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260727T121100Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260727T131100Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260727T121100Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260727T121100Z.json` (SHA-256 `1e33f7fe3a2be8193f1a79a0689133340be577c73667f74a3ee918ba1f24f0fd`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260727T131100Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260727T131100Z.json` (SHA-256 `b5a97cda6627cfde2cc123cba3e83c672ae89d11c574bbe34651d74f7ac53487`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -333,9 +370,11 @@ Observation point: Access Point (AP) wireless interfaces.
 |---|---|---:|---|---:|---|
 | `DlMuMimo` | `none (all decoded frames)` | 5801 | Data: QoS Data [HE-MU, HE-MCS 4, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1863), Control: Block Ack Request (BAR) (1804), Control: Block Ack (BA) (1803) | 66.27% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `DlMuMimo24MbpsLeakage001` | `none (all decoded frames)` | 6102 | Control: Block Ack Request (BAR) (1952), Control: Block Ack (BA) (1952), Data: QoS Data [HE-MU, HE-MCS 6, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1859) | 55.81% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `DlMuMimo24MbpsLeakage001Sta1Antenna` | `none (all decoded frames)` | 6102 | Control: Block Ack Request (BAR) (1952), Control: Block Ack (BA) (1952), Data: QoS Data [HE-MU, HE-MCS 6, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (1859) | 55.81% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `DlMuMimo48MbpsLeakage01` | `none (all decoded frames)` | 7180 | Data: QoS Data [HE-MU, HE-MCS 4, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (4190), Control: Block Ack Request (BAR) (1464), Control: Block Ack (BA) (1464) | 101.83% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `DlMuMimo72MbpsLeakage01` | `none (all decoded frames)` | 7256 | Data: QoS Data [HE-MU, HE-MCS 4, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (4320), Control: Block Ack Request (BAR) (1437), Control: Block Ack (BA) (1437) | 104.00% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `DlMuMimo96MbpsLeakage01` | `none (all decoded frames)` | 7257 | Data: QoS Data [HE-MU, HE-MCS 4, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] (4320), Control: Block Ack Request (BAR) (1438), Control: Block Ack (BA) (1437) | 104.01% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs24MbpsSta1Antenna` | `none (all decoded frames)` | 4731 | Data: QoS Data [HE-MU, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (2095), Control: Block Ack Request (BAR) (1308), Control: Block Ack (BA) (1308) | 64.49% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `EqualSizedRUs48Mbps` | `none (all decoded frames)` | 5652 | Data: QoS Data [HE-MU, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (3752), Control: Block Ack Request (BAR) (940), Control: Block Ack (BA) (940) | 96.48% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `EqualSizedRUs72Mbps` | `none (all decoded frames)` | 5657 | Data: QoS Data [HE-MU, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (3757), Control: Block Ack Request (BAR) (940), Control: Block Ack (BA) (940) | 96.59% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `EqualSizedRUs96Mbps` | `none (all decoded frames)` | 5658 | Data: QoS Data [HE-MU, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (3758), Control: Block Ack Request (BAR) (940), Control: Block Ack (BA) (940) | 96.61% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
@@ -347,9 +386,11 @@ Observation point: Access Point (AP) wireless interfaces.
 |---|---|---|
 | **PASS** | DlMuMimo produced protocol-visible wireless observations | 5801 AP/global transmission observations |
 | **PASS** | DlMuMimo24MbpsLeakage001 produced protocol-visible wireless observations | 6102 AP/global transmission observations |
+| **PASS** | DlMuMimo24MbpsLeakage001Sta1Antenna produced protocol-visible wireless observations | 6102 AP/global transmission observations |
 | **PASS** | DlMuMimo48MbpsLeakage01 produced protocol-visible wireless observations | 7180 AP/global transmission observations |
 | **PASS** | DlMuMimo72MbpsLeakage01 produced protocol-visible wireless observations | 7256 AP/global transmission observations |
 | **PASS** | DlMuMimo96MbpsLeakage01 produced protocol-visible wireless observations | 7257 AP/global transmission observations |
+| **PASS** | EqualSizedRUs24MbpsSta1Antenna produced protocol-visible wireless observations | 4731 AP/global transmission observations |
 | **PASS** | EqualSizedRUs48Mbps produced protocol-visible wireless observations | 5652 AP/global transmission observations |
 | **PASS** | EqualSizedRUs72Mbps produced protocol-visible wireless observations | 5657 AP/global transmission observations |
 | **PASS** | EqualSizedRUs96Mbps produced protocol-visible wireless observations | 5658 AP/global transmission observations |
@@ -443,6 +484,50 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6102*
 | 38 | 0.302943000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Control: Block Ack Request (BAR) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
 
 Frame numbers are local to capture `DlMuMimo24MbpsLeakage001-#0Lan80211AxDlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### [script] Configuration: `DlMuMimo24MbpsLeakage001Sta1Antenna`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **6102**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c02a" /></svg> | Data: QoS Data [HE-MU, HE-MCS 6, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 1859 | 30.47% | 1066.0 B | 0.0 B | 163.5 us | 8.4 us | 5010 MHz | - | 20.0 dBm | 54.46% | 30.40% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39d03b" /></svg> | Data: QoS Data [HE-MU, HE-MCS 7, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 202 | 3.31% | 1066.0 B | 0.0 B | 152.3 us | 3.6 us | 5010 MHz | - | 20.0 dBm | 5.51% | 3.08% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 42 | 0.69% | 1001.7 B | 231.8 B | 583.9 us | 126.8 us | 5010 MHz | - | 20.0 dBm | 4.39% | 2.45% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 7 | 0.11% | 45.1 B | 2.1 B | 35.0 us | 0.7 us | 5010 MHz | - | 20.0 dBm | 0.04% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 1952 | 31.99% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 9.79% | 5.47% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 1952 | 31.99% | 152.0 B | 0.0 B | 70.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 24.72% | 13.79% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 42 | 0.69% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 0.19% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.10% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -66.0 dBm | 20.0 dBm | 0.03% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 13 | 0.21% | 36.8 B | 0.5 B | 69.1 us | 0.7 us | 5010 MHz | -66.0 dBm | 20.0 dBm | 0.16% | 0.09% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#cb1a20" /></svg> | Management: Action [HE-TB, HE-MCS 0, 106-tone RU, GI 1.6 us, BCC] | 2 | 0.03% | 34.0 B | 0.0 B | 112.8 us | 0.0 us | 5005 MHz, 5015 MHz | -66.0 dBm | - | 0.04% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#de1c12" /></svg> | Management: Action [HE-TB, HE-MCS 0, 52-tone RU, GI 1.6 us, BCC] | 18 | 0.29% | 34.0 B | 0.0 B | 199.2 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz | -66.0 dBm | - | 0.64% | 0.36% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#82cc33" /></svg> | A-MPDU Delimiter / Aggregation Overhead | 7 | 0.11% | 0.0 B | 0.0 B | 20.0 us | 0.0 us | 5010 MHz | - | - | 0.03% | 0.01% |
+
+#### [script] Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 19 | 0.300644000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 20 | 0.300692000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 23 | 0.300902000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 26 | 0.301435000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 7, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=6, A-MPDU=2654436768 | Carries protocol-visible MAC payload in the representative exchange. |
+| 27 | 0.301435000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 7, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=6, A-MPDU=2654436768 | Carries protocol-visible MAC payload in the representative exchange. |
+| 28 | 0.301435000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 7, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=6, A-MPDU=1013905259 | Carries protocol-visible MAC payload in the representative exchange. |
+| 29 | 0.301435000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 7, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=6, A-MPDU=1013905259 | Carries protocol-visible MAC payload in the representative exchange. |
+| 30 | 0.301483000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Control: Block Ack Request (BAR) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 31 | 0.301572000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 32 | 0.301620000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Control: Block Ack Request (BAR) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 33 | 0.301709000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 34 | 0.302577000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 35 | 0.302626000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 36 | 0.302895000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 7, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=6, A-MPDU=2654436512 | Carries protocol-visible MAC payload in the representative exchange. |
+| 37 | 0.302895000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 7, 242-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=3, frag=0, more-frag=0, TID=6, A-MPDU=1013905003 | Carries protocol-visible MAC payload in the representative exchange. |
+| 38 | 0.302943000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Control: Block Ack Request (BAR) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+
+Frame numbers are local to capture `DlMuMimo24MbpsLeakage001Sta1Antenna-#0Lan80211AxDlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `DlMuMimo48MbpsLeakage01`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7180**
@@ -569,6 +654,44 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **7257*
 | 39 | 0.302201000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
 
 Frame numbers are local to capture `DlMuMimo96MbpsLeakage01-#0Lan80211AxDlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+### [script] Configuration: `EqualSizedRUs24MbpsSta1Antenna`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4731**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#36ce36" /></svg> | Data: QoS Data [HE-MU, HE-MCS 8, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 2095 | 44.28% | 1066.0 B | 0.0 B | 245.4 us | 17.4 us | 5010 MHz | - | 20.0 dBm | 79.73% | 51.42% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 4 | 0.08% | 391.0 B | 389.7 B | 249.9 us | 213.2 us | 5010 MHz | - | 20.0 dBm | 0.15% | 0.10% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 1308 | 27.65% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | - | 20.0 dBm | 5.68% | 3.66% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 1308 | 27.65% | 152.0 B | 0.0 B | 70.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 14.33% | 9.24% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 4 | 0.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -66.0 dBm | - | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -66.0 dBm | 20.0 dBm | 0.02% | 0.01% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.13% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -66.0 dBm | 20.0 dBm | 0.06% | 0.04% |
+
+#### [script] Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 1 | 0.200148000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 2 | 0.200196000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 4 | 0.200293000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 6 | 0.200407000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 7 | 0.200598000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 8 | 0.200647000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 10 | 0.200743000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 12 | 0.200866000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 13 | 0.201048000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 14 | 0.201097000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 16 | 0.201194000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 18 | 0.201317000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 19 | 0.300644000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 20 | 0.300692000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 21 | 0.301030000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:02 | Data: QoS Data / HE-MU, HE-MCS 8, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=6, A-MPDU=2654436069 | Carries protocol-visible MAC payload in the representative exchange. |
+| 22 | 0.301030000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:03 | Data: QoS Data / HE-MU, HE-MCS 8, 106-tone RU, NSS 1, GI 3.2 us, LDPC | direction=from DS, retry=0, seq=1, frag=0, more-frag=0, TID=6, A-MPDU=1013903406 | Carries protocol-visible MAC payload in the representative exchange. |
+
+Frame numbers are local to capture `EqualSizedRUs24MbpsSta1Antenna-#0Lan80211AxDlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `EqualSizedRUs48Mbps`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5652**
@@ -733,7 +856,7 @@ The following command selects a representative three-user exchange from the
 
 ```sh
 tshark -n \
-  -r 'examples/ieee80211ax/dl_mu_mimo/results/20260727T121100Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
+  -r 'examples/ieee80211ax/dl_mu_mimo/results/20260727T131100Z/DlMuMimo48MbpsLeakage01/DlMuMimo48MbpsLeakage01-#0Lan80211AxDlOfdma.ap.wlan[0].pcap' \
   -Y 'frame.number >= 27 && frame.number <= 40' \
   -T fields -E header=y -E separator='|' \
   -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
@@ -767,8 +890,9 @@ is an inference consistent with those measurements.
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
-| DL MU-MIMO executes in all treatments | `PASS` | gate, beamformer/beamformee, antennas, sounding, scheduler | multiple same-time STA IDs with disjoint stream ranges in all 25 MU runs | HE-MU users share 242-tone RU | load-dependent delivery is recorded |
-| OFDMA controls remain frequency-separated | `PASS` | identical prerequisites, MU gate disabled | no treatment stream check asserted | HE-MU MPDUs use 106-tone RUs at all four loads | load-dependent delivery is recorded |
+| DL MU-MIMO executes in all treatments | `PASS` | gate, beamformer/beamformee, antennas, sounding, scheduler | multiple same-time STA IDs with disjoint stream ranges in all 30 MU runs | HE-MU users share 242-tone RU | load-dependent delivery is recorded |
+| OFDMA controls remain frequency-separated | `PASS` | identical prerequisites, MU gate disabled | no treatment stream check asserted | HE-MU MPDUs use 106-tone RUs in all five controls | load-dependent delivery is recorded |
+| One-antenna STAs preserve three-user MU-MIMO | `PASS` | AP remains 4 antennas/4 sounding dimensions; each STA is 1 antenna/1 beamformee STS | 327 three-user PPDUs per run, NSS 1, starts 0/1/2, zero overlaps | 242-tone MU-MIMO versus 106-tone OFDMA; each user NSS 1 | all matched 24 Mbit/s cases deliver 24 Mbit/s with Jain fairness 1 |
 | Lower CSI leakage changes PHY selection | `PASS` | leakage 0.001 versus 0.01; load otherwise matched | allocation remains structurally valid | dominant MCS rises from 4 to 6; estimated airtime falls | both deliver approximately 24 Mbit/s |
 | Sweep exposes different saturation plateaus | `PASS` | matched packet size, intervals, channel, and seeds | all MU allocations remain valid | OFDMA and MU frame counts independently flatten | MU 49.3091 versus OFDMA about 42.9-43.1 Mbit/s under 72/96 Mbit/s load |
 | MU-MIMO improves aggregate saturated-load goodput | `PASS` | matched OFDMA/MU pairs at 48/72/96 Mbit/s | spatial versus frequency allocation directly observed | full-band MU and 106-tone OFDMA geometry | paired mean gain is approximately 5.0-6.4 Mbit/s |
@@ -779,8 +903,10 @@ modeled DL MU-MIMO mechanism across the requested load sweep, shows the MCS
 response to lower modeled CSI leakage, and demonstrates a higher modeled
 aggregate-goodput plateau than matched OFDMA in this topology. At 24 Mbit/s
 there is no throughput distinction because both methods are offered-load
-limited. Scalar/vector results and run-0 packet captures were co-recorded in
-session `20260727T121100Z`; packet statistics remain a single-seed
+limited. Giving each STA one antenna also produces no change at this load
+because the observed four-antenna cases already allocate only one stream per
+user. Scalar/vector results and run-0 packet captures were co-recorded in
+session `20260727T131100Z`; packet statistics remain a single-seed
 observation, while structural and delivery claims use five paired seeds.
 
 ## [agent] Limitations and inconclusive claims
@@ -836,8 +962,9 @@ generated evidence, and authored walkthrough were updated together.
 | New matched-load leakage case | `DlMuMimo24MbpsLeakage001`: aggregate 24 Mbit/s, `defaultCsiLeakage=0.001` |
 | MU load sweep | `DlMuMimo48MbpsLeakage01`, `DlMuMimo72MbpsLeakage01`, and `DlMuMimo96MbpsLeakage01`, all with CSI leakage 0.01 |
 | Matched OFDMA controls | `EqualSizedRUs48Mbps`, `EqualSizedRUs72Mbps`, and `EqualSizedRUs96Mbps`, with identical traffic intervals |
-| Analysis registration | nine conditions in the AX suite and scalar manifest; five MU structural evidence contracts |
-| Validation | the 72 Mbit/s diagnostic and all 45 publication simulations exited 0; all five MU evidence contracts pass; all 33 AX analysis tests pass |
+| One-antenna matched pair | `EqualSizedRUs24MbpsSta1Antenna` and `DlMuMimo24MbpsLeakage001Sta1Antenna`: each STA has one antenna and one 20 MHz beamformee STS; AP remains four-antenna; offered load 24 Mbit/s; MU leakage 0.001 |
+| Analysis registration | 11 conditions in the AX suite and scalar manifest; six MU structural evidence contracts |
+| Validation | the one-antenna MU diagnostic and all 55 publication simulations exited 0; all six MU evidence contracts pass; all 33 AX analysis tests pass |
 | Existing analysis correction | half-open `[0.55,0.88)` result cropping remains covered by its boundary-sample unit test |
 | Optional observability | consider an explicit PPDU correlation ID and `heMuMimoUsed` result to replace timestamp/order correlation |
 | Architecture and sealing | no `src/inet` change was required; any telemetry change there requires a separate requirements, sealing, implementation, and regression review |
@@ -846,8 +973,8 @@ generated evidence, and authored walkthrough were updated together.
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | [`results/20260727T121100Z`](results/20260727T121100Z) | nine configs, runs 0-4/seeds 0-4 | native OMNeT++ result API; `[0.55,0.88)` | hashes in [`evidence-ledger.json`](../../ieee80211/analysis/generated/sessions/20260727T121100Z/evidence-ledger.json) |
-| Paired/fairness table | same scalar/vector session | nine configs, three sinks per run | `packetReceived:vector(packetBytes)`; pair by run/seed; Jain formula in text | agent-derived from raw vectors, not a generated metrics field |
-| Scalar plot | [`mu-mimo-spatial-stream-matrix.png`](results/20260727T121100Z/mu-mimo-spatial-stream-matrix.png) | nine configs; 96 Mbit/s MU run 0 plotted | shared `mimo` renderer | [`PNG provenance`](results/20260727T121100Z/mu-mimo-spatial-stream-matrix.png.json) |
-| PCAP | [`results/20260727T121100Z`](results/20260727T121100Z) | nine configs, run 0/seed 0 | AP capture, TShark/Capinfos 4.6.4 | manifest SHA-256 recorded in [`packet_metrics.json`](../../ieee80211/analysis/generated/ax/packet_metrics.json) |
-| PCAP plot | [`packet_statistics.png`](results/20260727T121100Z/packet_statistics.png) | nine configs, run 0 | shared typed HE profile | [`PNG provenance`](results/20260727T121100Z/packet_statistics.png.json) |
+| Scalar/vector | [`results/20260727T131100Z`](results/20260727T131100Z) | 11 configs, runs 0-4/seeds 0-4 | native OMNeT++ result API; `[0.55,0.88)` | hashes in [`evidence-ledger.json`](../../ieee80211/analysis/generated/sessions/20260727T131100Z/evidence-ledger.json) |
+| Paired/fairness table | same scalar/vector session | 11 configs, three sinks per run | `packetReceived:vector(packetBytes)`; pair by run/seed; Jain formula in text | agent-derived from raw vectors, not a generated metrics field |
+| Scalar plot | [`mu-mimo-spatial-stream-matrix.png`](results/20260727T131100Z/mu-mimo-spatial-stream-matrix.png) | 11 configs; one-antenna MU run 0 plotted | shared `mimo` renderer | [`PNG provenance`](results/20260727T131100Z/mu-mimo-spatial-stream-matrix.png.json) |
+| PCAP | [`results/20260727T131100Z`](results/20260727T131100Z) | 11 configs, run 0/seed 0 | AP capture, TShark/Capinfos 4.6.4 | manifest SHA-256 recorded in [`packet_metrics.json`](../../ieee80211/analysis/generated/ax/packet_metrics.json) |
+| PCAP plot | [`packet_statistics.png`](results/20260727T131100Z/packet_statistics.png) | 11 configs, run 0 | shared typed HE profile | [`PNG provenance`](results/20260727T131100Z/packet_statistics.png.json) |

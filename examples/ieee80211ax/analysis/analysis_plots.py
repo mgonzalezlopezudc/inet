@@ -739,7 +739,7 @@ def plot_mimo(conditions: list[Condition], output: Path) -> None:
     if not any(np.count_nonzero(~np.isnan(matrix[:, column])) >= 2 for column in range(matrix.shape[1])):
         raise RuntimeError("No PPDU serves multiple MU-MIMO users")
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(18, 5.5), gridspec_kw={"width_ratios": [1, 1.35]})
     image = axes[0].imshow(
         matrix,
         aspect="auto",
@@ -760,12 +760,16 @@ def plot_mimo(conditions: list[Condition], output: Path) -> None:
         label = f"{method}\n{load:g}" if load is not None else method
         if condition.condition_metadata.get("csi_leakage") == 0.001:
             label += "\nleak .001"
+        if condition.condition_metadata.get("sta_antenna_count") == 1:
+            label += "\nSTA 1 ant"
         plot_labels.append(label)
     bar_with_ci(axes[1], plot_labels, goodputs, "goodput_bps", scale=1e-6)
-    axes[1].tick_params(axis="x", rotation=0)
+    axes[1].tick_params(axis="x", rotation=28, labelsize=8)
+    for label in axes[1].get_xticklabels():
+        label.set_horizontalalignment("right")
     axes[1].set_xlabel("Method and aggregate offered load [Mbit/s]")
     axes[1].set_ylabel("Aggregate goodput [Mbit/s]")
-    axes[1].set_title("20 MHz MU-MIMO/OFDMA offered-load sweep")
+    axes[1].set_title("20 MHz offered-load and STA-antenna comparisons")
     fig.suptitle("MU-MIMO stream compatibility and delivery")
     save(fig, output)
     write_provenance(
