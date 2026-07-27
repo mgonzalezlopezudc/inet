@@ -136,7 +136,7 @@
     "ul_ofdma": {
       "scalar_vector_group": "ul_ofdma",
       "ini": "ul_ofdma/omnetpp.ini",
-      "configurations": ["ScheduledOnly", "EqualRus", "EdcaBaseline"],
+      "configurations": ["BacklogBased", "EqualSizedRUs", "EdcaBaseline"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"],
       "capture": {
@@ -146,7 +146,7 @@
     "ul_uora": {
       "scalar_vector_group": "uora",
       "ini": "ul_uora/omnetpp.ini",
-      "configurations": ["MixedUora", "UoraLightContention", "UoraHeavyContention", "UoraMoreRandomAccessRus"],
+      "configurations": ["ScheduledOnly", "MixedUora", "UoraLightContention", "UoraHeavyContention", "UoraMoreRandomAccessRus"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma", "uora"],
       "capture": {
