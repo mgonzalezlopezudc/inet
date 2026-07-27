@@ -97,7 +97,7 @@ Run from the repository root:
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/preamble_puncturing/omnetpp.ini \
   -c DynamicPuncturing -r 0 \
-  --result-dir=examples/ieee80211ax/preamble_puncturing/results/manual/DynamicPuncturing
+  --result-dir="$PWD/examples/ieee80211ax/preamble_puncturing/results/manual/DynamicPuncturing"
 ```
 
 The direct `DynamicPuncturing` command was not executed and remains `NOT RUN`.

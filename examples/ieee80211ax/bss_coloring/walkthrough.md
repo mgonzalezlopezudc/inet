@@ -112,7 +112,7 @@ during this rewrite; no historical exit status is inferred:
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/bss_coloring/omnetpp.ini \
   -c BssColoringEnabled -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/bss_coloring/results/manual/BssColoringEnabled
+  --result-dir="$PWD/examples/ieee80211ax/bss_coloring/results/manual/BssColoringEnabled"
 ```
 
 The retained campaign can be regenerated with:

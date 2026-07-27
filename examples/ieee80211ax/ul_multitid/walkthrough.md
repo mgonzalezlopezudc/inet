@@ -105,11 +105,11 @@ executed during this documentation revision, so their exit status is
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/ul_multitid/omnetpp.ini \
   -c MultiTidBlockAck -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/ul_multitid/results/validation/dl
+  --result-dir="$PWD/examples/ieee80211ax/ul_multitid/results/validation/dl"
 
 bin/inet -u Cmdenv -f examples/ieee80211ax/ul_multitid/omnetpp.ini \
   -c UlMuMultiTidBlockAck -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/ul_multitid/results/validation/ul-mu
+  --result-dir="$PWD/examples/ieee80211ax/ul_multitid/results/validation/ul-mu"
 ```
 
 The shared analyzer resolved the real split INI entry points by configuration.

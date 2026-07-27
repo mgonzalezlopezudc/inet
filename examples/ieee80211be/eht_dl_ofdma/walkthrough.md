@@ -104,7 +104,7 @@ the repository root (`NOT RUN` during this authoring pass):
 bin/inet -u Cmdenv \
   -f examples/ieee80211be/eht_dl_ofdma/omnetpp.ini \
   -c EqualSizedMRUs -r 0 --seed-set=0 --sim-time-limit=0.15s \
-  --result-dir=examples/ieee80211be/eht_dl_ofdma/results/reproduction
+  --result-dir="$PWD/examples/ieee80211be/eht_dl_ofdma/results/reproduction"
 ```
 
 There is currently no shared-suite entry for `eht_dl_ofdma`; consequently the

@@ -104,7 +104,7 @@ Run from the INET repository root:
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/bsr/omnetpp.ini \
   -c StaleBsr -r 0 \
-  --result-dir=examples/ieee80211ax/bsr/results/manual/StaleBsr
+  --result-dir="$PWD/examples/ieee80211ax/bsr/results/manual/StaleBsr"
 ```
 
 The direct minimal command was not executed and remains `NOT RUN`. The

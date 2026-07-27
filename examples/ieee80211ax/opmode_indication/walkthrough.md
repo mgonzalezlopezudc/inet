@@ -102,7 +102,7 @@ Run from the INET repository root. This command is illustrative and was
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/opmode_indication/omnetpp.ini \
   -c OperatingModeIndication -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/opmode_indication/results/validation/run0
+  --result-dir="$PWD/examples/ieee80211ax/opmode_indication/results/validation/run0"
 ```
 
 The suite-owned packet command below was executed with exit status 0 and

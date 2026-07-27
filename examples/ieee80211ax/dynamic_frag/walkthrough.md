@@ -95,7 +95,7 @@ Run from the repository root:
 bin/inet -u Cmdenv \
   -f examples/ieee80211ax/dynamic_frag/omnetpp.ini \
   -c DynamicFragmentation -r 0 \
-  --result-dir=examples/ieee80211ax/dynamic_frag/results/manual/DynamicFragmentation
+  --result-dir="$PWD/examples/ieee80211ax/dynamic_frag/results/manual/DynamicFragmentation"
 ```
 
 The direct minimal command was not executed and remains `NOT RUN`. The

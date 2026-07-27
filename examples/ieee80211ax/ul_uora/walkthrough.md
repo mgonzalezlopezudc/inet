@@ -168,8 +168,9 @@ The treatment used the same command with
 exited 0. Because the relative `--result-dir` is resolved against the INI
 directory, `.sca`/`.vec` files appear under the nested path recorded in
 Artifact provenance. The PCAP recorder path appears under the non-nested
-session directory. Use `--result-dir="$PWD/examples/..."` in a new session to
-avoid that path quirk.
+session directory. For a new run, use
+`--result-dir="$PWD/examples/ieee80211ax/ul_uora/results/<new-session>/UoraHeavyContention"`
+to keep `.sca`, `.vec`, and PCAP files together.
 
 The shared suite's publication campaign is intentionally `NOT RUN`; it requires
 five runs:

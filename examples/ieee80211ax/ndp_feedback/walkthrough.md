@@ -101,7 +101,7 @@ documentation revision:
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/ndp_feedback/omnetpp.ini \
   -c NdpFeedbackReport -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/ndp_feedback/results/validation/run0 \
+  --result-dir="$PWD/examples/ieee80211ax/ndp_feedback/results/validation/run0" \
   '--**.numPcapRecorders=1' \
   '--**.pcapRecorder[*].moduleNamePatterns="wlan[0]"' \
   '--**.pcapRecorder[*].dumpProtocols="ieee80211mac"' \

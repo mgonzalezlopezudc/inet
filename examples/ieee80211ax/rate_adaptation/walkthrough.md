@@ -93,7 +93,7 @@ Run from the repository root:
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/rate_adaptation/omnetpp.ini \
   -c HeMinstrelMobile -r 0 \
-  --result-dir=examples/ieee80211ax/rate_adaptation/results/manual/HeMinstrelMobile
+  --result-dir="$PWD/examples/ieee80211ax/rate_adaptation/results/manual/HeMinstrelMobile"
 ```
 
 The direct minimal command was not executed and remains `NOT RUN`. The

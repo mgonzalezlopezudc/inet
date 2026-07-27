@@ -97,7 +97,7 @@ during this rewrite:
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/er_su/omnetpp.ini \
   -c CellBoundaryHeErSu -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/er_su/results/manual/CellBoundaryHeErSu
+  --result-dir="$PWD/examples/ieee80211ax/er_su/results/manual/CellBoundaryHeErSu"
 ```
 
 Campaign regeneration:

@@ -65,12 +65,14 @@ Run from the INET repository root:
 ```sh
 bin/inet -u Cmdenv -f <example>/omnetpp.ini \
   -c <Configuration> -r <run> --seed-set=<seed> \
-  --result-dir=<example>/results/<session>/<configuration>
+  --result-dir="$PWD/<example>/results/<session>/<configuration>"
 ```
 
 <Record the exact command, observed exit status (or `NOT RUN` if illustrative),
 output directory, build mode, and temporary command-line overrides. Add
-campaign/regeneration commands after the minimal run.>
+campaign/regeneration commands after the minimal run. Keep `--result-dir`
+absolute: scalar/vector output is resolved relative to the INI file, while
+PCAP output may be resolved relative to the process working directory.>
 
 ## [agent] Scalar and vector analysis
 

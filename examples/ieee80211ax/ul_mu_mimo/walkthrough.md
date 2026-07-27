@@ -107,11 +107,11 @@ this documentation revision:
 ```sh
 bin/inet -u Cmdenv -f examples/ieee80211ax/ul_mu_mimo/omnetpp.ini \
   -c DlMuMimo -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/ul_mu_mimo/results/validation/dl-mu
+  --result-dir="$PWD/examples/ieee80211ax/ul_mu_mimo/results/validation/dl-mu"
 
 bin/inet -u Cmdenv -f examples/ieee80211ax/ul_mu_mimo/omnetpp.ini \
   -c EqualSizedRUs_fBW -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/ul_mu_mimo/results/validation/dl-ofdma
+  --result-dir="$PWD/examples/ieee80211ax/ul_mu_mimo/results/validation/dl-ofdma"
 ```
 
 Repeat runs 1-4 into distinct directories for the retained comparison design.

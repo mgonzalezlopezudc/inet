@@ -109,7 +109,7 @@ the repository root (`NOT RUN` during this authoring pass):
 bin/inet -u Cmdenv \
   -f examples/ieee80211be/mlo/omnetpp.ini \
   -c Str -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211be/mlo/results/reproduction/Str
+  --result-dir="$PWD/examples/ieee80211be/mlo/results/reproduction/Str"
 ```
 
 Repeat with `-c Nstr` into a separate directory. There is no shared suite

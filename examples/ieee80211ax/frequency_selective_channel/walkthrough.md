@@ -113,7 +113,7 @@ Run from the repository root. This minimal command is illustrative and was
 bin/inet --release -u Cmdenv \
   -f examples/ieee80211ax/frequency_selective_channel/omnetpp.ini \
   -c FlatChannelOFDMA -r 0 --seed-set=0 \
-  --result-dir=examples/ieee80211ax/frequency_selective_channel/results/manual/FlatChannelOFDMA
+  --result-dir="$PWD/examples/ieee80211ax/frequency_selective_channel/results/manual/FlatChannelOFDMA"
 ```
 
 Fresh suite PCAP generation was executed with exit status 0 and created
