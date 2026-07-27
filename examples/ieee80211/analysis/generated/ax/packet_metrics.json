@@ -3,13 +3,49 @@
     "analysis_script_sha256": "6fbd7f91ed785ead4a42d45960826088ab6864260e3ab329e7b4c68b7066f028",
     "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
     "capture_manifest": {
-      "path": "examples/ieee80211/analysis/generated/ax/capture_manifests/20260727T142600Z.json",
-      "sha256": "11e592e4103f83fb282198192eddc4a0e826db94452cd95ecca59fb4686a79a4"
+      "path": "examples/ieee80211/analysis/generated/ax/capture_manifests/20260727T202540Z.json",
+      "sha256": "1c265f639dbad5528d2939b273aadeb85f28fa2d11a52ed3ca1f078d63bcfbd6"
     },
-    "capture_session_id": "20260727T142600Z",
+    "capture_session_id": "20260727T202540Z",
     "capture_source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "cross_layer_session_alignment": "ASSESSED: every capture is bound to the scalar metadata from the same result directory, configuration, run, seed, and simulation trajectory",
     "entries": [
+      {
+        "captures": [
+          {
+            "format": "pcapng",
+            "metadata": {
+              "data_size_bytes": 1224522,
+              "duration_seconds": 1.998534,
+              "encapsulation": "ieee-802-11-radiotap",
+              "end_seconds": 1.999582,
+              "file_size_bytes": 1352204,
+              "file_type": "pcapng",
+              "interfaces": [
+                {
+                  "description": "ap.wlan0",
+                  "interface_id": 0,
+                  "name": "wlan0",
+                  "snapshot_length": 0,
+                  "time_precision": "microseconds (6)"
+                }
+              ],
+              "packet_count": 2877,
+              "snapshot_length": null,
+              "start_seconds": 0.001048,
+              "strict_time_order": true,
+              "time_precision": "microseconds"
+            },
+            "path": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "sha256": "9ba4b7b7a5ca6368f9ae66b59440aa48c304b8663bf74b617fa00848cd7aafbd",
+            "size_bytes": 1352204
+          }
+        ],
+        "config": "ScheduledOnly",
+        "run_number": 0,
+        "seed_set": 0,
+        "subdir": "ul_uora"
+      },
       {
         "captures": [
           {
@@ -36,7 +72,7 @@
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "path": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "sha256": "aad97f46ef451695a54cb13c4ecdd0e45aa9ee22f498c8baa67b5023b964434a",
             "size_bytes": 1863872
           }
@@ -72,7 +108,7 @@
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "path": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "sha256": "0534f108aba294752f23f4afe3c9bad4c0adf077a5e35b45e7732484c508a344",
             "size_bytes": 2478420
           }
@@ -108,7 +144,7 @@
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "path": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "sha256": "efcab013a0fd5ebcdf2652087998575f3b142313d1808fa9a01665a8f425a9d0",
             "size_bytes": 3520428
           }
@@ -144,7 +180,7 @@
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "path": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "sha256": "215fcd8dbb03c8ca67d7efebe6fec3c1d45290f84698e13df1b50d1eefb89d4f",
             "size_bytes": 3365572
           }
@@ -155,13 +191,13 @@
         "subdir": "ul_uora"
       }
     ],
-    "repository_revision": "6c61c6d710b195b0598fb522762ef008336a445d",
+    "repository_revision": "1e8d2b37739899df0eb2930b9834bf4d7f119452",
     "run_number": 0,
     "schema_version": 1,
     "suite": "ax",
     "suite_descriptor": {
       "path": "examples/ieee80211/analysis/suites/ax.json",
-      "sha256": "3cc44f8a1e5c833dd8713e56e66d086013fa6e7f791cf334637403eee7876a17"
+      "sha256": "2ade399d8e407d0d993e48612fac3443ea62348108086d519bfc521366a9f476"
     },
     "tshark_version": "TShark (Wireshark) 4.6.4."
   },
@@ -169,7 +205,7 @@
     "MixedUora": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
@@ -243,7 +279,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -272,7 +308,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "216",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -301,7 +337,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "224",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -330,7 +366,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -359,7 +395,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -388,7 +424,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "344",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -417,7 +453,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "352",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -446,7 +482,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -475,7 +511,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -504,7 +540,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "472",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -533,7 +569,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "480",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -562,7 +598,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -591,7 +627,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -620,7 +656,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "600",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -649,7 +685,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "608",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -678,7 +714,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -709,10 +745,553 @@
         "used_ap_only": true
       }
     },
+    "ScheduledOnly": {
+      "global": {
+        "captures": [
+          "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+        ],
+        "display_filter": "none (all decoded frames)",
+        "stats": {
+          "1,13,Legacy,12 Mbps,,,,,False,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 2.8814126216114806,
+            "airtime_sim_pct": 1.258,
+            "count": 1020,
+            "freq": "5010 MHz",
+            "mean": 14.0,
+            "mean_duration": 2.466666666666667e-05,
+            "rx_sig": "-",
+            "std": 0.0,
+            "std_duration": 0.0,
+            "tx_pwr": "10.0 dBm"
+          },
+          "1,2,Legacy,24 Mbps,,,,,False,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 0.6818732412191874,
+            "airtime_sim_pct": 0.2977,
+            "count": 168,
+            "freq": "5010 MHz",
+            "mean": 46.32142857142857,
+            "mean_duration": 3.544047619047619e-05,
+            "rx_sig": "-",
+            "std": 2.928353650439239,
+            "std_duration": 9.76117883479746e-07,
+            "tx_pwr": "10.0 dBm"
+          },
+          "1,9,Legacy,24 Mbps,,,,,False,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 0.7567716456124268,
+            "airtime_sim_pct": 0.33039999999999997,
+            "count": 168,
+            "freq": "5010 MHz",
+            "mean": 58.0,
+            "mean_duration": 3.933333333333333e-05,
+            "rx_sig": "-",
+            "std": 0.0,
+            "std_duration": 0.0,
+            "tx_pwr": "10.0 dBm"
+          },
+          "2,12,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 22.463107998941265,
+            "airtime_sim_pct": 9.8072,
+            "count": 492,
+            "freq": "5002 MHz, 5004 MHz, 5006 MHz",
+            "mean": 34.0,
+            "mean_duration": 0.0003986666666666667,
+            "rx_sig": "-75.0 dBm",
+            "std": 0.0,
+            "std_duration": 0.0,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,False,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 73.21683449261376,
+            "airtime_sim_pct": 31.965841025641023,
+            "count": 1029,
+            "freq": "5010 MHz",
+            "mean": 1070.0,
+            "mean_duration": 0.0006212991452991453,
+            "rx_sig": "-63.7 dBm",
+            "std": 0.0,
+            "std_duration": 0.0,
+            "tx_pwr": "-"
+          }
+        },
+        "timeline": [
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "direct/IBSS",
+            "fragment_number": null,
+            "frame_name": "Control: Trigger",
+            "frame_number": 1,
+            "frame_subtype": "2",
+            "frame_type": "1",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": null,
+              "coding": null,
+              "format": "Legacy/HT/VHT",
+              "guard_interval": null,
+              "mcs": null,
+              "nss": null
+            },
+            "receiver": "ff:ff:ff:ff:ff:ff",
+            "retry": false,
+            "sequence_number": null,
+            "simulation_time_s": 0.001048,
+            "tid": null,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": false,
+            "transmitter": "10:00:00:00:00:00"
+          },
+          {
+            "ampdu": true,
+            "ampdu_reference": "216",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Null",
+            "frame_number": 2,
+            "frame_subtype": "12",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "26-tone RU",
+              "coding": "LDPC",
+              "format": "HE-TB",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 0",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": false,
+            "sequence_number": 0,
+            "simulation_time_s": 0.002064,
+            "tid": 0,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:01"
+          },
+          {
+            "ampdu": true,
+            "ampdu_reference": "222",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Null",
+            "frame_number": 3,
+            "frame_subtype": "12",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "26-tone RU",
+              "coding": "LDPC",
+              "format": "HE-TB",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 0",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": false,
+            "sequence_number": 0,
+            "simulation_time_s": 0.002064,
+            "tid": 0,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:03"
+          },
+          {
+            "ampdu": true,
+            "ampdu_reference": "228",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Null",
+            "frame_number": 4,
+            "frame_subtype": "12",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "26-tone RU",
+              "coding": "LDPC",
+              "format": "HE-TB",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 0",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": false,
+            "sequence_number": 0,
+            "simulation_time_s": 0.002064,
+            "tid": 0,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:02"
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "direct/IBSS",
+            "fragment_number": null,
+            "frame_name": "Control: Block Ack (BA)",
+            "frame_number": 5,
+            "frame_subtype": "9",
+            "frame_type": "1",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": null,
+              "coding": null,
+              "format": "Legacy/HT/VHT",
+              "guard_interval": null,
+              "mcs": null,
+              "nss": null
+            },
+            "receiver": "ff:ff:ff:ff:ff:ff",
+            "retry": false,
+            "sequence_number": null,
+            "simulation_time_s": 0.002133,
+            "tid": null,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": false,
+            "transmitter": "10:00:00:00:00:00"
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "direct/IBSS",
+            "fragment_number": null,
+            "frame_name": "Control: Trigger",
+            "frame_number": 6,
+            "frame_subtype": "2",
+            "frame_type": "1",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": null,
+              "coding": null,
+              "format": "Legacy/HT/VHT",
+              "guard_interval": null,
+              "mcs": null,
+              "nss": null
+            },
+            "receiver": "ff:ff:ff:ff:ff:ff",
+            "retry": false,
+            "sequence_number": null,
+            "simulation_time_s": 0.103048,
+            "tid": null,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": false,
+            "transmitter": "10:00:00:00:00:00"
+          },
+          {
+            "ampdu": true,
+            "ampdu_reference": "387",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Null",
+            "frame_number": 7,
+            "frame_subtype": "12",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "26-tone RU",
+              "coding": "LDPC",
+              "format": "HE-TB",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 0",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": false,
+            "sequence_number": 1,
+            "simulation_time_s": 0.104064,
+            "tid": 0,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:01"
+          },
+          {
+            "ampdu": true,
+            "ampdu_reference": "393",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Null",
+            "frame_number": 8,
+            "frame_subtype": "12",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "26-tone RU",
+              "coding": "LDPC",
+              "format": "HE-TB",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 0",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": false,
+            "sequence_number": 1,
+            "simulation_time_s": 0.104064,
+            "tid": 0,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:03"
+          },
+          {
+            "ampdu": true,
+            "ampdu_reference": "399",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Null",
+            "frame_number": 9,
+            "frame_subtype": "12",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "26-tone RU",
+              "coding": "LDPC",
+              "format": "HE-TB",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 0",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": false,
+            "sequence_number": 1,
+            "simulation_time_s": 0.104064,
+            "tid": 0,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:02"
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "direct/IBSS",
+            "fragment_number": null,
+            "frame_name": "Control: Block Ack (BA)",
+            "frame_number": 10,
+            "frame_subtype": "9",
+            "frame_type": "1",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": null,
+              "coding": null,
+              "format": "Legacy/HT/VHT",
+              "guard_interval": null,
+              "mcs": null,
+              "nss": null
+            },
+            "receiver": "ff:ff:ff:ff:ff:ff",
+            "retry": false,
+            "sequence_number": null,
+            "simulation_time_s": 0.104133,
+            "tid": null,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": false,
+            "transmitter": "10:00:00:00:00:00"
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Data",
+            "frame_number": 11,
+            "frame_subtype": "8",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "20 MHz",
+              "coding": "LDPC",
+              "format": "HE-SU",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 1",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": false,
+            "sequence_number": 0,
+            "simulation_time_s": 0.200644,
+            "tid": 6,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:01"
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Data",
+            "frame_number": 12,
+            "frame_subtype": "8",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "20 MHz",
+              "coding": "LDPC",
+              "format": "HE-SU",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 1",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": true,
+            "sequence_number": 0,
+            "simulation_time_s": 0.201388,
+            "tid": 6,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:03"
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "direct/IBSS",
+            "fragment_number": null,
+            "frame_name": "Control: Ack",
+            "frame_number": 13,
+            "frame_subtype": "13",
+            "frame_type": "1",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": null,
+              "coding": null,
+              "format": "Legacy/HT/VHT",
+              "guard_interval": null,
+              "mcs": null,
+              "nss": null
+            },
+            "receiver": "0a:aa:00:00:00:03",
+            "retry": false,
+            "sequence_number": null,
+            "simulation_time_s": 0.201436,
+            "tid": null,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": false,
+            "transmitter": null
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "to DS",
+            "fragment_number": 0,
+            "frame_name": "Data: QoS Data",
+            "frame_number": 14,
+            "frame_subtype": "8",
+            "frame_type": "2",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": "20 MHz",
+              "coding": "LDPC",
+              "format": "HE-SU",
+              "guard_interval": "3.2 us",
+              "mcs": "HE-MCS 1",
+              "nss": "1"
+            },
+            "receiver": "10:00:00:00:00:00",
+            "retry": true,
+            "sequence_number": 0,
+            "simulation_time_s": 0.202123,
+            "tid": 6,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": true,
+            "transmitter": "0a:aa:00:00:00:02"
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "direct/IBSS",
+            "fragment_number": null,
+            "frame_name": "Control: Ack",
+            "frame_number": 15,
+            "frame_subtype": "13",
+            "frame_type": "1",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": null,
+              "coding": null,
+              "format": "Legacy/HT/VHT",
+              "guard_interval": null,
+              "mcs": null,
+              "nss": null
+            },
+            "receiver": "0a:aa:00:00:00:02",
+            "retry": false,
+            "sequence_number": null,
+            "simulation_time_s": 0.202171,
+            "tid": null,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": false,
+            "transmitter": null
+          },
+          {
+            "ampdu": false,
+            "ampdu_reference": null,
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "direction": "direct/IBSS",
+            "fragment_number": null,
+            "frame_name": "Control: Trigger",
+            "frame_number": 16,
+            "frame_subtype": "2",
+            "frame_type": "1",
+            "from_ds": false,
+            "more_fragments": false,
+            "phy": {
+              "bandwidth_or_ru": null,
+              "coding": null,
+              "format": "Legacy/HT/VHT",
+              "guard_interval": null,
+              "mcs": null,
+              "nss": null
+            },
+            "receiver": "ff:ff:ff:ff:ff:ff",
+            "retry": false,
+            "sequence_number": null,
+            "simulation_time_s": 0.202272,
+            "tid": null,
+            "timestamp_field": "frame.time_epoch",
+            "to_ds": false,
+            "transmitter": "10:00:00:00:00:00"
+          }
+        ],
+        "total": 2877,
+        "used_ap_only": true
+      }
+    },
     "UoraHeavyContention": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
@@ -838,7 +1417,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -867,7 +1446,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "451",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -896,7 +1475,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "457",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -925,7 +1504,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -954,7 +1533,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -983,7 +1562,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "719",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1012,7 +1591,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "725",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1041,7 +1620,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1070,7 +1649,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1099,7 +1678,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "987",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1128,7 +1707,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "993",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1157,7 +1736,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1186,7 +1765,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1215,7 +1794,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "1255",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1244,7 +1823,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "1261",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1273,7 +1852,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1307,7 +1886,7 @@
     "UoraLightContention": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
@@ -1433,7 +2012,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1462,7 +2041,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "451",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1491,7 +2070,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "457",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1520,7 +2099,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1549,7 +2128,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1578,7 +2157,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "719",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1607,7 +2186,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "725",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1636,7 +2215,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1665,7 +2244,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1694,7 +2273,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "987",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1723,7 +2302,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "993",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1752,7 +2331,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1781,7 +2360,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1810,7 +2389,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "1255",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1839,7 +2418,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "1261",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1868,7 +2447,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1902,7 +2481,7 @@
     "UoraMoreRandomAccessRus": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
@@ -2028,7 +2607,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -2057,7 +2636,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "451",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2086,7 +2665,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "457",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2115,7 +2694,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -2144,7 +2723,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -2173,7 +2752,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "719",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2202,7 +2781,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "725",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2231,7 +2810,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -2260,7 +2839,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -2289,7 +2868,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "987",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2318,7 +2897,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "993",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2347,7 +2926,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -2376,7 +2955,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -2405,7 +2984,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "1255",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2434,7 +3013,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "1261",
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2463,7 +3042,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_uora/results/20260727T142600Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_uora/results/20260727T202540Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -2499,6 +3078,12 @@
         "evidence": "5085 AP/global transmission observations",
         "id": "capture-MixedUora",
         "requirement": "MixedUora produced protocol-visible wireless observations",
+        "status": "PASS"
+      },
+      {
+        "evidence": "2877 AP/global transmission observations",
+        "id": "capture-ScheduledOnly",
+        "requirement": "ScheduledOnly produced protocol-visible wireless observations",
         "status": "PASS"
       },
       {
