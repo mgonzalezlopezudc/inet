@@ -35,6 +35,32 @@ struct INET_API HeTbResponseProtection
     physicallayer::Ieee80211HeTxopDuration txopDuration;
 };
 
+class INET_API HeTbResponseEvent : public cObject
+{
+  public:
+    enum Reason {
+        DATA_SELECTED,
+        NO_PENDING_DATA,
+        NO_FITTING_PAYLOAD,
+        BUFFER_STATUS_REPORTED,
+        NDP_FEEDBACK_REPORTED,
+    };
+
+    uint32_t triggerId = 0;
+    IIeee80211HeUlTriggerPolicy::TriggerType triggerType =
+            IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
+    Reason reason = NO_PENDING_DATA;
+    uint16_t associationId = 0;
+    uint8_t tid = 0;
+    AccessCategory accessCategory = AC_BE;
+    int ruIndex = -1;
+    int ruToneSize = 0;
+    int ruToneOffset = 0;
+    int64_t selectedBytes = 0;
+    int64_t reportedBytes = 0;
+    int ackPolicy = -1;
+};
+
 /**
  * Returns the soliciting HE PPDU's decoded TXOP duration, if the incoming
  * packet was received in an HE PPDU.
@@ -116,6 +142,7 @@ class INET_API HeHcf : public Hcf
     cMessage *triggeredUlResponseTimer = nullptr;
     IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     bool ulTriggerAccessRequested = false;
+    simsignal_t heTbResponseCommittedSignal;
     struct TriggeredUlExchange {
         Tid tid = 0;
         queueing::IPacketQueue *sourceQueue = nullptr;

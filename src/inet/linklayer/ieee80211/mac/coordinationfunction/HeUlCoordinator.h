@@ -12,6 +12,7 @@
 #include <map>
 #include <ostream>
 #include <string>
+#include <vector>
 
 #include "inet/common/SimpleModule.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -22,6 +23,35 @@
 
 namespace inet {
 namespace ieee80211 {
+
+class INET_API HeUlTriggerDecisionEvent : public cObject
+{
+  public:
+    enum Reason {
+        BACKLOG_REPORTED,
+        REPORT_REFRESH_NEEDED,
+        NDP_FEEDBACK_ENABLED,
+    };
+
+    struct UserInfo {
+        uint16_t associationId = 0;
+        bool retryPending = false;
+        int64_t backlogBytes = 0;
+        int64_t reportedBytes = 0;
+        int64_t selectedBytes = 0;
+        uint8_t tid = 0;
+        AccessCategory accessCategory = AC_BE;
+        bool selected = false;
+        int ruIndex = -1;
+        int ruToneSize = 0;
+        int ruToneOffset = 0;
+    };
+
+    IIeee80211HeUlTriggerPolicy::TriggerType triggerType =
+            IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
+    Reason reason = REPORT_REFRESH_NEEDED;
+    std::vector<UserInfo> users;
+};
 
 /**
  * AP-side coordinator for HE trigger-based uplink OFDMA.
@@ -42,12 +72,13 @@ class INET_API HeUlCoordinator : public SimpleModule
         bool attempt = false;
     };
 
-    /** Most recent backlog and retry information reported by one associated STA. */
+    /** Most recent backlog information reported by one associated STA. */
     struct BufferStatus {
         MacAddress stationAddress;
         std::array<int64_t, 4> backlogBytes = {};
         std::array<uint8_t, 4> tid = {};
         simtime_t updateTime = SIMTIME_ZERO;
+        // Retained for source compatibility; coordinator-owned values stay false.
         std::array<bool, 4> retryPending = {};
         simtime_t lastService = SIMTIME_ZERO;
         std::array<int64_t, 4> scheduledBytes = {};
@@ -65,6 +96,7 @@ class INET_API HeUlCoordinator : public SimpleModule
     std::map<uint16_t, BufferStatus> bufferStatusByAid;
     IIeee80211HeUlScheduler *scheduler = nullptr;
     IIeee80211HeUlTriggerPolicy *triggerPolicy = nullptr;
+    std::vector<HeUlTriggerDecisionEvent::UserInfo> committedBasicTriggerUsers;
     simsignal_t basicTriggerSentSignal;
     simsignal_t bsrpTriggerSentSignal;
     simsignal_t bufferStatusUpdatedSignal;
@@ -75,6 +107,7 @@ class INET_API HeUlCoordinator : public SimpleModule
     simsignal_t randomAccessRusSignal;
     simsignal_t randomAccessAttemptSignal;
     simsignal_t randomAccessSuccessSignal;
+    simsignal_t triggerDecisionCommittedSignal;
 
   protected:
     virtual void initialize(int stage) override;
@@ -88,7 +121,10 @@ class INET_API HeUlCoordinator : public SimpleModule
     simtime_t getReportMaxAge() const { return reportMaxAge; }
     void updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
             AccessCategory ac, uint8_t tid,
-            int64_t backlogBytes, bool retryPending);
+            int64_t backlogBytes);
+    void updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
+            AccessCategory ac, uint8_t tid,
+            int64_t backlogBytes, bool receivedRetry);
     void clearStation(const MacAddress& stationAddress);
     void invalidatePeer(const MacAddress& stationAddress);
     IIeee80211HeUlTriggerPolicy::TriggerType selectTrigger(const Ieee80211Mib *mib) const;
@@ -117,11 +153,7 @@ inline std::ostream& operator<<(std::ostream& os, const HeUlCoordinator::BufferS
 {
     os << "backlog=[" << status.backlogBytes[0] << "," << status.backlogBytes[1] << "," 
        << status.backlogBytes[2] << "," << status.backlogBytes[3] << "]"
-       << " update=" << status.updateTime << " retry=["
-       << (status.retryPending[0] ? "yes" : "no") << ","
-       << (status.retryPending[1] ? "yes" : "no") << ","
-       << (status.retryPending[2] ? "yes" : "no") << ","
-       << (status.retryPending[3] ? "yes" : "no") << "]";
+       << " update=" << status.updateTime;
     return os;
 }
 

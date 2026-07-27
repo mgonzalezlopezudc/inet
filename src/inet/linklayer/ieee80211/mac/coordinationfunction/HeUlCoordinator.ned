@@ -30,6 +30,7 @@ simple HeUlCoordinator
         @signal[heUlRandomAccessRus](type=long);
         @signal[heUlRandomAccessAttempt](type=long);
         @signal[heUlRandomAccessSuccess](type=long);
+        @signal[heUlTriggerDecisionCommitted](type=inet::ieee80211::HeUlTriggerDecisionEvent);
         @statistic[heUlBasicTriggerSent](source=heUlBasicTriggerSent; record=count);
         @statistic[heUlBsrpTriggerSent](source=heUlBsrpTriggerSent; record=count);
         @statistic[heUlBufferStatusUpdated](source=heUlBufferStatusUpdated; record=count);

@@ -184,6 +184,7 @@ void HeHcf::initialize(int stage)
         ulCoordinator = check_and_cast<HeUlCoordinator *>(getSubmodule("ulCoordinator"));
         ulTriggerTimer = new cMessage("heUlTriggerTimer");
         triggeredUlResponseTimer = new cMessage("heTriggeredUlResponseTimer");
+        heTbResponseCommittedSignal = registerSignal("heTbResponseCommitted");
         linkPhyContext = std::make_unique<Ieee80211HeLinkPhyContext>(this, mac);
         delete frameSequenceHandler;
         frameSequenceHandler = new HeFrameSequenceHandler();

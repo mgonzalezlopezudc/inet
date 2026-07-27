@@ -95,6 +95,27 @@ class IntegerSignalCounter : public cListener
     }
 };
 
+class TriggerDecisionListener : public cListener
+{
+  public:
+    int count = 0;
+    IIeee80211HeUlTriggerPolicy::TriggerType triggerType =
+            IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
+    HeUlTriggerDecisionEvent::Reason reason =
+            HeUlTriggerDecisionEvent::REPORT_REFRESH_NEEDED;
+    std::vector<HeUlTriggerDecisionEvent::UserInfo> users;
+
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *value,
+            cObject *) override
+    {
+        auto event = check_and_cast<HeUlTriggerDecisionEvent *>(value);
+        count++;
+        triggerType = event->triggerType;
+        reason = event->reason;
+        users = event->users;
+    }
+};
+
 class MockHeLinkPhyContext : public IIeee80211HeLinkPhyContext
 {
   private:
@@ -134,7 +155,9 @@ auto coordinator = check_and_cast<HeUlCoordinator *>(getParentModule()->getSubmo
 auto scheduler = check_and_cast<RecordingHeUlScheduler *>(getParentModule()->getSubmodule("ulScheduler"));
 MockHeLinkPhyContext linkPhyContext(mib);
 IntegerSignalCounter staleReportCounter;
+TriggerDecisionListener triggerDecisionListener;
 coordinator->subscribe("heUlStaleBufferStatus", &staleReportCounter);
+coordinator->subscribe("heUlTriggerDecisionCommitted", &triggerDecisionListener);
 
 MacAddress sta1("02:00:00:00:10:01");
 MacAddress sta2("02:00:00:00:10:02");
@@ -149,11 +172,11 @@ auto aid3 = mib->getAssociationId(sta3);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
 EV << "Missing fresh reports selected a BSRP Trigger.\n";
 
-coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 1200, false);
-coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, 0, true);
+coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 1200);
+coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, 0);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
-ASSERT(coordinator->getPreferredAccessCategory() == AC_VI);
-EV << "Fresh backlogged and retry reports selected a Basic Trigger.\n";
+ASSERT(coordinator->getPreferredAccessCategory() == AC_BE);
+EV << "Fresh backlog selected a Basic Trigger.\n";
 
 auto freshSchedule = coordinator->prepareSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
         SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
@@ -163,22 +186,35 @@ ASSERT(scheduler->lastContext.candidates[0].hasFreshReport);
 ASSERT(scheduler->lastContext.candidates[0].associationId == aid1);
 ASSERT(scheduler->lastContext.candidates[0].getSelectedBacklogBytes() == 1200);
 ASSERT(scheduler->lastContext.candidates[1].associationId == aid2);
-ASSERT(scheduler->lastContext.candidates[1].retryPending);
+ASSERT(!scheduler->lastContext.candidates[1].retryPending);
 ASSERT(scheduler->lastContext.requestedDuration == SimTime(1500, SIMTIME_US));
 ASSERT(freshSchedule.commonDuration == SimTime(1500, SIMTIME_US));
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 0);
 coordinator->commitSchedule(freshSchedule);
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 1200);
+coordinator->noteTriggerSent(IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+REQUIRE(triggerDecisionListener.count == 1);
+REQUIRE(triggerDecisionListener.triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+REQUIRE(triggerDecisionListener.reason == HeUlTriggerDecisionEvent::BACKLOG_REPORTED);
+REQUIRE(triggerDecisionListener.users.size() == 2);
+REQUIRE(triggerDecisionListener.users[0].associationId == aid1);
+REQUIRE(!triggerDecisionListener.users[0].retryPending);
+REQUIRE(triggerDecisionListener.users[0].reportedBytes == 1200);
+REQUIRE(triggerDecisionListener.users[0].selectedBytes == 1200);
+REQUIRE(triggerDecisionListener.users[0].tid == 0);
+REQUIRE(triggerDecisionListener.users[0].accessCategory == AC_BE);
+REQUIRE(triggerDecisionListener.users[0].ruIndex == 0);
 EV << "Fresh reports reached the UL scheduler and produced allocations.\n";
 
-coordinator->updateBufferStatus(aid2, sta2, AC_BE, 0, 0, false);
-ASSERT(coordinator->getBufferStatus().at(aid2).retryPending[AC_VI]);
-ASSERT(!coordinator->getBufferStatus().at(aid2).retryPending[AC_BE]);
-ASSERT(coordinator->getPreferredAccessCategory() == AC_VI);
-coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, 0, false);
+// A successfully received retransmission may carry Retry=1, but that bit
+// describes the received MPDU and is deliberately absent from this future
+// scheduling API. With fresh zero-backlog reports it cannot select Basic.
+coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 0);
+coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, 0, true);
 ASSERT(!coordinator->getBufferStatus().at(aid2).retryPending[AC_VI]);
+ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::NO_TRIGGER);
 ASSERT(coordinator->getPreferredAccessCategory() == AC_BE);
-EV << "Per-AC retry state survived an unrelated report and cleared independently.\n";
+EV << "A received retransmission with zero reported backlog did not schedule future retry traffic.\n";
 
 wait(0.011);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
@@ -192,7 +228,7 @@ coordinator->commitSchedule(staleSchedule);
 REQUIRE(staleReportCounter.count == staleReportsBeforePreparation + 3);
 EV << "Stale reports were excluded and selected BSRP polling.\n";
 
-coordinator->updateBufferStatus(aid3, sta3, AC_VO, 6, 800, false);
+coordinator->updateBufferStatus(aid3, sta3, AC_VO, 6, 800);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
 auto implicitSchedule = coordinator->prepareSchedule(mib, linkPhyContext, SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
         SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US), -85, 10, 0, 0, 0);
@@ -206,12 +242,12 @@ coordinator->commitSchedule(implicitSchedule);
 ASSERT(coordinator->getBufferStatus().at(aid3).scheduledBytes[AC_VO] == 800);
 EV << "Implicit BSR refresh drove Basic Trigger scheduling for the reporting STA.\n";
 
-coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 900, false);
+coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 900);
 coordinator->clearStation(sta1);
 REQUIRE(coordinator->getBufferStatus().count(aid1) == 0);
 EV << "Peer lifecycle invalidation removed the station's cached BSR state.\n";
 
-coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 900, false);
+coordinator->updateBufferStatus(aid1, sta1, AC_BE, 0, 900);
 mib->releaseAssociationId(sta1);
 mib->bssAccessPointData.stations[sta1] = Ieee80211Mib::AUTHENTICATED;
 MacAddress replacement("02:00:00:00:10:04");
@@ -234,13 +270,13 @@ EV << ".\n";
 Missing fresh reports selected a BSRP Trigger.
 
 %contains: stdout
-Fresh backlogged and retry reports selected a Basic Trigger.
+Fresh backlog selected a Basic Trigger.
 
 %contains: stdout
 Fresh reports reached the UL scheduler and produced allocations.
 
 %contains: stdout
-Per-AC retry state survived an unrelated report and cleared independently.
+A received retransmission with zero reported backlog did not schedule future retry traffic.
 
 %contains: stdout
 Stale reports were excluded and selected BSRP polling.

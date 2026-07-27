@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 
 #include <algorithm>
+#include <numeric>
 #include <set>
 #include <sstream>
 
@@ -55,6 +56,7 @@ void HeUlCoordinator::initialize(int stage)
         randomAccessRusSignal = registerSignal("heUlRandomAccessRus");
         randomAccessAttemptSignal = registerSignal("heUlRandomAccessAttempt");
         randomAccessSuccessSignal = registerSignal("heUlRandomAccessSuccess");
+        triggerDecisionCommittedSignal = registerSignal("heUlTriggerDecisionCommitted");
 
         WATCH_EXPR("lastTriggerTime", lastTriggerTime.str());
         WATCH(hasSentTrigger);
@@ -116,7 +118,7 @@ std::string HeUlCoordinator::getBufferStatusSummary() const
 
 void HeUlCoordinator::updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
         AccessCategory ac, uint8_t tid,
-        int64_t backlogBytes, bool retryPending)
+        int64_t backlogBytes)
 {
     // IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
     // HE STAs report their queue backlogs using Buffer Status Reports (BSRs)
@@ -131,10 +133,20 @@ void HeUlCoordinator::updateBufferStatus(uint16_t aid, const MacAddress& station
     status.stationAddress = stationAddress;
     status.backlogBytes[ac] = std::max<int64_t>(0, backlogBytes);
     status.tid[ac] = tid;
-    status.retryPending[ac] = retryPending;
+    status.retryPending[ac] = false;
     status.updateTime = simTime();
     emit(bufferStatusUpdatedSignal, (long)aid);
     emit(bufferStatusReportedBytesSignal, (long)status.backlogBytes[ac]);
+}
+
+void HeUlCoordinator::updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
+        AccessCategory ac, uint8_t tid,
+        int64_t backlogBytes, bool receivedRetry)
+{
+    // Compatibility overload: Retry describes the MPDU that was successfully
+    // received, not future work at the originator. Never cache or schedule it.
+    (void)receivedRetry;
+    updateBufferStatus(aid, stationAddress, ac, tid, backlogBytes);
 }
 
 void HeUlCoordinator::clearStation(const MacAddress& stationAddress)
@@ -169,9 +181,6 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ie
                 simTime() - status->second.updateTime > reportMaxAge)
             continue;
         context.freshReports++;
-        if (std::any_of(status->second.retryPending.begin(), status->second.retryPending.end(),
-                [] (bool retryPending) { return retryPending; }))
-            context.retryStations++;
         for (auto bytes : status->second.backlogBytes)
             if (bytes > 0) {
                 context.backloggedStations++;
@@ -183,7 +192,6 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ie
     EV_DEBUG << "HE UL trigger decision: associated=" << context.associatedStations
              << ", freshReports=" << context.freshReports
              << ", backlogged=" << context.backloggedStations
-             << ", retries=" << context.retryStations
              << ", selected=" << triggerType << "\n";
     return triggerType;
 }
@@ -192,7 +200,7 @@ AccessCategory HeUlCoordinator::getPreferredAccessCategory() const
 {
     for (int ac = AC_VO; ac >= AC_BK; ac--)
         for (const auto& entry : bufferStatusByAid)
-            if (entry.second.backlogBytes[ac] > 0 || entry.second.retryPending[ac])
+            if (entry.second.backlogBytes[ac] > 0)
                 return static_cast<AccessCategory>(ac);
     return AC_BE;
 }
@@ -239,8 +247,7 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
         candidate.staAddress = station.first;
         candidate.associationId = aid;
         candidate.backlogBytes = status->second.backlogBytes;
-        candidate.retryPending = std::any_of(status->second.retryPending.begin(), status->second.retryPending.end(),
-                [] (bool retryPending) { return retryPending; });
+        candidate.retryPending = false;
         candidate.reportAge = simTime() - status->second.updateTime;
         candidate.hasFreshReport = true;
         candidate.lastService = status->second.lastService;
@@ -295,13 +302,24 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
 
 void HeUlCoordinator::commitSchedule(const IIeee80211HeUlScheduler::Schedule& schedule)
 {
+    committedBasicTriggerUsers.clear();
     for (auto aid : schedule.staleReportAids)
         emit(staleReportSignal, (long)aid);
     long scheduledUsers = 0;
     long randomAccessRus = 0;
     for (const auto& allocation : schedule.allocations)
-        if (allocation.randomAccess)
+        if (allocation.randomAccess) {
             randomAccessRus++;
+            HeUlTriggerDecisionEvent::UserInfo user;
+            user.associationId = 0;
+            user.selected = true;
+            user.ruIndex = allocation.ru.index;
+            user.ruToneSize = allocation.ru.toneSize;
+            user.ruToneOffset = allocation.ru.toneOffset;
+            user.tid = allocation.tid;
+            user.accessCategory = allocation.accessCategory;
+            committedBasicTriggerUsers.push_back(user);
+        }
         else {
             scheduledUsers++;
             auto status = bufferStatusByAid.find(allocation.associationId);
@@ -314,6 +332,19 @@ void HeUlCoordinator::commitSchedule(const IIeee80211HeUlScheduler::Schedule& sc
             status->second.lastService = simTime();
             status->second.scheduledBytes[allocation.accessCategory] =
                     status->second.backlogBytes[allocation.accessCategory];
+            HeUlTriggerDecisionEvent::UserInfo user;
+            user.associationId = allocation.associationId;
+            user.backlogBytes = std::accumulate(status->second.backlogBytes.begin(),
+                    status->second.backlogBytes.end(), INT64_C(0));
+            user.reportedBytes = status->second.backlogBytes[allocation.accessCategory];
+            user.selectedBytes = status->second.scheduledBytes[allocation.accessCategory];
+            user.tid = allocation.tid;
+            user.accessCategory = allocation.accessCategory;
+            user.selected = true;
+            user.ruIndex = allocation.ru.index;
+            user.ruToneSize = allocation.ru.toneSize;
+            user.ruToneOffset = allocation.ru.toneOffset;
+            committedBasicTriggerUsers.push_back(user);
             emit(bufferStatusScheduledBytesSignal,
                     (long)status->second.scheduledBytes[allocation.accessCategory]);
         }
@@ -340,6 +371,34 @@ void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType t
         emit(bsrpTriggerSentSignal, 1L);
     else if (triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER)
         emit(basicTriggerSentSignal, 1L);
+
+    HeUlTriggerDecisionEvent event;
+    event.triggerType = triggerType;
+    event.reason = triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ?
+            HeUlTriggerDecisionEvent::BACKLOG_REPORTED :
+            triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
+                    HeUlTriggerDecisionEvent::REPORT_REFRESH_NEEDED :
+                    HeUlTriggerDecisionEvent::NDP_FEEDBACK_ENABLED;
+    if (triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER)
+        event.users = committedBasicTriggerUsers;
+    else {
+        for (const auto& entry : bufferStatusByAid) {
+            HeUlTriggerDecisionEvent::UserInfo user;
+            user.associationId = entry.first;
+            user.backlogBytes = std::accumulate(entry.second.backlogBytes.begin(),
+                    entry.second.backlogBytes.end(), INT64_C(0));
+            for (int ac = AC_VO; ac >= AC_BK; --ac)
+                if (entry.second.backlogBytes[ac] > 0) {
+                    user.accessCategory = static_cast<AccessCategory>(ac);
+                    user.tid = entry.second.tid[ac];
+                    user.reportedBytes = entry.second.backlogBytes[ac];
+                    break;
+                }
+            event.users.push_back(user);
+        }
+    }
+    emit(triggerDecisionCommittedSignal, &event);
+    committedBasicTriggerUsers.clear();
 }
 
 HeUlCoordinator::PreparedRandomAccessSelection HeUlCoordinator::prepareRandomAccessRu(

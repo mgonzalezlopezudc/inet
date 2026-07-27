@@ -729,7 +729,7 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
     if (header->getBufferStatusPresent())
         ulCoordinator->updateBufferStatus(aid, header->getTransmitterAddress(),
                 static_cast<AccessCategory>(header->getBufferStatusAc()),
-                header->getBufferStatusTid(), header->getBufferStatusQueueSize(), header->getRetry());
+                header->getBufferStatusTid(), header->getBufferStatusQueueSize());
     if (header->getType() == ST_QOS_NULL) {
         delete packet;
         return;
@@ -923,6 +923,8 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     std::vector<std::unique_ptr<Packet>> preparedPacketOwners;
     std::unique_ptr<Packet> nullMpdu;
     std::unique_ptr<Packet> responsePacket;
+    const bool hadPendingPayload = sourcePacket != nullptr;
+    int64_t reportedQueueBytes = queueBytes;
     if (sourcePacket != nullptr) {
         // 26.5.2.4 requires a QoS Null response when the allocation cannot
         // contain pending data. Check the first MPDU too; the aggregation loop
@@ -941,16 +943,17 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         preparedPacketOwners.emplace_back(sourcePacket->dup());
         sourcePacket = preparedPacketOwners.back().get();
         originalPackets.push_back(originalSourcePacket);
-        // 26.5.2.4: a Basic Trigger response can carry QoS Data in an A-MPDU.
-        // The Ack Policy is Block Ack/Implicit BAR style so the AP can return a
-        // Multi-STA BA context after collecting simultaneous HE TB responses.
+        // IEEE Std 802.11-2024 Table 9-13, 10.3.2.13.3, and 26.4.4.5:
+        // Ack Policy wire bits 00 are context-dependent in an A-MPDU. They
+        // denote Implicit BAR on preceding untagged MPDUs and Normal Ack on
+        // the tagged final MPDU that solicits the immediate Multi-STA Block Ack.
         auto writableHeader = sourcePacket->removeAtFront<Ieee80211DataHeader>();
         if (!writableHeader->getRetry())
             preparedSequenceNumberState->assignSequenceNumber(writableHeader);
         if (!writableHeader->getBufferStatusPresent())
             writableHeader->setChunkLength(writableHeader->getChunkLength() + B(4));
         writableHeader->setOrder(true);
-        writableHeader->setAckPolicy(BLOCK_ACK);
+        writableHeader->setAckPolicy(NORMAL_ACK);
         writableHeader->setBufferStatusPresent(true);
         writableHeader->setBufferStatusTid(selectedTid);
         writableHeader->setBufferStatusAc(selectedAc);
@@ -969,7 +972,10 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         nullHeader->setAddress3(mac->getMib()->bssData.bssid);
         nullHeader->setToDS(true);
         nullHeader->setTid(selectedTid);
-        nullHeader->setAckPolicy(BLOCK_ACK);
+        // IEEE Std 802.11-2024 Table 9-13, 10.3.2.13.3, and 26.4.4.5:
+        // this single, tagged final QoS Null MPDU uses wire bits 00 as Normal
+        // Ack to solicit the immediate Multi-STA Block Ack.
+        nullHeader->setAckPolicy(NORMAL_ACK);
         nullHeader->setOrder(true);
         nullHeader->setBufferStatusPresent(true);
         nullHeader->setBufferStatusTid(selectedTid);
@@ -1017,13 +1023,12 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             if (!writableCandidateHeader->getRetry())
                 preparedSequenceNumberState->assignSequenceNumber(writableCandidateHeader);
             writableCandidateHeader->setOrder(true);
-            writableCandidateHeader->setAckPolicy(BLOCK_ACK);
+            writableCandidateHeader->setAckPolicy(NORMAL_ACK);
             candidate->insertAtFront(writableCandidateHeader);
             originalPackets.push_back(originalCandidate);
             exchange.packets.push_back(candidate);
             exchange.sequenceNumbers.push_back(writableCandidateHeader->getSequenceNumber().get());
         }
-        int64_t reportedQueueBytes = queueBytes;
         for (auto pkt : exchange.packets)
             reportedQueueBytes = std::max<int64_t>(0, reportedQueueBytes - pkt->getByteLength());
         auto firstHeader = exchange.packets.front()->removeAtFront<Ieee80211DataHeader>();
@@ -1125,6 +1130,27 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     responseHeader = sourcePacket != nullptr ?
             exchange.packets.front()->peekAtFront<Ieee80211MacHeader>() :
             nullMpdu->peekAtFront<Ieee80211MacHeader>();
+    HeTbResponseEvent event;
+    event.triggerId = triggerId;
+    event.triggerType = static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
+            trigger->getTriggerType());
+    event.reason = sourcePacket != nullptr ? HeTbResponseEvent::DATA_SELECTED :
+            trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
+                    HeTbResponseEvent::BUFFER_STATUS_REPORTED :
+            hadPendingPayload || queueBytes > 0 ? HeTbResponseEvent::NO_FITTING_PAYLOAD :
+                    HeTbResponseEvent::NO_PENDING_DATA;
+    event.associationId = mac->getMib()->bssStationData.associationId;
+    event.tid = selectedTid;
+    event.accessCategory = selectedAc;
+    event.ruIndex = selected->ruIndex;
+    event.ruToneSize = selected->ruToneSize;
+    event.ruToneOffset = selected->ruToneOffset;
+    for (auto selectedPacket : exchange.packets)
+        event.selectedBytes += selectedPacket->getByteLength();
+    event.reportedBytes = reportedQueueBytes;
+    auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(responseHeader);
+    event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
+    emit(heTbResponseCommittedSignal, &event);
     return responsePacket.release();
 }
 
@@ -1490,6 +1516,18 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
                 queueBytes > 256 ? 1 : 0, nfrpToneSetIndex,
                 nfrpStartingStsNumber, solicitingTxopDuration,
                 modeSet->getSifsTime());
+        HeTbResponseEvent event;
+        event.triggerId = triggerId;
+        event.triggerType = IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER;
+        event.reason = HeTbResponseEvent::NDP_FEEDBACK_REPORTED;
+        event.associationId = myAid;
+        event.tid = selectedTid;
+        event.accessCategory = selectedAc;
+        event.ruIndex = selected->ruIndex;
+        event.ruToneSize = selected->ruToneSize;
+        event.ruToneOffset = selected->ruToneOffset;
+        event.reportedBytes = queueBytes;
+        emit(heTbResponseCommittedSignal, &event);
     }
     EV_INFO << "Sending HE-TB response: trigger=" << triggerId
              << ", AID=" << myAid

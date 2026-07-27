@@ -23,11 +23,13 @@ class INET_API IIeee80211HeUlTriggerPolicy
         NFRP_TRIGGER = 7,
     };
 
-    /** Aggregate association, report, backlog, retry, and timing state for a decision. */
+    /** Aggregate association, report, backlog, and timing state for a decision. */
     struct Context {
         int associatedStations = 0;
         int freshReports = 0;
         int backloggedStations = 0;
+        // Retained for source compatibility. Received Retry bits do not
+        // represent future pending work, so the coordinator leaves this zero.
         int retryStations = 0;
         simtime_t elapsedSinceLastTrigger = SIMTIME_MAX;
     };

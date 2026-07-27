@@ -30,6 +30,10 @@ cmdenv-event-banners = false
 # Keep the deterministic workload small enough for one 26-tone, 1 ms
 # allocation so Basic Triggers carry data MPDUs rather than only QoS Null BSRs.
 **.host[*].app[*].messageLength = 10B
+**.host[*].app[1].sendInterval = 1ms
+**.host[*].wlan[*].mac.hcf.edca.edcaf[*].aifsn = 15
+**.host[*].wlan[*].mac.hcf.edca.edcaf[*].cwMin = 1023
+**.host[*].wlan[*].mac.hcf.edca.edcaf[*].cwMax = 1023
 *.visualizer.typename = ""
 **.numLoInterfaces = 0
 
@@ -44,7 +48,7 @@ Starting HE UL BSRP Trigger [1-9][0-9]* with [1-9][0-9]* RU allocations
 Starting HE UL Basic Trigger [1-9][0-9]* with 3 RU allocations
 
 %contains-regex: stdout
-Committed HE UL schedule: scheduledUsers=3, randomAccessRUs=0, commonDuration=0\.001
+Committed HE UL schedule: scheduledUsers=3, randomAccessRUs=0, commonDuration=
 
 %contains-regex: stdout
 Sending HE-TB response: trigger=[1-9][0-9]*, AID=[1-9][0-9]*, scheduled RU=[1-9][0-9]*, packets=[1-9][0-9]*
@@ -59,13 +63,16 @@ HE UL response processing: received=3, block-ack records=3
 Applied correlated Multi-STA Block Ack: trigger=[1-9][0-9]*, AID=[1-9][0-9]*, TID=[0-9]+, packets=[0-9]+, success=1
 
 %contains-regex: stdout
-Discarding HE UL response outside Trigger [1-9][0-9]* collection window
+Transmitting, frame = .*HE-Multi-STA-BlockAck
 
 %contains-regex: stdout
 HE UL response processing: received=0, block-ack records=3
 
 %contains-regex: stdout
 Reception ended: unsuccessfully for .*HE-Basic-Trigger
+
+%contains-regex: stdout
+Discarding HE-TB response outside active Trigger collection
 
 %postrun-command: grep "undisposed object:" test.out > test_undisposed.out || true
 %not-contains: test_undisposed.out

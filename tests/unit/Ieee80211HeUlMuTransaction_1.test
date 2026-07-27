@@ -45,6 +45,7 @@ sim-time-limit = 0s
 **.wlan[*].bitrate = 61.25Mbps
 **.wlan[*].mac.qosStation = true
 **.wlan[*].mac.hcf.typename = "TestHeHcf"
+**.wlan[*].mac.fcsMode = "computed"
 **.wlan[*].radio.transmitter.power = 20mW
 **.wlan[*].radio.transmitter.maxPower = 100mW
 **.wlan[*].radio.receiver.sensitivity = -85dBm
@@ -62,6 +63,12 @@ class TestHeHcf : public HeHcf
     struct CommittedExchange {
         std::vector<Packet *> packets;
         std::vector<int> sequenceNumbers;
+        AckPolicy ackPolicy = NO_ACK;
+        int wireAckPolicyBits = -1;
+        int serializedSubframeCount = 0;
+        int terminalDelimiterCount = 0;
+        bool allSubframesSameTid = false;
+        bool allSubframesAckPolicyBitsZero = false;
     };
 
     int failingCommitIndex = -1;
@@ -83,7 +90,8 @@ class TestHeHcf : public HeHcf
         mac->getMib()->bssStationData.associationId = aid;
     }
 
-    Packet *makeQueuedPacket(const char *name, const MacAddress& ap, int payloadByte)
+    Packet *makeQueuedPacket(const char *name, const MacAddress& ap, int payloadByte,
+            int payloadBytes = 1)
     {
         auto header = makeShared<Ieee80211DataHeader>();
         header->setType(ST_DATA_WITH_QOS);
@@ -93,9 +101,10 @@ class TestHeHcf : public HeHcf
         header->setToDS(true);
         header->setTid(0);
         header->setAckPolicy(NORMAL_ACK);
+        header->setChunkLength(B(26));
         auto packet = new Packet(name, header);
         packet->insertAtBack(makeShared<BytesChunk>(
-                std::vector<uint8_t>{static_cast<uint8_t>(payloadByte)}));
+                std::vector<uint8_t>(payloadBytes, static_cast<uint8_t>(payloadByte))));
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
         getSourceQueue()->enqueuePacket(packet);
         return packet;
@@ -125,7 +134,7 @@ class TestHeHcf : public HeHcf
         phyUser.numberOfSpatialStreams = 1;
         auto coding = ru.toneSize >= 484 ? HE_CODING_LDPC : HE_CODING_BCC;
         phyUser.coding = coding;
-        phyUser.psduLength = B(512);
+        phyUser.psduLength = B(requestedToneSize == 26 ? 64 : 512);
         phyUser.staId = mac->getMib()->bssStationData.associationId;
         Ieee80211HeTriggerResponseFinalizationRequest request;
         request.users = {phyUser};
@@ -220,6 +229,59 @@ class TestHeHcf : public HeHcf
         REQUIRE(handoff->getTxVector()->getCommon().getRequestedTxopDuration() ==
                 protection.txopDuration);
         REQUIRE(responseDataHeader->getDurationField() < trigger->getDurationField());
+        result.ackPolicy = responseDataHeader->getAckPolicy();
+        Packet serializedHeader("serialized-he-tb-header", responseHeader);
+        auto headerBytes = serializedHeader.peekDataAsBytes();
+        result.wireAckPolicyBits = (headerBytes->getByte(24) >> 5) & 0x3;
+
+        // Force the complete A-MPDU through wire serialization, then parse
+        // every delimiter and MPDU rather than trusting the source chunks.
+        if (!exchange.packets.empty()) {
+            auto serializedAggregate = response->peekDataAsBytes();
+            const auto& aggregateBytes = serializedAggregate->getBytes();
+            bool allSameTid = true;
+            bool allAckPolicyBitsZero = true;
+            int subframeIndex = 0;
+            size_t offset = 0;
+            while (offset < aggregateBytes.size()) {
+                REQUIRE(offset + 4 <= aggregateBytes.size());
+                uint8_t delimiterControl = aggregateBytes[offset];
+                bool delimiterEof = (delimiterControl & 0x40) != 0;
+                int delimiterReserved = (delimiterControl >> 7) & 0x1;
+                int delimiterLength =
+                        ((delimiterControl & 0x3F) << 8) | aggregateBytes[offset + 1];
+                uint8_t delimiterSignature = aggregateBytes[offset + 3];
+                offset += 4;
+                REQUIRE(subframeIndex < (int)exchange.packets.size());
+                REQUIRE(delimiterSignature == 0x4E);
+                REQUIRE(delimiterReserved == 0);
+                REQUIRE(delimiterLength ==
+                        exchange.packets[subframeIndex]->getByteLength());
+                bool terminal = subframeIndex + 1 == (int)exchange.packets.size();
+                REQUIRE(delimiterEof == terminal);
+                if (delimiterEof)
+                    result.terminalDelimiterCount++;
+
+                REQUIRE(offset + delimiterLength <= aggregateBytes.size());
+                int ackPolicyBits = (aggregateBytes[offset + 24] >> 5) & 0x3;
+                int serializedTid = aggregateBytes[offset + 24] & 0xF;
+                allAckPolicyBitsZero &= ackPolicyBits == 0;
+                allSameTid &= serializedTid == exchange.tid;
+                offset += delimiterLength;
+                if (!terminal)
+                    offset += (4 - (B(4) + B(delimiterLength)).get<B>() % 4) % 4;
+                subframeIndex++;
+            }
+            result.serializedSubframeCount = subframeIndex;
+            result.allSubframesSameTid = allSameTid;
+            result.allSubframesAckPolicyBitsZero = allAckPolicyBitsZero;
+            REQUIRE(result.serializedSubframeCount == (int)exchange.packets.size());
+            REQUIRE(result.terminalDelimiterCount == 1);
+            REQUIRE(result.allSubframesSameTid);
+            REQUIRE(result.allSubframesAckPolicyBitsZero);
+        }
+        REQUIRE(responseDataHeader->getAckPolicy() == NORMAL_ACK);
+        REQUIRE(responseDataHeader->getTid() == exchange.tid);
         delete response;
         result.packets = exchange.packets;
         result.sequenceNumbers = exchange.sequenceNumbers;
@@ -273,6 +335,37 @@ class TestHeHcf : public HeHcf
     }
 };
 
+class ResponseEventListener : public cListener
+{
+  public:
+    int count = 0;
+    HeTbResponseEvent::Reason reason = HeTbResponseEvent::NO_PENDING_DATA;
+    uint32_t triggerId = 0;
+    uint16_t associationId = 0;
+    uint8_t tid = 0;
+    AccessCategory accessCategory = AC_BE;
+    int ruIndex = -1;
+    int64_t selectedBytes = 0;
+    int64_t reportedBytes = 0;
+    int ackPolicy = -1;
+
+    virtual void receiveSignal(cComponent *, simsignal_t, cObject *value,
+            cObject *) override
+    {
+        auto event = check_and_cast<HeTbResponseEvent *>(value);
+        count++;
+        reason = event->reason;
+        triggerId = event->triggerId;
+        associationId = event->associationId;
+        tid = event->tid;
+        accessCategory = event->accessCategory;
+        ruIndex = event->ruIndex;
+        selectedBytes = event->selectedBytes;
+        reportedBytes = event->reportedBytes;
+        ackPolicy = event->ackPolicy;
+    }
+};
+
 Define_Module(TestHeHcf);
 
 %activity:
@@ -280,6 +373,8 @@ auto sta = getParentModule()->getSubmodule("sta");
 auto wlan = sta->getSubmodule("wlan", 0);
 auto mac = wlan->getSubmodule("mac");
 auto hcf = check_and_cast<TestHeHcf *>(mac->getSubmodule("hcf"));
+ResponseEventListener responseEventListener;
+hcf->subscribe("heTbResponseCommitted", &responseEventListener);
 MacAddress ap("10:00:00:00:00:00");
 hcf->configureAssociation(ap, 21);
 
@@ -325,6 +420,20 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     auto p1 = hcf->makeQueuedPacket("partial-p1", ap, 0x21);
     TestHeHcf::CommittedExchange committed;
     hcf->prepareAndCommit(41, ap, -1, committed);
+    REQUIRE(committed.ackPolicy == NORMAL_ACK);
+    REQUIRE(committed.wireAckPolicyBits == 0);
+    REQUIRE(committed.serializedSubframeCount == 2);
+    REQUIRE(committed.terminalDelimiterCount == 1);
+    REQUIRE(committed.allSubframesSameTid);
+    REQUIRE(committed.allSubframesAckPolicyBitsZero);
+    REQUIRE(responseEventListener.reason == HeTbResponseEvent::DATA_SELECTED);
+    REQUIRE(responseEventListener.triggerId == 41);
+    REQUIRE(responseEventListener.associationId == 21);
+    REQUIRE(responseEventListener.tid == 0);
+    REQUIRE(responseEventListener.accessCategory == AC_BE);
+    REQUIRE(responseEventListener.ruIndex >= 0);
+    REQUIRE(responseEventListener.selectedBytes > 0);
+    REQUIRE(responseEventListener.ackPolicy == NORMAL_ACK);
     REQUIRE(committed.packets == (std::vector<Packet *>{p0, p1}));
     requireQueueIdentities({});
     Ieee80211MultiStaBlockAckRecord record;
@@ -337,6 +446,26 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(hcf->getExchangeCount() == 0);
     requireQueueIdentities({p1});
     REQUIRE(p1->peekAtFront<Ieee80211DataHeader>()->getRetry());
+    hcf->clearState();
+}
+
+// A queued MPDU that cannot fit falls back to QoS Null, whose immediate
+// Multi-STA BA solicitation also serializes Ack Policy as wire bits 00.
+{
+    auto oversized = hcf->makeQueuedPacket("null-fallback-p0", ap, 0x25, 6000);
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(47, ap, -1, committed, 26, 0);
+    REQUIRE(committed.packets.empty());
+    REQUIRE(committed.ackPolicy == NORMAL_ACK);
+    REQUIRE(committed.wireAckPolicyBits == 0);
+    REQUIRE(responseEventListener.reason == HeTbResponseEvent::NO_FITTING_PAYLOAD);
+    REQUIRE(responseEventListener.triggerId == 47);
+    REQUIRE(responseEventListener.selectedBytes == 0);
+    REQUIRE(responseEventListener.reportedBytes > 0);
+    REQUIRE(responseEventListener.ackPolicy == NORMAL_ACK);
+    requireQueueIdentities({oversized});
+    hcf->expireExchange(47);
+    requireQueueIdentities({oversized});
     hcf->clearState();
 }
 

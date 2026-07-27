@@ -55,6 +55,7 @@ module HeHcf extends Hcf
         double csiValidityDuration @unit(s) = default(0.1s); // Validity duration of sounding CSI measurements
         double defaultCsiLeakage = default(0.01); // Default inter-user interference leakage factor
         string csiLeakageOverrides = default(""); // Specific peer-to-peer leakage overrides e.g. "1-2:0.01"
+        @signal[heTbResponseCommitted](type=inet::ieee80211::HeTbResponseEvent);
 
     submodules:
         dlScheduler: <default("HeDlSchedulerEqualSizedRUs")> like IIeee80211HeDlScheduler {

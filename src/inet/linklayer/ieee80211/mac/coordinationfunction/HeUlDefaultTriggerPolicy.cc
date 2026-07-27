@@ -20,7 +20,6 @@ void HeUlDefaultTriggerPolicy::initialize(int stage)
         WATCH(lastContext.associatedStations);
         WATCH(lastContext.freshReports);
         WATCH(lastContext.backloggedStations);
-        WATCH(lastContext.retryStations);
         WATCH_EXPR("lastContext.elapsedSinceLastTrigger", lastContext.elapsedSinceLastTrigger.str());
         WATCH(lastSelectedTrigger);
         WATCH_EXPR("lastSelectedTriggerName", getLastSelectedTriggerName());
@@ -32,12 +31,12 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlDefaultTriggerPolicy::selectTrigger
     // IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
     // Trigger frames coordinate HE TB PPDU transmissions by defining parameters such as RU size and MCS.
     // - NO_TRIGGER: No uplink exchange is requested (e.g. within minimum interval to prevent overhead).
-    // - BASIC_TRIGGER (Type 0): Requests HE TB payload transmissions from STAs with known backlogged or retry traffic.
+    // - BASIC_TRIGGER (Type 0): Requests HE TB payload transmissions from STAs with known backlog.
     // - BSRP_TRIGGER (Type 4): Polls associated STAs for fresh buffer status reports when current backlog info is stale.
     lastContext = context;
     if (context.associatedStations == 0 || context.elapsedSinceLastTrigger < minimumTriggerInterval)
         lastSelectedTrigger = NO_TRIGGER;
-    else if (context.backloggedStations > 0 || context.retryStations > 0)
+    else if (context.backloggedStations > 0)
         lastSelectedTrigger = BASIC_TRIGGER;
     else if (context.freshReports < context.associatedStations)
         lastSelectedTrigger = BSRP_TRIGGER;

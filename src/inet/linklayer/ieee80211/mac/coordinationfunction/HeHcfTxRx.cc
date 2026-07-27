@@ -77,6 +77,15 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             getLinkPhyContext(), tx, this))
         return;
 
+    if (isHeTbPacket(packet)) {
+        EV_INFO << "Discarding HE-TB response outside active Trigger collection\n";
+        PacketDropDetails details;
+        details.setReason(NOT_ADDRESSED_TO_US);
+        emit(packetDroppedSignal, packet, &details);
+        delete packet;
+        return;
+    }
+
     if (auto trigger = dynamicPtrCast<const Ieee80211TriggerFrame>(header)) {
         // 9.3.1.22 Trigger frames are control frames that solicit HE TB
         // responses; do not pass them through the legacy HCF recipient path.
@@ -97,7 +106,7 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
                 if (aid > 0) {
                     ulCoordinator->updateBufferStatus(aid, dataHeader->getTransmitterAddress(),
                             static_cast<AccessCategory>(dataHeader->getBufferStatusAc()),
-                            dataHeader->getBufferStatusTid(), dataHeader->getBufferStatusQueueSize(), dataHeader->getRetry());
+                            dataHeader->getBufferStatusTid(), dataHeader->getBufferStatusQueueSize());
                 }
             }
         }
@@ -139,6 +148,13 @@ void HeHcf::originatorProcessTransmittedFrame(Packet *packet)
         // IEEE 802.11-2024 26.7.3: the sounding NDP has a PHY preamble but no
         // PSDU, hence no MAC header to enter acknowledgement, BA, or
         // content-derived packet statistics.
+        return;
+    }
+    if (isHeTbPacket(packet)) {
+        // IEEE Std 802.11-2024 10.3.2.13.3 and 26.4.4.5: Normal Ack in
+        // this HE-TB MPDU solicits the terminal Multi-STA Block Ack. The
+        // triggeredUlExchanges ledger owns that response and retry state, so
+        // the legacy single-user Ack state machine must not start in parallel.
         return;
     }
     if (dynamic_cast<const HeUlMuTxOpFs *>(frameSequenceHandler->getFrameSequence()) != nullptr) {
