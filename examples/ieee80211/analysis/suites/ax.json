@@ -16,29 +16,24 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["twt"]
     },
-    "mac_features/dynamic_fragmentation": {
+    "dynamic_frag": {
       "scalar_vector_group": "fragmentation",
-      "ini": "mac_features/dynamic_fragmentation/omnetpp.ini",
+      "ini": "dynamic_frag/omnetpp.ini",
       "configurations": ["DynamicFragmentation", "StaticFragmentation", "NoFragmentation"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["fragmentation"]
     },
-    "mac_features/multi_tid_block_ack": {
+    "ul_multitid": {
       "scalar_vector_group": "multi_tid",
-      "ini": "mac_features/multi_tid_block_ack/downlink.ini",
-      "configurations": ["MultiTidBlockAck", "UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
-      "configuration_inis": {
-        "MultiTidBlockAck": "mac_features/multi_tid_block_ack/downlink.ini",
-        "UlMuMultiTidBlockAck": "mac_features/multi_tid_block_ack/uplink.ini",
-        "UlSuMultiTidBlockAck": "mac_features/multi_tid_block_ack/uplink.ini"
-      },
+      "ini": "ul_multitid/omnetpp.ini",
+      "configurations": ["UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["block-ack"]
     },
-    "mac_features/operating_mode_indication": {
+    "opmode_indication": {
       "scalar_vector_group": "operating_mode",
-      "ini": "mac_features/operating_mode_indication/omnetpp.ini",
-      "configurations": ["OperatingModeIndication"],
+      "ini": "opmode_indication/omnetpp.ini",
+      "configurations": ["OperatingModeIndication", "OmiRxNssReduction"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["operating-mode"]
     },
@@ -55,35 +50,49 @@
       "configurations": ["FlatChannelOFDMA", "TgaxModelBOFDMA"],
       "phy_profiles": ["legacy", "he"]
     },
-    "he_features": {
+    "preamble_puncturing": {
       "scalar_vector_group": "puncturing",
-      "ini": "he_features/omnetpp.ini",
-      "configurations": ["BccBaseline", "PreamblePuncturing", "CleanChannelBaseline", "LegacyInterferenceWithoutPuncturing", "PreamblePuncturingUnderInterference", "DynamicPuncturing"],
+      "ini": "preamble_puncturing/omnetpp.ini",
+      "configurations": ["PreamblePuncturing", "CleanChannelBaseline", "LegacyInterferenceWithoutPuncturing", "PreamblePuncturingUnderInterference", "DynamicPuncturing"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["puncturing"]
     },
-    "he_channel_widths": {
+    "packet_extension": {
+      "scalar_vector_group": "packet_extension",
+      "ini": "packet_extension/omnetpp.ini",
+      "configurations": ["PacketExtension", "CombinedHeFeatures"],
+      "phy_profiles": ["legacy", "he"]
+    },
+    "bcc_ldpc": {
+      "scalar_vector_group": "bcc_ldpc",
+      "ini": "bcc_ldpc/omnetpp.ini",
+      "configurations": ["BccBaseline", "HeLdpc", "MixedLdpcSupport"],
+      "phy_profiles": ["legacy", "he"]
+    },
+    "channel_widths": {
       "scalar_vector_group": "width",
-      "ini": "he_channel_widths/omnetpp.ini",
+      "ini": "channel_widths/omnetpp.ini",
       "configurations": ["Width20MHz", "Width40MHz", "Width80MHz", "Width160MHz"],
       "phy_profiles": ["legacy", "he"]
     },
-    "multi_user/ndp_feedback": {
+    "ndp_feedback": {
       "scalar_vector_group": "ndp_feedback",
-      "ini": "multi_user/ndp_feedback/omnetpp.ini",
-      "configurations": ["NdpFeedbackReport"],
+      "ini": "ndp_feedback/omnetpp.ini",
+      "configurations": ["NdpFeedbackReport", "FeedbackUnderInterference"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["sounding"]
     },
-    "multi_user/mu_mimo": {
+    "dl_mu_mimo": {
       "scalar_vector_group": "mimo",
-      "ini": "multi_user/mu_mimo/downlink.ini",
-      "configurations": ["DlMuMimo", "UlMuMimo", "EqualSizedRUs_fBW"],
-      "configuration_inis": {
-        "DlMuMimo": "multi_user/mu_mimo/downlink.ini",
-        "UlMuMimo": "multi_user/mu_mimo/uplink.ini",
-        "EqualSizedRUs_fBW": "multi_user/mu_mimo/downlink.ini"
-      },
+      "ini": "dl_mu_mimo/omnetpp.ini",
+      "configurations": ["DlMuMimo", "EqualSizedRUs_fBW", "DlMuMimo80MHz"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["mu-mimo"]
+    },
+    "ul_mu_mimo": {
+      "scalar_vector_group": "ul_mu_mimo",
+      "ini": "ul_mu_mimo/omnetpp.ini",
+      "configurations": ["UlMuMimo", "EdcaBaseline"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["mu-mimo"]
     },
@@ -101,16 +110,16 @@
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"]
     },
-    "he_rate_adaptation": {
+    "rate_adaptation": {
       "scalar_vector_group": "rate",
-      "ini": "he_rate_adaptation/omnetpp.ini",
+      "ini": "rate_adaptation/omnetpp.ini",
       "configurations": ["HeMinstrel", "FixedMcs", "HeMinstrelMobile"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["rate-adaptation"]
     },
-    "he_bsr": {
+    "bsr": {
       "scalar_vector_group": "bsr",
-      "ini": "he_bsr/omnetpp.ini",
+      "ini": "bsr/omnetpp.ini",
       "configurations": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting", "BurstyTraffic"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["buffer-status"]
@@ -125,18 +134,28 @@
       }
     },
     "ul_ofdma": {
-      "scalar_vector_group": "uora",
+      "scalar_vector_group": "ul_ofdma",
       "ini": "ul_ofdma/omnetpp.ini",
-      "configurations": ["ScheduledOnly", "MixedUora", "EqualRus", "EdcaBaseline", "UoraLightContention", "UoraHeavyContention", "UoraMoreRandomAccessRus"],
+      "configurations": ["ScheduledOnly", "EqualRus", "EdcaBaseline"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["ofdma"],
+      "capture": {
+        "interface_patterns": ["**.ap.wlan[*]"]
+      }
+    },
+    "ul_uora": {
+      "scalar_vector_group": "uora",
+      "ini": "ul_uora/omnetpp.ini",
+      "configurations": ["MixedUora", "UoraLightContention", "UoraHeavyContention", "UoraMoreRandomAccessRus"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma", "uora"],
       "capture": {
         "interface_patterns": ["**.ap.wlan[*]"]
       }
     },
-    "he_er_su": {
+    "er_su": {
       "scalar_vector_group": "er",
-      "ini": "he_er_su/omnetpp.ini",
+      "ini": "er_su/omnetpp.ini",
       "configurations": ["ErBss", "CellBoundaryHeSu", "CellBoundaryHeErSu"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["extended-range"]

@@ -66,8 +66,8 @@
   },
   "groups": {
     "fragmentation": {
-      "walkthrough": "examples/ieee80211ax/mac_features/dynamic_fragmentation/walkthrough.md",
-      "ini": "examples/ieee80211ax/mac_features/dynamic_fragmentation/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/dynamic_frag/walkthrough.md",
+      "ini": "examples/ieee80211ax/dynamic_frag/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
       "conditions": [
@@ -77,8 +77,8 @@
       ]
     },
     "uora": {
-      "walkthrough": "examples/ieee80211ax/ul_ofdma/walkthrough.md",
-      "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/ul_uora/walkthrough.md",
+      "ini": "examples/ieee80211ax/ul_uora/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
       "conditions": [
@@ -99,8 +99,8 @@
       ]
     },
     "rate": {
-      "walkthrough": "examples/ieee80211ax/he_rate_adaptation/walkthrough.md",
-      "ini": "examples/ieee80211ax/he_rate_adaptation/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/rate_adaptation/walkthrough.md",
+      "ini": "examples/ieee80211ax/rate_adaptation/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.5, "end": 1.7},
       "conditions": [
@@ -108,8 +108,8 @@
       ]
     },
     "er": {
-      "walkthrough": "examples/ieee80211ax/he_er_su/walkthrough.md",
-      "ini": "examples/ieee80211ax/he_er_su/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/er_su/walkthrough.md",
+      "ini": "examples/ieee80211ax/er_su/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 2.0},
       "conditions": [
@@ -118,8 +118,8 @@
       ]
     },
     "puncturing": {
-      "walkthrough": "examples/ieee80211ax/he_features/walkthrough.md",
-      "ini": "examples/ieee80211ax/he_features/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/preamble_puncturing/walkthrough.md",
+      "ini": "examples/ieee80211ax/preamble_puncturing/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.95},
       "conditions": [
@@ -130,8 +130,8 @@
       ]
     },
     "mimo": {
-      "walkthrough": "examples/ieee80211ax/multi_user/mu_mimo/walkthrough.md",
-      "ini": "examples/ieee80211ax/multi_user/mu_mimo/downlink.ini",
+      "walkthrough": "examples/ieee80211ax/dl_mu_mimo/walkthrough.md",
+      "ini": "examples/ieee80211ax/dl_mu_mimo/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.55, "end": 0.88},
       "conditions": [
@@ -153,8 +153,8 @@
       ]
     },
     "width": {
-      "walkthrough": "examples/ieee80211ax/he_channel_widths/walkthrough.md",
-      "ini": "examples/ieee80211ax/he_channel_widths/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/channel_widths/walkthrough.md",
+      "ini": "examples/ieee80211ax/channel_widths/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.43},
       "conditions": [
@@ -190,8 +190,8 @@
       ]
     },
     "bsr": {
-      "walkthrough": "examples/ieee80211ax/he_bsr/walkthrough.md",
-      "ini": "examples/ieee80211ax/he_bsr/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/bsr/walkthrough.md",
+      "ini": "examples/ieee80211ax/bsr/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
@@ -200,19 +200,18 @@
       ]
     },
     "multi_tid": {
-      "walkthrough": "examples/ieee80211ax/mac_features/multi_tid_block_ack/walkthrough.md",
-      "ini": "examples/ieee80211ax/mac_features/multi_tid_block_ack/downlink.ini",
+      "walkthrough": "examples/ieee80211ax/ul_multitid/walkthrough.md",
+      "ini": "examples/ieee80211ax/ul_multitid/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 0.88},
       "conditions": [
-        {"label": "Downlink Multi-TID BA", "config": "MultiTidBlockAck"},
-        {"label": "Uplink MU Multi-TID BA", "config": "UlMuMultiTidBlockAck", "ini": "examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "Uplink SU Multi-TID BA", "config": "UlSuMultiTidBlockAck", "ini": "examples/ieee80211ax/mac_features/multi_tid_block_ack/uplink.ini", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
+        {"label": "Uplink MU Multi-TID BA", "config": "UlMuMultiTidBlockAck", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Uplink SU Multi-TID BA", "config": "UlSuMultiTidBlockAck", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
       ]
     },
     "operating_mode": {
-      "walkthrough": "examples/ieee80211ax/mac_features/operating_mode_indication/walkthrough.md",
-      "ini": "examples/ieee80211ax/mac_features/operating_mode_indication/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/opmode_indication/walkthrough.md",
+      "ini": "examples/ieee80211ax/opmode_indication/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [
@@ -230,8 +229,8 @@
       ]
     },
     "ndp_feedback": {
-      "walkthrough": "examples/ieee80211ax/multi_user/ndp_feedback/walkthrough.md",
-      "ini": "examples/ieee80211ax/multi_user/ndp_feedback/omnetpp.ini",
+      "walkthrough": "examples/ieee80211ax/ndp_feedback/walkthrough.md",
+      "ini": "examples/ieee80211ax/ndp_feedback/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.9},
       "conditions": [

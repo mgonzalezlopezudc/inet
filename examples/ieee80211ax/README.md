@@ -20,23 +20,27 @@ for the exact contract and migration table.
 
 | Area | Example | Main mechanisms |
 |------|---------|-----------------|
-| Downlink multi-user access | [dl_ofdma_sched](dl_ofdma_sched/walkthrough.md) | RU scheduling, SU baseline, wide channels, DL MU-MIMO, Multi-TID Block Ack |
+| Downlink multi-user access | [dl_ofdma_sched](dl_ofdma_sched/walkthrough.md) | RU scheduling, SU baseline, wide channels, Multi-TID Block Ack |
 | Asymmetric downlink scheduling | [dl_ofdma_asym](dl_ofdma_asym/walkthrough.md) | Backlog-based and head-of-line minimum-delay scheduling under asymmetric load |
-| Uplink multi-user access | [ul_ofdma](ul_ofdma/walkthrough.md) | Scheduled OFDMA, UORA, UL MU-MIMO, fragmentation, NDP feedback, OM Control |
-| Buffer reporting | [he_bsr](he_bsr/walkthrough.md) | Explicit, stale, and implicit Buffer Status Reports |
-| Channel bandwidth | [he_channel_widths](he_channel_widths/walkthrough.md) | 20, 40, 80, and 160 MHz operation |
-| Frequency-selective channels | [frequency_selective_channel](frequency_selective_channel/walkthrough.md) | Dimensional radio, per-RU isolation, TGax static/dynamic SISO and static matrix channels, opt-in RBIR, notch sweeps, and preamble puncturing |
-| PHY and MAC feature combinations | [he_features](he_features/walkthrough.md) | LDPC, packet extension, puncturing, mixed capabilities, interference |
-| Rate selection | [he_rate_adaptation](he_rate_adaptation/walkthrough.md) | Fixed MCS and HE Minstrel, including mobility |
-| Extended range | [he_er_su](he_er_su/walkthrough.md) | HE SU and HE ER SU with DCM |
+| Downlink MU-MIMO | [dl_mu_mimo](dl_mu_mimo/walkthrough.md) | Downlink MU-MIMO spatial multiplexing and sequential BAR acknowledgment |
+| Uplink multi-user access | [ul_ofdma](ul_ofdma/walkthrough.md) | Scheduled UL OFDMA, equal RUs, and EDCA baseline |
+| Uplink UORA | [ul_uora](ul_uora/walkthrough.md) | Uplink OFDMA Random Access (UORA) contention under light, heavy, and multi-RU load |
+| Uplink MU-MIMO | [ul_mu_mimo](ul_mu_mimo/walkthrough.md) | Full-bandwidth HE UL MU-MIMO with spatial reuse |
+| Buffer reporting | [bsr](bsr/walkthrough.md) | Explicit, stale, and implicit Buffer Status Reports |
+| Channel bandwidth | [channel_widths](channel_widths/walkthrough.md) | 20, 40, 80, and 160 MHz operation |
+| Frequency-selective channels | [frequency_selective_channel](frequency_selective_channel/walkthrough.md) | Dimensional radio, per-RU isolation, TGax static/dynamic SISO and static matrix channels, opt-in RBIR |
+| Preamble puncturing | [preamble_puncturing](preamble_puncturing/walkthrough.md) | Subchannel puncturing, legacy interference avoidance, and dynamic puncturing |
+| Packet extension | [packet_extension](packet_extension/walkthrough.md) | HE packet-extension timing metadata and combined HE features |
+| BCC & LDPC coding | [bcc_ldpc](bcc_ldpc/walkthrough.md) | BCC baseline vs HE LDPC timing and mixed peer LDPC capability negotiation |
+| Rate selection | [rate_adaptation](rate_adaptation/walkthrough.md) | Fixed MCS and HE Minstrel, including mobility |
+| Extended range | [er_su](er_su/walkthrough.md) | HE SU and HE ER SU with DCM |
+| Feedback | [ndp_feedback](ndp_feedback/walkthrough.md) | NDP Feedback Report triggers and responses |
+| Dynamic fragmentation | [dynamic_frag](dynamic_frag/walkthrough.md) | Negotiated HE dynamic fragmentation |
+| Operating mode indication | [opmode_indication](opmode_indication/walkthrough.md) | Operating Mode Indication and OM Control |
+| Multi-TID Block Ack | [ul_multitid](ul_multitid/walkthrough.md) | Downlink and uplink Multi-TID Block Ack scenarios |
 | Spatial reuse | [bss_coloring](bss_coloring/walkthrough.md) | BSS coloring, OBSS/PD, and dual NAV |
 | Power saving | [twt](twt/walkthrough.md) | Individual and broadcast Target Wake Time agreements |
 | Dense IoT comparison | [dense_iot](dense_iot/README.md) | 128–512 STAs, UL/DL OFDMA with individual TWT versus 802.11ac |
-| Spatial multiplexing | [multi_user/mu_mimo](multi_user/mu_mimo/README.md) | Downlink and uplink MU-MIMO |
-| Feedback | [multi_user/ndp_feedback](multi_user/ndp_feedback/README.md) | NDP Feedback Report triggers and responses |
-| MAC feature | [mac_features/dynamic_fragmentation](mac_features/dynamic_fragmentation/README.md) | Negotiated HE dynamic fragmentation |
-| MAC feature | [mac_features/operating_mode_indication](mac_features/operating_mode_indication/README.md) | Operating Mode Indication and OM Control |
-| MAC feature | [mac_features/multi_tid_block_ack](mac_features/multi_tid_block_ack/README.md) | Downlink and uplink Multi-TID Block Ack scenarios |
 
 ## Running an example
 

@@ -1054,11 +1054,11 @@ def timeline_filter_for_subdir(subdir):
             "wlan.fc.subtype == 13))"
         )
     if subdir in {
-        "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "multi_user/mu_mimo",
-        "multi_user/ndp_feedback", "he_bsr",
+        "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
+        "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
     }:
         return data_and_responses
-    if subdir == "mac_features/dynamic_fragmentation":
+    if subdir in {"dynamic_frag", "mac_features/dynamic_fragmentation"}:
         return (
             "(wlan.fc.type == 2) || "
             "(wlan.fc.type == 1 && wlan.fc.subtype == 13)"
@@ -1094,11 +1094,11 @@ def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
             # signal and the following acknowledgment fit in the same window.
             return row["frame_name"].startswith("Data:")
         if subdir in {
-            "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "multi_user/mu_mimo",
-            "multi_user/ndp_feedback", "he_bsr",
+            "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
+            "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
         }:
             return "Trigger" in row["frame_name"]
-        if subdir == "mac_features/dynamic_fragmentation":
+        if subdir in {"dynamic_frag", "mac_features/dynamic_fragmentation"}:
             return (
                 row["more_fragments"]
                 or (row["fragment_number"] is not None
@@ -2025,7 +2025,7 @@ def evaluate_evidence(config_results, subdir):
             "evidence": f"{total} AP/global transmission observations",
         })
 
-    if subdir == "he_er_su":
+    if subdir in ("he_er_su", "er_su"):
         for config_name, expect_er in (("ErBss", True), ("CellBoundaryHeSu", False),
                                        ("CellBoundaryHeErSu", True)):
             qos_total = count_frames(config_results, config_name, "2", "8")
@@ -2113,7 +2113,7 @@ def evaluate_evidence(config_results, subdir):
             ),
         })
 
-    elif subdir == "he_features":
+    elif subdir in ("he_features", "preamble_puncturing", "packet_extension", "bcc_ldpc"):
         checks.append({
             "id": "puncturing-structure",
             "status": "INCONCLUSIVE",
@@ -2122,13 +2122,21 @@ def evaluate_evidence(config_results, subdir):
         })
 
     direct_evidence_requirements = {
+        "ul_multitid": ("multi-tid-ba-fields", "BA variant and per-AID/TID entries"),
         "mac_features/multi_tid_block_ack": ("multi-tid-ba-fields", "BA variant and per-AID/TID entries"),
+        "opmode_indication": ("operating-mode-fields", "OM Control value and receiver-applied width/NSS"),
         "mac_features/operating_mode_indication": ("operating-mode-fields", "OM Control value and receiver-applied width/NSS"),
+        "dl_mu_mimo": ("mu-mimo-streams", "Multiple users with disjoint stream allocations in one PPDU"),
+        "ul_mu_mimo": ("mu-mimo-streams", "Multiple users with disjoint stream allocations in one PPDU"),
         "multi_user/mu_mimo": ("mu-mimo-streams", "Multiple users with disjoint stream allocations in one PPDU"),
+        "ndp_feedback": ("ndp-trigger-type", "Trigger Type 7 and matching NDP feedback allocation"),
         "multi_user/ndp_feedback": ("ndp-trigger-type", "Trigger Type 7 and matching NDP feedback allocation"),
+        "bsr": ("bsr-backlog", "Reported backlog and scheduler-consumed backlog"),
         "he_bsr": ("bsr-backlog", "Reported backlog and scheduler-consumed backlog"),
+        "dynamic_frag": ("fragmentation-fields", "Capability gate, fragment numbers, sizes, More Fragments and acknowledgment"),
         "mac_features/dynamic_fragmentation": ("fragmentation-fields", "Capability gate, fragment numbers, sizes, More Fragments and acknowledgment"),
         "frequency_selective_channel": ("per-ru-channel-evidence", "Per-RU SNIR/reception outcome and sink delivery"),
+        "rate_adaptation": ("rate-control-evidence", "Selected MCS/NSS, EWMA outcome and retries"),
         "he_rate_adaptation": ("rate-control-evidence", "Selected MCS/NSS, EWMA outcome and retries"),
     }
     if subdir in direct_evidence_requirements:
@@ -2386,14 +2394,14 @@ def generate_markdown_tables(
             "classification; it does not guarantee a throughput improvement, and a more permissive threshold can increase interference. "
             f"{interpretation} The current model reports the standards-defined threshold/power coupling but does not dynamically adapt OBSS/PD or apply that limit to later transmissions."
         )
-    elif "dynamic_fragmentation" in subdir:
+    elif "dynamic_frag" in subdir or "dynamic_fragmentation" in subdir:
         analysis_text = (
             "IEEE Std 802.11-2024 Clause 26.3 gates dynamic fragmentation on negotiated peer capability; it does not require fragment size to adapt to channel conditions. "
             "In this implementation the dynamic and static policies use the same 500-byte sizing policy after the capability gate, so their detailed result-analysis "
             "traces are expected to overlap. This packet table contains only `DynamicFragmentation`; it cannot establish a higher fragment count without the static "
             "and unfragmented controls, nor can Block Ack subtype counts alone establish the fragment bitmap."
         )
-    elif "he_er_su" in subdir:
+    elif "er_su" in subdir or "he_er_su" in subdir:
         er_check = next(check for check in checks if check["id"] == "he-er-format-CellBoundaryHeErSu")
         analysis_text = (
             f"**{er_check['status']}: HE-ER-SU payload selection.** {er_check['evidence']}. "
@@ -2402,13 +2410,13 @@ def generate_markdown_tables(
             "but a configuration claiming HE-ER-SU payload coverage must first select that PPDU format. The matched five-seed 340 m sweep in this walkthrough "
             "uses equal MCS 0 data fields and reports application delivery together with incorrect-reception observations, isolating the modeled HE-SIG-A repetition gain."
         )
-    elif "he_rate_adaptation" in subdir:
+    elif "rate_adaptation" in subdir or "he_rate_adaptation" in subdir:
         analysis_text = (
             "IEEE 802.11 constrains negotiated HE modes but does not mandate a Minstrel algorithm. These packet counts therefore cannot establish adaptation, "
             "and a control/data ratio is not reliable evidence of retransmission or probing. Use the aligned selected-MCS/NSS, EWMA probability, transmission-outcome, "
             "and retry vectors documented above. INET's HE Minstrel remains a simplified implementation without scheduler-context or localized-fading adaptation."
         )
-    elif "he_channel_widths" in subdir:
+    elif "channel_widths" in subdir or "he_channel_widths" in subdir:
         analysis_text = (
             "IEEE Std 802.11-2024 Table 27-1 defines 20, 40, 80, and 160 MHz HE channel-width encodings, but the standard does not require packet count or throughput "
             "to scale linearly with width. The run-0 frame totals here are non-monotonic because aggregation, RU scheduling, and fixed overhead change the number of "
@@ -2420,31 +2428,31 @@ def generate_markdown_tables(
             "defined by IEEE Std 802.11-2024 Clause 26.5.7 and Annex G.5. One NFRP Trigger can allocate multiple feedback resources, so the counts need not be one-to-one. "
             "The generic Control-subtype label does not by itself prove Trigger Type 7; verify the Trigger field or simulator NFRP telemetry when conformance detail matters."
         )
-    elif "multi_tid_block_ack" in subdir:
+    elif "ul_multitid" in subdir or "multi_tid_block_ack" in subdir:
         analysis_text = (
             "BAR and Block Ack subtype counts show acknowledgment exchanges, but they do not identify the BA Control variant or its per-AID/TID entries. "
             "IEEE Std 802.11-2024 Clauses 9.3.1.8.6 and 10.25.5 require those contents to distinguish Multi-STA and Multi-TID operation. Treat this table as an exchange count; "
             "use decoded BA fields or simulator telemetry to prove that multiple TIDs were acknowledged."
         )
-    elif "operating_mode_indication" in subdir:
+    elif "opmode_indication" in subdir or "operating_mode_indication" in subdir:
         analysis_text = (
             "The data and acknowledgment counts show traffic before and after the configured operating-mode change, but frame subtype statistics cannot expose the "
             "Operating Mode Indication element or OM Control subfield. Standard behavior must be checked from those fields and the receiver's applied channel-width/NSS state, "
             "not inferred from the packet total."
         )
-    elif "mu_mimo" in subdir:
+    elif "dl_mu_mimo" in subdir or "ul_mu_mimo" in subdir or "mu_mimo" in subdir:
         analysis_text = (
             "Packet totals alone do not establish MU-MIMO. IEEE Std 802.11-2024 Clause 27.3.2.5 identifies each HE-MU user and its spatial streams; the direct evidence is "
             "multiple users in one PPDU with compatible, non-overlapping stream allocations. Use the RU/NSS allocation telemetry and five-run comparison documented above; "
             "the radiotap suffix establishes the PPDU format but not all users' stream allocations."
         )
-    elif "he_bsr" in subdir:
+    elif "bsr" in subdir or "he_bsr" in subdir:
         analysis_text = (
             "The scheduled conditions contain the expected Trigger/response activity, but a BSR is an A-Control scheduling input rather than a frame subtype. "
             "IEEE Std 802.11-2024 Clause 26.5.5 requires the report contents and capability conditions; use the AP-reported and scheduled-backlog telemetry documented above. "
             "QoS Data counts are not evidence that a BSR was fresh or that the reported bytes were delivered."
         )
-    elif "he_features" in subdir:
+    elif "preamble_puncturing" in subdir or "packet_extension" in subdir or "bcc_ldpc" in subdir or "he_features" in subdir:
         analysis_text = (
             "`BccBaseline` and `PreamblePuncturing` have identical frame counts in this run. That is not a standards violation and does not mean the PHY configuration was identical: "
             "preamble puncturing changes the usable subchannels/RU placement, while a fully served offered load can leave packet totals unchanged. Validate the mask and puncture-aware "

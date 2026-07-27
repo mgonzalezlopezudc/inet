@@ -1,9 +1,9 @@
 # working directory, command line arguments, simulation time limit, fingerprint, expected result, tags
 /examples/ieee80211ax/bss_coloring/,       -f omnetpp.ini -c BssColoringEnabled -r 0,       1s,      2bf4-9038/tplx, PASS, wireless ieee80211 he
 /examples/ieee80211ax/dl_ofdma_sched/,          -f omnetpp.ini -c EqualSizedRUs_fBW -r 0,        0.6s,    b1f5-c2ff/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_bsr/,            -f omnetpp.ini -c FullBsrAccounting -r 0,        2s,      0b61-ddc3/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_er_su/,          -f omnetpp.ini -c HeErSu -r 0,                   2s,      d790-2d10/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_features/,       -f omnetpp.ini -c CombinedHeFeatures -r 0,       0.52s,   56c4-9dd3/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/he_rate_adaptation/,-f omnetpp.ini -c HeMinstrel -r 0,               2s,      a481-63c8/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/bsr/,                 -f omnetpp.ini -c FullBsrAccounting -r 0,        2s,      0b61-ddc3/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/er_su/,               -f omnetpp.ini -c CellBoundaryHeErSu -r 0,         2s,      d790-2d10/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/packet_extension/,    -f omnetpp.ini -c CombinedHeFeatures -r 0,       0.52s,   56c4-9dd3/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/rate_adaptation/,     -f omnetpp.ini -c HeMinstrel -r 0,               2s,      a481-63c8/tplx, PASS, wireless ieee80211 he
 /examples/ieee80211ax/twt/,               -f omnetpp.ini -c IndividualAnnounced -r 0,      100s,    99f2-7833/tplx, PASS, wireless ieee80211 he
-/examples/ieee80211ax/ul_ofdma/,          -f omnetpp.ini -c MixedUora -r 0,                2s,      8705-fe54/tplx, PASS, wireless ieee80211 he
+/examples/ieee80211ax/ul_uora/,             -f omnetpp.ini -c MixedUora -r 0,                2s,      8705-fe54/tplx, PASS, wireless ieee80211 he
