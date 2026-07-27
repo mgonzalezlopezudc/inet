@@ -56,11 +56,21 @@ from analyze_pcap import (
     select_representative_timeline,
     timeline_filter_for_subdir,
     timeline_markdown,
+    timeline_role,
     validate_capture_decode,
     validate_capture_metadata,
     validate_entry_binding,
     validate_evidence_checks,
 )
+
+
+class TimelineRoleTest(unittest.TestCase):
+
+    def test_qos_null_is_not_described_as_payload(self):
+        self.assertEqual(
+            timeline_role({"frame_name": "Data: QoS Null"}),
+            "Responds without MAC payload while preserving QoS control information.",
+        )
 
 
 class DecodeHeFieldsTest(unittest.TestCase):

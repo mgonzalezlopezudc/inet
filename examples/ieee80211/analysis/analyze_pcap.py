@@ -2180,6 +2180,8 @@ def timeline_role(frame):
         return "Acknowledges the preceding unicast frame."
     if "PS-Poll" in name:
         return "Signals that the power-save station is awake for buffered traffic."
+    if "QoS Null" in name:
+        return "Responds without MAC payload while preserving QoS control information."
     if name.startswith("Data:"):
         return "Carries protocol-visible MAC payload in the representative exchange."
     return "Provides frame-order context for the representative exchange."
@@ -2362,11 +2364,11 @@ def generate_markdown_tables(
         )
     elif "ul_ofdma" in subdir:
         analysis_text = (
-            "`EdcaBaseline` provides the non-triggered control. The scheduled and mixed-access configurations contain repeated **Trigger** frames, "
+            "`EdcaBaseline` provides the non-triggered control. The two scheduled configurations contain repeated **Trigger** frames, "
             "solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure "
-            "(IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). The three UORA configurations expose load and RA-RU-count effects, "
-            "but frame-subtype counts alone cannot distinguish an AID-0 random-access attempt from scheduled access or prove a collision. "
-            "Use the per-STA `heUlRandomAccessAttempt` and `heUlRandomAccessSuccess` scalars for that decision evidence."
+            "(IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). Frame-subtype totals alone do not establish that queued payload "
+            "was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, "
+            "HE-TB payload observations, and aligned scheduler/application telemetry for those decisions."
         )
     elif subdir in DL_OFDMA_SUBDIRS:
         he_mu_check = next(check for check in checks if check["id"] == "dl-ofdma-he-mu-payload-decode")

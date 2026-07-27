@@ -1,375 +1,322 @@
-# Walkthrough: 802.11ax Uplink OFDMA and UORA
+# Walkthrough: IEEE 802.11ax scheduled uplink OFDMA
 
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260725T181500Z`
-- PCAP: `20260725T233546Z`
+- Scalar/vector: `20260727T211515Z`
+- PCAP: `20260727T211515Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260725T181500Z`, `20260725T182100Z`, `20260725T233546Z`.
+`[agent]` results sessions: `20260727T211515Z`.
 
-This example provides scheduled-uplink, mixed-access, and UORA configurations.
-The retained evidence includes a five-run UORA comparison and a separate run-0
-packet-exchange appendix.
+This walkthrough compares two access-point (AP) scheduling policies with a
+single-user Enhanced Distributed Channel Access (EDCA) control. The retained
+five-run result set and run-0 packet captures are co-recorded in session
+`20260727T211515Z`. They prove that the feature gate creates Trigger-led
+multi-user exchanges, but they also expose two important findings: the
+scheduled HE trigger-based (HE-TB) allocations are too small to test queued
+1,000-byte payload service, and their on-wire Ack Policy conflicts with the
+immediate Multi-STA Block Ack procedure. The first is an evidence boundary;
+the second is a demonstrated standards/model mismatch.
 
 ## [agent] Learning objectives and feature primer
 
 After completing this walkthrough, the reader can:
 
-- explain AP-scheduled uplink OFDMA and uplink OFDMA random access (UORA);
-- read a Basic Trigger's association-identifier (AID12) entries to distinguish
-  scheduled users from random-access RUs (RA-RUs);
-- relate UORA attempts/successes and Jain fairness to contention; and
-- reproduce a Trigger → simultaneous HE-TB response → Block Ack timeline.
+- explain how an AP coordinates simultaneous uplink transmissions with a
+  Trigger frame and per-station resource-unit (RU) assignments;
+- distinguish HE-TB scheduled responses from ordinary HE single-user (HE-SU)
+  uplink frames in a radiotap capture;
+- compare backlog-based and equal-sized-RU scheduler inputs without treating
+  delivered bytes as mechanism evidence;
+- reproduce the result and packet analyses; and
+- verify the allocation-capacity precondition before claiming that queued
+  payload should appear in a scheduled uplink response.
 
-For scheduled uplink, the access point (AP) names stations and resource units
-(RUs) in a Basic Trigger. UORA instead advertises RA-RUs with AID12 zero.
-Eligible stations decrement an OFDMA backoff counter and may choose the same
-RA-RU; simultaneous same-frequency responses make contention visible. INET's
-coordinator counters, not frame totals alone, decide whether attempts succeed.
+Orthogonal Frequency-Division Multiple Access (OFDMA) partitions a channel into
+RUs. For scheduled uplink OFDMA, the AP first wins channel access, broadcasts a
+Basic Trigger, and assigns an association identifier (AID), RU, modulation and
+coding scheme, stream allocation, and response duration to each selected
+station. Addressed stations respond using HE-TB physical protocol data units
+(PPDUs), aligned after a Short Interframe Space (SIFS). The AP then
+acknowledges the multi-user response.
+
+The important distinction is structural: a Trigger followed by HE-TB frames
+shows that the coordinated response path ran, but only an HE-TB QoS Data
+observation (or aligned scheduler/queue telemetry) shows that queued payload
+used that path. Aggregate goodput alone cannot establish this.
 
 ## [agent] Scenario description
 
-The [network](Lan80211AxUlOfdma.ned) extends the common single-BSS topology
-with one AP, a wired server, and three or eight fixed stations. The
-[configuration](omnetpp.ini) uses 5 GHz, 20 MHz, one stationary close-range
-BSS, no external interferer, and a 2 s run. Warm-up traffic begins at 0.2 s to
-establish Block Ack; measured uplink begins at 0.3 s.
+The [network](Lan80211AxUlOfdma.ned) extends the common
+[`HeSingleBssNetwork`](../common/HeSingleBssNetwork.ned) with three stationary
+wireless stations. Each station sends uplink UDP traffic through the AP and its
+wired Ethernet connection to `server.app[0]`:
 
 ```text
-host[0..N-1] -- HE uplink --> AP === wired LAN === server
-                    Trigger <--
+host[0] --\
+host[1] ---- 5 GHz / 20 MHz --> AP === 100 Gbit/s Ethernet === server
+host[2] --/                    ^  |
+                               |  +-- Multi-STA Block Ack
+                               +----- Basic Trigger
 ```
 
-Three-STA configurations send 1000-byte payloads every 5 ms. Eight-STA UORA
-loads use 100-byte payloads every 4 ms (light) or 1 ms (heavy). This stresses
-contention and scheduled/random-access capacity, not mobility or coverage.
+The [configuration](omnetpp.ini) places the AP at the center of a 50 m × 50 m
+area and the stations 5 m away, with no mobility or external interferer. All
+variants use IEEE 802.11ax mode, 10 mW transmit power, fixed 14.625 Mbit/s
+nominal bitrate, Block Ack support, A-MPDU aggregation, and the same receiver
+thresholds. A one-packet-per-station warm-up at 0.2 s is intended to establish
+Block Ack agreements. The measured application starts at 0.3 s: every station
+sends 1,000 bytes every 5 ms, or 1.6 Mbit/s per station and 4.8 Mbit/s in
+aggregate, until the 2 s limit.
+
+UDP port 5000 maps to user priority 6 (`UP_VO`) through
+`ExampleQosClassifier`. The high MU-EDCA contention values and zero configured
+random-access RUs are constant across configurations. This example therefore
+studies AP-scheduled access versus ordinary EDCA in one close-range,
+single-basic-service-set topology; it is not a coverage, interference, or
+Uplink OFDMA Random Access (UORA) experiment.
 
 ## [agent] Standards and INET model boundary
 
-IEEE Std 802.11-2024 Clause 26.5.4.1 permits a Basic Trigger to allocate
-RA-RUs and requires UORA-capable stations to maintain OFDMA contention-window
-and backoff state (`80211ax-2024:chunk:09810`). AID12 zero represents RA-RUs
-for associated stations in the observed Trigger encoding. HE trigger-based
-uplink responses use HE-TB PPDUs.
+IEEE Std 802.11-2024 Clause 26.5.2.2.1 defines Trigger-based solicitation of
+one or more HE-TB PPDUs. Clause 26.5.2.3.1 requires an eligible addressed
+station's response to begin one SIFS after the Trigger-containing PPDU, and
+Clause 26.5.2.3.3 derives HE-TB transmission parameters from Trigger Common
+Info and User Info. Trigger format and per-user AID12/RU/MCS/FEC/stream fields
+are defined in Clause 9.3.1.22 and Tables 9-47 and 9-53. Clause 26.5.2.4 allows
+a QoS Null response when no pending frame fits the Basic Trigger allocation.
+For immediate acknowledgement of more than one station, Clauses 10.3.2.13.3
+and 26.4.4.5 describe the Multi-STA Block Ack response.
 
-INET implements this with `HeHcf`, an AP UL coordinator/scheduler, modeled
-UORA counters, and typed radiotap HE observations. The model's attempt/success
-counters are authoritative for its classification. Captured same-RU responses
-are direct contention evidence, but absence of a decoded response is not by
-itself a modeled failure.
+INET represents this exchange with `HeHcf`, `HeUlCoordinator`, replaceable
+`HeUlScheduler*` policies, and `HeUlMuTxOpFs`. The scheduler produces an
+allocation; the station builds an HE-TB transmission after SIFS; and the AP's
+frame-sequence model collects the responses and constructs a Multi-STA Block
+Ack. INET also uses a model-only Trigger ID tag to correlate a response with
+the solicitation. That tag is not an on-air IEEE field and cannot be observed
+in PCAP.
+
+The scalar radio approximates per-RU uplink reception by frequency/power
+placement and does not model timing advance. `PcapRecorder` flattens A-MPDU
+contents into one capture record per MPDU, omitting delimiters and padding.
+Radiotap HE fields are authoritative only when their known bits are present.
+
+One observed behavior is not standards-conformant. The three HE-TB QoS Null
+responses after frame 270 carry Ack Policy `3` (`Block Ack`), while IEEE
+802.11-2024 Clause 26.4.4.5 and Table 9-13 require an Ack Policy that solicits
+the immediate response (Normal Ack or Implicit BAR) for this Basic-trigger
+sequence. INET nevertheless unconditionally schedules the terminal Multi-STA
+Block Ack. This walkthrough records that as a model-control versus serialized
+wire-semantics mismatch, not as a TShark heuristic.
 
 ## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
-| UORA attempts/successes are recorded | `PASS` | per-STA coordinator scalars | session `20260725T181500Z`, runs/seeds 0–4 | four configurations |
-| Five RA-RUs improve heavy-load UORA success | `PASS` | matched run-level counters | heavy 1-RU vs 5-RU, five seeds | 0.8 vs 7.2 mean successes |
-| Trigger frames advertise AID12-zero RA-RUs | `PASS` | AP captures | packet sessions, run 0 | one vs five entries |
-| Same-RU contention is visible | `PASS` | same-time/same-frequency HE-TB responses | run-0 captures | direct observations |
-| Packet frames cause exact scalar outcomes | `INCONCLUSIVE` | separate sessions | — | instrumentation changes trajectory |
-
-The scalar/vector campaign and packet sessions are separate experiments.
-PcapRecorder instrumentation changes the event trajectory, so exact run-0
-counter values are not expected to match between them. Compare configurations
-within a session, and use PCAP for frame-level behavior rather than substituting
-its frame counts for the UORA outcome counters.
+| UL-MU feature gate changes the exchange | `PASS` | 166 Basic + 2 BSRP Triggers and 492 HE-TB responses in each scheduled run-0 capture; zero in EDCA | run 0 / seed 0 | Direct AP-capture observation |
+| Basic Trigger assigns all three stations distinct RUs | `PASS` | frame 270: AID12 `1,2,3`, RU allocation `0,1,2`; frames 271–273 use distinct 26-tone RU frequencies | scheduled run 0 | One representative exchange |
+| Queued 1,000-byte payload uses HE-TB | `INCONCLUSIVE` | Basic Trigger UL Length 730, MCS 0, 26-tone RUs; zero HE-TB QoS Data; 492 HE-TB QoS Null; 1,029 HE-SU QoS Data | scheduled run 0 | The recorded 1 ms allocation cannot fit the 1,000-byte MPDU; QoS Null is permitted |
+| Backlog and equal-sized policies produce distinguishable behavior | `INCONCLUSIVE` | byte-identical run-0 captures; identical five-run goodput; both schedule zero reported bytes into the same three 26-tone RUs | runs/seeds 0–4 | The symmetric zero-byte candidates do not exercise a policy delta |
+| Immediate-response Ack Policy matches IEEE semantics | `FAIL` | frames 271–273 decode `wlan.qos.ack=3`, followed by Multi-STA BA frame 274 | scheduled run 0 | Direct field observation plus normative rule |
+| Offered payload reaches the server | `PASS` | `server.app[0] packetReceived:vector(packetBytes)` | runs/seeds 0–4 | Outcome only; not proof of OFDMA payload |
+| Scheduled access improves goodput | `INCONCLUSIVE` | 4.781 ± 0.007 Mbit/s scheduled vs 4.800 Mbit/s EDCA | five paired seeds | No acceptance threshold; intervals do not support improvement |
 
 ## [agent] Configuration matrix
 
-The configuration inputs in this table are defined by [the INI file](omnetpp.ini).
+All three configurations inherit `[General]`; none uses a `[Config ...]
+extends` chain.
 
-| Config | Stations and measured traffic | UL access | Configured RA-RUs |
-|---|---|---|---:|
-| `EdcaBaseline` | 3, 1000 B / 5 ms | EDCA | 0 |
-| `ScheduledOnly` | 3, 1000 B / 5 ms | backlog-scheduled | 0 |
-| `EqualRus` | 3, 1000 B / 5 ms | equal-sized scheduled RUs | 0 |
-| `MixedUora` | 3, 1000 B / 5 ms | scheduled plus UORA | 1–3 |
-| `UoraLightContention` | 8, 100 B / 4 ms | scheduled plus UORA | 1 |
-| `UoraHeavyContention` | 8, 100 B / 1 ms | scheduled plus UORA | 1 |
-| `UoraMoreRandomAccessRus` | 8, 100 B / 1 ms | scheduled plus UORA | 5 |
+| Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
+|---|---|---|---|---|---|
+| `BacklogBased` | Treatment | `enableUlMuOfdma=true`; `HeUlSchedulerBacklogBased` sizes/ranks requests from reported backlog | 3 × 1,000 B/5 ms; AX, 20 MHz | 0–4 / 0–4 | Basic Trigger assigns users/RUs and queued data appears in HE-TB |
+| `EqualSizedRUs` | Treatment/policy control | same gate; `HeUlSchedulerEqualSizedRUs` allocates equal RUs and uses backlog for duration | matched | 0–4 / 0–4 | Same exchange structure, with policy-dependent allocations when demand exposes a difference |
+| `EdcaBaseline` | Negative control | `enableUlMuOfdma=false`; coordinator inactive | matched | 0–4 / 0–4 | no Basic/BSRP Trigger or HE-TB scheduled response |
 
-The last two rows have the same station count, packet size, packet interval,
-measurement window, and scheduler family; their configured RA-RU count differs.
-This makes them the matched heavy-load comparison documented below.
+The AP's NED default scheduler typename remains backlog-based in
+`EdcaBaseline`, but it is inactive because the UL coordinator's `enabled`
+parameter follows `enableUlMuOfdma`. Both treatments set
+`minRandomAccessRus=maxRandomAccessRus=0`, so every Trigger user entry should
+be scheduled rather than random access.
 
 ## [agent] Expected invariants and diagnostic map
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
-| Basic Trigger advertises configured RA-RUs | AP AID12 fields | wrong zero-entry count | UL scheduler/Trigger encoding | typed Trigger decode and config trace |
-| Contending STAs emit HE-TB responses | AP same-time RU observations | no responses despite attempts | UORA backoff/MAC/PHY | STA/AP capture plus coordinator logs |
-| Success counters match model decisions | per-STA attempt/success scalars | impossible ratio or empty matches | coordinator signals/recording | narrow scalar query and source trace |
-| Heavy 5-RU treatment exceeds heavy 1-RU success | paired run aggregation | no increase across seeds | RU allocation/contention | inspect per-run Trigger opportunities |
+| Feature gate controls Trigger exchange | AP PCAP: Basic/BSRP Trigger and HE-TB counts | scheduled capture has no Trigger, or EDCA has one | `HeHcf` / UL coordinator initialization | inspect effective `enableUlMuOfdma`, coordinator timer, and AP channel-access request |
+| Trigger allocation is internally valid | Trigger AID12/RU fields and HE-TB RU/frequency | missing user, duplicate RU, wrong response PHY | scheduler → Trigger serialization → STA validation | export per-user Trigger fields and correlate with `HeUlMuTxOpFs` |
+| Fitting queued payload is selected for the Basic Trigger | capacity-checked Trigger plus HE-TB QoS Data and coordinator reported/scheduled-byte vectors | QoS Null despite a proved fitting eligible MPDU | Trigger policy, buffer status, or triggered A-MPDU builder | first run a deterministic fitting-allocation control; then inspect queue/TID selection |
+| Ack policy solicits the modeled immediate BA | `wlan.qos.ack` in HE-TB MPDUs | value `3` while AP sends immediate Multi-STA BA | HE-TB QoS header construction/serializer | inspect Ack Policy assignment and add field-level regression |
+| Scheduler policies are observable | allocation telemetry and per-run outcome | identical zero-byte allocations | scheduler inputs or workload not discriminating | record the selected Trigger reason/retry-pending state; add asymmetric backlog case |
 
 ## [agent] Reproduction
 
-Run from the INET repository root. This command was **not executed during this
-rewrite**; status: `NOT RUN`.
+Run from the INET repository root. This minimal direct command is a convenient
+single-configuration check but was not the evidence-producing command; status:
+`NOT RUN`.
 
 ```sh
-bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
-  -c UoraMoreRandomAccessRus -r 0 \
-  --result-dir=/tmp/inet-uora-more-ra-rus-r0
+bin/inet -u Cmdenv \
+  -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
+  -c BacklogBased -r 0 --seed-set=0 \
+  --result-dir="$PWD/examples/ieee80211ax/ul_ofdma/results/manual/BacklogBased"
 ```
 
-The scalar/vector session is historical. The suite-owned packet command below
-was executed with exit status 0 and created session `20260725T233546Z`:
+The publication campaign below was executed in release mode with exit status
+0. It launched configurations one at a time per run through the shared
+campaign machinery, covered run numbers `[0,5)` with seed sets 0–4, recorded
+the selected vectors for every run, and additionally recorded AP `wlan[0]`
+PCAPng in run 0:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
-  python3 examples/ieee80211/analysis/analyze_pcap.py \
-  --suite examples/ieee80211/analysis/suites/ax.json \
-  --generate --subdir ul_ofdma --run 0 --allow-failed-evidence
+  python3 examples/ieee80211/analysis/wifi_analysis.py run ul_ofdma \
+  --suite ax --evidence both --runs 5 --jobs 12 \
+  --session-id 20260727T211515Z
+```
+
+It wrote
+`examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/`.
+The report command also exited 0:
+
+```sh
+MPLCONFIGDIR=/tmp/matplotlib \
+  python3 examples/ieee80211/analysis/wifi_analysis.py report ul_ofdma \
+  --suite ax --session-id 20260727T211515Z
+```
+
+Regenerate the marker-bounded presentation bundles after the authored
+explanation exists:
+
+```sh
+python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_ofdma \
+  --suite ax --session-id 20260727T211515Z --update
 ```
 
 ## [agent] Scalar and vector analysis
 
-The evidence is the per-STA scalar pair
-`heUlRandomAccessAttempt:count` and `heUlRandomAccessSuccess:count` in the 15
-`.sca` files under the three eight-STA configuration directories and the five
-`.sca` files under `MixedUora`. Success probability is the run total of
-successes divided by the run total of attempts.
-Fairness is the Jain index over the per-STA success counts—three for
-`MixedUora`, eight for the other conditions—and is undefined for an
-all-zero-success run. These counters cover the complete `0–2 s` simulation;
-the INI file defines application phases but no OMNeT++ `warmup-period`.
-
-![Five-run UORA comparison](../analysis/figures/ul_ofdma/uora-dashboard.png)
-
-| Condition | Mean attempts | Mean success probability | Mean successful transmissions | Success fairness |
-|---|---:|---:|---:|---:|
-| Mixed, adaptive 1–3 RA-RUs | 68.6 ± 11.7 | 1.000 ± 0.000 | 68.6 ± 11.7 | 0.661 ± 0.003 |
-| Light, 1 RA-RU | 213.4 ± 55.6 | 0.078 ± 0.029 | 16.2 ± 5.1 | 0.475 ± 0.181 |
-| Heavy, 1 RA-RU | 9.4 ± 5.1 | 0.120 ± 0.157 | 0.8 ± 0.6 | 0.125 over four defined runs |
-| Heavy, 5 RA-RUs | 19.2 ± 7.8 | 0.370 ± 0.123 | 7.2 ± 4.0 | 0.543 ± 0.184 |
-
-Means and two-sided 95% Student-t confidence intervals use runs 0–4. The
-heavy-contention, one-RA-RU fairness row excludes run 1 because all eight
-success counts are zero; the other four defined fairness values are each
-0.125. `MixedUora` is a reference, not a matched fourth treatment: it has three
-stations, 1000-byte packets every 5 ms, and an adaptive 1–3 RA-RU range. The
-other conditions have eight stations and 100-byte packets. Only
-`UoraHeavyContention` and `UoraMoreRandomAccessRus` hold station count, offered
-load, packet size, scheduler, seeds, and run duration fixed while changing the
-RA-RU count.
-
-The plot generator fails closed if any retained run records no attempts, or if
-all runs of a condition record zero successes. This makes missing UORA
-instrumentation or a completely inactive condition a generation error rather
-than an empty-looking chart.
-
-### [agent] Scalar and vector interpretation by configuration
-
-The UORA attempt/success signals have `count` scalar recorders but no
-attempt/success vectors. The temporal evidence therefore comes from
-`endToEndDelay:vector` at `server.app[0]`. The table below first computes one
-mean over delivered packets in `[0.3 s, 2 s)` for each run, then reports the
-mean and 95% t interval over the five run means. It is delivery-conditioned:
-packets still queued at 2 s do not contribute.
-
-| Configuration | Mean end-to-end delay | Run-0 delivered samples | Run-0 delay range |
-|---|---:|---:|---:|
-| `MixedUora` | 3.115 ± 0.211 ms | 1018 | 0.666–13.729 ms |
-| `UoraLightContention` | 22.615 ± 4.905 ms | 3357 | 0.208–165.869 ms |
-| `UoraHeavyContention` | 136.335 ± 37.209 ms | 6920 | 0.233–1211.051 ms |
-| `UoraMoreRandomAccessRus` | 126.196 ± 12.746 ms | 7322 | 0.182–1143.597 ms |
-
-- **`MixedUora`:** `maxMuStations=2` lets the scheduler serve one part of the
-  three-STA workload while the advertised random-access RU serves the other
-  part. Across all five runs, host 0 records no UORA attempts and hosts 1–2
-  account for all 68.6 mean successes. The perfect UORA success probability
-  therefore describes a lightly contended random-access path, while the Jain
-  value near two thirds mechanically reflects the scheduled/UORA role split;
-  it is not evidence of unfair total service. The low delay vector is
-  consistent with the modest three-STA load.
-
-- **`UoraLightContention`:** fixing one RA-RU while expanding to eight STAs
-  creates many eligibility events—213.4 attempts per run—but only 7.8% become
-  recorded successes. Successes are spread unevenly across STAs, producing
-  0.475 Jain fairness. The 22.6 ms mean delay is well below the heavy-load
-  values because 100-byte packets arrive every 4 ms rather than every 1 ms.
-
-- **`UoraHeavyContention`:** only the arrival interval changes from 4 ms to
-  1 ms. The heavy backlog keeps the medium busy and sharply reduces the number
-  of Basic Trigger opportunities, so the UORA attempt count falls rather than
-  rising with offered load. One run has no success and every other run has a
-  success at only one STA, explaining both the wide probability interval and
-  Jain value 0.125. The delay vector shows the consequence of overload: a
-  136 ms five-run mean and a run-0 tail beyond 1.2 s.
-
-- **`UoraMoreRandomAccessRus`:** this is the matched heavy-load treatment.
-  Five advertised RA-RUs give eligible stations more choices per Basic Trigger.
-  The retained sample records about nine times as many UORA successes as the
-  one-RU heavy condition (7.2 versus 0.8), a higher success probability, and
-  success across more STAs. Its delivery-conditioned mean delay is only
-  modestly lower and the confidence intervals overlap: reserving additional
-  random-access RUs also leaves fewer RUs for scheduled service, and the
-  workload remains overloaded. The evidence supports increased UORA capacity
-  in this sample, not an optimal RA-RU count.
-
-<!-- BEGIN GENERATED: ieee80211-scalar-vector-uora -->
-### [script] Generated scalar/vector plot and table
-
-![uora scalar/vector analysis](../analysis/figures/ul_ofdma/uora-dashboard.png)
-
-Figure provenance: [`../analysis/figures/ul_ofdma/uora-dashboard.png.json`](../analysis/figures/ul_ofdma/uora-dashboard.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
-
-Common table provenance:
-
-- Source result filters / modules / units: scalar / heUlRandomAccessAttempt:count<br>scalar / heUlRandomAccessSuccess:count
-- Window / per-run aggregation / exclusions: [0.3, 2.0) s; fairness=Jain index over runs with at least one successful transmission; all-zero runs are excluded as undefined; observation=one value per run; uncertainty=95% Student-t CI; zero_success_runs={'MixedUora': 0, 'UoraHeavyContention': 1, 'UoraLightContention': 0, 'UoraMoreRandomAccessRus': 0}
-- Independent runs: run-level summaries: n=5, 4; direct observations: no independent-run estimate
-
-| Configuration / observation | Mean or direct value | 95% CI half-width |
-|---|---:|---:|
-| Heavy, 1 RA-RU / attempts | 9.4 | 5.08931 |
-| Heavy, 1 RA-RU / success fairness | 0.125 | 0 |
-| Heavy, 1 RA-RU / success probability | 0.119658 | 0.156692 |
-| Heavy, 1 RA-RU / successful transmissions | 0.8 | 0.555289 |
-| Heavy, 1 RA-RU / zero success run count | 1 | — |
-| Heavy, 5 RA-RUs / attempts | 19.2 | 7.77405 |
-| Heavy, 5 RA-RUs / success fairness | 0.543333 | 0.184415 |
-| Heavy, 5 RA-RUs / success probability | 0.370399 | 0.122753 |
-| Heavy, 5 RA-RUs / successful transmissions | 7.2 | 3.96556 |
-| Heavy, 5 RA-RUs / zero success run count | 0 | — |
-| Light, 1 RA-RU / attempts | 213.4 | 55.5539 |
-| Light, 1 RA-RU / success fairness | 0.475238 | 0.181105 |
-| Light, 1 RA-RU / success probability | 0.0775811 | 0.0291306 |
-| Light, 1 RA-RU / successful transmissions | 16.2 | 5.07414 |
-| Light, 1 RA-RU / zero success run count | 0 | — |
-| Mixed, adaptive 1–3 RA-RUs / attempts | 68.6 | 11.7336 |
-| Mixed, adaptive 1–3 RA-RUs / success fairness | 0.661106 | 0.00273725 |
-| Mixed, adaptive 1–3 RA-RUs / success probability | 1 | 0 |
-| Mixed, adaptive 1–3 RA-RUs / successful transmissions | 68.6 | 11.7336 |
-| Mixed, adaptive 1–3 RA-RUs / zero success run count | 0 | — |
-
-The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
-<!-- END GENERATED: ieee80211-scalar-vector-uora -->
-
-## [agent] PCAP statistics
-
-The captures observe `ap.wlan[0]`. A Basic Trigger's decoded
-`wlan.trigger.he.user_info.aid12` values expose advertised random-access RUs:
-`AID12=0` is the random-access allocation. HE-TB QoS Null frames at the same
-timestamp and frequency are direct evidence of simultaneous transmissions on
-one RU, but only the coordinator scalars establish whether INET classified an
-attempt as successful.
-
-| Configuration | Basic / BSRP Triggers | AID-0 entries per Basic Trigger | HE-TB QoS Null | Same-time, same-RU groups | QoS Data | BA |
-|---|---:|---:|---:|---:|---:|---:|
-| `MixedUora` | 378 / 103 | 1 | 960 | 0 groups / 0 frames | 1462 | 480 |
-| `UoraLightContention` | 440 / 101 | 1 | 832 | 68 groups / 226 frames | 8459 | 894 |
-| `UoraHeavyContention` | 55 / 101 | 1 | 317 | 4 groups / 12 frames | 13437 | 336 |
-| `UoraMoreRandomAccessRus` | 50 / 101 | 5 | 323 | 6 groups / 12 frames | 12810 | 341 |
-
-- **`MixedUora`:** the adaptive 1–3 range resolves to one AID-0 RU in every
-  run-0 Basic Trigger. Basic Triggers continue from 0.208 s to 1.999 s, and no
-  duplicate-RU response group is observed. This agrees with the separate
-  scalar campaign's collision-free UORA result, without treating the two
-  sessions' exact counts as interchangeable.
-
-- **`UoraLightContention`:** one AID-0 RU is repeatedly exposed through the
-  whole data phase (last Basic Trigger at 1.999 s). The 68 duplicate-RU groups
-  make contention visible in the capture and explain why numerous scalar
-  attempts coexist with a low success probability.
-
-- **`UoraHeavyContention`:** the AP emits only 55 Basic Triggers, ending at
-  0.806 s, while the capture is dominated by 13437 QoS Data frames and 7584
-  retry-bit observations. For example, frames 621 and 622 at 0.302547 s are
-  distinct STA HE-TB responses on 5006 MHz after the same Basic Trigger. The
-  single advertised RA-RU is directly oversubscribed; the scalar counter
-  supplies the resulting 13 attempts and one success for this packet run.
-
-- **`UoraMoreRandomAccessRus`:** every Basic Trigger carries five AID-0 user
-  entries. Only six duplicate-RU groups are observed even though five RUs allow
-  more simultaneous choices; the run-0 packet session records 21 attempts and
-  eight successes. Basic Triggers occur only through 0.310 s, after which the
-  trace is dominated by QoS Data/BAR exchanges. The five-RU treatment changes
-  contention capacity, not merely the total frame count.
-
-Reproduce the subtype counts for any of these captures with:
-
-```sh
-tshark -n -r "$PCAP" -q \
-  -z io,stat,0,'wlan.trigger.he.trigger_type == 0','wlan.trigger.he.trigger_type == 4','wlan.fc.type_subtype == 0x2c && radiotap.he.data_1.ppdu_format == 3','wlan.fc.type_subtype == 0x28 && radiotap.he.data_1.ppdu_format == 0','wlan.fc.type_subtype == 0x18','wlan.fc.type_subtype == 0x19','wlan.fc.retry == 1'
-```
-
-For a Trigger/HE-TB/Block-Ack timeline, use:
-
-```sh
-tshark -n -r "$PCAP" \
-  -Y 'wlan.trigger.he.trigger_type == 0 || (wlan.fc.type_subtype == 0x2c && radiotap.he.data_1.ppdu_format == 3) || wlan.fc.type_subtype == 0x19' \
-  -T fields -E separator='|' -E occurrence=a \
-  -e frame.number -e frame.time_epoch -e frame.packet_flags_direction \
-  -e wlan.fc.type_subtype -e wlan.ta -e wlan.ra \
-  -e radiotap.he.data_1.ppdu_format -e radiotap.channel.freq \
-  -e wlan.trigger.he.user_info.aid12 -e _ws.col.Info
-```
-
-### [agent] Regeneration and inspection
-
-Run one configuration from the repository root:
-
-```sh
-bin/inet -u Cmdenv -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
-  -c UoraMoreRandomAccessRus -r 0
-```
-
-Query the completed scalar evidence directly:
+The scalar/vector inputs are the 15 `.sca`/`.vec` pairs under
+`results/20260727T211515Z/{BacklogBased,EqualSizedRUs,EdcaBaseline}/`.
+The native result analysis matched exactly one vector per run:
+`Lan80211AxUlOfdma.server.app[0] packetReceived:vector(packetBytes)`. Its
+result-unit attribute is blank; byte semantics come from the
+`vector(packetBytes)` recording mode and the analysis sidecar. For each run
+the analysis sums delivered application bytes whose timestamps are in
+`[0.3 s,2.0 s)`, multiplies by eight, and divides by 1.7 s. One aggregate value
+per run enters the two-sided 95% Student-t confidence interval; packet samples
+are not treated as repetitions. No run or vector was excluded.
 
 ```sh
 opp_scavetool query -l \
-  -f 'name =~ "heUlRandomAccessAttempt:count" OR name =~ "heUlRandomAccessSuccess:count"' \
-  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/MixedUora/*.sca \
-  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/UoraLightContention/*.sca \
-  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/UoraHeavyContention/*.sca \
-  examples/ieee80211ax/ul_ofdma/results/20260725T181500Z/UoraMoreRandomAccessRus/*.sca
+  -f 'module =~ "*.server.app[0]" AND name =~ "packetReceived:vector(packetBytes)"' \
+  examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-\#0.vec
 ```
 
-Regenerate the four-condition dashboard with:
+| Configuration | Metric/source/unit | Window and per-run aggregation | Independent runs | Estimate |
+|---|---|---|---:|---:|
+| `BacklogBased` | delivered goodput; `server.app[0] packetReceived:vector(packetBytes)`; derived Mbit/s | `[0.3,2.0)`; sum byte-valued samples × 8 / 1.7 s | 5 | 4.78118 ± 0.00716 |
+| `EqualSizedRUs` | same | same | 5 | 4.78118 ± 0.00716 |
+| `EdcaBaseline` | same | same | 5 | 4.80000 ± 0.00000 |
+
+The two scheduled policies deliver the same near-offered-load goodput and are
+slightly below EDCA. This is consistent with Trigger exchanges adding protocol
+activity without carrying application payload in run 0, but that causal link
+is not directly measured. The
+goodput comparison has no manifest-defined acceptance threshold and does not
+validate UL OFDMA by itself.
+
+The AP radio's allocation vectors are empty because the AP is receiving rather
+than transmitting the scheduled HE-TB users. The corresponding station-radio
+vectors are nonempty and directly expose the modeled allocation. In run 0,
+each station records 164 allocation samples over the full 0–2 s run:
+
+| Module/user | RU offset and size | Scheduled PSDU | User PPDU duration | Interpretation |
+|---|---:|---:|---:|---|
+| `host[0].wlan[0].radio`, STA ID 1 | 0 / 26 tones | 38 B | 1 ms | first 26-tone HE-TB user |
+| `host[1].wlan[0].radio`, STA ID 2 | 26 / 26 tones | 38 B | 1 ms | second 26-tone HE-TB user |
+| `host[2].wlan[0].radio`, STA ID 3 | 54 / 26 tones | 38 B | 1 ms | third 26-tone HE-TB user |
+
+The 38-byte scheduled PSDU is the QoS Null observation, not the 1,000-byte
+application payload. Its 1 ms, MCS 0, 26-tone allocation cannot fit that
+1,000-byte MPDU, so IEEE 802.11-2024 Clause 26.5.2.4 permits this response. At
+`ap.wlan[0].mac.hcf.ulCoordinator`,
+`heUlBufferStatusReportedBytes` has 1,332 run-0 samples (mean 888.333 B,
+maximum 5,330 B), but all 498
+`heUlBufferStatusScheduledBytes` samples are zero. The same zero-byte
+candidate state makes the backlog scheduler choose its minimum 26-tone request
+and the equal-sized scheduler choose the same three-user layout.
+
+One source-level hypothesis is visible just after warm-up. At
+0.201388 s the AP successfully receives and acknowledges a TID 6 QoS Data
+retransmission whose Retry bit is set. `HeHcf::recipientProcessReceivedFrame()`
+passes that current-frame Retry bit to
+`HeUlCoordinator::updateBufferStatus()`, which stores it as future
+`retryPending` state. `HeUlDefaultTriggerPolicy` then treats it as outstanding
+work even though the MPDU has already been received. At
+0.202232287954 s the scheduler records zero bytes for all three users, frame
+16 sends a Basic Trigger at 0.202272 s, and frames 17–19 are QoS Null at
+0.203288 s. The QoS Null fallback is correct for the insufficient allocation.
+Because the retained session has no direct Trigger-reason or `retryPending`
+signal and the focused debug log did not record the decision, treating the
+received Retry bit as the cause remains an inference requiring a targeted
+control or effective logging; it is not the payload verdict.
+
+<!-- BEGIN GENERATED: ieee80211-scalar-vector-ul_ofdma -->
+### [script] Generated scalar/vector plot and table
+
+![ul_ofdma scalar/vector analysis](results/20260727T211515Z/ul-ofdma-delivery.png)
+
+Figure provenance: [`results/20260727T211515Z/ul-ofdma-delivery.png.json`](results/20260727T211515Z/ul-ofdma-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+
+Common table provenance:
+
+- Source result filters / modules / units: vector / **.app[*] / packetReceived:vector(packetBytes)
+- Window / per-run aggregation / exclusions: [0.3, 2.0) s; observation=one aggregate goodput value per run; uncertainty=95% Student-t CI
+- Independent runs: run-level summaries: n=5
+
+| Configuration / observation | Mean or direct value | 95% CI half-width |
+|---|---:|---:|
+| Backlog scheduler / goodput mbps | 4.78118 | 0.00715634 |
+| EDCA baseline / goodput mbps | 4.8 | 0 |
+| Equal-sized RUs / goodput mbps | 4.78118 | 0.00715634 |
+
+The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
+<!-- END GENERATED: ieee80211-scalar-vector-ul_ofdma -->
+
+## [agent] PCAP statistics
+
+The run-0 captures observe `ap.wlan[0]` MAC packet signals and are PCAPng with
+radiotap, microsecond timestamps, computed checksums/FCS, and TShark 4.6.4.
+Rows count AP-interface over-the-air frame/MPDU observations, not
+de-duplicated transmissions or application deliveries. HE MU/TB airtime is
+approximate where radiotap lacks user-dependent signaling.
 
 ```sh
-python3 examples/ieee80211ax/analysis/run_campaign.py uora -j$(nproc)
-MPLCONFIGDIR=/tmp/matplotlib \
-  python3 examples/ieee80211ax/analysis/first_tranche.py uora
+tshark -n \
+  -r examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-\#0Lan80211AxUlOfdma.ap.wlan[0].pcap \
+  -q -z io,stat,0,'wlan.trigger.he.trigger_type == 0','wlan.trigger.he.trigger_type == 4','wlan.fc.type_subtype == 0x28 && radiotap.he.data_1.ppdu_format == 3','wlan.fc.type_subtype == 0x2c && radiotap.he.data_1.ppdu_format == 3','wlan.fc.type_subtype == 0x28 && radiotap.he.data_1.ppdu_format == 0','wlan.fc.type_subtype == 0x19'
 ```
 
-Regenerate the packet appendix:
+| Configuration | Observation point/count | Selection | Decisive frame/PHY facts | Limit |
+|---|---:|---|---|---|
+| `BacklogBased` | AP `wlan[0]`; 2,877 | all decoded frames | 166 Basic + 2 BSRP Triggers; 492 HE-TB QoS Null; 0 HE-TB QoS Data; 1,029 HE-SU QoS Data; 168 BA | capture counts do not expose scheduler intent |
+| `EqualSizedRUs` | AP `wlan[0]`; 2,877 | all decoded frames | byte-identical to `BacklogBased` with the same decisive counts | identical traffic may not force a policy delta |
+| `EdcaBaseline` | AP `wlan[0]`; 2,483 | all decoded frames | 0 Trigger; 0 HE-TB; 1,460 HE-SU QoS Data; 0 BA (ordinary ACKs are used) | control proves exchange absence, not why |
 
-```sh
-MPLCONFIGDIR=/tmp/matplotlib \
-  python3 examples/ieee80211/analysis/analyze_pcap.py \
-  --suite examples/ieee80211/analysis/suites/ax.json \
-  --generate --subdir ul_ofdma --run 0 --update-walkthrough
-```
-
-For a direct decode of the retained five-RA-RU capture:
-
-```sh
-tshark -n -r \
-  'examples/ieee80211ax/ul_ofdma/results/20260725T233546Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
-  -c 20
-```
-
-The generated run-0 tables establish observed frame subtypes and radiotap
-fields at `ap.wlan[0]`. For example, the `EdcaBaseline` table has no Trigger
-row, while `EqualRus`, `MixedUora`, `ScheduledOnly`, `UoraLightContention`, and
-`UoraMoreRandomAccessRus` contain Trigger rows. Frame subtype totals alone do
-not distinguish scheduled from random access. The Trigger's AID12 fields expose
-advertised AID-0 RA-RUs, while the UORA scalar counters above remain the
-evidence for attempts and successes.
+The plot compares frame-observation count and estimated airtime composition.
+It makes the control/treatment exchange difference visible, while the
+identical scheduled bars correctly warn that the selected workload does not
+separate the two policies.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](../analysis/figures/ul_ofdma/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260727T211515Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](../analysis/figures/ul_ofdma/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260727T211515Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260725T233546Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T233546Z.json` (SHA-256 `634ac37a601cc1ef7817d988dd0c0dda98e6c7bf66660dcf60747910089dce4d`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260727T211515Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260727T211515Z.json` (SHA-256 `a8ebef158507eed350b92b1e50acaf07a417dd47e5a0b9aad8d7f0b7148322a2`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -381,23 +328,52 @@ Observation point: Access Point (AP) wireless interfaces.
 
 | Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---:|---|---:|---|
+| `BacklogBased` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `EdcaBaseline` | `none (all decoded frames)` | 2483 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1460), Control: Ack (1023) | 46.62% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `EqualRus` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `MixedUora` | `none (all decoded frames)` | 5085 | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (1367), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1281), Control: Ack (1021) | 70.86% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ScheduledOnly` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UoraLightContention` | `none (all decoded frames)` | 11466 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (8111), Control: Block Ack (BA) (903), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (771) | 60.50% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UoraMoreRandomAccessRus` | `none (all decoded frames)` | 14027 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (12709), Control: Block Ack (BA) (341), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (323) | 67.13% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs` | `none (all decoded frames)` | 2877 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1029), Control: Ack (1020), Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] (492) | 43.66% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
+| **PASS** | BacklogBased produced protocol-visible wireless observations | 2877 AP/global transmission observations |
 | **PASS** | EdcaBaseline produced protocol-visible wireless observations | 2483 AP/global transmission observations |
-| **PASS** | EqualRus produced protocol-visible wireless observations | 2877 AP/global transmission observations |
-| **PASS** | MixedUora produced protocol-visible wireless observations | 5085 AP/global transmission observations |
-| **PASS** | ScheduledOnly produced protocol-visible wireless observations | 2877 AP/global transmission observations |
-| **PASS** | UoraLightContention produced protocol-visible wireless observations | 11466 AP/global transmission observations |
-| **PASS** | UoraMoreRandomAccessRus produced protocol-visible wireless observations | 14027 AP/global transmission observations |
+| **PASS** | EqualSizedRUs produced protocol-visible wireless observations | 2877 AP/global transmission observations |
+
+### [script] Configuration: `BacklogBased`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1029 | 35.77% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 73.22% | 31.97% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 492 | 17.10% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 22.46% | 9.81% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 168 | 5.84% | 46.3 B | 2.9 B | 35.4 us | 1.0 us | 5010 MHz | - | 10.0 dBm | 0.68% | 0.30% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 168 | 5.84% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.76% | 0.33% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1020 | 35.45% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.88% | 1.26% |
+
+#### [script] Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 2 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Responds without MAC payload while preserving QoS control information. |
+| 3 | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=222 | Responds without MAC payload while preserving QoS control information. |
+| 4 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=228 | Responds without MAC payload while preserving QoS control information. |
+| 5 | 0.002133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 6 | 0.103048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 7 | 0.104064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=387 | Responds without MAC payload while preserving QoS control information. |
+| 8 | 0.104064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=393 | Responds without MAC payload while preserving QoS control information. |
+| 9 | 0.104064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=399 | Responds without MAC payload while preserving QoS control information. |
+| 10 | 0.104133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 11 | 0.200644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 12 | 0.201388000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 13 | 0.201436000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 14 | 0.202123000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 15 | 0.202171000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 16 | 0.202272000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+
+Frame numbers are local to capture `BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `EdcaBaseline`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2483**
@@ -431,7 +407,7 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2483*
 
 Frame numbers are local to capture `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
-### [script] Configuration: `EqualRus`
+### [script] Configuration: `EqualSizedRUs`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
@@ -448,14 +424,14 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877*
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
 | 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 2 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=222 | Carries protocol-visible MAC payload in the representative exchange. |
-| 4 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=228 | Carries protocol-visible MAC payload in the representative exchange. |
+| 2 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Responds without MAC payload while preserving QoS control information. |
+| 3 | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=222 | Responds without MAC payload while preserving QoS control information. |
+| 4 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=228 | Responds without MAC payload while preserving QoS control information. |
 | 5 | 0.002133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
 | 6 | 0.103048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 7 | 0.104064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=387 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.104064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=393 | Carries protocol-visible MAC payload in the representative exchange. |
-| 9 | 0.104064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=399 | Carries protocol-visible MAC payload in the representative exchange. |
+| 7 | 0.104064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=387 | Responds without MAC payload while preserving QoS control information. |
+| 8 | 0.104064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=393 | Responds without MAC payload while preserving QoS control information. |
+| 9 | 0.104064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=399 | Responds without MAC payload while preserving QoS control information. |
 | 10 | 0.104133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
 | 11 | 0.200644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 | 12 | 0.201388000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
@@ -464,236 +440,140 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877*
 | 15 | 0.202171000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
 | 16 | 0.202272000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
 
-Frame numbers are local to capture `EqualRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
-
-### [script] Configuration: `MixedUora`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5085**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1281 | 25.19% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.3 dBm | - | 56.16% | 39.79% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 1367 | 26.88% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 38.45% | 27.25% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 708 | 13.92% | 49.9 B | 9.5 B | 36.6 us | 3.2 us | 5010 MHz | - | 10.0 dBm | 1.83% | 1.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 708 | 13.92% | 47.2 B | 3.6 B | 35.7 us | 1.2 us | 5010 MHz | - | 10.0 dBm | 1.79% | 1.27% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1021 | 20.08% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.78% | 1.26% |
-
-#### [script] Representative frame-exchange timeline
-
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 2 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=224 | Carries protocol-visible MAC payload in the representative exchange. |
-| 4 | 0.002129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 5 | 0.003048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 6 | 0.004064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=344 | Carries protocol-visible MAC payload in the representative exchange. |
-| 7 | 0.004064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=352 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.004129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 9 | 0.005048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 10 | 0.006064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=472 | Carries protocol-visible MAC payload in the representative exchange. |
-| 11 | 0.006064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=480 | Carries protocol-visible MAC payload in the representative exchange. |
-| 12 | 0.006129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 13 | 0.007048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 14 | 0.008064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=600 | Carries protocol-visible MAC payload in the representative exchange. |
-| 15 | 0.008064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=608 | Carries protocol-visible MAC payload in the representative exchange. |
-| 16 | 0.008129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-
-Frame numbers are local to capture `MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
-
-### [script] Configuration: `ScheduledOnly`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2877**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1029 | 35.77% | 1070.0 B | 0.0 B | 621.3 us | 0.0 us | 5010 MHz | -63.7 dBm | - | 73.22% | 31.97% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 492 | 17.10% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 22.46% | 9.81% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 168 | 5.84% | 46.3 B | 2.9 B | 35.4 us | 1.0 us | 5010 MHz | - | 10.0 dBm | 0.68% | 0.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 168 | 5.84% | 58.0 B | 0.0 B | 39.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.76% | 0.33% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 1020 | 35.45% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.88% | 1.26% |
-
-#### [script] Representative frame-exchange timeline
-
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 2 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=216 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=222 | Carries protocol-visible MAC payload in the representative exchange. |
-| 4 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=228 | Carries protocol-visible MAC payload in the representative exchange. |
-| 5 | 0.002133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 6 | 0.103048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 7 | 0.104064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=387 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.104064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=393 | Carries protocol-visible MAC payload in the representative exchange. |
-| 9 | 0.104064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=399 | Carries protocol-visible MAC payload in the representative exchange. |
-| 10 | 0.104133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 11 | 0.200644000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 12 | 0.201388000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 13 | 0.201436000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 14 | 0.202123000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 15 | 0.202171000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 16 | 0.202272000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-
-Frame numbers are local to capture `ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
-
-### [script] Configuration: `UoraLightContention`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **11466**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 8111 | 70.74% | 167.2 B | 1.8 B | 95.0 us | 11.3 us | 5010 MHz | -59.2 dBm | - | 63.71% | 38.54% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 438 | 3.82% | 188.5 B | 127.7 B | 139.1 us | 69.8 us | 5010 MHz | -56.4 dBm | - | 5.04% | 3.05% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 771 | 6.72% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 25.40% | 15.37% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 562 | 4.90% | 50.9 B | 10.4 B | 37.0 us | 3.5 us | 5010 MHz | - | 10.0 dBm | 1.72% | 1.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 622 | 5.42% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -57.5 dBm | - | 1.44% | 0.87% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 903 | 7.88% | 41.0 B | 7.3 B | 33.7 us | 2.4 us | 5010 MHz | - | 10.0 dBm | 2.51% | 1.52% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 26 | 0.23% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.05% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 16 | 0.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.03% | 0.02% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 17 | 0.15% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.10% | 0.06% |
-
-#### [script] Representative frame-exchange timeline
-
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 2 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=451 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=457 | Carries protocol-visible MAC payload in the representative exchange. |
-| 4 | 0.002129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 5 | 0.003048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 6 | 0.004064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=719 | Carries protocol-visible MAC payload in the representative exchange. |
-| 7 | 0.004064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=725 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.004129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 9 | 0.005048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 10 | 0.006064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=987 | Carries protocol-visible MAC payload in the representative exchange. |
-| 11 | 0.006064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=993 | Carries protocol-visible MAC payload in the representative exchange. |
-| 12 | 0.006129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 13 | 0.007048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 14 | 0.008064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1255 | Carries protocol-visible MAC payload in the representative exchange. |
-| 15 | 0.008064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1261 | Carries protocol-visible MAC payload in the representative exchange. |
-| 16 | 0.008129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-
-Frame numbers are local to capture `UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
-
-### [script] Configuration: `UoraMoreRandomAccessRus`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **14027**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 12709 | 90.60% | 166.1 B | 0.7 B | 91.8 us | 6.1 us | 5010 MHz | -57.6 dBm | - | 86.91% | 58.35% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 101 | 0.72% | 250.2 B | 256.4 B | 172.9 us | 140.3 us | 5010 MHz | -58.3 dBm | - | 1.30% | 0.87% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 323 | 2.30% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz, 5008 MHz, 5010 MHz, 5012 MHz, 5014 MHz | -75.0 dBm | - | 9.59% | 6.44% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 151 | 1.08% | 72.0 B | 1.4 B | 44.0 us | 0.5 us | 5010 MHz | - | 10.0 dBm | 0.49% | 0.33% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 319 | 2.27% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -56.8 dBm | - | 0.67% | 0.45% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 341 | 2.43% | 38.5 B | 7.8 B | 32.8 us | 2.6 us | 5010 MHz | - | 10.0 dBm | 0.83% | 0.56% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 51 | 0.36% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.09% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 16 | 0.11% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.03% | 0.02% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 16 | 0.11% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -59.2 dBm | 10.0 dBm | 0.08% | 0.06% |
-
-#### [script] Representative frame-exchange timeline
-
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 2 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=451 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=457 | Carries protocol-visible MAC payload in the representative exchange. |
-| 4 | 0.002129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 5 | 0.003048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 6 | 0.004064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=719 | Carries protocol-visible MAC payload in the representative exchange. |
-| 7 | 0.004064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=725 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.004129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 9 | 0.005048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 10 | 0.006064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=987 | Carries protocol-visible MAC payload in the representative exchange. |
-| 11 | 0.006064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=993 | Carries protocol-visible MAC payload in the representative exchange. |
-| 12 | 0.006129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 13 | 0.007048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 14 | 0.008064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1255 | Carries protocol-visible MAC payload in the representative exchange. |
-| 15 | 0.008064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=0, A-MPDU=1261 | Carries protocol-visible MAC payload in the representative exchange. |
-| 16 | 0.008129000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-
-Frame numbers are local to capture `UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+Frame numbers are local to capture `EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Analysis of Packet Distribution
-`EdcaBaseline` provides the non-triggered control. The scheduled and mixed-access configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). The three UORA configurations expose load and RA-RU-count effects, but frame-subtype counts alone cannot distinguish an AID-0 random-access attempt from scheduled access or prove a collision. Use the per-STA `heUlRandomAccessAttempt` and `heUlRandomAccessSuccess` scalars for that decision evidence.
+`EdcaBaseline` provides the non-triggered control. The two scheduled configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). Frame-subtype totals alone do not establish that queued payload was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, HE-TB payload observations, and aligned scheduler/application telemetry for those decisions.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
 ## [agent] Frame exchange analysis
 
+This focused export selects the second measured Basic Trigger exchange:
+
 ```sh
-tshark -n -r \
-  'examples/ieee80211ax/ul_ofdma/results/20260725T182100Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap' \
-  -Y 'frame.number >= 620 && frame.number <= 625' \
+tshark -n \
+  -r examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-\#0Lan80211AxUlOfdma.ap.wlan[0].pcap \
+  -Y 'frame.number >= 270 && frame.number <= 274' \
   -T fields -E header=y -E separator='|' -E occurrence=a \
   -e frame.number -e frame.time_epoch -e wlan.fc.type_subtype \
-  -e wlan.ta -e wlan.ra -e radiotap.he.data_1.ppdu_format \
-  -e radiotap.channel.freq -e wlan.trigger.he.user_info.aid12 \
-  -e _ws.col.Info
+  -e wlan.ta -e wlan.ra -e wlan.trigger.he.trigger_type \
+  -e wlan.trigger.he.ul_length -e wlan.trigger.he.user_info.aid12 \
+  -e wlan.trigger.he.ru_allocation -e wlan.trigger.he.ul_mcs \
+  -e radiotap.he.data_1.ppdu_format \
+  -e radiotap.he.data_5.data_bw_ru_allocation \
+  -e wlan.qos.tid -e wlan.qos.ack -e wlan.fc.retry
 ```
 
 | Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
-| 620 | 0.301531 s | AP → broadcast | Basic Trigger | AID12 `5,6,0` | two scheduled RUs plus one RA-RU |
-| 621 | 0.302547 s | STA 8 → AP | QoS Null, HE-TB | 5006 MHz | RA-RU response |
-| 622 | 0.302547 s | STA 7 → AP | QoS Null, HE-TB | 5006 MHz | same-time, same-RU contention |
-| 623 | 0.302547 s | STA 6 → AP | QoS Null, HE-TB | 5004 MHz | scheduled/other RU response |
-| 624 | 0.302547 s | STA 5 → AP | QoS Null, HE-TB | 5002 MHz | scheduled/other RU response |
-| 625 | 0.302612 s | AP → broadcast | Block Ack | Multi-user response | closes trigger exchange |
+| 270 | 0.303001 s | AP → broadcast | Basic Trigger / legacy control | trigger type 0; UL Length 730; AID12 `1,2,3`; RU allocation `0,1,2`; MCS 0 | schedules all three associated stations on distinct RUs |
+| 271 | 0.304017 s | host[0] → AP | QoS Null / HE-TB | 26-tone RU at 5002 MHz; TID 0; Ack Policy 3 | solicited response, but no queued payload |
+| 272 | 0.304017 s | host[2] → AP | QoS Null / HE-TB | 26-tone RU at 5006 MHz; TID 0; Ack Policy 3 | simultaneous response on a different RU |
+| 273 | 0.304017 s | host[1] → AP | QoS Null / HE-TB | 26-tone RU at 5004 MHz; TID 0; Ack Policy 3 | simultaneous response on a different RU |
+| 274 | 0.304086 s | AP → broadcast | Multi-STA Block Ack / legacy control | follows the three responses | terminates the modeled UL-MU exchange |
 
-Frames 621–622 are direct evidence that two stations selected the same
-frequency allocation after one Trigger. The scalar session is separate; it
-supplies the model's success classification but cannot be matched to these
-frame numbers.
+The three HE-TB observations share one timestamp and occupy distinct RU
+frequencies, directly demonstrating the modeled simultaneous allocation.
+Their 1.016 ms gap from the Trigger timestamp is much larger than a literal
+SIFS because the AP-interface capture timestamps reflect INET's packet-level
+recording/model timing boundary; the capture alone is not suitable for a
+standards timing-conformance verdict. Frame numbers are local PCAP indices,
+not OMNeT++ event numbers.
+
+Frames 264, 266, 268, 275, and later application frames decode as HE-SU QoS
+Data with TID 6, not as HE-TB. The contrast with the Trigger-assigned TID 0
+QoS Null is a capacity boundary, not proof of wrong payload selection: the
+retained HE-TB allocation cannot fit the 1,000-byte application MPDU.
 
 ## [agent] Cross-layer findings and verdict
 
 | Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
 |---|---|---|---|---|---|
-| One-RA-RU heavy UORA contends | `PASS` | one configured RA-RU | low attempt/success sample | frames 620–625 | high delivery-conditioned delay |
-| Five RA-RUs increase heavy UORA capacity | `PASS` | only RA-RU count changes | 7.2 vs 0.8 mean successes | five AID12-zero entries | delay intervals overlap |
-| More RA-RUs optimize total service | `INCONCLUSIVE` | five-RU treatment | scheduled service not summarized | fewer duplicate-RU groups | no decisive total-goodput invariant |
-| Packet and scalar events correspond exactly | `INCONCLUSIVE` | matched scenario basis | separate session | separate session | instrumentation changes trajectory |
+| The feature gate creates scheduled UL exchanges | `PASS` | coordinator enabled only in treatments | station allocation vectors record three 26-tone users; coordinator schedules zero bytes | Trigger → three simultaneous HE-TB → Multi-STA BA; absent in EDCA | all configs deliver traffic |
+| Scheduled RUs carry queued application payload | `INCONCLUSIVE` | three stations offered TID 6 traffic | coordinator records zero scheduled bytes; station vectors record 38-byte responses | zero HE-TB QoS Data; payload remains HE-SU | the retained allocation cannot fit a 1,000-byte MPDU |
+| The two scheduler policies are distinguished | `INCONCLUSIVE` | different scheduler typenames | both receive zero-byte candidates and emit the same 26-tone allocation | scheduled PCAPs byte-identical | five-run estimates identical |
+| Serialized Ack Policy matches immediate BA semantics | `FAIL` | Block Ack enabled | AP still completes exchange | HE-TB Ack Policy 3 followed by immediate Multi-STA BA | not an application-outcome question |
 
-The matched heavy comparison directly supports increased random-access success
-in these five seeds, but not an optimal RU split. More RA-RUs consume capacity
-that could otherwise be scheduled.
+The co-recorded run-0 PCAP and result metadata share the same configuration,
+run, seed, directory, and simulation trajectory, so adjacent packet and
+outcome observations are session-aligned. The evidence directly proves
+feature-gate activity and distinct RU use. It does not test successful
+scheduled payload service because the allocation is insufficient; QoS Null is
+the standards-permitted boundary response. The bounded validation verdict for
+the exchange structure is `PASS`, scheduled payload service is
+`INCONCLUSIVE`, and the serialized Ack Policy is `FAIL`. The example therefore
+still has an overall `FAIL` due to that field-level mismatch, despite
+successful simulation exits and near-offered-load delivery over HE-SU/EDCA.
+
+Evidence basis: Trigger/HE-TB/Ack-Policy fields and recorded coordinator/radio
+vectors are direct observations; goodput and confidence intervals are derived
+measurements; the explanation that Trigger overhead accounts for the small
+delivery difference remains an inference.
 
 ## [agent] Limitations and inconclusive claims
 
-- Scalar/vector and packet evidence are separate sessions.
-- Attempt/success counters have scalars but no temporal vectors.
-- Delay is delivery-conditioned; queued packets at 2 s are excluded.
-- Heavy one-RU fairness excludes one all-zero-success run as undefined.
-- Co-record Trigger fields, UORA decisions, and sink delivery for one heavy
-  pair to establish event-level causality and total-service impact.
+- Run-0 is representative packet evidence; contention-sensitive packet
+  behavior was not compared across all five captures because only run 0 was
+  captured by design.
+- The result envelope exposes station-side RU/user/PSDU/duration and AP
+  reported/scheduled bytes, but not the per-AID `retryPending` state or the
+  reason the Trigger policy selected Basic. A focused owner-produced signal is
+  the smallest addition needed to make that decision direct evidence.
+- The symmetric, equal-size workload may legitimately lead both policies to
+  the same allocations. An asymmetric per-station backlog control is needed
+  before claiming that the policy implementations are equivalent.
+- PCAP cannot expose INET's model-only Trigger ID, queue ownership, buffer
+  status freshness, internal response eligibility, or Trigger-selection
+  reason. The retained capacity fields explain why QoS Null is legal, not why
+  the AP chose that zero-byte opportunity.
+- The scalar radio, fixed short distances, one BSS, one bandwidth/MCS basis,
+  and five seeds do not support real-network capacity, fairness, interference,
+  or coverage claims.
+- The timeline is not a SIFS-conformance measurement because the recorder's
+  observation timestamp does not isolate PPDU end-to-response-start timing.
 
 ## [agent] Further experiments
 
-- Sweep 1–5 RA-RUs under the same heavy load and report both UORA success and
-  total delivered goodput.
-- Vary the UORA contention window while keeping one RA-RU.
-- Add a scheduled-only eight-STA heavy control to quantify the capacity trade.
+- Give the stations asymmetric packet intervals while keeping the aggregate
+  offered load fixed. Predict different AID/RU-size decisions from the two
+  policies; inspect new allocation telemetry before comparing goodput.
+- Add a deterministic capacity-fit case by reducing the MPDU size or increasing
+  RU/MCS/duration, and retain the current insufficient-capacity case as a
+  negative boundary. Assert HE-TB QoS Data only in the proved-fit case and QoS
+  Null in the boundary case; inspect Trigger UL Length/RU/MCS and the first
+  response after fresh buffer-status reporting.
+- Retain the same seed and toggle only `enableUlMuOfdma`. Compare delivery,
+  delay, Trigger overhead, and radio energy after the payload invariant passes.
+- Add a field-level assertion that every Basic-trigger HE-TB MPDU participating
+  in the immediate Multi-STA BA sequence uses a standards-permitted Ack Policy.
 
 ## [agent] Implementation plan
 
+No production change is authorized by this walkthrough. The likely IEEE
+802.11 MAC files named below are currently unsealed under
+`src/inet/linklayer/ieee80211/`; the sealed recursive
+`src/inet/common/packet/` subtree is not a proposed change surface. Any future
+implementation still requires a fresh architecture/sealing check, one
+production-code writer, independent regression evidence, and review.
+
 | Item | Evidence-backed plan |
 |---|---|
-| Demonstrated gap | UORA attempts/successes lack timestamped vectors and cannot correlate with PCAP |
-| Intended behavior | make each eligibility/attempt/success decision directly testable |
-| Smallest change surface | first extend result recording/feature plugin; production signals only if existing telemetry is insufficient |
-| Observability | timestamp, STA, Trigger identity, selected RU, collision/success reason |
-| Validation | heavy 1-RU vs 5-RU, run 0 first then five seeds |
-| Compatibility and risks | added recording may alter trajectories; compare within session |
-| Architecture and sealing | required before any future `src/inet` edit |
-| Next handoff | simulation investigator to identify existing signal surface |
+| Demonstrated gap | HE-TB Ack Policy is 3 although an immediate Multi-STA BA follows; payload service remains inconclusive because the retained 1 ms/26-tone/MCS 0 allocation cannot fit the 1,000-byte MPDU |
+| Intended behavior | Follow IEEE 802.11-2024 Clauses 26.5.2.4 and 26.4.4.5: use QoS Null when no pending MPDU fits, include fitting pending MPDUs in a capacity-fit control, and serialize an Ack Policy compatible with the immediate acknowledgment procedure |
+| Smallest likely change surface | First fix/test HE-TB Ack Policy construction in `HeHcfUl.cc` and reconcile it with `HeUlMuTxOpFs.cc`; separately instrument `HeUlCoordinator`/`HeUlDefaultTriggerPolicy` before deciding whether received-frame Retry handling in `HeHcfTxRx.cc` requires correction |
+| Observability | Emit one owner-produced Trigger-decision event containing Trigger reason, AID, `retryPending`, reported bytes, selected bytes, TID, and RU; retain station response reason and Ack Policy as a separate owned event |
+| Validation | Matched EDCA/backlog/equal-RU configs; an insufficient-capacity QoS-Null boundary; a deterministic capacity-fit QoS Data case; a payload A-MPDU/Block-Ack-window case; asymmetric backlog; five seeds after one-seed mechanism checks; assert Trigger capacity fields, response payload/null choice, Ack Policy/Multi-STA BA, server delivery, and unchanged legacy/SU behavior |
+| Compatibility and risks | Preserve queue ownership, Block Ack state, deterministic user ordering, QoS/TID mapping, aggregation boundaries, and non-AX/EDCA paths |
+| Architecture and sealing | Apply `R-RUN-REPRO`, `R-RESULT-BUILTIN`, `R-RESULT-EXPORT`, `AR-OBS-SIGNALS`, `AR-QUAL-TESTS`, `AR-QUAL-DETERMINISM`, `AR-WLAN-STD-TRACE`, `AR-WLAN-ARCH-OWNERSHIP`, `AR-WLAN-MAC-EXCHANGE`, `AR-WLAN-MAC-MULTIUSER`, `AR-WLAN-OBS-EVENTS`, and `AR-WLAN-QUAL-TESTS`; all named MAC files are unsealed as of this walkthrough |
+| Next handoff | Runtime investigator establishes the exact queue/TID decision first; then one implementer owns the bounded fix, followed by independent Wi-Fi regression and standards/architecture review |
 
 ## [agent] Artifact provenance
 
 | Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
 |---|---|---|---|---|
-| Scalar/vector | `results/20260725T181500Z` | four UORA configs, runs 0–4 | scalar counters; delay `[0.3,2)` s | hashes retained in figure JSON |
-| PCAP | `results/20260725T233546Z` | six configs, run 0 | TShark 4.6.4, AP point | manifest and hashes in generated block |
-| Supplemental PCAP | `results/20260725T182100Z` | heavy 1-RU, run 0 | timeline above | separate from generated block |
-| Figure | `../analysis/figures/ul_ofdma/uora-dashboard.png` | four configs | one observation/run, 95% t CI | provenance retained |
+| Session manifest | `examples/ieee80211/analysis/generated/sessions/20260727T211515Z/session.json` | three configs; runs 0–4 | shared AX suite | publication session; run 0 is the PCAP representative |
+| Scalar/vector | `results/20260727T211515Z/` and `../analysis/metrics.json` | three configs; runs/seeds 0–4 | native OMNeT++ result API; `[0.3,2.0)` | file hashes are recorded in `metrics.json` and the figure sidecar |
+| Scalar/vector figure | `results/20260727T211515Z/ul-ofdma-delivery.png` | three five-run estimates | per-run delivered-byte goodput, 95% t CI | provenance: `ul-ofdma-delivery.png.json` |
+| PCAP | `results/20260727T211515Z/*/*ap.wlan[0].pcap` | three configs; run/seed 0 | TShark/capinfos 4.6.4; typed legacy/HE profiles | capture paths and SHA-256 hashes are in the selected capture manifest |
+| PCAP figure | `results/20260727T211515Z/packet_statistics.png` | three run-0 captures | observation count and estimated airtime composition | provenance: `packet_statistics.png.json` |
+| Capture manifest | `examples/ieee80211/analysis/generated/ax/capture_manifests/20260727T211515Z.json` | three configs; run 0 | AP `wlan[0]`, PCAPng/radiotap | binds config, run, seed, capture metadata, hashes, and source revision |
