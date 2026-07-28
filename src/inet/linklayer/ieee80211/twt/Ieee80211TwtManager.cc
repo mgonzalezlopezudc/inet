@@ -29,6 +29,10 @@ void Ieee80211TwtManager::initialize(int stage)
         maxIndividualAgreementsPerPeer = par("maxIndividualAgreementsPerPeer");
         servicePeriodTimer = new cMessage("twtServicePeriodTimer");
         lastRadioStateChange = simTime();
+        stateChangedSignal = registerSignal("twtStateChanged");
+        stationAwakeSignal = registerSignal("twtStationAwake");
+        activeServicePeriodCountSignal = registerSignal("twtActiveServicePeriodCount");
+        agreementCountSignal = registerSignal("twtAgreementCount");
         WATCH(enabled);
         WATCH(stationAwake);
         WATCH(awakeTime);
@@ -110,6 +114,47 @@ bool Ieee80211TwtManager::isAgreementActiveNow(const TwtAgreement& agreement, si
 
     // Check if the current time lies within the computed service period (SP) window [start, start + wakeDuration)
     return now >= start && now < start + agreement.wakeDuration;
+}
+
+unsigned int Ieee80211TwtManager::getActiveServicePeriodCount() const
+{
+    unsigned int count = 0;
+    for (const auto& agreement : agreements)
+        if (isAgreementActiveNow(agreement, simTime()))
+            count++;
+    for (const auto& schedule : broadcastSchedules)
+        if (isAgreementActiveNow(schedule, simTime()) &&
+                (mib == nullptr ||
+                 mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT ||
+                 schedule.members.count(mib->address) != 0))
+            count++;
+    return count;
+}
+
+void Ieee80211TwtManager::emitStateChanged()
+{
+    TwtStateChangedEvent event;
+    event.stationAwake = isStationAwake();
+    event.activeServicePeriodCount = getActiveServicePeriodCount();
+    event.agreementCount = agreements.size();
+    event.broadcastScheduleCount = broadcastSchedules.size();
+    if (hasPublishedState &&
+            event.stationAwake == publishedStationAwake &&
+            event.activeServicePeriodCount == publishedActiveServicePeriodCount &&
+            event.agreementCount == publishedAgreementCount &&
+            event.broadcastScheduleCount == publishedBroadcastScheduleCount)
+        return;
+    hasPublishedState = true;
+    publishedStationAwake = event.stationAwake;
+    publishedActiveServicePeriodCount = event.activeServicePeriodCount;
+    publishedAgreementCount = event.agreementCount;
+    publishedBroadcastScheduleCount = event.broadcastScheduleCount;
+    emit(stateChangedSignal, &event);
+    emit(stationAwakeSignal, event.stationAwake ? 1L : 0L);
+    emit(activeServicePeriodCountSignal,
+            static_cast<unsigned long>(event.activeServicePeriodCount));
+    emit(agreementCountSignal, static_cast<unsigned long>(
+            event.agreementCount + event.broadcastScheduleCount));
 }
 
 simtime_t Ieee80211TwtManager::getNextEventTime(const TwtAgreement& agreement, simtime_t now) const
@@ -388,6 +433,7 @@ void Ieee80211TwtManager::installBroadcastSchedule(const TwtBroadcastSchedule& s
         EV_INFO << "Creating new broadcast TWT schedule entry.\n";
         broadcastSchedules.push_back(schedule);
     }
+    emitStateChanged();
     rescheduleServicePeriodTimer();
 }
 
@@ -404,6 +450,7 @@ void Ieee80211TwtManager::removeBroadcastSchedule(uint8_t broadcastId)
 
     if (broadcastSchedules.size() < initialSize) {
         EV_INFO << "Successfully removed broadcast TWT schedule. New count: " << broadcastSchedules.size() << "\n";
+        emitStateChanged();
     } else {
         EV_INFO << "Broadcast TWT schedule was not found. No schedules removed.\n";
     }
@@ -441,7 +488,8 @@ bool Ieee80211TwtManager::addBroadcastMember(uint8_t broadcastId, const MacAddre
     }
 
     EV_INFO << "Adding peer " << peer << " to broadcast TWT schedule ID " << (int)broadcastId << "\n";
-    schedule->members.insert(peer);
+    if (schedule->members.insert(peer).second)
+        emitStateChanged();
     return true;
 }
 
@@ -454,7 +502,8 @@ void Ieee80211TwtManager::removeBroadcastMember(uint8_t broadcastId, const MacAd
 
     if (auto *schedule = findBroadcastScheduleForUpdate(broadcastId)) {
         EV_INFO << "Removing peer " << peer << " from broadcast TWT schedule ID " << (int)broadcastId << "\n";
-        schedule->members.erase(peer);
+        if (schedule->members.erase(peer) != 0)
+            emitStateChanged();
     } else {
         EV_INFO << "Cannot remove member from broadcast schedule: ID " << (int)broadcastId << " not found.\n";
     }
@@ -526,6 +575,7 @@ void Ieee80211TwtManager::updateServicePeriodState()
     // the radio is busy sending the PS-Poll.
     if (awakeAnnouncements.empty())
         mac->twtServicePeriodChanged();
+    emitStateChanged();
 }
 
 void Ieee80211TwtManager::rescheduleServicePeriodTimer()

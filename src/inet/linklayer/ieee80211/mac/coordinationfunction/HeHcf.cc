@@ -185,11 +185,17 @@ void HeHcf::initialize(int stage)
         ulTriggerTimer = new cMessage("heUlTriggerTimer");
         triggeredUlResponseTimer = new cMessage("heTriggeredUlResponseTimer");
         heTbResponseCommittedSignal = registerSignal("heTbResponseCommitted");
+        heTbResponseTriggerIdSignal = registerSignal("heTbResponseTriggerId");
         heTbResponseReasonSignal = registerSignal("heTbResponseReason");
         heTbResponseHadPendingPayloadSignal = registerSignal("heTbResponseHadPendingPayload");
         heTbResponsePendingBytesSignal = registerSignal("heTbResponsePendingBytes");
         heTbResponseSelectedBytesSignal = registerSignal("heTbResponseSelectedBytes");
         heTbResponseReportedBytesSignal = registerSignal("heTbResponseReportedBytes");
+        peerOperatingModeChangedSignal = registerSignal("peerOperatingModeChanged");
+        peerOperatingModeAssociationIdSignal = registerSignal("peerOperatingModeAssociationId");
+        peerOperatingModeRxNssSignal = registerSignal("peerOperatingModeRxNss");
+        peerOperatingModeChannelWidthSignal = registerSignal("peerOperatingModeChannelWidth");
+        peerOperatingModeUlMuDisableSignal = registerSignal("peerOperatingModeUlMuDisable");
         linkPhyContext = std::make_unique<Ieee80211HeLinkPhyContext>(this, mac);
         delete frameSequenceHandler;
         frameSequenceHandler = new HeFrameSequenceHandler();
@@ -222,6 +228,47 @@ void HeHcf::initialize(int stage)
         if (ulCoordinator->isEnabled())
             scheduleAfter(par("ulTriggerCheckInterval"), ulTriggerTimer);
     }
+}
+
+void HeHcf::emitHeTbResponse(HeTbResponseEvent& event)
+{
+    ASSERT(event.triggerId != 0);
+    emit(heTbResponseCommittedSignal, &event);
+    emit(heTbResponseTriggerIdSignal, static_cast<unsigned long>(event.triggerId));
+    emit(heTbResponseReasonSignal, static_cast<long>(event.reason));
+    emit(heTbResponseHadPendingPayloadSignal, event.hadPendingPayload ? 1L : 0L);
+    emit(heTbResponsePendingBytesSignal, event.pendingBytes);
+    emit(heTbResponseSelectedBytesSignal, event.selectedBytes);
+    emit(heTbResponseReportedBytesSignal, event.reportedBytes);
+}
+
+void HeHcf::updatePeerOperatingMode(const MacAddress& peer,
+        const Ieee80211HeOperatingMode& mode)
+{
+    auto existing = peerOperatingModes.find(peer);
+    if (existing != peerOperatingModes.end() &&
+            existing->second.channelWidth == mode.channelWidth &&
+            existing->second.rxNss == mode.rxNss &&
+            existing->second.ulMuDisable == mode.ulMuDisable)
+        return;
+
+    HePeerOperatingModeChangedEvent event;
+    event.peerAddress = peer;
+    event.associationId = getAssociationId(peer);
+    event.hadOldMode = existing != peerOperatingModes.end();
+    if (event.hadOldMode)
+        event.oldMode = existing->second;
+    event.newMode = mode;
+    peerOperatingModes[peer] = mode;
+    emit(peerOperatingModeChangedSignal, &event);
+    emit(peerOperatingModeAssociationIdSignal,
+            static_cast<unsigned long>(event.associationId));
+    emit(peerOperatingModeRxNssSignal,
+            static_cast<unsigned long>(event.newMode.rxNss));
+    emit(peerOperatingModeChannelWidthSignal,
+            static_cast<unsigned long>(event.newMode.channelWidth));
+    emit(peerOperatingModeUlMuDisableSignal,
+            event.newMode.ulMuDisable ? 1L : 0L);
 }
 
 const IIeee80211HeLinkPhyContext& HeHcf::getLinkPhyContext() const

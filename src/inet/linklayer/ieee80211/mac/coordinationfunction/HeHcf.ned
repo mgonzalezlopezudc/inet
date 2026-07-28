@@ -56,16 +56,27 @@ module HeHcf extends Hcf
         double defaultCsiLeakage = default(0.01); // Default inter-user interference leakage factor
         string csiLeakageOverrides = default(""); // Specific peer-to-peer leakage overrides e.g. "1-2:0.01"
         @signal[heTbResponseCommitted](type=inet::ieee80211::HeTbResponseEvent);
+        @signal[heTbResponseTriggerId](type=unsigned long);
         @signal[heTbResponseReason](type=long);
         @signal[heTbResponseHadPendingPayload](type=long);
         @signal[heTbResponsePendingBytes](type=long);
         @signal[heTbResponseSelectedBytes](type=long);
         @signal[heTbResponseReportedBytes](type=long);
+        @signal[peerOperatingModeChanged](type=inet::ieee80211::HePeerOperatingModeChangedEvent);
+        @signal[peerOperatingModeAssociationId](type=unsigned long);
+        @signal[peerOperatingModeRxNss](type=unsigned long);
+        @signal[peerOperatingModeChannelWidth](type=unsigned long);
+        @signal[peerOperatingModeUlMuDisable](type=long);
+        @statistic[heTbResponseTriggerId](title="HE-TB response Trigger identifier"; source=heTbResponseTriggerId; record=vector; interpolationmode=none);
         @statistic[heTbResponseReason](title="HE-TB response reason"; source=heTbResponseReason; record=vector; interpolationmode=none);
         @statistic[heTbResponseHadPendingPayload](title="HE-TB candidate payload existed"; source=heTbResponseHadPendingPayload; record=vector; interpolationmode=none);
         @statistic[heTbResponsePendingBytes](title="HE-TB live pending bytes"; source=heTbResponsePendingBytes; record=vector; interpolationmode=none);
         @statistic[heTbResponseSelectedBytes](title="HE-TB selected bytes"; source=heTbResponseSelectedBytes; record=vector; interpolationmode=none);
         @statistic[heTbResponseReportedBytes](title="HE-TB reported bytes"; source=heTbResponseReportedBytes; record=vector; interpolationmode=none);
+        @statistic[peerOperatingModeAssociationId](title="Peer operating mode association identifier"; source=peerOperatingModeAssociationId; record=vector; interpolationmode=none);
+        @statistic[peerOperatingModeRxNss](title="Peer operating mode receive spatial streams"; source=peerOperatingModeRxNss; record=vector; interpolationmode=none);
+        @statistic[peerOperatingModeChannelWidth](title="Peer operating mode channel width encoding"; source=peerOperatingModeChannelWidth; record=vector; interpolationmode=none);
+        @statistic[peerOperatingModeUlMuDisable](title="Peer operating mode UL MU disable"; source=peerOperatingModeUlMuDisable; record=vector; interpolationmode=none);
 
     submodules:
         dlScheduler: <default("HeDlSchedulerEqualSizedRUs")> like IIeee80211HeDlScheduler {

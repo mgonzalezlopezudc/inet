@@ -350,6 +350,7 @@ def validate_scalar_report_session(
 
 
 def run_command_handler(args: argparse.Namespace) -> None:
+    exhaustive_vectors = getattr(args, "exhaustive_vectors", False)
     suite_path = resolve_suite_path(args.suite)
     suite, scenario = scenario_record(suite_path, args.scenario)
     selected_session = args.session_id or new_session_id()
@@ -405,6 +406,8 @@ def run_command_handler(args: argparse.Namespace) -> None:
     ]
     for config in effective_configs or []:
         command.extend(["--config", config])
+    if exhaustive_vectors:
+        command.append("--exhaustive-vectors")
     if args.evidence == "both":
         command.extend(["--pcap-run", "0"])
         capture = scenario.get("capture", suite.capture)
@@ -457,10 +460,12 @@ def run_command_handler(args: argparse.Namespace) -> None:
         "scalar_vector_manifest": relative_path(scalar_path),
         "recording": (
             scalar_document_value["groups"][scalar_group].get("recording")
-            if scalar_document_value is not None
+            if exhaustive_vectors
+            and scalar_document_value is not None
             and scalar_group is not None
             else None
         ),
+        "exhaustive_vectors": exhaustive_vectors,
         "pcap_run": 0 if args.evidence == "both" else None,
         "pcap_scope": (
             "representative run 0 mechanism evidence"
@@ -623,6 +628,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     run_parser.add_argument("--config", action="append")
     run_parser.add_argument("--jobs", type=positive_int)
+    run_parser.add_argument(
+        "--exhaustive-vectors",
+        action="store_true",
+        help="record the example's curated diagnostic vectors for run 0",
+    )
     run_parser.add_argument("--session-id", type=session_id)
     run_parser.set_defaults(handler=run_command_handler)
 

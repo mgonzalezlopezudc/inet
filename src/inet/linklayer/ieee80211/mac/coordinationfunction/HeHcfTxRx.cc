@@ -117,7 +117,7 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
             mode.channelWidth = dataHeader->getOperatingModeChannelWidth();
             mode.rxNss = dataHeader->getOperatingModeRxNss();
             mode.ulMuDisable = dataHeader->getOperatingModeUlMuDisable();
-            peerOperatingModes[dataHeader->getTransmitterAddress()] = mode;
+            updatePeerOperatingMode(dataHeader->getTransmitterAddress(), mode);
             EV_INFO << "Accepted HE OMI from " << dataHeader->getTransmitterAddress()
                     << ": width=" << (int)mode.channelWidth << " rxNss=" << (int)mode.rxNss
                     << " ulMuDisable=" << mode.ulMuDisable << endl;

@@ -51,6 +51,7 @@ class INET_API HeUlTriggerDecisionEvent : public cObject
 
     IIeee80211HeUlTriggerPolicy::TriggerType triggerType =
             IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
+    uint32_t triggerId = 0;
     Reason reason = REPORT_REFRESH_NEEDED;
     std::vector<UserInfo> users;
 };
@@ -111,6 +112,7 @@ class INET_API HeUlCoordinator : public SimpleModule
     simsignal_t randomAccessAttemptSignal;
     simsignal_t randomAccessSuccessSignal;
     simsignal_t triggerDecisionCommittedSignal;
+    simsignal_t triggerDecisionIdSignal;
 
   protected:
     virtual void initialize(int stage) override;
@@ -146,7 +148,8 @@ class INET_API HeUlCoordinator : public SimpleModule
             bool useUlMuMimoPolicy = false);
     void commitSchedule(const IIeee80211HeUlScheduler::Schedule& schedule);
     uint32_t allocateTriggerId();
-    void noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
+    void noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType,
+            uint32_t triggerId);
     PreparedRandomAccessSelection prepareRandomAccessRu(
             AccessCategory ac, int randomAccessRuCount);
     int commitRandomAccessRu(const PreparedRandomAccessSelection& selection);

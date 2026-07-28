@@ -75,6 +75,198 @@ GROUP_PERFORMANCE_VECTOR_STATISTICS = {
     ),
 }
 
+GROUP_DIAGNOSTIC_VECTOR_STATISTICS = {
+    "fragmentation": (
+        "packetSentToPeerWithRetry",
+        "packetDropRetryLimitReached",
+        "frameSequenceDuration",
+        "frameSequenceNumPackets",
+    ),
+    "uora": (
+        "heUlBufferStatusReportedBytes",
+        "heUlBufferStatusScheduledBytes",
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "heStaId",
+        "heUlTriggerDecisionId",
+        "heTbResponseTriggerId",
+        "heTbResponseReason",
+        "heTbResponsePendingBytes",
+        "heTbResponseSelectedBytes",
+        "backoffPeriodGenerated",
+        "contentionWindowChanged",
+    ),
+    "twt": (
+        "packetSentToPeer",
+        "packetSentToPeerWithRetry",
+        "packetDropQueueOverflow",
+        "twtStationAwake",
+        "twtActiveServicePeriodCount",
+        "twtAgreementCount",
+    ),
+    "rate": (
+        "datarateChanged",
+        "packetSentToPeerWithRetry",
+        "packetDropRetryLimitReached",
+    ),
+    "er": (
+        "packetSentToPeerWithRetry",
+        "packetDropRetryLimitReached",
+        "receptionState",
+    ),
+    "puncturing": (
+        "heRuIndex",
+        "heScheduledPsduBytes",
+        "heUserPpduDuration",
+        "packetDropIncorrectlyReceived",
+        "transmissionState",
+    ),
+    "mimo": (
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "heScheduledPsduBytes",
+        "heUserPpduDuration",
+        "packetDropIncorrectlyReceived",
+    ),
+    "bss": (
+        "nav",
+        "receptionState",
+        "packetSentToPeerWithRetry",
+        "packetDropRetryLimitReached",
+    ),
+    "width": (
+        "datarateSelected",
+        "packetSentToPeer",
+        "acknowledgmentFrameType",
+        "acknowledgmentAirtime",
+        "frameSequenceDuration",
+    ),
+    "dl_sched": (
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "packetSentToPeer",
+        "packetSentToPeerWithRetry",
+    ),
+    "dl_asym": (
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "packetSentToPeer",
+        "packetSentToPeerWithRetry",
+    ),
+    "bsr": (
+        "heStaId",
+        "heScheduledPsduBytes",
+        "heUserPpduDuration",
+        "heUlTriggerDecisionId",
+        "heTbResponseTriggerId",
+        "heTbResponseReason",
+        "heTbResponsePendingBytes",
+        "heTbResponseSelectedBytes",
+    ),
+    "multi_tid": (
+        "blockAckAgreementActive",
+        "acknowledgmentFrameType",
+        "acknowledgmentAirtime",
+        "packetSentToPeer",
+        "packetSentToPeerWithRetry",
+        "packetDropRetryLimitReached",
+    ),
+    "operating_mode": (
+        "heStaId",
+        "heSpatialStreams",
+        "heStreamStartIndex",
+        "heScheduledPsduBytes",
+        "heUserPpduDuration",
+        "heUlBufferStatusScheduledBytes",
+        "peerOperatingModeAssociationId",
+        "peerOperatingModeRxNss",
+        "peerOperatingModeChannelWidth",
+        "peerOperatingModeUlMuDisable",
+        "heUlTriggerDecisionId",
+        "heTbResponseTriggerId",
+        "heTbResponseReason",
+        "packetSentToPeerWithRetry",
+    ),
+    "frequency_selective": (
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "heStaId",
+        "packetDropIncorrectlyReceived",
+        "receptionState",
+    ),
+    "ndp_feedback": (
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "heStaId",
+        "heUlTriggerDecisionId",
+        "heTbResponseTriggerId",
+        "heTbResponseReason",
+        "heTbResponseReportedBytes",
+        "transmissionState",
+        "receptionState",
+        "packetDropIncorrectlyReceived",
+    ),
+    "dense_iot": (
+        "datarateChanged",
+        "heRateSelectedMcs",
+        "heStaId",
+        "heRuToneSize",
+        "packetSentToPeerWithRetry",
+        "packetDropQueueOverflow",
+        "packetDropRetryLimitReached",
+        "receptionState",
+        "transmissionState",
+        "powerConsumption",
+        "twtStationAwake",
+        "twtActiveServicePeriodCount",
+        "twtAgreementCount",
+    ),
+    "bcc_ldpc": (
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "heStaId",
+        "heScheduledPsduBytes",
+        "heUserPpduDuration",
+        "packetDropIncorrectlyReceived",
+        "datarateSelected",
+    ),
+    "ul_mu_mimo": (
+        "heRuIndex",
+        "heRuToneOffset",
+        "heRuToneSize",
+        "heStaId",
+        "heSpatialStreams",
+        "heStreamStartIndex",
+        "heScheduledPsduBytes",
+        "heUserPpduDuration",
+        "heUlBufferStatusReportedBytes",
+        "heUlBufferStatusScheduledBytes",
+        "heUlTriggerDecisionId",
+        "heTbResponseTriggerId",
+        "heTbResponseReason",
+        "heTbResponsePendingBytes",
+        "heTbResponseSelectedBytes",
+        "transmissionState",
+        "packetSentToPeerWithRetry",
+    ),
+    "eht_features": (
+        "datarateSelected",
+        "packetSentToPeer",
+        "packetSentToPeerWithRetry",
+        "packetDropIncorrectlyReceived",
+        "packetDropRetryLimitReached",
+        "transmissionState",
+        "receptionState",
+    ),
+}
+
 CORE_SCALAR_STATISTICS = (
     "packetDropQueueOverflow",
     "packetDropRetryLimitReached",
@@ -103,6 +295,8 @@ UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS = (
     "heStaId",
     "heScheduledPsduBytes",
     "heUserPpduDuration",
+    "heUlTriggerDecisionId",
+    "heTbResponseTriggerId",
     "heTbResponseReason",
     "heTbResponseHadPendingPayload",
     "heTbResponsePendingBytes",
@@ -116,6 +310,20 @@ UL_OFDMA_QUEUE_VECTOR_OVERRIDES = (
     "--**.host[*].wlan[*].mac.hcf.edca.edcaf[*].inProgressFrames.queueLength*.vector-recording=true",
     "--**.host[*].wlan[*].mac.hcf.edca.edcaf[*].inProgressFrames.queueingTime*.vector-recording=true",
 )
+
+GROUP_DIAGNOSTIC_VECTOR_OVERRIDES = {
+    group: UL_OFDMA_QUEUE_VECTOR_OVERRIDES
+    for group in (
+        "uora",
+        "twt",
+        "dl_sched",
+        "dl_asym",
+        "bsr",
+        "dense_iot",
+        "ul_mu_mimo",
+        "ul_ofdma",
+    )
+}
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 
 
@@ -236,6 +444,16 @@ def performance_vector_statistics(group: str) -> tuple[str, ...]:
     return GROUP_PERFORMANCE_VECTOR_STATISTICS.get(group, ())
 
 
+def diagnostic_vector_statistics(group: str) -> tuple[str, ...]:
+    if group == "ul_ofdma":
+        return UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS
+    return GROUP_DIAGNOSTIC_VECTOR_STATISTICS.get(group, ())
+
+
+def diagnostic_vector_overrides(group: str) -> tuple[str, ...]:
+    return GROUP_DIAGNOSTIC_VECTOR_OVERRIDES.get(group, ())
+
+
 def scalar_statistics(group: str) -> tuple[str, ...]:
     return unique_statistics(
         CORE_SCALAR_STATISTICS,
@@ -258,18 +476,25 @@ def build_command(
     pcap_interface_patterns: tuple[str, ...] = (),
     group: str = "",
     diagnostic: bool = False,
+    exhaustive_vectors: bool = False,
 ) -> tuple[str, ...]:
     vectors = performance_vector_statistics(group)
     overrides = (
         CORE_SCALAR_RECORDING_OVERRIDES
         + CORE_PERFORMANCE_RECORDING_OVERRIDES
     )
-    if group == "ul_ofdma" and diagnostic:
+    if group == "ul_ofdma" and diagnostic and exhaustive_vectors:
         vectors = unique_statistics(
             vectors,
             UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS,
         )
         overrides += UL_OFDMA_QUEUE_VECTOR_OVERRIDES
+    if exhaustive_vectors and run == 0:
+        vectors = unique_statistics(
+            vectors,
+            diagnostic_vector_statistics(group),
+        )
+        overrides += diagnostic_vector_overrides(group)
     return build_cmdenv_command(
         REPOSITORY_ROOT,
         ini,
@@ -292,6 +517,7 @@ def collect_jobs(
     campaign_session_id: str | None = None,
     pcap_run: int | None = None,
     pcap_interface_patterns: tuple[str, ...] = (),
+    exhaustive_vectors: bool = False,
 ) -> list[CampaignJob]:
     session = campaign_session_id or new_session_id()
     group_names = (
@@ -320,7 +546,7 @@ def collect_jobs(
                 CORE_SCALAR_RECORDING_OVERRIDES
                 + CORE_PERFORMANCE_RECORDING_OVERRIDES
             )
-            if (
+            if exhaustive_vectors and (
                 group_name == "ul_ofdma"
                 and job.run == selected_diagnostic_run
             ):
@@ -330,6 +556,18 @@ def collect_jobs(
                     if statistic not in performance_vector_statistics(group_name)
                 )
                 additional += UL_OFDMA_QUEUE_VECTOR_OVERRIDES
+            if exhaustive_vectors and job.run == 0:
+                additional += tuple(
+                    f"--**.{statistic}*.vector-recording=true"
+                    for statistic in diagnostic_vector_statistics(group_name)
+                    if statistic not in performance_vector_statistics(group_name)
+                    and not (
+                        group_name == "ul_ofdma"
+                        and statistic in UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS
+                    )
+                )
+                if group_name != "ul_ofdma":
+                    additional += diagnostic_vector_overrides(group_name)
             job = replace(job, command=job.command + additional)
             jobs.append(job)
     return jobs
@@ -456,10 +694,15 @@ def module_matches(module: str, pattern: str) -> bool:
 def requirements_for_job(
     job: CampaignJob,
     manifest: dict[str, Any],
+    diagnostic_vectors: bool = False,
 ) -> tuple[RequiredResult, ...]:
     requirements = PERFORMANCE_REQUIREMENTS
     group = manifest["groups"][job.group]
-    if job.group != "ul_ofdma" or job.run != diagnostic_run(group):
+    if (
+        not diagnostic_vectors
+        or job.group != "ul_ofdma"
+        or job.run != diagnostic_run(group)
+    ):
         return requirements
     if job.config == "EdcaBaseline":
         return requirements + (
@@ -524,6 +767,7 @@ def validate_requirement(
 def validate_campaign_results(
     jobs: list[CampaignJob],
     manifest: dict[str, Any],
+    diagnostic_vectors: bool = False,
 ) -> list[str]:
     errors = []
     for job in jobs:
@@ -532,7 +776,11 @@ def validate_campaign_results(
         except RuntimeError as error:
             errors.append(str(error))
             continue
-        for requirement in requirements_for_job(job, manifest):
+        for requirement in requirements_for_job(
+            job,
+            manifest,
+            diagnostic_vectors,
+        ):
             error = validate_requirement(records, requirement)
             if error is not None:
                 errors.append(f"{job.label}: {error}")
@@ -555,6 +803,11 @@ def main() -> None:
         action="append",
         default=[],
         help="module pattern whose WLAN interfaces record PCAPng; repeat as needed",
+    )
+    parser.add_argument(
+        "--exhaustive-vectors",
+        action="store_true",
+        help="record the example's curated diagnostic vectors for run 0",
     )
     parser.add_argument(
         "--session-id",
@@ -589,10 +842,15 @@ def main() -> None:
         campaign_session_id=campaign_session_id,
         pcap_run=args.pcap_run,
         pcap_interface_patterns=tuple(args.pcap_interface_pattern),
+        exhaustive_vectors=args.exhaustive_vectors,
     )
     if not run_jobs(jobs, args.jobs):
         raise SystemExit(1)
-    validation_errors = validate_campaign_results(jobs, manifest)
+    validation_errors = validate_campaign_results(
+        jobs,
+        manifest,
+        diagnostic_vectors=args.exhaustive_vectors,
+    )
     if validation_errors:
         print("\nCampaign result validation failed:", file=sys.stderr)
         for error in validation_errors:

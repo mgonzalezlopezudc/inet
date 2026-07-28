@@ -31,6 +31,7 @@ simple HeUlCoordinator
         @signal[heUlRandomAccessAttempt](type=long);
         @signal[heUlRandomAccessSuccess](type=long);
         @signal[heUlTriggerDecisionCommitted](type=inet::ieee80211::HeUlTriggerDecisionEvent);
+        @signal[heUlTriggerDecisionId](type=unsigned long);
         @statistic[heUlBasicTriggerSent](source=heUlBasicTriggerSent; record=count);
         @statistic[heUlBsrpTriggerSent](source=heUlBsrpTriggerSent; record=count);
         @statistic[heUlBufferStatusUpdated](source=heUlBufferStatusUpdated; record=count);
@@ -41,4 +42,5 @@ simple HeUlCoordinator
         @statistic[heUlRandomAccessRus](source=heUlRandomAccessRus; record=count,sum,max);
         @statistic[heUlRandomAccessAttempt](source=heUlRandomAccessAttempt; record=count);
         @statistic[heUlRandomAccessSuccess](source=heUlRandomAccessSuccess; record=count);
+        @statistic[heUlTriggerDecisionId](title="HE UL Trigger decision identifier"; source=heUlTriggerDecisionId; record=vector; interpolationmode=none);
 }

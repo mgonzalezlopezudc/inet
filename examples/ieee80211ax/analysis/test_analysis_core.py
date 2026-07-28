@@ -38,6 +38,7 @@ from run_campaign import (
     RequiredResult,
     available_cpu_count,
     collect_jobs,
+    diagnostic_vector_statistics,
     parse_query_output,
     performance_vector_statistics,
     positive_int,
@@ -352,6 +353,7 @@ class CampaignRunnerTest(unittest.TestCase):
             manifest,
             "ul_ofdma",
             campaign_session_id=self.SESSION_ID,
+            exhaustive_vectors=True,
         )
         run0 = next(
             job for job in jobs
@@ -391,6 +393,36 @@ class CampaignRunnerTest(unittest.TestCase):
             run1.command,
         )
 
+    def test_ul_ofdma_run0_diagnostics_can_be_disabled(self):
+        manifest = {
+            "groups": {
+                "ul_ofdma": {
+                    "ini": "sample/omnetpp.ini",
+                    "expected_repetitions": 2,
+                    "recording": {
+                        "profile": "performance-with-run0-diagnostic",
+                        "diagnostic_run": 0,
+                    },
+                    "conditions": [{"config": "BacklogBased"}],
+                }
+            }
+        }
+        run0 = collect_jobs(
+            manifest,
+            "ul_ofdma",
+            campaign_session_id=self.SESSION_ID,
+            exhaustive_vectors=False,
+        )[0]
+        self.assertFalse(
+            any("heTbResponse" in argument for argument in run0.command)
+        )
+        self.assertFalse(
+            any(
+                "pendingQueue.queueLength" in argument
+                for argument in run0.command
+            )
+        )
+
     def test_performance_vectors_are_group_specific(self):
         self.assertEqual(
             performance_vector_statistics("ul_ofdma"),
@@ -404,6 +436,49 @@ class CampaignRunnerTest(unittest.TestCase):
             "powerConsumption",
             performance_vector_statistics("twt"),
         )
+
+    def test_semantic_diagnostic_vectors_are_group_specific(self):
+        twt = diagnostic_vector_statistics("twt")
+        self.assertIn("twtStationAwake", twt)
+        self.assertIn("twtActiveServicePeriodCount", twt)
+        self.assertIn("twtAgreementCount", twt)
+        self.assertNotIn("peerOperatingModeRxNss", twt)
+
+        operating_mode = diagnostic_vector_statistics("operating_mode")
+        self.assertIn("peerOperatingModeRxNss", operating_mode)
+        self.assertIn("heUlTriggerDecisionId", operating_mode)
+
+        ndp_feedback = diagnostic_vector_statistics("ndp_feedback")
+        self.assertIn("heUlTriggerDecisionId", ndp_feedback)
+        self.assertIn("heTbResponseTriggerId", ndp_feedback)
+
+    def test_exhaustive_vectors_are_recorded_only_for_run_zero(self):
+        manifest = {
+            "groups": {
+                "width": {
+                    "ini": "sample/omnetpp.ini",
+                    "expected_repetitions": 2,
+                    "conditions": [{"config": "First"}],
+                }
+            }
+        }
+        jobs = collect_jobs(
+            manifest,
+            "width",
+            campaign_session_id=self.SESSION_ID,
+            exhaustive_vectors=True,
+        )
+        run0 = next(job for job in jobs if job.run == 0)
+        run1 = next(job for job in jobs if job.run == 1)
+        self.assertIn(
+            "--**.datarateSelected*.vector-recording=true",
+            run0.command,
+        )
+        self.assertNotIn(
+            "--**.datarateSelected*.vector-recording=true",
+            run1.command,
+        )
+        self.assertNotIn("--**.vector-recording=true", run0.command)
 
     def test_ul_ofdma_validation_distinguishes_scheduled_edca_and_lean_runs(self):
         manifest = {
@@ -423,9 +498,15 @@ class CampaignRunnerTest(unittest.TestCase):
         edca = replace(scheduled, config="EdcaBaseline")
         lean = replace(scheduled, run=1)
 
-        scheduled_requirements = requirements_for_job(scheduled, manifest)
-        edca_requirements = requirements_for_job(edca, manifest)
-        lean_requirements = requirements_for_job(lean, manifest)
+        scheduled_requirements = requirements_for_job(
+            scheduled, manifest, diagnostic_vectors=True
+        )
+        edca_requirements = requirements_for_job(
+            edca, manifest, diagnostic_vectors=True
+        )
+        lean_requirements = requirements_for_job(
+            lean, manifest, diagnostic_vectors=True
+        )
 
         self.assertEqual(len(lean_requirements), 3)
         self.assertIn(

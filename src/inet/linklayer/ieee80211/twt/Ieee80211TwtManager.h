@@ -19,6 +19,15 @@ namespace ieee80211 {
 class Ieee80211Mac;
 class Ieee80211Mib;
 
+class INET_API TwtStateChangedEvent : public cObject
+{
+  public:
+    bool stationAwake = true;
+    unsigned int activeServicePeriodCount = 0;
+    unsigned int agreementCount = 0;
+    unsigned int broadcastScheduleCount = 0;
+};
+
 class INET_API Ieee80211TwtManager : public SimpleModule, public ITwtManager
 {
   protected:
@@ -33,6 +42,15 @@ class INET_API Ieee80211TwtManager : public SimpleModule, public ITwtManager
     simtime_t lastRadioStateChange = SIMTIME_ZERO;
     simtime_t awakeTime = SIMTIME_ZERO;
     simtime_t sleepTime = SIMTIME_ZERO;
+    simsignal_t stateChangedSignal;
+    simsignal_t stationAwakeSignal;
+    simsignal_t activeServicePeriodCountSignal;
+    simsignal_t agreementCountSignal;
+    bool hasPublishedState = false;
+    bool publishedStationAwake = true;
+    unsigned int publishedActiveServicePeriodCount = 0;
+    unsigned int publishedAgreementCount = 0;
+    unsigned int publishedBroadcastScheduleCount = 0;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -46,6 +64,8 @@ class INET_API Ieee80211TwtManager : public SimpleModule, public ITwtManager
     virtual TwtAgreement *findAgreement(const MacAddress& peer, uint8_t flowId, bool broadcast, uint8_t broadcastId);
     virtual TwtBroadcastSchedule *findBroadcastScheduleForUpdate(uint8_t broadcastId);
     virtual void expireBroadcastSchedules();
+    virtual unsigned int getActiveServicePeriodCount() const;
+    virtual void emitStateChanged();
 
   public:
     virtual ~Ieee80211TwtManager();

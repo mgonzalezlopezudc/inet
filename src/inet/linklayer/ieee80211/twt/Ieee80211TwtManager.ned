@@ -19,5 +19,12 @@ simple Ieee80211TwtManager extends SimpleModule like IIeee80211TwtManager
         bool allowAnnounced = default(true);
         bool allowBroadcast = default(true);
         bool allowTriggerEnabled = default(true);
+        @signal[twtStateChanged](type=inet::ieee80211::TwtStateChangedEvent);
+        @signal[twtStationAwake](type=long);
+        @signal[twtActiveServicePeriodCount](type=unsigned long);
+        @signal[twtAgreementCount](type=unsigned long);
+        @statistic[twtStationAwake](title="TWT station awake state"; source=twtStationAwake; record=vector; interpolationmode=sample-hold);
+        @statistic[twtActiveServicePeriodCount](title="Active TWT service periods"; source=twtActiveServicePeriodCount; record=vector; interpolationmode=sample-hold);
+        @statistic[twtAgreementCount](title="Installed TWT agreements and broadcast schedules"; source=twtAgreementCount; record=vector; interpolationmode=sample-hold);
         @display("i=block/clock");
 }

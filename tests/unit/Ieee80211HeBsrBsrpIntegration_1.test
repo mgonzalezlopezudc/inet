@@ -104,6 +104,7 @@ class TriggerDecisionListener : public cListener
             IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     HeUlTriggerDecisionEvent::Reason reason =
             HeUlTriggerDecisionEvent::REPORT_REFRESH_NEEDED;
+    uint32_t triggerId = 0;
     std::vector<HeUlTriggerDecisionEvent::UserInfo> users;
 
     virtual void receiveSignal(cComponent *, simsignal_t, cObject *value,
@@ -112,6 +113,7 @@ class TriggerDecisionListener : public cListener
         auto event = check_and_cast<HeUlTriggerDecisionEvent *>(value);
         count++;
         triggerType = event->triggerType;
+        triggerId = event->triggerId;
         reason = event->reason;
         users = event->users;
     }
@@ -193,9 +195,11 @@ ASSERT(freshSchedule.commonDuration == SimTime(1500, SIMTIME_US));
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 0);
 coordinator->commitSchedule(freshSchedule);
 ASSERT(coordinator->getBufferStatus().at(aid1).scheduledBytes[AC_BE] == 1200);
-coordinator->noteTriggerSent(IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+const uint32_t triggerId = coordinator->allocateTriggerId();
+coordinator->noteTriggerSent(IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, triggerId);
 REQUIRE(triggerDecisionListener.count == 1);
 REQUIRE(triggerDecisionListener.triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+REQUIRE(triggerDecisionListener.triggerId == triggerId);
 REQUIRE(triggerDecisionListener.reason == HeUlTriggerDecisionEvent::BACKLOG_REPORTED);
 REQUIRE(triggerDecisionListener.users.size() == 2);
 REQUIRE(triggerDecisionListener.users[0].associationId == aid1);

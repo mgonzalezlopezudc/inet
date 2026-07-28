@@ -58,6 +58,7 @@ void HeUlCoordinator::initialize(int stage)
         randomAccessAttemptSignal = registerSignal("heUlRandomAccessAttempt");
         randomAccessSuccessSignal = registerSignal("heUlRandomAccessSuccess");
         triggerDecisionCommittedSignal = registerSignal("heUlTriggerDecisionCommitted");
+        triggerDecisionIdSignal = registerSignal("heUlTriggerDecisionId");
 
         WATCH_EXPR("lastTriggerTime", lastTriggerTime.str());
         WATCH(hasSentTrigger);
@@ -386,11 +387,13 @@ uint32_t HeUlCoordinator::allocateTriggerId()
     return allocateIeee80211HeTriggerId();
 }
 
-void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType)
+void HeUlCoordinator::noteTriggerSent(
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType, uint32_t triggerId)
 {
     ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ||
             triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ||
             triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER);
+    ASSERT(triggerId != 0);
     lastTriggerTime = simTime();
     hasSentTrigger = true;
     if (triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER)
@@ -400,6 +403,7 @@ void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType t
 
     HeUlTriggerDecisionEvent event;
     event.triggerType = triggerType;
+    event.triggerId = triggerId;
     event.reason = triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER ?
             HeUlTriggerDecisionEvent::BACKLOG_REPORTED :
             triggerType == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
@@ -424,6 +428,7 @@ void HeUlCoordinator::noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType t
         }
     }
     emit(triggerDecisionCommittedSignal, &event);
+    emit(triggerDecisionIdSignal, static_cast<unsigned long>(event.triggerId));
     committedBasicTriggerUsers.clear();
 }
 

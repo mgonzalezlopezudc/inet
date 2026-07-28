@@ -528,7 +528,7 @@ void HeUlMuTxOpFs::startSequence(FrameSequenceContext *context, int firstStep)
              << " Trigger " << triggerId << " with " << schedule.allocations.size() << " RU allocations\n";
     if (triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER)
         coordinator->commitSchedule(schedule);
-    coordinator->noteTriggerSent(triggerType);
+    coordinator->noteTriggerSent(triggerType, triggerId);
 }
 
 IFrameSequenceStep *HeUlMuTxOpFs::prepareStep(FrameSequenceContext *context)

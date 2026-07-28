@@ -10,6 +10,14 @@ validation and debugging record. Treat prose, configuration, scalar/vector
 results, packet captures, and implementation telemetry as distinct evidence
 sources.
 
+## Be in the PRESENT, not looking back the PAST
+NEVER compare the current evidence, .ini, or implementation to previous ones, unless explicitely told so by the user. 
+
+We are not interested in the past, only in the current state of the example and its evidence.
+
+If there is already a walkthrough available, ALWAYS try to reuse its content BUT do not copy-paste without understanding the content. The walkthrough must be a coherent, self-contained explanation of the current evidence.
+
+
 ## Load the contract and template
 
 Read [references/walkthrough-contract.md](references/walkthrough-contract.md)

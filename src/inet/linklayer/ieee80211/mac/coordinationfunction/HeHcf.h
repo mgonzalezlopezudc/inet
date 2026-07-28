@@ -63,6 +63,16 @@ class INET_API HeTbResponseEvent : public cObject
     int ackPolicy = -1;
 };
 
+class INET_API HePeerOperatingModeChangedEvent : public cObject
+{
+  public:
+    MacAddress peerAddress;
+    uint16_t associationId = 0;
+    bool hadOldMode = false;
+    Ieee80211HeOperatingMode oldMode;
+    Ieee80211HeOperatingMode newMode;
+};
+
 /**
  * Returns the soliciting HE PPDU's decoded TXOP duration, if the incoming
  * packet was received in an HE PPDU.
@@ -145,11 +155,17 @@ class INET_API HeHcf : public Hcf
     IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     bool ulTriggerAccessRequested = false;
     simsignal_t heTbResponseCommittedSignal;
+    simsignal_t heTbResponseTriggerIdSignal;
     simsignal_t heTbResponseReasonSignal;
     simsignal_t heTbResponseHadPendingPayloadSignal;
     simsignal_t heTbResponsePendingBytesSignal;
     simsignal_t heTbResponseSelectedBytesSignal;
     simsignal_t heTbResponseReportedBytesSignal;
+    simsignal_t peerOperatingModeChangedSignal;
+    simsignal_t peerOperatingModeAssociationIdSignal;
+    simsignal_t peerOperatingModeRxNssSignal;
+    simsignal_t peerOperatingModeChannelWidthSignal;
+    simsignal_t peerOperatingModeUlMuDisableSignal;
     struct TriggeredUlExchange {
         Tid tid = 0;
         queueing::IPacketQueue *sourceQueue = nullptr;
@@ -213,6 +229,9 @@ class INET_API HeHcf : public Hcf
     virtual void scheduleTriggeredUlResponseTimeout();
     virtual void handleTriggeredUlResponseTimeout();
     virtual void beforeTriggeredUlPacketCommit(int packetIndex) {}
+    virtual void emitHeTbResponse(HeTbResponseEvent& event);
+    virtual void updatePeerOperatingMode(const MacAddress& peer,
+            const Ieee80211HeOperatingMode& mode);
     virtual bool reportHeDlMuTxResult(Packet *packet, AccessCategory ac, bool success);
     virtual void originatorProcessBlockAckResult(
             const Ptr<const Ieee80211BlockAck>& blockAck,

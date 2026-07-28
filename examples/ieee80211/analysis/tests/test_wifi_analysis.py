@@ -130,6 +130,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 config=None,
                 jobs=2,
                 session_id=SESSION,
+                exhaustive_vectors=True,
             )
             with (
                 patch.object(wifi_analysis, "GENERATED_ROOT", generated),
@@ -141,6 +142,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
             self.assertEqual(len(commands), 2)
             self.assertIn("run_campaign.py", commands[0][1])
             self.assertIn("--pcap-run", commands[0])
+            self.assertIn("--exhaustive-vectors", commands[0])
             self.assertEqual(
                 Path(commands[1][1]),
                 ANALYSIS_ROOT / "analyze_pcap.py",
@@ -163,6 +165,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 set(logical["configurations"]),
                 {"BaselineEnergy", "TwtEnergySaving"},
             )
+            self.assertTrue(logical["exhaustive_vectors"])
 
     def test_ul_ofdma_session_records_the_evidence_profile(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -175,6 +178,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 config=["BacklogBased", "EdcaBaseline"],
                 jobs=2,
                 session_id=SESSION,
+                exhaustive_vectors=True,
             )
             with (
                 patch.object(wifi_analysis, "GENERATED_ROOT", generated),
@@ -192,6 +196,31 @@ class WifiAnalysisCliTest(unittest.TestCase):
                     "diagnostic_run": 0,
                 },
             )
+
+    def test_disabled_diagnostic_vectors_are_not_claimed_in_session(self):
+        with tempfile.TemporaryDirectory() as directory:
+            generated = Path(directory) / "generated"
+            args = SimpleNamespace(
+                suite=str(AX_SUITE),
+                scenario="ul_ofdma",
+                evidence="scalar-vector",
+                runs=5,
+                config=["BacklogBased"],
+                jobs=2,
+                session_id=SESSION,
+                exhaustive_vectors=False,
+            )
+            with (
+                patch.object(wifi_analysis, "GENERATED_ROOT", generated),
+                patch.object(wifi_analysis, "run_command"),
+                redirect_stdout(io.StringIO()),
+            ):
+                wifi_analysis.run_command_handler(args)
+            logical = json.loads(
+                (generated / "sessions" / SESSION / "session.json").read_text()
+            )
+            self.assertIsNone(logical["recording"])
+            self.assertFalse(logical["exhaustive_vectors"])
 
     def test_report_never_requests_walkthrough_update(self):
         with tempfile.TemporaryDirectory() as directory:
