@@ -42,7 +42,7 @@ and a wired server:
 host[0..2] ))) AP -- Ethernet -- server
 ```
 
-The 2 s, 5 GHz/20 MHz HE scenario starts warm-up traffic at 0.2 s and regular
+The 1 s, 5 GHz/20 MHz HE scenario starts warm-up traffic at 0.2 s and regular
 1,000-byte uplink flows at 0.3 s. `OperatingModeIndication` extends
 `ScheduledOnly`; the wrapper adds no overriding assignment.
 
@@ -95,6 +95,10 @@ Confounder: there is no retained matched control, and the treatment's
 | application delivery remains healthy | app send/receive vectors | unexplained deficit | MAC/upper path | correlate retries and app vectors |
 
 ## [agent] Reproduction
+
+The checked-in configuration now uses a total simulation time of 1 s, and the
+current scalar/vector measurement window is `[0.3,0.95)` s. Numeric results
+below remain provenance-bound to the earlier retained 2 s result session.
 
 Run from the INET repository root. This command is illustrative and was
 `NOT RUN` during this revision:

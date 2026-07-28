@@ -92,6 +92,9 @@ three rows. Seeds are retained as result attributes, not inferred here.
 
 ## [agent] Reproduction
 
+The checked-in configuration uses a total simulation time of 1 s. The
+scalar/vector measurement window is `[0.3,0.95)` s.
+
 Run from the repository root:
 
 ```sh

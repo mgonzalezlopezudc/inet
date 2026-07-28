@@ -128,6 +128,9 @@ policy, but does not isolate OFDMA from queue organization.
 
 ## [agent] Reproduction
 
+The checked-in configuration uses a total simulation time of 1 s. The
+scalar/vector measurement window remains `[0.3,0.88)` s.
+
 Run from the INET repository root. The shared facade expands this into one
 Cmdenv invocation per configuration and run, using release-mode INET and
 `seed-set = run number`.

@@ -226,9 +226,9 @@ def plot_uora(conditions: list[Condition], output: Path) -> None:
             {"type": "scalar", "name": "heUlRandomAccessSuccess:count"},
         ],
         aggregation={
-            "goodput": "sum delivered application bytes over [0.3, 2.0) across sink vectors, convert to bit/s; one value per run",
-            "delay": "pool delivered-packet delays within each run over [0.3, 2.0), then take the 95th percentile; one value per run",
-            "mechanism": "terminal full-simulation [0, 2.0] scalar counters summed across stations; one value per run",
+            "goodput": "sum delivered application bytes over the manifest measurement window across sink vectors, convert to bit/s; one value per run",
+            "delay": "pool delivered-packet delays within each run over the manifest measurement window, then take the 95th percentile; one value per run",
+            "mechanism": "terminal full-simulation scalar counters summed across stations; one value per run",
             "zero_success_runs": zero_success_counts,
             "uncertainty": "95% Student-t CI",
         },
@@ -407,7 +407,7 @@ def plot_er(conditions: list[Condition], output: Path) -> None:
             {"type": "vector", "module": "**.mac", "name": "packetDropIncorrectlyReceived:vector(packetBytes)", "unit": "B", "optional_when_zero": True},
         ],
         aggregation={
-            "observation": "per-run 0.3-2.0 s measurement window",
+            "observation": "per-run manifest measurement window",
             "uncertainty": "95% Student-t CI over five seeds",
             "interpretation": "diagnostic delivery comparison; the standard does not guarantee a gain for this channel/error model",
         },

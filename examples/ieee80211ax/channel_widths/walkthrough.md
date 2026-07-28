@@ -53,7 +53,7 @@ interferer.
 [omnetpp.ini](omnetpp.ini) sends one 1,000-byte setup datagram to each host at
 `0.2 s`, then starts four downlink UDP flows at `0.3 s`, each offering a
 1,000-byte datagram every `0.25 ms`. The analysis window is `[0.3, 0.43) s`;
-the simulation ends at `0.45 s`.
+the simulation ends at `1 s`.
 
 ```text
 server -- AP ~~ {host[0], host[1], host[2], host[3]}
@@ -115,6 +115,9 @@ exploratory and is not part of the shared four-row analysis suite.
 | Results and PCAP share run-0 provenance | session manifest and capture manifest | different sessions or seeds | campaign plumbing | rerun `wifi_analysis.py run ... --evidence both` |
 
 ## [agent] Reproduction
+
+The checked-in configuration now uses a total simulation time of 1 s. The
+short `[0.3,0.43)` s scalar/vector window is intentionally unchanged.
 
 Run from the repository root. This minimal release-mode Cmdenv command was
 executed during this rewrite and exited with status `0`:

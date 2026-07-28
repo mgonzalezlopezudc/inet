@@ -40,8 +40,8 @@ report-to-scheduling invariant is `INCONCLUSIVE`.
 with one wired UDP server, one stationary AP, and three stationary STAs.
 Each STA is 60 m from the AP. Traffic is uplink to UDP port 5000 over a
 20 MHz, 5 GHz channel with no configured mobility or external interferer.
-[omnetpp.ini](omnetpp.ini) defines a 0.2 s warm-up and either saturated,
-stale-report, implicit-report, or two-burst traffic over a 2 s run.
+[omnetpp.ini](omnetpp.ini) defines a 0.2 s setup phase and either saturated,
+stale-report, implicit-report, or two-burst traffic over a 1 s run.
 
 ```text
 host[0..2] -- 802.11ax uplink --> AP -- Ethernet --> server
@@ -49,7 +49,7 @@ host[0..2] -- 802.11ax uplink --> AP -- Ethernet --> server
 ```
 
 `BurstyTraffic` isolates queue-state changes with bursts at 0.3--0.5 s and
-1.0--1.3 s. `StaleBsr` instead uses continuous offered load and a 10 ms
+0.65--0.95 s. `StaleBsr` instead uses continuous offered load and a 10 ms
 report maximum age, so it is a stress case rather than a clean
 single-parameter control for burstiness.
 
@@ -98,6 +98,10 @@ file's run attributes rather than inferred from the run number.
 | A consumed decision can be tied to its report | reported and scheduled vectors joined by decision ID | ambiguous many-to-many timestamp join | scheduler observability | add a stable decision identifier before regression |
 
 ## [agent] Reproduction
+
+The checked-in configuration uses a total simulation time of 1 s. The
+scalar/vector measurement window is `[0.3,0.95)` s; the second burst was moved
+to `[0.65,0.95)` s so both burst phases remain observable.
 
 Run from the INET repository root:
 

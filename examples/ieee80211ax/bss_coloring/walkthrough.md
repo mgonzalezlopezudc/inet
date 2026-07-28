@@ -106,6 +106,9 @@ assignments win. All APs and stations receive their local color explicitly.
 
 ## [agent] Reproduction
 
+The checked-in configuration uses a total simulation time of 1 s. The
+scalar/vector measurement window remains `[0.3,0.95)` s.
+
 Run from the repository root. This command is illustrative and was **NOT RUN**
 during this rewrite; no historical exit status is inferred:
 

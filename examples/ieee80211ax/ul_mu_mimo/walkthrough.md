@@ -47,7 +47,7 @@ UL: three STAs ))) 4-antenna AP -- Ethernet -- server
 
 The focused DL comparison is stationary, 5 GHz/20 MHz, 1 s with a 0.25 s
 warm-up. Both `DlMuMimo` and `EqualSizedRUs_fBW` send three 1,000-byte flows
-every 1 ms and use `dlMuAckMethod="sequentialBar"`. The UL scenario is 2 s,
+every 1 ms and use `dlMuAckMethod="sequentialBar"`. The UL scenario is 1 s,
 stationary, 20 MHz, and the wrapper raises offered load to one 1,000-byte
 packet per 0.5 ms while allowing a 1.5 ms HE TB PPDU.
 
@@ -100,6 +100,10 @@ acknowledgment policy, send interval, PPDU limit, and wide-band warm-up.
 | MU outcome comparison is matched | metadata, inputs, receive vectors | workload/window/seed mismatch | experiment setup | inspect `.sca` run attrs before metrics |
 
 ## [agent] Reproduction
+
+The checked-in configuration now uses a total simulation time of 1 s, and the
+current scalar/vector measurement window is `[0.3,0.95)` s. Numeric results
+below remain provenance-bound to the earlier retained 2 s result session.
 
 Run from the INET root. These illustrative commands were `NOT RUN` during
 this documentation revision:

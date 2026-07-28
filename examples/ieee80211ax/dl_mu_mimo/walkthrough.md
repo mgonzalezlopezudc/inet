@@ -163,6 +163,9 @@ dimensions.
 
 ## [agent] Reproduction
 
+The checked-in configuration uses a total simulation time of 1 s. The
+scalar/vector outcome window remains `[0.55,0.88)` s.
+
 Run from the INET repository root. The new one-antenna MU-MIMO case was first
 checked with release `bin/inet`, run 0/seed 0, and exit status 0:
 

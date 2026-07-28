@@ -116,6 +116,12 @@ comparison, not an isolated estimate of either OFDMA or TWT.
 
 ## [agent] Reproduction
 
+This example is not compatible with a 1 s total simulation time without
+redesigning its timing: association attempts are staggered through 15 s,
+traffic begins near 10 s, warm-up lasts 20 s, and analysis covers
+`[20,120)` s. Its 120 s configuration and analysis window are therefore
+unchanged.
+
 Run from the INET repository root. The bounded packet campaign below completed
 with exit status 0 and created session `20260725T234519Z`:
 

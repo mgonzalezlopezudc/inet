@@ -186,6 +186,11 @@ station and server outcomes:
 
 ## [agent] Reproduction
 
+The checked-in configuration uses a total simulation time of 1 s. The current
+default scalar/vector window is `[0.3,0.95)` s; the two condition-specific
+`[0.3,0.8)` s windows remain unchanged. Numeric results below remain
+provenance-bound to the earlier retained 2 s result session.
+
 Run from the INET repository root. This minimal direct command is a convenient
 single-configuration smoke check; the retained evidence commands follow it.
 
@@ -314,7 +319,7 @@ validate UL OFDMA by itself.
 The AP radio's allocation vectors are empty because the AP is receiving rather
 than transmitting the scheduled HE-TB users. The corresponding station-radio
 vectors are nonempty and directly expose the modeled allocation. In run 0,
-each station records 164 allocation samples over the full 0–2 s run:
+each station records 164 allocation samples over the retained full 0–2 s run:
 
 | Module/user | RU offset and size | Scheduled PSDU | User PPDU duration | Interpretation |
 |---|---:|---:|---:|---|

@@ -102,6 +102,11 @@ IndividualUnannounced, EnergyBase`, matching the baseline energy model.
 
 ## [agent] Reproduction
 
+This example is not compatible with a 1 s total simulation time without
+redesigning its timing: measured traffic begins near 10 s and the energy
+analysis covers `[10,100)` s. Its 100 s configuration and analysis window are
+therefore unchanged.
+
 Run from the INET repository root. This command was **not executed during this
 rewrite**; status: `NOT RUN`.
 

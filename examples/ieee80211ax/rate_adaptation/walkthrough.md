@@ -35,7 +35,7 @@ retained mobile run selected MCS 0--9 with valid outcome telemetry, and
 
 [HeRateAdaptationNetwork.ned](HeRateAdaptationNetwork.ned) uses one wired UDP
 server, one stationary AP, and four STAs. [omnetpp.ini](omnetpp.ini) sends
-saturated downlink traffic from 0.3--1.7 s on a 20 MHz 5 GHz channel. Hosts
+saturated downlink traffic from 0.3--0.95 s on a 20 MHz 5 GHz channel. Hosts
 0--2 are stationary; in `HeMinstrelMobile`, host 3 starts 230 m left of the AP
 and moves right at 40 m/s. The AP's backlog-aware downlink scheduler consults
 the HE rate-control module.
@@ -87,6 +87,11 @@ algorithm comparison. Seeds must be read from result attributes.
 | retry outcome is consistent | controller plus MAC retry/drop vectors | contradictory counts/timestamps | rate control / HCF retry | correlate one attempt in co-recorded run |
 
 ## [agent] Reproduction
+
+The checked-in configuration now uses a total simulation time of 1 s. Traffic
+stops at 0.95 s and the scalar/vector measurement window is `[0.5,0.95)` s.
+Numeric results below remain provenance-bound to the earlier retained 2 s
+result session.
 
 Run from the repository root:
 

@@ -37,7 +37,8 @@ pair the AP and host are 340 m apart, background noise is `-89 dBm`,
 sensitivity is `-100 dBm`, generic SNIR threshold is `0 dB`, payload is
 100 B, interval is 600 µs, and Block Ack is disabled. Traffic starts at
 `0.3 s`; there is no separate warm-up interval in the boundary pair, and
-results use `0.3–2.0 s`. [omnetpp.ini](omnetpp.ini) fixes MCS 0 in
+retained results use `0.3–2.0 s`; new runs use `[0.3,0.95)` s.
+[omnetpp.ini](omnetpp.ini) fixes MCS 0 in
 both cases so the primary delta is the PPDU format.
 
 ```text
@@ -90,6 +91,10 @@ bitrate.
 | ER boundary goodput is higher | sink byte vectors | overlap/reversal | receiver error model | correlate reception/drop telemetry per seed |
 
 ## [agent] Reproduction
+
+The checked-in configuration now uses a total simulation time of 1 s, and the
+current scalar/vector measurement window is `[0.3,0.95)` s. Numeric results
+below remain provenance-bound to the earlier retained 2 s result session.
 
 Run from the repository root. This command is illustrative and was **NOT RUN**
 during this rewrite:

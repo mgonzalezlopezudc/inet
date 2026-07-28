@@ -106,6 +106,10 @@ effective delta. This matrix does not convert unexecuted rows into evidence.
 
 ## [agent] Reproduction
 
+The checked-in configuration now uses a total simulation time of 1 s. The
+scalar/vector measurement window is `[0.3,0.95)` s; the interference interval
+ending at 0.85 s remains fully observable.
+
 Run from the repository root. This minimal command is illustrative and was
 **NOT RUN** during this rewrite:
 

@@ -46,7 +46,7 @@ host[2] /
 ```
 
 The nodes are stationary in a 50 m square; host distances from the AP are
-5 m. The 2 s scenario uses 5 GHz/20 MHz HE radios, no external interference,
+5 m. The 1 s scenario uses 5 GHz/20 MHz HE radios, no external interference,
 and periodic 20 ms AP checks while ordinary UL application traffic is also
 active. The control exchange, not UDP delivery, is the feature under test.
 
@@ -95,6 +95,10 @@ valid report is inference.
 
 ## [agent] Reproduction
 
+The checked-in configuration now uses a total simulation time of 1 s, and the
+current scalar/vector measurement window is `[0.3,0.95)` s. Numeric results
+below remain provenance-bound to the earlier retained 2 s result session.
+
 Run from the INET repository root. This command was `NOT RUN` during this
 documentation revision:
 
@@ -139,7 +143,7 @@ opp_scavetool query -l \
 
 This is single-run evidence. HCF counts do not identify Trigger types or NDP
 responses and are not pooled as repetitions. The inherited UL configuration
-sets no warm-up period, so the listed scalar counts use the full 0-2 s run;
+sets no warm-up period, so the retained scalar counts use the full 0-2 s run;
 the application staging (warm-up packets at 0.2 s and regular traffic from
 0.3 s) is described rather than silently removed. The NFRP timeline query also
 uses the full capture because the feature starts at 0.020036 s.

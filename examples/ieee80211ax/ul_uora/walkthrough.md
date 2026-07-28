@@ -60,8 +60,8 @@ mobility or external interferer.
 
 Every station emits one 1000-byte setup packet beginning at 0.2 s to establish
 Block Ack state. The measured application begins at 0.3 s and sends UDP toward
-the wired server. The simulation ends at 2 s, and application outcomes use
-the half-open measurement window `[0.3,2.0)`.
+the wired server. The simulation ends at 1 s, and new application-outcome
+analysis uses the half-open measurement window `[0.3,0.95)`.
 
 ## [agent] Standards and INET model boundary
 
@@ -149,6 +149,10 @@ scheduled-only configuration also changes MU-EDCA settings.
 
 ## [agent] Reproduction
 
+The checked-in configuration now uses a total simulation time of 1 s, and the
+current scalar/vector measurement window is `[0.3,0.95)` s. Numeric results
+below remain provenance-bound to the earlier retained 2 s result session.
+
 Run from the INET repository root. This direct single-run command shows the
 campaign's essential Cmdenv invocation for the heavy control; it is
 illustrative and was **NOT RUN separately** during this authoring session:
@@ -179,8 +183,8 @@ python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_uora \
 The initial campaign invocation was interrupted by the execution channel
 before three run-0 files closed cleanly; it did not yield a usable success
 status. The affected run-0 result pairs and AP captures were rerun to the
-configured 2 s limit, validated, and placed as siblings in their normal
-configuration directories. The final `report` and `publish` commands each
+retained campaign's configured 2 s limit, validated, and placed as siblings in
+their normal configuration directories. The final `report` and `publish` commands each
 exited 0. Recovery copies were moved outside the repository to
 `/tmp/ul-uora-20260727T202540Z-recovery/`.
 

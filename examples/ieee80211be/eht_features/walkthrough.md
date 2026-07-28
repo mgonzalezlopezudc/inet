@@ -95,11 +95,15 @@ effect of either 320 MHz or 4096-QAM.
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
-| Both runs complete to 0.5 s | Cmdenv exit and result metadata | Runtime error before limit | PHY transmission construction or aggregation | Inspect the aggregate at the reported event with targeted PHY/MAC logs |
+| Both runs complete to 1 s | Cmdenv exit and result metadata | Runtime error before limit | PHY transmission construction or aggregation | Inspect the aggregate at the reported event with targeted PHY/MAC logs |
 | EHT data uses known EHT/320 MHz/MCS 13/1 NSS fields | AP and host PCAPng typed EHT profile | Field absent, unknown, or different | Rate selection, EHT transmitter, or radiotap writer | Run shared typed-PHY analysis and inspect the first EHT data frame |
 | Receiver records delivered bytes | `host[0].app[0] packetReceived:sum(packetBytes)` | Empty result or zero bytes | MAC reception, bridge, or application path | Correlate receiver capture with MAC and UDP result records |
 
 ## [agent] Reproduction
+
+The checked-in configuration now uses a total simulation time of 1 s. The
+existing `[0.1,0.5)` s analysis window remains unchanged; the known
+BaselineAx duration exception is independent of the total simulation cap.
 
 Run the shared five-run pipeline from the INET repository root:
 

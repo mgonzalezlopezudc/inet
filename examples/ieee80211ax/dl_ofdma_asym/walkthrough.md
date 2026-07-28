@@ -114,6 +114,10 @@ All configurations inherit settings from [`omnetpp.ini`](omnetpp.ini) and `Lan80
 
 ## [agent] Reproduction
 
+This example inherits the 1 s total simulation time from
+`../dl_ofdma_sched/omnetpp.ini`. Its scalar/vector measurement window remains
+`[0.3,0.88)` s.
+
 Working directory: repository root (`inet`) or `examples/ieee80211ax/dl_ofdma_asym`.
 
 To run a single simulation for `BacklogBased` (run 0):

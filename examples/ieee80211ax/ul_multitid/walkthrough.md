@@ -46,7 +46,7 @@ UL: host[0..1] ))) AP -- Ethernet -- server
 ```
 
 All nodes are stationary. Both inherited networks use 5 GHz/20 MHz HE radios.
-The DL run lasts 1 s with a 0.25 s warm-up; the UL runs last 2 s. DL sends
+The DL and UL runs last 1 s; DL has a 0.25 s warm-up. DL sends
 ports 5000 and 5001 (TIDs 6 and 7) to two stations. UL-SU sends two TIDs from
 one station; UL-MU sends one TID from each of two stations and disables
 `host[2]` traffic.
@@ -97,6 +97,9 @@ the one-line wrappers add no later overrides.
 | Application outcome remains intact | sender/receiver application vectors | unexpected receive deficit | MAC retry/queue/upper path | correlate QoS sequence/retry fields and result vectors |
 
 ## [agent] Reproduction
+
+Both included downlink and uplink configurations now use a total simulation
+time of 1 s. The scalar/vector measurement window remains `[0.3,0.88)` s.
 
 Run from the INET repository root. These illustrative commands were not
 executed during this documentation revision, so their exit status is

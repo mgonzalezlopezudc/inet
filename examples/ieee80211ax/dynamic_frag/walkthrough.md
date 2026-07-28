@@ -89,6 +89,10 @@ policies have no demonstrated causal opportunity to diverge.
 
 ## [agent] Reproduction
 
+The checked-in configuration now uses a total simulation time of 1 s, and the
+current scalar/vector measurement window is `[0.3,0.95)` s. Numeric results
+below remain provenance-bound to the earlier retained 2 s result session.
+
 Run from the repository root:
 
 ```sh
@@ -140,8 +144,8 @@ fragmentation. The retained comparison exercises the configured
 capability-gated path and validates fragmentation mechanics; it does not prove
 that level-1 support was negotiated or demonstrate channel-adaptive fragment
 sizing.
-The declared measurement window is 0.3--2.0 s; the initial setup period is
-excluded as warm-up.
+The retained result session's declared measurement window is 0.3--2.0 s; the
+initial setup period is excluded as warm-up. New runs use `[0.3,0.95)` s.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-fragmentation -->
 ### [script] Generated scalar/vector plot and table
