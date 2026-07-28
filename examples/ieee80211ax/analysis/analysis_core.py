@@ -55,7 +55,7 @@ FIGURE_FILENAMES = {
     "eht_features": "eht-features-delivery.png",
     "bcc_ldpc": "bcc-ldpc-delivery.png",
     "ul_mu_mimo": "ul-mu-mimo-delivery.png",
-    "ul_ofdma": "ul-ofdma-delivery.png",
+    "ul_ofdma": "ul-ofdma-delivery-delay.png",
 }
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 EVIDENCE_HANDLERS = {

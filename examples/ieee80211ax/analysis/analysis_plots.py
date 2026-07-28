@@ -814,6 +814,35 @@ def plot_delivery(conditions: list[Condition], output: Path) -> None:
     )
 
 
+def plot_ul_ofdma(conditions: list[Condition], output: Path) -> None:
+    """Compare UL-OFDMA and EDCA using delivery and tail delay."""
+    goodputs = [per_run_goodput(condition) for condition in conditions]
+    delays = [per_run_delay_percentile(condition, 95) for condition in conditions]
+    labels = [condition.label for condition in conditions]
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.8))
+    bar_with_ci(axes[0], labels, goodputs, "goodput_bps", scale=1e-6)
+    bar_with_ci(axes[1], labels, delays, "delay_s", scale=1e3)
+    axes[0].set_ylabel("Aggregate goodput [Mbit/s]")
+    axes[1].set_ylabel("95th-percentile end-to-end delay [ms]")
+    axes[0].set_title("Application delivery")
+    axes[1].set_title("Tail delay")
+    for axis in axes:
+        axis.grid(axis="y", alpha=0.3)
+    fig.suptitle("UL-OFDMA contention and delivery comparison")
+    save(fig, output)
+    write_provenance(
+        output,
+        conditions=conditions,
+        result_filters=[
+            {"type": "vector", "module": "**.server.app[*]", "name": "packetReceived:vector(packetBytes)", "value_semantics": "delivered application bytes"},
+            {"type": "vector", "module": "**.server.app[*]", "name": "endToEndDelay:vector", "unit": "s"},
+        ],
+        aggregation={
+            "goodput": "sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run",
+            "delay": "pool delivered-packet delays within each run over each manifest measurement window, then take the 95th percentile; one value per run",
+            "uncertainty": "95% Student-t CI across independent runs",
+        },
+    )
 PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "fragmentation": plot_fragmentation,
     "uora": plot_uora,
@@ -835,5 +864,5 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "eht_features": plot_delivery,
     "bcc_ldpc": plot_delivery,
     "ul_mu_mimo": plot_delivery,
-    "ul_ofdma": plot_delivery,
+    "ul_ofdma": plot_ul_ofdma,
 }
