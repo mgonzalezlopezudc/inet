@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260728T121420Z`
-- PCAP: `20260728T121420Z`
+- Scalar/vector: `20260728T125240Z`
+- PCAP: `20260728T125240Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `20260727T211515Z`.
@@ -355,9 +355,9 @@ control or effective logging; it is not the payload verdict.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-ul_ofdma -->
 ### [script] Generated scalar/vector plot and table
 
-![ul_ofdma scalar/vector analysis](results/20260728T121420Z/ul-ofdma-delivery.png)
+![ul_ofdma scalar/vector analysis](results/20260728T125240Z/ul-ofdma-delivery.png)
 
-Figure provenance: [`results/20260728T121420Z/ul-ofdma-delivery.png.json`](results/20260728T121420Z/ul-ofdma-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260728T125240Z/ul-ofdma-delivery.png.json`](results/20260728T125240Z/ul-ofdma-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -403,13 +403,13 @@ separate the two policies.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260728T121420Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260728T125240Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260728T121420Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260728T125240Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260728T121420Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260728T121420Z.json` (SHA-256 `418f9faecc5faef4633798cd5364f8d76ff304a0050c99f1492267a2f71e970b`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260728T125240Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260728T125240Z.json` (SHA-256 `062710c7be48b891cfed9cd2dd27b1b4f25aceca665c831a9fe930024ceda7e3`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.

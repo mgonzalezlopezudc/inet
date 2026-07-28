@@ -185,6 +185,11 @@ void HeHcf::initialize(int stage)
         ulTriggerTimer = new cMessage("heUlTriggerTimer");
         triggeredUlResponseTimer = new cMessage("heTriggeredUlResponseTimer");
         heTbResponseCommittedSignal = registerSignal("heTbResponseCommitted");
+        heTbResponseReasonSignal = registerSignal("heTbResponseReason");
+        heTbResponseHadPendingPayloadSignal = registerSignal("heTbResponseHadPendingPayload");
+        heTbResponsePendingBytesSignal = registerSignal("heTbResponsePendingBytes");
+        heTbResponseSelectedBytesSignal = registerSignal("heTbResponseSelectedBytes");
+        heTbResponseReportedBytesSignal = registerSignal("heTbResponseReportedBytes");
         linkPhyContext = std::make_unique<Ieee80211HeLinkPhyContext>(this, mac);
         delete frameSequenceHandler;
         frameSequenceHandler = new HeFrameSequenceHandler();

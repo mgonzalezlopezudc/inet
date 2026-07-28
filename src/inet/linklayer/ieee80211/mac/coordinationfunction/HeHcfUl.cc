@@ -1216,12 +1216,19 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     event.ruIndex = selected->ruIndex;
     event.ruToneSize = selected->ruToneSize;
     event.ruToneOffset = selected->ruToneOffset;
+    event.hadPendingPayload = hadPendingPayload;
+    event.pendingBytes = queueBytes;
     for (auto selectedPacket : exchange.packets)
         event.selectedBytes += selectedPacket->getByteLength();
     event.reportedBytes = reportedQueueBytes;
     auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(responseHeader);
     event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
     emit(heTbResponseCommittedSignal, &event);
+    emit(heTbResponseReasonSignal, static_cast<long>(event.reason));
+    emit(heTbResponseHadPendingPayloadSignal, event.hadPendingPayload ? 1L : 0L);
+    emit(heTbResponsePendingBytesSignal, event.pendingBytes);
+    emit(heTbResponseSelectedBytesSignal, event.selectedBytes);
+    emit(heTbResponseReportedBytesSignal, event.reportedBytes);
     return responsePacket.release();
 }
 

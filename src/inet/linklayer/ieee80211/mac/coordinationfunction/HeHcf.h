@@ -56,6 +56,8 @@ class INET_API HeTbResponseEvent : public cObject
     int ruIndex = -1;
     int ruToneSize = 0;
     int ruToneOffset = 0;
+    bool hadPendingPayload = false;
+    int64_t pendingBytes = 0;
     int64_t selectedBytes = 0;
     int64_t reportedBytes = 0;
     int ackPolicy = -1;
@@ -143,6 +145,11 @@ class INET_API HeHcf : public Hcf
     IIeee80211HeUlTriggerPolicy::TriggerType pendingUlTrigger = IIeee80211HeUlTriggerPolicy::NO_TRIGGER;
     bool ulTriggerAccessRequested = false;
     simsignal_t heTbResponseCommittedSignal;
+    simsignal_t heTbResponseReasonSignal;
+    simsignal_t heTbResponseHadPendingPayloadSignal;
+    simsignal_t heTbResponsePendingBytesSignal;
+    simsignal_t heTbResponseSelectedBytesSignal;
+    simsignal_t heTbResponseReportedBytesSignal;
     struct TriggeredUlExchange {
         Tid tid = 0;
         queueing::IPacketQueue *sourceQueue = nullptr;

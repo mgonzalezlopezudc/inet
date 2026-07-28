@@ -56,6 +56,16 @@ module HeHcf extends Hcf
         double defaultCsiLeakage = default(0.01); // Default inter-user interference leakage factor
         string csiLeakageOverrides = default(""); // Specific peer-to-peer leakage overrides e.g. "1-2:0.01"
         @signal[heTbResponseCommitted](type=inet::ieee80211::HeTbResponseEvent);
+        @signal[heTbResponseReason](type=long);
+        @signal[heTbResponseHadPendingPayload](type=long);
+        @signal[heTbResponsePendingBytes](type=long);
+        @signal[heTbResponseSelectedBytes](type=long);
+        @signal[heTbResponseReportedBytes](type=long);
+        @statistic[heTbResponseReason](title="HE-TB response reason"; source=heTbResponseReason; record=vector; interpolationmode=none);
+        @statistic[heTbResponseHadPendingPayload](title="HE-TB candidate payload existed"; source=heTbResponseHadPendingPayload; record=vector; interpolationmode=none);
+        @statistic[heTbResponsePendingBytes](title="HE-TB live pending bytes"; source=heTbResponsePendingBytes; record=vector; interpolationmode=none);
+        @statistic[heTbResponseSelectedBytes](title="HE-TB selected bytes"; source=heTbResponseSelectedBytes; record=vector; interpolationmode=none);
+        @statistic[heTbResponseReportedBytes](title="HE-TB reported bytes"; source=heTbResponseReportedBytes; record=vector; interpolationmode=none);
 
     submodules:
         dlScheduler: <default("HeDlSchedulerEqualSizedRUs")> like IIeee80211HeDlScheduler {
