@@ -4,13 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import re
 import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -27,20 +28,93 @@ from inet_wifi_analysis import (
     collect_campaign_jobs,
 )
 
-VECTOR_STATISTICS = (
-    "packetReceived", "endToEndDelay", "packetSentToPeer", "packetDropIncorrectlyReceived",
-    "acknowledgmentFrameType", "acknowledgmentAirtime",
-    "radioMode", "powerConsumption", "transmissionState",
-    "heRateSelectedMcs", "heRateSelectedNss",
-    "heRateSuccessProbability", "heRateTxSuccess", "heRateRetryCount",
-    "heUlBufferStatusReportedBytes", "heUlBufferStatusScheduledBytes",
-    "heRuToneOffset", "heRuToneSize", "heStaId",
-    "hePuncturedSubchannelMask", "heSpatialStreams", "heStreamStartIndex",
-    "heScheduledPsduBytes", "heUserPpduDuration",
-    "heSpatialReuseBssType", "heSpatialReuseReceivedBssColor", "heSpatialReuseLocalBssColor",
-    "heSpatialReuseEligible", "heSpatialReuseIgnoredPpdu", "heSpatialReuseObssPdThreshold",
-    "heSpatialReuseTransmitPowerLimit",
-    "heSpatialReuseReason",
+CORE_PERFORMANCE_RECORDING_OVERRIDES = (
+    "--**.app[*].packetSent*.vector-recording=true",
+    "--**.app[*].packetReceived*.vector-recording=true",
+    "--**.app[*].endToEndDelay*.vector-recording=true",
+)
+
+GROUP_PERFORMANCE_VECTOR_STATISTICS = {
+    "fragmentation": (
+        "packetSentToPeer",
+        "acknowledgmentFrameType",
+        "acknowledgmentAirtime",
+    ),
+    "twt": ("radioMode", "powerConsumption"),
+    "rate": (
+        "heRateSelectedMcs",
+        "heRateSelectedNss",
+        "heRateSuccessProbability",
+        "heRateTxSuccess",
+        "heRateRetryCount",
+    ),
+    "er": ("packetDropIncorrectlyReceived",),
+    "puncturing": (
+        "heRuToneOffset",
+        "heRuToneSize",
+        "heStaId",
+        "hePuncturedSubchannelMask",
+    ),
+    "mimo": ("heStaId", "heSpatialStreams", "heStreamStartIndex"),
+    "bss": (
+        "transmissionState",
+        "heSpatialReuseBssType",
+        "heSpatialReuseReceivedBssColor",
+        "heSpatialReuseLocalBssColor",
+        "heSpatialReuseEligible",
+        "heSpatialReuseIgnoredPpdu",
+        "heSpatialReuseObssPdThreshold",
+        "heSpatialReuseTransmitPowerLimit",
+        "heSpatialReuseReason",
+    ),
+    "dl_sched": ("heStaId", "heScheduledPsduBytes", "heUserPpduDuration"),
+    "dl_asym": ("heStaId", "heScheduledPsduBytes", "heUserPpduDuration"),
+    "bsr": (
+        "heUlBufferStatusReportedBytes",
+        "heUlBufferStatusScheduledBytes",
+    ),
+}
+
+CORE_SCALAR_STATISTICS = (
+    "packetDropQueueOverflow",
+    "packetDropRetryLimitReached",
+)
+
+CORE_SCALAR_RECORDING_OVERRIDES = (
+    "--**.app[*].packetSent*.scalar-recording=true",
+    "--**.app[*].packetReceived*.scalar-recording=true",
+)
+
+GROUP_SCALAR_STATISTICS = {
+    "uora": ("heUlRandomAccessAttempt", "heUlRandomAccessSuccess"),
+    "ul_ofdma": (
+        "heUlBasicTriggerSent",
+        "heUlBsrpTriggerSent",
+        "heUlStaleBufferStatus",
+        "heUlScheduledUsers",
+    ),
+}
+
+UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS = (
+    "heUlBufferStatusReportedBytes",
+    "heUlBufferStatusScheduledBytes",
+    "heRuToneOffset",
+    "heRuToneSize",
+    "heStaId",
+    "heScheduledPsduBytes",
+    "heUserPpduDuration",
+    "heTbResponseReason",
+    "heTbResponseHadPendingPayload",
+    "heTbResponsePendingBytes",
+    "heTbResponseSelectedBytes",
+    "heTbResponseReportedBytes",
+)
+
+UL_OFDMA_QUEUE_VECTOR_OVERRIDES = (
+    "--**.host[*].wlan[*].mac.hcf.edca.edcaf[*].pendingQueue.queueLength*.vector-recording=true",
+    "--**.host[*].wlan[*].mac.hcf.edca.edcaf[*].pendingQueue.queueingTime*.vector-recording=true",
+    "--**.host[*].wlan[*].mac.hcf.edca.edcaf[*].inProgressFrames.queueLength*.vector-recording=true",
+    "--**.host[*].wlan[*].mac.hcf.edca.edcaf[*].inProgressFrames.queueingTime*.vector-recording=true",
 )
 SESSION_ID_PATTERN = re.compile(r"^\d{8}T\d{6}Z$")
 
@@ -50,6 +124,79 @@ class JobResult:
     job: CampaignJob
     returncode: int
     output: str
+
+
+@dataclass(frozen=True)
+class RequiredResult:
+    kind: str
+    module: str
+    name: str
+    expectation: str = "nonzero"
+
+
+@dataclass(frozen=True)
+class RecordedResult:
+    kind: str
+    module: str
+    name: str
+    count: int | None = None
+    value: float | None = None
+    maximum: float | None = None
+
+
+PERFORMANCE_REQUIREMENTS = (
+    RequiredResult("scalar", "**.app[*]", "packetSent:count"),
+    RequiredResult(
+        "vector",
+        "**.app[*]",
+        "packetReceived:vector(packetBytes)",
+    ),
+    RequiredResult("vector", "**.app[*]", "endToEndDelay:vector"),
+)
+
+UL_OFDMA_DIAGNOSTIC_REQUIREMENTS = (
+    RequiredResult(
+        "vector",
+        "**.host[*].wlan[*].mac.hcf.edca.edcaf[*].pendingQueue",
+        "queueLength:vector",
+        "positive",
+    ),
+    RequiredResult(
+        "vector",
+        "**.host[*].wlan[*].mac.hcf",
+        "heTbResponseReason:vector",
+    ),
+    RequiredResult(
+        "vector",
+        "**.host[*].wlan[*].mac.hcf",
+        "heTbResponseSelectedBytes:vector",
+    ),
+    RequiredResult(
+        "vector",
+        "**.ap.wlan[*].mac.hcf.ulCoordinator",
+        "heUlBufferStatusScheduledBytes:vector",
+    ),
+    RequiredResult(
+        "vector",
+        "**.host[*].wlan[*].radio",
+        "heScheduledPsduBytes:vector",
+    ),
+)
+
+UL_OFDMA_EDCA_INACTIVE_REQUIREMENTS = (
+    RequiredResult(
+        "vector",
+        "**.host[*].wlan[*].mac.hcf",
+        "heTbResponseReason:vector",
+        "zero",
+    ),
+    RequiredResult(
+        "vector",
+        "**.ap.wlan[*].mac.hcf.ulCoordinator",
+        "heUlBufferStatusScheduledBytes:vector",
+        "zero",
+    ),
+)
 
 
 def positive_int(value: str) -> int:
@@ -77,6 +224,31 @@ def available_cpu_count() -> int:
         return os.cpu_count() or 1
 
 
+def unique_statistics(*groups: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(dict.fromkeys(
+        statistic
+        for group in groups
+        for statistic in group
+    ))
+
+
+def performance_vector_statistics(group: str) -> tuple[str, ...]:
+    return GROUP_PERFORMANCE_VECTOR_STATISTICS.get(group, ())
+
+
+def scalar_statistics(group: str) -> tuple[str, ...]:
+    return unique_statistics(
+        CORE_SCALAR_STATISTICS,
+        GROUP_SCALAR_STATISTICS.get(group, ()),
+    )
+
+
+def diagnostic_run(group: dict[str, Any]) -> int | None:
+    recording = group.get("recording", {})
+    selected = recording.get("diagnostic_run")
+    return None if selected is None else int(selected)
+
+
 def build_command(
     ini: Path,
     result_dir: Path,
@@ -84,7 +256,20 @@ def build_command(
     run: int,
     repetitions: int,
     pcap_interface_patterns: tuple[str, ...] = (),
+    group: str = "",
+    diagnostic: bool = False,
 ) -> tuple[str, ...]:
+    vectors = performance_vector_statistics(group)
+    overrides = (
+        CORE_SCALAR_RECORDING_OVERRIDES
+        + CORE_PERFORMANCE_RECORDING_OVERRIDES
+    )
+    if group == "ul_ofdma" and diagnostic:
+        vectors = unique_statistics(
+            vectors,
+            UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS,
+        )
+        overrides += UL_OFDMA_QUEUE_VECTOR_OVERRIDES
     return build_cmdenv_command(
         REPOSITORY_ROOT,
         ini,
@@ -92,9 +277,10 @@ def build_command(
         config,
         run,
         repetitions,
-        VECTOR_STATISTICS,
-        ("heUlRandomAccessAttempt", "heUlRandomAccessSuccess"),
+        vectors,
+        scalar_statistics(group),
         pcap_interface_patterns,
+        overrides,
     )
 
 
@@ -107,18 +293,46 @@ def collect_jobs(
     pcap_run: int | None = None,
     pcap_interface_patterns: tuple[str, ...] = (),
 ) -> list[CampaignJob]:
-    return collect_campaign_jobs(
-        manifest,
-        selected_group,
-        REPOSITORY_ROOT,
-        campaign_session_id or new_session_id(),
-        VECTOR_STATISTICS,
-        ("heUlRandomAccessAttempt", "heUlRandomAccessSuccess"),
-        repetitions_override,
-        selected_configs,
-        pcap_run,
-        pcap_interface_patterns,
+    session = campaign_session_id or new_session_id()
+    group_names = (
+        sorted(manifest["groups"])
+        if selected_group == "all"
+        else [selected_group]
     )
+    jobs: list[CampaignJob] = []
+    for group_name in group_names:
+        group = manifest["groups"][group_name]
+        group_jobs = collect_campaign_jobs(
+            {"groups": {group_name: group}},
+            group_name,
+            REPOSITORY_ROOT,
+            session,
+            performance_vector_statistics(group_name),
+            scalar_statistics(group_name),
+            repetitions_override,
+            selected_configs,
+            pcap_run,
+            pcap_interface_patterns,
+        )
+        selected_diagnostic_run = diagnostic_run(group)
+        for job in group_jobs:
+            additional = (
+                CORE_SCALAR_RECORDING_OVERRIDES
+                + CORE_PERFORMANCE_RECORDING_OVERRIDES
+            )
+            if (
+                group_name == "ul_ofdma"
+                and job.run == selected_diagnostic_run
+            ):
+                additional += tuple(
+                    f"--**.{statistic}*.vector-recording=true"
+                    for statistic in UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS
+                    if statistic not in performance_vector_statistics(group_name)
+                )
+                additional += UL_OFDMA_QUEUE_VECTOR_OVERRIDES
+            job = replace(job, command=job.command + additional)
+            jobs.append(job)
+    return jobs
 
 
 def execute_job(job: CampaignJob) -> JobResult:
@@ -159,6 +373,170 @@ def run_jobs(jobs: list[CampaignJob], jobs_limit: int) -> bool:
         print(f"\n===== {failure.job.label}: exit {failure.returncode} =====", file=sys.stderr)
         print(failure.output.rstrip(), file=sys.stderr)
     return not failures
+
+
+def result_artifacts(job: CampaignJob) -> tuple[Path, Path]:
+    artifacts = []
+    for extension in ("sca", "vec"):
+        matches = sorted(
+            job.result_dir.glob(f"{job.config}*-#{job.run}.{extension}")
+        )
+        if len(matches) != 1:
+            raise RuntimeError(
+                f"{job.label}: expected one .{extension} result, "
+                f"found {len(matches)}"
+            )
+        artifacts.append(matches[0])
+    return artifacts[0], artifacts[1]
+
+
+def parse_query_output(output: str) -> list[RecordedResult]:
+    parsed = []
+    for line in output.splitlines():
+        fields = line.split()
+        if len(fields) < 4 or fields[0] not in {"scalar", "vector"}:
+            continue
+        kind, module, name = fields[:3]
+        if kind == "scalar":
+            try:
+                value = float(fields[3])
+            except ValueError:
+                continue
+            parsed.append(RecordedResult(kind, module, name, value=value))
+        else:
+            count_field = next(
+                (field for field in fields[3:] if field.startswith("count=")),
+                None,
+            )
+            if count_field is None:
+                continue
+            maximum_field = next(
+                (field for field in fields[3:] if field.startswith("max=")),
+                None,
+            )
+            parsed.append(RecordedResult(
+                kind,
+                module,
+                name,
+                count=int(count_field.split("=", 1)[1]),
+                maximum=(
+                    float(maximum_field.split("=", 1)[1])
+                    if maximum_field is not None
+                    else None
+                ),
+            ))
+    return parsed
+
+
+def query_job_results(job: CampaignJob) -> list[RecordedResult]:
+    scalar, vector = result_artifacts(job)
+    completed = subprocess.run(
+        ["opp_scavetool", "query", "-l", str(scalar), str(vector)],
+        cwd=REPOSITORY_ROOT,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=False,
+    )
+    if completed.returncode:
+        raise RuntimeError(
+            f"{job.label}: opp_scavetool query failed: "
+            f"{completed.stderr.strip()}"
+        )
+    return parse_query_output(completed.stdout)
+
+
+def module_matches(module: str, pattern: str) -> bool:
+    expression = re.escape(pattern)
+    expression = expression.replace(r"\*\*", ".*")
+    expression = expression.replace(r"\*", r"[^.]*")
+    return re.fullmatch(expression, module) is not None
+
+
+def requirements_for_job(
+    job: CampaignJob,
+    manifest: dict[str, Any],
+) -> tuple[RequiredResult, ...]:
+    requirements = PERFORMANCE_REQUIREMENTS
+    group = manifest["groups"][job.group]
+    if job.group != "ul_ofdma" or job.run != diagnostic_run(group):
+        return requirements
+    if job.config == "EdcaBaseline":
+        return requirements + (
+            UL_OFDMA_DIAGNOSTIC_REQUIREMENTS[0],
+        ) + UL_OFDMA_EDCA_INACTIVE_REQUIREMENTS
+    return requirements + UL_OFDMA_DIAGNOSTIC_REQUIREMENTS
+
+
+def validate_requirement(
+    records: list[RecordedResult],
+    requirement: RequiredResult,
+) -> str | None:
+    matches = [
+        record
+        for record in records
+        if record.kind == requirement.kind
+        and record.name == requirement.name
+        and module_matches(record.module, requirement.module)
+    ]
+    if not matches:
+        return (
+            f"missing {requirement.kind} {requirement.module} "
+            f"{requirement.name}"
+        )
+    total = sum(
+        record.count if record.kind == "vector" else record.value or 0
+        for record in matches
+    )
+    if not math.isfinite(total):
+        return (
+            f"non-finite {requirement.kind} "
+            f"{requirement.module} {requirement.name}"
+        )
+    if requirement.expectation == "nonzero" and total <= 0:
+        return (
+            f"expected nonzero {requirement.kind} "
+            f"{requirement.module} {requirement.name}"
+        )
+    if requirement.expectation == "positive":
+        maximum = max(
+            (
+                record.maximum
+                for record in matches
+                if record.maximum is not None
+                and math.isfinite(record.maximum)
+            ),
+            default=0,
+        )
+        if maximum <= 0:
+            return (
+                f"expected positive {requirement.kind} "
+                f"{requirement.module} {requirement.name}"
+            )
+    if requirement.expectation == "zero" and total != 0:
+        return (
+            f"expected inactive {requirement.kind} "
+            f"{requirement.module} {requirement.name}, observed {total:g}"
+        )
+    return None
+
+
+def validate_campaign_results(
+    jobs: list[CampaignJob],
+    manifest: dict[str, Any],
+) -> list[str]:
+    errors = []
+    for job in jobs:
+        try:
+            records = query_job_results(job)
+        except RuntimeError as error:
+            errors.append(str(error))
+            continue
+        for requirement in requirements_for_job(job, manifest):
+            error = validate_requirement(records, requirement)
+            if error is not None:
+                errors.append(f"{job.label}: {error}")
+    return errors
 
 
 def main() -> None:
@@ -214,6 +592,17 @@ def main() -> None:
     )
     if not run_jobs(jobs, args.jobs):
         raise SystemExit(1)
+    validation_errors = validate_campaign_results(jobs, manifest)
+    if validation_errors:
+        print("\nCampaign result validation failed:", file=sys.stderr)
+        for error in validation_errors:
+            print(f"- {error}", file=sys.stderr)
+        raise SystemExit(1)
+    print(
+        f"Validated required result artifacts and evidence for "
+        f"{len(jobs)} run(s).",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

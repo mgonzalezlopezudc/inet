@@ -455,6 +455,12 @@ def run_command_handler(args: argparse.Namespace) -> None:
         "configurations": effective_configs,
         "scalar_vector_group": scalar_group,
         "scalar_vector_manifest": relative_path(scalar_path),
+        "recording": (
+            scalar_document_value["groups"][scalar_group].get("recording")
+            if scalar_document_value is not None
+            and scalar_group is not None
+            else None
+        ),
         "pcap_run": 0 if args.evidence == "both" else None,
         "pcap_scope": (
             "representative run 0 mechanism evidence"

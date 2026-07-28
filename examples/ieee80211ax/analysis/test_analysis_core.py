@@ -5,6 +5,7 @@ import math
 import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -27,16 +28,24 @@ from analysis_core import (
     validate_unpunctured_ru,
 )
 from inet_wifi_analysis import (
+    CampaignJob,
     result_configuration_directory,
     result_root,
     result_session_directory,
 )
 from run_campaign import (
+    RecordedResult,
+    RequiredResult,
     available_cpu_count,
     collect_jobs,
+    parse_query_output,
+    performance_vector_statistics,
     positive_int,
+    requirements_for_job,
+    result_artifacts,
     run_jobs,
     session_id,
+    validate_requirement,
 )
 import summarize_results
 
@@ -283,6 +292,30 @@ class CampaignRunnerTest(unittest.TestCase):
                 }
             })
 
+    def test_manifest_validates_diagnostic_recording_profile(self):
+        valid = {
+            "groups": {
+                "ul_ofdma": {
+                    "ini": "sample/omnetpp.ini",
+                    "expected_repetitions": 2,
+                    "recording": {
+                        "profile": "performance-with-run0-diagnostic",
+                        "diagnostic_run": 0,
+                    },
+                    "conditions": [{"config": "BacklogBased"}],
+                }
+            }
+        }
+        validate_result_layout(valid)
+        invalid = json.loads(json.dumps(valid))
+        invalid["groups"]["ul_ofdma"]["recording"]["diagnostic_run"] = 2
+        with self.assertRaisesRegex(RuntimeError, "diagnostic_run"):
+            validate_result_layout(invalid)
+        invalid = json.loads(json.dumps(valid))
+        invalid["groups"]["ul_ofdma"]["recording"]["profile"] = "everything"
+        with self.assertRaisesRegex(RuntimeError, "unknown recording profile"):
+            validate_result_layout(invalid)
+
     def test_campaign_records_pcap_only_for_selected_run(self):
         jobs = collect_jobs(
             self.MANIFEST,
@@ -297,6 +330,200 @@ class CampaignRunnerTest(unittest.TestCase):
         self.assertFalse(
             any("recordPcap=true" in argument for argument in second.command)
         )
+
+    def test_ul_ofdma_uses_lean_runs_and_additive_run0_diagnostics(self):
+        manifest = {
+            "groups": {
+                "ul_ofdma": {
+                    "ini": "sample/omnetpp.ini",
+                    "expected_repetitions": 2,
+                    "recording": {
+                        "profile": "performance-with-run0-diagnostic",
+                        "diagnostic_run": 0,
+                    },
+                    "conditions": [
+                        {"config": "BacklogBased"},
+                        {"config": "EdcaBaseline"},
+                    ],
+                }
+            }
+        }
+        jobs = collect_jobs(
+            manifest,
+            "ul_ofdma",
+            campaign_session_id=self.SESSION_ID,
+        )
+        run0 = next(
+            job for job in jobs
+            if job.config == "BacklogBased" and job.run == 0
+        )
+        run1 = next(
+            job for job in jobs
+            if job.config == "BacklogBased" and job.run == 1
+        )
+        self.assertIn(
+            "--**.heTbResponseSelectedBytes*.vector-recording=true",
+            run0.command,
+        )
+        self.assertTrue(
+            any("pendingQueue.queueLength" in item for item in run0.command)
+        )
+        self.assertFalse(
+            any("heTbResponse" in item for item in run1.command)
+        )
+        self.assertFalse(
+            any("pendingQueue.queueLength" in item for item in run1.command)
+        )
+        self.assertIn(
+            "--**.app[*].packetSent*.scalar-recording=true",
+            run1.command,
+        )
+        self.assertIn(
+            "--**.app[*].endToEndDelay*.vector-recording=true",
+            run1.command,
+        )
+        self.assertIn(
+            "--**.packetDropQueueOverflow*.scalar-recording=true",
+            run1.command,
+        )
+        self.assertNotIn(
+            "--**.heSpatialReuseReason*.vector-recording=true",
+            run1.command,
+        )
+
+    def test_performance_vectors_are_group_specific(self):
+        self.assertEqual(
+            performance_vector_statistics("ul_ofdma"),
+            (),
+        )
+        fragmentation = performance_vector_statistics("fragmentation")
+        self.assertIn("packetSentToPeer", fragmentation)
+        self.assertIn("acknowledgmentAirtime", fragmentation)
+        self.assertNotIn("powerConsumption", fragmentation)
+        self.assertIn(
+            "powerConsumption",
+            performance_vector_statistics("twt"),
+        )
+
+    def test_ul_ofdma_validation_distinguishes_scheduled_edca_and_lean_runs(self):
+        manifest = {
+            "groups": {
+                "ul_ofdma": {
+                    "expected_repetitions": 2,
+                    "recording": {
+                        "profile": "performance-with-run0-diagnostic",
+                        "diagnostic_run": 0,
+                    },
+                }
+            }
+        }
+        scheduled = CampaignJob(
+            "ul_ofdma", "BacklogBased", 0, Path(), ()
+        )
+        edca = replace(scheduled, config="EdcaBaseline")
+        lean = replace(scheduled, run=1)
+
+        scheduled_requirements = requirements_for_job(scheduled, manifest)
+        edca_requirements = requirements_for_job(edca, manifest)
+        lean_requirements = requirements_for_job(lean, manifest)
+
+        self.assertEqual(len(lean_requirements), 3)
+        self.assertIn(
+            ("heTbResponseReason:vector", "nonzero"),
+            {(item.name, item.expectation) for item in scheduled_requirements},
+        )
+        self.assertIn(
+            ("heTbResponseReason:vector", "zero"),
+            {(item.name, item.expectation) for item in edca_requirements},
+        )
+        self.assertNotIn(
+            "heTbResponseSelectedBytes:vector",
+            {item.name for item in edca_requirements},
+        )
+        self.assertIn(
+            ("queueLength:vector", "positive"),
+            {(item.name, item.expectation) for item in edca_requirements},
+        )
+
+    def test_result_query_parser_and_requirement_validation(self):
+        parsed = parse_query_output(
+            "scalar Net.host[0].app[1] packetSent:count 700\n"
+            "vector Net.server.app[0] endToEndDelay:vector "
+            "vectorId=1 count=650 mean=0.1 min=0 max=1\n"
+        )
+        self.assertEqual(parsed[0].value, 700)
+        self.assertEqual(parsed[1].count, 650)
+        self.assertEqual(parsed[1].maximum, 1)
+        self.assertIsNone(validate_requirement(
+            parsed,
+            RequiredResult(
+                "scalar",
+                "**.host[*].app[*]",
+                "packetSent:count",
+            ),
+        ))
+        self.assertRegex(
+            validate_requirement(
+                [RecordedResult(
+                    "vector",
+                    "Net.host[0].queue",
+                    "queueLength:vector",
+                    count=10,
+                    maximum=0,
+                )],
+                RequiredResult(
+                    "vector",
+                    "**.queue",
+                    "queueLength:vector",
+                    "positive",
+                ),
+            ),
+            "expected positive",
+        )
+        self.assertRegex(
+            validate_requirement(
+                parsed,
+                RequiredResult(
+                    "vector",
+                    "**.host[*].wlan[*].mac.hcf",
+                    "heTbResponseReason:vector",
+                ),
+            ),
+            "missing",
+        )
+        self.assertIsNone(validate_requirement(
+            [RecordedResult(
+                "vector",
+                "Net.host[0].wlan[0].mac.hcf",
+                "heTbResponseReason:vector",
+                count=0,
+            )],
+            RequiredResult(
+                "vector",
+                "**.host[*].wlan[*].mac.hcf",
+                "heTbResponseReason:vector",
+                "zero",
+            ),
+        ))
+
+    def test_result_artifacts_require_one_scalar_vector_pair(self):
+        job = CampaignJob(
+            group="sample",
+            config="First",
+            run=0,
+            result_dir=Path(),
+            command=(),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            result_dir = Path(directory)
+            job = replace(job, result_dir=result_dir)
+            (result_dir / "First-#0.sca").touch()
+            with self.assertRaisesRegex(RuntimeError, "one .vec"):
+                result_artifacts(job)
+            (result_dir / "First-#0.vec").touch()
+            scalar, vector = result_artifacts(job)
+            self.assertEqual(scalar.name, "First-#0.sca")
+            self.assertEqual(vector.name, "First-#0.vec")
 
     def test_campaign_rejects_configurations_from_different_examples(self):
         manifest = {

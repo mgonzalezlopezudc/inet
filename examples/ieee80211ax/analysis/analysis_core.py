@@ -89,6 +89,35 @@ def validate_result_layout(manifest: dict[str, Any]) -> None:
             )
         if "ini" not in group:
             raise RuntimeError(f"{group_name}: missing ini")
+        recording = group.get("recording")
+        if recording is not None:
+            if not isinstance(recording, dict):
+                raise RuntimeError(
+                    f"{group_name}: recording profile must be an object"
+                )
+            if group_name != "ul_ofdma":
+                raise RuntimeError(
+                    f"{group_name}: diagnostic recording profile is only "
+                    f"defined for ul_ofdma"
+                )
+            if recording.get("profile") != (
+                "performance-with-run0-diagnostic"
+            ):
+                raise RuntimeError(
+                    f"{group_name}: unknown recording profile "
+                    f"{recording.get('profile')!r}"
+                )
+            diagnostic_run = recording.get("diagnostic_run")
+            repetitions = int(group["expected_repetitions"])
+            if (
+                not isinstance(diagnostic_run, int)
+                or diagnostic_run < 0
+                or diagnostic_run >= repetitions
+            ):
+                raise RuntimeError(
+                    f"{group_name}: diagnostic_run must be in "
+                    f"[0, {repetitions})"
+                )
         roots = {result_root(REPOSITORY_ROOT, group["ini"])}
         for entry in group.get("conditions", []):
             if "result_dir" in entry:

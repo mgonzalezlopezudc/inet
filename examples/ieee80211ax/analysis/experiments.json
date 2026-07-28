@@ -300,6 +300,10 @@
       "walkthrough": "examples/ieee80211ax/ul_ofdma/walkthrough.md",
       "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
       "expected_repetitions": 5,
+      "recording": {
+        "profile": "performance-with-run0-diagnostic",
+        "diagnostic_run": 0
+      },
       "measurement": {"start": 0.3, "end": 0.95},
       "conditions": [
         {"label": "Backlog scheduler", "config": "BacklogBased", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},

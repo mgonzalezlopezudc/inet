@@ -164,6 +164,35 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 {"BaselineEnergy", "TwtEnergySaving"},
             )
 
+    def test_ul_ofdma_session_records_the_evidence_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            generated = Path(directory) / "generated"
+            args = SimpleNamespace(
+                suite=str(AX_SUITE),
+                scenario="ul_ofdma",
+                evidence="scalar-vector",
+                runs=5,
+                config=["BacklogBased", "EdcaBaseline"],
+                jobs=2,
+                session_id=SESSION,
+            )
+            with (
+                patch.object(wifi_analysis, "GENERATED_ROOT", generated),
+                patch.object(wifi_analysis, "run_command"),
+                redirect_stdout(io.StringIO()),
+            ):
+                wifi_analysis.run_command_handler(args)
+            logical = json.loads(
+                (generated / "sessions" / SESSION / "session.json").read_text()
+            )
+            self.assertEqual(
+                logical["recording"],
+                {
+                    "profile": "performance-with-run0-diagnostic",
+                    "diagnostic_run": 0,
+                },
+            )
+
     def test_report_never_requests_walkthrough_update(self):
         with tempfile.TemporaryDirectory() as directory:
             generated = Path(directory) / "generated"
