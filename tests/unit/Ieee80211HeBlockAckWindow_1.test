@@ -114,18 +114,28 @@ ASSERT(ackHandler->getOccupiedBlockAckSequenceNumbers(sta1, tid).empty());
 
 auto retryHeader = makeHeader(sta1, tid, 200);
 auto retryPacket = new Packet("block-ack-retry", retryHeader);
+auto unrelatedHeader = makeHeader(sta2, tid, 200);
 ackHandler->frameGotInProgress(retryHeader);
 ackHandler->processTransmittedDataOrMgmtFrame(retryHeader);
+ackHandler->frameGotInProgress(unrelatedHeader);
+ackHandler->processTransmittedDataOrMgmtFrame(unrelatedHeader);
 auto blockAckReq = makeShared<Ieee80211CompressedBlockAckReq>();
 blockAckReq->setReceiverAddress(sta1);
 blockAckReq->setTidInfo(tid);
 blockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(200));
 ackHandler->processTransmittedBlockAckReq(blockAckReq);
-ackHandler->processFailedBlockAckReq(blockAckReq);
+auto failedFrames = ackHandler->processFailedBlockAckReq(blockAckReq);
+REQUIRE(failedFrames.size() == 1);
+REQUIRE(failedFrames.count(std::make_pair(sta1,
+        std::make_pair(tid, SequenceControlField(200, 0)))) == 1);
+REQUIRE(failedFrames.count(std::make_pair(sta2,
+        std::make_pair(tid, SequenceControlField(200, 0)))) == 0);
+REQUIRE(ackHandler->processFailedBlockAckReq(blockAckReq).empty());
 ASSERT(ackHandler->isRetransmission(retryHeader));
 ASSERT(ackHandler->setRetryBitIfNeeded(retryPacket));
 ASSERT(retryPacket->peekAtFront<Ieee80211DataHeader>()->getRetry());
 ackHandler->dropFrame(retryHeader);
+ackHandler->dropFrame(unrelatedHeader);
 delete retryPacket;
 
 auto ackedHeader = makeHeader(sta1, tid, 300);
@@ -262,7 +272,13 @@ delete unackedPacket;
     request->setTidInfo(tid);
     request->setStartingSequenceNumber(SequenceNumberCyclic(600));
     ackHandler->processTransmittedBlockAckReq(request);
-    ackHandler->processFailedBlockAckReq(request);
+    auto failedFrames = ackHandler->processFailedBlockAckReq(request);
+    REQUIRE(failedFrames.size() == 2);
+    REQUIRE(failedFrames.count(std::make_pair(sta1,
+            std::make_pair(tid, SequenceControlField(600, 0)))) == 1);
+    REQUIRE(failedFrames.count(std::make_pair(sta1,
+            std::make_pair(tid, SequenceControlField(601, 0)))) == 1);
+    REQUIRE(ackHandler->processFailedBlockAckReq(request).empty());
     REQUIRE(ledger.getLength() == 2);
     REQUIRE(ledger.getDroppedCount() == 0);
     for (auto packet : packets) {

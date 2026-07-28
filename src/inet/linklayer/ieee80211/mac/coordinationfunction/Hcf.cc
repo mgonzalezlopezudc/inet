@@ -885,7 +885,19 @@ void Hcf::originatorProcessFailedFrame(Packet *failedPacket)
             edcaf->getAckHandler()->processFailedFrame(mgmtHeader);
         }
         else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(failedHeader)) {
-            edcaf->getAckHandler()->processFailedBlockAckReq(blockAckReq);
+            auto failedFrameIds = edcaf->getAckHandler()->processFailedBlockAckReq(blockAckReq);
+            // IEEE Std 802.11-2024, 10.23.2.2 and 10.23.2.12.1: account each
+            // exact MPDU whose expected BlockAck did not arrive before retrying it.
+            for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); i++) {
+                auto packet = edcaf->getInProgressFrames()->getFrames(i);
+                auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
+                if (dataHeader == nullptr || dataHeader->getType() != ST_DATA_WITH_QOS)
+                    continue;
+                auto id = std::make_pair(dataHeader->getReceiverAddress(), std::make_pair(dataHeader->getTid(),
+                        SequenceControlField(dataHeader->getSequenceNumber().get(), dataHeader->getFragmentNumber())));
+                if (failedFrameIds.find(id) != failedFrameIds.end())
+                    edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, dataHeader);
+            }
             return;
         }
         else

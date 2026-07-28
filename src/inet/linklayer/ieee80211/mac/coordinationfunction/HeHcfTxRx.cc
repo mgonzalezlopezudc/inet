@@ -334,7 +334,7 @@ void HeHcf::originatorProcessFailedFrame(Packet *failedPacket)
                 edcaf->getAckHandler()->processFailedFrame(mgmtHeader);
             }
             else if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(failedHeader)) {
-                edcaf->getAckHandler()->processFailedBlockAckReq(blockAckReq);
+                Hcf::originatorProcessFailedFrame(failedPacket);
                 return;
             }
 

@@ -55,12 +55,7 @@ Apply the repository workflow skills that match the evidence being created:
 
 - Use `inet-ned-ini-analysis` to prove the configuration inheritance, winning
   parameter assignments, instantiated types, and recording paths.
-- Use `inet-simulation-run` for reproducible Cmdenv runs.
-- Use `omnetpp-result-analysis` to discover and query scalar/vector results
-  and `omnetpp-result-plotting` to produce the section's comparison,
-  distribution, or timeline figure. If no plot would improve the explanation,
-  record that decision and its reason in the section instead of emitting a
-  decorative chart.
+- Use `omnetpp-result-analysis` to discover and query scalar/vector results.
 - Use `inet-pcap-tshark-analysis` and, for Wi-Fi semantics,
   `inet-80211-packet-debugging` for capture setup and frame analysis.
 - Use `inet-cmdenv-log-analysis`, `omnetpp-eventlog-analysis`, or
@@ -138,18 +133,9 @@ when the shared observation envelope already represents the evidence. Keep
 generation-specific PHY decoding in its typed profile; do not fork the common
 MAC, provenance, campaign, or PCAP pipeline.
 
-Run from a stated working directory with an exact Cmdenv command. Record the
-INI file, configuration, run, seed set, command-line overrides, exit status,
-result directory, capture points, and artifact session. Use command-line
-overrides for temporary logging, packet capture, and result recording.
-
 Validate that every cited `.sca`, `.vec`, `.pcap`/`.pcapng`, log, image, and
 provenance file exists and belongs to the stated configuration and run. Never
-mix numeric results from separate sessions without labeling them. Separate
-sessions may support adjacent scoped claims when their effective configuration
-is matched, but they do not establish event-level causality or exact count
-agreement. Rerun with co-recorded evidence or label the causal link as
-inference.
+mix numeric results from separate sessions.
 
 ### 5. Analyze scalar and vector evidence
 

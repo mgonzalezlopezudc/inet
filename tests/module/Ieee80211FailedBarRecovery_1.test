@@ -1,0 +1,26 @@
+%description:
+
+Deterministic regression for failed BlockAckReq recovery accounting. The
+BacklogBased HE triggered-uplink scenario must complete through the 1 s
+simulation limit without querying a missing per-MPDU QoS retry counter.
+
+%inifile: omnetpp.ini
+
+[General]
+ned-path = .;../../../../src;../../../../examples
+sim-time-limit = 1s
+seed-set = 1
+repeat = 2
+record-vector-results = false
+*.visualizer.typename = ""
+**.numLoInterfaces = 0
+
+include ../../../../examples/ieee80211ax/ul_ofdma/omnetpp.ini
+
+%extraargs: -c BacklogBased -r 1
+
+%contains: stdout
+Simulation time limit reached -- at t=1s
+
+%not-contains: stdout
+retry counter entry doesn't exist
