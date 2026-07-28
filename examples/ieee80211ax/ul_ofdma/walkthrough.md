@@ -10,8 +10,8 @@
 `[agent]` results sessions: `20260727T211515Z`.
 
 Post-implementation checks cited below are an independent, unretained local
-verification set under `/tmp/ul_ofdma_final_*`; they are not a managed results
-session and are not part of either results-session ledger above.
+verification set under `/tmp/ul-capacity-repaired-*`; they are not a managed
+results session and are not part of either results-session ledger above.
 
 This walkthrough compares two access-point (AP) scheduling policies with a
 single-user Enhanced Distributed Channel Access (EDCA) control. The retained
@@ -35,7 +35,7 @@ After completing this walkthrough, the reader can:
   Trigger frame and per-station resource-unit (RU) assignments;
 - distinguish HE-TB scheduled responses from ordinary HE single-user (HE-SU)
   uplink frames in a radiotap capture;
-- compare backlog-based and equal-sized-RU scheduler inputs without treating
+- compare capacity-aware and equal-sized-RU scheduler inputs without treating
   delivered bytes as mechanism evidence;
 - reproduce the result and packet analyses; and
 - verify the allocation-capacity precondition before claiming that queued
@@ -76,7 +76,7 @@ nominal bitrate, Block Ack support, A-MPDU aggregation, and the same receiver
 thresholds. A one-packet-per-station warm-up at 0.2 s is intended to establish
 Block Ack agreements. The measured application starts at 0.3 s: every station
 sends 1,000 bytes every 5 ms, or 1.6 Mbit/s per station and 4.8 Mbit/s in
-aggregate, until the 2 s limit.
+aggregate, until the effective 1 s limit.
 
 UDP port 5000 maps to user priority 6 (`UP_VO`) through
 `ExampleQosClassifier`. The high MU-EDCA contention values and zero configured
@@ -104,6 +104,15 @@ frame-sequence model collects the responses and constructs a Multi-STA Block
 Ack. INET also uses a model-only Trigger ID tag to correlate a response with
 the solicitation. That tag is not an on-air IEEE field and cannot be observed
 in PCAP.
+
+`HeUlSchedulerBacklogBased` is now an INET capacity-aware policy, despite its
+compatibility typename. It fixes a common HE-TB timing boundary, asks the PHY
+calculator for each `(RU, MCS, NSS, FEC)` PSDU capacity, subtracts the shared
+minimum QoS/A-MPDU framing estimate, and maximizes conservative planned service
+bytes over the PHY-owned RU allocation tree. IEEE 802.11 defines the legal
+Trigger fields, HE-TB encoding, and timing; it does not define this objective,
+fairness order, random-access reservation, or tie-break policy. FEC is selected
+per Trigger User Info, so a legal schedule may contain both BCC and LDPC users.
 
 The scalar radio approximates per-RU uplink reception by frequency/power
 placement and does not model timing advance. `PcapRecorder` flattens A-MPDU
@@ -145,17 +154,25 @@ controls.
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
-| `BacklogBased` | Treatment | `enableUlMuOfdma=true`; `HeUlSchedulerBacklogBased` sizes/ranks requests from reported backlog | 3 × 1,000 B/5 ms; AX, 20 MHz | 0–4 / 0–4 | Basic Trigger assigns users/RUs and queued data appears in HE-TB |
+| `BacklogBased` | Treatment | `enableUlMuOfdma=true`; `HeUlSchedulerBacklogBased` scores PHY capacity against conservative BSR bounds | 3 × 1,000 B/5 ms; AX, 20 MHz | 0–4 / 0–4 | Basic Trigger assigns a deterministic fairness prefix and legal mixed/equal RUs |
 | `EqualSizedRUs` | Treatment/policy control | same gate; `HeUlSchedulerEqualSizedRUs` allocates equal RUs and uses backlog for duration | matched | 0–4 / 0–4 | Same exchange structure, with policy-dependent allocations when demand exposes a difference |
 | `EdcaBaseline` | Negative control | `enableUlMuOfdma=false`; coordinator inactive | matched | 0–4 / 0–4 | no Basic/BSRP Trigger or HE-TB scheduled response |
-| `CapacityFit` | Positive mechanism control | backlog scheduler; 10-byte packets; 1 ms source interval; CapacityFit-local legacy EDCA suppression; drain after 0.65 s | AX, 20 MHz; 0.8 s | run 0 / seed sets 0–5 | fitting queued packets produce HE-TB QoS Data with Ack Policy `00` and one terminal Multi-STA BA |
-| `AsymmetricBacklog` | Scheduler-input control | backlog scheduler; 256-byte packets; per-station intervals 1/5/20 ms | AX, 20 MHz; 0.8 s | run 0 / seed sets 1–5 | unequal reported/scheduled byte samples and deterministic Basic scheduling |
+| `CapacityFit` | Positive mechanism control | capacity-aware scheduler; 10-byte packets; 1 ms source interval; CapacityFit-local legacy EDCA suppression | AX, 20 MHz; 1 s | run 0 / seed 1 | fitting queued packets produce HE-TB QoS Data with Ack Policy `00` and one terminal Multi-STA BA |
+| `AsymmetricBacklog` | Scheduler discriminator | capacity-aware scheduler; 256-byte packets; per-station intervals 1/2/4 ms; AsymmetricBacklog-local legacy EDCA suppression | AX, 20 MHz; 1 s | run 0 / seed 1 | unequal conservative BSR bounds produce a deterministic mixed-RU plan when it scores best |
 
 The AP's NED default scheduler typename remains backlog-based in
 `EdcaBaseline`, but it is inactive because the UL coordinator's `enabled`
 parameter follows `enableUlMuOfdma`. Both treatments set
 `minRandomAccessRus=maxRandomAccessRus=0`, so every Trigger user entry should
 be scheduled rather than random access.
+
+The retained post-change seed-1 evidence keeps scheduler intent separate from
+station and server outcomes:
+
+| Configuration | RU layout (offset:size:AID) | Per-user MCS/FEC | Common duration | AP planned bytes | STA actual selected bytes | Status |
+|---|---|---|---|---|---|---|
+| `CapacityFit`, run 0, seed 1 | legal layouts with at most 3 scheduled users across 129 Basic Triggers | MCS 0; scheduler-selected FEC per negotiated user | Trigger-derived common boundary | recorded per user; the retained summary did not aggregate this field | 2,074 HE-TB QoS Data MPDUs of 10 payload bytes; Trigger/data/Multi-STA-BA sequences observed | `PASS` positive fitting boundary |
+| `AsymmetricBacklog`, run 0, seed 1 | representative frame 300: AID 1 `106@0`, AID 2 `26@108`, AID 3 `106@136` (RU codes 53, 4, 54) | MCS 0; LDPC for the scheduled users in the retained trace | UL Length 1108 | 511 nonzero scheduled-user events, total 292,475 B; maximum 3 users per Trigger | server received 753 packets / 192,768 B; this aggregate is not a per-Trigger selected-byte identity | `PASS` mixed-layout discriminator |
 
 ## [agent] Expected invariants and diagnostic map
 
@@ -170,8 +187,7 @@ be scheduled rather than random access.
 ## [agent] Reproduction
 
 Run from the INET repository root. This minimal direct command is a convenient
-single-configuration check but was not the evidence-producing command; status:
-`NOT RUN`.
+single-configuration smoke check; the retained evidence commands follow it.
 
 ```sh
 bin/inet -u Cmdenv \
@@ -186,14 +202,14 @@ campaign machinery, covered run numbers `[0,5)` with seed sets 0–4, recorded
 the selected vectors for every run, and additionally recorded AP `wlan[0]`
 PCAPng in run 0:
 
-The post-implementation capacity-fit mechanism check was also executed in
-release mode, one configuration and run at a time:
+The post-implementation checks were executed in release mode, one
+configuration and run at a time:
 
 ```sh
 bin/inet -u Cmdenv \
   -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
   -c CapacityFit -r 0 --seed-set=1 \
-  --result-dir=/tmp/ul_ofdma_final_capacityfit_r0 \
+  --result-dir=/tmp/ul-capacity-repaired-capacityfit-r0-s1 \
   --cmdenv-express-mode=true \
   '--*.ap.wlan[*].recordPcap=true' \
   '--*.ap.wlan[*].pcapRecorder[*].timePrecision=9' \
@@ -202,8 +218,9 @@ bin/inet -u Cmdenv \
   '--**.checksumMode="computed"' '--**.fcsMode="computed"'
 ```
 
-It exited 0 at 0.8 s. Seed sets 0–5 were then run sequentially with the same
-configuration and run number; every run exited 0.
+This checked-in configuration and retained run both use the effective 1 s
+duration. It produced 129 Basic Triggers and 2,074 10-byte HE-TB QoS Data
+MPDUs in complete Trigger/data/Multi-STA-BA exchanges.
 
 The asymmetric, negative-control, smoke, and focused-test commands were:
 
@@ -211,31 +228,31 @@ The asymmetric, negative-control, smoke, and focused-test commands were:
 bin/inet -u Cmdenv \
   -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
   -c AsymmetricBacklog -r 0 --seed-set=1 \
-  --result-dir=/tmp/ul_ofdma_final_asymmetric_r0 \
+  --result-dir=/tmp/ul-capacity-repaired-asymmetric-r0-s1 \
   --cmdenv-express-mode=true
 
 bin/inet -u Cmdenv \
   -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
   -c EdcaBaseline -r 0 --seed-set=1 \
-  --result-dir=/tmp/ul_ofdma_final_edca_r0 \
+  --result-dir=/tmp/ul-capacity-repaired-edca-r0-s1 \
   --cmdenv-express-mode=true
 
 bin/inet -u Cmdenv \
-  -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
-  -c BacklogBased -r 0 --seed-set=1 --sim-time-limit=0.5s \
-  --result-dir=/tmp/ul_ofdma_final_backlog_r0 \
+  -f examples/ieee80211ax/ul_uora/omnetpp.ini \
+  -c MixedUora -r 0 --seed-set=1 \
+  --result-dir=/tmp/ul-capacity-repaired-mixeduora-r0-s1 \
   --cmdenv-express-mode=true
 
 CCACHE_DISABLE=1 inet_run_unit_tests -m release \
-  -f '(Ieee80211HeBsrBsrpIntegration_1|Ieee80211HeUlMuTransaction_1).*\.test'
+  -f '(HeUlScheduler|Ieee80211HeBsrBsrpIntegration|Ieee80211HeErSuBsr|Ieee80211HePhyCalculatorGolden|Ieee80211HeRu|Ieee80211HeSchedulerValidation|Ieee80211HeTxVector_1|Ieee80211HeUlControlFrames|Ieee80211HeUlMuTransaction).*'
 
 CCACHE_DISABLE=1 inet_run_module_tests -m release --no-build --no-concurrent \
   -f 'Ieee80211HeUlTriggerExchange_1.*'
 ```
 
-For seed expansion the configuration and run number remained fixed, while
-`--seed-set` and the `/tmp` result-directory suffix changed. `CapacityFit`
-covered seed sets 0–5; `AsymmetricBacklog` covered seed sets 1–5.
+The retained repaired evidence uses run 0 and seed set 1 for each focused
+configuration. It is a deterministic regression set, not a multi-seed
+statistical campaign.
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
@@ -601,23 +618,25 @@ delivery difference remains an inference.
 - Run-0 is representative packet evidence; contention-sensitive packet
   behavior was not compared across all five captures because only run 0 was
   captured by design.
-- The result envelope exposes station-side RU/user/PSDU/duration and AP
-  reported/scheduled bytes, but not the per-AID `retryPending` state or the
-  reason the Trigger policy selected Basic. A focused owner-produced signal is
-  the smallest addition needed to make that decision direct evidence.
-- The symmetric, equal-size workload may legitimately lead both policies to
-  the same allocations. An asymmetric per-station backlog control is needed
-  before claiming that the policy implementations are equivalent.
+- The historical publication result envelope lacks the per-AID
+  `retryPending` state and Trigger-selection reason. The repaired model now
+  emits those owner-produced fields, but the unretained focused artifacts do
+  not retroactively add them to the historical session.
+- The symmetric workload may legitimately lead both policies to the same
+  allocations. The repaired asymmetric control proves that the capacity-aware
+  policy selects mixed sizes; it does not by itself quantify a paired
+  equal-sized-policy outcome.
 - PCAP cannot expose INET's model-only Trigger ID, queue ownership, buffer
   status freshness, internal response eligibility, or Trigger-selection
   reason. The retained capacity fields explain why QoS Null is legal, not why
   the AP chose that zero-byte opportunity.
 - The scalar radio, fixed short distances, one BSS, one bandwidth/MCS basis,
-  and five seeds do not support real-network capacity, fairness, interference,
-  or coverage claims.
+  the historical five-seed outcome set, and the repaired single-seed mechanism
+  checks do not support real-network capacity, fairness, interference, or
+  coverage claims.
 - The timeline is not a SIFS-conformance measurement because the recorder's
   observation timestamp does not isolate PPDU end-to-response-start timing.
-- The post-implementation `/tmp/ul_ofdma_final_*` checks are unretained local
+- The post-implementation `/tmp/ul-capacity-repaired-*` checks are unretained local
   regression artifacts, not a managed publication session. Their exact
   commands, paths, and scope are recorded here, but they may not survive
   workspace cleanup and are not listed in the generated results-session
@@ -625,18 +644,14 @@ delivery difference remains an inference.
 
 ## [agent] Further experiments
 
-- Give the stations asymmetric packet intervals while keeping the aggregate
-  offered load fixed. Predict different AID/RU-size decisions from the two
-  policies; inspect new allocation telemetry before comparing goodput.
-- Add a deterministic capacity-fit case by reducing the MPDU size or increasing
-  RU/MCS/duration, and retain the current insufficient-capacity case as a
-  negative boundary. Assert HE-TB QoS Data only in the proved-fit case and QoS
-  Null in the boundary case; inspect Trigger UL Length/RU/MCS and the first
-  response after fresh buffer-status reporting.
+- Run the asymmetric workload with the equal-sized policy under the same seed
+  and retain both decision-event streams before comparing goodput.
 - Retain the same seed and toggle only `enableUlMuOfdma`. Compare delivery,
-  delay, Trigger overhead, and radio energy after the payload invariant passes.
-- Add a field-level assertion that every Basic-trigger HE-TB MPDU participating
-  in the immediate Multi-STA BA sequence uses a standards-permitted Ack Policy.
+  delay, Trigger overhead, and radio energy; the present EDCA control records
+  delivery and feature-gate behavior but is not an energy comparison.
+- Repeat the repaired mechanism controls across a predefined seed set only if
+  the claim is expanded from deterministic mechanism evidence to a
+  contention-sensitive statistical outcome.
 
 ## [agent] Implementation outcome
 
@@ -650,22 +665,24 @@ unsealed before modification; the sealed recursive
 | Immediate response ownership | Valid HE-TB responses stay owned by the active Trigger collection and terminal Multi-STA BA. Overheard, late, or out-of-window HE-TB packets are discarded before legacy HCF Ack processing, preventing a parallel `WlanAck` timer. |
 | Retry semantics | A received frame's Retry bit is no longer cached as future scheduler work. The compatibility overload and layout remain available, while coordinator values stay false/zero. Originator-owned Block Ack failure/timeout requeue and Retry marking are unchanged. |
 | Observability | `HeUlCoordinator` emits a typed Trigger-decision event with reason and per-user AID/backlog/reported/selected-byte/TID/AC/RU fields. `HeHcf` emits a typed station-response event with response reason, Trigger identity/type, AID/TID/AC/RU, selected/reported bytes, and actual Ack Policy. |
-| Capacity-fit control | `CapacityFit` retains live backlog with a 1 ms source and local legacy-EDCA contention settings, uses a 10-byte payload that fits after MAC/A-MPDU/BSR overhead, and stops input at 0.65 s for a drain window. In the independent unretained seed-1 capture, 122 on-air Basic exchanges each ended in exactly one Multi-STA BA; 138 HE-TB QoS Data and 113 QoS Null frames all carried Ack Policy `00`, with no legacy Ack. |
-| Asymmetric control | In independent unretained checks, `AsymmetricBacklog` produced 27–42 Basic Triggers and 81–126 scheduled-user samples per seed over five seed sets. Seed 1 recorded reported backlog from 0 to 3,542 bytes and scheduled bytes from 0 to 322 bytes, exposing unequal scheduler inputs without claiming that its 256-byte packets fit the smallest allocation. |
-| Negative and compatibility controls | In independent unretained checks, `EdcaBaseline` completed with zero HE UL Trigger/scheduling counters and delivered 1,023 application packets in seed 1. A `BacklogBased` smoke run completed. Both focused release unit tests and the deterministic release module test pass; no fingerprint baseline was changed. |
+| Capacity-fit control | `CapacityFit` retains live backlog for the effective 1 s run with a 1 ms source and local legacy-EDCA contention settings. Repaired run 0 / seed 1 recorded 129 Basic Triggers, at most three scheduled users, and 2,074 length-10 HE-TB QoS Data MPDUs in Trigger/data/Multi-STA-BA exchanges. |
+| Asymmetric control | Repaired run 0 / seed 1 recorded 282 Basic Triggers and 511 scheduled-user events, with as many as three users per Trigger. All 511 planned-byte values were nonzero and totaled 292,475 B. Representative frame 300 used `106+26+106` for AIDs 1, 2, and 3 at MCS 0 and UL Length 1108. The server received 753 packets / 192,768 B; that aggregate outcome is not substituted for per-user planned or selected bytes. |
+| Negative and compatibility controls | Repaired `EdcaBaseline` run 0 / seed 1 recorded no Basic/BSRP Trigger, scheduled-user, or RA-RU event and delivered 2,090 packets / 209,000 B. Repaired `MixedUora` recorded 765 Basic Triggers, 1,468 scheduled-user assignments (maximum two), and 765 RA assignments (maximum one); representative frame 390 used one 26-tone RA RU plus AID 2 on a 106-tone RU, followed by a 100-byte QoS Data response and a QoS Null response. Focused release units and the deterministic release module test pass; no fingerprint baseline was changed. |
+| Fingerprint diagnostic | The narrow `MixedUora` fingerprint remains an intentional mismatch: expected `8705-fe54/tplx`, calculated `3953-411d/tplx`. The changed workload and legacy-EDCA suppression create the first Basic Trigger at 0.203988 s, where the prior run had none. No fingerprint CSV or generated update artifact was retained. |
 
 The AP schedules from cached BSR state, while each station selects from its
 current EDCA queue at Trigger time and then performs a capacity check. This
 explains why positive AP backlog alone did not prove a data-bearing response:
 ordinary EDCA could drain the packet first, and a 64-byte packet still did not
 fit after protocol overhead. The 10-byte capacity-fit control exercises the
-positive boundary; the retained 1,000-byte workload and the asymmetric
-256-byte case remain useful non-fitting boundaries.
+positive boundary. The retained 1,000-byte workload remains a non-fitting
+boundary; the asymmetric 256-byte run is a scheduler-plan discriminator, and
+its server aggregate must not be treated as per-Trigger selected-byte proof.
 
 The current bounded implementation verdict is `PASS` for Ack Policy,
 Trigger-owned terminal acknowledgment, capacity-fit HE-TB payload service,
 received-Retry scheduling semantics, typed observability, deterministic
-multi-seed execution, and the EDCA feature gate.
+focused execution, and the EDCA feature gate.
 
 ## [agent] Artifact provenance
 
@@ -677,7 +694,8 @@ multi-seed execution, and the EDCA feature gate.
 | PCAP | `results/20260727T211515Z/*/*ap.wlan[0].pcap` | three configs; run/seed 0 | TShark/capinfos 4.6.4; typed legacy/HE profiles | capture paths and SHA-256 hashes are in the selected capture manifest |
 | PCAP figure | `results/20260727T211515Z/packet_statistics.png` | three run-0 captures | observation count and estimated airtime composition | provenance: `packet_statistics.png.json` |
 | Capture manifest | `examples/ieee80211/analysis/generated/ax/capture_manifests/20260727T211515Z.json` | three configs; run 0 | AP `wlan[0]`, PCAPng/radiotap | binds config, run, seed, capture metadata, hashes, and source revision |
-| Post-fix CapacityFit | `/tmp/ul_ofdma_final_capacityfit_r0/CapacityFit-#0.sca`, matching AP PCAP, `exchange_timeline.csv`, and `/tmp/ul_ofdma_final_capacityfit_r0.log` | `CapacityFit`; run 0; seed set 1 | `opp_scavetool` scalar/vector inspection; TShark field export plus stateful Trigger/response/BA correlation | unretained local verification; not a managed results session |
-| Post-fix CapacityFit seeds | `/tmp/ul_ofdma_final_capacityfit_seed{0,2,3,4,5}/` plus the seed-1 path above | run 0; seed sets 0–5 | sequential Cmdenv runs; Basic/BSRP/scheduled-user scalars | unretained local verification |
-| Post-fix asymmetric seeds | `/tmp/ul_ofdma_final_asymmetric_{r0,seed2,seed3,seed4,seed5}/` | run 0; seed sets 1–5 | sequential Cmdenv runs; reported/scheduled-byte vectors and Trigger counters | unretained local verification |
-| Post-fix controls and tests | `/tmp/ul_ofdma_final_{edca_r0,backlog_r0}/`, `/tmp/ul_ofdma_final_units_release.log`; module work under `tests/module/work/Ieee80211HeUlTriggerExchange_1/` | EDCA and backlog seed set 1; two focused units; one module test | Cmdenv, release unit runner, release module runner | unretained local verification; module test PASS after generated work refresh |
+| Repaired CapacityFit | `/tmp/ul-capacity-repaired-capacityfit-r0-s1/` | `CapacityFit`; run 0; seed set 1 | scalar/vector inspection and AP PCAP correlation | unretained local verification; 129 Basic Triggers and 2,074 length-10 HE-TB QoS Data MPDUs |
+| Repaired asymmetric | `/tmp/ul-capacity-repaired-asymmetric-r0-s1/` | `AsymmetricBacklog`; run 0; seed set 1 | scheduler event vectors, server results, and AP PCAP | unretained local verification; representative frame 300 documented above |
+| Repaired feature-gate control | `/tmp/ul-capacity-repaired-edca-r0-s1/` | `EdcaBaseline`; run 0; seed set 1 | scalar/vector inspection and AP PCAP | no HE UL Trigger/scheduled/RA events; 2,090 packets / 209,000 B |
+| Repaired mixed UORA | `/tmp/ul-capacity-repaired-mixeduora-r0-s1/` | `MixedUora`; run 0; seed set 1 | scheduler event vectors and AP PCAP | 765 Basic Triggers; scheduled and RA assignments coexist |
+| Focused tests | `/tmp/capacity-final-nine-units.log`, `/tmp/capacity-final-module.log` | nine unit tests and one deterministic module test | release unit and module runners | final self-test artifacts |

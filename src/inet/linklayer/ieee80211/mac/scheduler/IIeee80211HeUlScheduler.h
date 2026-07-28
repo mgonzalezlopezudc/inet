@@ -9,12 +9,15 @@
 
 #include <array>
 #include <cmath>
+#include <limits>
 #include <ostream>
+#include <string>
 #include <vector>
 
 #include "inet/common/Units.h"
 #include "inet/linklayer/common/MacAddress.h"
 #include "inet/linklayer/ieee80211/mac/common/AccessCategory.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
 #include "inet/linklayer/ieee80211/mib/Ieee80211HeCapabilities.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HeRu.h"
 #include "inet/physicallayer/wireless/ieee80211/packetlevel/Ieee80211HePhyCalculator.h"
@@ -71,6 +74,8 @@ class INET_API IIeee80211HeUlScheduler
         MacAddress staAddress;
         uint16_t associationId = 0;
         std::array<int64_t, 4> backlogBytes = {};
+        std::array<Ieee80211HeQueueSizeEstimate, 4> backlogEstimates;
+        bool hasTypedBacklogEstimates = false;
         AccessCategory selectedAccessCategory = AC_BE;
         uint8_t selectedTid = 0;
         simtime_t reportAge = SIMTIME_MAX;
@@ -83,8 +88,20 @@ class INET_API IIeee80211HeUlScheduler
         Ieee80211NegotiatedHeCapabilities negotiatedHeCapabilities;
         bool ulMuDisabled = false;
         simtime_t lastService = SIMTIME_ZERO;
+        physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
 
-        int64_t getSelectedBacklogBytes() const { return backlogBytes[selectedAccessCategory]; }
+        int64_t getSelectedBacklogBytes() const {
+            return hasTypedBacklogEstimates ?
+                    std::min<uint64_t>(backlogEstimates[selectedAccessCategory].getConservativeBytes(),
+                            std::numeric_limits<int64_t>::max()) :
+                    backlogBytes[selectedAccessCategory];
+        }
+
+        bool isUnknownProbe() const {
+            return hasTypedBacklogEstimates &&
+                    backlogEstimates[selectedAccessCategory].kind ==
+                            Ieee80211HeQueueSizeKind::UNKNOWN;
+        }
     };
 
     /** Channel, TXOP, receiver, and random-access observations for one Trigger decision. */
@@ -94,11 +111,13 @@ class INET_API IIeee80211HeUlScheduler
         Hz channelBandwidth = Hz(NaN);
         simtime_t txopLimit = SIMTIME_ZERO;
         simtime_t requestedDuration = SimTime(1, SIMTIME_MS);
+        physicallayer::Ieee80211HeTbCapacityBoundary finalizedBoundary;
         double apSensitivityDbm = -85;
         double targetRssiMarginDb = 10;
         int estimatedRandomAccessContenders = 0;
         double recentRandomAccessCollisionRate = 0;
         double recentRandomAccessIdleRate = 0;
+        bool useUlMuMimoPolicy = false;
     };
 
     /** One scheduled or random-access RU in a trigger-based uplink PPDU. */
@@ -113,9 +132,11 @@ class INET_API IIeee80211HeUlScheduler
         int numberOfSpatialStreams = 1;
         int streamStartIndex = 0;
         bool muMimo = false;
+        physicallayer::Ieee80211HeCoding coding = physicallayer::HE_CODING_BCC;
         int targetRssiDbm = -75;
         bool useMaximumTransmitPower = false;
         simtime_t estimatedDuration = SIMTIME_ZERO;
+        int64_t plannedBytes = 0;
     };
 
     /** Complete Trigger allocation plus PHY parameters common to all HE-TB users. */
@@ -147,7 +168,17 @@ class INET_API IIeee80211HeUlScheduler
         int apTxPowerDbm = 0;
         int packetExtensionDurationUs = 0;
         uint8_t puncturedSubchannelMask = 0;
+        bool exactOptimization = false;
+        std::string decisionReason;
+        int64_t totalPlannedBytes = 0;
     };
+
+    /**
+     * Minimum triggered single-MPDU A-MPDU framing owned by the MAC:
+     * 30-byte QoS data header including HT Control, 4-byte FCS, and
+     * 4-byte A-MPDU delimiter.
+     */
+    static constexpr int64_t getMinimumHeTbMacServiceOverheadBytes() { return 38; }
 
     virtual ~IIeee80211HeUlScheduler() {}
     virtual Schedule schedule(const ScheduleContext& context) = 0;
@@ -185,6 +216,8 @@ inline std::ostream& operator<<(std::ostream& os, const IIeee80211HeUlScheduler:
        << " stream=" << allocation.streamStartIndex
        << " targetRssi=" << allocation.targetRssiDbm
        << " duration=" << allocation.estimatedDuration;
+    os << " coding=" << (allocation.coding == physicallayer::HE_CODING_LDPC ? "LDPC" : "BCC")
+       << " plannedBytes=" << allocation.plannedBytes;
     return os;
 }
 

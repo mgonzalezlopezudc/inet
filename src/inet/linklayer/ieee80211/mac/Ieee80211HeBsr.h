@@ -31,6 +31,16 @@ enum class Ieee80211HeQueueSizeKind {
     UNKNOWN
 };
 
+/** Decoded Table 9-33 queue-size semantics without lossy flattening. */
+struct Ieee80211HeQueueSizeEstimate {
+    Ieee80211HeQueueSizeKind kind = Ieee80211HeQueueSizeKind::QUANTIZED;
+    uint64_t lowerBoundBytes = 0;
+    uint64_t upperBoundBytes = 0;
+    bool hasUpperBound = true;
+
+    uint64_t getConservativeBytes() const { return lowerBoundBytes; }
+};
+
 constexpr uint8_t IEEE80211_HE_VARIANT = 3;
 constexpr uint8_t IEEE80211_HE_BSR_CONTROL_ID = 3;
 constexpr uint8_t IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE = 254;
@@ -85,21 +95,39 @@ inline bool unpackHeBufferStatusHtControl(uint32_t htControl, Ieee80211HeBufferS
     return isValidHeBufferStatus(status);
 }
 
+inline Ieee80211HeQueueSizeEstimate decodeHeBufferStatusQueueSize(
+        uint8_t queueCode, uint8_t scalingFactor)
+{
+    Ieee80211HeQueueSizeEstimate estimate;
+    const uint64_t unit = getHeBufferStatusScaleUnit(scalingFactor);
+    if (queueCode == 0)
+        return estimate;
+    if (queueCode < IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE) {
+        estimate.lowerBoundBytes = (queueCode - 1) * unit + 1;
+        estimate.upperBoundBytes = queueCode * unit;
+        return estimate;
+    }
+    if (queueCode == IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE) {
+        estimate.kind = Ieee80211HeQueueSizeKind::OVERFLOW;
+        estimate.lowerBoundBytes = static_cast<uint64_t>(queueCode) * unit + 1;
+        estimate.upperBoundBytes = std::numeric_limits<uint64_t>::max();
+        estimate.hasUpperBound = false;
+        return estimate;
+    }
+    estimate.kind = Ieee80211HeQueueSizeKind::UNKNOWN;
+    estimate.hasUpperBound = false;
+    return estimate;
+}
+
 inline Ieee80211HeQueueSizeKind decodeHeBufferStatusQueueSize(uint8_t queueCode,
         uint8_t scalingFactor, uint32_t& queueSize)
 {
-    auto unit = getHeBufferStatusScaleUnit(scalingFactor);
-    if (queueCode < IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE) {
-        queueSize = queueCode * unit;
-        return Ieee80211HeQueueSizeKind::QUANTIZED;
-    }
-    if (queueCode == IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE) {
-        // This is a strict lower bound, not a quantized upper bound.
-        queueSize = queueCode * unit;
-        return Ieee80211HeQueueSizeKind::OVERFLOW;
-    }
-    queueSize = IEEE80211_HE_BSR_UNKNOWN_QUEUE_SIZE;
-    return Ieee80211HeQueueSizeKind::UNKNOWN;
+    auto estimate = decodeHeBufferStatusQueueSize(queueCode, scalingFactor);
+    queueSize = estimate.kind == Ieee80211HeQueueSizeKind::UNKNOWN ?
+            IEEE80211_HE_BSR_UNKNOWN_QUEUE_SIZE :
+            static_cast<uint32_t>(std::min<uint64_t>(estimate.lowerBoundBytes,
+                    std::numeric_limits<uint32_t>::max()));
+    return estimate.kind;
 }
 
 inline bool encodeHeBufferStatusQueueSize(uint32_t queueSize, uint8_t scalingFactor, uint8_t& queueCode)

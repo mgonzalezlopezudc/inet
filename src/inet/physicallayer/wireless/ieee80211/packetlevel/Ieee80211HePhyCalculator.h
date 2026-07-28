@@ -449,11 +449,27 @@ struct Ieee80211HePhyValidationResult
     explicit operator bool() const { return valid; }
 };
 
+/** Fixed, already-finalized HE-TB symbol and padding boundary. */
+struct Ieee80211HeTbCapacityBoundary
+{
+    Hz channelBandwidth = Hz(NaN);
+    uint16_t ulLength = 0;
+    Ieee80211HeGuardInterval guardInterval = HE_GI_1_6_US;
+    Ieee80211HeLtfType ltfType = HE_LTF_2X;
+    int preFecPaddingFactor = 0;
+    bool ldpcExtraSymbolSegment = false;
+    bool peDisambiguity = false;
+    int numberOfHeLtfSymbols = 0;
+    int packetExtensionDurationUs = 0;
+};
+
 /**
  * Complete PHY inputs for finalizing the common timing fields of a
  * response-soliciting Trigger frame. When durationBudget is present, the
  * longest legal HE-TB duration not exceeding it is selected; otherwise the
  * shortest legal duration that contains every requested PSDU is selected.
+ * fixedBoundary requests validation against an immutable previously finalized
+ * common tuple.
  */
 struct Ieee80211HeTriggerResponseFinalizationRequest
 {
@@ -465,6 +481,7 @@ struct Ieee80211HeTriggerResponseFinalizationRequest
     int packetExtensionDurationUs = 0;
     bool noSignalExtension = false;
     std::optional<simtime_t> durationBudget;
+    std::optional<Ieee80211HeTbCapacityBoundary> fixedBoundary;
 };
 
 /** Canonical common Trigger fields and the resolved HE-TB calculation. */
@@ -480,6 +497,18 @@ struct Ieee80211HeTriggerResponseFinalizationResult
     bool peDisambiguity = false;
     simtime_t resolvedTxTime = SIMTIME_ZERO;
     Ieee80211HePpduParameters parameters;
+
+    explicit operator bool() const { return valid; }
+};
+
+/** Typed result of inverting the central HE-TB PHY calculation. */
+struct Ieee80211HePsduCapacityResult
+{
+    bool valid = false;
+    Ieee80211HeValidationErrorCode errorCode = Ieee80211HeValidationErrorCode::NONE;
+    Ieee80211HeValidationContext context;
+    std::string error;
+    B maximumPsduLength = B(0);
 
     explicit operator bool() const { return valid; }
 };
@@ -686,6 +715,18 @@ Ieee80211HePhyValidationResult computeHePpduParameters(
  */
 INET_API Ieee80211HeTriggerResponseFinalizationResult finalizeHeTriggerResponse(
         const Ieee80211HeTriggerResponseFinalizationRequest& request);
+
+/**
+ * Returns the greatest PSDU length that fits an immutable HE-TB boundary.
+ *
+ * IEEE 802.11-2024 Clauses 27.3.12.5.5 and 27.3.13. The implementation
+ * deliberately reuses computeHePpduParameters(), including BCC/LDPC padding
+ * and symbol-boundary rules, so the MAC does not duplicate PHY formulas.
+ */
+INET_API Ieee80211HePsduCapacityResult getHeTbPsduCapacity(
+        const Ieee80211HeTbCapacityBoundary& boundary,
+        const Ieee80211HeRu& ru, int mcs, int numberOfSpatialStreams,
+        Ieee80211HeCoding coding);
 
 inline Ieee80211HeUserPhyParameters computeHeUserPhyParameters(
         B psduLength, const Ieee80211HeRu& ru, int mcs,

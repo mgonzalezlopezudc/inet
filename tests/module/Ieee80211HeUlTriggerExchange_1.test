@@ -1,12 +1,11 @@
 %description:
 
 Deterministic packet-level HE triggered-uplink exchange proof. The fixed
-three-STA topology establishes Block Ack agreements, emits a Trigger with one
-transaction identity, receives parallel HE-TB responses, and completes the
-exchange with one correlated Multi-STA Block Ack. Later deterministic channel
-contention produces incomplete and out-of-window response collections, proving
-that colliding, missing, and late responders do not contaminate another
-Trigger transaction.
+three-STA topology establishes Block Ack agreements, collects parallel BSRP
+responses, then capacity-aware Basic Triggers select the one station whose
+fresh conservative BSR is positive. The exchange completes with one correlated
+Multi-STA Block Ack. Later out-of-window responses prove that a late responder
+does not contaminate another Trigger transaction.
 
 %inifile: omnetpp.ini
 
@@ -45,10 +44,10 @@ include ../../../../examples/ieee80211ax/ul_ofdma/omnetpp.ini
 Starting HE UL BSRP Trigger [1-9][0-9]* with [1-9][0-9]* RU allocations
 
 %contains-regex: stdout
-Starting HE UL Basic Trigger [1-9][0-9]* with 3 RU allocations
+Starting HE UL Basic Trigger [1-9][0-9]* with 1 RU allocations
 
 %contains-regex: stdout
-Committed HE UL schedule: scheduledUsers=3, randomAccessRUs=0, commonDuration=
+Committed HE UL schedule: scheduledUsers=1, randomAccessRUs=0, commonDuration=
 
 %contains-regex: stdout
 Sending HE-TB response: trigger=[1-9][0-9]*, AID=[1-9][0-9]*, scheduled RU=[1-9][0-9]*, packets=[1-9][0-9]*
@@ -67,9 +66,6 @@ Transmitting, frame = .*HE-Multi-STA-BlockAck
 
 %contains-regex: stdout
 HE UL response processing: received=0, block-ack records=3
-
-%contains-regex: stdout
-Reception ended: unsuccessfully for .*HE-Basic-Trigger
 
 %contains-regex: stdout
 Discarding HE-TB response outside active Trigger collection

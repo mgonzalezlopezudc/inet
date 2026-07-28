@@ -1532,12 +1532,18 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                         // populate the legacy TID field deterministically.
                         dataHeader->setBufferStatusAc(ieee80211::mapHeBufferStatusAciToAccessCategory(status.aciHigh));
                         dataHeader->setBufferStatusTid(ieee80211::getHeBufferStatusRepresentativeTid(status.aciHigh));
-                        uint32_t queueSize;
-                        auto queueSizeKind = ieee80211::decodeHeBufferStatusQueueSize(
-                                status.queueSizeAll, status.scalingFactor, queueSize);
-                        if (queueSizeKind == ieee80211::Ieee80211HeQueueSizeKind::OVERFLOW)
-                            queueSize++; // Store the strict lower bound in the legacy byte-count field.
-                        dataHeader->setBufferStatusQueueSize(queueSize);
+                        const auto estimate = ieee80211::decodeHeBufferStatusQueueSize(
+                                status.queueSizeAll, status.scalingFactor);
+                        dataHeader->setBufferStatusQueueSizeKind(static_cast<uint8_t>(estimate.kind));
+                        dataHeader->setBufferStatusScalingFactor(status.scalingFactor);
+                        dataHeader->setBufferStatusQueueSizeCode(status.queueSizeAll);
+                        dataHeader->setBufferStatusQueueSizeLowerBound(estimate.lowerBoundBytes);
+                        dataHeader->setBufferStatusQueueSizeUpperBound(estimate.upperBoundBytes);
+                        dataHeader->setBufferStatusQueueSizeHasUpperBound(estimate.hasUpperBound);
+                        // Compatibility field: conservative known bytes.
+                        dataHeader->setBufferStatusQueueSize(static_cast<uint32_t>(
+                                std::min<uint64_t>(estimate.getConservativeBytes(),
+                                        std::numeric_limits<uint32_t>::max())));
                     }
                     else {
                         dataHeader->markIncorrect();

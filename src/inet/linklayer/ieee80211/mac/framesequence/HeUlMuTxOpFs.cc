@@ -16,7 +16,7 @@
 //   1. Transmit a Basic or BSRP Trigger frame (IEEE 802.11-2024 26.5.2,
 //      with Trigger frame fields from 9.3.1.22).
 //   2. Collect simultaneous HE TB PPDU responses on the assigned RUs
-//      (26.5.2.3 and 27.3.11.12).
+//      (26.5.2.2.4, 27.3.12.5.5, and 27.3.13).
 //   3. Send a Multi-STA BlockAck acknowledging all received MPDUs
 //      (9.3.1.8 and 26.4.2).
 //
@@ -310,7 +310,7 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.ruToneSize = allocation.ru.toneSize;
         user.ruToneOffset = allocation.ru.toneOffset;
         user.mcs = allocation.mcs;
-        user.coding = schedule.coding;
+        user.coding = allocation.coding;
         user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
         user.streamStartIndex = allocation.streamStartIndex;
         user.muMimo = allocation.muMimo;

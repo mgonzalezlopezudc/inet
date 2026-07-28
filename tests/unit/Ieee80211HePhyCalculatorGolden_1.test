@@ -408,6 +408,95 @@ REQUIRE(!malformedPilot);
 REQUIRE(malformedPilot.errorCode == Ieee80211HeValidationErrorCode::INVALID_RU_LAYOUT);
 REQUIRE(malformedPilot.context.fieldName == "ru.pilotSubcarriers");
 
+for (auto coding : {HE_CODING_BCC, HE_CODING_LDPC}) {
+    auto capacityUser = makeGoldenUser(106, 4, coding, 1);
+    Ieee80211HeTriggerResponseFinalizationRequest capacityRequest;
+    capacityRequest.users = {capacityUser};
+    capacityRequest.centerFrequency = Hz(5.18e9);
+    capacityRequest.channelBandwidth = MHz(20);
+    capacityRequest.guardInterval = HE_GI_1_6_US;
+    capacityRequest.ltfType = HE_LTF_2X;
+    capacityRequest.durationBudget = SimTime(1, SIMTIME_MS);
+    auto finalizedCapacity = finalizeHeTriggerResponse(capacityRequest);
+    REQUIRE(finalizedCapacity);
+    Ieee80211HeTbCapacityBoundary boundary;
+    boundary.channelBandwidth = MHz(20);
+    boundary.ulLength = finalizedCapacity.ulLength;
+    boundary.guardInterval = capacityRequest.guardInterval;
+    boundary.ltfType = capacityRequest.ltfType;
+    boundary.preFecPaddingFactor =
+            finalizedCapacity.parameters.common.preFecPaddingFactor;
+    boundary.ldpcExtraSymbolSegment =
+            finalizedCapacity.parameters.common.ldpcExtraSymbol;
+    boundary.peDisambiguity = finalizedCapacity.peDisambiguity;
+    boundary.numberOfHeLtfSymbols =
+            finalizedCapacity.parameters.common.numberOfHeLtfSymbols;
+    boundary.packetExtensionDurationUs =
+            finalizedCapacity.parameters.common.packetExtensionDurationUs;
+    auto capacity = getHeTbPsduCapacity(boundary, capacityUser.ru,
+            capacityUser.mcs, capacityUser.numberOfSpatialStreams, coding);
+    REQUIRE(capacity);
+    auto exactUser = capacityUser;
+    exactUser.psduLength = capacity.maximumPsduLength;
+    Ieee80211HeTbCalculationContext exactContext;
+    exactContext.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    exactContext.ulLength = boundary.ulLength;
+    exactContext.preFecPaddingFactor = boundary.preFecPaddingFactor;
+    exactContext.ldpcExtraSymbolSegment = boundary.ldpcExtraSymbolSegment;
+    exactContext.peDisambiguity = boundary.peDisambiguity;
+    exactContext.numberOfHeLtfSymbols = boundary.numberOfHeLtfSymbols;
+    REQUIRE(computeHePpduParameters({exactUser}, MHz(20),
+            HE_TRIGGER_BASED_UPLINK, boundary.guardInterval, boundary.ltfType,
+            boundary.packetExtensionDurationUs, true, exactContext));
+    exactUser.psduLength = capacity.maximumPsduLength + B(1);
+    REQUIRE(!computeHePpduParameters({exactUser}, MHz(20),
+            HE_TRIGGER_BASED_UPLINK, boundary.guardInterval, boundary.ltfType,
+            boundary.packetExtensionDurationUs, true, exactContext));
+}
+
+{
+    auto bcc = makeGoldenUser(52, 0, HE_CODING_BCC, 1);
+    auto ldpc = makeGoldenUser(106, 4, HE_CODING_LDPC, 1);
+    Ieee80211HeTriggerResponseFinalizationRequest request;
+    request.users = {bcc, ldpc};
+    request.centerFrequency = Hz(5.18e9);
+    request.channelBandwidth = MHz(20);
+    request.guardInterval = HE_GI_1_6_US;
+    request.ltfType = HE_LTF_2X;
+    request.durationBudget = SimTime(2, SIMTIME_MS);
+    auto initial = finalizeHeTriggerResponse(request);
+    REQUIRE(initial);
+    Ieee80211HeTbCapacityBoundary boundary;
+    boundary.channelBandwidth = request.channelBandwidth;
+    boundary.ulLength = initial.ulLength;
+    boundary.guardInterval = request.guardInterval;
+    boundary.ltfType = request.ltfType;
+    boundary.preFecPaddingFactor = initial.parameters.common.preFecPaddingFactor;
+    boundary.ldpcExtraSymbolSegment = initial.parameters.common.ldpcExtraSymbol;
+    boundary.peDisambiguity = initial.peDisambiguity;
+    boundary.numberOfHeLtfSymbols =
+            initial.parameters.common.numberOfHeLtfSymbols;
+    boundary.packetExtensionDurationUs =
+            initial.parameters.common.packetExtensionDurationUs;
+    auto bccCapacity = getHeTbPsduCapacity(boundary, bcc.ru, bcc.mcs, 1, bcc.coding);
+    auto ldpcCapacity = getHeTbPsduCapacity(boundary, ldpc.ru, ldpc.mcs, 1, ldpc.coding);
+    REQUIRE(bccCapacity);
+    REQUIRE(ldpcCapacity);
+    request.fixedBoundary = boundary;
+    request.packetExtensionDurationUs = boundary.packetExtensionDurationUs;
+    request.users[0].psduLength = bccCapacity.maximumPsduLength;
+    request.users[1].psduLength = ldpcCapacity.maximumPsduLength;
+    auto repeated = finalizeHeTriggerResponse(request);
+    REQUIRE(repeated);
+    REQUIRE(repeated.ulLength == boundary.ulLength);
+    REQUIRE(repeated.parameters.common.preFecPaddingFactor ==
+            boundary.preFecPaddingFactor);
+    REQUIRE(repeated.parameters.common.ldpcExtraSymbol ==
+            boundary.ldpcExtraSymbolSegment);
+    request.users[1].psduLength += B(1);
+    REQUIRE(!finalizeHeTriggerResponse(request));
+}
+
 EV << "Exact HE BCC/LDPC/DCM/padding/PE golden calculations passed.\n";
 EV << ".\n";
 

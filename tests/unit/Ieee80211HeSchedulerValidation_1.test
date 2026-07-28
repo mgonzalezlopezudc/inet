@@ -125,7 +125,7 @@ static ValidUlFixture makeValidUlFixture(const MacAddress& station)
     user.mcs = allocation.mcs;
     user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
     user.staId = allocation.associationId;
-    user.coding = schedule.coding;
+    user.coding = allocation.coding;
     user.psduLength = B(1);
     Ieee80211HeTriggerResponseFinalizationRequest request;
     request.users.push_back(user);
@@ -407,7 +407,7 @@ randomAccess.associationId = 0;
 randomAccess.estimatedDuration = SimTime(1, SIMTIME_MS);
 ulSchedule.allocations.clear();
 ulSchedule.allocations.push_back(randomAccess);
-ulSchedule.coding = HE_CODING_LDPC;
+ulSchedule.allocations.front().coding = HE_CODING_LDPC;
 auto bccOnlyRaContext = ulFixture.context;
 bccOnlyRaContext.stations.front().capabilities.mutual.ldpc = false;
 requireRejectedUl(bccOnlyRaContext, ulSchedule,
@@ -421,6 +421,91 @@ requireRejectedUl(ulFixture.context, ulSchedule,
         IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER,
         HeUlMuPlanErrorCode::INCONSISTENT_TXVECTOR,
         "UL Length inconsistent with the canonical TB calculation must be rejected");
+
+{
+    auto mixedFixture = makeValidUlFixture(sta1);
+    auto secondContract = mixedFixture.context.stations.front();
+    secondContract.station = sta2;
+    secondContract.associationId = 8;
+    mixedFixture.context.stations.push_back(secondContract);
+    for (auto& station : mixedFixture.context.stations) {
+        station.capabilities.mutual.ldpc = true;
+        station.capabilities.localRxPeerTx.supportedRuToneSizes =
+                {26, 52, 106, 242};
+        station.capabilities.localRxPeerTx.mcsNss.maxMcsPerNss[0] = 11;
+    }
+    auto catalog = getHeRuAllocationCatalog(
+            mixedFixture.context.centerFrequency, MHz(20));
+    Ieee80211HeRu bccRu;
+    Ieee80211HeRu ldpcRu;
+    bool foundLayout = false;
+    for (const auto& first : catalog)
+        for (const auto& second : catalog)
+            if (first.toneSize == 52 && second.toneSize == 106 &&
+                    validateHeRuLayout({first, second}, MHz(20))) {
+                bccRu = first;
+                ldpcRu = second;
+                foundLayout = true;
+                break;
+            }
+    requireTrue(foundLayout, "mixed BCC/LDPC test layout must exist");
+    auto& mixedSchedule = mixedFixture.schedule;
+    mixedSchedule.guardInterval = HE_GI_1_6_US;
+    mixedSchedule.ltfType = HE_LTF_2X;
+    mixedSchedule.allocations.resize(2);
+    mixedSchedule.allocations[0].staAddress = sta1;
+    mixedSchedule.allocations[0].associationId = 7;
+    mixedSchedule.allocations[0].ru = bccRu;
+    mixedSchedule.allocations[0].mcs = 0;
+    mixedSchedule.allocations[0].coding = HE_CODING_BCC;
+    mixedSchedule.allocations[0].numberOfSpatialStreams = 1;
+    mixedSchedule.allocations[0].targetRssiDbm = -70;
+    mixedSchedule.allocations[1] = mixedSchedule.allocations[0];
+    mixedSchedule.allocations[1].staAddress = sta2;
+    mixedSchedule.allocations[1].associationId = 8;
+    mixedSchedule.allocations[1].ru = ldpcRu;
+    mixedSchedule.allocations[1].mcs = 4;
+    mixedSchedule.allocations[1].coding = HE_CODING_LDPC;
+    std::vector<Ieee80211HeUserPhyParameters> mixedUsers;
+    for (const auto& allocation : mixedSchedule.allocations) {
+        Ieee80211HeUserPhyParameters user;
+        user.ru = allocation.ru;
+        user.mcs = allocation.mcs;
+        user.numberOfSpatialStreams = 1;
+        user.staId = allocation.associationId;
+        user.coding = allocation.coding;
+        user.psduLength = B(1);
+        mixedUsers.push_back(user);
+    }
+    Ieee80211HeTriggerResponseFinalizationRequest mixedRequest;
+    mixedRequest.users = mixedUsers;
+    mixedRequest.centerFrequency = mixedFixture.context.centerFrequency;
+    mixedRequest.channelBandwidth = MHz(20);
+    mixedRequest.guardInterval = mixedSchedule.guardInterval;
+    mixedRequest.ltfType = mixedSchedule.ltfType;
+    mixedRequest.durationBudget = SimTime(2, SIMTIME_MS);
+    auto mixedFinalization = finalizeHeTriggerResponse(mixedRequest);
+    requireTrue(static_cast<bool>(mixedFinalization),
+            "mixed BCC/LDPC schedule must finalize");
+    mixedSchedule.ulLength = mixedFinalization.ulLength;
+    mixedSchedule.commonDuration = mixedFinalization.commonDuration;
+    mixedSchedule.commonDurationExact = mixedFinalization.commonDurationExact;
+    mixedSchedule.preFecPaddingFactor =
+            mixedFinalization.parameters.common.preFecPaddingFactor;
+    mixedSchedule.ldpcExtraSymbolSegment =
+            mixedFinalization.parameters.common.ldpcExtraSymbol;
+    mixedSchedule.peDisambiguity = mixedFinalization.peDisambiguity;
+    mixedSchedule.numberOfHeLtfSymbols =
+            mixedFinalization.parameters.common.numberOfHeLtfSymbols;
+    mixedSchedule.packetExtensionDurationUs =
+            mixedFinalization.parameters.common.packetExtensionDurationUs;
+    for (auto& allocation : mixedSchedule.allocations)
+        allocation.estimatedDuration = mixedSchedule.commonDuration;
+    auto mixedPlan = HeUlMuPlan::create(mixedFixture.context, mixedSchedule,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, ulDiagnostic);
+    requireTrue(mixedPlan.has_value() && !ulDiagnostic,
+            "mixed BCC/LDPC fixed boundary must survive HeUlMuPlan validation");
+}
 
 EV << "Immutable DL and UL scheduler plans rejected malformed release-path cases without mutation.\n";
 

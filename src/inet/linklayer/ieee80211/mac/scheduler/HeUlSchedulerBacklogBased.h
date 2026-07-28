@@ -12,9 +12,14 @@
 namespace inet {
 namespace ieee80211 {
 
-/** HE UL scheduler that serves stations in descending reported-backlog order. */
+/** Capacity-aware HE UL scheduler with deterministic least-recently-served fairness. */
 class INET_API HeUlSchedulerBacklogBased : public HeUlSchedulerBase
 {
+  protected:
+    int maxOptimizedStations = 8;
+
+    virtual void initialize(int stage) override;
+
   public:
     virtual Schedule schedule(const ScheduleContext& context) override;
 };

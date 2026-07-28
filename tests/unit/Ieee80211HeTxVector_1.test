@@ -571,6 +571,15 @@ REQUIRE(tbDataResult.getTxVector()->getCommon().getParameters().lSigLength == 13
 REQUIRE(tbDataResult.getPpduLayout()->getDuration() == SimTime(200, SIMTIME_US));
 REQUIRE(tbDataResult.getPpduLayout()->getCommonNumberOfDataSymbols() == 9);
 REQUIRE(tbDataResult.getPpduLayout()->getUsers()[0].preFecPaddingBits > 0);
+auto bccTbWithCommonLdpcExtra = tbDataRequest;
+bccTbWithCommonLdpcExtra.ldpcExtraSymbolSegment = true;
+REQUIRE(bccTbWithCommonLdpcExtra.users[0].coding == HE_CODING_BCC);
+REQUIRE(Ieee80211HeTxVectorFactory::create(bccTbWithCommonLdpcExtra));
+auto bccNonTbWithLdpcExtra = baseRequest;
+bccNonTbWithLdpcExtra.ldpcExtraSymbolSegment = true;
+assertInvalid(Ieee80211HeTxVectorFactory::create(bccNonTbWithLdpcExtra),
+        Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION,
+        "ldpcExtraSymbolSegment");
 auto exactTbDataRequest = tbDataRequest;
 exactTbDataRequest.requestedTxTime = SimTime(200, SIMTIME_US);
 exactTbDataRequest.requestedTxTimeExact = true;

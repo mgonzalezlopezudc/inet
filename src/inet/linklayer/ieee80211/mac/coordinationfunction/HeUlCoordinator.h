@@ -38,6 +38,8 @@ class INET_API HeUlTriggerDecisionEvent : public cObject
         bool retryPending = false;
         int64_t backlogBytes = 0;
         int64_t reportedBytes = 0;
+        int64_t plannedBytes = 0;
+        // Compatibility alias for pre-capacity-aware listeners.
         int64_t selectedBytes = 0;
         uint8_t tid = 0;
         AccessCategory accessCategory = AC_BE;
@@ -76,6 +78,7 @@ class INET_API HeUlCoordinator : public SimpleModule
     struct BufferStatus {
         MacAddress stationAddress;
         std::array<int64_t, 4> backlogBytes = {};
+        std::array<Ieee80211HeQueueSizeEstimate, 4> backlogEstimates;
         std::array<uint8_t, 4> tid = {};
         simtime_t updateTime = SIMTIME_ZERO;
         // Retained for source compatibility; coordinator-owned values stay false.
@@ -124,6 +127,9 @@ class INET_API HeUlCoordinator : public SimpleModule
             int64_t backlogBytes);
     void updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
             AccessCategory ac, uint8_t tid,
+            const Ieee80211HeQueueSizeEstimate& estimate);
+    void updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
+            AccessCategory ac, uint8_t tid,
             int64_t backlogBytes, bool receivedRetry);
     void clearStation(const MacAddress& stationAddress);
     void invalidatePeer(const MacAddress& stationAddress);
@@ -135,7 +141,9 @@ class INET_API HeUlCoordinator : public SimpleModule
             double sensitivityDbm, double targetRssiMarginDb,
             int estimatedRaContenders, double collisionRate, double idleRate,
             const std::function<bool(const MacAddress&)>& isUlMuDisabled = {},
-            IIeee80211HeUlScheduler::ScheduleContext *preparedContext = nullptr);
+            IIeee80211HeUlScheduler::ScheduleContext *preparedContext = nullptr,
+            const physicallayer::Ieee80211HeTbCapacityBoundary *finalizedBoundary = nullptr,
+            bool useUlMuMimoPolicy = false);
     void commitSchedule(const IIeee80211HeUlScheduler::Schedule& schedule);
     uint32_t allocateTriggerId();
     void noteTriggerSent(IIeee80211HeUlTriggerPolicy::TriggerType triggerType);

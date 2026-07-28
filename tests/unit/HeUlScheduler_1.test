@@ -2,6 +2,9 @@
 Test IEEE 802.11ax uplink scheduled and random-access RU allocation.
 
 %includes:
+#include <tuple>
+
+#include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuPlan.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerEqualSizedRUs.h"
 #include "inet/linklayer/ieee80211/mac/scheduler/HeUlSchedulerBacklogBased.h"
 #include "inet/linklayer/common/MacAddress.h"
@@ -23,6 +26,31 @@ network TestNetwork
             parameters:
                 minRandomAccessRus = 1;
                 maxRandomAccessRus = 4;
+        }
+        fallbackScheduler: HeUlSchedulerBacklogBased {
+            parameters:
+                maxMuStations = 9;
+                maxOptimizedStations = 2;
+                minRandomAccessRus = 1;
+                maxRandomAccessRus = 4;
+        }
+        probeScheduler: HeUlSchedulerBacklogBased {
+            parameters:
+                minRandomAccessRus = 0;
+                maxRandomAccessRus = 0;
+        }
+        anchorScheduler: HeUlSchedulerBacklogBased {
+            parameters:
+                maxMuStations = 1;
+                minRandomAccessRus = 0;
+                maxRandomAccessRus = 0;
+        }
+        largeFallbackScheduler: HeUlSchedulerBacklogBased {
+            parameters:
+                maxMuStations = 30;
+                maxOptimizedStations = 8;
+                minRandomAccessRus = 0;
+                maxRandomAccessRus = 0;
         }
 }
 
@@ -59,6 +87,120 @@ static IIeee80211HeUlScheduler::ScheduleContext makeContext(Hz bandwidth)
     return context;
 }
 
+static void finalizeCapacityBoundary(IIeee80211HeUlScheduler::ScheduleContext& context)
+{
+    Ieee80211HeUserPhyParameters user;
+    user.ru = getHeEqualRuLayout(context.channelCenterFrequency,
+            context.channelBandwidth, getHeMaxRuCount(context.channelBandwidth)).front();
+    user.mcs = 0;
+    user.coding = HE_CODING_BCC;
+    user.psduLength = B(1);
+    Ieee80211HeTriggerResponseFinalizationRequest request;
+    request.users = {user};
+    request.centerFrequency = context.channelCenterFrequency;
+    request.channelBandwidth = context.channelBandwidth;
+    request.durationBudget = context.requestedDuration;
+    auto finalized = finalizeHeTriggerResponse(request);
+    ASSERT(finalized);
+    context.finalizedBoundary.channelBandwidth = context.channelBandwidth;
+    context.finalizedBoundary.ulLength = finalized.ulLength;
+    context.finalizedBoundary.guardInterval = finalized.parameters.common.guardInterval;
+    context.finalizedBoundary.ltfType = finalized.parameters.common.ltfType;
+    context.finalizedBoundary.preFecPaddingFactor =
+            finalized.parameters.common.preFecPaddingFactor;
+    context.finalizedBoundary.ldpcExtraSymbolSegment =
+            finalized.parameters.common.ldpcExtraSymbol;
+    context.finalizedBoundary.peDisambiguity = finalized.peDisambiguity;
+    context.finalizedBoundary.numberOfHeLtfSymbols =
+            finalized.parameters.common.numberOfHeLtfSymbols;
+    context.finalizedBoundary.packetExtensionDurationUs =
+            finalized.parameters.common.packetExtensionDurationUs;
+}
+
+struct OracleScore {
+    int64_t total = -1;
+    std::vector<int64_t> delivered;
+    int64_t unused = 0;
+    std::vector<std::tuple<int, int, uint16_t>> signature;
+};
+
+static bool betterOracleScore(const OracleScore& left, const OracleScore& right)
+{
+    if (left.total != right.total)
+        return left.total > right.total;
+    if (left.delivered != right.delivered)
+        return std::lexicographical_compare(right.delivered.begin(), right.delivered.end(),
+                left.delivered.begin(), left.delivered.end());
+    if (left.unused != right.unused)
+        return left.unused < right.unused;
+    return left.signature < right.signature;
+}
+
+static OracleScore bruteForceThreeUserOracle(
+        const IIeee80211HeUlScheduler::ScheduleContext& context,
+        bool reserveRandomAccessRu = true)
+{
+    // Independently mirror the actual minimum built triggered A-MPDU:
+    // 30-byte QoS header with HT Control + 4-byte FCS + 4-byte delimiter.
+    constexpr int64_t minimumBuiltTriggeredAmpduBytes = 30 + 4 + 4;
+    OracleScore best;
+    const auto catalog = getHeRuAllocationCatalog(
+            context.channelCenterFrequency, context.channelBandwidth);
+    const std::array<std::array<int, 3>, 6> permutations = {{
+        {{0, 1, 2}}, {{0, 2, 1}}, {{1, 0, 2}},
+        {{1, 2, 0}}, {{2, 0, 1}}, {{2, 1, 0}}
+    }};
+    for (size_t a = 0; a < catalog.size(); ++a)
+        for (size_t b = a + 1; b < catalog.size(); ++b)
+            for (size_t c = b + 1; c < catalog.size(); ++c)
+                for (int r = -1; r < static_cast<int>(catalog.size()); ++r) {
+                    if ((reserveRandomAccessRu && r < 0) ||
+                            (!reserveRandomAccessRu && r >= 0) ||
+                            (r >= 0 && (r == static_cast<int>(a) ||
+                             r == static_cast<int>(b) ||
+                             r == static_cast<int>(c) ||
+                             catalog[r].toneSize != 26)))
+                        continue;
+                    std::vector<Ieee80211HeRu> layout = {
+                        catalog[a], catalog[b], catalog[c]};
+                    if (r >= 0)
+                        layout.push_back(catalog[r]);
+                    if (!validateHeRuLayout(layout, context.channelBandwidth))
+                        continue;
+                    const std::array<size_t, 3> ruIndices = {{a, b, c}};
+                    for (const auto& permutation : permutations) {
+                        OracleScore score;
+                        score.total = 0;
+                        score.delivered.resize(3);
+                        for (int position = 0; position < 3; ++position) {
+                            int candidateIndex = permutation[position];
+                            const auto& ru = catalog[ruIndices[position]];
+                            auto capacity = getHeTbPsduCapacity(context.finalizedBoundary,
+                                    ru, 0, 1, HE_CODING_BCC);
+                            if (!capacity) {
+                                score.total = -1;
+                                break;
+                            }
+                            int64_t serviceCapacity = std::max<int64_t>(0,
+                                    capacity.maximumPsduLength.get<B>() -
+                                    minimumBuiltTriggeredAmpduBytes);
+                            int64_t delivered = std::min<int64_t>(
+                                    context.candidates[candidateIndex].getSelectedBacklogBytes(),
+                                    serviceCapacity);
+                            score.delivered[candidateIndex] = delivered;
+                            score.total += delivered;
+                            score.unused += serviceCapacity - delivered;
+                            score.signature.emplace_back(ru.toneOffset, ru.toneSize,
+                                    context.candidates[candidateIndex].associationId);
+                        }
+                        std::sort(score.signature.begin(), score.signature.end());
+                        if (score.total >= 0 && betterOracleScore(score, best))
+                            best = score;
+                    }
+                }
+    return best;
+}
+
 static void assertValidSchedule(const IIeee80211HeUlScheduler::Schedule& schedule, Hz bandwidth)
 {
     ASSERT(!schedule.allocations.empty());
@@ -82,11 +224,150 @@ static void assertValidSchedule(const IIeee80211HeUlScheduler::Schedule& schedul
     ASSERT(validateHeRuLayout(rus, bandwidth));
 }
 
+static HeUlMuPlan::ValidationContext makePlanContext(
+        const IIeee80211HeUlScheduler::ScheduleContext& schedulerContext,
+        const IIeee80211HeUlScheduler::Schedule& schedule)
+{
+    HeUlMuPlan::ValidationContext context;
+    context.centerFrequency = schedulerContext.channelCenterFrequency;
+    context.requireSchedulerCandidate = true;
+    Ieee80211HeCapabilities apCapabilities;
+    Ieee80211HeCapabilities staCapabilities;
+    apCapabilities.ldpc = true;
+    staCapabilities.ldpc = true;
+    Ieee80211HeOperation operation;
+    operation.operatingChannelWidth = schedulerContext.channelBandwidth;
+    auto negotiated = negotiateHeCapabilities(
+            apCapabilities, staCapabilities, operation, true);
+    for (const auto& allocation : schedule.allocations) {
+        if (allocation.randomAccess)
+            continue;
+        HeUlMuPlan::StationContract station;
+        station.station = allocation.staAddress;
+        station.associationId = allocation.associationId;
+        station.capabilities = negotiated;
+        station.schedulerCandidate = true;
+        context.stations.push_back(station);
+    }
+    return context;
+}
+
+static bool applyFixedBoundaryToSchedule(
+        const IIeee80211HeUlScheduler::ScheduleContext& context,
+        IIeee80211HeUlScheduler::Schedule& schedule)
+{
+    schedule.channelBandwidth = context.channelBandwidth;
+    schedule.ulLength = context.finalizedBoundary.ulLength;
+    schedule.guardInterval = context.finalizedBoundary.guardInterval;
+    schedule.ltfType = context.finalizedBoundary.ltfType;
+    schedule.preFecPaddingFactor =
+            context.finalizedBoundary.preFecPaddingFactor;
+    schedule.ldpcExtraSymbolSegment =
+            context.finalizedBoundary.ldpcExtraSymbolSegment;
+    schedule.peDisambiguity = context.finalizedBoundary.peDisambiguity;
+    schedule.numberOfHeLtfSymbols =
+            context.finalizedBoundary.numberOfHeLtfSymbols;
+    schedule.packetExtensionDurationUs =
+            context.finalizedBoundary.packetExtensionDurationUs;
+    std::vector<Ieee80211HeUserPhyParameters> users;
+    for (const auto& allocation : schedule.allocations) {
+        if (allocation.randomAccess)
+            continue;
+        Ieee80211HeUserPhyParameters user;
+        user.ru = allocation.ru;
+        user.mcs = allocation.mcs;
+        user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
+        user.staId = allocation.associationId;
+        user.coding = allocation.coding;
+        user.psduLength = B(1);
+        users.push_back(user);
+    }
+    Ieee80211HeTriggerResponseFinalizationRequest request;
+    request.users = users;
+    request.centerFrequency = context.channelCenterFrequency;
+    request.channelBandwidth = context.channelBandwidth;
+    request.guardInterval = schedule.guardInterval;
+    request.ltfType = schedule.ltfType;
+    request.packetExtensionDurationUs = schedule.packetExtensionDurationUs;
+    request.durationBudget = context.requestedDuration;
+    request.fixedBoundary = context.finalizedBoundary;
+    auto finalization = finalizeHeTriggerResponse(request);
+    if (!finalization)
+        return false;
+    schedule.commonDuration = finalization.commonDuration;
+    schedule.commonDurationExact = finalization.commonDurationExact;
+    for (auto& allocation : schedule.allocations)
+        allocation.estimatedDuration = schedule.commonDuration;
+    return true;
+}
+
+struct TestTreeNode
+{
+    Ieee80211HeRu ru;
+    int parent = -1;
+    std::vector<int> children;
+    std::vector<std::pair<int, int>> leaves;
+};
+
+static int collectTestTree(const Ieee80211HeRuAllocationTree& tree, int parent,
+        std::vector<TestTreeNode>& nodes)
+{
+    int index = nodes.size();
+    nodes.push_back({tree.ru, parent, {}, {}});
+    if (tree.children.empty())
+        nodes[index].leaves.emplace_back(tree.ru.toneSize, tree.ru.toneOffset);
+    else
+        for (const auto& child : tree.children) {
+            int childIndex = collectTestTree(child, index, nodes);
+            nodes[index].children.push_back(childIndex);
+            nodes[index].leaves.insert(nodes[index].leaves.end(),
+                    nodes[childIndex].leaves.begin(), nodes[childIndex].leaves.end());
+        }
+    return index;
+}
+
+static bool leavesOverlap(const TestTreeNode& left, const TestTreeNode& right)
+{
+    for (const auto& leaf : left.leaves)
+        if (std::find(right.leaves.begin(), right.leaves.end(), leaf) !=
+                right.leaves.end())
+            return true;
+    return false;
+}
+
+static int64_t getTestPlannedBytes(
+        const IIeee80211HeUlScheduler::ScheduleContext& context,
+        const IIeee80211HeUlScheduler::RuAllocation& allocation,
+        const Ieee80211HeRu& ru)
+{
+    auto capacity = getHeTbPsduCapacity(context.finalizedBoundary, ru,
+            allocation.mcs, allocation.numberOfSpatialStreams, allocation.coding);
+    if (!capacity)
+        return -1;
+    int64_t serviceCapacity = std::max<int64_t>(0,
+            capacity.maximumPsduLength.get<B>() - (30 + 4 + 4));
+    auto candidate = std::find_if(context.candidates.begin(), context.candidates.end(),
+            [&] (const auto& item) {
+                return item.associationId == allocation.associationId;
+            });
+    ASSERT(candidate != context.candidates.end());
+    return std::min<int64_t>(
+            candidate->getSelectedBacklogBytes(), serviceCapacity);
+}
+
 %activity:
 auto equalScheduler = check_and_cast<HeUlSchedulerEqualSizedRUs *>(
         getParentModule()->getSubmodule("equalScheduler"));
 auto backlogScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
         getParentModule()->getSubmodule("backlogScheduler"));
+auto fallbackScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
+        getParentModule()->getSubmodule("fallbackScheduler"));
+auto probeScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
+        getParentModule()->getSubmodule("probeScheduler"));
+auto anchorScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
+        getParentModule()->getSubmodule("anchorScheduler"));
+auto largeFallbackScheduler = check_and_cast<HeUlSchedulerBacklogBased *>(
+        getParentModule()->getSubmodule("largeFallbackScheduler"));
 
 const double bandwidths[] = {20e6, 40e6, 80e6, 160e6};
 for (double value : bandwidths) {
@@ -97,6 +378,105 @@ for (double value : bandwidths) {
     assertValidSchedule(backlog, context.channelBandwidth);
 }
 EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
+
+{
+    auto context = makeContext(MHz(20));
+    context.candidates.resize(3);
+    for (int i = 0; i < 3; ++i) {
+        auto& candidate = context.candidates[i];
+        candidate.hasTypedBacklogEstimates = true;
+        candidate.hasFreshReport = true;
+        candidate.backlogBytes = {};
+        candidate.hasNegotiatedHeCapabilities = true;
+        auto& capabilities = candidate.negotiatedHeCapabilities.localRxPeerTx;
+        capabilities.valid = true;
+        capabilities.ofdma = true;
+        capabilities.supportedChannelWidths = {MHz(20)};
+        capabilities.supportedRuToneSizes = {26, 52, 106, 242};
+        capabilities.mcsNss.maxMcsPerNss[0] = 11;
+    }
+    context.candidates[0].backlogEstimates[AC_BE].lowerBoundBytes = 400;
+    context.candidates[0].backlogEstimates[AC_BE].upperBoundBytes = 416;
+    context.candidates[1].backlogEstimates[AC_BE].kind =
+            Ieee80211HeQueueSizeKind::UNKNOWN;
+    context.candidates[1].backlogEstimates[AC_BE].hasUpperBound = false;
+    finalizeCapacityBoundary(context);
+    auto schedule = probeScheduler->schedule(context);
+    ASSERT(schedule.allocations.size() == 2);
+    ASSERT(schedule.allocations[0].associationId == 1);
+    ASSERT(schedule.allocations[0].plannedBytes > 0);
+    ASSERT(schedule.allocations[1].associationId == 2);
+    ASSERT(schedule.allocations[1].plannedBytes == 0);
+    EV << "Positive BSR preceded one UNKNOWN probe while known zero was excluded.\n";
+}
+
+{
+    auto context = makeContext(MHz(20));
+    context.candidates.resize(1);
+    auto& candidate = context.candidates.front();
+    candidate.hasTypedBacklogEstimates = true;
+    candidate.hasFreshReport = true;
+    candidate.backlogEstimates[AC_BE].lowerBoundBytes = 50;
+    candidate.hasNegotiatedHeCapabilities = true;
+    auto& capabilities = candidate.negotiatedHeCapabilities.localRxPeerTx;
+    capabilities.valid = true;
+    capabilities.ofdma = true;
+    capabilities.supportedChannelWidths = {MHz(20)};
+    capabilities.supportedRuToneSizes = {26, 52, 106, 242};
+    capabilities.mcsNss.maxMcsPerNss[0] = 0;
+    finalizeCapacityBoundary(context);
+    auto schedule = probeScheduler->schedule(context);
+    ASSERT(schedule.allocations.size() == 1);
+    ASSERT(schedule.allocations.front().ru.toneSize == 26);
+    ASSERT(schedule.allocations.front().mcs == 0);
+    EV << "Negotiated 26-tone/MCS-0 edge limits were enforced before scoring.\n";
+}
+
+{
+    auto context = makeContext(MHz(160));
+    context.candidates.clear();
+    context.estimatedRandomAccessContenders = 0;
+    for (int i = 0; i < 30; ++i) {
+        IIeee80211HeUlScheduler::CandidateInfo candidate;
+        char address[32];
+        snprintf(address, sizeof(address), "02:00:00:20:%02X:%02X", i / 256, i % 256);
+        candidate.staAddress = MacAddress(address);
+        candidate.associationId = i + 1;
+        candidate.backlogBytes[AC_BE] = 1000 + i;
+        candidate.lastService = SimTime(i, SIMTIME_US);
+        context.candidates.push_back(candidate);
+    }
+    finalizeCapacityBoundary(context);
+    auto schedule = largeFallbackScheduler->schedule(context);
+    ASSERT(!schedule.exactOptimization);
+    ASSERT(schedule.allocations.size() == 30);
+    EV << "Thirty 160 MHz candidates used the bounded fallback without truncating maxMuStations.\n";
+}
+
+{
+    auto context = makeContext(Hz(20e6));
+    context.candidates.resize(3);
+    context.useUlMuMimoPolicy = true;
+    context.estimatedRandomAccessContenders = 0;
+    for (auto& candidate : context.candidates) {
+        candidate.hasNegotiatedHeCapabilities = true;
+        candidate.negotiatedHeCapabilities.localRxPeerTx.
+                transmitterCanTransmitFullBandwidthUlMuMimo = true;
+    }
+    finalizeCapacityBoundary(context);
+    auto schedule = backlogScheduler->schedule(context);
+    ASSERT(!schedule.exactOptimization);
+    ASSERT(schedule.decisionReason == "UL MU-MIMO policy bypass");
+    ASSERT(schedule.allocations.size() == 3);
+    for (size_t i = 0; i < schedule.allocations.size(); ++i) {
+        const auto& allocation = schedule.allocations[i];
+        ASSERT(allocation.muMimo);
+        ASSERT(allocation.ru.toneSize == 242);
+        ASSERT(allocation.streamStartIndex == static_cast<int>(i));
+        ASSERT(allocation.plannedBytes > 0);
+    }
+    EV << "UL MU-MIMO policy bypassed the OFDMA optimizer.\n";
+}
 
 {
     auto context = makeContext(Hz(20e6));
@@ -126,6 +506,201 @@ EV << "UL scheduled and UORA layouts passed for 20/40/80/160 MHz.\n";
     ASSERT(randomAccessRus >= 1);
     EV << "Backlog fitting preserved mandatory UORA capacity.\n";
 }
+
+{
+    auto context = makeContext(Hz(20e6));
+    context.candidates.resize(3);
+    context.estimatedRandomAccessContenders = 1;
+    for (auto& candidate : context.candidates)
+        candidate.backlogBytes[AC_BE] = 250;
+    finalizeCapacityBoundary(context);
+    auto schedule = backlogScheduler->schedule(context);
+    ASSERT(schedule.exactOptimization);
+    ASSERT(schedule.totalPlannedBytes > 0);
+    int scheduled = 0;
+    for (const auto& allocation : schedule.allocations)
+        if (!allocation.randomAccess) {
+            scheduled++;
+            ASSERT(allocation.ru.toneSize >= 52);
+            ASSERT(allocation.plannedBytes > 0);
+            ASSERT(allocation.plannedBytes <= 250);
+        }
+    ASSERT(scheduled == 3);
+    auto oracle = bruteForceThreeUserOracle(context);
+    ASSERT(schedule.totalPlannedBytes == oracle.total);
+    std::vector<int64_t> delivered(3);
+    for (const auto& allocation : schedule.allocations)
+        if (!allocation.randomAccess)
+            for (int i = 0; i < 3; ++i)
+                if (context.candidates[i].associationId == allocation.associationId)
+                    delivered[i] = allocation.plannedBytes;
+    ASSERT(delivered == oracle.delivered);
+    auto expected = schedule.allocations;
+    std::reverse(context.candidates.begin(), context.candidates.end());
+    auto permuted = backlogScheduler->schedule(context);
+    auto canonical = [] (const auto& allocations) {
+        std::vector<std::tuple<uint16_t, int, int>> result;
+        for (const auto& allocation : allocations)
+            if (!allocation.randomAccess)
+                result.emplace_back(allocation.associationId,
+                        allocation.ru.toneSize, allocation.ru.toneOffset);
+        std::sort(result.begin(), result.end());
+        return result;
+    };
+    ASSERT(canonical(expected) == canonical(permuted.allocations));
+    EV << "Capacity-aware exact scheduling selected deterministic 3x52-or-larger service.\n";
+}
+
+{
+    auto context = makeContext(MHz(20));
+    context.candidates.resize(3);
+    context.estimatedRandomAccessContenders = 0;
+    for (auto& candidate : context.candidates) {
+        candidate.anchor = false;
+        candidate.lastService = SIMTIME_ZERO;
+    }
+    context.candidates[0].backlogBytes[AC_BE] = 500;
+    context.candidates[1].backlogBytes[AC_BE] = 200;
+    context.candidates[2].backlogBytes[AC_BE] = 200;
+    finalizeCapacityBoundary(context);
+    auto schedule = probeScheduler->schedule(context);
+    auto oracle = bruteForceThreeUserOracle(context, false);
+    ASSERT(schedule.exactOptimization);
+    ASSERT(schedule.totalPlannedBytes == oracle.total);
+    std::vector<int> toneSizes;
+    for (const auto& allocation : schedule.allocations)
+        if (!allocation.randomAccess)
+            toneSizes.push_back(allocation.ru.toneSize);
+    std::sort(toneSizes.begin(), toneSizes.end());
+    ASSERT(toneSizes == std::vector<int>({52, 52, 106}));
+    ASSERT(applyFixedBoundaryToSchedule(context, schedule));
+    auto validationContext = makePlanContext(context, schedule);
+    HeUlMuPlanDiagnostic diagnostic;
+    auto plan = HeUlMuPlan::create(validationContext, schedule,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, diagnostic);
+    ASSERT(plan.has_value());
+    EV << "Asymmetric oracle selected 106+52+52 and survived fixed-boundary plan validation.\n";
+}
+
+{
+    auto context = makeContext(MHz(20));
+    context.candidates.resize(2);
+    context.estimatedRandomAccessContenders = 0;
+    context.candidates[0].anchor = true;
+    context.candidates[0].associationId = 71;
+    context.candidates[0].backlogBytes[AC_BE] = 1;
+    context.candidates[0].lastService = SimTime(1, SIMTIME_MS);
+    context.candidates[1].anchor = false;
+    context.candidates[1].associationId = 72;
+    context.candidates[1].backlogBytes[AC_BE] = 50000;
+    context.candidates[1].lastService = SimTime(2, SIMTIME_MS);
+    finalizeCapacityBoundary(context);
+    auto schedule = anchorScheduler->schedule(context);
+    ASSERT(schedule.allocations.size() == 1);
+    ASSERT(schedule.allocations.front().associationId == 71);
+    EV << "The fairness anchor was not skipped for a newer larger backlog.\n";
+}
+
+{
+    auto context = makeContext(Hz(20e6));
+    context.estimatedRandomAccessContenders = 1;
+    auto schedule = fallbackScheduler->schedule(context);
+    ASSERT(!schedule.exactOptimization);
+    int scheduled = 0;
+    int randomAccess = 0;
+    for (const auto& allocation : schedule.allocations) {
+        scheduled += !allocation.randomAccess;
+        randomAccess += allocation.randomAccess;
+    }
+    ASSERT(scheduled == 4);
+    ASSERT(randomAccess >= 1);
+    EV << "Bounded deterministic fallback retained the complete fairness prefix and UORA RU.\n";
+}
+
+{
+    auto context = makeContext(MHz(20));
+    context.estimatedRandomAccessContenders = 1;
+    for (auto& candidate : context.candidates)
+        candidate.backlogBytes[AC_BE] = 50000;
+    finalizeCapacityBoundary(context);
+    auto schedule = fallbackScheduler->schedule(context);
+    ASSERT(!schedule.exactOptimization);
+    auto canonical = [] (const auto& allocations) {
+        std::vector<std::tuple<uint16_t, int, int, bool>> result;
+        for (const auto& allocation : allocations)
+            result.emplace_back(allocation.associationId,
+                    allocation.ru.toneSize, allocation.ru.toneOffset,
+                    allocation.randomAccess);
+        std::sort(result.begin(), result.end());
+        return result;
+    };
+    auto expected = canonical(schedule.allocations);
+    std::reverse(context.candidates.begin(), context.candidates.end());
+    auto permuted = fallbackScheduler->schedule(context);
+    ASSERT(canonical(permuted.allocations) == expected);
+
+    std::vector<TestTreeNode> nodes;
+    collectTestTree(getHeRuAllocationTree(context.channelCenterFrequency,
+            context.channelBandwidth), -1, nodes);
+    auto findNode = [&] (const Ieee80211HeRu& ru) {
+        for (size_t i = 0; i < nodes.size(); ++i)
+            if (nodes[i].ru.toneSize == ru.toneSize &&
+                    nodes[i].ru.toneOffset == ru.toneOffset)
+                return static_cast<int>(i);
+        return -1;
+    };
+    for (const auto& allocation : schedule.allocations) {
+        if (allocation.randomAccess)
+            continue;
+        int nodeIndex = findNode(allocation.ru);
+        ASSERT(nodeIndex >= 0);
+        if (!nodes[nodeIndex].children.empty())
+            for (int child : nodes[nodeIndex].children)
+                ASSERT(getTestPlannedBytes(context, allocation,
+                        nodes[nodeIndex].ru) >
+                        getTestPlannedBytes(context, allocation,
+                                nodes[child].ru));
+        if (nodes[nodeIndex].parent < 0)
+            continue;
+        int parent = nodes[nodeIndex].parent;
+        bool parentFree = true;
+        for (const auto& other : schedule.allocations) {
+            if (&other == &allocation)
+                continue;
+            int otherNode = findNode(other.ru);
+            ASSERT(otherNode >= 0);
+            if (leavesOverlap(nodes[parent], nodes[otherNode])) {
+                parentFree = false;
+                break;
+            }
+        }
+        if (parentFree)
+            ASSERT(getTestPlannedBytes(context, allocation,
+                    nodes[parent].ru) <= allocation.plannedBytes);
+    }
+    EV << "Fallback was permutation-invariant and exhausted every legal positive parent gain.\n";
+}
+
+{
+    auto context = makeContext(MHz(20));
+    context.candidates.clear();
+    context.estimatedRandomAccessContenders = 0;
+    context.requestedDuration = SimTime(2, SIMTIME_MS);
+    ASSERT(probeScheduler->schedule(context).commonDuration ==
+            SimTime(2, SIMTIME_MS));
+    context.requestedDuration = SimTime(1, SIMTIME_MS);
+    ASSERT(probeScheduler->schedule(context).commonDuration ==
+            SimTime(1, SIMTIME_MS));
+    context.requestedDuration = SimTime(2, SIMTIME_MS);
+    context.txopLimit = SimTime(750, SIMTIME_US);
+    ASSERT(probeScheduler->schedule(context).commonDuration ==
+            SimTime(750, SIMTIME_US));
+    context.requestedDuration = SimTime(10, SIMTIME_MS);
+    context.txopLimit = SIMTIME_ZERO;
+    ASSERT(probeScheduler->schedule(context).commonDuration ==
+            SimTime(5.484, SIMTIME_MS));
+    EV << "Default 2 ms, explicit 1 ms, sub-2 ms TXOP, and 5.484 ms ceiling durations passed.\n";
+}
 EV << ".\n";
 
 %contains: stdout
@@ -136,3 +711,18 @@ Collision feedback did not reduce UORA capacity.
 
 %contains: stdout
 Backlog fitting preserved mandatory UORA capacity.
+
+%contains: stdout
+Capacity-aware exact scheduling selected deterministic 3x52-or-larger service.
+
+%contains: stdout
+Bounded deterministic fallback retained the complete fairness prefix and UORA RU.
+
+%contains: stdout
+Positive BSR preceded one UNKNOWN probe while known zero was excluded.
+
+%contains: stdout
+Negotiated 26-tone/MCS-0 edge limits were enforced before scoring.
+
+%contains: stdout
+Thirty 160 MHz candidates used the bounded fallback without truncating maxMuStations.

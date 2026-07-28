@@ -76,6 +76,7 @@ class RecordingHeUlScheduler : public cSimpleModule, public IIeee80211HeUlSchedu
             allocation.ru.bandwidth = Hz(26 * 78125.0);
             allocation.mcs = 2;
             allocation.estimatedDuration = SimTime(500, SIMTIME_US);
+            allocation.plannedBytes = candidate.getSelectedBacklogBytes();
             schedule.allocations.push_back(allocation);
         }
         if (!schedule.allocations.empty())
@@ -200,7 +201,7 @@ REQUIRE(triggerDecisionListener.users.size() == 2);
 REQUIRE(triggerDecisionListener.users[0].associationId == aid1);
 REQUIRE(!triggerDecisionListener.users[0].retryPending);
 REQUIRE(triggerDecisionListener.users[0].reportedBytes == 1200);
-REQUIRE(triggerDecisionListener.users[0].selectedBytes == 1200);
+REQUIRE(triggerDecisionListener.users[0].plannedBytes == 1200);
 REQUIRE(triggerDecisionListener.users[0].tid == 0);
 REQUIRE(triggerDecisionListener.users[0].accessCategory == AC_BE);
 REQUIRE(triggerDecisionListener.users[0].ruIndex == 0);
@@ -215,6 +216,31 @@ ASSERT(!coordinator->getBufferStatus().at(aid2).retryPending[AC_VI]);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::NO_TRIGGER);
 ASSERT(coordinator->getPreferredAccessCategory() == AC_BE);
 EV << "A received retransmission with zero reported backlog did not schedule future retry traffic.\n";
+
+Ieee80211HeQueueSizeEstimate unknownEstimate;
+unknownEstimate.kind = Ieee80211HeQueueSizeKind::UNKNOWN;
+unknownEstimate.hasUpperBound = false;
+coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, unknownEstimate);
+ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+auto unknownSchedule = coordinator->prepareSchedule(mib, linkPhyContext,
+        SimTime(1, SIMTIME_S), Hz(5.18e9), Hz(20e6),
+        SimTime(2, SIMTIME_MS), SimTime(1500, SIMTIME_US),
+        -85, 10, 0, 0, 0);
+auto unknownCandidate = std::find_if(scheduler->lastContext.candidates.begin(),
+        scheduler->lastContext.candidates.end(),
+        [&] (const auto& candidate) { return candidate.associationId == aid2; });
+ASSERT(unknownCandidate != scheduler->lastContext.candidates.end());
+ASSERT(unknownCandidate->isUnknownProbe());
+ASSERT(unknownCandidate->selectedAccessCategory == AC_VI);
+ASSERT(unknownCandidate->selectedTid == 5);
+auto unknownAllocation = std::find_if(unknownSchedule.allocations.begin(),
+        unknownSchedule.allocations.end(),
+        [&] (const auto& allocation) { return allocation.associationId == aid2; });
+ASSERT(unknownAllocation != unknownSchedule.allocations.end());
+ASSERT(unknownAllocation->accessCategory == AC_VI);
+ASSERT(unknownAllocation->tid == 5);
+coordinator->updateBufferStatus(aid2, sta2, AC_VI, 5, 0);
+EV << "UNKNOWN queue semantics preserved their AC and TID through coordinator scheduling.\n";
 
 wait(0.011);
 ASSERT(coordinator->selectTrigger(mib) == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER);
@@ -277,6 +303,9 @@ Fresh reports reached the UL scheduler and produced allocations.
 
 %contains: stdout
 A received retransmission with zero reported backlog did not schedule future retry traffic.
+
+%contains: stdout
+UNKNOWN queue semantics preserved their AC and TID through coordinator scheduling.
 
 %contains: stdout
 Stale reports were excluded and selected BSRP polling.

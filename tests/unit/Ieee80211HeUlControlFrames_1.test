@@ -748,10 +748,21 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     // legacy field is populated with the deterministic AC_VO representative.
     REQUIRE(decoded->getBufferStatusTid() == 6);
     REQUIRE(decoded->getBufferStatusAc() == AC_VO);
-    // BSR queue sizes are rounded up to the 256-byte scaling unit on wire.
-    REQUIRE(decoded->getBufferStatusQueueSize() == 12544);
+    // Table 9-33 code 49 at SF=256 represents [12289,12544].
+    REQUIRE(decoded->getBufferStatusQueueSizeKind() ==
+            static_cast<uint8_t>(Ieee80211HeQueueSizeKind::QUANTIZED));
+    REQUIRE(decoded->getBufferStatusScalingFactor() == 1);
+    REQUIRE(decoded->getBufferStatusQueueSizeCode() == 49);
+    REQUIRE(decoded->getBufferStatusQueueSizeLowerBound() == 12289);
+    REQUIRE(decoded->getBufferStatusQueueSizeUpperBound() == 12544);
+    REQUIRE(decoded->getBufferStatusQueueSizeHasUpperBound());
+    REQUIRE(decoded->getBufferStatusQueueSize() == 12289);
     packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
     auto ampdu = TestHeHcfScheduleFinalizer::aggregateHeTbMpdus({packet});
+    // Independent builder boundary: 30-byte triggered QoS header including
+    // HT Control + 4-byte FCS + 4-byte A-MPDU delimiter.
+    REQUIRE(packet->getByteLength() == 34);
+    REQUIRE(ampdu->getByteLength() == 38);
     auto delimiter = ampdu->popAtFront<Ieee80211MpduSubframeHeader>();
     REQUIRE(delimiter->getLength() == packet->getByteLength());
     REQUIRE(delimiter->getEof());

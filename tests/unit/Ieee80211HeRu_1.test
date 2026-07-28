@@ -72,6 +72,22 @@ for (const auto& ru : catalog80)
 if (central26Count != 1)
     throw cRuntimeError("The 80 MHz allocation tree does not contain exactly one central 26-tone RU");
 
+for (auto channelBandwidth : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
+    auto allocationTree = getHeRuAllocationTree(centerFrequency, channelBandwidth);
+    if (allocationTree.ru.toneSize != getHeChannelToneCount(channelBandwidth))
+        throw cRuntimeError("HE allocation-tree root does not span the channel");
+    std::vector<Ieee80211HeRu> treeNodes;
+    std::function<void(const Ieee80211HeRuAllocationTree&)> visit =
+            [&] (const Ieee80211HeRuAllocationTree& node) {
+        treeNodes.push_back(node.ru);
+        for (const auto& child : node.children)
+            visit(child);
+    };
+    visit(allocationTree);
+    if (treeNodes != getHeRuAllocationCatalog(centerFrequency, channelBandwidth))
+        throw cRuntimeError("Typed HE allocation tree and flat catalog disagree");
+}
+
 constexpr double toneSpacing = 78125;
 for (auto channelBandwidth : {MHz(20), MHz(40), MHz(80), MHz(160)}) {
     auto channelTones = getHeChannelToneCount(channelBandwidth);

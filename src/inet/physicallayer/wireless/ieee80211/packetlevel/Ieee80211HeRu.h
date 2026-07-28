@@ -57,6 +57,18 @@ struct Ieee80211HeRu {
     }
 };
 
+/**
+ * One node of the canonical HE RU allocation tree.
+ *
+ * The PHY owns the split geometry (IEEE 802.11-2024, Figures 27-5 through
+ * 27-8); MAC schedulers consume this read-only value tree instead of
+ * duplicating the split table.
+ */
+struct Ieee80211HeRuAllocationTree {
+    Ieee80211HeRu ru;
+    std::vector<Ieee80211HeRuAllocationTree> children;
+};
+
 inline std::ostream& operator<<(std::ostream& os, const Ieee80211HeRu& ru)
 {
     os << "idx=" << ru.index
@@ -134,6 +146,9 @@ Ieee80211HeRu makeHeRu(Hz centerFrequency, int channelTones,
  * is stable within this catalog and is therefore usable in HE-SIG-B encoding.
  */
 std::vector<Ieee80211HeRu> getHeRuAllocationCatalog(Hz centerFrequency, Hz channelBandwidth);
+
+/** Returns the canonical allocation-tree root for the selected channel. */
+Ieee80211HeRuAllocationTree getHeRuAllocationTree(Hz centerFrequency, Hz channelBandwidth);
 
 /**
  * Returns the standard equal-sized layout as one level of the allocation tree.

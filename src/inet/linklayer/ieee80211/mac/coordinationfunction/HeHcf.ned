@@ -44,7 +44,7 @@ module HeHcf extends Hcf
         bool enableNdpFeedbackReport = default(false); // Periodically sends NFRP Trigger frames when peers negotiated support
         double ulTriggerCheckInterval @unit(s) = default(1ms); // Interval at which the AP considers starting an uplink Trigger exchange
         double ulTargetRssiMargin @unit(dB) = default(10dB); // Target received-power margin requested from scheduled uplink STAs
-        double maxHeTbPpduDuration @unit(s) = default(1ms); // Maximum duration requested for an HE trigger-based uplink PPDU
+        double maxHeTbPpduDuration @unit(s) = default(2ms); // Maximum duration requested for an HE trigger-based uplink PPDU
         // Bit 0 denotes the primary 20 MHz subchannel. Empty keeps the
         // legacy unpunctured channel; puncturing is supported for 80/160 MHz.
         string hePreamblePuncturing = default("");

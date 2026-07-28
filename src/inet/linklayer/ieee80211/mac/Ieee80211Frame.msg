@@ -226,6 +226,12 @@ class Ieee80211DataHeader extends Ieee80211DataOrMgmtHeader
     bool bufferStatusPresent = false;
     uint8_t bufferStatusTid = 0;
     uint8_t bufferStatusAc = 0;
+    uint8_t bufferStatusQueueSizeKind = 0; // Ieee80211HeQueueSizeKind
+    uint8_t bufferStatusScalingFactor = 0;
+    uint8_t bufferStatusQueueSizeCode = 0;
+    uint64_t bufferStatusQueueSizeLowerBound = 0;
+    uint64_t bufferStatusQueueSizeUpperBound = 0;
+    bool bufferStatusQueueSizeHasUpperBound = true;
     uint32_t bufferStatusQueueSize = 0;
     bool operatingModePresent = false;
     uint8_t operatingModeChannelWidth = 0;

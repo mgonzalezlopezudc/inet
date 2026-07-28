@@ -383,6 +383,50 @@ void appendHeRuAllocationTree(std::vector<Ieee80211HeRu>& catalog,
     }
 }
 
+Ieee80211HeRuAllocationTree makeHeRuAllocationTree(Hz centerFrequency,
+        int channelTones, int toneSize, int toneOffset, int& nextIndex)
+{
+    Ieee80211HeRuAllocationTree tree;
+    tree.ru = makeHeRu(centerFrequency, channelTones, nextIndex++, toneSize, toneOffset);
+    auto appendChild = [&] (int childToneSize, int childToneOffset) {
+        tree.children.push_back(makeHeRuAllocationTree(centerFrequency,
+                channelTones, childToneSize, childToneOffset, nextIndex));
+    };
+    switch (toneSize) {
+        case 1992:
+            appendChild(996, toneOffset);
+            appendChild(996, toneOffset + 996);
+            break;
+        case 996:
+            appendChild(484, toneOffset);
+            appendChild(26, toneOffset + 485);
+            appendChild(484, toneOffset + 512);
+            break;
+        case 484:
+            appendChild(242, toneOffset);
+            appendChild(242, toneOffset + 242);
+            break;
+        case 242:
+            appendChild(106, toneOffset);
+            appendChild(26, toneOffset + 108);
+            appendChild(106, toneOffset + 136);
+            break;
+        case 106:
+            appendChild(52, toneOffset);
+            appendChild(52, toneOffset + 54);
+            break;
+        case 52:
+            appendChild(26, toneOffset);
+            appendChild(26, toneOffset + 26);
+            break;
+        case 26:
+            break;
+        default:
+            throw std::invalid_argument("Unsupported IEEE 802.11ax RU allocation-tree node");
+    }
+    return tree;
+}
+
 } // namespace
 
 std::vector<Ieee80211HeRu> getHeRuAllocationCatalog(Hz centerFrequency, Hz channelBandwidth)
@@ -393,6 +437,14 @@ std::vector<Ieee80211HeRu> getHeRuAllocationCatalog(Hz centerFrequency, Hz chann
     appendHeRuAllocationTree(catalog, centerFrequency, channelTones,
             channelTones, 0, nextIndex);
     return catalog;
+}
+
+Ieee80211HeRuAllocationTree getHeRuAllocationTree(Hz centerFrequency, Hz channelBandwidth)
+{
+    int channelTones = getHeChannelToneCount(channelBandwidth);
+    int nextIndex = 0;
+    return makeHeRuAllocationTree(centerFrequency, channelTones,
+            channelTones, 0, nextIndex);
 }
 
 std::vector<Ieee80211HeRu> getHeEqualRuLayout(Hz centerFrequency, Hz channelBandwidth, int count)

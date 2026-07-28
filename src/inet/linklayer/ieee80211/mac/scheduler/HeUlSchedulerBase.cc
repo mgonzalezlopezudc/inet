@@ -15,7 +15,7 @@
 // Common helpers for UL scheduler implementations:
 //   - Computing the number of random-access RUs for UORA (Clause 26.5.4).
 //   - Selecting the target RSSI for triggered STAs (Clause 26.5.2.3).
-//   - Computing the common HE-TB PPDU duration (Clause 27.3.11.12).
+//   - Computing the common HE-TB PPDU duration (Clauses 27.3.13 and 27.4.3).
 //
 // Implementation notes:
 //   - computeRandomAccessRuCount() uses a heuristic feedback formula based on
@@ -116,7 +116,7 @@ simtime_t HeUlSchedulerBase::computeCommonDuration(const ScheduleContext& contex
     if (duration <= SIMTIME_ZERO) {
         duration = SIMTIME_ZERO;
         for (const auto& allocation : allocations)
-            // IEEE 802.11-2024 Clause 27.3.11.12: all HE-TB users transmit with
+            // IEEE 802.11-2024 Clauses 27.3.13 and 27.4.3: all HE-TB users use
             // the same number of symbols and are padded to the common duration.
             // The slowest selected user therefore determines that duration.
             duration = std::max(duration, allocation.estimatedDuration);

@@ -415,7 +415,7 @@ HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
         user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
         user.streamStartIndex = allocation.streamStartIndex;
         user.staId = allocation.associationId;
-        user.coding = proposedSchedule.coding;
+        user.coding = allocation.coding;
         // A feedback NDP has no Data field. Other Trigger types need at least
         // one data symbol; the actual PSDU is padded to the selected duration.
         user.psduLength = B(1);
@@ -431,6 +431,19 @@ HeUlScheduleFinalizationResult HeHcf::finalizeUlSchedule(
     request.packetExtensionDurationUs = proposedSchedule.packetExtensionDurationUs;
     request.noSignalExtension = proposedSchedule.noSignalExtension;
     request.durationBudget = proposedSchedule.commonDuration;
+    if (!feedbackNdp && proposedSchedule.ulLength != 0) {
+        physicallayer::Ieee80211HeTbCapacityBoundary boundary;
+        boundary.channelBandwidth = channelBandwidth;
+        boundary.ulLength = proposedSchedule.ulLength;
+        boundary.guardInterval = proposedSchedule.guardInterval;
+        boundary.ltfType = proposedSchedule.ltfType;
+        boundary.preFecPaddingFactor = proposedSchedule.preFecPaddingFactor;
+        boundary.ldpcExtraSymbolSegment = proposedSchedule.ldpcExtraSymbolSegment;
+        boundary.peDisambiguity = proposedSchedule.peDisambiguity;
+        boundary.numberOfHeLtfSymbols = proposedSchedule.numberOfHeLtfSymbols;
+        boundary.packetExtensionDurationUs = proposedSchedule.packetExtensionDurationUs;
+        request.fixedBoundary = boundary;
+    }
     auto finalization = physicallayer::finalizeHeTriggerResponse(request);
     if (!finalization) {
         result.error = finalization.error;
@@ -476,9 +489,18 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         txopLimit = std::max(SIMTIME_ZERO,
                 edcaf->getTxopProcedure()->getLimit() - edcaf->getTxopProcedure()->getDuration());
     auto sensitivityDbm = math::mW2dBmW(phy.getReceiveSensitivity().get<mW>());
+    const auto puncturedSubchannels = triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
+            std::vector<bool>() : phy.getPuncturedSubchannels();
+    if (std::any_of(puncturedSubchannels.begin(), puncturedSubchannels.end(),
+            [] (bool punctured) { return punctured; })) {
+        EV_WARN << "HE UL skipping Trigger because the modeled HE-TB Trigger fields "
+                << "do not carry a punctured response bandwidth\n";
+        return false;
+    }
     IIeee80211HeUlScheduler::Schedule ulSchedule;
     IIeee80211HeUlScheduler::ScheduleContext schedulerContext;
     bool schedulerPrepared = false;
+    bool useUlMuMimoPolicy = false;
     // 9.3.1.22 encodes the triggering AP's combined transmit power normalized
     // to 20 MHz in one-dB steps. Keep the projected value in the schedule so
     // the frame sequence and serializer cannot silently substitute a default.
@@ -564,64 +586,103 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
     }
     else {
         int staleOrUnknown = 0;
+        int fullBandwidthMuMimoCandidates = 0;
+        const auto fullBandwidthRu = physicallayer::getHeEqualRuLayout(
+                centerFrequency, channelBandwidth, 1).front();
         for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
             if (station.second != Ieee80211Mib::ASSOCIATED)
                 continue;
             auto aid = mac->getMib()->getAssociationId(station.first);
             auto status = ulCoordinator->getBufferStatus().find(aid);
             if (status == ulCoordinator->getBufferStatus().end() ||
-                    simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge())
+                    simTime() - status->second.updateTime > ulCoordinator->getReportMaxAge()) {
                 staleOrUnknown++;
+                continue;
+            }
+            bool hasServiceRequest = false;
+            for (const auto& estimate : status->second.backlogEstimates)
+                hasServiceRequest |= estimate.getConservativeBytes() > 0 ||
+                        estimate.kind == Ieee80211HeQueueSizeKind::UNKNOWN;
+            auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(station.first);
+            Ieee80211HeOperatingMode mode;
+            const bool disabled = isTwtSleeping(mac, station.first) ||
+                    (getPeerOperatingMode(station.first, mode) && mode.ulMuDisable);
+            if (hasServiceRequest && !disabled && negotiated != nullptr &&
+                    negotiated->localRxPeerTx.valid &&
+                    negotiated->localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo &&
+                    negotiated->localRxPeerTx.supportedRuToneSizes.count(
+                            fullBandwidthRu.toneSize) != 0 &&
+                    negotiated->localRxPeerTx.mcsNss.maxMcsPerNss[0] >= 0)
+                fullBandwidthMuMimoCandidates++;
         }
+        useUlMuMimoPolicy = par("enableUlMuMimo").boolValue() &&
+                fullBandwidthMuMimoCandidates >= 2;
+        physicallayer::Ieee80211HeTbCapacityBoundary capacityBoundary;
+        const auto boundaryLayout = physicallayer::getHeEqualRuLayout(centerFrequency,
+                channelBandwidth, physicallayer::getHeMaxRuCount(channelBandwidth));
+        physicallayer::Ieee80211HeUserPhyParameters boundaryUser;
+        boundaryUser.ru = boundaryLayout.front();
+        boundaryUser.mcs = 0;
+        boundaryUser.coding = physicallayer::HE_CODING_BCC;
+        boundaryUser.psduLength = B(1);
+        auto boundaryLdpcUser = boundaryUser;
+        boundaryLdpcUser.ru = boundaryLayout[1];
+        boundaryLdpcUser.coding = physicallayer::HE_CODING_LDPC;
+        physicallayer::Ieee80211HeTriggerResponseFinalizationRequest boundaryRequest;
+        // Seed both coding families so the immutable common boundary is not
+        // derived from a one-user BCC-only approximation.
+        boundaryRequest.users = {boundaryUser, boundaryLdpcUser};
+        boundaryRequest.centerFrequency = centerFrequency;
+        boundaryRequest.channelBandwidth = channelBandwidth;
+        boundaryRequest.guardInterval = phy.getGuardInterval() == physicallayer::HE_GI_3_2_US ?
+                physicallayer::HE_GI_3_2_US : physicallayer::HE_GI_1_6_US;
+        boundaryRequest.ltfType = boundaryRequest.guardInterval == physicallayer::HE_GI_3_2_US ?
+                physicallayer::HE_LTF_4X : useUlMuMimoPolicy ?
+                physicallayer::HE_LTF_1X : physicallayer::HE_LTF_2X;
+        boundaryRequest.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
+        boundaryRequest.durationBudget = std::min(SimTime(par("maxHeTbPpduDuration")),
+                txopLimit > SIMTIME_ZERO ? txopLimit : SimTime(par("maxHeTbPpduDuration")));
+        auto boundaryFinalization = physicallayer::finalizeHeTriggerResponse(boundaryRequest);
+        if (!boundaryFinalization) {
+            EV_WARN << "HE UL skipping OFDMA optimization because the common timing boundary "
+                    << "cannot be finalized: " << boundaryFinalization.error << "\n";
+            return false;
+        }
+        capacityBoundary.channelBandwidth = channelBandwidth;
+        capacityBoundary.ulLength = boundaryFinalization.ulLength;
+        capacityBoundary.guardInterval = boundaryRequest.guardInterval;
+        capacityBoundary.ltfType = boundaryRequest.ltfType;
+        capacityBoundary.preFecPaddingFactor =
+                boundaryFinalization.parameters.common.preFecPaddingFactor;
+        capacityBoundary.ldpcExtraSymbolSegment =
+                boundaryFinalization.parameters.common.ldpcExtraSymbol;
+        capacityBoundary.peDisambiguity = boundaryFinalization.peDisambiguity;
+        capacityBoundary.numberOfHeLtfSymbols =
+                boundaryFinalization.parameters.common.numberOfHeLtfSymbols;
+        capacityBoundary.packetExtensionDurationUs =
+                boundaryFinalization.parameters.common.packetExtensionDurationUs;
         ulSchedule = ulCoordinator->prepareSchedule(mac->getMib(), getLinkPhyContext(),
                 SimTime(par("linkEstimateMaxAge")), centerFrequency, channelBandwidth,
                 txopLimit, par("maxHeTbPpduDuration"), sensitivityDbm,
                 par("ulTargetRssiMargin"), staleOrUnknown, 0, 0,
                 [this] (const MacAddress& address) {
                     Ieee80211HeOperatingMode mode;
-                    return getPeerOperatingMode(address, mode) && mode.ulMuDisable;
-                }, &schedulerContext);
+                    return isTwtSleeping(mac, address) ||
+                            (getPeerOperatingMode(address, mode) && mode.ulMuDisable);
+                }, &schedulerContext, &capacityBoundary,
+                useUlMuMimoPolicy);
+        ulSchedule.ulLength = capacityBoundary.ulLength;
+        ulSchedule.guardInterval = capacityBoundary.guardInterval;
+        ulSchedule.ltfType = capacityBoundary.ltfType;
+        ulSchedule.preFecPaddingFactor = capacityBoundary.preFecPaddingFactor;
+        ulSchedule.ldpcExtraSymbolSegment = capacityBoundary.ldpcExtraSymbolSegment;
+        ulSchedule.peDisambiguity = capacityBoundary.peDisambiguity;
+        ulSchedule.numberOfHeLtfSymbols = capacityBoundary.numberOfHeLtfSymbols;
+        ulSchedule.packetExtensionDurationUs = capacityBoundary.packetExtensionDurationUs;
         schedulerPrepared = true;
     }
-    ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
-            [this] (const auto& allocation) {
-                return !allocation.randomAccess && isTwtSleeping(mac, allocation.staAddress);
-            }), ulSchedule.allocations.end());
-    auto puncturedSubchannels = triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER ?
-            std::vector<bool>() : phy.getPuncturedSubchannels();
-    if (!puncturedSubchannels.empty()) {
-        for (size_t i = 0; i < puncturedSubchannels.size(); ++i)
-            if (puncturedSubchannels[i])
-                EV_DEBUG << "HE UL excludes scheduler RUs in punctured 20 MHz subchannel " << i << "\n";
-        ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
-                [&] (const auto& allocation) {
-                    return overlapsHePuncturedSubchannel(allocation.ru, puncturedSubchannels, channelBandwidth) ||
-                            !supportsPreamblePuncturing(allocation);
-                }), ulSchedule.allocations.end());
-    }
-    ulSchedule.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
-    if (par("enableUlMuMimo").boolValue() && triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER) {
-        std::vector<IIeee80211HeUlScheduler::RuAllocation *> eligible;
-        for (auto& allocation : ulSchedule.allocations) {
-            if (allocation.randomAccess)
-                continue;
-            auto negotiated = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-            if (negotiated != nullptr && negotiated->localRxPeerTx.valid &&
-                    negotiated->localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo)
-                eligible.push_back(&allocation);
-        }
-        if (eligible.size() >= 2) {
-            auto fullRu = physicallayer::getHeEqualRuLayout(centerFrequency, channelBandwidth, 1).front();
-            int stream = 0;
-            for (auto allocation : eligible) {
-                allocation->ru = fullRu;
-                allocation->streamStartIndex = stream++;
-                allocation->muMimo = true;
-            }
-            ulSchedule.allocations.erase(std::remove_if(ulSchedule.allocations.begin(), ulSchedule.allocations.end(),
-                    [] (const auto& allocation) { return allocation.randomAccess || !allocation.muMimo; }), ulSchedule.allocations.end());
-        }
-    }
+    if (!schedulerPrepared)
+        ulSchedule.packetExtensionDurationUs = phy.getPacketExtensionDurationUs();
     // Select one complete Table 9-49 GI/HE-LTF pair. Full-bandwidth UL
     // MU-MIMO may use the raw-0 1x/1.6 us pair; other medium-GI schedules use
     // raw 1 (2x/1.6 us), and long GI uses raw 2 (4x/3.2 us).
@@ -643,23 +704,12 @@ bool HeHcf::tryStartUlMuFrameSequence(AccessCategory ac)
         ulSchedule.guardInterval = physicallayer::HE_GI_3_2_US;
         ulSchedule.ltfType = physicallayer::HE_LTF_4X;
     }
-    bool ldpcSupportedByAll = mac->getMib()->localHeCapabilities.ldpc;
-    for (const auto& allocation : ulSchedule.allocations) {
-        if (allocation.randomAccess) {
-            for (const auto& station : mac->getMib()->bssAccessPointData.stations) {
-                if (station.second != Ieee80211Mib::ASSOCIATED)
-                    continue;
-                auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(station.first);
-                ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr &&
-                        capabilities->localRxPeerTx.valid && capabilities->mutual.ldpc;
-            }
-            continue;
-        }
-        auto capabilities = mac->getMib()->findNegotiatedHeCapabilities(allocation.staAddress);
-        ldpcSupportedByAll = ldpcSupportedByAll && capabilities != nullptr &&
-                capabilities->localRxPeerTx.valid && capabilities->mutual.ldpc;
-    }
-    ulSchedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
+    // UL FEC Coding Type is a per-User Info field. Scheduled users retain the
+    // scheduler's capability-aware choice; UORA uses the universally legal
+    // 26-tone/MCS-0 BCC combination because the responder is not yet known.
+    for (auto& allocation : ulSchedule.allocations)
+        if (allocation.randomAccess)
+            allocation.coding = physicallayer::HE_CODING_BCC;
     if (triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         ulSchedule.coding = physicallayer::HE_CODING_BCC;
         ulSchedule.packetExtensionDurationUs = 0;
@@ -727,9 +777,23 @@ void HeHcf::processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211Dat
 {
     emit(packetReceivedFromPeerSignal, packet);
     if (header->getBufferStatusPresent())
+    {
+        Ieee80211HeQueueSizeEstimate estimate;
+        estimate.kind = static_cast<Ieee80211HeQueueSizeKind>(
+                header->getBufferStatusQueueSizeKind());
+        estimate.lowerBoundBytes = header->getBufferStatusQueueSizeLowerBound();
+        estimate.upperBoundBytes = header->getBufferStatusQueueSizeUpperBound();
+        estimate.hasUpperBound = header->getBufferStatusQueueSizeHasUpperBound();
+        if (estimate.lowerBoundBytes == 0 &&
+                header->getBufferStatusQueueSize() != 0) {
+            estimate.lowerBoundBytes = header->getBufferStatusQueueSize();
+            estimate.upperBoundBytes = estimate.lowerBoundBytes;
+            estimate.hasUpperBound = true;
+        }
         ulCoordinator->updateBufferStatus(aid, header->getTransmitterAddress(),
                 static_cast<AccessCategory>(header->getBufferStatusAc()),
-                header->getBufferStatusTid(), header->getBufferStatusQueueSize());
+                header->getBufferStatusTid(), estimate);
+    }
     if (header->getType() == ST_QOS_NULL) {
         delete packet;
         return;
@@ -1506,7 +1570,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         scheduleTriggeredUlResponseTimeout();
     }
 
-    // 26.5.2.3.3 and 27.3.11.12: the HE TB TXVECTOR is derived from the
+    // 26.5.2.2.4, 27.3.12.5.5, and 27.4.3: the HE-TB TXVECTOR is derived from the
     // selected Trigger User Info and Common Info fields before the packet
     // crosses the MAC/PHY boundary.
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {

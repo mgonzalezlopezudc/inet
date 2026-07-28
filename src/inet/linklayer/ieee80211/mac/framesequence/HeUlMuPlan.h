@@ -265,7 +265,7 @@ class INET_API HeUlMuPlan
                             capabilities.localRxPeerTx.supportedRuToneSizes.count(allocation.ru.toneSize) == 0 ||
                             capabilities.localRxPeerTx.mcsNss.maxMcsPerNss[
                                     allocation.numberOfSpatialStreams - 1] < allocation.mcs ||
-                            (normalized.coding == HE_CODING_LDPC && !capabilities.mutual.ldpc))
+                            (allocation.coding == HE_CODING_LDPC && !capabilities.mutual.ldpc))
                         return rejected(HeUlMuPlanErrorCode::UNSUPPORTED_CAPABILITY, i,
                                 station.station, "random-access parameters exceed an associated contender's capabilities");
                 }
@@ -298,7 +298,7 @@ class INET_API HeUlMuPlan
                         capabilities.localRxPeerTx.supportedChannelWidths.count(bandwidth) == 0 ||
                         capabilities.localRxPeerTx.supportedRuToneSizes.count(allocation.ru.toneSize) == 0 ||
                         capabilities.localRxPeerTx.mcsNss.maxMcsPerNss[nssIndex] < allocation.mcs ||
-                        (normalized.coding == HE_CODING_LDPC && !capabilities.mutual.ldpc) ||
+                        (allocation.coding == HE_CODING_LDPC && !capabilities.mutual.ldpc) ||
                         (allocation.muMimo &&
                          !capabilities.localRxPeerTx.transmitterCanTransmitFullBandwidthUlMuMimo))
                     return rejected(HeUlMuPlanErrorCode::UNSUPPORTED_CAPABILITY, i,
@@ -372,7 +372,7 @@ class INET_API HeUlMuPlan
                 user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
                 user.streamStartIndex = allocation.streamStartIndex;
                 user.staId = allocation.associationId;
-                user.coding = normalized.coding;
+                user.coding = allocation.coding;
                 user.psduLength = B(1);
                 users.push_back(user);
             }
@@ -385,6 +385,19 @@ class INET_API HeUlMuPlan
         request.packetExtensionDurationUs = normalized.packetExtensionDurationUs;
         request.noSignalExtension = normalized.noSignalExtension;
         request.durationBudget = normalized.commonDuration;
+        if (!nfrp) {
+            Ieee80211HeTbCapacityBoundary boundary;
+            boundary.channelBandwidth = bandwidth;
+            boundary.ulLength = normalized.ulLength;
+            boundary.guardInterval = normalized.guardInterval;
+            boundary.ltfType = normalized.ltfType;
+            boundary.preFecPaddingFactor = normalized.preFecPaddingFactor;
+            boundary.ldpcExtraSymbolSegment = normalized.ldpcExtraSymbolSegment;
+            boundary.peDisambiguity = normalized.peDisambiguity;
+            boundary.numberOfHeLtfSymbols = normalized.numberOfHeLtfSymbols;
+            boundary.packetExtensionDurationUs = normalized.packetExtensionDurationUs;
+            request.fixedBoundary = boundary;
+        }
         try {
             auto finalization = finalizeHeTriggerResponse(request);
             if (!finalization || finalization.ulLength != normalized.ulLength ||

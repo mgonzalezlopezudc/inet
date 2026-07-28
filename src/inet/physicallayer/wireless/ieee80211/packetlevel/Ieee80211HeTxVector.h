@@ -568,7 +568,11 @@ class INET_API Ieee80211HeTxVectorFactory final
             if (request.doppler || request.midamblePeriodicity != 0)
                 return makeError(Ieee80211HeValidationErrorCode::UNSUPPORTED_DOPPLER_TIMING,
                         "doppler", "HE Doppler is deferred until N_MA midamble timing is modeled");
-            if (request.ldpcExtraSymbolSegment &&
+            // For HE TB, LDPC Extra Symbol Segment is a Trigger-common
+            // outcome. A BCC STA therefore repeats the common value even
+            // when its local validation view contains no LDPC-coded user.
+            if (request.ppduFormat != HE_TRIGGER_BASED_UPLINK &&
+                    request.ldpcExtraSymbolSegment &&
                     std::none_of(request.users.begin(), request.users.end(),
                             [] (const auto& user) { return user.coding == HE_CODING_LDPC; }))
                 return makeError(Ieee80211HeValidationErrorCode::INVALID_FEC_COMBINATION,

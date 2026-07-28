@@ -33,7 +33,12 @@ ASSERT(unpacked.aciHigh == 2);
 uint32_t quantizedQueueSize;
 ASSERT(decodeHeBufferStatusQueueSize(unpacked.queueSizeAll, unpacked.scalingFactor,
         quantizedQueueSize) == Ieee80211HeQueueSizeKind::QUANTIZED);
-ASSERT(quantizedQueueSize == 75776);
+ASSERT(quantizedQueueSize == 73729);
+auto quantizedEstimate = decodeHeBufferStatusQueueSize(
+        unpacked.queueSizeAll, unpacked.scalingFactor);
+ASSERT(quantizedEstimate.lowerBoundBytes == 73729);
+ASSERT(quantizedEstimate.upperBoundBytes == 75776);
+ASSERT(quantizedEstimate.hasUpperBound);
 
 Ieee80211HeBufferStatus bestEffort;
 ASSERT(encodeHeSingleAcBufferStatus(0, AC_BE, 0, bestEffort));
@@ -59,9 +64,18 @@ ASSERT(encodeHeSingleAcBufferStatus(7, AC_VO, 254 * 32768 + 1, boundary));
 ASSERT(boundary.scalingFactor == 3 && boundary.queueSizeAll == IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE);
 ASSERT(decodeHeBufferStatusQueueSize(boundary.queueSizeAll, boundary.scalingFactor,
         quantizedQueueSize) == Ieee80211HeQueueSizeKind::OVERFLOW);
-ASSERT(quantizedQueueSize == 254 * 32768);
+ASSERT(quantizedQueueSize == 254 * 32768 + 1);
+auto overflowEstimate = decodeHeBufferStatusQueueSize(
+        boundary.queueSizeAll, boundary.scalingFactor);
+ASSERT(overflowEstimate.lowerBoundBytes == 254ULL * 32768 + 1);
+ASSERT(!overflowEstimate.hasUpperBound);
 ASSERT(encodeHeSingleAcBufferStatus(0, AC_BE, IEEE80211_HE_BSR_UNKNOWN_QUEUE_SIZE, boundary));
 ASSERT(boundary.queueSizeAll == IEEE80211_HE_BSR_UNKNOWN_QUEUE_CODE);
+auto unknownEstimate = decodeHeBufferStatusQueueSize(
+        boundary.queueSizeAll, boundary.scalingFactor);
+ASSERT(unknownEstimate.kind == Ieee80211HeQueueSizeKind::UNKNOWN);
+ASSERT(unknownEstimate.getConservativeBytes() == 0);
+ASSERT(!unknownEstimate.hasUpperBound);
 ASSERT(!encodeHeSingleAcBufferStatus(5, AC_VO, 1, boundary));
 
 ASSERT(!unpackHeBufferStatusHtControl(packed ^ 0x1, unpacked)); // Invalid HE variant.

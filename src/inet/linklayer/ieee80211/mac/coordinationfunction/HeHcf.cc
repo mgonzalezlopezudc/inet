@@ -49,7 +49,7 @@
 //   - Clause 26.4.4: frame exchange rules for HE MU and HE TB PPDUs.
 //   - Clause 27.3.11: HE PPDU formats (HE SU, HE ER SU, HE MU, HE TB).
 //   - Clause 27.3.11.13: HE MU PPDU format and HE-SIG-B.
-//   - Clause 27.3.11.12: HE TB PPDU format.
+//   - Clauses 27.3.12.5.5 and 27.3.13: HE-TB encoding and duration.
 //
 // Implementation notes / deviations from the standard:
 //   - DL MU scheduling is restricted to QoS data frames that already have an

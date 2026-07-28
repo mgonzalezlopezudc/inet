@@ -1335,6 +1335,93 @@ Ieee80211HeTriggerResponseFinalizationResult finalizeHeTriggerResponse(
         return result;
     }
 
+    if (request.fixedBoundary) {
+        const auto& boundary = *request.fixedBoundary;
+        if (boundary.channelBandwidth != request.channelBandwidth ||
+                boundary.guardInterval != request.guardInterval ||
+                boundary.ltfType != request.ltfType ||
+                boundary.packetExtensionDurationUs != request.packetExtensionDurationUs ||
+                boundary.ulLength == 0 ||
+                boundary.preFecPaddingFactor < 1 ||
+                boundary.preFecPaddingFactor > 4 ||
+                boundary.numberOfHeLtfSymbols <= 0) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "fixedBoundary", "HE Trigger fixed boundary does not match the finalization request");
+            return result;
+        }
+        auto envelope = getIeee80211HeTriggerTxTimeUpperBound(
+                boundary.ulLength, signalExtensionNs);
+        if (!envelope || (request.durationBudget && envelope.txTime > *request.durationBudget)) {
+            fail(Ieee80211HeValidationErrorCode::PPDU_DURATION_EXCEEDED,
+                    "fixedBoundary", "HE Trigger fixed boundary exceeds the duration budget");
+            return result;
+        }
+        Ieee80211HeTbCalculationContext tbContext;
+        tbContext.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+        tbContext.ulLength = boundary.ulLength;
+        tbContext.preFecPaddingFactor = boundary.preFecPaddingFactor;
+        tbContext.ldpcExtraSymbolSegment = boundary.ldpcExtraSymbolSegment;
+        tbContext.peDisambiguity = boundary.peDisambiguity;
+        tbContext.numberOfHeLtfSymbols = boundary.numberOfHeLtfSymbols;
+        auto candidate = computeHePpduParameters(request.users,
+                request.channelBandwidth, HE_TRIGGER_BASED_UPLINK,
+                request.guardInterval, request.ltfType,
+                request.packetExtensionDurationUs, false, tbContext);
+        if (!candidate) {
+            result.errorCode = candidate.errorCode;
+            result.context = candidate.context;
+            result.error = std::string("Cannot validate HE Trigger fixed boundary: ") +
+                    candidate.context.detail;
+            return result;
+        }
+        const auto resolvedTxTime = candidate.parameters.duration +
+                SimTime(signalExtensionNs, SIMTIME_NS);
+        auto projected = buildIeee80211HeTriggerUlLength(
+                resolvedTxTime, signalExtensionNs);
+        if (!projected) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "fixedBoundary", "HE Trigger fixed-boundary TXTIME cannot be projected to UL Length");
+            return result;
+        }
+        if (projected.value.length != boundary.ulLength) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "fixedBoundary", "HE Trigger users resolve to a different UL Length bucket");
+            return result;
+        }
+        if (candidate.parameters.common.preFecPaddingFactor !=
+                boundary.preFecPaddingFactor) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "fixedBoundary", "HE Trigger users do not preserve the finalized padding factor");
+            return result;
+        }
+        if (candidate.parameters.common.ldpcExtraSymbol !=
+                boundary.ldpcExtraSymbolSegment) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "fixedBoundary", "HE Trigger users do not preserve the finalized LDPC extra-symbol flag");
+            return result;
+        }
+        if (candidate.parameters.common.numberOfHeLtfSymbols !=
+                boundary.numberOfHeLtfSymbols) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "fixedBoundary", "HE Trigger users do not preserve the finalized HE-LTF count");
+            return result;
+        }
+        if (candidate.parameters.common.packetExtensionDurationUs !=
+                boundary.packetExtensionDurationUs) {
+            fail(Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT,
+                    "fixedBoundary", "HE Trigger users do not preserve the finalized packet extension");
+            return result;
+        }
+        result.ulLength = boundary.ulLength;
+        result.commonDuration = envelope.txTime;
+        result.peDisambiguity = boundary.peDisambiguity;
+        result.resolvedTxTime = resolvedTxTime;
+        result.parameters = candidate.parameters;
+        result.errorCode = Ieee80211HeValidationErrorCode::NONE;
+        result.valid = true;
+        return result;
+    }
+
     auto minimum = computeHePpduParameters(request.users, request.channelBandwidth,
             HE_TRIGGER_BASED_UPLINK, request.guardInterval, request.ltfType,
             request.packetExtensionDurationUs, false);
@@ -1471,6 +1558,68 @@ Ieee80211HeTriggerResponseFinalizationResult finalizeHeTriggerResponse(
 
     fail(Ieee80211HeValidationErrorCode::INVALID_L_SIG_LENGTH, "ulLength",
             "HE Trigger response has no L_LENGTH bucket with a legal full-symbol TXTIME");
+    return result;
+}
+
+Ieee80211HePsduCapacityResult getHeTbPsduCapacity(
+        const Ieee80211HeTbCapacityBoundary& boundary,
+        const Ieee80211HeRu& ru, int mcs, int numberOfSpatialStreams,
+        Ieee80211HeCoding coding)
+{
+    Ieee80211HePsduCapacityResult result;
+    if (boundary.ulLength == 0 || boundary.ulLength > 4095 ||
+            boundary.preFecPaddingFactor < 1 || boundary.preFecPaddingFactor > 4 ||
+            boundary.numberOfHeLtfSymbols < 1) {
+        result.errorCode = Ieee80211HeValidationErrorCode::INVALID_TRIGGER_CONTEXT;
+        result.context.fieldName = "boundary";
+        result.context.detail = "HE-TB capacity boundary is not finalized";
+        result.error = result.context.detail;
+        return result;
+    }
+
+    Ieee80211HeTbCalculationContext tbContext;
+    tbContext.triggerMethod = Ieee80211HeTriggerMethod::TRIGGER_FRAME;
+    tbContext.ulLength = boundary.ulLength;
+    tbContext.preFecPaddingFactor = boundary.preFecPaddingFactor;
+    tbContext.ldpcExtraSymbolSegment = boundary.ldpcExtraSymbolSegment;
+    tbContext.peDisambiguity = boundary.peDisambiguity;
+    tbContext.numberOfHeLtfSymbols = boundary.numberOfHeLtfSymbols;
+
+    auto fits = [&] (int64_t bytes, Ieee80211HePhyValidationResult *calculation = nullptr) {
+        Ieee80211HeUserPhyParameters user;
+        user.ru = ru;
+        user.mcs = mcs;
+        user.numberOfSpatialStreams = numberOfSpatialStreams;
+        user.coding = coding;
+        user.psduLength = B(bytes);
+        auto candidate = computeHePpduParameters({user}, boundary.channelBandwidth,
+                HE_TRIGGER_BASED_UPLINK, boundary.guardInterval, boundary.ltfType,
+                boundary.packetExtensionDurationUs, true, tbContext);
+        if (calculation != nullptr)
+            *calculation = candidate;
+        return static_cast<bool>(candidate);
+    };
+
+    Ieee80211HePhyValidationResult minimum;
+    if (!fits(1, &minimum)) {
+        result.errorCode = minimum.errorCode;
+        result.context = minimum.context;
+        result.error = minimum.error;
+        return result;
+    }
+
+    // IEEE 802.11's HE A-MPDU length is below this conservative search cap.
+    int64_t low = 1;
+    int64_t high = 16 * 1024 * 1024;
+    while (low < high) {
+        int64_t middle = low + (high - low + 1) / 2;
+        if (fits(middle))
+            low = middle;
+        else
+            high = middle - 1;
+    }
+    result.maximumPsduLength = B(low);
+    result.valid = true;
     return result;
 }
 

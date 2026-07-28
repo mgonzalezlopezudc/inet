@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeUlCoordinator.h"
 
 #include <algorithm>
+#include <limits>
 #include <numeric>
 #include <set>
 #include <sstream>
@@ -88,8 +89,10 @@ int HeUlCoordinator::getBackloggedReportCount() const
     int count = 0;
     for (const auto& entry : bufferStatusByAid) {
         bool backlogged = false;
-        for (auto bytes : entry.second.backlogBytes)
-            if (bytes > 0) {
+        for (int ac = AC_BK; ac <= AC_VO; ++ac)
+            if (entry.second.backlogBytes[ac] > 0 ||
+                    entry.second.backlogEstimates[ac].kind ==
+                            Ieee80211HeQueueSizeKind::UNKNOWN) {
                 backlogged = true;
                 break;
             }
@@ -120,6 +123,16 @@ void HeUlCoordinator::updateBufferStatus(uint16_t aid, const MacAddress& station
         AccessCategory ac, uint8_t tid,
         int64_t backlogBytes)
 {
+    Ieee80211HeQueueSizeEstimate estimate;
+    estimate.lowerBoundBytes = std::max<int64_t>(0, backlogBytes);
+    estimate.upperBoundBytes = estimate.lowerBoundBytes;
+    updateBufferStatus(aid, stationAddress, ac, tid, estimate);
+}
+
+void HeUlCoordinator::updateBufferStatus(uint16_t aid, const MacAddress& stationAddress,
+        AccessCategory ac, uint8_t tid,
+        const Ieee80211HeQueueSizeEstimate& estimate)
+{
     // IEEE 802.11-2024 Clause 26.5.2 ("Uplink multi-user operation").
     // HE STAs report their queue backlogs using Buffer Status Reports (BSRs)
     // carried inside the HE Variant QoS Control fields or in BSRP trigger frame responses.
@@ -131,7 +144,9 @@ void HeUlCoordinator::updateBufferStatus(uint16_t aid, const MacAddress& station
     if (!status.stationAddress.isUnspecified() && status.stationAddress != stationAddress)
         status = BufferStatus {};
     status.stationAddress = stationAddress;
-    status.backlogBytes[ac] = std::max<int64_t>(0, backlogBytes);
+    status.backlogEstimates[ac] = estimate;
+    status.backlogBytes[ac] = std::min<uint64_t>(estimate.getConservativeBytes(),
+            std::numeric_limits<int64_t>::max());
     status.tid[ac] = tid;
     status.retryPending[ac] = false;
     status.updateTime = simTime();
@@ -181,8 +196,10 @@ IIeee80211HeUlTriggerPolicy::TriggerType HeUlCoordinator::selectTrigger(const Ie
                 simTime() - status->second.updateTime > reportMaxAge)
             continue;
         context.freshReports++;
-        for (auto bytes : status->second.backlogBytes)
-            if (bytes > 0) {
+        for (int ac = AC_BK; ac <= AC_VO; ++ac)
+            if (status->second.backlogBytes[ac] > 0 ||
+                    status->second.backlogEstimates[ac].kind ==
+                            Ieee80211HeQueueSizeKind::UNKNOWN) {
                 context.backloggedStations++;
                 break;
             }
@@ -202,6 +219,11 @@ AccessCategory HeUlCoordinator::getPreferredAccessCategory() const
         for (const auto& entry : bufferStatusByAid)
             if (entry.second.backlogBytes[ac] > 0)
                 return static_cast<AccessCategory>(ac);
+    for (int ac = AC_VO; ac >= AC_BK; ac--)
+        for (const auto& entry : bufferStatusByAid)
+            if (entry.second.backlogEstimates[ac].kind ==
+                    Ieee80211HeQueueSizeKind::UNKNOWN)
+                return static_cast<AccessCategory>(ac);
     return AC_BE;
 }
 
@@ -211,7 +233,9 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
         double sensitivityDbm, double targetRssiMarginDb,
         int estimatedRaContenders, double collisionRate, double idleRate,
         const std::function<bool(const MacAddress&)>& isUlMuDisabled,
-        IIeee80211HeUlScheduler::ScheduleContext *preparedContext)
+        IIeee80211HeUlScheduler::ScheduleContext *preparedContext,
+        const physicallayer::Ieee80211HeTbCapacityBoundary *finalizedBoundary,
+        bool useUlMuMimoPolicy)
 {
     ASSERT(mib != nullptr);
     ASSERT(scheduler != nullptr);
@@ -226,11 +250,14 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
     context.channelBandwidth = bandwidth;
     context.txopLimit = txopLimit;
     context.requestedDuration = requestedDuration;
+    if (finalizedBoundary != nullptr)
+        context.finalizedBoundary = *finalizedBoundary;
     context.apSensitivityDbm = sensitivityDbm;
     context.targetRssiMarginDb = targetRssiMarginDb;
     context.estimatedRandomAccessContenders = estimatedRaContenders;
     context.recentRandomAccessCollisionRate = collisionRate;
     context.recentRandomAccessIdleRate = idleRate;
+    context.useUlMuMimoPolicy = useUlMuMimoPolicy;
     std::vector<uint16_t> staleReportAids;
     for (const auto& station : mib->bssAccessPointData.stations) {
         if (station.second != Ieee80211Mib::ASSOCIATED)
@@ -247,22 +274,37 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
         candidate.staAddress = station.first;
         candidate.associationId = aid;
         candidate.backlogBytes = status->second.backlogBytes;
+        candidate.backlogEstimates = status->second.backlogEstimates;
+        candidate.hasTypedBacklogEstimates = true;
         candidate.retryPending = false;
         candidate.reportAge = simTime() - status->second.updateTime;
         candidate.hasFreshReport = true;
         candidate.lastService = status->second.lastService;
+        bool selected = false;
         for (int ac = AC_VO; ac >= AC_BK; ac--)
             if (candidate.backlogBytes[ac] > 0) {
                 candidate.selectedAccessCategory = static_cast<AccessCategory>(ac);
                 candidate.selectedTid = status->second.tid[ac];
+                selected = true;
                 break;
             }
+        if (!selected)
+            for (int ac = AC_VO; ac >= AC_BK; ac--)
+                if (candidate.backlogEstimates[ac].kind ==
+                        Ieee80211HeQueueSizeKind::UNKNOWN) {
+                    candidate.selectedAccessCategory = static_cast<AccessCategory>(ac);
+                    candidate.selectedTid = status->second.tid[ac];
+                    break;
+                }
         const auto peer = linkPhyContext.getPeerSnapshot(station.first, maximumLinkEstimateAge);
         candidate.pathLossDb = peer.getPathLossDb();
         candidate.hasFreshPathLoss = peer.getHasFreshPathLoss();
         if (auto negotiated = mib->findNegotiatedHeCapabilities(station.first)) {
             candidate.hasNegotiatedHeCapabilities = true;
             candidate.negotiatedHeCapabilities = *negotiated;
+            candidate.coding = mib->localHeCapabilities.ldpc &&
+                    negotiated->localRxPeerTx.valid && negotiated->mutual.ldpc ?
+                    physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
         }
         candidate.ulMuDisabled = isUlMuDisabled && isUlMuDisabled(station.first);
         context.candidates.push_back(candidate);
@@ -277,23 +319,6 @@ IIeee80211HeUlScheduler::Schedule HeUlCoordinator::prepareSchedule(const Ieee802
     auto schedule = scheduler->schedule(context);
     schedule.staleReportAids = std::move(staleReportAids);
     schedule.packetExtensionDurationUs = mib->heOperation.defaultPeDurationUs;
-    bool ldpcSupportedByAll = mib->localHeCapabilities.ldpc;
-    for (const auto& allocation : schedule.allocations) {
-        if (allocation.randomAccess)
-            continue;
-        auto negotiated = mib->findNegotiatedHeCapabilities(allocation.staAddress);
-        ldpcSupportedByAll = ldpcSupportedByAll && negotiated != nullptr &&
-                negotiated->localRxPeerTx.valid && negotiated->mutual.ldpc;
-    }
-    schedule.coding = ldpcSupportedByAll ? physicallayer::HE_CODING_LDPC : physicallayer::HE_CODING_BCC;
-    if (schedule.coding == physicallayer::HE_CODING_BCC) {
-        schedule.allocations.erase(std::remove_if(schedule.allocations.begin(), schedule.allocations.end(),
-                [] (const auto& allocation) {
-                    return allocation.ru.toneSize >= 484;
-                }), schedule.allocations.end());
-        for (auto& allocation : schedule.allocations)
-            allocation.mcs = std::min(allocation.mcs, 9);
-    }
     EV_DEBUG << "Prepared HE UL schedule without committing coordinator state: candidates="
              << context.candidates.size() << ", allocations=" << schedule.allocations.size()
              << ", commonDuration=" << schedule.commonDuration << "\n";
@@ -331,13 +356,14 @@ void HeUlCoordinator::commitSchedule(const IIeee80211HeUlScheduler::Schedule& sc
                         allocation.associationId);
             status->second.lastService = simTime();
             status->second.scheduledBytes[allocation.accessCategory] =
-                    status->second.backlogBytes[allocation.accessCategory];
+                    allocation.plannedBytes;
             HeUlTriggerDecisionEvent::UserInfo user;
             user.associationId = allocation.associationId;
             user.backlogBytes = std::accumulate(status->second.backlogBytes.begin(),
                     status->second.backlogBytes.end(), INT64_C(0));
             user.reportedBytes = status->second.backlogBytes[allocation.accessCategory];
-            user.selectedBytes = status->second.scheduledBytes[allocation.accessCategory];
+            user.plannedBytes = allocation.plannedBytes;
+            user.selectedBytes = user.plannedBytes;
             user.tid = allocation.tid;
             user.accessCategory = allocation.accessCategory;
             user.selected = true;
