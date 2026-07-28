@@ -130,7 +130,7 @@
     "ul_ofdma": {
       "scalar_vector_group": "ul_ofdma",
       "ini": "ul_ofdma/omnetpp.ini",
-      "configurations": ["BacklogBased", "EqualSizedRUs", "EdcaBaseline"],
+      "configurations": ["BacklogBased", "EqualSizedRUs", "EdcaBaseline", "CapacityFit", "AsymmetricBacklog"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"],
       "capture": {

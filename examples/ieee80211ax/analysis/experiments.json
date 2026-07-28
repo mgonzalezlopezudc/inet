@@ -304,7 +304,9 @@
       "conditions": [
         {"label": "Backlog scheduler", "config": "BacklogBased", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
         {"label": "Equal-sized RUs", "config": "EqualSizedRUs", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "EDCA baseline", "config": "EdcaBaseline", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
+        {"label": "EDCA baseline", "config": "EdcaBaseline", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Capacity-fit control", "config": "CapacityFit", "measurement": {"start": 0.3, "end": 0.8}, "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Asymmetric backlog", "config": "AsymmetricBacklog", "measurement": {"start": 0.3, "end": 0.8}, "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
       ]
     },
     "eht_features": {

@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-27T21:15:52.946690+00:00",
+    "generated_at_utc": "2026-07-27T22:52:38.217438+00:00",
     "groups": {
       "ul_ofdma": {
         "conditions": [
@@ -18,44 +18,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#0.sca",
-                "sha256": "bbe7f493c5659a0603d0258b4556dad3cc8415d30758a6b3dce7b37e77618431"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#0.sca",
+                "sha256": "066f85104dab403061b093a87d3486db19992d07176499acedcbea2c1e9e38f5"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#0.vec",
-                "sha256": "1dd59deeb1042cc3660661b154b34f0162212c55829ba2fc8bbc91295487646d"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#0.vec",
+                "sha256": "ee636eb41e2ede52ae2c2d73385174ae3705907277d5a44f49586bb86c3d4bf4"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#1.sca",
-                "sha256": "275b35cc572dc8733689bc53c98ea7ddad85508b06d48f6d19be43c0db1203d3"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#1.sca",
+                "sha256": "2edbff69f6dd171fef23c118f031e67ebde9257ae9b56e5e79fb0a329edcd3fe"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#1.vec",
-                "sha256": "9ddebe9ab142779df1388f0354b17308bfb62678f6890ed18a635a4b5f112568"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#1.vec",
+                "sha256": "2da13df475b673218483a589943453fab17194f7e102392aeee5f3c11ac0b979"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#2.sca",
-                "sha256": "7b814a6669450d72fc204de935276883917b9cdc5e218bc2fe4808369b2209f3"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#2.sca",
+                "sha256": "c3ab8249a7c8c8612e34da0770528e90ca0bbc175a8eec334b0ac2bf06079fa5"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#2.vec",
-                "sha256": "27e33a45f1a050fe9a57587f27adffedee3a61f2324cd146d554a1eac2fe0633"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#2.vec",
+                "sha256": "ca48c4afaf04f10e63a7ef395e214eecfa583fb6944807ce4911722fa2a84d00"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#3.sca",
-                "sha256": "ed050630e066571ede2b0b2fc2238a39672c9ee01647a02ed959befbe1aa67fd"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#3.sca",
+                "sha256": "0d2e9df2bf83a8945f5cd0ebd2dce91c3ff4b93060efd0d594b835e1388353d0"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#3.vec",
-                "sha256": "0b1ba69a57e63e618ebb32816431233c885e1830a8e738883a3214ed161956bb"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#3.vec",
+                "sha256": "5ca472c77dd21a412a88e3e1cde56bc8ffe334b869e5c567c9d0f25597551d5f"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#4.sca",
-                "sha256": "d5e25afef1c4122e23e1af747954b672de0db80ae0b2cb2377527dbbaa3abca3"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#4.sca",
+                "sha256": "2382fa5b1dff82def2f14f8eb005c50263f090244043eeac13dc40c13c9992fa"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/BacklogBased/BacklogBased-#4.vec",
-                "sha256": "b9b76dca72ac1a29edd2692effee1de463c952e4eda5f56927e64852b257839d"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/BacklogBased/BacklogBased-#4.vec",
+                "sha256": "285a4252a7119977ac42a1506fb6654f70e8adf528517216becc2989f618c92b"
               }
             ]
           },
@@ -73,44 +73,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#0.sca",
-                "sha256": "cf7281f53fc0547c0e8e1430659a74d5b0a323d11d2508946ac611ee7831677a"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#0.sca",
+                "sha256": "414d72b5daa0500fe2efdc7dae6ff97a0c6b63e1e2db69b026b67459746314f3"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#0.vec",
-                "sha256": "4baabc1015de7706d95a93bdb99e2a9cd543bf1e9c4fd8f361aefcc6c433074e"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#0.vec",
+                "sha256": "7857e85313ab3d8fa2cf0cbf3a2da83f2c6b70e59068e8cecc103f53350d83ca"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#1.sca",
-                "sha256": "16f03766ffc5fd3319927a30438c646adff68463d6a7d6ff1bb06fd7f8d79a35"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#1.sca",
+                "sha256": "41ff91c756ed5b25cc823da16829ce576889b5403afca1f58f78615c344c9ccc"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#1.vec",
-                "sha256": "b6846c80dc58c90db9d19e29d86876c46aaaddc69f0da47c1486bdcbd9137d74"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#1.vec",
+                "sha256": "a6f1d088cd78494097a69a89d9766cf1e79283748a18f94f5b416baeceeabade"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#2.sca",
-                "sha256": "635720fead0e3fac3a1234249869a7b1019f1855b53587a1b8ded29cbc787bd1"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#2.sca",
+                "sha256": "5c0d8ac4055f423519f494ae293084fb89ae3ae5245100b9ad470dddc9b706bf"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#2.vec",
-                "sha256": "5bcb2d3b042cd8bcf94b205e7c9f9950f5442771fb2fd03090791f79cd6012af"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#2.vec",
+                "sha256": "a6c2b02df0f609e9458f09ab5b67a58f0685fcbd06d6d501320355035db37806"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#3.sca",
-                "sha256": "fff3b0fa60ebfb654313b1cf992ecd5af62c18f434f918601ff0d07f21e297aa"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#3.sca",
+                "sha256": "14ec70bf6c9c3ccad2b97077f012975540b493b0b3939348b409387b6ce9b3ef"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#3.vec",
-                "sha256": "024115790c5e1ef993e351a9c1441701b50f4311fb2da5344a6ccbce48fa0677"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#3.vec",
+                "sha256": "35d41fcf19045c088805bf29f190874379bbb5b10aac80b3d268a7fea93c73f9"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#4.sca",
-                "sha256": "9b310c7740066b906f5e9732ae9e73d8cd5e4f76b5a363d8221019e6ad7cd237"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#4.sca",
+                "sha256": "9e20bd6602c7805a850f56769996da75042b6558ff5cd6cb48f7a0a135efc4c7"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EqualSizedRUs/EqualSizedRUs-#4.vec",
-                "sha256": "bf4cdf12c9153fdca190fd2aac8f799fc44096f0edd0ae2adbc7392a3a95622e"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EqualSizedRUs/EqualSizedRUs-#4.vec",
+                "sha256": "1e2b7dac1bad755442b784cf6ab03223e80fc7a9e47d7d5847cba9822c249e17"
               }
             ]
           },
@@ -128,76 +128,76 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#0.sca",
-                "sha256": "6668e127535de121f2fed942b43e19eeb03e7ecc4115e6d92e5078cb40db2585"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#0.sca",
+                "sha256": "48af0f4e0ee3ea1e78bdcef851706fd5bbf4af1c8463ad609659c0fefc06d11a"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#0.vec",
-                "sha256": "54f3141a23fee97aaa88f58e04d04e423131e942e43b96e9143a248a25949e71"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#0.vec",
+                "sha256": "fc8d8e091ac802e8a7c5e5946b94bc8d3cf0082b76fa6ecff29c320974ab116c"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#1.sca",
-                "sha256": "ee97e941bcc269442c054ba51a2387b7c01879555f8344c2078ff411b7d9f6de"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#1.sca",
+                "sha256": "689a7d0156e54625cb87806871c93b446da4a7847b296221178c97a9f1a20378"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#1.vec",
-                "sha256": "688885cc2b68053e4e8746751a8355582e04681e93a202dfc989bde1ab7a9c86"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#1.vec",
+                "sha256": "3afc017e9ec0797760143547adb374ecf5877e62e114542a0daa2d53bfb061bd"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#2.sca",
-                "sha256": "834b4ba3eb4517d2a656c1a601d56a066a352e7622702ecd393b0cbcd12a45a5"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#2.sca",
+                "sha256": "d2b851befd9610e9d99670573e9da3be63d393faac679cdd9966629610438ac7"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#2.vec",
-                "sha256": "f93c3fa26dfa136b41a043a2d2e6b7afe60b6fc3141f94a8125de27c02833415"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#2.vec",
+                "sha256": "9fe9af8f22abb8e054a7e869cb7fc6cebe799e3a636058c2edc73a29c5e3f937"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#3.sca",
-                "sha256": "37363173c2776065e8154746a29e89a1ab977ac602d247c23dea6c4f9acd20fb"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#3.sca",
+                "sha256": "98aa1ab27094d2827f751422cc6532d5734a4b756f01c1bd0b5bfcef241c44cf"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#3.vec",
-                "sha256": "f6b5a7c0b006291f2f59c22735acc0f917f7d523b25c8266ac5c44893c7d5890"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#3.vec",
+                "sha256": "b286901a36ddd4236e4c17ceefc3fb21d873cb8f1e4265967a634c889f535c54"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#4.sca",
-                "sha256": "e5f5f3ec7298edc17328fdda6f085c8bb8aa781ab66aa6c664b8923581e17890"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#4.sca",
+                "sha256": "42b62803839897fe3fa955a576d2b01716ad492e20ac37693d6a23762bb8dd53"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T211515Z/EdcaBaseline/EdcaBaseline-#4.vec",
-                "sha256": "799b5d4d6a23919d2e4b8ea981c798dab6973f6a9c7c8e0bba1814c993507919"
+                "path": "examples/ieee80211ax/ul_ofdma/results/20260727T225125Z/EdcaBaseline/EdcaBaseline-#4.vec",
+                "sha256": "23307784409e163c9ec98b34ef3ff54ac2782eea9a64c7e136eb52e2780e874c"
               }
             ]
           }
         ],
-        "session_id": "20260727T211515Z",
+        "session_id": "20260727T225125Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "6d77deda39dc46f953d63a352bdcd164db63e3df",
-    "requested_session_id": "20260727T211515Z",
+    "repository_revision": "6f67e0991e0c77f197848a1945dda89f96cd2bb4",
+    "requested_session_id": "20260727T225125Z",
     "schema_version": 1
   },
   "ul_ofdma": {
     "Backlog scheduler": {
       "goodput_mbps": {
-        "ci95": 0.007156337006078529,
+        "ci95": 0.004499585424705041,
         "count": 5,
-        "mean": 4.781176470588235
+        "mean": 2.3874823529411766
       }
     },
     "EDCA baseline": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.002247894953505949,
         "count": 5,
-        "mean": 4.8
+        "mean": 2.3950117647058824
       }
     },
     "Equal-sized RUs": {
       "goodput_mbps": {
-        "ci95": 0.007156337006078529,
+        "ci95": 0.004499585424705041,
         "count": 5,
-        "mean": 4.781176470588235
+        "mean": 2.3874823529411766
       }
     }
   }
