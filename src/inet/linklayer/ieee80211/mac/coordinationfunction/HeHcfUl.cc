@@ -903,6 +903,9 @@ void HeHcf::retryPendingTriggeredUlExchanges()
         if (entry.second.randomAccess)
             ulCoordinator->reportRandomAccessResult(false);
         for (auto pkt : entry.second.packets) {
+            auto header = pkt->peekAtFront<Ieee80211DataHeader>();
+            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
+                    getRecoveryProcedure()->dataFrameTransmissionFailed(pkt, header);
             auto writableHeader = pkt->removeAtFront<Ieee80211DataHeader>();
             writableHeader->setRetry(true);
             pkt->insertAtFront(writableHeader);
@@ -938,6 +941,9 @@ void HeHcf::handleTriggeredUlResponseTimeout()
         if (exchange.randomAccess)
             ulCoordinator->reportRandomAccessResult(false);
         for (auto packet : exchange.packets) {
+            auto header = packet->peekAtFront<Ieee80211DataHeader>();
+            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
+                    getRecoveryProcedure()->dataFrameTransmissionFailed(packet, header);
             auto writableHeader = packet->removeAtFront<Ieee80211DataHeader>();
             writableHeader->setRetry(true);
             packet->insertAtFront(writableHeader);
@@ -1674,6 +1680,11 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
             exchangeSuccess = true;
         }
         else {
+            auto header = exchange.packets[i]->
+                    peekAtFront<Ieee80211DataHeader>();
+            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
+                    getRecoveryProcedure()->dataFrameTransmissionFailed(
+                            exchange.packets[i], header);
             auto writableHeader = exchange.packets[i]->
                     removeAtFront<Ieee80211DataHeader>();
             writableHeader->setRetry(true);

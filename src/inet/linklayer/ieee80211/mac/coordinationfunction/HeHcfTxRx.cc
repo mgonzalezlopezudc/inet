@@ -270,15 +270,8 @@ void HeHcf::originatorProcessBlockAckResult(
                 continue;
             if (ackedFrames.count(key) != 0)
                 reportHeDlMuTxResult(packet, ac, true);
-            else {
-                // A zero bitmap bit is an unsuccessful MPDU attempt, not an
-                // absence of feedback. Create/increment its retry state before
-                // reporting the exact transmitted HE tuple.
-                auto edcaf = edca->getEdcaf(ac);
-                edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(
-                        packet, dataHeader);
+            else
                 reportHeDlMuTxResult(packet, ac, false);
-            }
         }
     }
 }

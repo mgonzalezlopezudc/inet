@@ -1005,6 +1005,14 @@ void Hcf::originatorProcessReceivedControlFrame(Packet *packet, const Ptr<const 
         // retransmission window.
         edcaf->getRecoveryProcedure()->blockAckFrameReceived();
         auto ackedSeqAndFragNums = edcaf->getAckHandler()->processReceivedBlockAck(blockAck);
+        for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); i++) {
+            auto packet = edcaf->getInProgressFrames()->getFrames(i);
+            auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront<Ieee80211MacHeader>());
+            if (dataHeader == nullptr)
+                continue;
+            if (edcaf->getAckHandler()->getQoSDataAckStatus(dataHeader) == QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED)
+                edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, dataHeader);
+        }
         originatorProcessBlockAckResult(blockAck, ackedSeqAndFragNums, ac);
         if (originatorBlockAckAgreementHandler)
             originatorBlockAckAgreementHandler->processReceivedBlockAck(blockAck, this);
