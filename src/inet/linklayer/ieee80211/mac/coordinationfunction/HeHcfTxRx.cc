@@ -129,11 +129,16 @@ void HeHcf::recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80
 void HeHcf::transmissionComplete(Packet *packet, const Ptr<const Ieee80211MacHeader>& header)
 {
     if (isHeTbPacket(packet)) {
-        if (auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header)) {
+        // IEEE Std 802.11-2024, 26.2.7: start MUEDCATimer[AC] at HE-TB PPDU
+        // completion only for successful QoS Data that needs no immediate
+        // acknowledgment. Immediate-ack data is deferred to its correlated
+        // Multi-STA BA success decision, and QoS Null must not activate it.
+        auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(header);
+        if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS &&
+                dataHeader->getAckPolicy() == NO_ACK) {
             AccessCategory ac = edca->mapTidToAc(dataHeader->getTid());
-            if (ac >= 0 && ac < 4) {
+            if (ac >= 0 && ac < 4)
                 edca->getEdcaf(ac)->startMuEdcaTimer();
-            }
         }
         return;
     }

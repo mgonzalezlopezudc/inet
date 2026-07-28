@@ -30,7 +30,7 @@ network TestNetwork
 %inifile: omnetpp.ini
 [General]
 network = TestNetwork
-sim-time-limit = 0s
+sim-time-limit = 1ns
 **.constraintAreaMinX = 0m
 **.constraintAreaMinY = 0m
 **.constraintAreaMinZ = 0m
@@ -46,6 +46,11 @@ sim-time-limit = 0s
 **.wlan[*].mac.qosStation = true
 **.wlan[*].mac.hcf.typename = "TestHeHcf"
 **.wlan[*].mac.fcsMode = "computed"
+**.wlan[*].mac.hcf.edca.edcaf[1].cwMin = 31
+**.wlan[*].mac.hcf.edca.edcaf[1].cwMax = 31
+**.wlan[*].mac.hcf.edca.edcaf[1].muCwMin = 7
+**.wlan[*].mac.hcf.edca.edcaf[1].muCwMax = 7
+**.wlan[*].mac.hcf.edca.edcaf[1].muEdcaTimer = 1ps
 **.wlan[*].radio.transmitter.power = 20mW
 **.wlan[*].radio.transmitter.maxPower = 100mW
 **.wlan[*].radio.receiver.sensitivity = -85dBm
@@ -282,6 +287,7 @@ class TestHeHcf : public HeHcf
         }
         REQUIRE(responseDataHeader->getAckPolicy() == NORMAL_ACK);
         REQUIRE(responseDataHeader->getTid() == exchange.tid);
+        transmissionComplete(response, responseHeader);
         delete response;
         result.packets = exchange.packets;
         result.sequenceNumbers = exchange.sequenceNumbers;
@@ -291,6 +297,34 @@ class TestHeHcf : public HeHcf
     }
 
     int getExchangeCount() const { return triggeredUlExchanges.size(); }
+
+    int getBestEffortCw() const
+    {
+        return edca->getEdcaf(AC_BE)->getCw();
+    }
+
+    void completeNoAckHeTbQosData(const MacAddress& ap)
+    {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(ap);
+        header->setTransmitterAddress(mac->getAddress());
+        header->setAddress3(ap);
+        header->setToDS(true);
+        header->setTid(0);
+        header->setAckPolicy(NO_ACK);
+        header->setChunkLength(B(26));
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setEof(true);
+        delimiter->setLength(30);
+        auto packet = new Packet("he-tb-no-ack-qos-data");
+        packet->insertAtBack(delimiter);
+        packet->insertAtBack(header);
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        packet->addTag<Ieee80211HeTriggerCorrelationTag>()->setTriggerId(48);
+        transmissionComplete(packet, header);
+        delete packet;
+    }
 
     void setExchangeDeadline(uint32_t triggerId, simtime_t deadline)
     {
@@ -413,8 +447,47 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     hcf->clearState();
 }
 
+// A queued MPDU that cannot fit falls back to QoS Null. Neither completing
+// that HE-TB transmission nor receiving its positive BA starts MU-EDCA.
+{
+    auto oversized = hcf->makeQueuedPacket("null-fallback-p0", ap, 0x25, 6000);
+    TestHeHcf::CommittedExchange committed;
+    REQUIRE(hcf->getBestEffortCw() == 31);
+    hcf->prepareAndCommit(47, ap, -1, committed, 26, 0);
+    REQUIRE(committed.packets.empty());
+    REQUIRE(committed.ackPolicy == NORMAL_ACK);
+    REQUIRE(committed.wireAckPolicyBits == 0);
+    REQUIRE(responseEventListener.reason == HeTbResponseEvent::NO_FITTING_PAYLOAD);
+    REQUIRE(responseEventListener.triggerId == 47);
+    REQUIRE(responseEventListener.selectedBytes == 0);
+    REQUIRE(responseEventListener.reportedBytes > 0);
+    REQUIRE(responseEventListener.ackPolicy == NORMAL_ACK);
+    requireQueueIdentities({oversized});
+    REQUIRE(hcf->getBestEffortCw() == 31);
+    Ieee80211MultiStaBlockAckRecord record;
+    record.aid = 21;
+    record.tid = 0;
+    record.responseReceived = true;
+    hcf->receiveBlockAck(47, ap, {record});
+    REQUIRE(hcf->getExchangeCount() == 0);
+    requireQueueIdentities({oversized});
+    REQUIRE(hcf->getBestEffortCw() == 31);
+    hcf->clearState();
+}
+
+// QoS Data that requires no immediate acknowledgment starts MU-EDCA at
+// HE-TB PPDU completion, without waiting for a Multi-STA BA.
+{
+    REQUIRE(hcf->getBestEffortCw() == 31);
+    hcf->completeNoAckHeTbQosData(ap);
+    REQUIRE(hcf->getBestEffortCw() == 7);
+    wait(SimTime(2, SIMTIME_PS));
+    REQUIRE(hcf->getBestEffortCw() == 31);
+}
+
 // Commit moves the exact originals into the Trigger ledger. A partial BA
-// retires only p0 and requeues exact p1 with Retry set.
+// retires only p0, requeues exact p1 with Retry set, and starts MU-EDCA
+// because its bitmap acknowledges a QoS Data MPDU.
 {
     auto p0 = hcf->makeQueuedPacket("partial-p0", ap, 0x20);
     auto p1 = hcf->makeQueuedPacket("partial-p1", ap, 0x21);
@@ -436,6 +509,7 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(responseEventListener.ackPolicy == NORMAL_ACK);
     REQUIRE(committed.packets == (std::vector<Packet *>{p0, p1}));
     requireQueueIdentities({});
+    REQUIRE(hcf->getBestEffortCw() == 31);
     Ieee80211MultiStaBlockAckRecord record;
     record.aid = 21;
     record.tid = 0;
@@ -446,26 +520,7 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(hcf->getExchangeCount() == 0);
     requireQueueIdentities({p1});
     REQUIRE(p1->peekAtFront<Ieee80211DataHeader>()->getRetry());
-    hcf->clearState();
-}
-
-// A queued MPDU that cannot fit falls back to QoS Null, whose immediate
-// Multi-STA BA solicitation also serializes Ack Policy as wire bits 00.
-{
-    auto oversized = hcf->makeQueuedPacket("null-fallback-p0", ap, 0x25, 6000);
-    TestHeHcf::CommittedExchange committed;
-    hcf->prepareAndCommit(47, ap, -1, committed, 26, 0);
-    REQUIRE(committed.packets.empty());
-    REQUIRE(committed.ackPolicy == NORMAL_ACK);
-    REQUIRE(committed.wireAckPolicyBits == 0);
-    REQUIRE(responseEventListener.reason == HeTbResponseEvent::NO_FITTING_PAYLOAD);
-    REQUIRE(responseEventListener.triggerId == 47);
-    REQUIRE(responseEventListener.selectedBytes == 0);
-    REQUIRE(responseEventListener.reportedBytes > 0);
-    REQUIRE(responseEventListener.ackPolicy == NORMAL_ACK);
-    requireQueueIdentities({oversized});
-    hcf->expireExchange(47);
-    requireQueueIdentities({oversized});
+    REQUIRE(hcf->getBestEffortCw() == 7);
     hcf->clearState();
 }
 

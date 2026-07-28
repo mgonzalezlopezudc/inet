@@ -1670,11 +1670,7 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
     // attempt and must reset OCW and be counted.
     bool exchangeSuccess = exchange.packets.empty() &&
             record != nullptr && record->responseReceived;
-    if (record != nullptr && record->responseReceived) {
-        AccessCategory ac = edca->mapTidToAc(exchange.tid);
-        if (ac >= 0 && ac < 4)
-            edca->getEdcaf(ac)->startMuEdcaTimer();
-    }
+    bool acknowledgedQosData = false;
     for (size_t i = 0; i < exchange.packets.size(); ++i) {
         bool acknowledged = false;
         if (record != nullptr && record->responseReceived) {
@@ -1686,6 +1682,7 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
         if (acknowledged) {
             delete exchange.packets[i];
             exchangeSuccess = true;
+            acknowledgedQosData = true;
         }
         else {
             auto header = exchange.packets[i]->
@@ -1699,6 +1696,14 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
             exchange.packets[i]->insertAtFront(writableHeader);
             exchange.sourceQueue->pushPacket(exchange.packets[i], nullptr);
         }
+    }
+    // IEEE Std 802.11-2024, 26.2.7: for QoS Data requiring immediate
+    // acknowledgment, MUEDCATimer[AC] starts at the end of the immediate
+    // response only when at least one QoS Data frame for that AC succeeded.
+    if (acknowledgedQosData) {
+        AccessCategory ac = edca->mapTidToAc(exchange.tid);
+        if (ac >= 0 && ac < 4)
+            edca->getEdcaf(ac)->startMuEdcaTimer();
     }
     if (exchange.randomAccess)
         ulCoordinator->reportRandomAccessResult(exchangeSuccess);
