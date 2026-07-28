@@ -3,10 +3,10 @@
     "analysis_script_sha256": "c6bddc44cb58b14a9a435f76daf0548aa379f1c5de62956baba86b0d1db1130e",
     "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
     "capture_manifest": {
-      "path": "examples/ieee80211/analysis/generated/ax/capture_manifests/20260728T113344Z.json",
-      "sha256": "8b9f9217ef5bd6216c73860bd10a1cc139159246fbb994efe859cc4f4175a95b"
+      "path": "examples/ieee80211/analysis/generated/ax/capture_manifests/20260728T121420Z.json",
+      "sha256": "418f9faecc5faef4633798cd5364f8d76ff304a0050c99f1492267a2f71e970b"
     },
-    "capture_session_id": "20260728T113344Z",
+    "capture_session_id": "20260728T121420Z",
     "capture_source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "cross_layer_session_alignment": "ASSESSED: every capture is bound to the scalar metadata from the same result directory, configuration, run, seed, and simulation trajectory",
     "entries": [
@@ -15,11 +15,11 @@
           {
             "format": "pcapng",
             "metadata": {
-              "data_size_bytes": 467753,
-              "duration_seconds": 0.998837,
+              "data_size_bytes": 400063,
+              "duration_seconds": 0.997992,
               "encapsulation": "ieee-802-11-radiotap",
-              "end_seconds": 0.999885,
-              "file_size_bytes": 590888,
+              "end_seconds": 0.99904,
+              "file_size_bytes": 527496,
               "file_type": "pcapng",
               "interfaces": [
                 {
@@ -30,15 +30,15 @@
                   "time_precision": "microseconds (6)"
                 }
               ],
-              "packet_count": 2689,
+              "packet_count": 2791,
               "snapshot_length": null,
               "start_seconds": 0.001048,
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
-            "sha256": "b6a48bedd0249895945e282d108bd46c81032237f1daba8c9bc0c8a8b0528556",
-            "size_bytes": 590888
+            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "sha256": "04b8dc0ad2441d7dbf337a00bd0df055d39005217eaf8c57f0ac70167fd5cb08",
+            "size_bytes": 527496
           }
         ],
         "config": "BacklogBased",
@@ -51,11 +51,11 @@
           {
             "format": "pcapng",
             "metadata": {
-              "data_size_bytes": 472265,
-              "duration_seconds": 0.997992,
+              "data_size_bytes": 493881,
+              "duration_seconds": 0.997482,
               "encapsulation": "ieee-802-11-radiotap",
-              "end_seconds": 0.99904,
-              "file_size_bytes": 600252,
+              "end_seconds": 0.99853,
+              "file_size_bytes": 621548,
               "file_type": "pcapng",
               "interfaces": [
                 {
@@ -66,15 +66,15 @@
                   "time_precision": "microseconds (6)"
                 }
               ],
-              "packet_count": 2792,
+              "packet_count": 2786,
               "snapshot_length": null,
               "start_seconds": 0.001048,
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
-            "sha256": "ee408da1175bcb1bdb69c90eb99c452b616b18586cc01b04dcdfc661e25675e0",
-            "size_bytes": 600252
+            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "sha256": "238bd9384ca3a8f673cc96968697cbd2e1ea988dc773ac1e31da25aad91a6519",
+            "size_bytes": 621548
           }
         ],
         "config": "EqualSizedRUs",
@@ -87,11 +87,11 @@
           {
             "format": "pcapng",
             "metadata": {
-              "data_size_bytes": 873518,
-              "duration_seconds": 0.79923,
+              "data_size_bytes": 845440,
+              "duration_seconds": 0.799821,
               "encapsulation": "ieee-802-11-radiotap",
-              "end_seconds": 0.999394,
-              "file_size_bytes": 1098632,
+              "end_seconds": 0.999985,
+              "file_size_bytes": 1064392,
               "file_type": "pcapng",
               "interfaces": [
                 {
@@ -102,15 +102,15 @@
                   "time_precision": "microseconds (6)"
                 }
               ],
-              "packet_count": 4927,
+              "packet_count": 4795,
               "snapshot_length": null,
               "start_seconds": 0.200164,
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
-            "sha256": "2825867fd2fbf3a58ee00e8a796dd47308630db3c751ffcacf2dbd1091bb303f",
-            "size_bytes": 1098632
+            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "sha256": "26dc6b9f58980059e67acbfd78199b490ab3e00c15ecb05e3c859b18286ee486",
+            "size_bytes": 1064392
           }
         ],
         "config": "EdcaBaseline",
@@ -123,11 +123,11 @@
           {
             "format": "pcapng",
             "metadata": {
-              "data_size_bytes": 273762,
-              "duration_seconds": 0.998113,
+              "data_size_bytes": 275612,
+              "duration_seconds": 0.998265,
               "encapsulation": "ieee-802-11-radiotap",
-              "end_seconds": 0.999161,
-              "file_size_bytes": 393992,
+              "end_seconds": 0.999313,
+              "file_size_bytes": 396196,
               "file_type": "pcapng",
               "interfaces": [
                 {
@@ -138,15 +138,15 @@
                   "time_precision": "microseconds (6)"
                 }
               ],
-              "packet_count": 2707,
+              "packet_count": 2716,
               "snapshot_length": null,
               "start_seconds": 0.001048,
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
-            "sha256": "364c5f527f6fac940a71001157bc235013931379a2ea0479176968d48f829d21",
-            "size_bytes": 393992
+            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "sha256": "67b98de821d10150a3b99f36ced3277d268bd4f25ef270367b2b5b1ab37cd169",
+            "size_bytes": 396196
           }
         ],
         "config": "CapacityFit",
@@ -159,11 +159,11 @@
           {
             "format": "pcapng",
             "metadata": {
-              "data_size_bytes": 409821,
-              "duration_seconds": 0.997988,
+              "data_size_bytes": 426795,
+              "duration_seconds": 0.998569,
               "encapsulation": "ieee-802-11-radiotap",
-              "end_seconds": 0.999036,
-              "file_size_bytes": 496064,
+              "end_seconds": 0.999617,
+              "file_size_bytes": 503752,
               "file_type": "pcapng",
               "interfaces": [
                 {
@@ -174,15 +174,15 @@
                   "time_precision": "microseconds (6)"
                 }
               ],
-              "packet_count": 1892,
+              "packet_count": 1688,
               "snapshot_length": null,
               "start_seconds": 0.001048,
               "strict_time_order": true,
               "time_precision": "microseconds"
             },
-            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
-            "sha256": "617eec0a3d943d334e73052fbb7d648b4a210fc5e55a3d919009db7aeeb88c4f",
-            "size_bytes": 496064
+            "path": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "sha256": "c6b0c54481d5fc334513856987d7f1c0aef5cce0a4139ba96e4565293442f6a1",
+            "size_bytes": 503752
           }
         ],
         "config": "AsymmetricBacklog",
@@ -191,7 +191,7 @@
         "subdir": "ul_ofdma"
       }
     ],
-    "repository_revision": "37b0bc8acddad0b50bb24a68580be33dc2547528",
+    "repository_revision": "bb5c8b78d258fd25d28a808af78b379f882752ae",
     "run_number": 0,
     "schema_version": 1,
     "suite": "ax",
@@ -205,13 +205,13 @@
     "AsymmetricBacklog": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
           "0,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.09744748131471574,
+            "airtime_pct": 0.15086990139504686,
             "airtime_sim_pct": 0.0416,
             "count": 6,
             "freq": "5010 MHz",
@@ -224,9 +224,9 @@
           },
           "1,13,Legacy,12 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.04622508729031388,
-            "airtime_sim_pct": 0.019733333333333335,
-            "count": 8,
+            "airtime_pct": 0.02683743438277277,
+            "airtime_sim_pct": 0.007400000000000001,
+            "count": 3,
             "freq": "5010 MHz",
             "mean": 14.0,
             "mean_duration": 2.466666666666667e-05,
@@ -237,7 +237,7 @@
           },
           "1,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.03466881546773541,
+            "airtime_pct": 0.05367486876554554,
             "airtime_sim_pct": 0.014800000000000002,
             "count": 6,
             "freq": "5010 MHz",
@@ -250,22 +250,22 @@
           },
           "1,2,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 2.2184137753464657,
-            "airtime_sim_pct": 0.9470333333333334,
-            "count": 283,
+            "airtime_pct": 2.148808090782819,
+            "airtime_sim_pct": 0.5925,
+            "count": 186,
             "freq": "5010 MHz",
-            "mean": 40.3922261484099,
-            "mean_duration": 3.34640753828033e-05,
+            "mean": 35.564516129032256,
+            "mean_duration": 3.1854838709677416e-05,
             "rx_sig": "-",
-            "std": 6.00043075530501,
-            "std_duration": 2.0001435851016704e-06,
+            "std": 6.4448553319481,
+            "std_duration": 2.148285110649366e-06,
             "tx_pwr": "10.0 dBm"
           },
           "1,8,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.21644584792018592,
-            "airtime_sim_pct": 0.09240000000000001,
-            "count": 33,
+            "airtime_pct": 0.7920669823239962,
+            "airtime_sim_pct": 0.2184,
+            "count": 78,
             "freq": "5010 MHz",
             "mean": 24.0,
             "mean_duration": 2.8000000000000003e-05,
@@ -276,46 +276,20 @@
           },
           "1,9,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 2.5683033296503446,
-            "airtime_sim_pct": 1.0964,
-            "count": 315,
+            "airtime_pct": 3.0188487000297357,
+            "airtime_sim_pct": 0.8324,
+            "count": 264,
             "freq": "5010 MHz",
-            "mean": 44.41904761904762,
-            "mean_duration": 3.4806349206349206e-05,
+            "mean": 34.59090909090909,
+            "mean_duration": 3.153030303030303e-05,
             "rx_sig": "-",
-            "std": 8.981230112354641,
-            "std_duration": 2.9937433707848796e-06,
+            "std": 4.524268809925291,
+            "std_duration": 1.5080896033084302e-06,
             "tx_pwr": "10.0 dBm"
-          },
-          "2,12,HE-TB,HE-MCS 0,106-tone RU,3.2 us,1,LDPC,True,False": {
-            "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 4.490704763919818,
-            "airtime_sim_pct": 1.917066666666667,
-            "count": 158,
-            "freq": "5005 MHz",
-            "mean": 34.0,
-            "mean_duration": 0.00012133333333333335,
-            "rx_sig": "-75.0 dBm",
-            "std": 0.0,
-            "std_duration": 0.0,
-            "tx_pwr": "-"
-          },
-          "2,12,HE-TB,HE-MCS 0,242-tone RU,3.2 us,1,LDPC,True,False": {
-            "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.7201407309978526,
-            "airtime_sim_pct": 0.30742564102564107,
-            "count": 42,
-            "freq": "5010 MHz",
-            "mean": 34.0,
-            "mean_duration": 7.31965811965812e-05,
-            "rx_sig": "-75.0 dBm",
-            "std": 0.0,
-            "std_duration": 0.0,
-            "tx_pwr": "-"
           },
           "2,12,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,BCC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 1.4008075438990388,
+            "airtime_pct": 2.168754832553799,
             "airtime_sim_pct": 0.598,
             "count": 15,
             "freq": "5002 MHz, 5004 MHz, 5006 MHz",
@@ -326,14 +300,27 @@
             "std_duration": 0.0,
             "tx_pwr": "-"
           },
-          "2,12,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,LDPC,True,False": {
+          "2,12,HE-TB,HE-MCS 1,106-tone RU,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 5.509843006002886,
-            "airtime_sim_pct": 2.3521333333333336,
-            "count": 59,
+            "airtime_pct": 0.08558965559911312,
+            "airtime_sim_pct": 0.0236,
+            "count": 3,
+            "freq": "5005 MHz",
+            "mean": 34.0,
+            "mean_duration": 7.866666666666666e-05,
+            "rx_sig": "-75.0 dBm",
+            "std": 0.0,
+            "std_duration": 0.0,
+            "tx_pwr": "-"
+          },
+          "2,12,HE-TB,HE-MCS 1,242-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 0.7524400752843372,
+            "airtime_sim_pct": 0.20747350427350428,
+            "count": 38,
             "freq": "5010 MHz",
             "mean": 34.0,
-            "mean_duration": 0.0003986666666666667,
+            "mean_duration": 5.45982905982906e-05,
             "rx_sig": "-75.0 dBm",
             "std": 0.0,
             "std_duration": 0.0,
@@ -341,54 +328,67 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.702874395551228,
-            "airtime_sim_pct": 0.3000547008547009,
-            "count": 14,
+            "airtime_pct": 2.642777449272572,
+            "airtime_sim_pct": 0.7287042735042735,
+            "count": 34,
             "freq": "5010 MHz",
             "mean": 326.0,
-            "mean_duration": 0.00021432478632478635,
+            "mean_duration": 0.00021432478632478632,
             "rx_sig": "-50.0 dBm",
-            "std": 0.0,
-            "std_duration": 2.710505431213761e-20,
-            "tx_pwr": "-"
-          },
-          "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,True,False": {
-            "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 27.314902208819003,
-            "airtime_sim_pct": 11.660639316239315,
-            "count": 654,
-            "freq": "5010 MHz",
-            "mean": 322.2262996941896,
-            "mean_duration": 0.0001782972372513657,
-            "rx_sig": "-50.0 dBm",
-            "std": 0.9241142922648162,
-            "std_duration": 8.822527046664957e-06,
-            "tx_pwr": "-"
-          },
-          "2,8,HE-TB,HE-MCS 0,106-tone RU,3.2 us,1,LDPC,True,False": {
-            "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 50.82396904706572,
-            "airtime_sim_pct": 21.696580392156864,
-            "count": 254,
-            "freq": "5005 MHz, 5015 MHz",
-            "mean": 326.0,
-            "mean_duration": 0.0008541960784313726,
-            "rx_sig": "-75.0 dBm",
             "std": 0.0,
             "std_duration": 0.0,
             "tx_pwr": "-"
           },
-          "2,8,HE-TB,HE-MCS 0,242-tone RU,3.2 us,1,LDPC,True,False": {
+          "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 3.855253966756869,
-            "airtime_sim_pct": 1.6457948717948718,
-            "count": 45,
+            "airtime_pct": 56.65587600115566,
+            "airtime_sim_pct": 15.62196581196581,
+            "count": 865,
             "freq": "5010 MHz",
-            "mean": 323.3333333333333,
-            "mean_duration": 0.0003657321937321937,
+            "mean": 322.4763005780347,
+            "mean_duration": 0.00018060076083197468,
+            "rx_sig": "-50.0 dBm",
+            "std": 1.295507650113482,
+            "std_duration": 1.2262227271126435e-05,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-TB,HE-MCS 1,106-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 9.591673448306596,
+            "airtime_sim_pct": 2.6447529411764705,
+            "count": 62,
+            "freq": "5005 MHz, 5015 MHz",
+            "mean": 324.19354838709677,
+            "mean_duration": 0.000426573055028463,
             "rx_sig": "-75.0 dBm",
-            "std": 1.8856180831641267,
-            "std_duration": 1.903346116424644e-05,
+            "std": 1.990612725231163,
+            "std_duration": 2.0413538339135286e-05,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-TB,HE-MCS 1,242-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 5.495009635910901,
+            "airtime_sim_pct": 1.515162393162393,
+            "count": 78,
+            "freq": "5010 MHz",
+            "mean": 323.8974358974359,
+            "mean_duration": 0.00019425158886697346,
+            "rx_sig": "-75.0 dBm",
+            "std": 1.9973684199128663,
+            "std_duration": 1.9068893376433094e-05,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-TB,HE-MCS 1,52-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 16.41677292423667,
+            "airtime_sim_pct": 4.526666666666666,
+            "count": 50,
+            "freq": "5003 MHz",
+            "mean": 326.0,
+            "mean_duration": 0.0009053333333333333,
+            "rx_sig": "-75.0 dBm",
+            "std": 0.0,
+            "std_duration": 0.0,
             "tx_pwr": "-"
           }
         },
@@ -396,7 +396,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -425,7 +425,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "220",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -454,7 +454,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "224",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -483,7 +483,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "228",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -512,7 +512,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -541,7 +541,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -570,7 +570,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "385",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -599,7 +599,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "389",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -628,7 +628,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "393",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -657,7 +657,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -686,7 +686,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -715,7 +715,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -744,7 +744,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -773,7 +773,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -802,7 +802,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -831,7 +831,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -858,20 +858,20 @@
             "transmitter": "10:00:00:00:00:00"
           }
         ],
-        "total": 1892,
+        "total": 1688,
         "used_ap_only": true
       }
     },
     "BacklogBased": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
           "0,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.14828670994072543,
+            "airtime_pct": 0.13076146261218538,
             "airtime_sim_pct": 0.0416,
             "count": 6,
             "freq": "5010 MHz",
@@ -884,7 +884,7 @@
           },
           "1,13,Legacy,12 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.026377924364455973,
+            "airtime_pct": 0.02326045248389837,
             "airtime_sim_pct": 0.007400000000000001,
             "count": 3,
             "freq": "5010 MHz",
@@ -897,7 +897,7 @@
           },
           "1,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.052755848728911946,
+            "airtime_pct": 0.04652090496779674,
             "airtime_sim_pct": 0.014800000000000002,
             "count": 6,
             "freq": "5010 MHz",
@@ -910,46 +910,46 @@
           },
           "1,2,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 1.280517526467306,
-            "airtime_sim_pct": 0.35923333333333335,
-            "count": 112,
+            "airtime_pct": 3.0790762033527987,
+            "airtime_sim_pct": 0.9795666666666668,
+            "count": 284,
             "freq": "5010 MHz",
-            "mean": 36.223214285714285,
-            "mean_duration": 3.2074404761904764e-05,
+            "mean": 43.475352112676056,
+            "mean_duration": 3.449178403755869e-05,
             "rx_sig": "-",
-            "std": 8.154435494857747,
-            "std_duration": 2.7181451649525824e-06,
+            "std": 5.751554433120095,
+            "std_duration": 1.917184811040032e-06,
             "tx_pwr": "10.0 dBm"
           },
           "1,8,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 1.5470296181316068,
-            "airtime_sim_pct": 0.434,
-            "count": 155,
+            "airtime_pct": 0.4048576053954202,
+            "airtime_sim_pct": 0.1288,
+            "count": 46,
             "freq": "5010 MHz",
             "mean": 24.0,
-            "mean_duration": 2.8e-05,
+            "mean_duration": 2.8000000000000003e-05,
             "rx_sig": "-50.0 dBm",
             "std": 0.0,
-            "std_duration": 3.3881317890172014e-21,
+            "std_duration": 0.0,
             "tx_pwr": "-"
           },
           "1,9,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 2.928662521329328,
-            "airtime_sim_pct": 0.8216000000000001,
-            "count": 263,
+            "airtime_pct": 3.6963164086800298,
+            "airtime_sim_pct": 1.1759333333333333,
+            "count": 322,
             "freq": "5010 MHz",
-            "mean": 33.71863117870723,
-            "mean_duration": 3.1239543726235745e-05,
+            "mean": 49.559006211180126,
+            "mean_duration": 3.651966873706004e-05,
             "rx_sig": "-",
-            "std": 4.380729798057696,
-            "std_duration": 1.4602432660192317e-06,
+            "std": 10.224404321664938,
+            "std_duration": 3.4081347738883113e-06,
             "tx_pwr": "10.0 dBm"
           },
           "2,12,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,BCC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 1.2789728732387569,
+            "airtime_pct": 1.1278176150300991,
             "airtime_sim_pct": 0.3588,
             "count": 9,
             "freq": "5002 MHz, 5004 MHz, 5006 MHz",
@@ -960,14 +960,40 @@
             "std_duration": 0.0,
             "tx_pwr": "-"
           },
-          "2,12,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,LDPC,True,False": {
+          "2,12,HE-TB,HE-MCS 1,106-tone RU,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.14210809702652855,
-            "airtime_sim_pct": 0.03986666666666667,
-            "count": 1,
+            "airtime_pct": 9.940385802037865,
+            "airtime_sim_pct": 3.1624,
+            "count": 402,
+            "freq": "5005 MHz, 5015 MHz",
+            "mean": 34.0,
+            "mean_duration": 7.866666666666666e-05,
+            "rx_sig": "-75.0 dBm",
+            "std": 0.0,
+            "std_duration": 0.0,
+            "tx_pwr": "-"
+          },
+          "2,12,HE-TB,HE-MCS 1,242-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 0.5148571395257892,
+            "airtime_sim_pct": 0.1637948717948718,
+            "count": 30,
             "freq": "5010 MHz",
             "mean": 34.0,
-            "mean_duration": 0.0003986666666666667,
+            "mean_duration": 5.4598290598290604e-05,
+            "rx_sig": "-75.0 dBm",
+            "std": 0.0,
+            "std_duration": 6.776263578034403e-21,
+            "tx_pwr": "-"
+          },
+          "2,12,HE-TB,HE-MCS 1,26-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 11.203575059451733,
+            "airtime_sim_pct": 3.564266666666667,
+            "count": 164,
+            "freq": "5010 MHz",
+            "mean": 34.0,
+            "mean_duration": 0.00021733333333333335,
             "rx_sig": "-75.0 dBm",
             "std": 0.0,
             "std_duration": 0.0,
@@ -975,9 +1001,9 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 4.919869818941502,
-            "airtime_sim_pct": 1.380208547008547,
-            "count": 107,
+            "airtime_pct": 1.13528632118686,
+            "airtime_sim_pct": 0.36117606837606836,
+            "count": 28,
             "freq": "5010 MHz",
             "mean": 170.0,
             "mean_duration": 0.00012899145299145298,
@@ -988,54 +1014,54 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 62.252206165447156,
-            "airtime_sim_pct": 17.464085470085468,
-            "count": 1845,
+            "airtime_pct": 37.95788828348293,
+            "airtime_sim_pct": 12.075791452991453,
+            "count": 1303,
             "freq": "5010 MHz",
-            "mean": 166.44444444444446,
-            "mean_duration": 9.465628981076135e-05,
+            "mean": 166.34382194934767,
+            "mean_duration": 9.267683386793133e-05,
             "rx_sig": "-50.0 dBm",
-            "std": 1.257078722109418,
-            "std_duration": 1.146451428325918e-05,
+            "std": 1.1211932324703948,
+            "std_duration": 8.059112344014713e-06,
             "tx_pwr": "-"
           },
-          "2,8,HE-TB,HE-MCS 0,106-tone RU,3.2 us,1,LDPC,True,False": {
+          "2,8,HE-TB,HE-MCS 1,106-tone RU,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 9.996995695170574,
-            "airtime_sim_pct": 2.8045333333333335,
-            "count": 64,
-            "freq": "5005 MHz, 5015 MHz",
-            "mean": 167.875,
-            "mean_duration": 0.00043820833333333336,
-            "rx_sig": "-75.0 dBm",
-            "std": 1.996089927833914,
-            "std_duration": 2.2974603679186416e-05,
-            "tx_pwr": "-"
-          },
-          "2,8,HE-TB,HE-MCS 0,242-tone RU,3.2 us,1,LDPC,True,False": {
-            "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 6.689658540541759,
-            "airtime_sim_pct": 1.8767008547008548,
-            "count": 92,
-            "freq": "5010 MHz",
-            "mean": 168.2173913043478,
-            "mean_duration": 0.00020398922333704944,
-            "rx_sig": "-75.0 dBm",
-            "std": 1.988150150464987,
-            "std_duration": 2.0068421604266237e-05,
-            "tx_pwr": "-"
-          },
-          "2,8,HE-TB,HE-MCS 0,52-tone RU,3.2 us,1,LDPC,True,False": {
-            "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 8.736558660674406,
-            "airtime_sim_pct": 2.450933333333333,
+            "airtime_pct": 1.7669315209045893,
+            "airtime_sim_pct": 0.5621254901960785,
             "count": 26,
-            "freq": "5003 MHz",
+            "freq": "5005 MHz, 5015 MHz",
+            "mean": 166.76923076923077,
+            "mean_duration": 0.00021620211161387635,
+            "rx_sig": "-75.0 dBm",
+            "std": 1.5764539639937842,
+            "std_duration": 1.6166380846446062e-05,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-TB,HE-MCS 1,26-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 10.963426604077428,
+            "airtime_sim_pct": 3.4878666666666662,
+            "count": 37,
+            "freq": "5002 MHz, 5004 MHz",
             "mean": 170.0,
             "mean_duration": 0.0009426666666666665,
             "rx_sig": "-75.0 dBm",
             "std": 0.0,
             "std_duration": 1.0842021724855044e-19,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-TB,HE-MCS 1,52-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 18.00903861681284,
+            "airtime_sim_pct": 5.729333333333333,
+            "count": 125,
+            "freq": "5003 MHz, 5007 MHz",
+            "mean": 167.344,
+            "mean_duration": 0.00045834666666666663,
+            "rx_sig": "-75.0 dBm",
+            "std": 1.8893554456480655,
+            "std_duration": 2.2042480199227397e-05,
             "tx_pwr": "-"
           }
         },
@@ -1043,7 +1069,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1072,7 +1098,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "220",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1101,7 +1127,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "224",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1130,7 +1156,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "228",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1159,7 +1185,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1188,7 +1214,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1217,7 +1243,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "385",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1246,7 +1272,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "389",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1275,7 +1301,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "393",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1304,7 +1330,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1333,7 +1359,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -1362,7 +1388,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -1391,7 +1417,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -1420,7 +1446,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -1449,7 +1475,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -1478,7 +1504,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/BacklogBased/BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -1505,20 +1531,20 @@
             "transmitter": "0a:aa:00:00:00:02"
           }
         ],
-        "total": 2689,
+        "total": 2791,
         "used_ap_only": true
       }
     },
     "CapacityFit": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
           "0,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.2650997888810824,
+            "airtime_pct": 0.28302905616385055,
             "airtime_sim_pct": 0.0416,
             "count": 6,
             "freq": "5010 MHz",
@@ -1531,7 +1557,7 @@
           },
           "1,13,Legacy,12 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.047157173983654085,
+            "airtime_pct": 0.05034651479837726,
             "airtime_sim_pct": 0.007400000000000001,
             "count": 3,
             "freq": "5010 MHz",
@@ -1544,7 +1570,7 @@
           },
           "1,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.09431434796730817,
+            "airtime_pct": 0.10069302959675452,
             "airtime_sim_pct": 0.014800000000000002,
             "count": 6,
             "freq": "5010 MHz",
@@ -1557,46 +1583,46 @@
           },
           "1,2,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 2.210864264963386,
-            "airtime_sim_pct": 0.3469333333333333,
-            "count": 109,
+            "airtime_pct": 2.407107694008902,
+            "airtime_sim_pct": 0.3538,
+            "count": 111,
             "freq": "5010 MHz",
-            "mean": 35.48623853211009,
-            "mean_duration": 3.182874617737003e-05,
+            "mean": 35.62162162162162,
+            "mean_duration": 3.1873873873873876e-05,
             "rx_sig": "-",
-            "std": 7.344241554884816,
-            "std_duration": 2.448080518294938e-06,
+            "std": 7.3128962405053555,
+            "std_duration": 2.4376320801684516e-06,
             "tx_pwr": "10.0 dBm"
           },
           "1,8,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 3.2474724137932593,
-            "airtime_sim_pct": 0.5096,
-            "count": 182,
+            "airtime_pct": 3.3528057422486914,
+            "airtime_sim_pct": 0.4928,
+            "count": 176,
             "freq": "5010 MHz",
             "mean": 24.0,
-            "mean_duration": 2.8000000000000003e-05,
+            "mean_duration": 2.8e-05,
             "rx_sig": "-50.0 dBm",
             "std": 0.0,
-            "std_duration": 0.0,
+            "std_duration": 3.3881317890172014e-21,
             "tx_pwr": "-"
           },
           "1,9,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 5.756149101842603,
-            "airtime_sim_pct": 0.9032666666666667,
-            "count": 291,
+            "airtime_pct": 6.028881754054329,
+            "airtime_sim_pct": 0.8861333333333334,
+            "count": 285,
             "freq": "5010 MHz",
-            "mean": 33.12027491408935,
-            "mean_duration": 3.104009163802978e-05,
+            "mean": 33.27719298245614,
+            "mean_duration": 3.1092397660818716e-05,
             "rx_sig": "-",
-            "std": 3.1843638486043853,
-            "std_duration": 1.0614546162014613e-06,
+            "std": 3.469719516641263,
+            "std_duration": 1.1565731722137538e-06,
             "tx_pwr": "10.0 dBm"
           },
           "2,12,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,BCC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 3.048647572132447,
+            "airtime_pct": 3.2548341458842813,
             "airtime_sim_pct": 0.4784,
             "count": 12,
             "freq": "5002 MHz, 5004 MHz, 5006 MHz",
@@ -1609,9 +1635,9 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 6.3535277722259735,
-            "airtime_sim_pct": 0.997008547008547,
-            "count": 125,
+            "airtime_pct": 6.186306199494578,
+            "airtime_sim_pct": 0.909271794871795,
+            "count": 114,
             "freq": "5010 MHz",
             "mean": 80.0,
             "mean_duration": 7.976068376068377e-05,
@@ -1622,67 +1648,67 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 54.71733281335784,
-            "airtime_sim_pct": 8.586355555555555,
-            "count": 1866,
+            "airtime_pct": 58.921029849989445,
+            "airtime_sim_pct": 8.660294017094017,
+            "count": 1892,
             "freq": "5010 MHz",
-            "mean": 76.46730975348339,
-            "mean_duration": 4.601476717875432e-05,
+            "mean": 76.44397463002115,
+            "mean_duration": 4.577322419182884e-05,
             "rx_sig": "-50.0 dBm",
-            "std": 1.2848582054969504,
-            "std_duration": 1.2241777538597291e-05,
+            "std": 1.2564971340922975,
+            "std_duration": 1.1945023836881867e-05,
             "tx_pwr": "-"
           },
-          "2,8,HE-TB,HE-MCS 0,106-tone RU,3.2 us,1,LDPC,True,False": {
+          "2,8,HE-TB,HE-MCS 1,106-tone RU,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 3.3196451315806432,
-            "airtime_sim_pct": 0.5209254901960785,
-            "count": 22,
+            "airtime_pct": 4.519073285898222,
+            "airtime_sim_pct": 0.6642196078431372,
+            "count": 49,
             "freq": "5005 MHz, 5015 MHz",
-            "mean": 80.0,
-            "mean_duration": 0.00023678431372549022,
+            "mean": 79.91836734693878,
+            "mean_duration": 0.0001355550220088035,
             "rx_sig": "-75.0 dBm",
-            "std": 0.0,
-            "std_duration": 2.710505431213761e-20,
+            "std": 0.5655676106347354,
+            "std_duration": 5.799840399254246e-06,
             "tx_pwr": "-"
           },
-          "2,8,HE-TB,HE-MCS 0,242-tone RU,3.2 us,1,LDPC,True,False": {
+          "2,8,HE-TB,HE-MCS 1,242-tone RU,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 3.122874641553704,
-            "airtime_sim_pct": 0.49004786324786326,
-            "count": 40,
+            "airtime_pct": 0.10853168771043119,
+            "airtime_sim_pct": 0.015952136752136754,
+            "count": 2,
             "freq": "5010 MHz",
-            "mean": 79.9,
-            "mean_duration": 0.0001225119658119658,
-            "rx_sig": "-75.0 dBm",
-            "std": 0.6244997998398398,
-            "std_duration": 6.303711654793599e-06,
-            "tx_pwr": "-"
-          },
-          "2,8,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,LDPC,True,False": {
-            "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 9.634508032444208,
-            "airtime_sim_pct": 1.5118666666666667,
-            "count": 17,
-            "freq": "5002 MHz",
             "mean": 80.0,
-            "mean_duration": 0.0008893333333333333,
+            "mean_duration": 7.976068376068377e-05,
             "rx_sig": "-75.0 dBm",
             "std": 0.0,
             "std_duration": 0.0,
             "tx_pwr": "-"
           },
-          "2,8,HE-TB,HE-MCS 0,52-tone RU,3.2 us,1,LDPC,True,False": {
+          "2,8,HE-TB,HE-MCS 1,26-tone RU,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 8.18240694527187,
-            "airtime_sim_pct": 1.284,
-            "count": 28,
-            "freq": "5003 MHz",
-            "mean": 79.71428571428571,
-            "mean_duration": 0.0004585714285714286,
+            "airtime_pct": 10.27068901886896,
+            "airtime_sim_pct": 1.5096,
+            "count": 33,
+            "freq": "5002 MHz",
+            "mean": 79.63636363636364,
+            "mean_duration": 0.00045745454545454545,
             "rx_sig": "-75.0 dBm",
-            "std": 1.0301575072754254,
-            "std_duration": 1.4765590937614433e-05,
+            "std": 1.1499191491521379,
+            "std_duration": 1.6482174471180646e-05,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-TB,HE-MCS 1,52-tone RU,3.2 us,1,LDPC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 4.516672021281448,
+            "airtime_sim_pct": 0.6638666666666667,
+            "count": 27,
+            "freq": "5003 MHz, 5007 MHz",
+            "mean": 79.70370370370371,
+            "mean_duration": 0.00024587654320987656,
+            "rx_sig": "-75.0 dBm",
+            "std": 1.0475656017578483,
+            "std_duration": 1.2221598687174897e-05,
             "tx_pwr": "-"
           }
         },
@@ -1690,7 +1716,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1719,7 +1745,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "220",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1748,7 +1774,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "224",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1777,7 +1803,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "228",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1806,7 +1832,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1835,7 +1861,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -1864,7 +1890,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "385",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1893,7 +1919,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "389",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1922,7 +1948,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "393",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -1951,7 +1977,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -1980,7 +2006,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2009,7 +2035,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2038,7 +2064,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2067,7 +2093,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2096,7 +2122,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2125,7 +2151,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/CapacityFit/CapacityFit-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2152,20 +2178,20 @@
             "transmitter": "0a:aa:00:00:00:01"
           }
         ],
-        "total": 2707,
+        "total": 2716,
         "used_ap_only": true
       }
     },
     "EdcaBaseline": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
           "0,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.09295448473113088,
+            "airtime_pct": 0.09513973785827928,
             "airtime_sim_pct": 0.0416,
             "count": 6,
             "freq": "5010 MHz",
@@ -2178,7 +2204,7 @@
           },
           "1,13,Legacy,12 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.016535172764672323,
+            "airtime_pct": 0.016923895676713145,
             "airtime_sim_pct": 0.007400000000000001,
             "count": 3,
             "freq": "5010 MHz",
@@ -2191,7 +2217,7 @@
           },
           "1,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.033070345529344645,
+            "airtime_pct": 0.03384779135342629,
             "airtime_sim_pct": 0.014800000000000002,
             "count": 6,
             "freq": "5010 MHz",
@@ -2204,9 +2230,9 @@
           },
           "1,8,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 3.3097159323017085,
-            "airtime_sim_pct": 1.4812000000000003,
-            "count": 529,
+            "airtime_pct": 3.297872644029778,
+            "airtime_sim_pct": 1.4420000000000002,
+            "count": 515,
             "freq": "5010 MHz",
             "mean": 24.0,
             "mean_duration": 2.8000000000000003e-05,
@@ -2217,9 +2243,9 @@
           },
           "1,9,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 2.446311776049089,
-            "airtime_sim_pct": 1.0948000000000002,
-            "count": 357,
+            "airtime_pct": 2.609024349728967,
+            "airtime_sim_pct": 1.1408,
+            "count": 372,
             "freq": "5010 MHz",
             "mean": 32.0,
             "mean_duration": 3.066666666666667e-05,
@@ -2230,9 +2256,9 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 23.231272217109534,
-            "airtime_sim_pct": 10.396711111111111,
-            "count": 806,
+            "airtime_pct": 25.104935776572475,
+            "airtime_sim_pct": 10.97717264957265,
+            "count": 851,
             "freq": "5010 MHz",
             "mean": 170.0,
             "mean_duration": 0.00012899145299145298,
@@ -2243,15 +2269,15 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 70.87014007151585,
-            "airtime_sim_pct": 31.71657435897436,
-            "count": 3220,
+            "airtime_pct": 68.84225580478204,
+            "airtime_sim_pct": 30.101384615384614,
+            "count": 3042,
             "freq": "5010 MHz",
-            "mean": 168.58136645962733,
-            "mean_duration": 9.849867813346074e-05,
+            "mean": 168.54437869822485,
+            "mean_duration": 9.895261214787842e-05,
             "rx_sig": "-50.0 dBm",
-            "std": 1.9136386909812377,
-            "std_duration": 1.4055769963926647e-05,
+            "std": 1.9244874208263911,
+            "std_duration": 1.4473183758959047e-05,
             "tx_pwr": "-"
           }
         },
@@ -2259,7 +2285,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2288,7 +2314,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2317,7 +2343,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2346,7 +2372,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2375,7 +2401,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2404,7 +2430,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2433,7 +2459,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2462,7 +2488,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2491,7 +2517,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2520,7 +2546,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2549,7 +2575,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2578,7 +2604,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2607,7 +2633,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2636,7 +2662,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -2665,7 +2691,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2694,7 +2720,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EdcaBaseline/EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -2721,20 +2747,20 @@
             "transmitter": "0a:aa:00:00:00:01"
           }
         ],
-        "total": 4927,
+        "total": 4795,
         "used_ap_only": true
       }
     },
     "EqualSizedRUs": {
       "global": {
         "captures": [
-          "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
+          "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap"
         ],
         "display_filter": "none (all decoded frames)",
         "stats": {
           "0,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.14115260533309215,
+            "airtime_pct": 0.09805685173964297,
             "airtime_sim_pct": 0.0416,
             "count": 6,
             "freq": "5010 MHz",
@@ -2747,7 +2773,7 @@
           },
           "1,13,Legacy,12 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.02510887691021351,
+            "airtime_pct": 0.017442805357532648,
             "airtime_sim_pct": 0.007400000000000001,
             "count": 3,
             "freq": "5010 MHz",
@@ -2760,7 +2786,7 @@
           },
           "1,13,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.05021775382042702,
+            "airtime_pct": 0.034885610715065296,
             "airtime_sim_pct": 0.014800000000000002,
             "count": 6,
             "freq": "5010 MHz",
@@ -2773,22 +2799,22 @@
           },
           "1,2,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 0.8185267666631314,
-            "airtime_sim_pct": 0.24123333333333336,
-            "count": 67,
+            "airtime_pct": 0.7185335810569191,
+            "airtime_sim_pct": 0.30483333333333335,
+            "count": 85,
             "freq": "5010 MHz",
-            "mean": 48.014925373134325,
-            "mean_duration": 3.600497512437811e-05,
+            "mean": 47.588235294117645,
+            "mean_duration": 3.586274509803922e-05,
             "rx_sig": "-",
-            "std": 7.095284406937212,
-            "std_duration": 2.3650948023124027e-06,
+            "std": 6.352941176470588,
+            "std_duration": 2.1176470588235283e-06,
             "tx_pwr": "10.0 dBm"
           },
           "1,8,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 1.7291194153303788,
-            "airtime_sim_pct": 0.5096,
-            "count": 182,
+            "airtime_pct": 1.0757968061051215,
+            "airtime_sim_pct": 0.45640000000000003,
+            "count": 163,
             "freq": "5010 MHz",
             "mean": 24.0,
             "mean_duration": 2.8000000000000003e-05,
@@ -2799,22 +2825,22 @@
           },
           "1,9,Legacy,24 Mbps,,,,,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 2.753833040585038,
-            "airtime_sim_pct": 0.8116,
+            "airtime_pct": 1.9518656337469638,
+            "airtime_sim_pct": 0.8280666666666667,
             "count": 246,
             "freq": "5010 MHz",
-            "mean": 38.97560975609756,
-            "mean_duration": 3.2991869918699185e-05,
+            "mean": 40.983739837398375,
+            "mean_duration": 3.366124661246613e-05,
             "rx_sig": "-",
-            "std": 11.519840371688016,
-            "std_duration": 3.83994679056267e-06,
+            "std": 12.364046841803017,
+            "std_duration": 4.121348947267671e-06,
             "tx_pwr": "10.0 dBm"
           },
           "2,12,HE-TB,HE-MCS 0,26-tone RU,3.2 us,1,BCC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 25.295723147401223,
-            "airtime_sim_pct": 7.455066666666667,
-            "count": 187,
+            "airtime_pct": 0.8457403462544206,
+            "airtime_sim_pct": 0.3588,
+            "count": 9,
             "freq": "5002 MHz, 5004 MHz, 5006 MHz",
             "mean": 34.0,
             "mean_duration": 0.0003986666666666667,
@@ -2823,11 +2849,24 @@
             "std_duration": 0.0,
             "tx_pwr": "-"
           },
+          "2,12,HE-TB,HE-MCS 1,26-tone RU,3.2 us,1,BCC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 1.1782536447817997,
+            "airtime_sim_pct": 0.4998666666666667,
+            "count": 23,
+            "freq": "5002 MHz, 5004 MHz, 5006 MHz",
+            "mean": 34.0,
+            "mean_duration": 0.00021733333333333335,
+            "rx_sig": "-75.0 dBm",
+            "std": 0.0,
+            "std_duration": 0.0,
+            "tx_pwr": "-"
+          },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,False,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 5.864909312090351,
-            "airtime_sim_pct": 1.72848547008547,
-            "count": 134,
+            "airtime_pct": 3.6181995144663937,
+            "airtime_sim_pct": 1.5349982905982904,
+            "count": 119,
             "freq": "5010 MHz",
             "mean": 170.0,
             "mean_duration": 0.00012899145299145298,
@@ -2838,15 +2877,28 @@
           },
           "2,8,HE-SU,HE-MCS 1,20 MHz,3.2 us,1,LDPC,True,False": {
             "airtime_evidence_status": "AVAILABLE",
-            "airtime_pct": 63.321409081869675,
-            "airtime_sim_pct": 18.66186324786325,
-            "count": 1961,
+            "airtime_pct": 42.688367036919026,
+            "airtime_sim_pct": 18.110270085470084,
+            "count": 1911,
             "freq": "5010 MHz",
-            "mean": 166.4895461499235,
-            "mean_duration": 9.516503441031742e-05,
+            "mean": 166.705389848247,
+            "mean_duration": 9.476855094437511e-05,
             "rx_sig": "-50.0 dBm",
-            "std": 1.310926835025168,
-            "std_duration": 1.2118373698320665e-05,
+            "std": 1.5244620542926122,
+            "std_duration": 1.1385919254326153e-05,
+            "tx_pwr": "-"
+          },
+          "2,8,HE-TB,HE-MCS 1,26-tone RU,3.2 us,1,BCC,True,False": {
+            "airtime_evidence_status": "AVAILABLE",
+            "airtime_pct": 47.77285816886035,
+            "airtime_sim_pct": 20.267333333333333,
+            "count": 215,
+            "freq": "5002 MHz, 5004 MHz, 5006 MHz",
+            "mean": 170.0,
+            "mean_duration": 0.0009426666666666666,
+            "rx_sig": "-75.0 dBm",
+            "std": 0.0,
+            "std_duration": 0.0,
             "tx_pwr": "-"
           }
         },
@@ -2854,7 +2906,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -2883,7 +2935,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "220",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2912,7 +2964,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "224",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2941,7 +2993,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "228",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -2970,7 +3022,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -2999,7 +3051,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Trigger",
@@ -3028,7 +3080,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "385",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -3057,7 +3109,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "389",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -3086,7 +3138,7 @@
           {
             "ampdu": true,
             "ampdu_reference": "393",
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Null",
@@ -3115,7 +3167,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Block Ack (BA)",
@@ -3144,7 +3196,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -3173,7 +3225,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -3202,7 +3254,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -3231,7 +3283,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -3260,7 +3312,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "direct/IBSS",
             "fragment_number": null,
             "frame_name": "Control: Ack",
@@ -3289,7 +3341,7 @@
           {
             "ampdu": false,
             "ampdu_reference": null,
-            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T113344Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+            "capture": "examples/ieee80211ax/ul_ofdma/results/20260728T121420Z/EqualSizedRUs/EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
             "direction": "to DS",
             "fragment_number": 0,
             "frame_name": "Data: QoS Data",
@@ -3316,37 +3368,37 @@
             "transmitter": "0a:aa:00:00:00:02"
           }
         ],
-        "total": 2792,
+        "total": 2786,
         "used_ap_only": true
       }
     },
     "_evidence_checks": [
       {
-        "evidence": "1892 AP/global transmission observations",
+        "evidence": "1688 AP/global transmission observations",
         "id": "capture-AsymmetricBacklog",
         "requirement": "AsymmetricBacklog produced protocol-visible wireless observations",
         "status": "PASS"
       },
       {
-        "evidence": "2689 AP/global transmission observations",
+        "evidence": "2791 AP/global transmission observations",
         "id": "capture-BacklogBased",
         "requirement": "BacklogBased produced protocol-visible wireless observations",
         "status": "PASS"
       },
       {
-        "evidence": "2707 AP/global transmission observations",
+        "evidence": "2716 AP/global transmission observations",
         "id": "capture-CapacityFit",
         "requirement": "CapacityFit produced protocol-visible wireless observations",
         "status": "PASS"
       },
       {
-        "evidence": "4927 AP/global transmission observations",
+        "evidence": "4795 AP/global transmission observations",
         "id": "capture-EdcaBaseline",
         "requirement": "EdcaBaseline produced protocol-visible wireless observations",
         "status": "PASS"
       },
       {
-        "evidence": "2792 AP/global transmission observations",
+        "evidence": "2786 AP/global transmission observations",
         "id": "capture-EqualSizedRUs",
         "requirement": "EqualSizedRUs produced protocol-visible wireless observations",
         "status": "PASS"

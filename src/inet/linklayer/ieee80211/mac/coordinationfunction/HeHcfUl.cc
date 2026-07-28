@@ -1000,8 +1000,9 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         // contain pending data. Check the first MPDU too; the aggregation loop
         // below performs the same check for every additional MPDU.
         auto sourceHeader = sourcePacket->peekAtFront<Ieee80211DataHeader>();
-        B psduLength = B(4 + sourcePacket->getByteLength()) +
-                (sourceHeader->getBufferStatusPresent() ? B(0) : B(4));
+        B psduLength = B(sourcePacket->getByteLength() +
+                IIeee80211HeUlScheduler::getHeTbQueuedPacketOverheadBytes(
+                        sourceHeader->getBufferStatusPresent()));
         auto prospective = createHeTbTxVector(*trigger, *selected,
                 phy.getChannelCenterFrequency(),
                 mac->getMib()->bssStationData.associationId, psduLength);

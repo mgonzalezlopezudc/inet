@@ -230,8 +230,13 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerBacklogBased::schedule(
                 allocation.mcs, allocation.numberOfSpatialStreams, allocation.coding);
         const int64_t psduCapacity = capacity ?
                 capacity.maximumPsduLength.get<B>() : 0;
+        // Candidate backlog is the queued MAC Packet::getByteLength(), not
+        // application payload bytes. The final STA-side construction uses
+        // 4 bytes for the A-MPDU delimiter and, for a queued header without
+        // BSR/HT Control, another 4 bytes for the inserted HT Control field.
+        // Do not subtract the already-counted MAC header and FCS again.
         const int64_t serviceCapacity = std::max<int64_t>(0, psduCapacity -
-                getMinimumHeTbMacServiceOverheadBytes());
+                getHeTbQueuedPacketOverheadBytes(false));
         allocation.plannedBytes = std::min<int64_t>(
                 candidate.getSelectedBacklogBytes(), serviceCapacity);
         return std::make_pair(allocation, serviceCapacity);

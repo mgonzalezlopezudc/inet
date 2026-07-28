@@ -174,11 +174,16 @@ class INET_API IIeee80211HeUlScheduler
     };
 
     /**
-     * Minimum triggered single-MPDU A-MPDU framing owned by the MAC:
-     * 30-byte QoS data header including HT Control, 4-byte FCS, and
-     * 4-byte A-MPDU delimiter.
+     * Bytes added to a queued MAC packet when it is placed into an HE-TB
+     * A-MPDU. The BSR backlog is measured with Packet::getByteLength(), so
+     * the queued packet's MAC header and trailer are already included. Only
+     * the A-MPDU delimiter and, when the queued header has not yet acquired
+     * HT Control, the four-byte HT Control field are additional here.
      */
-    static constexpr int64_t getMinimumHeTbMacServiceOverheadBytes() { return 38; }
+    static constexpr int64_t getHeTbQueuedPacketOverheadBytes(bool hasBufferStatus)
+    {
+        return 4 + (hasBufferStatus ? 0 : 4);
+    }
 
     virtual ~IIeee80211HeUlScheduler() {}
     virtual Schedule schedule(const ScheduleContext& context) = 0;
