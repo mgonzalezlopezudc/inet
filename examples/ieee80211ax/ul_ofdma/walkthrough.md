@@ -3,34 +3,33 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260728T235632Z`
-- PCAP: `20260728T235632Z`
+- Scalar/vector: `20260729T083529Z`
+- PCAP: `20260729T083529Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260728T161000Z`.
+`[agent]` results sessions: `20260729T083529Z`.
 
-This walkthrough uses the current four-configuration UL-OFDMA experiment. It
-compares two AP schedulers with a single-user EDCA control and an asymmetric
-backlog stress case. The scalar/vector and run-0 AP PCAP evidence were
-co-recorded in session `20260728T161000Z`.
+This four-configuration experiment shows that enabling scheduled uplink OFDMA
+changes the observed exchange from station-contended HE-SU traffic to
+Trigger-led HE-TB responses. In session `20260729T083529Z`, the scheduled
+configurations contain that exchange while the EDCA control does not. The
+application results compare delivery and tail delay, but do not by themselves
+explain each scheduler decision.
 
 ## [agent] Learning objectives and feature primer
 
-After completing this walkthrough, the reader can:
-
-- explain how a Basic Trigger solicits simultaneous uplink HE-TB responses;
-- distinguish scheduled HE-TB traffic from ordinary HE-SU EDCA traffic;
-- identify the effect of the current SU and MU contention parameters; and
-- compare delivered goodput and tail delay without treating either as proof of
-  a particular RU allocation.
+The learning question is: does the example expose the scheduled uplink OFDMA
+exchange, and how do its application outcomes compare with ordinary EDCA?
 
 Uplink Orthogonal Frequency-Division Multiple Access (OFDMA) lets an access
 point (AP) divide a channel into resource units (RUs). The AP wins channel
-access, sends a Basic Trigger containing per-station user information, and
-eligible stations respond after SIFS with aligned HE trigger-based (HE-TB)
-PPDUs. The AP then completes the modeled exchange with acknowledgment traffic.
-An ordinary EDCA transmission is instead a station-originated HE single-user
-(HE-SU) exchange with no preceding Basic Trigger.
+access and sends a Basic Trigger whose User Info fields identify scheduled
+stations and their RU/PHY parameters. Addressed stations that satisfy the
+response conditions start aligned HE trigger-based (HE-TB) responses one SIFS
+after the triggering PPDU. A response can carry scheduled data or QoS Null.
+INET completes this example's modeled exchange with a SIFS-delayed Multi-STA
+Block Ack. An ordinary EDCA transmission is instead a station-originated HE
+single-user (HE-SU) exchange with no preceding Basic Trigger.
 
 ## [agent] Scenario description
 
@@ -47,29 +46,37 @@ host[2] --/                    ^
 
 The [INI file](omnetpp.ini) places the AP at the center of a 50 m × 50 m
 area, fixes the radios to AX 20 MHz operation and HE MCS 1/NSS 1, disables
-random-access RUs, and enables Block Ack and MPDU aggregation. A warm-up app
-runs at 0.2 s; the measured app starts at 0.3 s and sends 100-byte packets
-every 1 ms. The default measurement window is `[0.3,0.95)` s. The asymmetric
-case uses 256-byte packets and 1/2/4 ms intervals for hosts 0/1/2 and measures
-`[0.3,0.8)` s.
+random-access RUs, and enables Block Ack and MPDU aggregation. The common
+warm-up app offers one 100-byte packet per host at 0.2 s; the measured app
+starts at 0.3 s and sends 100-byte packets every 0.5 ms. The default
+measurement window is `[0.3,0.95)` s. The asymmetric case changes both apps
+to 256-byte packets, uses 1/2/4 ms measured-app intervals for hosts 0/1/2, and
+measures `[0.3,0.8)` s.
 
 Port 5000 is classified as UP_VO by `ExampleQosClassifier`. The baseline SU
 EDCA values are therefore the HE VO defaults (AIFSN/CWmin/CWmax `2/3/7`).
 The current MU-EDCA settings are explicitly `muAifsn=10`, `muCwMin=255`,
-`muCwMax=1023`, and `muEdcaTimer=100ms` at
-[`omnetpp.ini:64`](omnetpp.ini:64). MU values apply while the MU-EDCA timer is
-active; `EdcaBaseline` disables UL MU-OFDMA, so its ordinary EDCA path is the
-relevant control. These settings are input evidence; the campaign results and
-captures establish what exchanges occurred.
+`muCwMax=1023`, and `muEdcaTimer=100ms` in the
+[INI configuration](omnetpp.ini). `AsymmetricBacklog` also sets the ordinary
+SU values to `10/255/1023` so queues remain available to the AP scheduler.
+These assignments are requested configuration; the campaign results and
+captures establish what occurred.
 
 ## [agent] Standards and INET model boundary
 
-IEEE Std 802.11-2024 Clause 26.5.2 specifies Trigger-based solicitation and
-HE-TB responses; Clause 26.5.2.3 covers the SIFS response timing and Trigger
-User Info parameters. INET models this with `HeHcf`, the UL coordinator, and
-replaceable `HeUlScheduler*` policies. IEEE defines legal frame fields and
-timing, but not INET's scheduler objective, backlog scoring, fairness order, or
-tie-breaking policy.
+IEEE Std 802.11-2024 defines the Basic Trigger format in Clause 9.3.1.22.2 and
+UL-MU solicitation in Clause 26.5.2.2. Clause 26.5.2.2.4 constrains the Common
+Info and User Info fields used to construct an HE-TB PPDU. Under Clause
+26.5.2.3.1, a qualifying non-AP station starts that response one SIFS after
+the triggering PPDU; Clause 26.5.2.4 permits a QoS Null response when no
+pending frame fits. Immediate acknowledgment behavior is specified in Clause
+10.3.2.13.3 and Clauses 26.4.4.5–26.4.4.6.
+
+INET concretizes the exchange with `HeHcf`, the UL coordinator, and
+replaceable `HeUlScheduler*` policies. This configured path collects HE-TB
+responses and sends a SIFS-delayed Multi-STA Block Ack. IEEE defines legal
+fields, response conditions, and timing, but not INET's scheduler objective,
+backlog scoring, allocation order, or tie-breaking policy.
 
 The PCAP is AP `wlan[0]` observation evidence. It counts capture observations,
 not necessarily unique application deliveries; A-MPDU expansion and parallel
@@ -84,69 +91,62 @@ PCAP fields and result records are direct observations; goodput and delay are
 derived measurements from those records; scheduler explanations are
 inferences unless aligned telemetry establishes them.
 
-| Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
+| Claim | Status | Script-generated evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
-| UL-MU feature gate changes the wireless exchange | `PASS` | Fresh AP PCAPs contain Trigger/HE-TB observations for the three scheduled configurations and none for EDCA | run 0 / seed 0 | Direct capture observation |
-| Four current configurations are analyzed | `PASS` | Suite and scalar/vector manifests; fresh session has four configuration directories and 5 runs each | runs 0–4 / seeds 0–4 | The removed legacy configuration is absent |
-| Delivered application performance is recorded | `PASS` | `packetReceived:vector(packetBytes)` and `endToEndDelay:vector` | 20 runs | Windowed per-run aggregation |
-| Scheduler policy differences are exposed by outcomes | `INCONCLUSIVE` | Goodput and delay differ, but application outcomes do not identify each Trigger's RU decision | 5 runs/configuration | Use Trigger fields and scheduler telemetry for attribution |
-| Current SU/MU contention inputs are documented | `PASS` | Effective INI assignments and current configuration matrix below | all configurations | MU timer activation is not separately recorded |
+| Scheduled configurations use a Trigger-led UL-MU exchange while the EDCA control does not | `PASS` | PCAP statistics and representative timelines | run 0 / seed 0 per configuration | Direct AP-capture observation in this session |
+| All four configurations record delivered goodput and p95 delay | `PASS` | Scalar/vector plot and table | runs 0–4 / seeds 0–4 | Per-run aggregation over the stated windows |
+| One scheduler is generally better than the others | `INCONCLUSIVE` | Scalar/vector plot and table | runs 0–4 / seeds 0–4 | No acceptance threshold; one scenario and five seeds |
+| Outcome differences identify individual RU decisions | `INCONCLUSIVE` | PCAP and scalar/vector outputs | matched run 0 plus five-run outcomes | Requires decoded Trigger user allocations aligned with scheduler telemetry |
 
 ## [agent] Configuration matrix
 
 | Configuration | Role | Effective scheduler / UL mode | Contention delta | Workload | Expected invariant |
 |---|---|---|---|---|---|
-| `BacklogBased` | Scheduled treatment | `HeUlSchedulerBacklogBased`; UL MU-OFDMA enabled | SU `2/3/7`; MU `10/255/1023`, 100 ms | 3 × 100 B every 1 ms | Trigger-led HE-TB exchange |
+| `BacklogBased` | Scheduled treatment | `HeUlSchedulerBacklogBased`; UL MU-OFDMA enabled | SU `2/3/7`; MU `10/255/1023`, 100 ms | 3 × 100 B every 0.5 ms | Trigger-led HE-TB exchange |
 | `EqualSizedRUs` | Scheduled policy control | `HeUlSchedulerEqualSizedRUs`; UL MU-OFDMA enabled | same | matched | Trigger-led exchange with equal-sized RU policy |
 | `EdcaBaseline` | Negative control | UL MU-OFDMA disabled; HE-SU EDCA | SU `2/3/7`; MU settings inactive for the disabled trigger path | matched | no Basic Trigger or HE-TB response |
-| `AsymmetricBacklog` | Stress/discriminator | inherits `BacklogBased`; UL MU-OFDMA enabled | explicitly SU/MU `10/255/1023`; MU timer 100 ms | 256 B every 1/2/4 ms | unequal backlog inputs remain observable in outcomes and captures |
+| `AsymmetricBacklog` | Multi-factor stress case | inherits `BacklogBased`; UL MU-OFDMA enabled | SU `10/255/1023`; MU `10/255/1023`, 100 ms | both apps 256 B; measured app every 1/2/4 ms | unequal backlog inputs remain observable |
 
 All four configurations use AX 20 MHz, fixed HE MCS 1/NSS 1, three stations,
-zero random-access RUs, and the same topology. The only intended comparison
-deltas are scheduler type, UL-MU enablement, and the asymmetric workload plus
-its explicit SU contention values.
+zero random-access RUs, and the same topology. `BacklogBased`,
+`EqualSizedRUs`, and `EdcaBaseline` share the measured workload. The
+asymmetric condition also changes payload size, offered load, SU contention,
+and measurement duration, so it is not an isolated scheduler comparison.
 
 ## [agent] Expected invariants and diagnostic map
 
-| Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
-|---|---|---|---|---|
-| Scheduled configurations produce Trigger → HE-TB ordering | AP PCAP and generated frame timeline | no Trigger or no solicited HE-TB response | `HeHcf` / UL coordinator | inspect effective `enableUlMuOfdma` and AP scheduler initialization |
-| EDCA control remains non-triggered | EDCA AP PCAP | Trigger/HE-TB appears in baseline | configuration precedence or coordinator enablement | inspect effective INI and AP MAC type |
-| Trigger users have legal, non-overlapping RUs | decoded Trigger User Info and HE-TB PHY observations | duplicate/missing RU or mismatched response | scheduler/Trigger serialization | inspect RU telemetry and Trigger fields |
-| Delay comparison uses delivered packets only | sink `endToEndDelay` vectors in `[0.3,end)` | empty or non-sink delay vectors | result recording/filtering | query module paths and units before aggregation |
+| Invariant | Script-generated evidence | Failure symptom | First diagnostic |
+|---|---|---|---|
+| Scheduled cases show Trigger followed by HE-TB responses | Representative PCAP timelines | Trigger or solicited response is absent | inspect effective `enableUlMuOfdma` and AP scheduler initialization |
+| EDCA remains non-triggered | EDCA PCAP statistics and timeline | Trigger or HE-TB appears in the control | inspect INI precedence and selected MAC type |
+| Delivery metrics use only sink packets in the measurement window | Scalar/vector provenance | empty or off-path vectors | inspect recorded module paths, vector units, and window bounds |
+| RU attribution remains bounded by decoded fields | Trigger/HE-TB fields in generated timelines | scheduler conclusions exceed visible fields | add aligned Trigger-user and scheduler telemetry |
 
 ## [agent] Reproduction
 
-Run from the repository root. The minimal smoke run is:
+Run from the INET repository root. First inspect the suite-owned options:
 
 ```sh
-bin/inet -u Cmdenv \
-  -f examples/ieee80211ax/ul_ofdma/omnetpp.ini \
-  -c BacklogBased -r 0 --seed-set=0 \
-  --result-dir="$PWD/examples/ieee80211ax/ul_ofdma/results/manual/BacklogBased"
-```
+python3 examples/ieee80211/analysis/wifi_analysis.py inspect ul_ofdma
 
-The evidence-producing campaign was executed in release mode with exit status
-0 using Cmdenv, 20 runs total, run numbers `[0,5)`, seed sets 0–4, and AP
-`wlan[0]` PCAPng for run 0:
-
-```sh
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py run ul_ofdma \
   --suite ax --evidence both --runs 5 --jobs "$(nproc)" \
-  --session-id 20260728T161000Z
+  --session-id 20260729T083529Z
 ```
 
-The report and publication commands were:
+The session contains runs `[0,5)` for each of the four configurations. Run 0
+also records the AP `wlan[0]` PCAP from the same simulation trajectory. Report
+and publish that retained session with:
 
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py report ul_ofdma \
-  --suite ax --session-id 20260728T161000Z
+  --suite ax --session-id 20260729T083529Z
 
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_ofdma \
-  --suite ax --session-id 20260728T161000Z --update
+  --suite ax --session-id 20260729T083529Z --update
 ```
 
 ## [agent] Scalar and vector analysis
@@ -160,29 +160,23 @@ sum of delivered bytes × 8 divided by the window duration. Delay is the pooled
 run-level values per condition are summarized with a two-sided 95% Student-t
 interval; vector samples are not treated as independent repetitions.
 
-The generated presentation bundle contains the compact table and the new
-goodput-plus-delay figure:
+The retained inputs are the `.sca` and `.vec` files under
+`results/20260729T083529Z/{configuration}/` for runs 0–4.
 
-```text
-results/20260728T161000Z/ul-ofdma-delivery-delay.png
-results/20260728T161000Z/ul-ofdma-delivery-delay.png.json
-```
-
-The figure answers two separate questions: how much application traffic was
-delivered, and how the scheduler/contending access affected tail delay. It is
-an outcome comparison, not direct RU-allocation evidence.
-
-Input result artifacts are the `.sca`/`.vec` pairs under
-`examples/ieee80211ax/ul_ofdma/results/20260728T161000Z/{BacklogBased,EqualSizedRUs,EdcaBaseline,AsymmetricBacklog}/`.
-The exact native result queries are `packetReceived:vector(packetBytes)` and
-`endToEndDelay:vector` on `**.app[*]`, filtered to sink modules.
+The figure answers two separate questions: how much application traffic
+reached the sink and what p95 delay the delivered packets experienced. In this
+session the EDCA control has the highest goodput and lowest p95 delay. The
+scheduled cases still prove the UL-MU mechanism, but this workload does not
+show a delivery or delay advantage for it. The wide confidence interval for
+the equal-sized scheduler also cautions against ranking the two schedulers
+from five runs.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-ul_ofdma -->
 ### [script] Generated scalar/vector plot and table
 
-![ul_ofdma scalar/vector analysis](results/20260728T235632Z/ul-ofdma-delivery-delay.png)
+![ul_ofdma scalar/vector analysis](results/20260729T083529Z/ul-ofdma-delivery-delay.png)
 
-Figure provenance: [`results/20260728T235632Z/ul-ofdma-delivery-delay.png.json`](results/20260728T235632Z/ul-ofdma-delivery-delay.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260729T083529Z/ul-ofdma-delivery-delay.png.json`](results/20260729T083529Z/ul-ofdma-delivery-delay.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -206,7 +200,7 @@ The table is a presentation view of the session-bound run-level summary; the com
 ## [agent] PCAP statistics
 
 The shared AX PCAP analyzer used the four AP captures from session
-`20260728T161000Z`, with PCAPng/radiotap input and TShark decoding. Generated
+`20260729T083529Z`, with PCAPng/radiotap input and TShark decoding. Generated
 statistics, composition plots, evidence checks, and representative timelines
 are inserted below by the shared publisher. Counts are capture observations;
 unknown PHY fields remain unknown and estimated HE-TB airtime is explicitly
@@ -214,13 +208,13 @@ limited by fields not exposed in radiotap.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260728T235632Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260729T083529Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260728T235632Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260729T083529Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260728T235632Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260728T235632Z.json` (SHA-256 `da1f7b749ddeac1a6d8f4c03ee1b8bea5294b74caa5a506f5be9ae82477db3b9`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260729T083529Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260729T083529Z.json` (SHA-256 `01d29f72f485d88c220061fd238592889b5cfb4c57913191895fa4682e62d31b`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -416,38 +410,35 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4951*
 Frame numbers are local to capture `EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Analysis of Packet Distribution
-`EdcaBaseline` provides the non-triggered control. The two scheduled configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2 and Annex G.5). Frame-subtype totals alone do not establish that queued payload was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, HE-TB payload observations, and aligned scheduler/application telemetry for those decisions.
+`EdcaBaseline` provides the non-triggered control. The three scheduled configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2; see informative Annex G.5). Frame-subtype totals alone do not establish that queued payload was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, HE-TB payload observations, and aligned scheduler/application telemetry for those decisions.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
 ## [agent] Frame exchange analysis
 
-The representative scheduled exchange should be read as a protocol sequence:
+The generated scheduled timelines show the decisive order: an AP Trigger,
+simultaneous HE-TB responses on decoded RUs, and an AP Block Ack. Early
+responses can be QoS Null while the warm-up establishes state; later scheduled
+responses carry QoS Data. The asymmetric case exposes several RU sizes, while
+the equal-sized policy shows 26-tone responses in its representative
+timeline. These are direct run-0 observations, not proof of the scheduler's
+internal reason for choosing an RU.
 
-| Step | Observation | Role |
-|---|---|---|
-| 1 | AP Basic Trigger with per-user AID/RU information | solicits coordinated uplink |
-| 2 | aligned HE-TB responses from addressed stations | carries scheduled uplink response traffic or a permitted null response |
-| 3 | AP acknowledgment, including Block Ack where decoded | closes the modeled exchange |
-
-The EDCA control instead shows HE-SU station transmissions without the Trigger
-prefix. Frame numbers are local to each AP capture and are not OMNeT++ event
-numbers. Use the generated PCAP timeline for exact timestamps, decoded fields,
-and configuration-specific observations.
+The EDCA timeline instead shows station-originated HE-SU data without the
+Trigger prefix. Frame numbers are local to each AP capture and are not
+OMNeT++ event numbers.
 
 ## [agent] Cross-layer findings and verdict
 
-- `PASS`: the current suite and experiment manifest contain exactly the four
-  live configurations; no analysis script depends on the removed legacy
-  configuration.
-- `PASS`: all 20 fresh runs completed and recorded the requested delivery and
-  delay vectors; run-0 AP captures were nonempty and decoded.
-- `PASS`: scheduled configurations show the expected Trigger-led UL-MU path,
-  while `EdcaBaseline` provides the non-triggered control.
-- `PASS`: the delay plot is bound to the same session as the scalar/vector
-  metrics and uses per-run aggregation over the documented windows.
-- `INCONCLUSIVE`: the outcome differences do not alone prove which station
-  received which RU or why one scheduler produced a given delay. Use decoded
-  Trigger User Info and aligned scheduler telemetry for that claim.
+`PASS`: in session `20260729T083529Z`, all four configurations have five
+scalar/vector runs and a matched run-0 AP capture. The three scheduled
+configurations show Trigger-led HE-TB exchanges, while `EdcaBaseline` shows
+the non-triggered HE-SU control.
+
+`INCONCLUSIVE`: the measured application outcomes do not establish a general
+scheduler ranking. EDCA performs best for delivery and p95 delay in this
+matched workload, EqualSizedRUs has wide run-to-run uncertainty, and
+AsymmetricBacklog changes both workload and measurement window. None of those
+outcomes identifies why a scheduler chose an RU.
 
 ## [agent] Limitations and inconclusive claims
 
@@ -458,25 +449,5 @@ and configuration-specific observations.
   observation.
 - AP PCAP counts do not equal delivered application-packet counts and cannot
   establish internal scheduler decisions by themselves.
-- No external interference, mobility, channel-width sweep, or UORA condition
-  is included.
-
-## [agent] Further experiments
-
-- Repeat with one contention parameter changed at a time and compare the delay
-  panel plus the EDCA backoff/Trigger timeline.
-- Add a larger station count while holding the four current contention values
-  fixed; inspect RU occupancy and tail-delay changes.
-- Pair a focused scheduler-telemetry run with the PCAP to attribute each
-  Trigger User Info entry to a scheduler decision.
-
-## [agent] Artifact provenance
-
-| Artifact | Session/path | Scope |
-|---|---|---|
-| Logical analysis session | `examples/ieee80211/analysis/generated/sessions/20260728T161000Z/session.json` | AX suite, `ul_ofdma`, both evidence families |
-| Scalar/vector metrics | `examples/ieee80211ax/analysis/metrics.json` | four configurations, five runs each, native result API |
-| Scalar/vector figure | `examples/ieee80211ax/ul_ofdma/results/20260728T161000Z/ul-ofdma-delivery-delay.png` and `.json` | goodput and p95 delay |
-| PCAP manifest/report | `examples/ieee80211/analysis/generated/ax/capture_manifests/20260728T161000Z.json` and `packet_metrics.json` | AP `wlan[0]`, run 0 |
-| Analysis definitions | `examples/ieee80211ax/analysis/experiments.json`, `examples/ieee80211/analysis/suites/ax.json` | current four-configuration matrix |
-| Configuration | `examples/ieee80211ax/ul_ofdma/omnetpp.ini` | current SU/MU contention and workload inputs |
+- The smallest useful attribution check is aligned Trigger User Info plus AP
+  scheduler telemetry for the same run-0 events.
