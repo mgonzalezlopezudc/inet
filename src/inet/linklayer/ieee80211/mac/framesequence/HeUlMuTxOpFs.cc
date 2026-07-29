@@ -279,7 +279,12 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
     ASSERT(triggerType == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER || !schedule.allocations.empty());
     ASSERT(schedule.commonDuration > SIMTIME_ZERO);
     auto header = makeShared<Ieee80211TriggerFrame>();
-    header->setReceiverAddress(MacAddress::BROADCAST_ADDRESS);
+    // IEEE Std 802.11-2024, 9.3.1.22: a Trigger with exactly one ordinary
+    // scheduled User Info field and no RA-RU is individually addressed.
+    header->setReceiverAddress(schedule.allocations.size() == 1 &&
+            !schedule.allocations.front().randomAccess ?
+            schedule.allocations.front().staAddress :
+            MacAddress::BROADCAST_ADDRESS);
     header->setTransmitterAddress(apAddress);
     header->setTriggerType(triggerType);
     header->setUlLength(schedule.ulLength);
@@ -397,6 +402,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
         uint16_t aid = matchedAllocation->randomAccess ? 0 : matchedAllocation->associationId;
         uint8_t tid = matchedAllocation->tid;
         bool responseIdentityKnown = aid != 0;
+        bool responseTidKnown = triggerType != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER;
         std::vector<std::pair<Packet *, physicallayer::Ieee80211MpduReceiveResult>> decodedMpdus;
 
         if (dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront()) != nullptr) {
@@ -526,14 +532,26 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
                 aid = decodedAid;
                 tid = header->getTid();
                 responseIdentityKnown = true;
+                responseTidKnown = true;
             }
-            else if (responseIdentityKnown &&
-                    (decodedAid != aid || header->getTid() != tid)) {
+            else if (responseIdentityKnown && decodedAid != aid) {
+                identityConflict = true;
+                break;
+            }
+            else if (!responseTidKnown) {
+                // IEEE Std 802.11-2024, 26.5.5: a BSRP response may report
+                // the live selected TID rather than the polling allocation's
+                // default TID. The scheduled AID/RU still identifies the STA.
+                tid = header->getTid();
+                responseTidKnown = true;
+            }
+            else if (triggerType == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
+                    header->getTid() != tid) {
                 identityConflict = true;
                 break;
             }
         }
-        if (responseIdentityKnown && !identityConflict) {
+        if (responseIdentityKnown && responseTidKnown && !identityConflict) {
             responders.insert(aid);
             receivedTids[aid] = tid;
             for (auto& decoded : decodedMpdus) {
@@ -554,7 +572,8 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     for (auto& record : ackRecords)
         if (responders.count(record.aid) != 0 &&
                 blockAckReqRecords.count(record.aid) == 0)
-            record = buildHeUlMultiStaBlockAckRecord(record.aid, record.tid,
+            record = buildHeUlMultiStaBlockAckRecord(record.aid,
+                    receivedTids.at(record.aid),
                     receivedOutcomes[record.aid]);
     for (auto aid : responders) {
         auto record = std::find_if(ackRecords.begin(), ackRecords.end(),
