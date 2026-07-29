@@ -41,6 +41,7 @@ from analyze_pcap import (
     estimate_airtime,
     evaluate_evidence,
     extract_frame_timeline,
+    extract_he_trigger_allocations,
     get_config_pcap_stats,
     is_generated_analysis_artifact,
     replace_generated_section,
@@ -57,6 +58,7 @@ from analyze_pcap import (
     timeline_filter_for_subdir,
     timeline_markdown,
     timeline_role,
+    trigger_allocations_markdown,
     validate_capture_decode,
     validate_capture_metadata,
     validate_entry_binding,
@@ -71,6 +73,49 @@ class TimelineRoleTest(unittest.TestCase):
             timeline_role({"frame_name": "Data: QoS Null"}),
             "Responds without MAC payload while preserving QoS control information.",
         )
+
+
+class TriggerAllocationDecodeTest(unittest.TestCase):
+
+    def test_preserves_repeated_trigger_user_info_in_field_order(self):
+        result = SimpleNamespace(
+            returncode=0,
+            stdout=(
+                "191\t0.319200000\t0\t0\t"
+                "0x0000000000000003,0x0000000000000002\t"
+                "0,0\t0,1\t0x0,0x2\t35,34\n"
+            ),
+            stderr="",
+        )
+        with patch("analyze_pcap.subprocess.run", return_value=result):
+            rows = extract_he_trigger_allocations([
+                analyze_pcap.REPOSITORY_ROOT / "capture.pcapng"
+            ])
+        self.assertEqual(
+            [user["association_id"] for user in rows[0]["users"]],
+            [3, 2],
+        )
+        self.assertEqual(
+            [user["ru_allocation"] for user in rows[0]["users"]],
+            [0, 1],
+        )
+        self.assertTrue(rows[0]["field_cardinality_consistent"])
+        markdown = trigger_allocations_markdown(rows)
+        self.assertIn("#0: AID=3, RU=0", markdown)
+        self.assertIn("#1: AID=2, RU=1", markdown)
+
+    def test_marks_mismatched_repeated_field_cardinality(self):
+        result = SimpleNamespace(
+            returncode=0,
+            stdout="191\t0.3192\t0\t0\t1,2\t0,0\t0\t0,0\t35,35\n",
+            stderr="",
+        )
+        with patch("analyze_pcap.subprocess.run", return_value=result):
+            rows = extract_he_trigger_allocations([
+                analyze_pcap.REPOSITORY_ROOT / "capture.pcapng"
+            ])
+        self.assertFalse(rows[0]["field_cardinality_consistent"])
+        self.assertIsNone(rows[0]["users"][1]["ru_allocation"])
 
 
 class DecodeHeFieldsTest(unittest.TestCase):

@@ -3,18 +3,19 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260729T083529Z`
-- PCAP: `20260729T083529Z`
+- Scalar/vector: `20260729T093614Z`
+- PCAP: `20260729T093614Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260729T083529Z`.
+`[agent]` results sessions: `20260729T093614Z`.
 
 This four-configuration experiment shows that enabling scheduled uplink OFDMA
 changes the observed exchange from station-contended HE-SU traffic to
-Trigger-led HE-TB responses. In session `20260729T083529Z`, the scheduled
+Trigger-led HE-TB responses. In session `20260729T093614Z`, the scheduled
 configurations contain that exchange while the EDCA control does not. The
-application results compare delivery and tail delay, but do not by themselves
-explain each scheduler decision.
+application results compare delivery and tail delay. Aligned run-0 telemetry
+and decoded Trigger User Info additionally verify each emitted per-user RU
+allocation, but do not establish that one scheduler policy is generally best.
 
 ## [agent] Learning objectives and feature primer
 
@@ -96,7 +97,7 @@ inferences unless aligned telemetry establishes them.
 | Scheduled configurations use a Trigger-led UL-MU exchange while the EDCA control does not | `PASS` | PCAP statistics and representative timelines | run 0 / seed 0 per configuration | Direct AP-capture observation in this session |
 | All four configurations record delivered goodput and p95 delay | `PASS` | Scalar/vector plot and table | runs 0–4 / seeds 0–4 | Per-run aggregation over the stated windows |
 | One scheduler is generally better than the others | `INCONCLUSIVE` | Scalar/vector plot and table | runs 0–4 / seeds 0–4 | No acceptance threshold; one scenario and five seeds |
-| Outcome differences identify individual RU decisions | `INCONCLUSIVE` | PCAP and scalar/vector outputs | matched run 0 plus five-run outcomes | Requires decoded Trigger user allocations aligned with scheduler telemetry |
+| Each committed Basic Trigger per-user allocation matches the transmitted Trigger User Info | `PASS` | Joined scheduler decision vectors and decoded Trigger AID/RU fields | matched run 0 / seed 0 in the three scheduled configurations | 437 per-user allocations matched one-to-one; commit-to-capture delay was 35.0–40.0 µs |
 
 ## [agent] Configuration matrix
 
@@ -120,7 +121,7 @@ and measurement duration, so it is not an isolated scheduler comparison.
 | Scheduled cases show Trigger followed by HE-TB responses | Representative PCAP timelines | Trigger or solicited response is absent | inspect effective `enableUlMuOfdma` and AP scheduler initialization |
 | EDCA remains non-triggered | EDCA PCAP statistics and timeline | Trigger or HE-TB appears in the control | inspect INI precedence and selected MAC type |
 | Delivery metrics use only sink packets in the measurement window | Scalar/vector provenance | empty or off-path vectors | inspect recorded module paths, vector units, and window bounds |
-| RU attribution remains bounded by decoded fields | Trigger/HE-TB fields in generated timelines | scheduler conclusions exceed visible fields | add aligned Trigger-user and scheduler telemetry |
+| Committed per-user allocations match transmitted Trigger fields | Executable joined-allocation check | count, order, AID, RU size, or RU offset differs | inspect the decision projection vectors, AP capture, and join diagnostics |
 
 ## [agent] Reproduction
 
@@ -132,7 +133,7 @@ python3 examples/ieee80211/analysis/wifi_analysis.py inspect ul_ofdma
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py run ul_ofdma \
   --suite ax --evidence both --runs 5 --jobs "$(nproc)" \
-  --session-id 20260729T083529Z
+  --session-id 20260729T093614Z
 ```
 
 The session contains runs `[0,5)` for each of the four configurations. Run 0
@@ -142,11 +143,11 @@ and publish that retained session with:
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py report ul_ofdma \
-  --suite ax --session-id 20260729T083529Z
+  --suite ax --session-id 20260729T093614Z
 
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_ofdma \
-  --suite ax --session-id 20260729T083529Z --update
+  --suite ax --session-id 20260729T093614Z --update
 ```
 
 ## [agent] Scalar and vector analysis
@@ -161,7 +162,7 @@ run-level values per condition are summarized with a two-sided 95% Student-t
 interval; vector samples are not treated as independent repetitions.
 
 The retained inputs are the `.sca` and `.vec` files under
-`results/20260729T083529Z/{configuration}/` for runs 0–4.
+`results/20260729T093614Z/{configuration}/` for runs 0–4.
 
 The figure answers two separate questions: how much application traffic
 reached the sink and what p95 delay the delivered packets experienced. In this
@@ -174,9 +175,9 @@ from five runs.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-ul_ofdma -->
 ### [script] Generated scalar/vector plot and table
 
-![ul_ofdma scalar/vector analysis](results/20260729T083529Z/ul-ofdma-delivery-delay.png)
+![ul_ofdma scalar/vector analysis](results/20260729T093614Z/ul-ofdma-delivery-delay.png)
 
-Figure provenance: [`results/20260729T083529Z/ul-ofdma-delivery-delay.png.json`](results/20260729T083529Z/ul-ofdma-delivery-delay.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260729T093614Z/ul-ofdma-delivery-delay.png.json`](results/20260729T093614Z/ul-ofdma-delivery-delay.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -196,11 +197,37 @@ Common table provenance:
 | Equal-sized RUs / goodput mbps | 3.99138 | 0.970507 |
 
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
+
+### [script] Executable evidence checks
+
+| Status | Requirement | Evaluation |
+|---|---|---|
+| **PASS** | Every committed Basic Trigger per-user allocation matches the decoded PCAP AID and RU allocation | All 437 committed Basic Trigger user allocations match decoded PCAP AID/RU fields one-to-one. |
+| **INCONCLUSIVE** | Scheduled uplink OFDMA and EDCA are compared using delivered application bytes | The five-run delivery comparison has no manifest-defined acceptance threshold. |
+
+#### [script] Joined Basic Trigger allocation evidence
+
+| Config | Time (s) / Trigger / user | AID | Reported / planned bytes | Model RU | PCAP RU field → decoded RU | Match |
+|---|---|---:|---:|---|---|---|
+| AsymmetricBacklog | 0.3067131639200001 / 4 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.318 / 5 / 0 | 1 | 7728 / 7728 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.321 / 6 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.32405606671200005 / 7 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.326 / 8 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.328 / 9 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.33 / 10 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.33339906671200004 / 11 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.33339906671200004 / 11 / 1 | 1 | 15456 / 9040 | 106@136 | 54 → 106@136 | PASS |
+| AsymmetricBacklog | 0.3365521334240001 / 12 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.33958620013600005 / 13 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
+| AsymmetricBacklog | 0.34800000000000003 / 14 / 0 | 2 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+
+Showing 12 of 437 joined users; the session-bound evidence ledger retains every observation.
 <!-- END GENERATED: ieee80211-scalar-vector-ul_ofdma -->
 ## [agent] PCAP statistics
 
 The shared AX PCAP analyzer used the four AP captures from session
-`20260729T083529Z`, with PCAPng/radiotap input and TShark decoding. Generated
+`20260729T093614Z`, with PCAPng/radiotap input and TShark decoding. Generated
 statistics, composition plots, evidence checks, and representative timelines
 are inserted below by the shared publisher. Counts are capture observations;
 unknown PHY fields remain unknown and estimated HE-TB airtime is explicitly
@@ -208,13 +235,13 @@ limited by fields not exposed in radiotap.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260729T083529Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260729T093614Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260729T083529Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260729T093614Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260729T083529Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260729T083529Z.json` (SHA-256 `01d29f72f485d88c220061fd238592889b5cfb4c57913191895fa4682e62d31b`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260729T093614Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260729T093614Z.json` (SHA-256 `e2407ac0ba3d415a2eb63c088babe3a35e34819a11266501af3f1259a997d791`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -283,6 +310,25 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1756*
 
 Frame numbers are local to capture `AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
+#### [script] Decoded HE Trigger user allocations
+
+| Frame | Simulation time (s) | Trigger type | Ordered user allocations |
+|---:|---:|---:|---|
+| 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 6 | 0.104048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 25 | 0.207048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 48 | 0.306749000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 74 | 0.318036000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
+| 79 | 0.321036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 88 | 0.324092000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 91 | 0.326036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 94 | 0.328036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 97 | 0.330036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 110 | 0.333435000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35; #1: AID=1, RU=54, MCS=1, target RSSI=35 |
+| 121 | 0.336588000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+
+Showing the first 12 of 160 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
+
 ### [script] Configuration: `BacklogBased`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4494**
 
@@ -329,6 +375,25 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4494*
 
 Frame numbers are local to capture `BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
+#### [script] Decoded HE Trigger user allocations
+
+| Frame | Simulation time (s) | Trigger type | Ordered user allocations |
+|---:|---:|---:|---|
+| 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 6 | 0.104048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 33 | 0.301048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 147 | 0.314324000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 191 | 0.319200000 | 0 | #0: AID=3, RU=0, MCS=1, target RSSI=35 |
+| 211 | 0.322562000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35; #1: AID=3, RU=1, MCS=1, target RSSI=35 |
+| 256 | 0.328408000 | 0 | #0: AID=1, RU=37, MCS=1, target RSSI=35; #1: AID=2, RU=38, MCS=1, target RSSI=35 |
+| 311 | 0.333865000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 320 | 0.336085000 | 0 | #0: AID=1, RU=37, MCS=1, target RSSI=35; #1: AID=2, RU=54, MCS=1, target RSSI=35 |
+| 335 | 0.338508000 | 0 | #0: AID=2, RU=61, MCS=1, target RSSI=35 |
+| 359 | 0.341077000 | 0 | #0: AID=2, RU=61, MCS=1, target RSSI=35 |
+| 425 | 0.350036000 | 0 | #0: AID=3, RU=61, MCS=1, target RSSI=35 |
+
+Showing the first 12 of 182 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
+
 ### [script] Configuration: `EdcaBaseline`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5968**
 
@@ -366,6 +431,10 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5968*
 | 22 | 0.300664000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 
 Frame numbers are local to capture `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
+#### [script] Decoded HE Trigger user allocations
+
+No HE Trigger User Info fields were decoded.
 
 ### [script] Configuration: `EqualSizedRUs`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4951**
@@ -409,6 +478,25 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4951*
 
 Frame numbers are local to capture `EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
+#### [script] Decoded HE Trigger user allocations
+
+| Frame | Simulation time (s) | Trigger type | Ordered user allocations |
+|---:|---:|---:|---|
+| 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 6 | 0.104048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 33 | 0.301048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 147 | 0.314324000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 191 | 0.319204000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 201 | 0.321820000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 277 | 0.329262000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 487 | 0.368382000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 1531 | 0.502145000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 1595 | 0.508421000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 1811 | 0.531470000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 1874 | 0.539441000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+
+Showing the first 12 of 50 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
+
 ### [script] Analysis of Packet Distribution
 `EdcaBaseline` provides the non-triggered control. The three scheduled configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2; see informative Annex G.5). Frame-subtype totals alone do not establish that queued payload was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, HE-TB payload observations, and aligned scheduler/application telemetry for those decisions.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
@@ -429,16 +517,18 @@ OMNeT++ event numbers.
 
 ## [agent] Cross-layer findings and verdict
 
-`PASS`: in session `20260729T083529Z`, all four configurations have five
+`PASS`: in session `20260729T093614Z`, all four configurations have five
 scalar/vector runs and a matched run-0 AP capture. The three scheduled
 configurations show Trigger-led HE-TB exchanges, while `EdcaBaseline` shows
-the non-triggered HE-SU control.
+the non-triggered HE-SU control. Across the scheduled configurations, all 437
+committed per-user Basic Trigger allocations match the decoded transmitted
+AID and RU geometry one-to-one.
 
 `INCONCLUSIVE`: the measured application outcomes do not establish a general
 scheduler ranking. EDCA performs best for delivery and p95 delay in this
 matched workload, EqualSizedRUs has wide run-to-run uncertainty, and
 AsymmetricBacklog changes both workload and measurement window. None of those
-outcomes identifies why a scheduler chose an RU.
+application outcomes alone explains why a scheduler chose an RU.
 
 ## [agent] Limitations and inconclusive claims
 
@@ -447,7 +537,9 @@ outcomes identifies why a scheduler chose an RU.
 - The MU-EDCA timer is configured but not separately recorded as a state vector;
   activation is therefore configuration evidence, not a direct per-packet
   observation.
-- AP PCAP counts do not equal delivered application-packet counts and cannot
-  establish internal scheduler decisions by themselves.
-- The smallest useful attribution check is aligned Trigger User Info plus AP
-  scheduler telemetry for the same run-0 events.
+- AP PCAP counts do not equal delivered application-packet counts, and PCAP
+  fields alone do not expose the scheduler's backlog inputs or rationale.
+- The model-only Trigger ID is not transmitted over the air. The executable
+  check therefore requires equal counts and uses an order-preserving causal
+  join, accepting only a 0–1 ms commit-to-capture delay before comparing every
+  user ordinal, AID, RU size, and RU offset.

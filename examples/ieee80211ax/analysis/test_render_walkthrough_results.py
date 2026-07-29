@@ -4,6 +4,7 @@ from pathlib import Path
 from render_walkthrough_results import (
     independent_runs_summary,
     metric_rows,
+    render_evidence_markdown,
     replace_generated_section,
     update_walkthrough,
     validate_bundle_provenance,
@@ -35,6 +36,42 @@ class MetricRowsTest(unittest.TestCase):
             }),
             "run-level summaries: n=5; direct observations: no independent-run estimate",
         )
+
+
+class EvidenceMarkdownTest(unittest.TestCase):
+
+    def test_renders_executable_check_and_joined_scheduler_inputs(self):
+        markdown = render_evidence_markdown(
+            "ul_ofdma",
+            {
+                "session_id": "20260729T120000Z",
+                "checks": [{
+                    "handler": "ul_trigger_allocation_join",
+                    "status": "PASS",
+                    "requirement": "Trigger AID/RU join",
+                    "reason": "one-to-one",
+                    "observations": [{
+                        "config": "BacklogBased",
+                        "simulation_time": "0.5",
+                        "trigger_id": 17,
+                        "user_ordinal": 0,
+                        "association_id": 3,
+                        "reported_bytes": 1000,
+                        "planned_bytes": 800,
+                        "model_ru_tone_size": 106,
+                        "model_ru_tone_offset": 0,
+                        "pcap_ru_allocation": 53,
+                        "pcap_ru_tone_size": 106,
+                        "pcap_ru_tone_offset": 0,
+                        "matched": True,
+                    }],
+                }],
+            },
+            "20260729T120000Z",
+        )
+        self.assertIn("Trigger AID/RU join", markdown)
+        self.assertIn("1000 / 800", markdown)
+        self.assertIn("53 → 106@0", markdown)
 
 
 class GeneratedSectionTest(unittest.TestCase):

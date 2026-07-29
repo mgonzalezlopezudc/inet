@@ -9,13 +9,16 @@ import math
 from collections import Counter
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable
 
 import numpy as np
+from omnetpp.scave import results as scave_results
 
 from analysis_core import (
     DEFAULT_MANIFEST,
+    QUERY_OPTIONS,
     REPOSITORY_ROOT,
     SESSION_ID_PATTERN,
     Condition,
@@ -163,6 +166,231 @@ def evaluate_matched_delivery(
     )
 
 
+def _he_ru_offsets(root_tone_size: int, target_tone_size: int) -> list[int]:
+    offsets = []
+
+    def visit(tone_size: int, tone_offset: int) -> None:
+        if tone_size == target_tone_size:
+            offsets.append(tone_offset)
+        children = {
+            1992: ((996, 0), (996, 996)),
+            996: ((484, 0), (26, 485), (484, 512)),
+            484: ((242, 0), (242, 242)),
+            242: ((106, 0), (26, 108), (106, 136)),
+            106: ((52, 0), (52, 54)),
+            52: ((26, 0), (26, 26)),
+            26: (),
+        }[tone_size]
+        for child_size, child_offset in children:
+            visit(child_size, tone_offset + child_offset)
+
+    visit(root_tone_size, 0)
+    return sorted(offsets)
+
+
+def decode_he_trigger_ru(
+    ul_bandwidth: int, allocation: int, allocation_region: int = 0,
+) -> tuple[int, int]:
+    """Decode the HE Trigger RU Allocation field into INET RU geometry."""
+    # IEEE Std 802.11-2024, Clause 9.3.1.22 and Tables 9-53 and
+    # 27-8 through 27-10: UL BW, RU Allocation B0, and B7-B1 jointly
+    # identify the Trigger User Info RU size and location.
+    if ul_bandwidth not in {0, 1, 2, 3}:
+        raise ValueError(f"Invalid HE Trigger UL bandwidth {ul_bandwidth}")
+    if allocation < 0 or allocation > 127:
+        raise ValueError(f"Invalid HE Trigger RU Allocation {allocation}")
+    if allocation_region not in {0, 1}:
+        raise ValueError(
+            f"Invalid HE Trigger RU Allocation Region {allocation_region}"
+        )
+    half = allocation_region
+    code = allocation
+    if ul_bandwidth != 3 and half:
+        raise ValueError(
+            f"HE Trigger RU Allocation {allocation} selects a 160 MHz half "
+            f"for UL bandwidth {ul_bandwidth}"
+        )
+    if code == 68:
+        if ul_bandwidth != 3 or half:
+            raise ValueError(f"Invalid 2x996-tone HE Trigger allocation {allocation}")
+        return 1992, 0
+    ranges = (
+        (0, 36, 26),
+        (37, 52, 52),
+        (53, 60, 106),
+        (61, 64, 242),
+        (65, 66, 484),
+        (67, 67, 996),
+    )
+    for first, last, tone_size in ranges:
+        if first <= code <= last:
+            index = code - first
+            root_tone_size = {0: 242, 1: 484, 2: 996, 3: 996}[ul_bandwidth]
+            offsets = _he_ru_offsets(root_tone_size, tone_size)
+            if index >= len(offsets):
+                raise ValueError(
+                    f"HE Trigger RU Allocation {allocation} is outside the "
+                    f"{root_tone_size}-tone catalog"
+                )
+            return tone_size, offsets[index] + (996 if ul_bandwidth == 3 and half else 0)
+    raise ValueError(f"Reserved HE Trigger RU Allocation {allocation}")
+
+
+def _timestamp_key(value: Any) -> Decimal:
+    return Decimal(str(value))
+
+
+def evaluate_ul_trigger_allocation_join(
+    model_rows: dict[str, list[dict[str, Any]]],
+    packet_rows: dict[str, list[dict[str, Any]]],
+) -> Evaluation:
+    """Join each committed Basic Trigger user to decoded PCAP User Info."""
+    maximum_commit_to_capture_delay = Decimal("0.001")
+    observations = []
+    failures = []
+    inconclusive = []
+    for config in sorted(set(model_rows) | set(packet_rows)):
+        models = model_rows.get(config, [])
+        packets = [
+            row for row in packet_rows.get(config, [])
+            if row.get("trigger_type") == 0
+        ]
+        models_by_time: dict[Decimal, list[dict[str, Any]]] = {}
+        for row in models:
+            if int(row["trigger_type"]) != 0:
+                continue
+            models_by_time.setdefault(_timestamp_key(row["simulation_time"]), []).append(row)
+        packets_by_time: dict[Decimal, list[dict[str, Any]]] = {}
+        for row in packets:
+            packets_by_time.setdefault(
+                _timestamp_key(row["simulation_time"]), []
+            ).append(row)
+        if not models_by_time and not packets_by_time:
+            inconclusive.append(f"{config}: no committed or decoded Basic Triggers")
+            continue
+        model_decisions = sorted(models_by_time.items())
+        packet_triggers = sorted(
+            [
+                (timestamp, packet_trigger)
+                for timestamp, triggers in packets_by_time.items()
+                for packet_trigger in triggers
+            ],
+            key=lambda item: (item[0], int(item[1]["frame_number"])),
+        )
+        if len(model_decisions) != len(packet_triggers):
+            inconclusive.append(
+                f"{config}: found {len(model_decisions)} committed Basic "
+                f"Triggers and {len(packet_triggers)} decoded PCAP Triggers"
+            )
+            continue
+        for (commit_time, model_users), (
+            capture_time,
+            packet_trigger,
+        ) in zip(model_decisions, packet_triggers):
+            trigger_ids = {int(row["trigger_id"]) for row in model_users}
+            if len(trigger_ids) != 1:
+                inconclusive.append(
+                    f"{config} at {commit_time}: expected one model decision, "
+                    f"found trigger IDs {sorted(trigger_ids)}"
+                )
+                continue
+            capture_delay = capture_time - commit_time
+            if (
+                capture_delay < 0
+                or capture_delay > maximum_commit_to_capture_delay
+            ):
+                inconclusive.append(
+                    f"{config} decision at {commit_time}: ordered PCAP Trigger "
+                    f"at {capture_time} has non-causal or excessive delay "
+                    f"{capture_delay} s"
+                )
+                continue
+            if not packet_trigger.get("field_cardinality_consistent", False):
+                inconclusive.append(
+                    f"{config} at {commit_time}: inconsistent repeated Trigger "
+                    "User Info field cardinalities"
+                )
+                continue
+            ordered_models = sorted(
+                model_users, key=lambda row: int(row["user_ordinal"])
+            )
+            ordinals = [int(row["user_ordinal"]) for row in ordered_models]
+            if ordinals != list(range(len(ordered_models))):
+                inconclusive.append(
+                    f"{config} at {commit_time}: model user ordinals are {ordinals}"
+                )
+                continue
+            packet_users = packet_trigger.get("users", [])
+            if len(ordered_models) != len(packet_users):
+                failures.append(
+                    f"{config} at {commit_time}: model has {len(ordered_models)} "
+                    f"users but PCAP has {len(packet_users)}"
+                )
+                continue
+            for model, packet in zip(ordered_models, packet_users):
+                try:
+                    decoded_tone_size, decoded_tone_offset = decode_he_trigger_ru(
+                        int(packet_trigger["ul_bandwidth"]),
+                        int(packet["ru_allocation"]),
+                        int(packet.get("ru_allocation_region") or 0),
+                    )
+                except (KeyError, TypeError, ValueError) as error:
+                    inconclusive.append(f"{config} at {commit_time}: {error}")
+                    continue
+                matches = (
+                    int(model["association_id"]) == int(packet["association_id"])
+                    and int(model["ru_tone_size"]) == decoded_tone_size
+                    and int(model["ru_tone_offset"]) == decoded_tone_offset
+                )
+                observation = {
+                    "config": config,
+                    "simulation_time": str(commit_time),
+                    "pcap_simulation_time": str(capture_time),
+                    "commit_to_capture_delay_us": float(
+                        capture_delay * Decimal("1000000")
+                    ),
+                    "trigger_id": int(model["trigger_id"]),
+                    "user_ordinal": int(model["user_ordinal"]),
+                    "association_id": int(model["association_id"]),
+                    "backlog_bytes": int(model["backlog_bytes"]),
+                    "reported_bytes": int(model["reported_bytes"]),
+                    "planned_bytes": int(model["planned_bytes"]),
+                    "tid": int(model["tid"]),
+                    "access_category": int(model["access_category"]),
+                    "selected": bool(model["selected"]),
+                    "model_ru_index": int(model["ru_index"]),
+                    "model_ru_tone_size": int(model["ru_tone_size"]),
+                    "model_ru_tone_offset": int(model["ru_tone_offset"]),
+                    "pcap_frame_number": int(packet_trigger["frame_number"]),
+                    "pcap_ru_allocation": int(packet["ru_allocation"]),
+                    "pcap_ru_tone_size": decoded_tone_size,
+                    "pcap_ru_tone_offset": decoded_tone_offset,
+                    "matched": matches,
+                }
+                observations.append(observation)
+                if not matches:
+                    failures.append(
+                        f"{config} at {commit_time} user {model['user_ordinal']}: "
+                        "AID/RU allocation mismatch"
+                    )
+    if failures:
+        return Evaluation("FAIL", "; ".join(failures[:8]), observations)
+    if inconclusive:
+        return Evaluation(
+            "INCONCLUSIVE", "; ".join(inconclusive[:8]), observations
+        )
+    if not observations:
+        return Evaluation(
+            "INCONCLUSIVE", "No one-to-one Basic Trigger user joins were produced.", []
+        )
+    return Evaluation(
+        "PASS",
+        f"All {len(observations)} committed Basic Trigger user allocations "
+        "match decoded PCAP AID/RU fields one-to-one.",
+        observations,
+    )
+
+
 def _single_condition(conditions: Iterable[Condition], config: str) -> Condition:
     matches = [condition for condition in conditions if condition.config == config]
     if len(matches) != 1:
@@ -232,8 +460,81 @@ def _delivery_by_run_seed(
     return delivered
 
 
+def _trigger_decision_rows(
+    condition: Condition, evaluation: dict[str, Any]
+) -> list[dict[str, Any]]:
+    run_number = int(evaluation["diagnostic_run"])
+    columns = {}
+    for key, name in evaluation["vectors"].items():
+        expression = f'module =~ "{evaluation["module"]}" AND name =~ "{name}"'
+        frame = scave_results.get_vectors(
+            condition._read(expression),
+            omit_empty_vectors=True,
+            **QUERY_OPTIONS,
+        )
+        frame = frame[frame.runnumber.astype(int) == run_number]
+        if len(frame) != 1:
+            raise RuntimeError(
+                f"{condition.config}/{name}: expected one diagnostic vector "
+                f"for run {run_number}, found {len(frame)}"
+            )
+        row = frame.iloc[0]
+        columns[key] = (
+            np.asarray(row.vectime, dtype=float),
+            np.asarray(row.vecvalue, dtype=float),
+        )
+    reference_times = columns["trigger_id"][0]
+    if any(
+        len(times) != len(reference_times)
+        or not np.array_equal(times, reference_times)
+        for times, _ in columns.values()
+    ):
+        raise RuntimeError(
+            f"{condition.config}: Trigger decision projection vectors are not aligned"
+        )
+    return [
+        {
+            "simulation_time": float(reference_times[index]),
+            **{
+                key: values[index]
+                for key, (_, values) in columns.items()
+            },
+        }
+        for index in range(len(reference_times))
+    ]
+
+
+def _packet_trigger_rows(
+    evaluation: dict[str, Any], requested_session_id: str,
+) -> dict[str, list[dict[str, Any]]]:
+    path = REPOSITORY_ROOT / evaluation["packet_metrics"]
+    if not path.is_file():
+        raise FileNotFoundError(path)
+    document = json.loads(path.read_text(encoding="utf-8"))
+    packet_session = document.get("_provenance", {}).get("capture_session_id")
+    if packet_session != requested_session_id:
+        raise RuntimeError(
+            f"Packet metrics session {packet_session!r} does not match "
+            f"scalar/vector session {requested_session_id!r}"
+        )
+    run_number = document.get("_provenance", {}).get("run_number")
+    if run_number != int(evaluation["diagnostic_run"]):
+        raise RuntimeError(
+            f"Packet metrics run {run_number!r} does not match diagnostic run "
+            f"{evaluation['diagnostic_run']}"
+        )
+    group = document.get("ul_ofdma", {})
+    return {
+        config: group.get(config, {}).get("global", {}).get(
+            "he_trigger_allocations", []
+        )
+        for config in evaluation["configs"]
+    }
+
+
 def evaluate_contract(
-    contract: dict[str, Any], conditions: list[Condition]
+    contract: dict[str, Any], conditions: list[Condition],
+    requested_session_id: str | None = None,
 ) -> tuple[Evaluation, list[dict[str, str]]]:
     evaluation = contract["evaluation"]
     handler = evaluation["handler"]
@@ -261,6 +562,40 @@ def evaluate_contract(
             "name": evaluation["result"],
             "selection": "condition sink_module_regex",
         }]
+    if handler == "ul_trigger_allocation_join":
+        if requested_session_id is None:
+            raise RuntimeError(
+                "UL Trigger allocation join requires a resolved result session"
+            )
+        selected = {
+            config: _single_condition(conditions, config)
+            for config in evaluation["configs"]
+        }
+        model_rows = {
+            config: _trigger_decision_rows(condition, evaluation)
+            for config, condition in selected.items()
+        }
+        packet_rows = _packet_trigger_rows(evaluation, requested_session_id)
+        result = evaluate_ul_trigger_allocation_join(model_rows, packet_rows)
+        filters = [
+            {
+                "type": "vector",
+                "module": evaluation["module"],
+                "name": name,
+                "run": str(evaluation["diagnostic_run"]),
+            }
+            for name in evaluation["vectors"].values()
+        ]
+        filters.append({
+            "type": "packet",
+            "module": "AP PCAP",
+            "name": (
+                "wlan.trigger.he.user_info.aid12,"
+                "wlan.trigger.he.ru_allocation"
+            ),
+            "run": str(evaluation["diagnostic_run"]),
+        })
+        return result, filters
     raise RuntimeError(f"Unknown evidence handler {handler!r}")
 
 
@@ -298,7 +633,9 @@ def build_ledger(
         conditions = conditions_for_group(manifest, group_name, selected_session)
         checks = []
         for contract in manifest["evidence_contracts"][group_name]:
-            result, filters = evaluate_contract(contract, conditions)
+            result, filters = evaluate_contract(
+                contract, conditions, selected_session
+            )
             check = {
                 **{key: contract[key] for key in ("id", "kind", "requirement", "results")},
                 "handler": contract["evaluation"]["handler"],

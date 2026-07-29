@@ -4,8 +4,10 @@ from unittest.mock import patch
 
 from evaluate_evidence import (
     build_ledger,
+    decode_he_trigger_ru,
     evaluate_matched_delivery,
     evaluate_mimo_triplets,
+    evaluate_ul_trigger_allocation_join,
 )
 
 
@@ -47,6 +49,102 @@ class MatchedDeliveryEvidenceTest(unittest.TestCase):
         self.assertEqual(mismatch.status, "INCONCLUSIVE")
         zero = evaluate_matched_delivery({(0, 10): 0}, {(0, 10): 0}, 0.95)
         self.assertEqual(zero.status, "INCONCLUSIVE")
+
+
+class UlTriggerAllocationEvidenceTest(unittest.TestCase):
+    @staticmethod
+    def model_user(**overrides):
+        return {
+            "simulation_time": "0.5",
+            "trigger_id": 17,
+            "trigger_type": 0,
+            "user_ordinal": 0,
+            "association_id": 3,
+            "backlog_bytes": 1500,
+            "reported_bytes": 1000,
+            "planned_bytes": 800,
+            "tid": 0,
+            "access_category": 1,
+            "selected": 1,
+            "ru_index": 1,
+            "ru_tone_size": 106,
+            "ru_tone_offset": 0,
+            **overrides,
+        }
+
+    @staticmethod
+    def packet_trigger(**overrides):
+        return {
+            "simulation_time": "0.500000000",
+            "frame_number": 42,
+            "trigger_type": 0,
+            "ul_bandwidth": 0,
+            "field_cardinality_consistent": True,
+            "users": [{
+                "ordinal": 0,
+                "association_id": 3,
+                "ru_allocation_region": 0,
+                "ru_allocation": 53,
+                "ul_mcs": 0,
+                "ul_target_rssi": 35,
+            }],
+            **overrides,
+        }
+
+    def test_decodes_trigger_ru_allocation_to_inet_geometry(self):
+        self.assertEqual(decode_he_trigger_ru(0, 53), (106, 0))
+        self.assertEqual(decode_he_trigger_ru(0, 54), (106, 136))
+        self.assertEqual(decode_he_trigger_ru(3, 67, 1), (996, 996))
+
+    def test_ordered_causal_join_preserves_scheduler_inputs(self):
+        result = evaluate_ul_trigger_allocation_join(
+            {"BacklogBased": [self.model_user()]},
+            {"BacklogBased": [self.packet_trigger(
+                simulation_time="0.500036"
+            )]},
+        )
+        self.assertEqual(result.status, "PASS")
+        self.assertEqual(result.observations[0]["reported_bytes"], 1000)
+        self.assertEqual(result.observations[0]["planned_bytes"], 800)
+        self.assertEqual(
+            result.observations[0]["commit_to_capture_delay_us"], 36.0
+        )
+        self.assertTrue(result.observations[0]["matched"])
+
+    def test_noncausal_or_excessively_delayed_join_is_inconclusive(self):
+        for packet_time in ("0.499999", "0.501001"):
+            with self.subTest(packet_time=packet_time):
+                result = evaluate_ul_trigger_allocation_join(
+                    {"BacklogBased": [self.model_user()]},
+                    {"BacklogBased": [self.packet_trigger(
+                        simulation_time=packet_time
+                    )]},
+                )
+                self.assertEqual(result.status, "INCONCLUSIVE")
+
+    def test_mismatch_fails_and_ambiguity_is_inconclusive(self):
+        mismatch = evaluate_ul_trigger_allocation_join(
+            {"BacklogBased": [self.model_user()]},
+            {"BacklogBased": [self.packet_trigger(
+                users=[{
+                    "ordinal": 0,
+                    "association_id": 2,
+                    "ru_allocation_region": 0,
+                    "ru_allocation": 53,
+                    "ul_mcs": 0,
+                    "ul_target_rssi": 35,
+                }]
+            )]},
+        )
+        self.assertEqual(mismatch.status, "FAIL")
+        ambiguity = evaluate_ul_trigger_allocation_join(
+            {"BacklogBased": [self.model_user()]},
+            {"BacklogBased": [
+                self.packet_trigger(frame_number=42),
+                self.packet_trigger(frame_number=43),
+            ]},
+        )
+        self.assertEqual(ambiguity.status, "INCONCLUSIVE")
 
 
 class EvidenceLedgerProvenanceTest(unittest.TestCase):

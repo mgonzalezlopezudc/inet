@@ -287,9 +287,26 @@ GROUP_SCALAR_STATISTICS = {
     ),
 }
 
+UL_OFDMA_TRIGGER_DECISION_VECTOR_STATISTICS = (
+    "heUlTriggerDecisionTriggerId",
+    "heUlTriggerDecisionTriggerType",
+    "heUlTriggerDecisionUserOrdinal",
+    "heUlTriggerDecisionAssociationId",
+    "heUlTriggerDecisionBacklogBytes",
+    "heUlTriggerDecisionReportedBytes",
+    "heUlTriggerDecisionPlannedBytes",
+    "heUlTriggerDecisionTid",
+    "heUlTriggerDecisionAccessCategory",
+    "heUlTriggerDecisionSelected",
+    "heUlTriggerDecisionRuIndex",
+    "heUlTriggerDecisionRuToneSize",
+    "heUlTriggerDecisionRuToneOffset",
+)
+
 UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS = (
     "heUlBufferStatusReportedBytes",
     "heUlBufferStatusScheduledBytes",
+    *UL_OFDMA_TRIGGER_DECISION_VECTOR_STATISTICS,
     "heRuToneOffset",
     "heRuToneSize",
     "heStaId",
@@ -302,6 +319,11 @@ UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS = (
     "heTbResponsePendingBytes",
     "heTbResponseSelectedBytes",
     "heTbResponseReportedBytes",
+)
+
+UL_OFDMA_TRIGGER_DECISION_VECTOR_OVERRIDES = tuple(
+    f"--**.{statistic}.result-recording-modes=+vector"
+    for statistic in UL_OFDMA_TRIGGER_DECISION_VECTOR_STATISTICS
 )
 
 UL_OFDMA_QUEUE_VECTOR_OVERRIDES = (
@@ -488,7 +510,10 @@ def build_command(
             vectors,
             UL_OFDMA_DIAGNOSTIC_VECTOR_STATISTICS,
         )
-        overrides += UL_OFDMA_QUEUE_VECTOR_OVERRIDES
+        overrides += (
+            UL_OFDMA_QUEUE_VECTOR_OVERRIDES
+            + UL_OFDMA_TRIGGER_DECISION_VECTOR_OVERRIDES
+        )
     if exhaustive_vectors and run == 0:
         vectors = unique_statistics(
             vectors,
@@ -556,6 +581,7 @@ def collect_jobs(
                     if statistic not in performance_vector_statistics(group_name)
                 )
                 additional += UL_OFDMA_QUEUE_VECTOR_OVERRIDES
+                additional += UL_OFDMA_TRIGGER_DECISION_VECTOR_OVERRIDES
             if exhaustive_vectors and job.run == 0:
                 additional += tuple(
                     f"--**.{statistic}*.vector-recording=true"

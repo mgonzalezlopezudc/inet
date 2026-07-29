@@ -43,4 +43,17 @@ simple HeUlCoordinator
         @statistic[heUlRandomAccessAttempt](source=heUlRandomAccessAttempt; record=count);
         @statistic[heUlRandomAccessSuccess](source=heUlRandomAccessSuccess; record=count);
         @statistic[heUlTriggerDecisionId](title="HE UL Trigger decision identifier"; source=heUlTriggerDecisionId; record=vector; interpolationmode=none);
+        @statistic[heUlTriggerDecisionTriggerId](title="HE UL Trigger decision identifier per user"; source=heUlTriggerDecisionTriggerId(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionTriggerType](title="HE UL Trigger type per user"; source=heUlTriggerDecisionTriggerType(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionUserOrdinal](title="HE UL Trigger user ordinal"; source=heUlTriggerDecisionUserOrdinal(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionAssociationId](title="HE UL Trigger user association identifier"; source=heUlTriggerDecisionAssociationId(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionBacklogBytes](title="HE UL Trigger user total backlog"; source=heUlTriggerDecisionBacklogBytes(heUlTriggerDecisionCommitted); record=vector?; unit=B; interpolationmode=none);
+        @statistic[heUlTriggerDecisionReportedBytes](title="HE UL Trigger user reported backlog"; source=heUlTriggerDecisionReportedBytes(heUlTriggerDecisionCommitted); record=vector?; unit=B; interpolationmode=none);
+        @statistic[heUlTriggerDecisionPlannedBytes](title="HE UL Trigger user planned payload"; source=heUlTriggerDecisionPlannedBytes(heUlTriggerDecisionCommitted); record=vector?; unit=B; interpolationmode=none);
+        @statistic[heUlTriggerDecisionTid](title="HE UL Trigger user traffic identifier"; source=heUlTriggerDecisionTid(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionAccessCategory](title="HE UL Trigger user access category"; source=heUlTriggerDecisionAccessCategory(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionSelected](title="HE UL Trigger user selected flag"; source=heUlTriggerDecisionSelected(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionRuIndex](title="HE UL Trigger user RU index"; source=heUlTriggerDecisionRuIndex(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionRuToneSize](title="HE UL Trigger user RU tone size"; source=heUlTriggerDecisionRuToneSize(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
+        @statistic[heUlTriggerDecisionRuToneOffset](title="HE UL Trigger user RU tone offset"; source=heUlTriggerDecisionRuToneOffset(heUlTriggerDecisionCommitted); record=vector?; interpolationmode=none);
 }

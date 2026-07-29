@@ -26,6 +26,9 @@ from inet_wifi_analysis import (
 
 
 DEFAULT_METRICS = Path(__file__).resolve().parent / "metrics.json"
+DEFAULT_EVIDENCE_LEDGER = (
+    Path(__file__).resolve().parent / "evidence-ledger.json"
+)
 
 
 def escape_cell(value: object) -> str:
@@ -93,6 +96,61 @@ def metric_rows(group_metrics: dict[str, Any]) -> list[list[str]]:
                     "—",
                 ])
     return rows
+
+
+def render_evidence_markdown(
+    group_name: str, group_evidence: dict[str, Any], session_id: str
+) -> str:
+    if group_evidence.get("session_id") != session_id:
+        raise RuntimeError(
+            f"{group_name}: evidence session "
+            f"{group_evidence.get('session_id')!r} does not match metrics "
+            f"session {session_id!r}"
+        )
+    lines = [
+        "\n### [script] Executable evidence checks\n\n",
+        "| Status | Requirement | Evaluation |\n",
+        "|---|---|---|\n",
+    ]
+    for check in group_evidence.get("checks", []):
+        lines.append(
+            f"| **{escape_cell(check['status'])}** | "
+            f"{escape_cell(check['requirement'])} | "
+            f"{escape_cell(check['reason'])} |\n"
+        )
+    allocation_check = next(
+        (
+            check for check in group_evidence.get("checks", [])
+            if check.get("handler") == "ul_trigger_allocation_join"
+        ),
+        None,
+    )
+    if allocation_check is not None:
+        lines.extend([
+            "\n#### [script] Joined Basic Trigger allocation evidence\n\n",
+            "| Config | Time (s) / Trigger / user | AID | "
+            "Reported / planned bytes | Model RU | PCAP RU field → decoded RU | Match |\n",
+            "|---|---|---:|---:|---|---|---|\n",
+        ])
+        observations = allocation_check.get("observations", [])
+        for row in observations[:12]:
+            lines.append(
+                f"| {escape_cell(row['config'])} | "
+                f"{escape_cell(row['simulation_time'])} / "
+                f"{row['trigger_id']} / {row['user_ordinal']} | "
+                f"{row['association_id']} | "
+                f"{row['reported_bytes']} / {row['planned_bytes']} | "
+                f"{row['model_ru_tone_size']}@{row['model_ru_tone_offset']} | "
+                f"{row['pcap_ru_allocation']} → "
+                f"{row['pcap_ru_tone_size']}@{row['pcap_ru_tone_offset']} | "
+                f"{'PASS' if row['matched'] else 'FAIL'} |\n"
+            )
+        if len(observations) > 12:
+            lines.append(
+                f"\nShowing 12 of {len(observations)} joined users; the "
+                "session-bound evidence ledger retains every observation.\n"
+            )
+    return "".join(lines)
 
 
 def relative_link(target: Path, walkthrough: Path) -> str:
@@ -208,6 +266,7 @@ def render_group(
     metrics_document: dict[str, Any],
     metrics_path: Path = DEFAULT_METRICS,
     sidecar_document: dict[str, Any] | None = None,
+    evidence_document: dict[str, Any] | None = None,
 ) -> str:
     walkthrough = REPOSITORY_ROOT / group["walkthrough"]
     provenance = metrics_document.get("_provenance", {}).get("groups", {}).get(
@@ -261,6 +320,14 @@ def render_group(
         "\nThe table is a presentation view of the session-bound run-level "
         "summary; the common provenance applies to every row.\n"
     )
+    if evidence_document is not None:
+        group_evidence = evidence_document.get("groups", {}).get(group_name)
+        if group_evidence is not None:
+            lines.append(
+                render_evidence_markdown(
+                    group_name, group_evidence, session_id
+                )
+            )
     return "".join(lines)
 
 
@@ -323,6 +390,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--metrics", type=Path, default=DEFAULT_METRICS)
     parser.add_argument(
+        "--evidence-ledger",
+        type=Path,
+        default=DEFAULT_EVIDENCE_LEDGER,
+    )
+    parser.add_argument(
         "--update",
         action="store_true",
         help="update marker-bounded blocks in the configured walkthroughs",
@@ -334,6 +406,11 @@ def main() -> None:
     args = parse_args()
     manifest = load_manifest(args.manifest)
     metrics = json.loads(args.metrics.read_text(encoding="utf-8"))
+    evidence = (
+        json.loads(args.evidence_ledger.read_text(encoding="utf-8"))
+        if args.evidence_ledger.is_file()
+        else None
+    )
     groups = sorted(manifest["groups"]) if args.group == "all" else [args.group]
     unknown = [name for name in groups if name not in manifest["groups"]]
     if unknown:
@@ -350,6 +427,7 @@ def main() -> None:
             group,
             metrics,
             args.metrics,
+            evidence_document=evidence,
         )
         marker = f"ieee80211-scalar-vector-{group_name}"
         walkthrough = REPOSITORY_ROOT / group["walkthrough"]

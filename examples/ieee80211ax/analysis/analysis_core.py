@@ -62,6 +62,7 @@ EVIDENCE_HANDLERS = {
     "unimplemented",
     "mimo_disjoint_streams",
     "matched_delivery_ratio",
+    "ul_trigger_allocation_join",
 }
 
 QUERY_OPTIONS = {
@@ -180,6 +181,29 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
                 ratio = evaluation["minimum_ratio"]
                 if not isinstance(ratio, (int, float)) or not math.isfinite(ratio) or ratio <= 0:
                     raise RuntimeError(f"{identifier}: minimum_ratio must be finite and positive")
+            elif handler == "ul_trigger_allocation_join":
+                required = {
+                    "configs", "diagnostic_run", "module",
+                    "packet_metrics", "vectors",
+                }
+                missing = required - evaluation.keys()
+                if missing:
+                    raise RuntimeError(
+                        f"{identifier}: missing parameters {sorted(missing)}"
+                    )
+                if not isinstance(evaluation["configs"], list) or not evaluation["configs"]:
+                    raise RuntimeError(f"{identifier}: configs must be a nonempty list")
+                required_vectors = {
+                    "trigger_id", "trigger_type", "user_ordinal",
+                    "association_id", "backlog_bytes", "reported_bytes",
+                    "planned_bytes", "tid", "access_category", "selected",
+                    "ru_index", "ru_tone_size", "ru_tone_offset",
+                }
+                if set(evaluation["vectors"]) != required_vectors:
+                    raise RuntimeError(
+                        f"{identifier}: vectors must define "
+                        f"{sorted(required_vectors)}"
+                    )
 
 
 def sha256(path: Path) -> str:

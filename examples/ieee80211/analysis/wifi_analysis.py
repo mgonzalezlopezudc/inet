@@ -514,19 +514,6 @@ def report_command(args: argparse.Namespace) -> None:
             "--session-id",
             args.session_id,
         ], matplotlib=True)
-        run_command([
-            sys.executable,
-            str(ax_analysis / "evaluate_evidence.py"),
-            "--manifest",
-            str(filtered_manifest),
-            "--session-id",
-            args.session_id,
-            "--group",
-            scalar_group,
-            "--output",
-            str(session_directory(args.session_id) / "evidence-ledger.json"),
-        ])
-
     if evidence == "both":
         command = [
             sys.executable,
@@ -544,6 +531,20 @@ def report_command(args: argparse.Namespace) -> None:
         for config in configurations:
             command.extend(["--config", config])
         run_command(command, matplotlib=True)
+
+    if evidence in {"scalar-vector", "both"}:
+        run_command([
+            sys.executable,
+            str(ax_analysis / "evaluate_evidence.py"),
+            "--manifest",
+            str(filtered_manifest),
+            "--session-id",
+            args.session_id,
+            "--group",
+            scalar_group,
+            "--output",
+            str(session_directory(args.session_id) / "evidence-ledger.json"),
+        ])
 
 
 def publish_command(args: argparse.Namespace) -> None:
@@ -576,6 +577,8 @@ def publish_command(args: argparse.Namespace) -> None:
             str(REPOSITORY_ROOT / logical["scalar_vector_manifest"]),
             "--metrics",
             str(scalar_manifest.parent / "metrics.json"),
+            "--evidence-ledger",
+            str(session_directory(args.session_id) / "evidence-ledger.json"),
             "--update",
         ])
     if evidence == "both":

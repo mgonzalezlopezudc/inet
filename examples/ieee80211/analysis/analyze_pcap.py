@@ -1253,6 +1253,140 @@ def extract_frame_timeline(pcap_files, subdir, limit=TIMELINE_LIMIT):
     return select_representative_timeline(rows, subdir, limit)
 
 
+def _parse_repeated_tshark_integers(value):
+    if not value:
+        return []
+    parsed = []
+    for item in value.split(","):
+        number = parse_tshark_int(item.strip())
+        if number is None:
+            raise RuntimeError(f"Invalid repeated TShark integer {item!r}")
+        parsed.append(number)
+    return parsed
+
+
+def extract_he_trigger_allocations(pcap_files):
+    """Preserve every decoded HE Trigger User Info occurrence in field order."""
+    fields = [
+        "frame.number",
+        "frame.time_epoch",
+        "wlan.trigger.he.trigger_type",
+        "wlan.trigger.he.ul_bw",
+        "wlan.trigger.he.user_info.aid12",
+        "wlan.trigger.he.ru_allocation_region",
+        "wlan.trigger.he.ru_allocation",
+        "wlan.trigger.he.ul_mcs",
+        "wlan.trigger.he.ul_target_rssi",
+    ]
+    triggers = []
+    for path in pcap_files:
+        command = [
+            "tshark", "-n", "-r", str(path),
+            "-Y", "wlan.fc.type == 1 && wlan.fc.subtype == 2",
+            "-T", "fields", "-E", "occurrence=a", "-E", "aggregator=,",
+        ]
+        for field in fields:
+            command.extend(["-e", field])
+        proc = subprocess.run(
+            command, cwd=str(REPOSITORY_ROOT), check=False,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        )
+        if proc.returncode != 0:
+            detail = proc.stderr.strip() or "no decoder diagnostic"
+            raise RuntimeError(
+                f"TShark Trigger User Info decode failed for {path}: "
+                f"exit {proc.returncode}: {detail}"
+            )
+        for line in proc.stdout.splitlines():
+            values = line.split("\t")
+            values += [""] * (len(fields) - len(values))
+            frame_number = parse_tshark_int(values[0].strip())
+            timestamp = values[1].strip()
+            trigger_type = parse_tshark_int(values[2].strip())
+            ul_bandwidth = parse_tshark_int(values[3].strip())
+            if frame_number is None or not timestamp or trigger_type is None:
+                continue
+            repeated = [
+                _parse_repeated_tshark_integers(value.strip())
+                for value in values[4:9]
+            ]
+            cardinalities = [len(items) for items in repeated]
+            user_count = max(cardinalities, default=0)
+            users = []
+            for ordinal in range(user_count):
+                users.append({
+                    "ordinal": ordinal,
+                    "association_id": (
+                        repeated[0][ordinal] if ordinal < len(repeated[0]) else None
+                    ),
+                    "ru_allocation": (
+                        repeated[2][ordinal] if ordinal < len(repeated[2]) else None
+                    ),
+                    "ru_allocation_region": (
+                        repeated[1][ordinal] if ordinal < len(repeated[1]) else None
+                    ),
+                    "ul_mcs": (
+                        repeated[3][ordinal] if ordinal < len(repeated[3]) else None
+                    ),
+                    "ul_target_rssi": (
+                        repeated[4][ordinal] if ordinal < len(repeated[4]) else None
+                    ),
+                })
+            triggers.append({
+                "capture": str(Path(path).relative_to(REPOSITORY_ROOT)),
+                "frame_number": frame_number,
+                "simulation_time": timestamp,
+                "simulation_time_s": float(timestamp),
+                "trigger_type": trigger_type,
+                "ul_bandwidth": ul_bandwidth,
+                "user_field_cardinalities": dict(zip(
+                    (
+                        "association_id", "ru_allocation_region",
+                        "ru_allocation", "ul_mcs", "ul_target_rssi",
+                    ),
+                    cardinalities,
+                )),
+                "field_cardinality_consistent": (
+                    len(set(cardinalities)) <= 1
+                ),
+                "users": users,
+            })
+    return triggers
+
+
+def trigger_allocations_markdown(triggers, limit=12):
+    if not triggers:
+        return "No HE Trigger User Info fields were decoded.\n\n"
+    lines = [
+        "| Frame | Simulation time (s) | Trigger type | Ordered user allocations |\n",
+        "|---:|---:|---:|---|\n",
+    ]
+    for trigger in triggers[:limit]:
+        users = "; ".join(
+            f"#{user['ordinal']}: AID={user['association_id']}, "
+            f"RU={user['ru_allocation']}, MCS={user['ul_mcs']}, "
+            f"target RSSI={user['ul_target_rssi']}"
+            for user in trigger["users"]
+        ) or "no decoded users"
+        if not trigger["field_cardinality_consistent"]:
+            users += (
+                "; inconsistent field cardinalities="
+                + str(trigger["user_field_cardinalities"])
+            )
+        lines.append(
+            f"| {trigger['frame_number']} | {trigger['simulation_time']} | "
+            f"{trigger['trigger_type']} | {users} |\n"
+        )
+    if len(triggers) > limit:
+        lines.append(
+            f"\nShowing the first {limit} of {len(triggers)} decoded Trigger frames; "
+            "the script-owned packet metrics JSON preserves every row.\n\n"
+        )
+    else:
+        lines.append("\n")
+    return "".join(lines)
+
+
 def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
     total_sim_time = get_sim_time_limit(subdir, config_name)
     stats = {}
@@ -1650,6 +1784,9 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                 ],
                 "display_filter": "none (all decoded frames)",
                 "timeline": extract_frame_timeline(target_pcaps, subdir),
+                "he_trigger_allocations": extract_he_trigger_allocations(
+                    target_pcaps
+                ),
             }
         }
 
@@ -2317,6 +2454,13 @@ def generate_markdown_tables(
             "#### [script] Representative frame-exchange timeline\n\n"
         )
         md.append(timeline_markdown(global_res["timeline"]))
+        if subdir == "ul_ofdma":
+            md.append(
+                "#### [script] Decoded HE Trigger user allocations\n\n"
+            )
+            md.append(trigger_allocations_markdown(
+                global_res["he_trigger_allocations"]
+            ))
 
         if "mpdu_observations" in res:
             observation = res["mpdu_observations"]
@@ -2760,6 +2904,7 @@ def main():
                     "display_filter": g["display_filter"],
                     "stats": {",".join(str(x) for x in k): v for k, v in g["stats"].items()},
                     "timeline": g["timeline"],
+                    "he_trigger_allocations": g["he_trigger_allocations"],
                 }
             if "per_flow" in res:
                 serialized[subdir][config_name]["per_flow"] = {}

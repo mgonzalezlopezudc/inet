@@ -246,9 +246,51 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 patch.object(wifi_analysis, "run_command") as run,
             ):
                 wifi_analysis.report_command(args)
-            command = run.call_args.args[0]
-            self.assertIn("--reuse", command)
-            self.assertNotIn("--update-walkthrough", command)
+            pcap_command = next(
+                call.args[0] for call in run.call_args_list
+                if "analyze_pcap.py" in call.args[0][1]
+            )
+            self.assertIn("--reuse", pcap_command)
+            self.assertNotIn("--update-walkthrough", pcap_command)
+
+    def test_both_report_analyzes_pcap_before_cross_layer_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            generated = Path(directory) / "generated"
+            session_dir = generated / "sessions" / SESSION
+            session_dir.mkdir(parents=True)
+            filtered = session_dir / "scalar-vector-manifest.json"
+            filtered.write_text("{}")
+            (session_dir / "session.json").write_text(json.dumps({
+                "suite": "ax",
+                "scenario": "ul_ofdma",
+                "evidence": "both",
+                "runs": 5,
+                "pcap_run": 0,
+                "configurations": ["BacklogBased"],
+                "scalar_vector_manifest": str(filtered),
+            }))
+            args = SimpleNamespace(
+                suite=str(AX_SUITE),
+                scenario="ul_ofdma",
+                session_id=SESSION,
+            )
+            with (
+                patch.object(wifi_analysis, "GENERATED_ROOT", generated),
+                patch.object(wifi_analysis, "run_command") as run,
+            ):
+                wifi_analysis.report_command(args)
+            scripts = [
+                Path(call.args[0][1]).name for call in run.call_args_list
+            ]
+            self.assertEqual(
+                scripts,
+                [
+                    "summarize_results.py",
+                    "first_tranche.py",
+                    "analyze_pcap.py",
+                    "evaluate_evidence.py",
+                ],
+            )
 
     def test_scalar_report_passes_filtered_manifest_to_evaluator(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -362,6 +404,43 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 wifi_analysis.validate_scalar_report_session(
                     logical, manifest, "twt"
                 )
+
+    def test_publish_passes_session_ledger_to_renderer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            generated = Path(directory) / "generated"
+            session_dir = generated / "sessions" / SESSION
+            session_dir.mkdir(parents=True)
+            filtered = session_dir / "scalar-vector-manifest.json"
+            filtered.write_text("{}")
+            (session_dir / "session.json").write_text(json.dumps({
+                "session_id": SESSION,
+                "suite": "ax",
+                "scenario": "twt",
+                "evidence": "scalar-vector",
+                "runs": 5,
+                "pcap_run": None,
+                "configurations": ["BaselineEnergy"],
+                "scalar_vector_manifest": str(filtered),
+            }))
+            args = SimpleNamespace(
+                suite=str(AX_SUITE),
+                scenario="twt",
+                session_id=SESSION,
+                update=True,
+            )
+            with (
+                patch.object(wifi_analysis, "GENERATED_ROOT", generated),
+                patch.object(
+                    wifi_analysis, "validate_scalar_report_session"
+                ),
+                patch.object(wifi_analysis, "run_command") as run,
+            ):
+                wifi_analysis.publish_command(args)
+            command = run.call_args.args[0]
+            self.assertEqual(
+                command[command.index("--evidence-ledger") + 1],
+                str(session_dir / "evidence-ledger.json"),
+            )
 
     def test_unknown_scenario_and_eht_mapping(self):
         with self.assertRaisesRegex(wifi_analysis.CliError, "Unknown scenario"):

@@ -55,7 +55,11 @@ CLAUDE.md
 /examples/*/results/
 /examples/*/*/results/
 /examples/*/*/*/results/
-/examples/ieee80211/analysis/generated/sessions/
+/examples/ieee80211/analysis/generated/sessions/*
+# Retain the immutable evidence ledger cited by the UL OFDMA walkthrough.
+!/examples/ieee80211/analysis/generated/sessions/20260729T093614Z/
+/examples/ieee80211/analysis/generated/sessions/20260729T093614Z/*
+!/examples/ieee80211/analysis/generated/sessions/20260729T093614Z/evidence-ledger.json
 /examples/*/cache/
 /examples/*/*/cache/
 /tutorials/*/cache/
