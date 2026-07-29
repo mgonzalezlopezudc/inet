@@ -74,7 +74,7 @@ void Edcaf::initialize(int stage)
     }
 }
 
-void Edcaf::calculateTimingParameters()
+void Edcaf::calculateTimingParameters(bool preserveCw)
 {
     slotTime = modeSet->getSlotTime();
     sifs = modeSet->getSifsTime();
@@ -93,13 +93,14 @@ void Edcaf::calculateTimingParameters()
 
     // IEEE Std 802.11-2024, 10.3.2.3.6 and 10.23.2.4:
     // AIFS[AC] = AIFSN[AC] * aSlotTime + aSIFSTime.
-    simtime_t aifs = sifs + fallback(aifsnVal, getAifsNumber(ac)) * slotTime;
+    int aifsNumber = fallback(aifsnVal, getAifsNumber(ac));
+    simtime_t aifs = sifs + aifsNumber * slotTime;
     ifs = aifs;
     // IEEE Std 802.11-2024, 10.3.2.3.7: after erroneous reception, EDCA uses
     // EIFS-DIFS+AIFS[AC]; this implementation folds that interval into eifs.
     eifs = sifs + aifs + modeSet->getSlowestMandatoryMode()->getDuration(LENGTH_ACK);
     EV_DEBUG << "Timing parameters are initialized: slotTime = " << slotTime << ", sifs = " << sifs << ", ifs = " << ifs << ", eifs = " << eifs << std::endl;
-    ASSERT(ifs > sifs);
+    ASSERT(ifs > sifs || (isMuEdcaTimerActive && aifsNumber == 0));
     if (cwMinVal == -1)
         cwMin = getCwMin(ac, modeSet->getCwMin());
     else
@@ -108,7 +109,7 @@ void Edcaf::calculateTimingParameters()
         cwMax = getCwMax(ac, modeSet->getCwMax(), modeSet->getCwMin());
     else
         cwMax = cwMaxVal;
-    if (cw < cwMin || cw > cwMax)
+    if (cw == -1 || (!preserveCw && (cw < cwMin || cw > cwMax)))
         cw = cwMin;
     EV_DEBUG << "Contention window parameters are initialized: cw = " << cw << ", cwMin = " << cwMin << ", cwMax = " << cwMax << std::endl;
 }
@@ -268,14 +269,19 @@ void Edcaf::startMuEdcaTimer()
 
     isMuEdcaTimerActive = true;
     edca->scheduleAt(simTime() + timerDuration, muEdcaTimer);
-    calculateTimingParameters();
+    calculateTimingParameters(true);
+    if (par("muAifsn").intValue() == 0)
+        contention->suspendContention();
+    else
+        contention->resumeContention(ifs, eifs, slotTime);
 }
 
 void Edcaf::muEdcaTimerExpired()
 {
     isMuEdcaTimerActive = false;
     muEdcaTimer = nullptr;
-    calculateTimingParameters();
+    calculateTimingParameters(true);
+    contention->resumeContention(ifs, eifs, slotTime);
 }
 
 } // namespace ieee80211

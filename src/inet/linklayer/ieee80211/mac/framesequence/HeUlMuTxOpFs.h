@@ -36,6 +36,7 @@ class HeUlCoordinator;
 class INET_API HeUlMuTxOpFs : public IFrameSequence
 {
   protected:
+    static constexpr uint8_t modeledTidAggregationLimit = 1;
     HeUlCoordinator *coordinator = nullptr;
     HeHcf *callback = nullptr;
     const HeUlMuPlan plan;

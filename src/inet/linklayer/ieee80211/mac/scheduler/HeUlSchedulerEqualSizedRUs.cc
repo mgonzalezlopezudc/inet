@@ -22,7 +22,10 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
     // The coordinator projects operating-mode state into the immutable context.
     std::vector<CandidateInfo> candidates;
     for (const auto& candidate : context.candidates) {
-        if (!candidate.ulMuDisabled)
+        const bool freshKnownZero = candidate.hasTypedBacklogEstimates &&
+                candidate.hasFreshReport && !candidate.isUnknownProbe() &&
+                candidate.getSelectedBacklogBytes() == 0;
+        if (!candidate.ulMuDisabled && !freshKnownZero)
             candidates.push_back(candidate);
     }
 
@@ -60,6 +63,8 @@ IIeee80211HeUlScheduler::Schedule HeUlSchedulerEqualSizedRUs::schedule(const Sch
         result.allocations.push_back(allocation);
     }
     result.commonDuration = computeCommonDuration(context, result.allocations);
+    for (auto& allocation : result.allocations)
+        allocation.estimatedDuration = result.commonDuration;
     EV_INFO << "HE UL equal-RU schedule: scheduled=" << scheduledCount
              << ", randomAccess=" << raCount
              << ", total=" << result.allocations.size() << "\n";

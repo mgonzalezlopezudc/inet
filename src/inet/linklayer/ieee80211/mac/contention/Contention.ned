@@ -29,7 +29,6 @@ simple Contention extends SimpleModule like IContention
         @statistic[backoffPeriodGenerated](title="backoff periods"; record=vector; interpolationmode=none);
         @statistic[backoffActive](title="backoff active"; source=warmup(count(backoffStarted)-count(backoffStopped)); record=vector; interpolationmode=sample-hold; autoWarmupFilter=false);
         @statistic[channelAccessGranted](title="channel access granted"; record=count,vector?);
-        @statistic[stateChanged](title="contention state changed"; type=enum; enum=IDLE, DEFER, IFS_AND_BACKOFF; record=count,vector; interpolationmode=none);
+        @statistic[stateChanged](title="contention state changed"; type=enum; enum=IDLE, DEFER, IFS_AND_BACKOFF, SUSPENDED; record=count,vector; interpolationmode=none);
         @defaultStatistic(stateChanged:vector);
 }
-

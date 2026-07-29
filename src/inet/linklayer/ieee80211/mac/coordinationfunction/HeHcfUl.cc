@@ -902,6 +902,9 @@ void HeHcf::retryPendingTriggeredUlExchanges()
     for (auto& entry : triggeredUlExchanges) {
         if (entry.second.randomAccess)
             ulCoordinator->reportRandomAccessResult(false);
+        if (entry.second.recoveryKind ==
+                TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST)
+            processFailedTriggeredUlBlockAckReq(entry.second);
         for (auto pkt : entry.second.packets) {
             auto header = pkt->peekAtFront<Ieee80211DataHeader>();
             edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
@@ -914,6 +917,85 @@ void HeHcf::retryPendingTriggeredUlExchanges()
     }
     triggeredUlExchanges.clear();
     cancelEvent(triggeredUlResponseTimer);
+}
+
+void HeHcf::processFailedTriggeredUlBlockAckReq(TriggeredUlExchange& exchange)
+{
+    ASSERT(exchange.recoveryKind ==
+            TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST);
+    ASSERT(exchange.blockAckReq != nullptr);
+    auto edcaf = edca->getEdcaf(exchange.recoveryAccessCategory);
+    auto failedFrameIds = edcaf->getAckHandler()->processFailedBlockAckReq(
+            exchange.blockAckReq);
+    for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); ++i) {
+        auto packet = edcaf->getInProgressFrames()->getFrames(i);
+        auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                packet->peekAtFront<Ieee80211MacHeader>());
+        if (header == nullptr || header->getType() != ST_DATA_WITH_QOS)
+            continue;
+        auto id = std::make_pair(header->getReceiverAddress(),
+                std::make_pair(header->getTid(), SequenceControlField(
+                        header->getSequenceNumber().get(),
+                        header->getFragmentNumber())));
+        if (failedFrameIds.find(id) != failedFrameIds.end())
+            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, header);
+    }
+}
+
+void HeHcf::processReceivedTriggeredUlBlockAck(
+        TriggeredUlExchange& exchange,
+        const Ptr<const Ieee80211CompressedBlockAck>& blockAck)
+{
+    ASSERT(exchange.recoveryKind ==
+            TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST);
+    auto edcaf = edca->getEdcaf(exchange.recoveryAccessCategory);
+    edcaf->getRecoveryProcedure()->blockAckFrameReceived();
+    auto ackedFrames = edcaf->getAckHandler()->processReceivedBlockAck(blockAck);
+    for (int i = 0; i < edcaf->getInProgressFrames()->getLength(); ++i) {
+        auto packet = edcaf->getInProgressFrames()->getFrames(i);
+        auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                packet->peekAtFront<Ieee80211MacHeader>());
+        if (header != nullptr &&
+                edcaf->getAckHandler()->getQoSDataAckStatus(header) ==
+                        QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED)
+            edcaf->getRecoveryProcedure()->dataFrameTransmissionFailed(packet, header);
+    }
+    originatorProcessBlockAckResult(blockAck, ackedFrames,
+            exchange.recoveryAccessCategory);
+    if (originatorBlockAckAgreementHandler != nullptr)
+        originatorBlockAckAgreementHandler->processReceivedBlockAck(blockAck, this);
+    edcaf->getInProgressFrames()->dropFrames(ackedFrames);
+    edcaf->getAckHandler()->dropFrames(ackedFrames);
+}
+
+const Ptr<Ieee80211CompressedBlockAck> HeHcf::processTriggeredUlBlockAckReq(
+        Packet *packet,
+        const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
+        uint16_t aid)
+{
+    ASSERT(packet != nullptr);
+    ASSERT(blockAckReq != nullptr);
+    auto agreement = recipientBlockAckAgreementHandler == nullptr ? nullptr :
+            recipientBlockAckAgreementHandler->getAgreement(
+                    blockAckReq->getTidInfo(),
+                    blockAckReq->getTransmitterAddress());
+    if (agreement == nullptr) {
+        delete packet;
+        return nullptr;
+    }
+    sendUp(recipientDataService->controlFrameReceived(packet, blockAckReq,
+            recipientBlockAckAgreementHandler));
+    auto blockAck = recipientBlockAckProcedure->buildBlockAck(
+            blockAckReq, recipientBlockAckAgreementHandler);
+    delete packet;
+    auto compressedBlockAck = dynamicPtrCast<Ieee80211CompressedBlockAck>(blockAck);
+    if (compressedBlockAck == nullptr)
+        throw cRuntimeError("A compressed HE-TB BAR produced a non-compressed BlockAck");
+    compressedBlockAck->setTransmitterAddress(mac->getAddress());
+    EV_INFO << "Processed correlated HE-TB compressed BAR: AID=" << aid
+            << ", TID=" << blockAckReq->getTidInfo()
+            << ", SSN=" << blockAckReq->getStartingSequenceNumber().get() << "\n";
+    return compressedBlockAck;
 }
 
 void HeHcf::scheduleTriggeredUlResponseTimeout()
@@ -940,6 +1022,9 @@ void HeHcf::handleTriggeredUlResponseTimeout()
                 << ", packets=" << exchange.packets.size() << "\n";
         if (exchange.randomAccess)
             ulCoordinator->reportRandomAccessResult(false);
+        if (exchange.recoveryKind ==
+                TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST)
+            processFailedTriggeredUlBlockAckReq(exchange);
         for (auto packet : exchange.packets) {
             auto header = packet->peekAtFront<Ieee80211DataHeader>();
             edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
@@ -992,6 +1077,9 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     std::vector<Packet *> originalPackets;
     std::vector<std::unique_ptr<Packet>> preparedPacketOwners;
     std::unique_ptr<Packet> nullMpdu;
+    std::unique_ptr<Packet> blockAckReqMpdu;
+    Ptr<Ieee80211CompressedBlockAckReq> preparedBlockAckReq;
+    AccessCategory blockAckReqAc = AC_BE;
     std::unique_ptr<Packet> responsePacket;
     const bool hadPendingPayload = sourcePacket != nullptr;
     int64_t reportedQueueBytes = queueBytes;
@@ -1008,6 +1096,88 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
                 mac->getMib()->bssStationData.associationId, psduLength);
         if (!prospective)
             sourcePacket = nullptr;
+    }
+    // IEEE Std 802.11-2024, 26.5.2.4 and 26.4.1: when the selected
+    // single-TID BA window is full, a Basic Trigger with nonzero TAL may carry
+    // a BAR S-MPDU for any AC whose TID has an active agreement. The agreement
+    // SSN is used unchanged; candidates outside its 64-position compressed
+    // bitmap are not skipped.
+    if (sourcePacket == nullptr && availableSlots == 0 &&
+            trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
+            selected->tidAggregationLimit > 0 &&
+            originatorBlockAckProcedure != nullptr) {
+        const auto& receiverAddress = mac->getMib()->bssData.bssid;
+        for (int ac = AC_VO; ac >= AC_BK && preparedBlockAckReq == nullptr; --ac) {
+            auto candidateEdcaf = edca->getEdcaf(static_cast<AccessCategory>(ac));
+            auto outstandingFrames =
+                    candidateEdcaf->getInProgressFrames()->getOutstandingFrames();
+            for (auto candidate : outstandingFrames) {
+                auto candidateHeader = dynamicPtrCast<const Ieee80211DataHeader>(
+                        candidate->peekAtFront<Ieee80211MacHeader>());
+                if (candidateHeader == nullptr ||
+                        candidateHeader->getType() != ST_DATA_WITH_QOS ||
+                        candidateHeader->getReceiverAddress() != receiverAddress ||
+                        candidateHeader->getFragmentNumber() != 0)
+                    continue;
+                auto agreement = originatorBlockAckAgreementHandler == nullptr ?
+                        nullptr : originatorBlockAckAgreementHandler->getAgreement(
+                                receiverAddress, candidateHeader->getTid());
+                if (agreement == nullptr || !agreement->getIsAddbaResponseReceived())
+                    continue;
+                const auto startingSequenceNumber =
+                        agreement->getStartingSequenceNumber();
+                bool completeWindow = true;
+                for (auto outstanding : outstandingFrames) {
+                    auto outstandingHeader =
+                            dynamicPtrCast<const Ieee80211DataHeader>(
+                                    outstanding->peekAtFront<Ieee80211MacHeader>());
+                    if (outstandingHeader == nullptr ||
+                            outstandingHeader->getTid() != candidateHeader->getTid())
+                        continue;
+                    int offset = (outstandingHeader->getSequenceNumber().get() -
+                            startingSequenceNumber.get() + 4096) % 4096;
+                    if (outstandingHeader->getReceiverAddress() != receiverAddress ||
+                            outstandingHeader->getFragmentNumber() != 0 ||
+                            offset >= 64) {
+                        completeWindow = false;
+                        break;
+                    }
+                }
+                if (!completeWindow)
+                    continue;
+                preparedBlockAckReq =
+                        dynamicPtrCast<Ieee80211CompressedBlockAckReq>(
+                                originatorBlockAckProcedure->
+                                        buildCompressedBlockAckReqFrame(
+                                                receiverAddress,
+                                                candidateHeader->getTid(),
+                                                startingSequenceNumber));
+                ASSERT(preparedBlockAckReq != nullptr);
+                preparedBlockAckReq->setTransmitterAddress(mac->getAddress());
+                preparedBlockAckReq->setBarAckPolicy(false);
+                preparedBlockAckReq->setReserved(0);
+                preparedBlockAckReq->setFragmentNumber(0);
+                preparedBlockAckReq->setDurationField(SIMTIME_ZERO);
+                blockAckReqMpdu = std::make_unique<Packet>(
+                        "HE-TB-Compressed-BAR", preparedBlockAckReq);
+                blockAckReqMpdu->insertAtBack(
+                        makeShared<Ieee80211MacTrailer>());
+                blockAckReqAc = static_cast<AccessCategory>(ac);
+                break;
+            }
+        }
+    }
+    if (blockAckReqMpdu != nullptr) {
+        std::unique_ptr<Packet> prospectiveAmpdu(
+                buildHeTbAmpdu({blockAckReqMpdu.get()}));
+        auto prospective = createHeTbTxVector(*trigger, *selected,
+                phy.getChannelCenterFrequency(),
+                mac->getMib()->bssStationData.associationId,
+                B((prospectiveAmpdu->getDataLength().get<b>() + 7) / 8));
+        if (!prospective) {
+            blockAckReqMpdu.reset();
+            preparedBlockAckReq = nullptr;
+        }
     }
     if (sourcePacket != nullptr) {
         auto originalSourcePacket = sourcePacket;
@@ -1032,7 +1202,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
         sourcePacket->insertAtFront(writableHeader);
         responsePacket.reset(sourcePacket->dup());
     }
-    else {
+    else if (blockAckReqMpdu == nullptr) {
         // 26.5.2.4 allows a triggered STA with no data fitting the allocation
         // to carry a QoS Null-style response; we still include BSR so the AP's
         // scheduler state is refreshed by the HE TB exchange.
@@ -1108,7 +1278,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     }
 
     auto finalizeMpdu = [&] (Packet *mpdu, simtime_t durationField) {
-        auto header = mpdu->removeAtFront<Ieee80211DataHeader>();
+        auto header = mpdu->removeAtFront<Ieee80211MacHeader>();
         header->setDurationField(durationField);
         mpdu->insertAtFront(header);
         auto trailer = mpdu->removeAtBack<Ieee80211MacTrailer>(B(4));
@@ -1121,12 +1291,16 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     auto buildResponseAmpdu = [&] {
         if (sourcePacket != nullptr)
             responsePacket.reset(buildHeTbAmpdu(exchange.packets));
+        else if (blockAckReqMpdu != nullptr)
+            responsePacket.reset(buildHeTbAmpdu({blockAckReqMpdu.get()}));
         else
             responsePacket.reset(buildHeTbAmpdu({nullMpdu.get()}));
     };
     if (sourcePacket != nullptr)
         for (auto mpdu : exchange.packets)
             finalizeMpdu(mpdu, SIMTIME_ZERO);
+    else if (blockAckReqMpdu != nullptr)
+        finalizeMpdu(blockAckReqMpdu.get(), SIMTIME_ZERO);
     else
         finalizeMpdu(nullMpdu.get(), SIMTIME_ZERO);
     buildResponseAmpdu();
@@ -1147,6 +1321,8 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     if (sourcePacket != nullptr)
         for (auto mpdu : exchange.packets)
             finalizeMpdu(mpdu, protection.macDurationField);
+    else if (blockAckReqMpdu != nullptr)
+        finalizeMpdu(blockAckReqMpdu.get(), protection.macDurationField);
     else
         finalizeMpdu(nullMpdu.get(), protection.macDurationField);
     buildResponseAmpdu();
@@ -1178,7 +1354,17 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     // are invariant violations and deliberately fail loudly instead of
     // faking rollback after observer-visible state changes.
     committed = true;
-    qosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+    if (blockAckReqMpdu == nullptr)
+        qosDataService->commitSequenceNumberState(*preparedSequenceNumberState);
+    else {
+        exchange.tid = preparedBlockAckReq->getTidInfo();
+        exchange.recoveryKind =
+                TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST;
+        exchange.recoveryAccessCategory = blockAckReqAc;
+        exchange.blockAckReq = preparedBlockAckReq;
+        edca->getEdcaf(blockAckReqAc)->getAckHandler()->
+                processTransmittedBlockAckReq(preparedBlockAckReq);
+    }
     if (!originalPackets.empty()) {
         for (size_t i = 0; i < originalPackets.size(); ++i) {
             auto original = originalPackets[i];
@@ -1200,19 +1386,24 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     // through the aggregate representation by the Tx handoff.
     responseHeader = sourcePacket != nullptr ?
             exchange.packets.front()->peekAtFront<Ieee80211MacHeader>() :
+            blockAckReqMpdu != nullptr ?
+                    blockAckReqMpdu->peekAtFront<Ieee80211MacHeader>() :
             nullMpdu->peekAtFront<Ieee80211MacHeader>();
     HeTbResponseEvent event;
     event.triggerId = triggerId;
     event.triggerType = static_cast<IIeee80211HeUlTriggerPolicy::TriggerType>(
             trigger->getTriggerType());
     event.reason = sourcePacket != nullptr ? HeTbResponseEvent::DATA_SELECTED :
+            blockAckReqMpdu != nullptr ? HeTbResponseEvent::BLOCK_ACK_REQUESTED :
             trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER ?
                     HeTbResponseEvent::BUFFER_STATUS_REPORTED :
             hadPendingPayload || queueBytes > 0 ? HeTbResponseEvent::NO_FITTING_PAYLOAD :
                     HeTbResponseEvent::NO_PENDING_DATA;
     event.associationId = mac->getMib()->bssStationData.associationId;
-    event.tid = selectedTid;
-    event.accessCategory = selectedAc;
+    event.tid = blockAckReqMpdu != nullptr ?
+            preparedBlockAckReq->getTidInfo() : selectedTid;
+    event.accessCategory = blockAckReqMpdu != nullptr ?
+            blockAckReqAc : selectedAc;
     event.ruIndex = selected->ruIndex;
     event.ruToneSize = selected->ruToneSize;
     event.ruToneOffset = selected->ruToneOffset;
@@ -1220,7 +1411,8 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     event.pendingBytes = queueBytes;
     for (auto selectedPacket : exchange.packets)
         event.selectedBytes += selectedPacket->getByteLength();
-    event.reportedBytes = reportedQueueBytes;
+    event.reportedBytes = blockAckReqMpdu != nullptr ?
+            0 : reportedQueueBytes;
     auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(responseHeader);
     event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
     emitHeTbResponse(event);
@@ -1645,6 +1837,51 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
     }
     auto myAid = mac->getMib()->bssStationData.associationId;
     auto& exchange = exchangeIt->second;
+    if (exchange.recoveryKind ==
+            TriggeredUlExchange::RecoveryKind::COMPRESSED_BLOCK_ACK_REQUEST) {
+        const Ieee80211MultiStaBlockAckRecord *blockAckRecord = nullptr;
+        int aidRecordCount = 0;
+        for (unsigned int i = 0;
+                i < multiStaBlockAck->getRecordsArraySize(); ++i) {
+            const auto& candidate = multiStaBlockAck->getRecords(i);
+            if (candidate.aid == myAid) {
+                blockAckRecord = &candidate;
+                aidRecordCount++;
+            }
+        }
+        bool valid = aidRecordCount == 1 &&
+                blockAckRecord->responseReceived &&
+                blockAckRecord->tid == exchange.blockAckReq->getTidInfo() &&
+                blockAckRecord->startingSequenceNumber ==
+                        exchange.blockAckReq->getStartingSequenceNumber().get();
+        if (valid) {
+            auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+            blockAck->setReceiverAddress(mac->getAddress());
+            blockAck->setTransmitterAddress(mac->getMib()->bssData.bssid);
+            blockAck->setTidInfo(blockAckRecord->tid);
+            blockAck->setStartingSequenceNumber(
+                    SequenceNumberCyclic(blockAckRecord->startingSequenceNumber));
+            std::vector<uint8_t> bytes(8, 0);
+            BitVector bitmap(bytes);
+            for (int i = 0; i < 64; ++i)
+                bitmap.setBit(i,
+                        (blockAckRecord->bitmap & (UINT64_C(1) << i)) != 0);
+            blockAck->setBlockAckBitmap(bitmap);
+            processReceivedTriggeredUlBlockAck(exchange, blockAck);
+        }
+        else {
+            EV_WARN << "Treating missing or corrupt HE-TB BAR terminal record "
+                    << "as failed: trigger=" << correlation->getTriggerId()
+                    << ", AID=" << myAid << "\n";
+            processFailedTriggeredUlBlockAckReq(exchange);
+        }
+        if (exchange.randomAccess)
+            ulCoordinator->reportRandomAccessResult(valid);
+        triggeredUlExchanges.erase(exchangeIt);
+        scheduleTriggeredUlResponseTimeout();
+        delete packet;
+        return;
+    }
     const Ieee80211MultiStaBlockAckRecord *record = nullptr;
     int matchingRecordCount = 0;
     for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); ++i)
@@ -1675,6 +1912,10 @@ void HeHcf::processReceivedMultiStaBlockAck(Packet *packet, const Ptr<const Ieee
                     (record->bitmap & (UINT64_C(1) << offset));
         }
         if (acknowledged) {
+            auto header = exchange.packets[i]->
+                    peekAtFront<Ieee80211DataHeader>();
+            edca->getEdcaf(edca->mapTidToAc(header->getTid()))->
+                    getAckHandler()->retireFrame(header);
             delete exchange.packets[i];
             exchangeSuccess = true;
             acknowledgedQosData = true;

@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/framesequence/HeUlMuTxOpFs.h"
 
 #include <algorithm>
+#include <iomanip>
 #include <map>
 #include <set>
 
@@ -314,7 +315,7 @@ Packet *HeUlMuTxOpFs::buildTriggerPacket() const
         user.numberOfSpatialStreams = allocation.numberOfSpatialStreams;
         user.streamStartIndex = allocation.streamStartIndex;
         user.muMimo = allocation.muMimo;
-        user.tidAggregationLimit = 1; // single-TID HE TB A-MPDU model
+        user.tidAggregationLimit = modeledTidAggregationLimit;
         user.preferredAc = accessCategoryToAci(allocation.accessCategory);
         user.targetRssiDbm = allocation.targetRssiDbm;
         user.useMaximumTransmitPower = allocation.useMaximumTransmitPower;
@@ -374,6 +375,7 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     auto collection = check_and_cast<ReceiveCollectionStep *>(context->getLastStep());
     std::map<uint16_t, std::vector<physicallayer::Ieee80211MpduReceiveResult>> receivedOutcomes;
     std::map<uint16_t, uint8_t> receivedTids;
+    std::map<uint16_t, Ieee80211MultiStaBlockAckRecord> blockAckReqRecords;
     std::set<uint16_t> responders;
     constexpr int parsingFlags = Chunk::PF_ALLOW_INCORRECT | Chunk::PF_ALLOW_INCOMPLETE |
             Chunk::PF_ALLOW_IMPROPERLY_REPRESENTED;
@@ -422,9 +424,12 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
             else {
                 auto mpdu = new Packet(parser->getName());
                 mpdu->insertAtBack(parser->popAtFront(length, parsingFlags));
-                auto header = dynamicPtrCast<const Ieee80211DataHeader>(
-                        mpdu->peekAtFront<Ieee80211MacHeader>());
-                if (header == nullptr && (outcome.status == physicallayer::MPDU_SUCCESS ||
+                auto header = mpdu->peekAtFront<Ieee80211MacHeader>();
+                bool supportedHeader =
+                        dynamicPtrCast<const Ieee80211DataHeader>(header) != nullptr ||
+                        dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(
+                                header) != nullptr;
+                if (!supportedHeader && (outcome.status == physicallayer::MPDU_SUCCESS ||
                         outcome.status == physicallayer::MPDU_FCS_ERROR))
                     outcome.status = physicallayer::MPDU_HEADER_ERROR;
                 decodedMpdus.emplace_back(mpdu, outcome);
@@ -435,6 +440,73 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
             resultIndex++;
         }
         delete parser;
+
+        // IEEE Std 802.11-2024, 26.5.2.4: a Basic Trigger allocation with
+        // nonzero TAL may contain a compressed BAR S-MPDU instead of QoS
+        // payload. Its response is represented by the same terminal per-AID
+        // Multi-STA BA record, but its bitmap comes from the recipient's
+        // historical BA state after BAR reorder-window processing.
+        auto compressedBlockAckReq = decodedMpdus.size() == 1 &&
+                decodedMpdus.front().second.status ==
+                        physicallayer::MPDU_SUCCESS ?
+                dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(
+                        decodedMpdus.front().first->
+                                peekAtFront<Ieee80211MacHeader>()) :
+                nullptr;
+        if (compressedBlockAckReq != nullptr) {
+            auto decodedAid = callback->getAssociationId(
+                    compressedBlockAckReq->getTransmitterAddress());
+            bool valid = triggerType ==
+                            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER &&
+                    modeledTidAggregationLimit > 0 &&
+                    decodedAid != 0 &&
+                    compressedBlockAckReq->getReceiverAddress() == apAddress &&
+                    !compressedBlockAckReq->getBarAckPolicy() &&
+                    compressedBlockAckReq->getReserved() == 0 &&
+                    compressedBlockAckReq->getFragmentNumber() == 0 &&
+                    (!responseIdentityKnown || decodedAid == aid) &&
+                    responders.count(decodedAid) == 0;
+            if (valid) {
+                aid = decodedAid;
+                auto blockAck = callback->processTriggeredUlBlockAckReq(
+                        decodedMpdus.front().first->dup(),
+                        compressedBlockAckReq, aid);
+                valid = blockAck != nullptr &&
+                        blockAck->getTidInfo() ==
+                                compressedBlockAckReq->getTidInfo() &&
+                        blockAck->getStartingSequenceNumber() ==
+                                compressedBlockAckReq->
+                                        getStartingSequenceNumber();
+                if (valid) {
+                    Ieee80211MultiStaBlockAckRecord record;
+                    record.aid = aid;
+                    record.tid = compressedBlockAckReq->getTidInfo();
+                    record.responseReceived = true;
+                    record.startingSequenceNumber =
+                            compressedBlockAckReq->
+                                    getStartingSequenceNumber().get();
+                    auto bitmap = blockAck->getBlockAckBitmap();
+                    for (int i = 0; i < 64; ++i)
+                        if (bitmap.getBit(i))
+                            record.bitmap |= UINT64_C(1) << i;
+                    blockAckReqRecords.emplace(aid, record);
+                    responders.insert(aid);
+                    receivedTids[aid] = record.tid;
+                    EV_INFO << "Correlated HE-TB compressed BAR: trigger="
+                            << triggerId << ", AID=" << aid
+                            << ", TID=" << (int)record.tid
+                            << ", SSN=" << record.startingSequenceNumber
+                            << ", bitmap=0x" << std::hex << record.bitmap
+                            << std::dec << "\n";
+                }
+            }
+            if (!valid)
+                EV_WARN << "Ignoring invalid or conflicting HE-TB compressed BAR"
+                        << " for Trigger " << triggerId << "\n";
+            for (auto& decoded : decodedMpdus)
+                delete decoded.first;
+            continue;
+        }
 
         // Scheduled allocation identity is supplied by the Trigger/RXVECTOR
         // even when every MPDU fails its FCS. An AID12=0 random-access RU has
@@ -480,15 +552,22 @@ void HeUlMuTxOpFs::processResponses(FrameSequenceContext *context)
     }
 
     for (auto& record : ackRecords)
-        if (responders.count(record.aid) != 0)
+        if (responders.count(record.aid) != 0 &&
+                blockAckReqRecords.count(record.aid) == 0)
             record = buildHeUlMultiStaBlockAckRecord(record.aid, record.tid,
                     receivedOutcomes[record.aid]);
     for (auto aid : responders) {
         auto record = std::find_if(ackRecords.begin(), ackRecords.end(),
                 [aid] (const auto& value) { return value.aid == aid; });
-        if (record == ackRecords.end())
-            ackRecords.push_back(buildHeUlMultiStaBlockAckRecord(aid,
-                    receivedTids[aid], receivedOutcomes[aid]));
+        if (blockAckReqRecords.count(aid) != 0) {
+            if (record == ackRecords.end())
+                ackRecords.push_back(blockAckReqRecords.at(aid));
+            else
+                *record = blockAckReqRecords.at(aid);
+        }
+        else if (record == ackRecords.end())
+            ackRecords.push_back(buildHeUlMultiStaBlockAckRecord(
+                    aid, receivedTids[aid], receivedOutcomes[aid]));
     }
     EV_INFO << "HE UL response processing: received=" << responders.size()
              << ", block-ack records=" << ackRecords.size() << "\n";

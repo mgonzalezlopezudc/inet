@@ -71,7 +71,7 @@ class INET_API Edcaf : public IChannelAccess, public IContention::ICallback, pub
     virtual int getCwMax(AccessCategory ac, int aCwMax, int aCwMin);
     virtual int getCwMin(AccessCategory ac, int aCwMin);
 
-    virtual void calculateTimingParameters();
+    virtual void calculateTimingParameters(bool preserveCw = false);
 
   public:
     virtual ~Edcaf();
@@ -100,6 +100,7 @@ class INET_API Edcaf : public IChannelAccess, public IContention::ICallback, pub
 
     // Edcaf
     virtual bool isOwning() { return owning; }
+    virtual bool isMuEdcaActive() const { return isMuEdcaTimerActive; }
     virtual bool isInternalCollision();
     virtual AccessCategory getAccessCategory() { return ac; }
     virtual void startMuEdcaTimer();
@@ -110,4 +111,3 @@ class INET_API Edcaf : public IChannelAccess, public IContention::ICallback, pub
 } /* namespace inet */
 
 #endif
-

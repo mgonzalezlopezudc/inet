@@ -12,6 +12,22 @@
 namespace inet {
 namespace ieee80211 {
 
+const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(
+        const Ptr<const Ieee80211BlockAckReq>& blockAckReq,
+        IRecipientBlockAckAgreementHandler *blockAckAgreementHandler) const
+{
+    Tid tid = -1;
+    if (auto basicBlockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq))
+        tid = basicBlockAckReq->getTidInfo();
+    else if (auto compressedBlockAckReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq))
+        tid = compressedBlockAckReq->getTidInfo();
+    else
+        throw cRuntimeError("Unsupported Block Ack Request");
+    auto agreement = blockAckAgreementHandler->getAgreement(
+            tid, blockAckReq->getTransmitterAddress());
+    return agreement == nullptr ? nullptr : buildBlockAck(blockAckReq, agreement);
+}
+
 //
 // Upon successful reception of a frame of a type that requires an immediate BlockAck response, the receiving
 // STA shall transmit a BlockAck frame after a SIFS period, without regard to the busy/idle state of the medium.
@@ -90,7 +106,7 @@ void RecipientBlockAckProcedure::processTransmittedBlockAck(const Ptr<const Ieee
 // until the MPDU with the highest sequence number that has been received, and the STA shall set bits in the
 // Block Ack bitmap corresponding to all other MPDUs to 0.
 //
-const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr<const Ieee80211BlockAckReq>& blockAckReq, RecipientBlockAckAgreement *agreement)
+const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr<const Ieee80211BlockAckReq>& blockAckReq, RecipientBlockAckAgreement *agreement) const
 {
     if (auto basicBlockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq)) {
         ASSERT(agreement != nullptr);

@@ -23,8 +23,8 @@ namespace ieee80211 {
 class INET_API Contention : public SimpleModule, public IContention
 {
   public:
-    enum State { IDLE, DEFER, IFS_AND_BACKOFF };
-    enum EventType { START, MEDIUM_STATE_CHANGED, CORRUPTED_FRAME_RECEIVED, CHANNEL_ACCESS_GRANTED };
+    enum State { IDLE, DEFER, IFS_AND_BACKOFF, SUSPENDED };
+    enum EventType { START, SUSPEND, RESUME, MEDIUM_STATE_CHANGED, CORRUPTED_FRAME_RECEIVED, CHANNEL_ACCESS_GRANTED };
     static simsignal_t stateChangedSignal;
 
   protected:
@@ -37,9 +37,11 @@ class INET_API Contention : public SimpleModule, public IContention
     simtime_t ifs = SIMTIME_ZERO;
     simtime_t eifs = SIMTIME_ZERO;
     simtime_t slotTime = SIMTIME_ZERO;
+    int contentionWindow = -1;
 
     Fsm fsm;
     simtime_t endEifsTime = SIMTIME_ZERO;
+    simtime_t suspendedCorruptedFrameTime = -1;
     int backoffSlots = 0;
     simtime_t scheduledTransmissionTime = SIMTIME_ZERO;
     simtime_t lastChannelBusyTime = SIMTIME_ZERO;
@@ -47,6 +49,7 @@ class INET_API Contention : public SimpleModule, public IContention
     simtime_t backoffOptimizationDelta = SIMTIME_ZERO;
     bool mediumFree = true;
     bool backoffOptimization = true;
+    bool backoffGenerated = false;
     simtime_t startTime = SIMTIME_ZERO; // TODO for debugging
 
   protected:
@@ -55,6 +58,7 @@ class INET_API Contention : public SimpleModule, public IContention
     virtual void handleMessage(cMessage *msg) override;
 
     virtual void handleWithFSM(EventType event);
+    virtual void generateBackoffPeriod();
     virtual void scheduleTransmissionRequest();
     virtual void scheduleTransmissionRequestFor(simtime_t txStartTime);
     virtual void cancelTransmissionRequest();
@@ -70,14 +74,15 @@ class INET_API Contention : public SimpleModule, public IContention
 
     // TODO also add a switchToReception() method? because switching takes time, so we dont automatically switch to tx after completing a transmission! (as we may want to transmit immediate frames afterwards)
     virtual void startContention(int cw, simtime_t ifs, simtime_t eifs, simtime_t slotTime, ICallback *callback) override;
+    virtual void suspendContention() override;
+    virtual void resumeContention(simtime_t ifs, simtime_t eifs, simtime_t slotTime) override;
 
     virtual void mediumStateChanged(bool mediumFree) override;
     virtual void corruptedFrameReceived() override;
-    virtual bool isContentionInProgress() override { return fsm.getState() != IDLE; }
+    virtual bool isContentionInProgress() override { return callback != nullptr; }
 };
 
 } // namespace ieee80211
 } // namespace inet
 
 #endif
-

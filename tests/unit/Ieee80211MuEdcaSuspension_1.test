@@ -1,0 +1,250 @@
+%description:
+Verify IEEE 802.11-2024 MU AIFSN=0 contention suspension preserves an
+existing backoff and defers a new contention request until resume.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
+#include "inet/linklayer/ieee80211/mac/contention/Contention.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.contention.Contention;
+import inet.node.wireless.AccessPoint;
+import inet.physicallayer.wireless.ieee80211.packetlevel.Ieee80211ScalarRadioMedium;
+
+simple TestContention extends Contention
+{
+    parameters:
+        @class(TestContention);
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        radioMedium: Ieee80211ScalarRadioMedium;
+        sta: AccessPoint;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+sim-time-limit = 1ms
+**.constraintAreaMinX = 0m
+**.constraintAreaMinY = 0m
+**.constraintAreaMinZ = 0m
+**.constraintAreaMaxX = 100m
+**.constraintAreaMaxY = 100m
+**.constraintAreaMaxZ = 0m
+**.mobility.typename = "StationaryMobility"
+**.mobility.initFromDisplayString = false
+**.opMode = "ax"
+**.bandName = "5 GHz (80 MHz)"
+**.channelNumber = 2
+**.wlan[*].bitrate = 61.25Mbps
+**.wlan[*].mac.qosStation = true
+**.wlan[*].mac.hcf.edca.edcaf[*].contention.typename = "TestContention"
+**.wlan[*].mac.hcf.edca.edcaf[1].muAifsn = 0
+**.wlan[*].mac.hcf.edca.edcaf[1].muCwMin = 7
+**.wlan[*].mac.hcf.edca.edcaf[1].muCwMax = 7
+**.wlan[*].mac.hcf.edca.edcaf[1].muEdcaTimer = 20us
+**.wlan[*].radio.transmitter.power = 20mW
+**.wlan[*].radio.transmitter.maxPower = 100mW
+**.wlan[*].radio.receiver.sensitivity = -85dBm
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestContention : public Contention
+{
+  protected:
+    int backoffGenerationCount = 0;
+
+    virtual void generateBackoffPeriod() override
+    {
+        backoffGenerationCount++;
+        Contention::generateBackoffPeriod();
+    }
+
+  public:
+    State getState() const { return static_cast<State>(fsm.getState()); }
+    int getBackoffSlots() const { return backoffSlots; }
+    int getBackoffGenerationCount() const { return backoffGenerationCount; }
+    bool isBackoffGenerated() const { return backoffGenerated; }
+    simtime_t getScheduledTransmissionTime() const { return scheduledTransmissionTime; }
+};
+
+class TestCallback : public IContention::ICallback
+{
+  public:
+    int grants = 0;
+    simtime_t expectedAccess = -1;
+
+    virtual void expectedChannelAccess(simtime_t time) override { expectedAccess = time; }
+    virtual void channelAccessGranted() override { grants++; }
+};
+
+class TestChannelCallback : public IChannelAccess::ICallback
+{
+  public:
+    int grants = 0;
+    IChannelAccess *channelAccess = nullptr;
+
+    virtual void channelGranted(IChannelAccess *channelAccess) override
+    {
+        grants++;
+        this->channelAccess = channelAccess;
+    }
+};
+
+Define_Module(TestContention);
+
+%activity:
+auto contention = check_and_cast<TestContention *>(
+        getParentModule()->getModuleByPath("sta.wlan[0].mac.hcf.edca.edcaf[1].contention"));
+const auto ifs = SimTime(10, SIMTIME_US);
+const auto eifs = SimTime(20, SIMTIME_US);
+const auto slotTime = SimTime(1, SIMTIME_US);
+
+// IEEE Std 802.11-2024, 26.2.7: AIFSN=0 suspends the EDCAF. A new
+// request remains pending and does not draw a backoff until timer expiry.
+TestCallback pendingCallback;
+contention->suspendContention();
+REQUIRE(contention->getState() == Contention::SUSPENDED);
+contention->startContention(0, ifs, eifs, slotTime, &pendingCallback);
+REQUIRE(contention->isContentionInProgress());
+REQUIRE(!contention->isBackoffGenerated());
+REQUIRE(contention->getBackoffGenerationCount() == 0);
+REQUIRE(pendingCallback.expectedAccess == -1);
+
+contention->resumeContention(ifs, eifs, slotTime);
+REQUIRE(contention->getState() == Contention::IFS_AND_BACKOFF);
+REQUIRE(contention->isBackoffGenerated());
+REQUIRE(contention->getBackoffGenerationCount() == 1);
+REQUIRE(pendingCallback.expectedAccess == simTime() + ifs);
+
+// Suspend exactly at the scheduled contention boundary, before the
+// low-priority grant event. The zero remaining counter must be retained.
+wait(ifs);
+REQUIRE(pendingCallback.grants == 0);
+contention->suspendContention();
+REQUIRE(contention->getState() == Contention::SUSPENDED);
+REQUIRE(contention->getBackoffSlots() == 0);
+REQUIRE(contention->getBackoffGenerationCount() == 1);
+REQUIRE(pendingCallback.expectedAccess == -1);
+wait(SimTime(5, SIMTIME_US));
+REQUIRE(pendingCallback.grants == 0);
+
+// IEEE Std 802.11-2024, 10.23.2.2: resume without changing the
+// backoff counter (and therefore without another random draw).
+contention->resumeContention(ifs, eifs, slotTime);
+REQUIRE(contention->getBackoffGenerationCount() == 1);
+REQUIRE(pendingCallback.expectedAccess == simTime() + ifs);
+wait(ifs + SimTime(1, SIMTIME_PS));
+REQUIRE(pendingCallback.grants == 1);
+REQUIRE(!contention->isContentionInProgress());
+
+// A corrupted reception while suspended retains the EIFS history used by
+// the normal contention FSM when the pending request resumes.
+TestCallback corruptedCallback;
+contention->suspendContention();
+contention->startContention(0, ifs, eifs, slotTime, &corruptedCallback);
+simtime_t corruptedFrameTime = simTime();
+contention->corruptedFrameReceived();
+wait(SimTime(5, SIMTIME_US));
+contention->resumeContention(ifs, eifs, slotTime);
+REQUIRE(contention->getState() == Contention::IFS_AND_BACKOFF);
+REQUIRE(corruptedCallback.expectedAccess == corruptedFrameTime + eifs);
+wait(corruptedCallback.expectedAccess - simTime() + SimTime(1, SIMTIME_PS));
+REQUIRE(corruptedCallback.grants == 1);
+
+// Once the absolute EIFS boundary elapses during suspension, resume falls
+// back to the restored AIFS instead of starting a fresh EIFS.
+TestCallback elapsedCorruptionCallback;
+contention->suspendContention();
+contention->startContention(0, ifs, eifs, slotTime,
+        &elapsedCorruptionCallback);
+contention->corruptedFrameReceived();
+wait(eifs + SimTime(1, SIMTIME_PS));
+contention->resumeContention(ifs, eifs, slotTime);
+REQUIRE(elapsedCorruptionCallback.expectedAccess == simTime() + ifs);
+wait(ifs + SimTime(1, SIMTIME_PS));
+REQUIRE(elapsedCorruptionCallback.grants == 1);
+
+// Suspension from DEFER also preserves the already-generated counter.
+contention->mediumStateChanged(false);
+TestCallback deferredCallback;
+contention->startContention(7, ifs, eifs, slotTime, &deferredCallback);
+REQUIRE(contention->getState() == Contention::DEFER);
+int deferredSlots = contention->getBackoffSlots();
+int generationCount = contention->getBackoffGenerationCount();
+contention->suspendContention();
+REQUIRE(contention->getState() == Contention::SUSPENDED);
+contention->resumeContention(ifs, eifs, slotTime);
+REQUIRE(contention->getState() == Contention::DEFER);
+REQUIRE(contention->getBackoffSlots() == deferredSlots);
+REQUIRE(contention->getBackoffGenerationCount() == generationCount);
+contention->mediumStateChanged(true);
+simtime_t deferredAccess = contention->getScheduledTransmissionTime();
+wait(deferredAccess - simTime() + SimTime(1, SIMTIME_PS));
+REQUIRE(deferredCallback.grants == 1);
+
+auto edcaf = check_and_cast<Edcaf *>(
+        getParentModule()->getModuleByPath("sta.wlan[0].mac.hcf.edca.edcaf[1]"));
+
+// IEEE Std 802.11-2024, 10.23.2.2: applying the MU EDCA parameters after
+// an HE TB PPDU does not change CW, even when no contention is pending.
+REQUIRE(!contention->isContentionInProgress());
+int idleLegacyCw = edcaf->getCw();
+REQUIRE(idleLegacyCw > 7);
+edcaf->startMuEdcaTimer();
+REQUIRE(edcaf->getCw() == idleLegacyCw);
+REQUIRE(contention->getState() == Contention::SUSPENDED);
+wait(SimTime(20, SIMTIME_US) + SimTime(1, SIMTIME_PS));
+REQUIRE(edcaf->getCw() == idleLegacyCw);
+REQUIRE(!contention->isContentionInProgress());
+
+// Exercise the EDCAF timer boundary itself: activating MU AIFSN=0
+// suspends an existing draw, and expiry resumes it with the restored AIFS.
+TestChannelCallback channelCallback;
+edcaf->requestChannel(&channelCallback);
+int edcafCw = edcaf->getCw();
+int edcafSlots = contention->getBackoffSlots();
+generationCount = contention->getBackoffGenerationCount();
+edcaf->startMuEdcaTimer();
+REQUIRE(contention->getState() == Contention::SUSPENDED);
+REQUIRE(contention->getBackoffSlots() == edcafSlots);
+REQUIRE(contention->getBackoffGenerationCount() == generationCount);
+REQUIRE(edcaf->getCw() == edcafCw);
+wait(SimTime(20, SIMTIME_US) + SimTime(1, SIMTIME_PS));
+REQUIRE(contention->getState() == Contention::IFS_AND_BACKOFF);
+REQUIRE(contention->getBackoffSlots() == edcafSlots);
+REQUIRE(contention->getBackoffGenerationCount() == generationCount);
+REQUIRE(edcaf->getCw() == edcafCw);
+REQUIRE(contention->getScheduledTransmissionTime() > simTime());
+wait(contention->getScheduledTransmissionTime() - simTime() + SimTime(1, SIMTIME_PS));
+REQUIRE(channelCallback.grants == 1);
+edcaf->releaseChannel(&channelCallback);
+
+EV << "MU EDCA suspension deferred a new request until resume.\n";
+EV << "MU EDCA suspension preserved running and deferred backoff counters.\n";
+EV << "MU EDCA suspension preserved corrupted-frame EIFS history.\n";
+EV << "MU EDCA activation preserved an idle legacy CW outside the MU range.\n";
+EV << "MU EDCA timer expiry resumed the original EDCAF counter and CW.\n";
+
+%contains: stdout
+MU EDCA suspension deferred a new request until resume.
+
+%contains: stdout
+MU EDCA suspension preserved running and deferred backoff counters.
+
+%contains: stdout
+MU EDCA suspension preserved corrupted-frame EIFS history.
+
+%contains: stdout
+MU EDCA activation preserved an idle legacy CW outside the MU range.
+
+%contains: stdout
+MU EDCA timer expiry resumed the original EDCAF counter and CW.

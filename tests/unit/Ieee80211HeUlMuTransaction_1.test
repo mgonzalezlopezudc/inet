@@ -7,6 +7,9 @@ Validate HE triggered-uplink prepare/commit and terminal packet ownership by exa
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edcaf.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckProcedure.h"
 
 %file: TestNetwork.ned
 import inet.linklayer.ieee80211.mac.coordinationfunction.HeHcf;
@@ -61,6 +64,22 @@ using namespace inet::ieee80211;
 using namespace inet::physicallayer;
 
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestOriginatorBlockAckAgreementHandler :
+        public OriginatorBlockAckAgreementHandler
+{
+  public:
+    void addAgreement(const MacAddress& receiver, Tid tid,
+            int startingSequenceNumber)
+    {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid,
+                SequenceNumberCyclic(startingSequenceNumber), 64,
+                false, false);
+        agreement->setIsAddbaResponseReceived(true);
+        agreement->setBlockAckTimeoutValue(0);
+        blockAckAgreements[std::make_pair(receiver, tid)] = agreement;
+    }
+};
 
 class TestHeHcf : public HeHcf
 {
@@ -303,6 +322,109 @@ class TestHeHcf : public HeHcf
         return edca->getEdcaf(AC_BE)->getCw();
     }
 
+    bool isBestEffortMuEdcaTimerActive() const
+    {
+        return edca->getEdcaf(AC_BE)->isMuEdcaActive();
+    }
+
+    void markBestEffortBlockAckRetry(Packet *packet, int sequenceNumber)
+    {
+        auto header = packet->removeAtFront<Ieee80211DataHeader>();
+        header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+        header->setRetry(true);
+        header->setAckPolicy(BLOCK_ACK);
+        packet->insertAtFront(header);
+        edca->getEdcaf(AC_BE)->getAckHandler()->
+                processTransmittedDataOrMgmtFrame(header);
+    }
+
+    Packet *stageLegacyBlockAckFrame(const MacAddress& ap,
+            int sequenceNumber)
+    {
+        auto packet = makeQueuedPacket("legacy-block-ack-frame", ap, 0x73);
+        getSourceQueue()->removePacket(packet);
+        edca->getEdcaf(AC_BE)->getInProgressFrames()->
+                addInProgressFrame(packet);
+        markBestEffortBlockAckRetry(packet, sequenceNumber);
+        return packet;
+    }
+
+    void installOriginatorBlockAckAgreement(const MacAddress& ap,
+            int startingSequenceNumber)
+    {
+        delete originatorBlockAckAgreementHandler;
+        auto handler = new TestOriginatorBlockAckAgreementHandler();
+        handler->addAgreement(ap, 0, startingSequenceNumber);
+        originatorBlockAckAgreementHandler = handler;
+        if (originatorBlockAckProcedure == nullptr)
+            originatorBlockAckProcedure = new OriginatorBlockAckProcedure();
+    }
+
+    Ptr<const Ieee80211CompressedBlockAckReq> prepareBlockAckReq(
+            uint32_t triggerId, const MacAddress& ap)
+    {
+        Ieee80211HeTriggerUserInfo user;
+        auto trigger = makeTrigger(ap, user);
+        TriggeredUlExchange exchange;
+        exchange.sourceQueue = getSourceQueue();
+        exchange.expectedResponseTime = SimTime(1, SIMTIME_S);
+        bool committed = false;
+        Ptr<const Ieee80211MacHeader> responseHeader;
+        auto response = buildTriggeredUlResponsePacket(nullptr,
+                getSourceQueue(), AC_BE, 0, 0, 0, &user, trigger,
+                triggerId,
+                getLinkPhyContext().getSnapshot().getMaximumTransmitPower(),
+                std::nullopt, exchange, responseHeader, committed);
+        REQUIRE(committed);
+        auto blockAckReq =
+                dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(
+                        responseHeader);
+        REQUIRE(blockAckReq != nullptr);
+        REQUIRE(exchange.recoveryKind ==
+                TriggeredUlExchange::RecoveryKind::
+                        COMPRESSED_BLOCK_ACK_REQUEST);
+        transmissionComplete(response, responseHeader);
+        delete response;
+        auto inserted = triggeredUlExchanges.emplace(
+                triggerId, std::move(exchange));
+        REQUIRE(inserted.second);
+        return blockAckReq;
+    }
+
+    int getBestEffortInProgressCount() const
+    {
+        return edca->getEdcaf(AC_BE)->getInProgressFrames()->getLength();
+    }
+
+    QosAckHandler::Status getBestEffortAckStatus(Packet *packet) const
+    {
+        return edca->getEdcaf(AC_BE)->getAckHandler()->
+                getQoSDataAckStatus(
+                        packet->peekAtFront<Ieee80211DataHeader>());
+    }
+
+    int getBestEffortRetryCount(Packet *packet) const
+    {
+        auto header = packet->peekAtFront<Ieee80211DataHeader>();
+        return edca->getEdcaf(AC_BE)->getRecoveryProcedure()->
+                getRetryCount(packet, header);
+    }
+
+    void clearBestEffortInProgress()
+    {
+        auto frames = edca->getEdcaf(AC_BE)->getInProgressFrames();
+        while (frames->getLength() != 0)
+            frames->retireFrame(frames->getFrames(0));
+        frames->clearDroppedFrames();
+    }
+
+    std::set<int> getOccupiedBestEffortBlockAckSequenceNumbers(
+            const MacAddress& receiverAddress) const
+    {
+        return edca->getEdcaf(AC_BE)->getAckHandler()->
+                getOccupiedBlockAckSequenceNumbers(receiverAddress, 0);
+    }
+
     void completeNoAckHeTbQosData(const MacAddress& ap)
     {
         auto header = makeShared<Ieee80211DataHeader>();
@@ -360,6 +482,7 @@ class TestHeHcf : public HeHcf
     void clearState()
     {
         retryPendingTriggeredUlExchanges();
+        clearBestEffortInProgress();
         auto queue = getSourceQueue();
         while (queue->getNumPackets() > 0) {
             auto packet = queue->getPacket(0);
@@ -447,6 +570,89 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     hcf->clearState();
 }
 
+// A Basic Trigger can carry a committed compressed BAR for legacy outstanding
+// frames. Its terminal record supports cyclic partial/all/missing outcomes.
+{
+    hcf->installOriginatorBlockAckAgreement(ap, 4095);
+    auto p4095 = hcf->stageLegacyBlockAckFrame(ap, 4095);
+    auto p0 = hcf->stageLegacyBlockAckFrame(ap, 0);
+    auto request = hcf->prepareBlockAckReq(50, ap);
+    REQUIRE(request->getTidInfo() == 0);
+    REQUIRE(request->getStartingSequenceNumber().get() == 4095);
+    REQUIRE(!request->getBarAckPolicy());
+    REQUIRE(request->getReserved() == 0);
+    REQUIRE(responseEventListener.reason ==
+            HeTbResponseEvent::BLOCK_ACK_REQUESTED);
+    REQUIRE(hcf->getBestEffortAckStatus(p4095) ==
+            QosAckHandler::Status::WAITING_FOR_BLOCK_ACK);
+    REQUIRE(hcf->getBestEffortAckStatus(p0) ==
+            QosAckHandler::Status::WAITING_FOR_BLOCK_ACK);
+    Ieee80211MultiStaBlockAckRecord partial;
+    partial.aid = 21;
+    partial.tid = 0;
+    partial.responseReceived = true;
+    partial.startingSequenceNumber = 4095;
+    partial.bitmap = 1;
+    hcf->receiveBlockAck(50, ap, {partial});
+    REQUIRE(hcf->getBestEffortInProgressCount() == 1);
+    REQUIRE(hcf->getBestEffortAckStatus(p0) ==
+            QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED);
+    hcf->clearState();
+
+    hcf->installOriginatorBlockAckAgreement(ap, 333);
+    auto timedOut = hcf->stageLegacyBlockAckFrame(ap, 333);
+    hcf->prepareBlockAckReq(53, ap);
+    REQUIRE(!hcf->isBestEffortMuEdcaTimerActive());
+    hcf->expireExchange(53);
+    REQUIRE(hcf->getExchangeCount() == 0);
+    REQUIRE(!hcf->isBestEffortMuEdcaTimerActive());
+    REQUIRE(hcf->getBestEffortRetryCount(timedOut) == 1);
+    REQUIRE(hcf->getBestEffortAckStatus(timedOut) ==
+            QosAckHandler::Status::BLOCK_ACK_NOT_ARRIVED);
+    Ieee80211MultiStaBlockAckRecord late;
+    late.aid = 21;
+    late.tid = 0;
+    late.responseReceived = true;
+    late.startingSequenceNumber = 333;
+    late.bitmap = 1;
+    hcf->receiveBlockAck(53, ap, {late});
+    REQUIRE(hcf->getBestEffortRetryCount(timedOut) == 1);
+    REQUIRE(hcf->getBestEffortAckStatus(timedOut) ==
+            QosAckHandler::Status::BLOCK_ACK_NOT_ARRIVED);
+    REQUIRE(hcf->getBestEffortInProgressCount() == 1);
+    REQUIRE(!hcf->isBestEffortMuEdcaTimerActive());
+    hcf->clearState();
+
+    hcf->installOriginatorBlockAckAgreement(ap, 117);
+    auto all = hcf->stageLegacyBlockAckFrame(ap, 117);
+    hcf->prepareBlockAckReq(51, ap);
+    Ieee80211MultiStaBlockAckRecord complete;
+    complete.aid = 21;
+    complete.tid = 0;
+    complete.responseReceived = true;
+    complete.startingSequenceNumber = 117;
+    complete.bitmap = 1;
+    hcf->receiveBlockAck(51, ap, {complete});
+    REQUIRE(hcf->getBestEffortInProgressCount() == 0);
+    (void)all;
+    hcf->clearState();
+
+    hcf->installOriginatorBlockAckAgreement(ap, 231);
+    auto missing = hcf->stageLegacyBlockAckFrame(ap, 231);
+    hcf->prepareBlockAckReq(52, ap);
+    Ieee80211MultiStaBlockAckRecord unrelated;
+    unrelated.aid = 99;
+    unrelated.tid = 0;
+    unrelated.responseReceived = true;
+    unrelated.startingSequenceNumber = 231;
+    unrelated.bitmap = 1;
+    hcf->receiveBlockAck(52, ap, {unrelated});
+    REQUIRE(hcf->getBestEffortInProgressCount() == 1);
+    REQUIRE(hcf->getBestEffortAckStatus(missing) ==
+            QosAckHandler::Status::BLOCK_ACK_NOT_ARRIVED);
+    hcf->clearState();
+}
+
 // A queued MPDU that cannot fit falls back to QoS Null. Neither completing
 // that HE-TB transmission nor receiving its positive BA starts MU-EDCA.
 {
@@ -476,18 +682,18 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
 }
 
 // QoS Data that requires no immediate acknowledgment starts MU-EDCA at
-// HE-TB PPDU completion, without waiting for a Multi-STA BA.
+// HE-TB PPDU completion without waiting for a Multi-STA BA or changing CW.
 {
     REQUIRE(hcf->getBestEffortCw() == 31);
     hcf->completeNoAckHeTbQosData(ap);
-    REQUIRE(hcf->getBestEffortCw() == 7);
+    REQUIRE(hcf->getBestEffortCw() == 31);
     wait(SimTime(2, SIMTIME_PS));
     REQUIRE(hcf->getBestEffortCw() == 31);
 }
 
 // Commit moves the exact originals into the Trigger ledger. A partial BA
 // retires only p0, requeues exact p1 with Retry set, and starts MU-EDCA
-// because its bitmap acknowledges a QoS Data MPDU.
+// because its bitmap acknowledges a QoS Data MPDU, while preserving CW.
 {
     auto p0 = hcf->makeQueuedPacket("partial-p0", ap, 0x20);
     auto p1 = hcf->makeQueuedPacket("partial-p1", ap, 0x21);
@@ -520,7 +726,7 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(hcf->getExchangeCount() == 0);
     requireQueueIdentities({p1});
     REQUIRE(p1->peekAtFront<Ieee80211DataHeader>()->getRetry());
-    REQUIRE(hcf->getBestEffortCw() == 7);
+    REQUIRE(hcf->getBestEffortCw() == 31);
     hcf->clearState();
 }
 
@@ -540,6 +746,31 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(p0->peekAtFront<Ieee80211DataHeader>()->getRetry());
     REQUIRE(p1->peekAtFront<Ieee80211DataHeader>()->getRetry());
     hcf->clearState();
+}
+
+// A retry can enter the Trigger ledger with legacy Block Ack state from its
+// earlier SU attempt. A successful Multi-STA BA must retire that exact key.
+{
+    auto retry = hcf->makeQueuedPacket("triggered-retry-p0", ap, 0x28);
+    hcf->markBestEffortBlockAckRetry(retry, 117);
+    REQUIRE(hcf->getOccupiedBestEffortBlockAckSequenceNumbers(ap) ==
+            std::set<int>({117}));
+    TestHeHcf::CommittedExchange committed;
+    hcf->prepareAndCommit(49, ap, -1, committed);
+    REQUIRE(committed.packets == std::vector<Packet *>({retry}));
+    REQUIRE(committed.sequenceNumbers == std::vector<int>({117}));
+    REQUIRE(hcf->getOccupiedBestEffortBlockAckSequenceNumbers(ap) ==
+            std::set<int>({117}));
+    Ieee80211MultiStaBlockAckRecord record;
+    record.aid = 21;
+    record.tid = 0;
+    record.responseReceived = true;
+    record.startingSequenceNumber = 117;
+    record.bitmap = 1;
+    hcf->receiveBlockAck(49, ap, {record});
+    REQUIRE(hcf->getExchangeCount() == 0);
+    requireQueueIdentities({});
+    REQUIRE(hcf->getOccupiedBestEffortBlockAckSequenceNumbers(ap).empty());
 }
 
 // Timeout owns the ledger once; a late BA cannot mutate the requeued identities.

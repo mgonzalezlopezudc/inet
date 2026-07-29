@@ -26,6 +26,8 @@ class TestHeHcfScheduleFinalizer : public HeHcf
   public:
     std::map<MacAddress, uint16_t> associationIds;
     int deliveredTriggeredFrames = 0;
+    int processedTriggeredBlockAckReqs = 0;
+    uint64_t triggeredBlockAckBitmap = 0;
 
     static HeUlScheduleFinalizationResult finalize(
             const IIeee80211HeUlScheduler::Schedule& schedule,
@@ -51,6 +53,28 @@ class TestHeHcfScheduleFinalizer : public HeHcf
     {
         deliveredTriggeredFrames++;
         delete packet;
+    }
+
+    virtual const Ptr<Ieee80211CompressedBlockAck> processTriggeredUlBlockAckReq(
+            Packet *packet,
+            const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
+            uint16_t) override
+    {
+        processedTriggeredBlockAckReqs++;
+        auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+        blockAck->setReceiverAddress(blockAckReq->getTransmitterAddress());
+        blockAck->setTransmitterAddress(blockAckReq->getReceiverAddress());
+        blockAck->setTidInfo(blockAckReq->getTidInfo());
+        blockAck->setStartingSequenceNumber(
+                blockAckReq->getStartingSequenceNumber());
+        std::vector<uint8_t> bytes(8, 0);
+        BitVector bitmap(bytes);
+        for (int i = 0; i < 64; ++i)
+            bitmap.setBit(i,
+                    (triggeredBlockAckBitmap & (UINT64_C(1) << i)) != 0);
+        blockAck->setBlockAckBitmap(bitmap);
+        delete packet;
+        return blockAck;
     }
 };
 
@@ -246,6 +270,42 @@ static Packet *makeHeTbAmpduResponse(
     context->setTriggerId(1);
     context->setRecipientParameters(std::shared_ptr<const Ieee80211HeUserPhyParameters>(
             canonical.getPpduLayout(), &canonical.getPpduLayout()->getUsers().front()));
+    return packet;
+}
+
+static Packet *makeHeTbCompressedBarResponse(
+        const IIeee80211HeUlScheduler::RuAllocation& allocation,
+        const MacAddress& transmitter, const MacAddress& receiver,
+        uint8_t tid, int startingSequenceNumber,
+        bool barAckPolicy = false, uint16_t reserved = 0,
+        int fragmentNumber = 0)
+{
+    auto packet = makeHeTbAmpduResponse(
+            allocation, transmitter, {MPDU_SUCCESS});
+    packet->removeAll();
+    auto blockAckReq = makeShared<Ieee80211CompressedBlockAckReq>();
+    blockAckReq->setReceiverAddress(receiver);
+    blockAckReq->setTransmitterAddress(transmitter);
+    blockAckReq->setTidInfo(tid);
+    blockAckReq->setStartingSequenceNumber(
+            SequenceNumberCyclic(startingSequenceNumber));
+    blockAckReq->setBarAckPolicy(barAckPolicy);
+    blockAckReq->setReserved(reserved);
+    blockAckReq->setFragmentNumber(fragmentNumber);
+    auto mpdu = new Packet("compressed-bar", blockAckReq);
+    mpdu->insertAtBack(makeShared<Ieee80211MacTrailer>());
+    auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+    delimiter->setLength(mpdu->getByteLength());
+    delimiter->setEof(true);
+    packet->insertAtBack(delimiter);
+    packet->insertAtBack(mpdu->peekAll());
+    Ieee80211MpduReceiveResult outcome;
+    outcome.length = B(mpdu->getByteLength());
+    outcome.status = MPDU_SUCCESS;
+    auto indication = packet->getTagForUpdate<Ieee80211MpduReceiveInd>();
+    indication->setResultsArraySize(1);
+    indication->setResults(0, outcome);
+    delete mpdu;
     return packet;
 }
 
@@ -943,6 +1003,99 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
 }
 
 {
+    auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+            SimTime(120, SIMTIME_US),
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    schedule.allocations.front().associationId = 7;
+    schedule.allocations.front().tid = 1;
+    auto transmitter = MacAddress("20:00:00:00:00:07");
+    auto ap = MacAddress("10:00:00:00:00:00");
+    auto coordinator = new HeUlCoordinator();
+    auto callback = new TestHeHcfScheduleFinalizer();
+    callback->associationIds[transmitter] = 7;
+    callback->triggeredBlockAckBitmap = UINT64_C(0x8000000000000003);
+    auto plan = makeUlPlan(schedule,
+            IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER);
+    TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
+            const_cast<Ieee80211ModeSet *>(
+                    Ieee80211ModeSet::getModeSet("ax")), ap);
+    FrameSequenceContext context(ap,
+            const_cast<Ieee80211ModeSet *>(
+                    Ieee80211ModeSet::getModeSet("ax")),
+            nullptr, nullptr, nullptr, nullptr, nullptr);
+    auto collection = new ReceiveCollectionStep();
+    collection->setFrameToReceive(makeHeTbCompressedBarResponse(
+            schedule.allocations.front(), transmitter, ap, 5, 4095));
+    context.addStep(collection);
+    sequence.processResponsesForTest(&context);
+    const auto& records = sequence.getAckRecordsForTest();
+    REQUIRE(callback->processedTriggeredBlockAckReqs == 1);
+    REQUIRE(callback->deliveredTriggeredFrames == 0);
+    REQUIRE(records.size() == 1);
+    REQUIRE(records.front().aid == 7);
+    REQUIRE(records.front().tid == 5);
+    REQUIRE(records.front().responseReceived);
+    REQUIRE(records.front().startingSequenceNumber == 4095);
+    REQUIRE(records.front().bitmap == UINT64_C(0x8000000000000003));
+    delete callback;
+    delete coordinator;
+    EV << "HE-TB compressed BAR preserves historical bitmap and cyclic SSN in the terminal record.\n";
+}
+
+{
+    struct RejectedBarCase {
+        IIeee80211HeUlTriggerPolicy::TriggerType triggerType;
+        MacAddress receiver;
+        bool barAckPolicy;
+        uint16_t reserved;
+        int fragmentNumber;
+    };
+    auto ap = MacAddress("10:00:00:00:00:00");
+    auto wrongAp = MacAddress("10:00:00:00:00:09");
+    auto transmitter = MacAddress("20:00:00:00:00:07");
+    std::vector<RejectedBarCase> cases = {
+        {IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, wrongAp, false, 0, 0},
+        {IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, ap, true, 0, 0},
+        {IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, ap, false, 1, 0},
+        {IIeee80211HeUlTriggerPolicy::BASIC_TRIGGER, ap, false, 0, 1},
+        {IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER, ap, false, 0, 0},
+    };
+    for (const auto& testCase : cases) {
+        auto schedule = makeUlSchedule(MHz(5180), MHz(20),
+                SimTime(120, SIMTIME_US), testCase.triggerType);
+        schedule.allocations.front().associationId = 7;
+        schedule.allocations.front().tid = 5;
+        auto coordinator = new HeUlCoordinator();
+        auto callback = new TestHeHcfScheduleFinalizer();
+        callback->associationIds[transmitter] = 7;
+        auto plan = makeUlPlan(schedule, testCase.triggerType);
+        TestHeUlMuTxOpFs sequence(coordinator, callback, plan,
+                const_cast<Ieee80211ModeSet *>(
+                        Ieee80211ModeSet::getModeSet("ax")), ap);
+        FrameSequenceContext context(ap,
+                const_cast<Ieee80211ModeSet *>(
+                        Ieee80211ModeSet::getModeSet("ax")),
+                nullptr, nullptr, nullptr, nullptr, nullptr);
+        auto collection = new ReceiveCollectionStep();
+        collection->setFrameToReceive(makeHeTbCompressedBarResponse(
+                schedule.allocations.front(), transmitter,
+                testCase.receiver, 5, 100, testCase.barAckPolicy,
+                testCase.reserved, testCase.fragmentNumber));
+        context.addStep(collection);
+        sequence.processResponsesForTest(&context);
+        const auto& records = sequence.getAckRecordsForTest();
+        REQUIRE(callback->processedTriggeredBlockAckReqs == 0);
+        REQUIRE(records.size() == 1);
+        REQUIRE(records.front().aid == 7);
+        REQUIRE(!records.front().responseReceived);
+        REQUIRE(records.front().bitmap == 0);
+        delete callback;
+        delete coordinator;
+    }
+    EV << "Malformed and non-Basic HE-TB BARs are rejected before recipient state mutation.\n";
+}
+
+{
     auto outcome = [] (int sequenceNumber, Ieee80211MpduReceiveStatus status,
             uint8_t tid = 5) {
         Ieee80211MpduReceiveResult result;
@@ -1011,5 +1164,19 @@ HE UL response processing: received=0, block-ack records=1
 Single-TID HE-TB identity rejects a decoded MPDU from another TID.
 HE UL response processing: received=1, block-ack records=1
 Interspersed zero-length delimiters do not shift HE-TB MPDU outcomes.
+Correlated HE-TB compressed BAR: trigger=16, AID=7, TID=5, SSN=4095, bitmap=0x8000000000000003
+HE UL response processing: received=1, block-ack records=1
+HE-TB compressed BAR preserves historical bitmap and cyclic SSN in the terminal record.
+Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 17
+HE UL response processing: received=0, block-ack records=1
+Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 18
+HE UL response processing: received=0, block-ack records=1
+Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 19
+HE UL response processing: received=0, block-ack records=1
+Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 20
+HE UL response processing: received=0, block-ack records=1
+Ignoring invalid or conflicting HE-TB compressed BAR for Trigger 21
+HE UL response processing: received=0, block-ack records=1
+Malformed and non-Basic HE-TB BARs are rejected before recipient state mutation.
 Multi-STA Block Ack preserves 101/110/all-failed sequence bases.
 .

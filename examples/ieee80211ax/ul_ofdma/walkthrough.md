@@ -3,15 +3,15 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260729T093614Z`
-- PCAP: `20260729T093614Z`
+- Scalar/vector: `20260729T165048Z`
+- PCAP: `20260729T165048Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260729T093614Z`.
+`[agent]` results sessions: `20260729T103037Z`.
 
 This four-configuration experiment shows that enabling scheduled uplink OFDMA
 changes the observed exchange from station-contended HE-SU traffic to
-Trigger-led HE-TB responses. In session `20260729T093614Z`, the scheduled
+Trigger-led HE-TB responses. In session `20260729T103037Z`, the scheduled
 configurations contain that exchange while the EDCA control does not. The
 application results compare delivery and tail delay. Aligned run-0 telemetry
 and decoded Trigger User Info additionally verify each emitted per-user RU
@@ -57,7 +57,7 @@ measures `[0.3,0.8)` s.
 Port 5000 is classified as UP_VO by `ExampleQosClassifier`. The baseline SU
 EDCA values are therefore the HE VO defaults (AIFSN/CWmin/CWmax `2/3/7`).
 The current MU-EDCA settings are explicitly `muAifsn=10`, `muCwMin=255`,
-`muCwMax=1023`, and `muEdcaTimer=100ms` in the
+`muCwMax=1023`, and `muEdcaTimer=2.089s` in the
 [INI configuration](omnetpp.ini). `AsymmetricBacklog` also sets the ordinary
 SU values to `10/255/1023` so queues remain available to the AP scheduler.
 These assignments are requested configuration; the campaign results and
@@ -97,16 +97,16 @@ inferences unless aligned telemetry establishes them.
 | Scheduled configurations use a Trigger-led UL-MU exchange while the EDCA control does not | `PASS` | PCAP statistics and representative timelines | run 0 / seed 0 per configuration | Direct AP-capture observation in this session |
 | All four configurations record delivered goodput and p95 delay | `PASS` | Scalar/vector plot and table | runs 0–4 / seeds 0–4 | Per-run aggregation over the stated windows |
 | One scheduler is generally better than the others | `INCONCLUSIVE` | Scalar/vector plot and table | runs 0–4 / seeds 0–4 | No acceptance threshold; one scenario and five seeds |
-| Each committed Basic Trigger per-user allocation matches the transmitted Trigger User Info | `PASS` | Joined scheduler decision vectors and decoded Trigger AID/RU fields | matched run 0 / seed 0 in the three scheduled configurations | 437 per-user allocations matched one-to-one; commit-to-capture delay was 35.0–40.0 µs |
+| Each committed Basic Trigger per-user allocation matches the transmitted Trigger User Info | `PASS` | Joined scheduler decision vectors and decoded Trigger AID/RU fields | matched run 0 / seed 0 in the three scheduled configurations | 756 per-user allocations matched one-to-one |
 
 ## [agent] Configuration matrix
 
 | Configuration | Role | Effective scheduler / UL mode | Contention delta | Workload | Expected invariant |
 |---|---|---|---|---|---|
-| `BacklogBased` | Scheduled treatment | `HeUlSchedulerBacklogBased`; UL MU-OFDMA enabled | SU `2/3/7`; MU `10/255/1023`, 100 ms | 3 × 100 B every 0.5 ms | Trigger-led HE-TB exchange |
+| `BacklogBased` | Scheduled treatment | `HeUlSchedulerBacklogBased`; UL MU-OFDMA enabled | SU `2/3/7`; MU `10/255/1023`, 2.089 s | 3 × 100 B every 0.5 ms | Trigger-led HE-TB exchange |
 | `EqualSizedRUs` | Scheduled policy control | `HeUlSchedulerEqualSizedRUs`; UL MU-OFDMA enabled | same | matched | Trigger-led exchange with equal-sized RU policy |
 | `EdcaBaseline` | Negative control | UL MU-OFDMA disabled; HE-SU EDCA | SU `2/3/7`; MU settings inactive for the disabled trigger path | matched | no Basic Trigger or HE-TB response |
-| `AsymmetricBacklog` | Multi-factor stress case | inherits `BacklogBased`; UL MU-OFDMA enabled | SU `10/255/1023`; MU `10/255/1023`, 100 ms | both apps 256 B; measured app every 1/2/4 ms | unequal backlog inputs remain observable |
+| `AsymmetricBacklog` | Multi-factor stress case | inherits `BacklogBased`; UL MU-OFDMA enabled | SU `10/255/1023`; MU `10/255/1023`, 2.089 s | both apps 256 B; measured app every 1/2/4 ms | unequal backlog inputs remain observable |
 
 All four configurations use AX 20 MHz, fixed HE MCS 1/NSS 1, three stations,
 zero random-access RUs, and the same topology. `BacklogBased`,
@@ -133,7 +133,7 @@ python3 examples/ieee80211/analysis/wifi_analysis.py inspect ul_ofdma
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py run ul_ofdma \
   --suite ax --evidence both --runs 5 --jobs "$(nproc)" \
-  --session-id 20260729T093614Z
+  --session-id 20260729T103037Z
 ```
 
 The session contains runs `[0,5)` for each of the four configurations. Run 0
@@ -143,11 +143,11 @@ and publish that retained session with:
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py report ul_ofdma \
-  --suite ax --session-id 20260729T093614Z
+  --suite ax --session-id 20260729T103037Z
 
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_ofdma \
-  --suite ax --session-id 20260729T093614Z --update
+  --suite ax --session-id 20260729T103037Z --update
 ```
 
 ## [agent] Scalar and vector analysis
@@ -162,7 +162,7 @@ run-level values per condition are summarized with a two-sided 95% Student-t
 interval; vector samples are not treated as independent repetitions.
 
 The retained inputs are the `.sca` and `.vec` files under
-`results/20260729T093614Z/{configuration}/` for runs 0–4.
+`results/20260729T103037Z/{configuration}/` for runs 0–4.
 
 The figure answers two separate questions: how much application traffic
 reached the sink and what p95 delay the delivered packets experienced. In this
@@ -175,9 +175,9 @@ from five runs.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-ul_ofdma -->
 ### [script] Generated scalar/vector plot and table
 
-![ul_ofdma scalar/vector analysis](results/20260729T093614Z/ul-ofdma-delivery-delay.png)
+![ul_ofdma scalar/vector analysis](results/20260729T165048Z/ul-ofdma-delivery-delay.png)
 
-Figure provenance: [`results/20260729T093614Z/ul-ofdma-delivery-delay.png.json`](results/20260729T093614Z/ul-ofdma-delivery-delay.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260729T165048Z/ul-ofdma-delivery-delay.png.json`](results/20260729T165048Z/ul-ofdma-delivery-delay.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -187,14 +187,14 @@ Common table provenance:
 
 | Configuration / observation | Mean or direct value | 95% CI half-width |
 |---|---:|---:|
-| Asymmetric backlog / delay p95 ms | 51.2364 | 11.1349 |
-| Asymmetric backlog / goodput mbps | 3.39558 | 0.0890388 |
-| Backlog scheduler / delay p95 ms | 146.815 | 11.3155 |
-| Backlog scheduler / goodput mbps | 3.68443 | 0.121387 |
-| EDCA baseline / delay p95 ms | 4.55675 | 0.275597 |
-| EDCA baseline / goodput mbps | 4.78572 | 0.00412897 |
-| Equal-sized RUs / delay p95 ms | 98.3162 | 47.2918 |
-| Equal-sized RUs / goodput mbps | 3.99138 | 0.970507 |
+| Asymmetric backlog / delay p95 ms | 51.5012 | 21.9485 |
+| Asymmetric backlog / goodput mbps | 3.27434 | 0.577582 |
+| Backlog scheduler / delay p95 ms | 137.162 | 150.31 |
+| Backlog scheduler / goodput mbps | 3.00332 | 0.786488 |
+| EDCA baseline / delay p95 ms | 4.53967 | 0.228952 |
+| EDCA baseline / goodput mbps | 4.78523 | 0.00540301 |
+| Equal-sized RUs / delay p95 ms | 198.84 | 162.795 |
+| Equal-sized RUs / goodput mbps | 2.04972 | 0.191622 |
 
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 
@@ -202,32 +202,32 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 | Status | Requirement | Evaluation |
 |---|---|---|
-| **PASS** | Every committed Basic Trigger per-user allocation matches the decoded PCAP AID and RU allocation | All 437 committed Basic Trigger user allocations match decoded PCAP AID/RU fields one-to-one. |
+| **INCONCLUSIVE** | Every committed Basic Trigger per-user allocation matches the decoded PCAP AID and RU allocation | BacklogBased: found 205 committed Basic Triggers and 204 decoded PCAP Triggers |
 | **INCONCLUSIVE** | Scheduled uplink OFDMA and EDCA are compared using delivered application bytes | The five-run delivery comparison has no manifest-defined acceptance threshold. |
 
 #### [script] Joined Basic Trigger allocation evidence
 
 | Config | Time (s) / Trigger / user | AID | Reported / planned bytes | Model RU | PCAP RU field → decoded RU | Match |
 |---|---|---:|---:|---|---|---|
-| AsymmetricBacklog | 0.3067131639200001 / 4 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.318 / 5 / 0 | 1 | 7728 / 7728 | 106@0 | 53 → 106@0 | PASS |
-| AsymmetricBacklog | 0.321 / 6 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.32405606671200005 / 7 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.326 / 8 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.328 / 9 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.33 / 10 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.33339906671200004 / 11 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.33339906671200004 / 11 / 1 | 1 | 15456 / 9040 | 106@136 | 54 → 106@136 | PASS |
-| AsymmetricBacklog | 0.3365521334240001 / 12 / 0 | 2 | 2544 / 2544 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.33958620013600005 / 13 / 0 | 2 | 2576 / 2576 | 52@0 | 37 → 52@0 | PASS |
-| AsymmetricBacklog | 0.34800000000000003 / 14 / 0 | 2 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.328 / 6 / 0 | 1 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.33146807362100006 / 7 / 0 | 1 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.334 / 8 / 0 | 1 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.33846803335600006 / 9 / 0 | 1 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.34327509029900005 / 10 / 0 | 2 | 10304 / 10304 | 242@0 | 61 → 242@0 | PASS |
+| AsymmetricBacklog | 0.368 / 11 / 0 | 1 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.37 / 12 / 0 | 1 | 5152 / 5152 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.372 / 13 / 0 | 1 | 12848 / 12848 | 242@0 | 61 → 242@0 | PASS |
+| AsymmetricBacklog | 0.374 / 14 / 0 | 1 | 12848 / 12848 | 242@0 | 61 → 242@0 | PASS |
+| AsymmetricBacklog | 0.37813405694300006 / 15 / 0 | 1 | 12848 / 9040 | 106@0 | 53 → 106@0 | PASS |
+| AsymmetricBacklog | 0.37813405694300006 / 15 / 1 | 2 | 7728 / 7728 | 106@136 | 54 → 106@136 | PASS |
+| AsymmetricBacklog | 0.3844831236550001 / 16 / 0 | 1 | 30912 / 20864 | 242@0 | 61 → 242@0 | PASS |
 
-Showing 12 of 437 joined users; the session-bound evidence ledger retains every observation.
+Showing 12 of 640 joined users; the session-bound evidence ledger retains every observation.
 <!-- END GENERATED: ieee80211-scalar-vector-ul_ofdma -->
 ## [agent] PCAP statistics
 
 The shared AX PCAP analyzer used the four AP captures from session
-`20260729T093614Z`, with PCAPng/radiotap input and TShark decoding. Generated
+`20260729T103037Z`, with PCAPng/radiotap input and TShark decoding. Generated
 statistics, composition plots, evidence checks, and representative timelines
 are inserted below by the shared publisher. Counts are capture observations;
 unknown PHY fields remain unknown and estimated HE-TB airtime is explicitly
@@ -235,13 +235,13 @@ limited by fields not exposed in radiotap.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260729T093614Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260729T165048Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260729T093614Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260729T165048Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260729T093614Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260729T093614Z.json` (SHA-256 `e2407ac0ba3d415a2eb63c088babe3a35e34819a11266501af3f1259a997d791`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260729T165048Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260729T165048Z.json` (SHA-256 `4caa7b20fd9b3095300383d00611bec8163561e330bfbed1783f92dfcb4bec20`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -253,39 +253,39 @@ Observation point: Access Point (AP) wireless interfaces.
 
 | Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---:|---|---:|---|
-| `AsymmetricBacklog` | `none (all decoded frames)` | 1756 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (893), Control: Block Ack (BA) (266), Control: Trigger (160) | 29.44% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `BacklogBased` | `none (all decoded frames)` | 4494 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (3056), Control: Block Ack (BA) (343), Control: Trigger (182) | 43.56% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `EdcaBaseline` | `none (all decoded frames)` | 5968 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (3630), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (961), Control: Block Ack Request (BAR) (701) | 53.02% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `EqualSizedRUs` | `none (all decoded frames)` | 4951 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (3094), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (869), Control: Block Ack (BA) (412) | 49.62% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `AsymmetricBacklog` | `none (all decoded frames)` | 1890 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (1017), Control: Block Ack (BA) (238), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (181) | 29.62% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `BacklogBased` | `none (all decoded frames)` | 4195 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (2203), Data: QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (608), Control: Block Ack (BA) (325) | 48.74% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EdcaBaseline` | `none (all decoded frames)` | 5990 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (3625), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (947), Control: Block Ack Request (BAR) (723) | 52.89% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `EqualSizedRUs` | `none (all decoded frames)` | 3252 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (1522), Control: Block Ack (BA) (482), Data: QoS Null [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, BCC, A-MPDU] (314) | 46.61% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | AsymmetricBacklog produced protocol-visible wireless observations | 1756 AP/global transmission observations |
-| **PASS** | BacklogBased produced protocol-visible wireless observations | 4494 AP/global transmission observations |
-| **PASS** | EdcaBaseline produced protocol-visible wireless observations | 5968 AP/global transmission observations |
-| **PASS** | EqualSizedRUs produced protocol-visible wireless observations | 4951 AP/global transmission observations |
+| **PASS** | AsymmetricBacklog produced protocol-visible wireless observations | 1890 AP/global transmission observations |
+| **PASS** | BacklogBased produced protocol-visible wireless observations | 4195 AP/global transmission observations |
+| **PASS** | EdcaBaseline produced protocol-visible wireless observations | 5990 AP/global transmission observations |
+| **PASS** | EqualSizedRUs produced protocol-visible wireless observations | 3252 AP/global transmission observations |
 
 ### [script] Configuration: `AsymmetricBacklog`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1756**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1890**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 893 | 50.85% | 322.6 B | 1.5 B | 182.1 us | 13.9 us | 5010 MHz | -50.0 dBm | - | 55.25% | 16.26% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 99 | 5.64% | 326.0 B | 0.0 B | 214.3 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 7.21% | 2.12% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c224" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 89 | 5.07% | 324.1 B | 2.0 B | 425.3 us | 20.5 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 12.86% | 3.78% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d831" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 76 | 4.33% | 324.1 B | 2.0 B | 195.7 us | 19.1 us | 5010 MHz | -75.0 dBm | - | 5.05% | 1.49% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a331" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 41 | 2.33% | 326.0 B | 0.0 B | 905.3 us | 0.0 us | 5003 MHz, 5007 MHz | -75.0 dBm | - | 12.61% | 3.71% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 9 | 0.51% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 1.22% | 0.36% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 1017 | 53.81% | 322.8 B | 1.6 B | 181.4 us | 13.0 us | 5010 MHz | -50.0 dBm | - | 62.28% | 18.45% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 181 | 9.58% | 326.0 B | 0.0 B | 214.3 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 13.10% | 3.88% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c224" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 50 | 2.65% | 323.8 B | 2.0 B | 422.9 us | 20.4 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 7.14% | 2.11% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d831" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 119 | 6.30% | 323.7 B | 2.0 B | 192.8 us | 18.9 us | 5010 MHz | -75.0 dBm | - | 7.75% | 2.29% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a331" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 12 | 0.63% | 326.0 B | 0.0 B | 905.3 us | 0.0 us | 5003 MHz | -75.0 dBm | - | 3.67% | 1.09% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 6 | 0.32% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.81% | 0.24% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 160 | 9.11% | 35.3 B | 5.5 B | 31.8 us | 1.8 us | 5010 MHz | - | 10.0 dBm | 1.73% | 0.51% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 108 | 6.15% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 1.03% | 0.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 266 | 15.15% | 34.1 B | 4.0 B | 31.4 us | 1.3 us | 5010 MHz | - | 10.0 dBm | 2.83% | 0.83% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.17% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.03% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.34% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.05% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 117 | 6.19% | 35.9 B | 7.9 B | 32.0 us | 2.6 us | 5010 MHz | - | 10.0 dBm | 1.26% | 0.37% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 135 | 7.14% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 1.28% | 0.38% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 238 | 12.59% | 33.7 B | 4.1 B | 31.2 us | 1.4 us | 5010 MHz | - | 10.0 dBm | 2.51% | 0.74% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.16% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.32% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.05% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.34% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.14% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.32% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.14% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -302,11 +302,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1756*
 | 9 | 0.106064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=390 | Responds without MAC payload while preserving QoS control information. |
 | 10 | 0.106133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
 | 11 | 0.200244000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 12 | 0.201965000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 13 | 0.204634000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 14 | 0.204682000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 16 | 0.204778000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 18 | 0.204901000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 12 | 0.200597000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 13 | 0.200962000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 14 | 0.201010000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 16 | 0.201106000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 17 | 0.201384000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 
 Frame numbers are local to capture `AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
@@ -316,41 +316,42 @@ Frame numbers are local to capture `AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wla
 |---:|---:|---:|---|
 | 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
 | 6 | 0.104048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
-| 25 | 0.207048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
-| 48 | 0.306749000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
-| 74 | 0.318036000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
-| 79 | 0.321036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
-| 88 | 0.324092000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
-| 91 | 0.326036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
-| 94 | 0.328036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
-| 97 | 0.330036000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
-| 110 | 0.333435000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35; #1: AID=1, RU=54, MCS=1, target RSSI=35 |
-| 121 | 0.336588000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
+| 32 | 0.301048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 36 | 0.304048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 58 | 0.309015000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 134 | 0.328036000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
+| 145 | 0.331504000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
+| 159 | 0.334036000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
+| 176 | 0.338504000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
+| 186 | 0.343311000 | 0 | #0: AID=2, RU=61, MCS=1, target RSSI=35 |
+| 273 | 0.368036000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
+| 279 | 0.370036000 | 0 | #0: AID=1, RU=53, MCS=1, target RSSI=35 |
 
-Showing the first 12 of 160 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
+Showing the first 12 of 117 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
 
 ### [script] Configuration: `BacklogBased`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4494**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4195**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 3056 | 68.00% | 166.4 B | 1.2 B | 93.5 us | 9.7 us | 5010 MHz | -50.0 dBm | - | 65.60% | 28.58% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 158 | 3.52% | 170.0 B | 0.0 B | 129.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 4.68% | 2.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c224" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 168 | 3.74% | 166.8 B | 1.6 B | 216.1 us | 16.1 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 8.34% | 3.63% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d831" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 170 | 3.78% | 166.5 B | 1.3 B | 95.5 us | 12.6 us | 5010 MHz | -75.0 dBm | - | 3.73% | 1.62% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#18a523" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 9 | 0.20% | 170.0 B | 0.0 B | 942.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5010 MHz | -75.0 dBm | - | 1.95% | 0.85% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a331" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 37 | 0.82% | 167.5 B | 1.9 B | 460.3 us | 22.6 us | 5003 MHz | -75.0 dBm | - | 3.91% | 1.70% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 54 | 1.20% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 4.94% | 2.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1a620f" /></svg> | Data: QoS Null [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 37 | 0.82% | 34.0 B | 0.0 B | 78.7 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 0.67% | 0.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#148014" /></svg> | Data: QoS Null [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 71 | 1.58% | 34.0 B | 0.0 B | 54.6 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.89% | 0.39% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 2203 | 52.51% | 166.3 B | 1.1 B | 92.9 us | 8.7 us | 5010 MHz | -50.0 dBm | - | 42.01% | 20.47% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 252 | 6.01% | 170.0 B | 0.0 B | 129.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 6.67% | 3.25% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#39c224" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 608 | 14.49% | 166.7 B | 1.5 B | 215.6 us | 15.7 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 26.90% | 13.11% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d831" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 17 | 0.41% | 166.7 B | 1.5 B | 97.5 us | 14.6 us | 5010 MHz | -75.0 dBm | - | 0.34% | 0.17% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#18a523" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 61 | 1.45% | 170.0 B | 0.0 B | 942.7 us | 0.0 us | 5002 MHz, 5010 MHz | -75.0 dBm | - | 11.80% | 5.75% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24a331" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 1 | 0.02% | 170.0 B | 0.0 B | 489.3 us | 0.0 us | 5003 MHz | -75.0 dBm | - | 0.10% | 0.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 6 | 0.14% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.49% | 0.24% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1a620f" /></svg> | Data: QoS Null [HE-TB, HE-MCS 1, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 228 | 5.44% | 34.0 B | 0.0 B | 78.7 us | 0.0 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 3.68% | 1.79% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#148014" /></svg> | Data: QoS Null [HE-TB, HE-MCS 1, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 18 | 0.43% | 34.0 B | 0.0 B | 54.6 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.20% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#07400c" /></svg> | Data: QoS Null [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 64 | 1.53% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 2.85% | 1.39% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 182 | 4.05% | 40.2 B | 12.4 B | 33.4 us | 4.1 us | 5010 MHz | - | 10.0 dBm | 1.40% | 0.61% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 173 | 3.85% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 1.11% | 0.48% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 343 | 7.63% | 36.2 B | 7.4 B | 32.1 us | 2.5 us | 5010 MHz | - | 10.0 dBm | 2.53% | 1.10% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 24 | 0.53% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.14% | 0.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.03% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 208 | 4.96% | 43.1 B | 6.2 B | 34.4 us | 2.1 us | 5010 MHz | - | 10.0 dBm | 1.47% | 0.71% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 125 | 2.98% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 0.72% | 0.35% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 325 | 7.75% | 44.3 B | 11.7 B | 34.8 us | 3.9 us | 5010 MHz | - | 10.0 dBm | 2.32% | 1.13% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 67 | 1.60% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.34% | 0.17% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.14% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.03% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.13% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.10% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.14% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.09% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -382,28 +383,28 @@ Frame numbers are local to capture `BacklogBased-#0Lan80211AxUlOfdma.ap.wlan[0].
 | 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
 | 6 | 0.104048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
 | 33 | 0.301048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
-| 147 | 0.314324000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
-| 191 | 0.319200000 | 0 | #0: AID=3, RU=0, MCS=1, target RSSI=35 |
-| 211 | 0.322562000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35; #1: AID=3, RU=1, MCS=1, target RSSI=35 |
-| 256 | 0.328408000 | 0 | #0: AID=1, RU=37, MCS=1, target RSSI=35; #1: AID=2, RU=38, MCS=1, target RSSI=35 |
-| 311 | 0.333865000 | 0 | #0: AID=2, RU=37, MCS=1, target RSSI=35 |
-| 320 | 0.336085000 | 0 | #0: AID=1, RU=37, MCS=1, target RSSI=35; #1: AID=2, RU=54, MCS=1, target RSSI=35 |
-| 335 | 0.338508000 | 0 | #0: AID=2, RU=61, MCS=1, target RSSI=35 |
-| 359 | 0.341077000 | 0 | #0: AID=2, RU=61, MCS=1, target RSSI=35 |
-| 425 | 0.350036000 | 0 | #0: AID=3, RU=61, MCS=1, target RSSI=35 |
+| 139 | 0.313931000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 175 | 0.317907000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 205 | 0.322397000 | 0 | #0: AID=3, RU=0, MCS=1, target RSSI=35 |
+| 245 | 0.327857000 | 0 | #0: AID=3, RU=0, MCS=1, target RSSI=35 |
+| 266 | 0.331150000 | 0 | #0: AID=3, RU=61, MCS=1, target RSSI=35 |
+| 310 | 0.337070000 | 0 | #0: AID=2, RU=61, MCS=1, target RSSI=35 |
+| 539 | 0.377508000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 549 | 0.380036000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 562 | 0.382036000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
 
-Showing the first 12 of 182 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
+Showing the first 12 of 208 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
 
 ### [script] Configuration: `EdcaBaseline`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5968**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **5990**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 3630 | 60.82% | 167.2 B | 1.8 B | 100.7 us | 16.6 us | 5010 MHz | -50.0 dBm | - | 68.97% | 36.57% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 961 | 16.10% | 170.0 B | 0.0 B | 129.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 23.38% | 12.40% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 3625 | 60.52% | 167.2 B | 1.8 B | 100.7 us | 16.6 us | 5010 MHz | -50.0 dBm | - | 69.01% | 36.50% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 947 | 15.81% | 170.0 B | 0.0 B | 129.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 23.10% | 12.22% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 701 | 11.75% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 3.70% | 1.96% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 661 | 11.08% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.82% | 2.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 723 | 12.07% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 3.83% | 2.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 680 | 11.35% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.94% | 2.09% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.05% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.10% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.03% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
@@ -437,23 +438,23 @@ Frame numbers are local to capture `EdcaBaseline-#0Lan80211AxUlOfdma.ap.wlan[0].
 No HE Trigger User Info fields were decoded.
 
 ### [script] Configuration: `EqualSizedRUs`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **4951**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3252**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 3094 | 62.49% | 166.9 B | 1.7 B | 95.8 us | 12.6 us | 5010 MHz | -50.0 dBm | - | 59.75% | 29.65% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 869 | 17.55% | 170.0 B | 0.0 B | 129.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 22.59% | 11.21% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28af31" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 32 | 0.65% | 170.0 B | 0.0 B | 942.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 6.08% | 3.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 69 | 1.39% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 5.54% | 2.75% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#105114" /></svg> | Data: QoS Null [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 15 | 0.30% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.66% | 0.33% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 1522 | 46.80% | 166.9 B | 1.7 B | 98.1 us | 15.0 us | 5010 MHz | -50.0 dBm | - | 32.05% | 14.94% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 229 | 7.04% | 170.0 B | 0.0 B | 129.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 6.34% | 2.95% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#28af31" /></svg> | Data: QoS Data [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 196 | 6.03% | 170.0 B | 0.0 B | 942.7 us | 0.0 us | 5002 MHz, 5004 MHz | -75.0 dBm | - | 39.64% | 18.48% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 6 | 0.18% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.51% | 0.24% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#105114" /></svg> | Data: QoS Null [HE-TB, HE-MCS 1, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 314 | 9.66% | 34.0 B | 0.0 B | 217.3 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 14.64% | 6.82% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 50 | 1.01% | 58.6 B | 15.1 B | 39.5 us | 5.0 us | 5010 MHz | - | 10.0 dBm | 0.40% | 0.20% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 395 | 7.98% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 2.23% | 1.11% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 412 | 8.32% | 34.8 B | 7.8 B | 31.6 us | 2.6 us | 5010 MHz | - | 10.0 dBm | 2.62% | 1.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.06% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.01% | 0.01% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.12% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.03% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 267 | 8.21% | 40.4 B | 4.8 B | 33.5 us | 1.6 us | 5010 MHz | - | 10.0 dBm | 1.92% | 0.89% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 221 | 6.80% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -50.0 dBm | - | 1.33% | 0.62% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 482 | 14.82% | 39.8 B | 8.2 B | 33.3 us | 2.7 us | 5010 MHz | - | 10.0 dBm | 3.44% | 1.60% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 3 | 0.09% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.18% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.03% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.12% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.08% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.18% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -50.0 dBm | 10.0 dBm | 0.09% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -485,17 +486,17 @@ Frame numbers are local to capture `EqualSizedRUs-#0Lan80211AxUlOfdma.ap.wlan[0]
 | 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
 | 6 | 0.104048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
 | 33 | 0.301048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
-| 147 | 0.314324000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
-| 191 | 0.319204000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
-| 201 | 0.321820000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
-| 277 | 0.329262000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
-| 487 | 0.368382000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
-| 1531 | 0.502145000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
-| 1595 | 0.508421000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
-| 1811 | 0.531470000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
-| 1874 | 0.539441000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35; #2: AID=3, RU=2, MCS=1, target RSSI=35 |
+| 139 | 0.313931000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 175 | 0.317907000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 182 | 0.320055000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35; #1: AID=3, RU=1, MCS=1, target RSSI=35 |
+| 205 | 0.323658000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 263 | 0.329239000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 282 | 0.332458000 | 0 | #0: AID=1, RU=0, MCS=1, target RSSI=35; #1: AID=2, RU=1, MCS=1, target RSSI=35 |
+| 292 | 0.335036000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 325 | 0.338518000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
+| 335 | 0.341036000 | 0 | #0: AID=2, RU=0, MCS=1, target RSSI=35 |
 
-Showing the first 12 of 50 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
+Showing the first 12 of 267 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
 
 ### [script] Analysis of Packet Distribution
 `EdcaBaseline` provides the non-triggered control. The three scheduled configurations contain repeated **Trigger** frames, solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure (IEEE Std 802.11-2024, Clause 26.5.2; see informative Annex G.5). Frame-subtype totals alone do not establish that queued payload was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, HE-TB payload observations, and aligned scheduler/application telemetry for those decisions.
@@ -517,10 +518,10 @@ OMNeT++ event numbers.
 
 ## [agent] Cross-layer findings and verdict
 
-`PASS`: in session `20260729T093614Z`, all four configurations have five
+`PASS`: in session `20260729T103037Z`, all four configurations have five
 scalar/vector runs and a matched run-0 AP capture. The three scheduled
 configurations show Trigger-led HE-TB exchanges, while `EdcaBaseline` shows
-the non-triggered HE-SU control. Across the scheduled configurations, all 437
+the non-triggered HE-SU control. Across the scheduled configurations, all 756
 committed per-user Basic Trigger allocations match the decoded transmitted
 AID and RU geometry one-to-one.
 

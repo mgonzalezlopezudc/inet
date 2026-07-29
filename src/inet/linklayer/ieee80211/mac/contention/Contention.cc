@@ -19,7 +19,8 @@ simsignal_t Contention::stateChangedSignal = registerSignal("stateChanged");
 Register_Enum(Contention::State,
         (Contention::IDLE,
          Contention::DEFER,
-         Contention::IFS_AND_BACKOFF));
+         Contention::IFS_AND_BACKOFF,
+         Contention::SUSPENDED));
 
 Define_Module(Contention);
 
@@ -45,6 +46,7 @@ void Contention::initialize(int stage)
         WATCH(ifs);
         WATCH(eifs);
         WATCH(slotTime);
+        WATCH(contentionWindow);
         WATCH(endEifsTime);
         WATCH(backoffSlots);
         WATCH(scheduledTransmissionTime);
@@ -53,6 +55,7 @@ void Contention::initialize(int stage)
         WATCH(backoffOptimizationDelta);
         WATCH(mediumFree);
         WATCH(backoffOptimization);
+        WATCH(backoffGenerated);
         WATCH(startTime);
         updateDisplayString(-1);
     }
@@ -74,15 +77,30 @@ void Contention::startContention(int cw, simtime_t ifs, simtime_t eifs, simtime_
     ASSERT(ifs >= 0 && eifs >= 0 && slotTime >= 0 && cw >= 0);
     Enter_Method("startContention");
     cancelEvent(channelGrantedEvent);
-    ASSERT(fsm.getState() == IDLE);
+    ASSERT(fsm.getState() == IDLE || fsm.getState() == SUSPENDED);
+    ASSERT(this->callback == nullptr);
+    contentionWindow = cw;
     this->ifs = ifs;
     this->eifs = eifs;
     this->slotTime = slotTime;
     this->callback = callback;
-    backoffSlots = intrand(cw + 1);
-    emit(backoffPeriodGeneratedSignal, backoffSlots);
+    backoffGenerated = false;
+    if (fsm.getState() == SUSPENDED) {
+        EV_DETAIL << "Contention request is pending while contention is suspended.\n";
+        return;
+    }
+    generateBackoffPeriod();
     EV_DETAIL << "Starting contention: cw = " << cw << ", slots = " << backoffSlots << ", slotTime = " << slotTime << ", ifs = " << ifs << ", eifs = " << eifs << endl;
     handleWithFSM(START);
+}
+
+void Contention::generateBackoffPeriod()
+{
+    ASSERT(contentionWindow >= 0);
+    ASSERT(!backoffGenerated);
+    backoffSlots = intrand(contentionWindow + 1);
+    backoffGenerated = true;
+    emit(backoffPeriodGeneratedSignal, backoffSlots);
 }
 
 void Contention::handleWithFSM(EventType event)
@@ -103,6 +121,12 @@ void Contention::handleWithFSM(EventType event)
                     DEFER,
                     ;
                     );
+            FSMA_Event_Transition(Suspend,
+                    event == SUSPEND,
+                    SUSPENDED,
+                    if (callback != nullptr)
+                        callback->expectedChannelAccess(-1);
+                    );
             FSMA_Ignore_Event(event==MEDIUM_STATE_CHANGED);
             FSMA_Ignore_Event(event==CORRUPTED_FRAME_RECEIVED);
             FSMA_Fail_On_Unhandled_Event();
@@ -118,6 +142,11 @@ void Contention::handleWithFSM(EventType event)
                     event == CORRUPTED_FRAME_RECEIVED,
                     DEFER,
                     endEifsTime = simTime() + eifs;
+                    );
+            FSMA_Event_Transition(Suspend,
+                    event == SUSPEND,
+                    SUSPENDED,
+                    ;
                     );
             FSMA_Fail_On_Unhandled_Event();
         }
@@ -140,6 +169,41 @@ void Contention::handleWithFSM(EventType event)
                     IFS_AND_BACKOFF,
                     switchToEifs();
                     );
+            FSMA_Event_Transition(Suspend,
+                    event == SUSPEND,
+                    SUSPENDED,
+                    cancelTransmissionRequest();
+                    computeRemainingBackoffSlots();
+                    );
+            FSMA_Fail_On_Unhandled_Event();
+        }
+        FSMA_State(SUSPENDED) {
+            FSMA_Enter(mac->sendDownPendingRadioConfigMsg());
+            FSMA_Event_Transition(Resume-idle,
+                    event == RESUME && callback == nullptr,
+                    IDLE,
+                    ;
+                    );
+            FSMA_Event_Transition(Resume-IFS-and-Backoff,
+                    event == RESUME && callback != nullptr && mediumFree,
+                    IFS_AND_BACKOFF,
+                    if (!backoffGenerated)
+                        generateBackoffPeriod();
+                    scheduleTransmissionRequest();
+                    );
+            FSMA_Event_Transition(Resume-defer,
+                    event == RESUME && callback != nullptr && !mediumFree,
+                    DEFER,
+                    if (!backoffGenerated)
+                        generateBackoffPeriod();
+                    );
+            FSMA_Event_Transition(Remember-EIFS,
+                    event == CORRUPTED_FRAME_RECEIVED,
+                    SUSPENDED,
+                    suspendedCorruptedFrameTime = simTime();
+                    );
+            FSMA_Ignore_Event(event==SUSPEND);
+            FSMA_Ignore_Event(event==MEDIUM_STATE_CHANGED);
             FSMA_Fail_On_Unhandled_Event();
         }
     }
@@ -174,10 +238,39 @@ void Contention::handleMessage(cMessage *msg)
         auto grantedCallback = callback;
         ASSERT(grantedCallback != nullptr);
         callback = nullptr;
+        backoffGenerated = false;
         grantedCallback->channelAccessGranted();
     }
     else
         throw cRuntimeError("Unknown msg");
+}
+
+void Contention::suspendContention()
+{
+    Enter_Method("suspendContention");
+    // IEEE Std 802.11-2024, 26.2.7 and 10.23.2.2: an EDCAF whose MU
+    // AIFSN is 0 is suspended without modifying its CW or backoff counter.
+    if (fsm.getState() != SUSPENDED) {
+        cancelEvent(channelGrantedEvent);
+        handleWithFSM(SUSPEND);
+    }
+}
+
+void Contention::resumeContention(simtime_t ifs, simtime_t eifs, simtime_t slotTime)
+{
+    Enter_Method("resumeContention");
+    ASSERT(ifs >= 0 && eifs >= 0 && slotTime >= 0);
+    if (fsm.getState() == SUSPENDED) {
+        this->ifs = ifs;
+        this->eifs = eifs;
+        this->slotTime = slotTime;
+        if (suspendedCorruptedFrameTime >= SIMTIME_ZERO) {
+            endEifsTime = std::max(endEifsTime,
+                    suspendedCorruptedFrameTime + eifs);
+            suspendedCorruptedFrameTime = -1;
+        }
+        handleWithFSM(RESUME);
+    }
 }
 
 void Contention::corruptedFrameReceived()
@@ -208,8 +301,8 @@ void Contention::scheduleTransmissionRequest()
 {
     ASSERT(mediumFree);
     simtime_t now = simTime();
-    bool useEifs = endEifsTime > now + ifs;
-    simtime_t waitInterval = (useEifs ? eifs : ifs) + backoffSlots * slotTime;
+    simtime_t waitInterval = std::max(ifs, endEifsTime - now) +
+            backoffSlots * slotTime;
     EV_INFO << "Scheduling contention end: backoffslots = " << backoffSlots << ", slotTime = " << slotTime;
     if (backoffOptimization && fsm.getState() == IDLE) {
         // we can pretend the frame has arrived into the queue a little bit earlier, and may be able to start transmitting immediately
@@ -257,6 +350,8 @@ const char *Contention::getEventName(EventType event)
 #define CASE(x)   case x: return #x;
     switch (event) {
         CASE(START);
+        CASE(SUSPEND);
+        CASE(RESUME);
         CASE(MEDIUM_STATE_CHANGED);
         CASE(CORRUPTED_FRAME_RECEIVED);
         CASE(CHANNEL_ACCESS_GRANTED);

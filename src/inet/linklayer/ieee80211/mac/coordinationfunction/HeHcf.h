@@ -44,6 +44,7 @@ class INET_API HeTbResponseEvent : public cObject
         NO_FITTING_PAYLOAD,
         BUFFER_STATUS_REPORTED,
         NDP_FEEDBACK_REPORTED,
+        BLOCK_ACK_REQUESTED,
     };
 
     uint32_t triggerId = 0;
@@ -167,10 +168,18 @@ class INET_API HeHcf : public Hcf
     simsignal_t peerOperatingModeChannelWidthSignal;
     simsignal_t peerOperatingModeUlMuDisableSignal;
     struct TriggeredUlExchange {
+        enum class RecoveryKind {
+            NONE,
+            COMPRESSED_BLOCK_ACK_REQUEST,
+        };
+
         Tid tid = 0;
         queueing::IPacketQueue *sourceQueue = nullptr;
         std::vector<Packet *> packets;
         std::vector<int> sequenceNumbers;
+        RecoveryKind recoveryKind = RecoveryKind::NONE;
+        AccessCategory recoveryAccessCategory = AC_BE;
+        Ptr<const Ieee80211CompressedBlockAckReq> blockAckReq;
         physicallayer::Ieee80211HeRu ru;
         bool randomAccess = false;
         simtime_t expectedResponseTime = SIMTIME_ZERO;
@@ -221,6 +230,10 @@ class INET_API HeHcf : public Hcf
             IIeee80211HeUlTriggerPolicy::TriggerType triggerType);
     static Packet *buildHeTbAmpdu(const std::vector<Packet *>& mpdus);
     virtual void retryPendingTriggeredUlExchanges();
+    virtual void processFailedTriggeredUlBlockAckReq(TriggeredUlExchange& exchange);
+    virtual void processReceivedTriggeredUlBlockAck(
+            TriggeredUlExchange& exchange,
+            const Ptr<const Ieee80211CompressedBlockAck>& blockAck);
     virtual int retireQueuedPacketsForPeer(const MacAddress& peer);
     virtual int retireInProgressPacketsForPeer(const MacAddress& peer);
     virtual bool retireQueuedPacket(Packet *packet, const MacAddress& peer);
@@ -289,6 +302,10 @@ class INET_API HeHcf : public Hcf
     virtual void originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastTransmittedPacket) override;
     virtual void originatorProcessFailedFrame(Packet *packet) override;
     virtual uint16_t getAssociationId(const MacAddress& address) const;
+    virtual const Ptr<Ieee80211CompressedBlockAck> processTriggeredUlBlockAckReq(
+            Packet *packet,
+            const Ptr<const Ieee80211CompressedBlockAckReq>& blockAckReq,
+            uint16_t aid);
     virtual bool getPeerOperatingMode(const MacAddress& address, Ieee80211HeOperatingMode& mode) const;
     void handleDlMuPlanningFailure(AccessCategory ac);
     virtual void processTriggeredUlFrame(Packet *packet, const Ptr<const Ieee80211DataHeader>& header, uint16_t aid);
