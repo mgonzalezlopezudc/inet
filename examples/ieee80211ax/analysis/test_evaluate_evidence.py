@@ -1,8 +1,13 @@
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
+
+import pandas as pd
 
 from evaluate_evidence import (
+    MissingDiagnosticTelemetryError,
+    _trigger_decision_rows,
     build_ledger,
     decode_he_trigger_ru,
     evaluate_matched_delivery,
@@ -148,6 +153,64 @@ class UlTriggerAllocationEvidenceTest(unittest.TestCase):
 
 
 class EvidenceLedgerProvenanceTest(unittest.TestCase):
+    def test_empty_diagnostic_vector_reports_rerun_guidance(self):
+        condition = SimpleNamespace(
+            config="BacklogBased",
+            _read=Mock(return_value=object()),
+        )
+        evaluation = {
+            "diagnostic_run": 0,
+            "module": "**.ulCoordinator",
+            "vectors": {"trigger_id": "triggerId:vector"},
+        }
+        with patch(
+            "evaluate_evidence.scave_results.get_vectors",
+            return_value=pd.DataFrame(),
+        ):
+            with self.assertRaises(MissingDiagnosticTelemetryError) as raised:
+                _trigger_decision_rows(condition, evaluation)
+        message = str(raised.exception)
+        self.assertIn("BacklogBased/triggerId:vector", message)
+        self.assertIn("diagnostic run 0", message)
+        self.assertIn("--exhaustive-vectors", message)
+
+    def test_missing_diagnostic_telemetry_maps_contract_to_not_run(self):
+        manifest = {
+            "groups": {
+                "diagnostic": {"measurement": {"start": 0, "end": 1}},
+            },
+            "evidence_contracts": {
+                "diagnostic": [{
+                    "id": "diagnostic-check",
+                    "kind": "model",
+                    "requirement": "diagnostic telemetry",
+                    "results": ["triggerId"],
+                    "evaluation": {"handler": "ul_trigger_allocation_join"},
+                }],
+            },
+        }
+        condition = SimpleNamespace(
+            measurement=SimpleNamespace(start=0, end=1),
+            provenance=Mock(return_value={"config": "BacklogBased"}),
+        )
+        error = MissingDiagnosticTelemetryError(
+            "BacklogBased", "triggerId:vector", 0
+        )
+        with (
+            patch("evaluate_evidence.resolve_session_id", return_value="session"),
+            patch("evaluate_evidence.conditions_for_group", return_value=[condition]),
+            patch("evaluate_evidence.evaluate_contract", side_effect=error),
+            patch("evaluate_evidence.git_revision", return_value="revision"),
+        ):
+            ledger = build_ledger(
+                manifest, "session", ["diagnostic"], Path("/tmp/manifest.json")
+            )
+        check = ledger["groups"]["diagnostic"]["checks"][0]
+        self.assertEqual(check["status"], "NOT RUN")
+        self.assertEqual(ledger["groups"]["diagnostic"]["status"], "NOT RUN")
+        self.assertEqual(ledger["status_summary"]["NOT RUN"], 1)
+        self.assertIn("--exhaustive-vectors", check["reason"])
+
     def test_ledger_records_the_loaded_manifest_path(self):
         manifest = {
             "groups": {"diagnostic": {"measurement": {"start": 0, "end": 1}}},

@@ -46,6 +46,15 @@ class Evaluation:
             raise ValueError(f"Invalid evidence status {self.status!r}")
 
 
+class MissingDiagnosticTelemetryError(RuntimeError):
+    def __init__(self, config: str, vector: str, diagnostic_run: int) -> None:
+        super().__init__(
+            f"{config}/{vector}: diagnostic telemetry is unavailable for "
+            f"diagnostic run {diagnostic_run}; rerun the campaign with "
+            "--exhaustive-vectors"
+        )
+
+
 def evaluate_mimo_triplets(
     per_run: dict[int, list[tuple[float, int, int, int]]]
 ) -> Evaluation:
@@ -472,7 +481,15 @@ def _trigger_decision_rows(
             omit_empty_vectors=True,
             **QUERY_OPTIONS,
         )
+        if frame.empty:
+            raise MissingDiagnosticTelemetryError(
+                condition.config, name, run_number
+            )
         frame = frame[frame.runnumber.astype(int) == run_number]
+        if frame.empty:
+            raise MissingDiagnosticTelemetryError(
+                condition.config, name, run_number
+            )
         if len(frame) != 1:
             raise RuntimeError(
                 f"{condition.config}/{name}: expected one diagnostic vector "
@@ -633,9 +650,13 @@ def build_ledger(
         conditions = conditions_for_group(manifest, group_name, selected_session)
         checks = []
         for contract in manifest["evidence_contracts"][group_name]:
-            result, filters = evaluate_contract(
-                contract, conditions, selected_session
-            )
+            try:
+                result, filters = evaluate_contract(
+                    contract, conditions, selected_session
+                )
+            except MissingDiagnosticTelemetryError as error:
+                result = Evaluation("NOT RUN", str(error), [])
+                filters = []
             check = {
                 **{key: contract[key] for key in ("id", "kind", "requirement", "results")},
                 "handler": contract["evaluation"]["handler"],
