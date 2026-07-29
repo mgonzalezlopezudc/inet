@@ -1,4 +1,4 @@
 interface:
   display_name: "INET 802.11 Walkthrough Writer"
-  short_description: "Write evidence-backed Wi-Fi walkthroughs"
-  default_prompt: "Use $inet-80211-walkthrough-writer to create or improve an evidence-backed walkthrough.md for this INET IEEE 802.11 example."
+  short_description: "Write concise, script-backed Wi-Fi walkthroughs"
+  default_prompt: "Use $inet-80211-walkthrough-writer to create or improve a concise walkthrough.md that interprets only analysis-script-generated scalar/vector and PCAP evidence."

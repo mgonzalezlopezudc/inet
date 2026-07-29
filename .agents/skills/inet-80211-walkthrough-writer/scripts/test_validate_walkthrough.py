@@ -4,6 +4,8 @@ from validate_walkthrough import (
     has_markdown_table,
     has_plot_or_rationale,
     section_body,
+    strip_generated_blocks,
+    validate_analysis_ownership,
     validate_heading_ownership,
     validate_session_ledger,
 )
@@ -65,6 +67,49 @@ class AnalysisPresentationValidationTest(unittest.TestCase):
         self.assertTrue(validate_session_ledger(
             text.replace("- PCAP: `NOT RUN`\n", "")
         ))
+
+    def test_generated_analysis_is_not_treated_as_agent_content(self):
+        text = (
+            "Intro.\n"
+            "<!-- BEGIN GENERATED: pcap -->\n"
+            "| Frame | Count |\n|---|---:|\n| Data | 2 |\n"
+            "![Packets](packets.png)\n"
+            "<!-- END GENERATED: pcap -->\n"
+            "Interpretation.\n"
+        )
+        authored = strip_generated_blocks(text)
+        self.assertNotIn("| Data |", authored)
+        self.assertNotIn("![Packets]", authored)
+
+    def test_rejects_agent_authored_analysis_presentations(self):
+        base = (
+            "## [agent] Scalar and vector analysis\n\n"
+            "{body}\n\n"
+            "## [agent] PCAP statistics\n\nInterpretation.\n\n"
+            "## [agent] Frame exchange analysis\n\nInterpretation.\n"
+        )
+        table = "| Metric | Value |\n|---|---:|\n| Delay | 1 |\n"
+        self.assertTrue(validate_analysis_ownership(base.format(body=table)))
+        self.assertTrue(validate_analysis_ownership(
+            base.format(body="![Delay](delay.png)")
+        ))
+        self.assertTrue(validate_analysis_ownership(
+            base.format(body="```sh\nopp_scavetool query results.sca\n```")
+        ))
+
+    def test_accepts_script_generated_analysis_with_agent_interpretation(self):
+        text = (
+            "## [agent] Scalar and vector analysis\n\n"
+            "The treatment lowers delay in this scope.\n\n"
+            "<!-- BEGIN GENERATED: scalar -->\n"
+            "### [script] Results\n"
+            "| Metric | Value |\n|---|---:|\n| Delay | 1 |\n"
+            "![Delay](delay.png)\n"
+            "<!-- END GENERATED: scalar -->\n\n"
+            "## [agent] PCAP statistics\n\nInterpretation.\n\n"
+            "## [agent] Frame exchange analysis\n\nInterpretation.\n"
+        )
+        self.assertEqual(validate_analysis_ownership(text), [])
 
 
 if __name__ == "__main__":
