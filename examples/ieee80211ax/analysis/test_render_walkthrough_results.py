@@ -26,6 +26,23 @@ class MetricRowsTest(unittest.TestCase):
         )
         self.assertEqual(rows[1][2:], ["—", "[0, 2]", "—"])
 
+    def test_orders_ul_ofdma_conditions_by_presentation_order(self):
+        rows = metric_rows({
+            "Asymmetric backlog": {"goodput_mbps": {"count": 5, "mean": 4}},
+            "Backlog scheduler": {"goodput_mbps": {"count": 5, "mean": 3}},
+            "EDCA baseline": {"goodput_mbps": {"count": 5, "mean": 1}},
+            "Equal-sized RUs": {"goodput_mbps": {"count": 5, "mean": 2}},
+        })
+        self.assertEqual(
+            [row[0] for row in rows],
+            [
+                "EDCA baseline",
+                "Equal-sized RUs",
+                "Backlog scheduler",
+                "Asymmetric backlog",
+            ],
+        )
+
     def test_summarizes_common_run_counts_and_direct_values(self):
         self.assertEqual(
             independent_runs_summary({

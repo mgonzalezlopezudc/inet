@@ -114,7 +114,7 @@
     "bsr": {
       "scalar_vector_group": "bsr",
       "ini": "bsr/omnetpp.ini",
-      "configurations": ["FreshBsr", "StaleBsr", "ImplicitBsr", "BurstyTraffic"],
+      "configurations": ["FreshBsr", "StaleBsr", "LongTriggerCheck", "BurstyTraffic"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["buffer-status"]
     },
@@ -130,7 +130,7 @@
     "ul_ofdma": {
       "scalar_vector_group": "ul_ofdma",
       "ini": "ul_ofdma/omnetpp.ini",
-      "configurations": ["BacklogBased", "EqualSizedRUs", "EdcaBaseline", "AsymmetricBacklog"],
+      "configurations": ["EdcaBaseline", "EqualSizedRUs", "BacklogBased", "AsymmetricBacklog"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["ofdma"],
       "capture": {

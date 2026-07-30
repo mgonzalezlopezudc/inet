@@ -70,6 +70,7 @@ GROUP_PERFORMANCE_VECTOR_STATISTICS = {
     "dl_sched": ("heStaId", "heScheduledPsduBytes", "heUserPpduDuration"),
     "dl_asym": ("heStaId", "heScheduledPsduBytes", "heUserPpduDuration"),
     "bsr": (
+        "heUlBufferStatusUpdated",
         "heUlBufferStatusReportedBytes",
         "heUlBufferStatusScheduledBytes",
         "heUlTriggerDecisionTriggerId",

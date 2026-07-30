@@ -8,9 +8,11 @@
 #ifndef __INET_HCF_H
 #define __INET_HCF_H
 
+#include <limits>
 #include <map>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Hcca.h"
@@ -157,6 +159,14 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void recordSelectedMode(Packet *packet, const physicallayer::IIeee80211Mode *mode);
     virtual bool isSentByUs(const Ptr<const Ieee80211MacHeader>& header) const;
     virtual bool isForUs(const Ptr<const Ieee80211MacHeader>& header) const;
+
+    static constexpr uint32_t MAX_FINITE_BUFFER_STATUS_BYTES =
+            std::numeric_limits<uint32_t>::max() - 1;
+    static void addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount);
+    uint32_t calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddress& peer,
+            int tid, const std::vector<Packet *>& additionalPackets) const;
+    virtual uint32_t getBufferedTrafficServiceBytes(
+            Edcaf *edcaf, const MacAddress& peer, int tid = -1) const;
 
     // Per-STA queue bank routing (HE OFDMA scheduling)
     virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac);

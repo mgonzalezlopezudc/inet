@@ -395,15 +395,9 @@ void HeHcf::transmitFrame(Packet *packet, simtime_t ifs)
                 // INET models that information directly on the data header.
                 auto tid = dataHeader->getTid();
                 auto ac = mapTidToAccessCategory(tid);
-                auto pendingQueue = edca->getEdcaf(ac)->getPendingQueue();
-                int64_t queueBytes = 0;
-                for (int i = 0; i < pendingQueue->getNumPackets(); i++) {
-                    auto queuedPacket = pendingQueue->getPacket(i);
-                    auto queuedHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                            queuedPacket->peekAtFront<Ieee80211MacHeader>());
-                    if (queuedHeader != nullptr && queuedHeader->getTid() == tid)
-                        queueBytes += queuedPacket->getByteLength();
-                }
+                auto edcaf = edca->getEdcaf(ac);
+                auto queueBytes = getBufferedTrafficServiceBytes(edcaf,
+                        dataHeader->getReceiverAddress(), tid);
                 auto writableHeader = packet->removeAtFront<Ieee80211DataHeader>();
                 if (!writableHeader->getBufferStatusPresent() && !writableHeader->getOperatingModePresent())
                     writableHeader->setChunkLength(writableHeader->getChunkLength() + B(4));

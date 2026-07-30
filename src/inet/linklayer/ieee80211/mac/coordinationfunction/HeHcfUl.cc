@@ -46,6 +46,19 @@
 namespace inet {
 namespace ieee80211 {
 
+uint32_t HeHcf::getBufferedTrafficServiceBytes(
+        Edcaf *edcaf, const MacAddress& peer, int tid) const
+{
+    std::vector<Packet *> triggeredPackets;
+    auto pendingQueue = edcaf->getPendingQueue();
+    for (const auto& entry : triggeredUlExchanges)
+        if (entry.second.sourceQueue == pendingQueue)
+            triggeredPackets.insert(triggeredPackets.end(),
+                    entry.second.packets.begin(), entry.second.packets.end());
+    return calculateBufferedTrafficServiceBytes(
+            edcaf, peer, tid, triggeredPackets);
+}
+
 static physicallayer::Ieee80211HeTxVectorValidationResult createHeTbTxVector(
         const Ieee80211TriggerFrame& trigger, const Ieee80211HeTriggerUserInfo& selected,
         Hz centerFrequency, uint16_t staId, B psduLength,
@@ -1060,7 +1073,7 @@ Packet *HeHcf::buildHeTbAmpdu(const std::vector<Packet *>& mpdus)
 }
 
 Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
-        AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
+        AccessCategory selectedAc, uint8_t selectedTid, uint32_t queueBytes, int availableSlots,
         const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
         uint32_t triggerId, W transmitPower,
         const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
@@ -1082,7 +1095,6 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     AccessCategory blockAckReqAc = AC_BE;
     std::unique_ptr<Packet> responsePacket;
     const bool hadPendingPayload = sourcePacket != nullptr;
-    int64_t reportedQueueBytes = queueBytes;
     if (sourcePacket != nullptr) {
         // 26.5.2.4 requires a QoS Null response when the allocation cannot
         // contain pending data. Check the first MPDU too; the aggregation loop
@@ -1270,11 +1282,6 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
             exchange.packets.push_back(candidate);
             exchange.sequenceNumbers.push_back(writableCandidateHeader->getSequenceNumber().get());
         }
-        for (auto pkt : exchange.packets)
-            reportedQueueBytes = std::max<int64_t>(0, reportedQueueBytes - pkt->getByteLength());
-        auto firstHeader = exchange.packets.front()->removeAtFront<Ieee80211DataHeader>();
-        firstHeader->setBufferStatusQueueSize(reportedQueueBytes);
-        exchange.packets.front()->insertAtFront(firstHeader);
     }
 
     auto finalizeMpdu = [&] (Packet *mpdu, simtime_t durationField) {
@@ -1412,7 +1419,7 @@ Packet *HeHcf::buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IP
     for (auto selectedPacket : exchange.packets)
         event.selectedBytes += selectedPacket->getByteLength();
     event.reportedBytes = blockAckReqMpdu != nullptr ?
-            0 : reportedQueueBytes;
+            0 : queueBytes;
     auto dataHeader = dynamicPtrCast<const Ieee80211DataHeader>(responseHeader);
     event.ackPolicy = dataHeader == nullptr ? -1 : dataHeader->getAckPolicy();
     emitHeTbResponse(event);
@@ -1551,7 +1558,24 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
     bool randomAccess = false;
     bool randomAccessCommitted = false;
     std::optional<HeUlCoordinator::PreparedRandomAccessSelection> randomAccessSelection;
-    int bsrpTid = -1;
+    int reportedTid = -1;
+    auto selectInProgressTrafficToReport = [&] (AccessCategory lowestAc) {
+        for (int ac = AC_VO; ac >= lowestAc; ac--) {
+            auto edcaf = edca->getEdcaf(static_cast<AccessCategory>(ac));
+            auto frames = edcaf->getInProgressFrames();
+            for (int i = 0; i < frames->getLength(); i++) {
+                auto header = dynamicPtrCast<const Ieee80211DataHeader>(
+                        frames->getFrames(i)->peekAtFront());
+                if (header != nullptr && header->getType() == ST_DATA_WITH_QOS &&
+                        header->getReceiverAddress() == mac->getMib()->bssData.bssid) {
+                    selectedAc = static_cast<AccessCategory>(ac);
+                    sourceQueue = edcaf->getPendingQueue();
+                    reportedTid = header->getTid();
+                    return;
+                }
+            }
+        }
+    };
     if (selected != nullptr && trigger->getTriggerType() != IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER &&
             trigger->getTriggerType() != IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
         // 26.5.2.4: an associated non-AP STA responding to a Basic Trigger
@@ -1575,6 +1599,8 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
                 }
             }
         }
+        if (sourcePacket == nullptr)
+            selectInProgressTrafficToReport(preferredAc);
         if (sourceQueue == nullptr) {
             selectedAc = preferredAc;
             sourceQueue = edca->getEdcaf(selectedAc)->getPendingQueue();
@@ -1597,11 +1623,13 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
                 if (dataHeader != nullptr && dataHeader->getType() == ST_DATA_WITH_QOS) {
                     sourceQueue = queue;
                     selectedAc = static_cast<AccessCategory>(ac);
-                    bsrpTid = dataHeader->getTid();
+                    reportedTid = dataHeader->getTid();
                     break;
                 }
             }
         }
+        if (sourceQueue == nullptr)
+            selectInProgressTrafficToReport(AC_BK);
     }
     else if (selected == nullptr && !randomAccessUsers.empty()) {
         // 9.3.1.22 Table 9-52 encodes AID12=0 as RA-RUs for associated STAs.
@@ -1637,7 +1665,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
                 selectedAc = pendingAc;
                 sourceQueue = pendingQueue;
                 if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::BSRP_TRIGGER) {
-                    bsrpTid = pendingTid;
+                    reportedTid = pendingTid;
                     sourcePacket = nullptr;
                 }
                 else {
@@ -1659,7 +1687,7 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         return;
     }
 
-    uint8_t selectedTid = bsrpTid >= 0 ? bsrpTid : 0;
+    uint8_t selectedTid = reportedTid >= 0 ? reportedTid : 0;
     if (sourcePacket != nullptr) {
         auto sourceHeader = dynamicPtrCast<const Ieee80211DataHeader>(
                 sourcePacket->peekAtFront<Ieee80211MacHeader>());
@@ -1686,23 +1714,16 @@ void HeHcf::processReceivedTriggerFrame(Packet *packet, const Ptr<const Ieee8021
         availableSlots = 1;
     if (sourcePacket != nullptr && availableSlots == 0)
         sourcePacket = nullptr;
-    int64_t queueBytes = 0;
+    uint32_t queueBytes = 0;
     if (trigger->getTriggerType() == IIeee80211HeUlTriggerPolicy::NFRP_TRIGGER) {
-        for (int ac = AC_BK; ac <= AC_VO; ac++) {
-            auto queue = edca->getEdcaf(static_cast<AccessCategory>(ac))->getPendingQueue();
-            for (int i = 0; i < queue->getNumPackets(); i++)
-                queueBytes += queue->getPacket(i)->getByteLength();
-        }
+        for (int ac = AC_BK; ac <= AC_VO; ac++)
+            addBufferedTrafficServiceBytes(queueBytes, getBufferedTrafficServiceBytes(
+                    edca->getEdcaf(static_cast<AccessCategory>(ac)),
+                    mac->getMib()->bssData.bssid));
     }
-    else {
-        for (int i = 0; i < sourceQueue->getNumPackets(); i++) {
-            auto queuedPacket = sourceQueue->getPacket(i);
-            auto queuedHeader = dynamicPtrCast<const Ieee80211DataHeader>(
-                    queuedPacket->peekAtFront<Ieee80211MacHeader>());
-            if (queuedHeader != nullptr && queuedHeader->getTid() == selectedTid)
-                queueBytes += queuedPacket->getByteLength();
-        }
-    }
+    else
+        queueBytes = getBufferedTrafficServiceBytes(edca->getEdcaf(selectedAc),
+                mac->getMib()->bssData.bssid, selectedTid);
     TriggeredUlExchange exchange;
     exchange.tid = selectedTid;
     exchange.sourceQueue = sourceQueue;

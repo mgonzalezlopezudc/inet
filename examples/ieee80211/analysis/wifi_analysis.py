@@ -177,6 +177,13 @@ def scalar_configs(document: dict[str, Any], group: str) -> set[str]:
     }
 
 
+def ordered_scalar_configs(document: dict[str, Any], group: str) -> list[str]:
+    return [
+        condition["config"]
+        for condition in document["groups"][group]["conditions"]
+    ]
+
+
 def validate_result_mapping(
     suite: Suite,
     scenario_name: str,
@@ -262,7 +269,7 @@ def inspect_command(args: argparse.Namespace) -> None:
         scalar = {
             "group": group,
             "manifest": relative_path(manifest_path),
-            "configurations": sorted(scalar_configs(document, group)),
+            "configurations": ordered_scalar_configs(document, group),
             "default_runs": int(
                 group_document.get(
                     "expected_repetitions",
@@ -380,8 +387,8 @@ def run_command_handler(args: argparse.Namespace) -> None:
         and scalar_document_value is not None
         and scalar_group is not None
     ):
-        effective_configs = sorted(
-            scalar_configs(scalar_document_value, scalar_group)
+        effective_configs = ordered_scalar_configs(
+            scalar_document_value, scalar_group
         )
 
     write_json(

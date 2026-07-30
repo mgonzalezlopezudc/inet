@@ -634,22 +634,63 @@ def plot_dl(conditions: list[Condition], output: Path) -> None:
 
 
 def plot_bsr(conditions: list[Condition], output: Path) -> None:
+    visible_aids = {1, 2}
     fig, axes = plt.subplots(len(conditions), 1, figsize=(12, 4 * len(conditions)), sharex=True)
     axes = np.atleast_1d(axes)
     for axis, condition in zip(axes, conditions):
         reported = representative_run(condition.vectors("heUlBufferStatusReportedBytes:vector"))
+        reported_aids = representative_run(condition.vectors("heUlBufferStatusUpdated:vector"))
         scheduled_vectors = condition.vectors(
             "heUlBufferStatusScheduledBytes:vector",
             required=False,
             allow_missing_runs=True,
         )
         scheduled = representative_run(scheduled_vectors) if not scheduled_vectors.empty else scheduled_vectors
-        for _, row in reported.iterrows():
-            times, values = crop_vector(row.vectime, row.vecvalue, condition.measurement)
-            axis.step(times, values, where="post", label="reported", alpha=0.8)
-        for _, row in scheduled.iterrows():
-            times, values = crop_vector(row.vectime, row.vecvalue, condition.measurement)
-            axis.step(times, values, where="post", label="scheduled", alpha=0.8)
+        scheduled_aids = representative_run(
+            condition.vectors(
+                "heUlTriggerDecisionAssociationId:vector",
+                required=False,
+                allow_missing_runs=True,
+            )
+        )
+        colors = plt.get_cmap("tab10")
+
+        if len(reported) != len(reported_aids):
+            raise RuntimeError("Reported BSR byte and AID vectors are not aligned")
+        for (_, value_row), (_, aid_row) in zip(reported.iterrows(), reported_aids.iterrows()):
+            if len(value_row.vectime) != len(aid_row.vectime) or not np.array_equal(value_row.vectime, aid_row.vectime):
+                raise RuntimeError("Reported BSR byte and AID vector timestamps are not aligned")
+            for aid in sorted({int(value) for value in aid_row.vecvalue} & visible_aids):
+                mask = np.asarray(aid_row.vecvalue, dtype=int) == aid
+                times, values = crop_vector(value_row.vectime[mask], value_row.vecvalue[mask], condition.measurement)
+                if len(times):
+                    color = colors((aid - 1) % 10 / 9)
+                    axis.step(times, values, where="post", color=color, linestyle="-", alpha=0.85, label=f"STA {aid} reported")
+
+        if not scheduled.empty:
+            if len(scheduled) != len(scheduled_aids):
+                raise RuntimeError("Scheduled BSR byte and association vectors are not aligned by run")
+            for (_, value_row), (_, aid_row) in zip(scheduled.iterrows(), scheduled_aids.iterrows()):
+                association_times = np.asarray(aid_row.vectime)
+                association_values = np.asarray(aid_row.vecvalue, dtype=int)
+                used = np.zeros(len(association_times), dtype=bool)
+                scheduled_aids_for_values = []
+                for time in np.asarray(value_row.vectime):
+                    matches = np.flatnonzero(
+                        ~used & np.isclose(association_times, time, rtol=0, atol=1e-12)
+                    )
+                    if len(matches) == 0:
+                        raise RuntimeError("Scheduled BSR timestamps do not match trigger-decision association timestamps")
+                    match = matches[0]
+                    used[match] = True
+                    scheduled_aids_for_values.append(association_values[match])
+                scheduled_aids_for_values = np.asarray(scheduled_aids_for_values, dtype=int)
+                for aid in sorted(set(scheduled_aids_for_values) & visible_aids):
+                    mask = scheduled_aids_for_values == aid
+                    times, values = crop_vector(np.asarray(value_row.vectime)[mask], np.asarray(value_row.vecvalue)[mask], condition.measurement)
+                    if len(times):
+                        color = colors((aid - 1) % 10 / 9)
+                        axis.step(times, values, where="post", color=color, linestyle="--", alpha=0.9, label=f"STA {aid} scheduled")
         if scheduled.empty:
             axis.text(
                 0.5, 0.5, "No scheduled bytes observed in run 0",
@@ -665,10 +706,12 @@ def plot_bsr(conditions: list[Condition], output: Path) -> None:
         output,
         conditions=conditions,
         result_filters=[
+            {"type": "vector", "name": "heUlBufferStatusUpdated:vector", "unit": "AID"},
             {"type": "vector", "name": "heUlBufferStatusReportedBytes:vector"},
             {"type": "vector", "name": "heUlBufferStatusScheduledBytes:vector"},
+            {"type": "vector", "name": "heUlTriggerDecisionAssociationId:vector", "unit": "AID"},
         ],
-        aggregation={"timeline": "representative run 0; event-driven step observations"},
+        aggregation={"timeline": "representative run 0; event-driven step observations", "grouping": "STA association ID; solid=reported, dashed=scheduled"},
     )
 
 
@@ -826,6 +869,19 @@ def plot_delivery(conditions: list[Condition], output: Path) -> None:
 
 def plot_ul_ofdma(conditions: list[Condition], output: Path) -> None:
     """Compare UL-OFDMA and EDCA using delivery and tail delay."""
+    ul_ofdma_order = {
+        "EDCA baseline": 0,
+        "Equal-sized RUs": 1,
+        "Backlog scheduler": 2,
+        "Asymmetric backlog": 3,
+    }
+    conditions = sorted(
+        conditions,
+        key=lambda condition: (
+            ul_ofdma_order.get(condition.label, len(ul_ofdma_order)),
+            condition.label,
+        ),
+    )
     bidirectional = conditions and conditions[0].group == "dl_ul_ofdma"
     goodputs = [per_run_goodput(condition) for condition in conditions]
     delays = [per_run_delay_percentile(condition, 95) for condition in conditions]

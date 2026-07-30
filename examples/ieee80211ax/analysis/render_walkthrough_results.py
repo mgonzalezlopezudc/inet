@@ -59,10 +59,18 @@ def natural_sort_key(s: str) -> list[object]:
 
 def condition_sort_key(s: str) -> list[object]:
     name = str(s)
+    ul_ofdma_order = {
+        "EDCA baseline": 0,
+        "Equal-sized RUs": 1,
+        "Backlog scheduler": 2,
+        "Asymmetric backlog": 3,
+    }
+    if name in ul_ofdma_order:
+        return [ul_ofdma_order[name]]
     bsr_order = {
         "FreshBsr": 0,
         "StaleBsr": 1,
-        "ImplicitBsr": 2,
+        "LongTriggerCheck": 2,
         "BurstyTraffic": 3,
     }
     if name in bsr_order:

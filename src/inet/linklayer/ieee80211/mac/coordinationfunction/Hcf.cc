@@ -87,6 +87,68 @@ static B calculateAmpduLength(const std::vector<Packet *>& frames)
     return aggregateLength;
 }
 
+void Hcf::addBufferedTrafficServiceBytes(uint32_t& total, uint64_t amount)
+{
+    total += static_cast<uint32_t>(std::min<uint64_t>(
+            amount, MAX_FINITE_BUFFER_STATUS_BYTES - total));
+}
+
+uint32_t Hcf::calculateBufferedTrafficServiceBytes(Edcaf *edcaf, const MacAddress& peer,
+        int tid, const std::vector<Packet *>& additionalPackets) const
+{
+    std::set<const Packet *> accountedPackets;
+    uint32_t serviceBytes = 0;
+    auto accountPacket = [&] (const Packet *packet) {
+        if (!accountedPackets.insert(packet).second)
+            return;
+        auto header =
+                dynamicPtrCast<const Ieee80211DataHeader>(packet->peekAtFront());
+        if (header == nullptr || header->getType() != ST_DATA_WITH_QOS ||
+                header->getReceiverAddress() != peer ||
+                (tid >= 0 && header->getTid() != tid))
+            return;
+        // IEEE Std 802.11-2024 clauses 9.2.4.5.6, 9.2.4.7.4, and 26.5.5:
+        // buffer status counts MAC-SAP MSDU/A-MSDU service octets, including
+        // queued in-progress traffic, but excludes MPDU/A-MPDU and PHY overhead.
+        if (header->getAMsduPresent()) {
+            b offset = header->getChunkLength();
+            b bodyEnd = packet->getDataLength() - B(4);
+            while (offset < bodyEnd) {
+                auto subframeHeader =
+                        packet->peekAt<Ieee80211MsduSubframeHeader>(offset);
+                auto subframeLength = B(subframeHeader->getLength());
+                addBufferedTrafficServiceBytes(serviceBytes,
+                        subframeLength.get<B>());
+                offset += subframeHeader->getChunkLength() + subframeLength;
+                if (offset < bodyEnd)
+                    offset += B((4 - (subframeHeader->getChunkLength() +
+                            subframeLength).get<B>() % 4) % 4);
+            }
+        }
+        else {
+            auto payloadBytes = (packet->getDataLength() -
+                    header->getChunkLength() - B(4)).get<B>();
+            if (payloadBytes > 0)
+                addBufferedTrafficServiceBytes(serviceBytes, payloadBytes);
+        }
+    };
+    auto pendingQueue = edcaf->getPendingQueue();
+    for (int i = 0; i < pendingQueue->getNumPackets(); i++)
+        accountPacket(pendingQueue->getPacket(i));
+    auto inProgressFrames = edcaf->getInProgressFrames();
+    for (int i = 0; i < inProgressFrames->getLength(); i++)
+        accountPacket(inProgressFrames->getFrames(i));
+    for (auto packet : additionalPackets)
+        accountPacket(packet);
+    return serviceBytes;
+}
+
+uint32_t Hcf::getBufferedTrafficServiceBytes(
+        Edcaf *edcaf, const MacAddress& peer, int tid) const
+{
+    return calculateBufferedTrafficServiceBytes(edcaf, peer, tid, {});
+}
+
 void Hcf::initialize(int stage)
 {
     ModeSetListener::initialize(stage);

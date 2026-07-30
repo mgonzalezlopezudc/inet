@@ -3,6 +3,9 @@ Validate HE triggered-uplink prepare/commit and terminal packet ownership by exa
 
 %includes:
 #include <algorithm>
+#include <limits>
+#include "inet/common/packet/chunk/ByteCountChunk.h"
+#include "inet/linklayer/ieee80211/mac/Ieee80211HeBsr.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 #include "inet/linklayer/ieee80211/mac/channelaccess/Edca.h"
@@ -93,6 +96,7 @@ class TestHeHcf : public HeHcf
         int terminalDelimiterCount = 0;
         bool allSubframesSameTid = false;
         bool allSubframesAckPolicyBitsZero = false;
+        int64_t bufferStatusQueueSize = -1;
     };
 
     int failingCommitIndex = -1;
@@ -115,7 +119,7 @@ class TestHeHcf : public HeHcf
     }
 
     Packet *makeQueuedPacket(const char *name, const MacAddress& ap, int payloadByte,
-            int payloadBytes = 1)
+            int payloadBytes = 1, int tid = 0)
     {
         auto header = makeShared<Ieee80211DataHeader>();
         header->setType(ST_DATA_WITH_QOS);
@@ -123,7 +127,7 @@ class TestHeHcf : public HeHcf
         header->setTransmitterAddress(mac->getAddress());
         header->setAddress3(ap);
         header->setToDS(true);
-        header->setTid(0);
+        header->setTid(tid);
         header->setAckPolicy(NORMAL_ACK);
         header->setChunkLength(B(26));
         auto packet = new Packet(name, header);
@@ -132,6 +136,96 @@ class TestHeHcf : public HeHcf
         packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
         getSourceQueue()->enqueuePacket(packet);
         return packet;
+    }
+
+    Packet *makeQueuedAmsdu(const char *name, const MacAddress& ap,
+            int firstPayloadBytes, int secondPayloadBytes)
+    {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(ap);
+        header->setTransmitterAddress(mac->getAddress());
+        header->setAddress3(ap);
+        header->setToDS(true);
+        header->setTid(0);
+        header->setAMsduPresent(true);
+        header->setChunkLength(B(26));
+        auto packet = new Packet(name, header);
+        for (int i = 0; i < 2; i++) {
+            int payloadBytes = i == 0 ? firstPayloadBytes : secondPayloadBytes;
+            auto subframeHeader = makeShared<Ieee80211MsduSubframeHeader>();
+            subframeHeader->setLength(payloadBytes);
+            packet->insertAtBack(subframeHeader);
+            packet->insertAtBack(makeShared<BytesChunk>(
+                    std::vector<uint8_t>(payloadBytes, 0x5a + i)));
+            int padding = (4 - (14 + payloadBytes) % 4) % 4;
+            if (i == 0 && padding != 0)
+                packet->insertAtBack(makeShared<ByteCountChunk>(B(padding)));
+        }
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        getSourceQueue()->enqueuePacket(packet);
+        return packet;
+    }
+
+    Packet *makeQueuedAmpduContainer(const char *name, const MacAddress& ap,
+            int payloadBytes)
+    {
+        auto delimiter = makeShared<Ieee80211MpduSubframeHeader>();
+        delimiter->setLength(26 + payloadBytes + 4);
+        delimiter->setEof(true);
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(ap);
+        header->setTid(0);
+        header->setChunkLength(B(26));
+        auto packet = new Packet(name, delimiter);
+        packet->insertAtBack(header);
+        packet->insertAtBack(makeShared<BytesChunk>(
+                std::vector<uint8_t>(payloadBytes, 0x6a)));
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        edca->getEdcaf(AC_BE)->getInProgressFrames()->addInProgressFrame(packet);
+        return packet;
+    }
+
+    Packet *makeQueuedByteCountPacket(const char *name, const MacAddress& ap,
+            uint64_t payloadBytes)
+    {
+        auto header = makeShared<Ieee80211DataHeader>();
+        header->setType(ST_DATA_WITH_QOS);
+        header->setReceiverAddress(ap);
+        header->setTransmitterAddress(mac->getAddress());
+        header->setAddress3(ap);
+        header->setToDS(true);
+        header->setTid(0);
+        header->setChunkLength(B(26));
+        auto packet = new Packet(name, header);
+        packet->insertAtBack(makeShared<ByteCountChunk>(B(payloadBytes)));
+        packet->insertAtBack(makeShared<Ieee80211MacTrailer>());
+        getSourceQueue()->enqueuePacket(packet);
+        return packet;
+    }
+
+    uint32_t getBufferedBytes(const MacAddress& peer, int tid = -1) const
+    {
+        return getBufferedTrafficServiceBytes(edca->getEdcaf(AC_BE), peer, tid);
+    }
+
+    void moveToInProgress(Packet *packet, bool retry)
+    {
+        getSourceQueue()->removePacket(packet);
+        if (retry) {
+            auto header = packet->removeAtFront<Ieee80211DataHeader>();
+            header->setRetry(true);
+            packet->insertAtFront(header);
+        }
+        edca->getEdcaf(AC_BE)->getInProgressFrames()->addInProgressFrame(packet);
+    }
+
+    void discardInProgressPacket(Packet *packet)
+    {
+        auto frames = edca->getEdcaf(AC_BE)->getInProgressFrames();
+        frames->dropFrame(packet);
+        frames->clearDroppedFrames();
     }
 
     Ptr<Ieee80211TriggerFrame> makeTrigger(
@@ -222,9 +316,8 @@ class TestHeHcf : public HeHcf
         exchange.ru.toneSize = user.ruToneSize;
         exchange.ru.toneOffset = user.ruToneOffset;
         exchange.expectedResponseTime = SimTime(1, SIMTIME_S);
-        int64_t queueBytes = 0;
-        for (int i = 0; i < queue->getNumPackets(); ++i)
-            queueBytes += queue->getPacket(i)->getByteLength();
+        uint32_t queueBytes = getBufferedTrafficServiceBytes(
+                edca->getEdcaf(AC_BE), ap, 0);
         bool committed = false;
         Ptr<const Ieee80211MacHeader> responseHeader;
         failingCommitIndex = failAt;
@@ -254,6 +347,8 @@ class TestHeHcf : public HeHcf
                 protection.txopDuration);
         REQUIRE(responseDataHeader->getDurationField() < trigger->getDurationField());
         result.ackPolicy = responseDataHeader->getAckPolicy();
+        result.bufferStatusQueueSize =
+                responseDataHeader->getBufferStatusQueueSize();
         Packet serializedHeader("serialized-he-tb-header", responseHeader);
         auto headerBytes = serializedHeader.peekDataAsBytes();
         result.wireAckPolicyBits = (headerBytes->getByte(24) >> 5) & 0x3;
@@ -542,6 +637,44 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
         REQUIRE(queue->getPacket(i) == expected[i]);
 };
 
+// Buffer status counts MAC-SAP service bytes in both queue ownership phases,
+// filters the addressed AP/TID, and parses A-MSDU subframe payload lengths.
+{
+    auto pending = hcf->makeQueuedPacket("bsr-pending", ap, 0x01, 17);
+    auto wrongTid = hcf->makeQueuedPacket("bsr-wrong-tid", ap, 0x02, 19, 3);
+    auto wrongPeer = hcf->makeQueuedPacket("bsr-wrong-peer",
+            MacAddress("20:00:00:00:00:00"), 0x03, 23);
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 17);
+    hcf->moveToInProgress(pending, true);
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 17);
+    (void)wrongTid;
+    (void)wrongPeer;
+    hcf->clearState();
+
+    auto amsdu = hcf->makeQueuedAmsdu("bsr-amsdu", ap, 3, 5);
+    auto ampdu = hcf->makeQueuedAmpduContainer("bsr-ampdu-container", ap, 11);
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 8);
+    (void)amsdu;
+    hcf->discardInProgressPacket(ampdu);
+    hcf->clearState();
+
+    auto large0 = hcf->makeQueuedByteCountPacket("bsr-large-p0", ap,
+            UINT64_C(3000000000));
+    auto large1 = hcf->makeQueuedByteCountPacket("bsr-large-p1", ap,
+            UINT64_C(3000000000));
+    auto saturatedBytes = hcf->getBufferedBytes(ap, 0);
+    REQUIRE(saturatedBytes == std::numeric_limits<uint32_t>::max() - 1);
+    Ieee80211HeBufferStatus status;
+    REQUIRE(encodeHeSingleAcBufferStatus(0, AC_BE, saturatedBytes, status));
+    REQUIRE(status.queueSizeHigh == IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE);
+    REQUIRE(status.queueSizeAll == IEEE80211_HE_BSR_OVERFLOW_QUEUE_CODE);
+    REQUIRE(status.queueSizeHigh != IEEE80211_HE_BSR_UNKNOWN_QUEUE_CODE);
+    REQUIRE(status.queueSizeAll != IEEE80211_HE_BSR_UNKNOWN_QUEUE_CODE);
+    (void)large0;
+    (void)large1;
+    hcf->clearState();
+}
+
 // An injected failure before the commit boundary must leave exact queue
 // identities and every header field untouched.
 {
@@ -712,7 +845,9 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     REQUIRE(responseEventListener.accessCategory == AC_BE);
     REQUIRE(responseEventListener.ruIndex >= 0);
     REQUIRE(responseEventListener.selectedBytes > 0);
+    REQUIRE(responseEventListener.reportedBytes == 2);
     REQUIRE(responseEventListener.ackPolicy == NORMAL_ACK);
+    REQUIRE(committed.bufferStatusQueueSize == 2);
     REQUIRE(committed.packets == (std::vector<Packet *>{p0, p1}));
     requireQueueIdentities({});
     REQUIRE(hcf->getBestEffortCw() == 31);
@@ -758,6 +893,7 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     TestHeHcf::CommittedExchange committed;
     hcf->prepareAndCommit(49, ap, -1, committed);
     REQUIRE(committed.packets == std::vector<Packet *>({retry}));
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 1);
     REQUIRE(committed.sequenceNumbers == std::vector<int>({117}));
     REQUIRE(hcf->getOccupiedBestEffortBlockAckSequenceNumbers(ap) ==
             std::set<int>({117}));
@@ -770,6 +906,7 @@ auto requireQueueIdentities = [&] (const std::vector<Packet *>& expected) {
     hcf->receiveBlockAck(49, ap, {record});
     REQUIRE(hcf->getExchangeCount() == 0);
     requireQueueIdentities({});
+    REQUIRE(hcf->getBufferedBytes(ap, 0) == 0);
     REQUIRE(hcf->getOccupiedBestEffortBlockAckSequenceNumbers(ap).empty());
 }
 

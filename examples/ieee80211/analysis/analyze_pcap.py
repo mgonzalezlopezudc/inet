@@ -86,12 +86,7 @@ def configure_suite(suite, output_dir):
     GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
     GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
     SUITE_SCENARIOS = dict(suite.scenarios)
-    CONFIG_ORDER = {
-        config: index
-        for index, config in enumerate(
-            suite.scenarios.get("bsr", {}).get("configurations", [])
-        )
-    }
+    CONFIG_ORDER = {}
     subdirs_configs = {
         name: list(scenario["configurations"])
         for name, scenario in suite.scenarios.items()
@@ -1894,10 +1889,15 @@ def get_sort_key(pt):
 
 def get_packet_color(pt):
     base = get_base_type(pt)
+    suffix = pt[len(base):]
 
     # Define base HSL values for each category
     # Hue: 0-360, Saturation: 0-100 (%), Lightness: 0-100 (%)
-    if base == "Data: Data":  # Regular data (Light Green)
+    if re.match(r" \[(?:HE-SU|HE-ER-SU)(?:,|\])", suffix):
+        # Keep single-user PPDU variants in the yellow family in both packet
+        # statistics plots and the matching table swatches.
+        h, s, l = 50, 95, 48
+    elif base == "Data: Data":  # Regular data (Light Green)
         h, s, l = 120, 65, 75
     elif base == "Data: QoS Data":  # QoS (Green)
         h, s, l = 120, 70, 45
@@ -1939,7 +1939,6 @@ def get_packet_color(pt):
         return matplotlib.colors.to_hex((r, g, b))
 
     # Perturb HSL based on the suffix (to distinguish subtypes visually)
-    suffix = pt[len(base):]
     if suffix:
         val = zlib.adler32(suffix.encode('utf-8'))
         # Perturb Hue by +/- 8 degrees
@@ -1996,8 +1995,12 @@ def generate_stacked_bar_plot(config_results, subdir, color_map, output_dir):
         for key, stat in stats.items():
             name = unpack_key_to_name(key)
             pct = (stat["count"] / total) * 100
-            count_data[name][idx] = pct
-            airtime_data[name][idx] = stat["airtime_pct"]
+            # Multiple internal statistic keys can intentionally share the
+            # same display name (for example, separate Ack variants). Add
+            # them together instead of letting a later key overwrite the
+            # earlier one.
+            count_data[name][idx] += pct
+            airtime_data[name][idx] += stat["airtime_pct"]
 
     # Set up matplotlib style for a clean, premium look
     plt.rcParams['font.sans-serif'] = 'DejaVu Sans'
@@ -2777,6 +2780,7 @@ def parse_args(argv=None):
 
 
 def main():
+    global CONFIG_ORDER
     args = parse_args()
     if args.capture_only and not args.index:
         raise ValueError("--capture-only requires --index")
@@ -2854,6 +2858,10 @@ def main():
     global_color_map = {pt: get_packet_color(pt) for pt in global_packet_types}
 
     for subdir, res in all_results.items():
+        CONFIG_ORDER = {
+            config: index
+            for index, config in enumerate(subdirs_configs[subdir])
+        }
         output_dir = campaign_result_directory(
             subdir,
             subdirs_configs[subdir][0],

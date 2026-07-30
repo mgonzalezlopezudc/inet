@@ -34,7 +34,7 @@ simple HeUlCoordinator
         @signal[heUlTriggerDecisionId](type=unsigned long);
         @statistic[heUlBasicTriggerSent](source=heUlBasicTriggerSent; record=count);
         @statistic[heUlBsrpTriggerSent](source=heUlBsrpTriggerSent; record=count);
-        @statistic[heUlBufferStatusUpdated](source=heUlBufferStatusUpdated; record=count);
+        @statistic[heUlBufferStatusUpdated](source=heUlBufferStatusUpdated; record=count,vector; interpolationmode=none);
         @statistic[heUlBufferStatusReportedBytes](source=heUlBufferStatusReportedBytes; record=vector);
         @statistic[heUlBufferStatusScheduledBytes](source=heUlBufferStatusScheduledBytes; record=vector);
         @statistic[heUlStaleBufferStatus](source=heUlStaleBufferStatus; record=count);

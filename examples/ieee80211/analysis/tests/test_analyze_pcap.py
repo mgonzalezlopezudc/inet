@@ -343,6 +343,30 @@ class GeneratedSectionTest(unittest.TestCase):
 
 class PacketPlotStorageTest(unittest.TestCase):
 
+    def test_single_user_packet_colors_use_yellow_family(self):
+        he_su = analyze_pcap.get_packet_color(
+            "Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz]"
+        )
+        he_er_su = analyze_pcap.get_packet_color(
+            "Data: QoS Data [HE-ER-SU, HE-MCS 0, 242-tone RU]"
+        )
+        he_mu = analyze_pcap.get_packet_color(
+            "Data: QoS Data [HE-MU, HE-MCS 1, 106-tone RU]"
+        )
+
+        for color in (he_su, he_er_su):
+            red, green, blue = (
+                round(channel * 255)
+                for channel in analyze_pcap.matplotlib.colors.to_rgb(color)
+            )
+            self.assertGreater(red, 150)
+            self.assertGreater(green, 120)
+            self.assertLess(blue, 100)
+        self.assertGreater(
+            analyze_pcap.matplotlib.colors.to_rgb(he_mu)[1],
+            analyze_pcap.matplotlib.colors.to_rgb(he_mu)[0],
+        )
+
     def test_stores_plot_in_shared_result_session(self):
         with tempfile.TemporaryDirectory() as directory:
             example_root = Path(directory)

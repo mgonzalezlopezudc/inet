@@ -215,6 +215,8 @@ class INET_API HeHcf : public Hcf
     virtual void initialize(int stage) override;
     virtual void handleMessage(cMessage *msg) override;
     virtual void finish() override;
+    virtual uint32_t getBufferedTrafficServiceBytes(
+            Edcaf *edcaf, const MacAddress& peer, int tid = -1) const override;
     virtual queueing::IPacketQueue *getPerStaQueue(const MacAddress& staAddr, AccessCategory ac) override;
     virtual const char *getPendingUlTriggerName() const;
     virtual int getStationQueueBankCount() const;
@@ -253,7 +255,7 @@ class INET_API HeHcf : public Hcf
     virtual void sendTriggeredBlockAckResponse(Packet *packet, const Ptr<const Ieee80211TriggerFrame>& trigger,
             uint32_t triggerId);
     virtual Packet *buildTriggeredUlResponsePacket(Packet *sourcePacket, queueing::IPacketQueue *sourceQueue,
-            AccessCategory selectedAc, uint8_t selectedTid, int64_t queueBytes, int availableSlots,
+            AccessCategory selectedAc, uint8_t selectedTid, uint32_t queueBytes, int availableSlots,
             const Ieee80211HeTriggerUserInfo *selected, const Ptr<const Ieee80211TriggerFrame>& trigger,
             uint32_t triggerId, W transmitPower,
             const std::optional<physicallayer::Ieee80211HeTxopDuration>& solicitingTxopDuration,
