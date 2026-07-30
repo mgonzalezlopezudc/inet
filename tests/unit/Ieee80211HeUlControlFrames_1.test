@@ -21,6 +21,14 @@ using namespace inet::units::values;
 
 #define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
 
+template<typename F>
+static bool throwsRuntimeError(F function)
+{
+    try { function(); }
+    catch (const cRuntimeError&) { return true; }
+    return false;
+}
+
 class TestHeHcfScheduleFinalizer : public HeHcf
 {
   public:
@@ -873,6 +881,8 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     auto packet = new Packet("multi-sta-ba", blockAck);
     auto bytes = packet->peekDataAsBytes();
     REQUIRE(bytes->getChunkLength() == B(42));
+    // IEEE Std 802.11-2024 Table 9-37: Multi-STA BlockAck is BA Type 11.
+    REQUIRE(bytes->getByte(16) == 0x16 && bytes->getByte(17) == 0x00);
     // IEEE Std 802.11-2024 Figures 9-58..9-60: BA Information starts
     // immediately after BA Control. There is no record-count octet, and
     // bitmap bit 0 is carried in the least significant bit of the first
@@ -889,6 +899,12 @@ static Ieee80211HeTxVectorValidationResult createTxVectorFromDecodedTrigger(
     REQUIRE(decoded->getRecords(1).bitmap == 0);
     delete packet;
     delete received;
+
+    auto invalidBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
+    invalidBlockAck->setBlockAckPolicy(true);
+    auto invalidPacket = new Packet("invalid-multi-sta-ba", invalidBlockAck);
+    REQUIRE(throwsRuntimeError([&]() { invalidPacket->peekDataAsBytes(); }));
+    delete invalidPacket;
     EV << "Multi-STA Block Ack round trip passed.\n";
 }
 

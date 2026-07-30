@@ -1390,6 +1390,32 @@ def trigger_allocations_markdown(triggers, limit=100):
     return "".join(lines)
 
 
+def multi_sta_block_ack_records_markdown(records, limit=25):
+    if not records:
+        return "No Multi-STA Block Ack BA Type 11 records were decoded.\n\n"
+    lines = [
+        "| Frame | Simulation time (s) | BA Control | Decoded per-AID/TID entries |\n",
+        "|---:|---:|---|---|\n",
+    ]
+    for record in records[:limit]:
+        entries = "; ".join(
+            f"AID={entry['aid']}, TID={entry['tid']}"
+            for entry in record["aid_tid_entries"]
+        ) or "no decoded entries"
+        lines.append(
+            f"| {record['frame_number']} | {record['simulation_time_s']:.9f} | "
+            f"{record['control']} (type {record['ba_type']}) | {entries} |\n"
+        )
+    if len(records) > limit:
+        lines.append(
+            f"\nShowing the first {limit} of {len(records)} decoded Multi-STA Block Ack frames; "
+            "the script-owned packet metrics JSON preserves every row.\n\n"
+        )
+    else:
+        lines.append("\n")
+    return "".join(lines)
+
+
 def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
     total_sim_time = get_sim_time_limit(subdir, config_name)
     stats = {}
@@ -1758,6 +1784,54 @@ def get_mpdu_observation_stats(pcap_files):
         "unique_ampdu_references": len(ampdu_references),
     }
 
+
+def extract_multi_sta_block_ack_records(pcap_files):
+    """Return directly decoded Multi-STA BlockAck AID/TID entries by frame."""
+    fields = [
+        "frame.number", "frame.time_epoch", "wlan.ba.control",
+        "wlan.ba.control.ba_type", "wlan.ba.multi_sta.aid11",
+        "wlan.ba.multi_sta.tid",
+    ]
+    records = []
+    for path in pcap_files:
+        command = [
+            "tshark", "-n", "-r", str(path),
+            "-Y", "wlan.fc.type_subtype == 0x19 && wlan.ba.control.ba_type == 11",
+            "-T", "fields",
+        ]
+        for field in fields:
+            command.extend(["-e", field])
+        proc = subprocess.run(
+            command, check=False, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        if proc.returncode != 0:
+            detail = proc.stderr.strip() or "no decoder diagnostic"
+            raise RuntimeError(
+                f"TShark Multi-STA BlockAck decode failed for {path}: "
+                f"exit {proc.returncode}: {detail}"
+            )
+        for line in proc.stdout.splitlines():
+            values = line.split("\t")
+            values += [""] * (len(fields) - len(values))
+            frame_number, timestamp, control, ba_type, aids, tids = values[:len(fields)]
+            aid_values = [value.strip() for value in aids.split(",") if value.strip()]
+            tid_values = [value.strip() for value in tids.split(",") if value.strip()]
+            if not frame_number or not timestamp or len(aid_values) != len(tid_values):
+                continue
+            records.append({
+                "capture": str(path.relative_to(REPOSITORY_ROOT)),
+                "frame_number": int(frame_number),
+                "simulation_time_s": float(timestamp),
+                "control": control,
+                "ba_type": ba_type,
+                "aid_tid_entries": [
+                    {"aid": int(aid, 0), "tid": int(tid, 0)}
+                    for aid, tid in zip(aid_values, tid_values)
+                ],
+            })
+    return records
+
 def analyze_subdirectory(subdir, considered, config_pcaps):
     dir_path = EXAMPLE_ROOT / subdir
     if not dir_path.exists():
@@ -1789,6 +1863,11 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                 "timeline": extract_frame_timeline(target_pcaps, subdir),
                 "he_trigger_allocations": extract_he_trigger_allocations(
                     target_pcaps
+                ),
+                "multi_sta_block_ack_records": (
+                    extract_multi_sta_block_ack_records(target_pcaps)
+                    if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
+                    else []
                 ),
             }
         }
@@ -2270,9 +2349,29 @@ def evaluate_evidence(config_results, subdir):
             "evidence": "Subtype counts cannot establish the puncturing mask; result vectors remain authoritative",
         })
 
+    if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack"):
+        qualifying_records = {
+            config_name: [
+                record for record in result.get("global", {}).get(
+                    "multi_sta_block_ack_records", []
+                )
+                if len(record["aid_tid_entries"]) >= 2
+            ]
+            for config_name, result in config_results.items()
+        }
+        evidence = ", ".join(
+            f"{config_name}: {len(records)} BA Type 11 frame(s) with multiple AID/TID entries"
+            for config_name, records in qualifying_records.items()
+            if records
+        )
+        checks.append({
+            "id": "multi-tid-ba-fields",
+            "status": "PASS" if evidence else "INCONCLUSIVE",
+            "requirement": "BA Type 11 and per-AID/TID entries are decoded from Multi-STA Block Ack frames",
+            "evidence": evidence or "No BA Type 11 frame with multiple decoded AID/TID entries was observed",
+        })
+
     direct_evidence_requirements = {
-        "ul_multitid": ("multi-tid-ba-fields", "BA variant and per-AID/TID entries"),
-        "mac_features/multi_tid_block_ack": ("multi-tid-ba-fields", "BA variant and per-AID/TID entries"),
         "opmode_indication": ("operating-mode-fields", "OM Control value and receiver-applied width/NSS"),
         "mac_features/operating_mode_indication": ("operating-mode-fields", "OM Control value and receiver-applied width/NSS"),
         "dl_mu_mimo": ("mu-mimo-streams", "Multiple users with disjoint stream allocations in one PPDU"),
@@ -2469,6 +2568,13 @@ def generate_markdown_tables(
             "#### [script] Representative frame-exchange timeline\n\n"
         )
         md.append(timeline_markdown(global_res["timeline"]))
+        if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack"):
+            md.append(
+                "#### [script] Decoded Multi-STA Block Ack records\n\n"
+            )
+            md.append(multi_sta_block_ack_records_markdown(
+                global_res["multi_sta_block_ack_records"]
+            ))
         if subdir in ("ul_ofdma", "bsr", "he_bsr"):
             md.append(
                 "#### [script] Decoded HE Trigger user allocations\n\n"
@@ -2596,10 +2702,15 @@ def generate_markdown_tables(
             "The generic Control-subtype label does not by itself prove Trigger Type 7; verify the Trigger field or simulator NFRP telemetry when conformance detail matters."
         )
     elif "ul_multitid" in subdir or "multi_tid_block_ack" in subdir:
+        multi_tid_check = next(
+            check for check in checks if check["id"] == "multi-tid-ba-fields"
+        )
         analysis_text = (
-            "BAR and Block Ack subtype counts show acknowledgment exchanges, but they do not identify the BA Control variant or its per-AID/TID entries. "
-            "IEEE Std 802.11-2024 Clauses 9.3.1.8.6 and 10.25.5 require those contents to distinguish Multi-STA and Multi-TID operation. Treat this table as an exchange count; "
-            "use decoded BA fields or simulator telemetry to prove that multiple TIDs were acknowledged."
+            f"**{multi_tid_check['status']}: decoded Multi-STA Block Ack fields.** "
+            f"{multi_tid_check['evidence']}. The table above is direct TShark decoding "
+            "of BA Control Type 11 and its per-AID/TID entries, as specified by IEEE Std "
+            "802.11-2024 Clause 9.3.1.8.6. It establishes the acknowledged recipient/TID "
+            "identities in the captured frames, not payload delivery or end-to-end reliability."
         )
     elif "opmode_indication" in subdir or "operating_mode_indication" in subdir:
         analysis_text = (
@@ -2931,6 +3042,7 @@ def main():
                     "stats": {",".join(str(x) for x in k): v for k, v in g["stats"].items()},
                     "timeline": g["timeline"],
                     "he_trigger_allocations": g["he_trigger_allocations"],
+                    "multi_sta_block_ack_records": g["multi_sta_block_ack_records"],
                 }
             if "per_flow" in res:
                 serialized[subdir][config_name]["per_flow"] = {}

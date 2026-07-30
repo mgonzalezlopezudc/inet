@@ -121,6 +121,21 @@ void unpackBlockAckControl(uint16_t control, bool& ackPolicy, bool& multiTid, bo
     tidInfo = (control >> 12) & 0xF;
 }
 
+constexpr uint16_t BLOCK_ACK_TYPE_MASK = 0x001E;
+constexpr uint16_t MULTI_STA_BLOCK_ACK_TYPE = 11;
+
+uint16_t packMultiStaBlockAckControl()
+{
+    // IEEE Std 802.11-2024 Figure 9-53: bit 0 and bits 5..15 are reserved;
+    // Multi-STA BlockAck uses BA Type 11 in bits 1..4.
+    return MULTI_STA_BLOCK_ACK_TYPE << 1;
+}
+
+bool isMultiStaBlockAckControl(uint16_t control)
+{
+    return (control & BLOCK_ACK_TYPE_MASK) == (MULTI_STA_BLOCK_ACK_TYPE << 1);
+}
+
 uint16_t packQosControl(uint8_t tid, ieee80211::AckPolicy ackPolicy, bool aMsduPresent)
 {
     return (tid & 0xF) |
@@ -745,7 +760,9 @@ void Ieee80211MacHeaderSerializer::serialize(MemoryOutputStream& stream, const P
                 auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(chunk);
                 if (multiStaBlockAck == nullptr)
                     throw cRuntimeError("Unsupported multi-STA Block Ack representation");
-                stream.writeUint16Le(packBlockAckControl(blockAck->getBlockAckPolicy(), multiTid, compressedBitmap, blockAck->getReserved(), 0));
+                if (blockAck->getBlockAckPolicy())
+                    throw cRuntimeError("Multi-STA Block Ack must not set the reserved Block Ack policy bit");
+                stream.writeUint16Le(packMultiStaBlockAckControl());
                 for (unsigned int i = 0; i < multiStaBlockAck->getRecordsArraySize(); i++) {
                     const auto& record = multiStaBlockAck->getRecords(i);
                     if (record.aid > 2047 || record.tid > 7)
@@ -1393,12 +1410,49 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
             bool compressedBitmap;
             uint16_t reserved;
             uint8_t tidInfo;
-            unpackBlockAckControl(stream.readUint16Le(), blockAckPolicy, multiTid, compressedBitmap, reserved, tidInfo);
+            auto blockAckControl = stream.readUint16Le();
+            unpackBlockAckControl(blockAckControl, blockAckPolicy, multiTid, compressedBitmap, reserved, tidInfo);
             blockAck->setBlockAckPolicy(blockAckPolicy);
             blockAck->setMultiTid(multiTid);
             blockAck->setCompressedBitmap(compressedBitmap);
             blockAck->setReserved(reserved);
-            if (!multiTid && !compressedBitmap) {
+            if (isMultiStaBlockAckControl(blockAckControl)) {
+                auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
+                copyBasicFields(multiStaBlockAck, macHeader);
+                copyBlockAckFrameFields(multiStaBlockAck, blockAck);
+                multiStaBlockAck->setMultiTid(true);
+                multiStaBlockAck->setCompressedBitmap(false);
+                multiStaBlockAck->setReserved(0);
+                std::vector<Ieee80211MultiStaBlockAckRecord> records;
+                auto remainingBits = stream.getRemainingLength().get<b>();
+                if (remainingBits % 96 != 0)
+                    multiStaBlockAck->markIncorrect();
+                auto count = remainingBits / 96;
+                for (int i = 0; i < count; i++) {
+                    auto aidTidInfo = stream.readUint16Le();
+                    Ieee80211MultiStaBlockAckRecord record;
+                    record.aid = aidTidInfo & 0x7FF;
+                    bool ackType = (aidTidInfo & 0x0800) != 0;
+                    record.tid = (aidTidInfo >> 12) & 0xF;
+                    record.responseReceived = true;
+                    if (!ackType && record.tid <= 7) {
+                        int fragmentNumber;
+                        SequenceNumberCyclic sequenceNumber;
+                        readSequenceControl(stream, fragmentNumber, sequenceNumber);
+                        record.startingSequenceNumber = sequenceNumber.get();
+                        record.bitmap = stream.readUint64Le();
+                    }
+                    else
+                        multiStaBlockAck->markIncorrect();
+                    records.push_back(record);
+                }
+                multiStaBlockAck->setRecordsArraySize(records.size());
+                for (size_t i = 0; i < records.size(); i++)
+                    multiStaBlockAck->setRecords(i, records[i]);
+                multiStaBlockAck->setChunkLength(stream.getPosition());
+                return multiStaBlockAck;
+            }
+            else if (!multiTid && !compressedBitmap) {
                 auto basicBlockAck = makeShared<Ieee80211BasicBlockAck>();
                 copyBasicFields(basicBlockAck, macHeader);
                 copyBlockAckFrameFields(basicBlockAck, blockAck);
@@ -1434,39 +1488,6 @@ const Ptr<Chunk> Ieee80211MacHeaderSerializer::deserialize(MemoryInputStream& st
                 }
                 compressedBlockAck->setBlockAckBitmap(*(new BitVector(bytes)));
                 return compressedBlockAck;
-            }
-            else if (multiTid && !compressedBitmap) {
-                auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
-                copyBasicFields(multiStaBlockAck, macHeader);
-                copyBlockAckFrameFields(multiStaBlockAck, blockAck);
-                std::vector<Ieee80211MultiStaBlockAckRecord> records;
-                auto remainingBits = stream.getRemainingLength().get<b>();
-                if (remainingBits % 96 != 0)
-                    multiStaBlockAck->markIncorrect();
-                auto count = remainingBits / 96;
-                for (int i = 0; i < count; i++) {
-                    auto aidTidInfo = stream.readUint16Le();
-                    Ieee80211MultiStaBlockAckRecord record;
-                    record.aid = aidTidInfo & 0x7FF;
-                    bool ackType = (aidTidInfo & 0x0800) != 0;
-                    record.tid = (aidTidInfo >> 12) & 0xF;
-                    record.responseReceived = true;
-                    if (!ackType && record.tid <= 7) {
-                        int fragmentNumber;
-                        SequenceNumberCyclic sequenceNumber;
-                        readSequenceControl(stream, fragmentNumber, sequenceNumber);
-                        record.startingSequenceNumber = sequenceNumber.get();
-                        record.bitmap = stream.readUint64Le();
-                    }
-                    else
-                        multiStaBlockAck->markIncorrect();
-                    records.push_back(record);
-                }
-                multiStaBlockAck->setRecordsArraySize(records.size());
-                for (size_t i = 0; i < records.size(); i++)
-                    multiStaBlockAck->setRecords(i, records[i]);
-                multiStaBlockAck->setChunkLength(stream.getPosition());
-                return multiStaBlockAck;
             }
             else if (multiTid && compressedBitmap) {
                 auto multiTidAck = makeShared<Ieee80211MultiTidBlockAck>();

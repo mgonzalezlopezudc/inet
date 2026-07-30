@@ -1,0 +1,268 @@
+{
+  "analysis_script_sha256": "b4ef24dcf64670c422779d704a04f7eb325746719bd67076ba78e9b4315ab76c",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 576680,
+            "duration_seconds": 0.998,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999048,
+            "file_size_bytes": 724892,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3239,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/ScheduledOnly/ScheduledOnly-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "3e3f014e280f14b00f767b4822611dbdc38f8fc34880ef8180dcb58683e3a1bf",
+          "size_bytes": 724892
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "ScheduledOnly",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_uora/omnetpp.ini",
+      "ini_sha256": "dce77b0a5b30b766df33c279480b3af1bf17948a16d0c11a27c066f503a755a7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "ScheduledOnly",
+        "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/ScheduledOnly/ScheduledOnly-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "fc17613d759f47419e53dec5112ec45c2e7c58a3c00b6a2e9a30a7aea745fc76"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_uora"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 630607,
+            "duration_seconds": 0.998694,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999742,
+            "file_size_bytes": 809648,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3937,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/MixedUora/MixedUora-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "3456fb1283576da142bdd1333349a591f178a9e90d8eff1c57a0830ff6b7a7a3",
+          "size_bytes": 809648
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "MixedUora",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_uora/omnetpp.ini",
+      "ini_sha256": "dce77b0a5b30b766df33c279480b3af1bf17948a16d0c11a27c066f503a755a7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "MixedUora",
+        "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/MixedUora/MixedUora-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "a942281744be8359a7705f1d86c96a1496e4cc4b144e8c57c72ddef405ce6c0a"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_uora"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 528311,
+            "duration_seconds": 0.997992,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.99904,
+            "file_size_bytes": 683824,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3424,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/UoraLightContention/UoraLightContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "a06d8e8408e9f87fa5bb86bf4b7f10c4adefce6414aeb3b9b95f1160b19711b8",
+          "size_bytes": 683824
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UoraLightContention",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_uora/omnetpp.ini",
+      "ini_sha256": "dce77b0a5b30b766df33c279480b3af1bf17948a16d0c11a27c066f503a755a7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UoraLightContention",
+        "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/UoraLightContention/UoraLightContention-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "cbf602e12b1457f25f2bbe176bcf5a5eb35f06ca7fab2303fd5a29f00cf4081d"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_uora"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 1000433,
+            "duration_seconds": 0.998577,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999625,
+            "file_size_bytes": 1256596,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 5604,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/UoraHeavyContention/UoraHeavyContention-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "e6fe389710ed60e90fb97baad5e719dee73ae75117981c180edeac3285b35786",
+          "size_bytes": 1256596
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UoraHeavyContention",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_uora/omnetpp.ini",
+      "ini_sha256": "dce77b0a5b30b766df33c279480b3af1bf17948a16d0c11a27c066f503a755a7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UoraHeavyContention",
+        "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/UoraHeavyContention/UoraHeavyContention-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "604fc7cc1d22aa67c70aa22d57f732fecfd081396f46bd09906d97be5144fe02"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_uora"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 765063,
+            "duration_seconds": 0.998,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999048,
+            "file_size_bytes": 963356,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 4349,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "61419a2db490067c850342ad97efe86303f4592679d34a93be33f6dea97e273e",
+          "size_bytes": 963356
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UoraMoreRandomAccessRus",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_uora/omnetpp.ini",
+      "ini_sha256": "dce77b0a5b30b766df33c279480b3af1bf17948a16d0c11a27c066f503a755a7",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UoraMoreRandomAccessRus",
+        "path": "examples/ieee80211ax/ul_uora/results/20260730T213054Z/UoraMoreRandomAccessRus/UoraMoreRandomAccessRus-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "b051e6319394c42e3c55412c5e0e99f4c3a0ae72c504a5783d1769525519b8c8"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_uora"
+    }
+  ],
+  "generated_at_utc": "2026-07-30T21:31:54.877283+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "ea98f2915624c8f21469f46ba1a03db5443dff56787dbba3ea0b9f37e97d1798",
+  "repository_revision": "a8aef8885bc34e26d4e21cb5ee877529c2d6d980",
+  "session_id": "20260730T213054Z",
+  "suite": "ax",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ax.json",
+    "sha256": "5f2540b9d067bafe39ea83d8c51fd3004862e4858a96896c6aee4fa2c135ca4f"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}
