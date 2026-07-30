@@ -72,8 +72,26 @@ GROUP_PERFORMANCE_VECTOR_STATISTICS = {
     "bsr": (
         "heUlBufferStatusReportedBytes",
         "heUlBufferStatusScheduledBytes",
+        "heUlTriggerDecisionTriggerId",
+        "heUlTriggerDecisionTriggerType",
+        "heUlTriggerDecisionUserOrdinal",
+        "heUlTriggerDecisionAssociationId",
+        "heUlTriggerDecisionReportedBytes",
+        "heUlTriggerDecisionPlannedBytes",
     ),
 }
+
+BSR_TRIGGER_DECISION_VECTOR_OVERRIDES = tuple(
+    f"--**.{statistic}.result-recording-modes=+vector"
+    for statistic in (
+        "heUlTriggerDecisionTriggerId",
+        "heUlTriggerDecisionTriggerType",
+        "heUlTriggerDecisionUserOrdinal",
+        "heUlTriggerDecisionAssociationId",
+        "heUlTriggerDecisionReportedBytes",
+        "heUlTriggerDecisionPlannedBytes",
+    )
+)
 
 GROUP_DIAGNOSTIC_VECTOR_STATISTICS = {
     "fragmentation": (
@@ -520,6 +538,8 @@ def build_command(
             diagnostic_vector_statistics(group),
         )
         overrides += diagnostic_vector_overrides(group)
+    if group == "bsr":
+        overrides += BSR_TRIGGER_DECISION_VECTOR_OVERRIDES
     return build_cmdenv_command(
         REPOSITORY_ROOT,
         ini,
@@ -594,6 +614,8 @@ def collect_jobs(
                 )
                 if group_name != "ul_ofdma":
                     additional += diagnostic_vector_overrides(group_name)
+            if group_name == "bsr":
+                additional += BSR_TRIGGER_DECISION_VECTOR_OVERRIDES
             job = replace(job, command=job.command + additional)
             jobs.append(job)
     return jobs

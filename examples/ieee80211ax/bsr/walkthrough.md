@@ -1,213 +1,141 @@
-# HE Buffer Status Report scheduling walkthrough
+# Walkthrough: HE Buffer Status Reports
 
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260725T120411Z`
-- PCAP: `20260725T230736Z`
+- Scalar/vector: `20260730T130100Z`
+- PCAP: `20260730T130100Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260725T120411Z`, `20260725T230736Z`.
+`[agent]` results sessions: `NOT RECORDED`.
 
-This walkthrough teaches how an access point (AP) obtains high-efficiency
-(HE) station queue information and uses it for uplink orthogonal
-frequency-division multiple access (OFDMA) scheduling. It validates only the
-retained BSR-poll exchange, AP backlog vectors, and the stated five-run
-comparison; the missing report-to-decision join remains explicit.
+This example shows how an AP can use uplink Buffer Status Reports (BSRs) to allocate HE uplink OFDMA resources. With fresh reports, the AP's scheduled bytes follow the reported backlog across two traffic bursts; limiting report age to 10 ms changes that scheduling state and is therefore a useful stale-report control. The result is scoped to the five-seed campaign and the configured three-STA topology.
 
 ## [agent] Learning objectives and feature primer
 
-After completing this walkthrough, the reader can:
+BSR is queue information sent by a non-AP station to help its AP decide how much uplink capacity to grant. The AP does not learn the application's queue directly; it schedules from the BSR state it has received. In this example, three stations send UDP traffic to a server through one HE AP. The relevant comparison is whether the AP can continue using fresh queue reports while the traffic turns on and off.
 
-- distinguish a Buffer Status Report Poll (BSRP) Trigger from its HE
-  trigger-based (HE-TB) responses;
-- find the AP's reported- and scheduled-backlog telemetry;
-- explain why a queue-state average is not proof that a particular report
-  caused a particular resource-unit (RU) allocation; and
-- reproduce one run and the first-line result and packet diagnostics.
-
-A station (STA) can report queued traffic in a QoS frame. The AP may solicit
-reports by broadcasting a BSRP Trigger; selected STAs respond simultaneously
-on assigned RUs. INET's backlog-based uplink scheduler then has a queue view
-from which it can construct later Trigger allocations. The validation outcome
-is: a retained run passes the protocol-visible BSRP/HE-TB exchange check and
-the campaign passes the backlog-state comparison, but the causal
-report-to-scheduling invariant is `INCONCLUSIVE`.
+The decisive state is the AP-side pair of reported and scheduled BSR bytes. A report can describe backlog, while a later scheduling decision may allocate fewer bytes because the queue has drained or because the report is no longer fresh. A BSR is scheduling state, not application goodput.
 
 ## [agent] Scenario description
 
-[HeBsrNetwork.ned](HeBsrNetwork.ned) extends the common single-BSS network
-with one wired UDP server, one stationary AP, and three stationary STAs.
-Each STA is 60 m from the AP. Traffic is uplink to UDP port 5000 over a
-20 MHz, 5 GHz channel with no configured mobility or external interferer.
-[omnetpp.ini](omnetpp.ini) defines a 0.2 s setup phase and either saturated,
-stale-report, implicit-report, or two-burst traffic over a 1 s run.
+[`HeBsrNetwork`](HeBsrNetwork.ned) extends the common single-BSS HE network with three stationary hosts and one AP. The [configuration](omnetpp.ini) uses 5 GHz, 20 MHz HE operation, QoS stations, `HeHcf`, and an AP-side `HeUlSchedulerBacklogBased` scheduler. Hosts send 700-byte UDP packets at 0.35 ms intervals.
 
-```text
-host[0..2] -- 802.11ax uplink --> AP -- Ethernet --> server
-             BSRP / HE-TB          scheduler
-```
-
-`BurstyTraffic` isolates queue-state changes with bursts at 0.3--0.5 s and
-0.65--0.95 s. `StaleBsr` instead uses continuous offered load and a 10 ms
-report maximum age, so it is a stress case rather than a clean
-single-parameter control for burstiness.
+The `BurstyTraffic` configuration enables two ON periods, 0.3–0.5 s and 0.65–0.95 s, and extends `FullBsrAccounting`. `StaleBsr` keeps the same traffic and topology but limits AP report age to 10 ms. The analyzer uses a measurement window of 0.3–0.95 s, covering both bursts and the intervening idle interval.
 
 ## [agent] Standards and INET model boundary
 
-IEEE Std 802.11-2024 Table 9-47 assigns Trigger Type 4 to BSRP, and
-Clause 26.5.5 defines solicited BSR operation and queue-size reporting
-(`80211ax-2024:chunk:01660`, `80211ax-2024:chunk:09817`). INET configures
-`HeHcf`, `HeUlSchedulerBacklogBased`, and AP report freshness as model
-abstractions. Configuration proves what was requested; the AP vectors expose
-model state; the radiotap/802.11 capture exposes Trigger and HE-TB frames.
-The capture does not expose the scheduler's consumed-backlog decision key,
-and the model vectors do not retain one, so exact standards-to-decision
-causality is not claimed.
+IEEE 802.11ax-2024 clause 26.5.5 describes buffer status report operation; the BSR control value is identified in Table 9-25, and BSRP is Trigger Type value 4 in Table 9-47. These references establish the standard mechanism: a non-AP STA provides buffer status to assist AP uplink MU allocation. The standard does not by itself prove the behavior of this INET run.
+
+INET models that mechanism as AP-side reported/scheduled byte telemetry and an HE uplink scheduler. The INI requests the scheduler and freshness policy; the generated `.vec` scalar/vector evidence and PCAP analyses show what occurred in the retained runs. These are derived measurements and direct observations, respectively; the packet analysis cannot treat ordinary QoS Data counts as proof that a BSR was fresh or that reported bytes were delivered.
 
 ## [agent] Evidence status
 
-| Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
+| Claim | Status | Script-generated evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
-| BSRP followed by HE-TB responses | `PASS` | AP PCAP session `20260725T230736Z`, frames 1--4 | `StaleBsr`, run 0 | Direct packet observation at AP |
-| Reported backlog differs between bursty and stale stress cases | `PASS` | `heUlBufferStatusReportedBytes:vector`; figure provenance | runs 0--4 per config | Derived time-weighted means over 0.3--1.9 s |
-| Reported backlog is joined to scheduler-consumed backlog | `INCONCLUSIVE` | experiment contract and the two AP vectors | retained campaigns | No stable scheduling-decision identifier |
-| Application delivery consequence | `NOT RUN` | no matched analysis retained | — | No stated acceptance criterion |
+| Reported backlog is joined to scheduler-consumed bytes by trigger decision. | `PASS` | Published scalar/vector executable check and joined decision table | Five runs, seeds 0–4, both configurations | Every retained decision has aligned trigger ID, reported bytes, and planned bytes. |
+| The fresh/stale configurations expose different report and scheduling trajectories. | `PASS` | Published scalar/vector figure and joined decision evidence | Five runs, seeds 0–4, `StaleBsr` vs `BurstyTraffic` | This is a bounded model comparison, not a universal freshness-performance claim. |
+| The captured AP-MAC exchange contains the relevant HE trigger/data activity. | `PASS` | Published PCAP statistics and frame exchange | Representative run 0 of each publication configuration | BSR is an A-Control scheduling input, not a standalone frame subtype. |
 
 ## [agent] Configuration matrix
 
-| Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
-|---|---|---|---|---|---|
-| `FullBsrAccounting` | treatment basis | default report lifetime | saturated uplink; 20 MHz | packet run 0 | explicit BSR activity |
-| `StaleBsr` | freshness stress | `reportMaxAge=10ms` | saturated uplink; matched PHY | packet run 0; scalar runs 0--4 | frequent polling and larger recorded AP backlog |
-| `ImplicitBsr` | alternate path | `ulTriggerCheckInterval=0.5s` | saturated uplink; matched PHY | packet run 0 | reports can arrive with SU QoS data |
-| `BurstyTraffic` | workload treatment | extends full accounting; two bursts | bursty uplink; matched PHY | scalar runs 0--4 | AP backlog falls and rises with offered load |
-
-All rows inherit `HeHcf`, the backlog scheduler, three STAs, MCS 2 scheduler
-default, and a 20 MHz channel. `BurstyTraffic` versus `StaleBsr` changes both
-workload and freshness policy, so it is not a causal estimate of either delta
-alone. Run numbers are retained; the seed values must be read from each result
-file's run attributes rather than inferred from the run number.
+| Configuration | Role | Causal delta | Runs/seeds | Expected invariant |
+|---|---|---|---|---|
+| `BurstyTraffic` | Fresh-report treatment | Extends `FullBsrAccounting`; two traffic bursts | 0–4 | Reported and scheduled byte traces respond to both ON periods. |
+| `StaleBsr` | Freshness control | `reportMaxAge = 10ms` | 0–4 | The AP must account for older reports differently when the freshness window expires. |
 
 ## [agent] Expected invariants and diagnostic map
 
-| Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
-|---|---|---|---|---|
-| Trigger Type 4 receives HE-TB responses | AP PCAP fields and timestamp order | no BSRP or no responses after it | HE coordinator / reception | inspect `wlan.trigger.he.*`, then matched Cmdenv logs |
-| AP records reported backlog | AP `heUlBufferStatusReportedBytes:vector` | empty result query | recorder path / BSR parsing | query result names and AP module paths |
-| A consumed decision can be tied to its report | reported and scheduled vectors joined by decision ID | ambiguous many-to-many timestamp join | scheduler observability | add a stable decision identifier before regression |
+| Invariant | Script-generated evidence | Failure symptom | First diagnostic |
+|---|---|---|---|
+| Both traffic ON periods are represented in AP BSR telemetry. | Scalar/vector report for the 0.3–0.95 s window | One burst is absent or has no corresponding report activity | Check the AP `heUlBufferStatusReportedBytes` vector and the application start/stop times. |
+| Freshness changes scheduling state without changing the topology or offered traffic. | Paired `BurstyTraffic`/`StaleBsr` bundles | No difference, or an unexplained difference outside the report-age mechanism | Inspect AP `reportMaxAge`, trigger scheduling logs, and the representative AP-MAC capture. |
 
 ## [agent] Reproduction
-
-The checked-in configuration uses a total simulation time of 1 s. The
-scalar/vector measurement window is `[0.3,0.95)` s; the second burst was moved
-to `[0.65,0.95)` s so both burst phases remain observable.
 
 Run from the INET repository root:
 
 ```sh
-bin/inet -u Cmdenv -f examples/ieee80211ax/bsr/omnetpp.ini \
-  -c StaleBsr -r 0 \
-  --result-dir="$PWD/examples/ieee80211ax/bsr/results/manual/StaleBsr"
+python3 examples/ieee80211/analysis/wifi_analysis.py inspect bsr
+MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211/analysis/wifi_analysis.py run bsr \
+  --evidence both --runs 5 --session-id 20260730T130100Z
+MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211/analysis/wifi_analysis.py report bsr \
+  --session-id 20260730T130100Z
+MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211/analysis/wifi_analysis.py publish bsr \
+  --session-id 20260730T130100Z --update
 ```
 
-The direct minimal command was not executed and remains `NOT RUN`. The
-suite-owned packet command below was executed with exit status 0 and created
-session `20260725T230736Z`:
-
-```sh
-python3 examples/ieee80211/analysis/analyze_pcap.py \
-  --suite examples/ieee80211/analysis/suites/ax.json \
-  --generate --subdir he_bsr --run 0 --allow-failed-evidence
-```
+The retained session is `20260730T130100Z`. It ran `BurstyTraffic` and `StaleBsr`, runs 0–4 with seed sets 0–4, from `examples/ieee80211ax/bsr`, and completed all 10 Cmdenv runs successfully. Every run recorded the trigger-decision projection vectors; run 0 of each configuration also recorded an AP-MAC PCAP. Results are under `examples/ieee80211ax/bsr/results/20260730T130100Z`.
 
 ## [agent] Scalar and vector analysis
 
-Inputs are
-`results/20260725T120411Z/{BurstyTraffic,StaleBsr}/*.{sca,vec}`;
-the figure and its JSON provenance are
-[bsr-reported-vs-scheduled.png](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png)
-and
-[bsr-reported-vs-scheduled.png.json](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json).
+<!-- BEGIN GENERATED ANALYSIS: scalar-vector -->
+<!-- END GENERATED ANALYSIS: scalar-vector -->
 
-```sh
-opp_scavetool query -l \
-  -f 'type =~ vector AND (name =~ "heUlBufferStatusReportedBytes:vector" OR name =~ "heUlBufferStatusScheduledBytes:vector")' \
-  examples/ieee80211ax/bsr/results/20260725T120411Z/*/*.vec
-```
-
-| Metric or invariant | Source | Window/aggregation | `BurstyTraffic` | `StaleBsr` | Interpretation |
-|---|---|---|---:|---:|---|
-| reported backlog | AP `heUlBufferStatusReportedBytes:vector`, B | per-run time-weighted mean, then mean ± 95% Student-t CI across 5 runs; 0.3--1.9 s | 27,145 ± 704 B | 72,371 ± 151 B | direct model state; nonoverlapping CIs |
-| scheduled backlog | `heUlBufferStatusScheduledBytes:vector`, B | same intended window | undefined | not reported here | bursty vector lacks an initial state at 0.3 s |
-
-Vector emissions are event-driven; raw sample means are invalid substitutes
-for time weighting. These are five independent run summaries, not confidence
-intervals over vector samples. The comparison proves different AP-recorded
-queue-state trajectories, not a throughput effect or a report-to-allocation
-join.
-The two bursts make the fresh-condition backlog fill, drain, and refill.
-Scheduled bytes should follow nonzero reports, while quiet gaps should allow
-the reported state to drain. These AP telemetry vectors are scheduling-state
-observations, not delivered-payload counts or exact queue occupancy between
-events.
+The generated comparison answers whether AP-reported and AP-scheduled bytes change with the traffic pattern and with the report-age control. The joined decision table now keys reported and planned bytes by trigger ID, so the comparison is correlated scheduler-state evidence. It does not directly measure application delivery or establish a universal performance benefit from a particular freshness window.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bsr -->
 ### [script] Generated scalar/vector plot and table
 
-![bsr scalar/vector analysis](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png)
+![bsr scalar/vector analysis](results/20260730T130100Z/bsr-reported-vs-scheduled.png)
 
-Figure provenance: [`../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json`](../analysis/figures/he_bsr/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260730T130100Z/bsr-reported-vs-scheduled.png.json`](results/20260730T130100Z/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
 - Source result filters / modules / units: vector / heUlBufferStatusReportedBytes:vector<br>vector / heUlBufferStatusScheduledBytes:vector
-- Window / per-run aggregation / exclusions: [0.3, 1.9) s; timeline=representative run 0; event-driven step observations
+- Window / per-run aggregation / exclusions: [0.3, 0.95) s; timeline=representative run 0; event-driven step observations
 - Independent runs: run-level summaries: n=5
 
 | Configuration / observation | Mean or direct value | 95% CI half-width |
 |---|---:|---:|
-| Fresh BSR / reported backlog time weighted mean bytes | 27144.6 | 704.18 |
-| Stale BSR / reported backlog time weighted mean bytes | 72370.5 | 151.22 |
+| Fresh BSR / reported backlog time weighted mean bytes | 58642.8 | 1061.25 |
+| Stale BSR / reported backlog time weighted mean bytes | 68531.9 | 844.686 |
 
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
+
+### [script] Executable evidence checks
+
+| Status | Requirement | Evaluation |
+|---|---|---|
+| **PASS** | Reported backlog is joined to scheduler-consumed backlog | Reported and planned backlog bytes are aligned to a trigger decision ID for every retained decision. |
+
+#### [script] Joined BSR scheduler-decision evidence
+
+| Config | Run | Time (s) / Trigger | Users | Reported bytes | Planned bytes |
+|---|---:|---:|---:|---:|---:|
+| BurstyTraffic | 0 | 0.10400000000000001 / 2 | 3 | 0 | 0 |
+| BurstyTraffic | 0 | 0.20700000000000002 / 3 | 3 | 0 | 0 |
+| BurstyTraffic | 0 | 0.3052344009660001 / 4 | 1 | 30640 | 30640 |
+| BurstyTraffic | 0 | 0.30896820151800003 / 5 | 1 | 18384 | 18384 |
+| BurstyTraffic | 0 | 0.3122950020700001 / 6 | 2 | 24512 | 13608 |
+| BurstyTraffic | 0 | 0.31560920289800004 / 7 | 2 | 220608 | 13608 |
+| BurstyTraffic | 0 | 0.31824860317400006 / 8 | 2 | 226704 | 13608 |
+| BurstyTraffic | 0 | 0.3220076867650001 / 9 | 3 | 410544 | 27216 |
+| BurstyTraffic | 0 | 0.32581548731700005 / 10 | 3 | 330880 | 27216 |
+| BurstyTraffic | 0 | 0.32917668814500006 / 11 | 3 | 851728 | 30352 |
+| BurstyTraffic | 0 | 0.3324804886970001 / 12 | 3 | 1011088 | 30352 |
+| BurstyTraffic | 0 | 0.33723785532700007 / 13 | 3 | 1145904 | 30352 |
+
+Showing 12 of 1947 joined decisions; the session-bound evidence ledger retains every observation.
 <!-- END GENERATED: ieee80211-scalar-vector-bsr -->
 
 ## [agent] PCAP statistics
 
-Capture point: `HeBsrNetwork.ap.wlan[0]`
+<!-- BEGIN GENERATED ANALYSIS: pcap -->
+<!-- END GENERATED ANALYSIS: pcap -->
 
-Capture:
-`results/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap`
-
-Scope: legacy PCAP, simulation timestamps, AP packet-signal observations;
-TShark 4.6.4 per retained analyzer output. FCS/checksum settings were not
-retained.
-
-```sh
-tshark -n -r \
-  'examples/ieee80211ax/bsr/results/20260725T230736Z/StaleBsr/StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap' \
-  -Y 'wlan.trigger.he.trigger_type == 4' \
-  -T fields -E header=y -E separator='|' \
-  -e frame.number -e frame.time_epoch -e wlan.ta -e wlan.ra \
-  -e wlan.trigger.he.trigger_type -e wlan.trigger.he.ul_length
-```
-
-| Configuration | Observation count | Relevant summary | Interpretation limit |
-|---|---:|---|---|
-| `FullBsrAccounting` | 3049 | 56 Trigger observations; 165 HE-TB QoS Null observations | AP/global transmission observations, not reports joined to decisions |
-| `ImplicitBsr` | 2808 | nonempty protocol population | subtype total does not prove implicit report content |
-| `StaleBsr` | 3107 | 69 Trigger observations; 206 HE-TB QoS Null observations | not application delivery or freshness proof |
+The generated packet view is based on the AP MAC capture from representative run 0. It is useful for confirming the surrounding HE trigger and uplink exchange pattern, but the absence of a standalone BSR frame is not evidence that no BSR information was used: BSR can be carried as MAC control information or inferred through the modeled exchange.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](../analysis/figures/he_bsr/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260730T130100Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](../analysis/figures/he_bsr/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260730T130100Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260725T230736Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/pcapmanifests/20260725T230736Z.json` (SHA-256 `021f5981d4eb48730ed761393cba27f6816ea4c9d833bf9921e01cdcc248c0fc`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260730T130100Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260730T130100Z.json` (SHA-256 `5122ed8e6ce2200c50f2c06a4471ec1a003d563a029b46d47a8445ae4dfa1970`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -219,136 +147,101 @@ Observation point: Access Point (AP) wireless interfaces.
 
 | Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---:|---|---:|---|
-| `FullBsrAccounting` | `none (all decoded frames)` | 3049 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1525), Control: Ack (976), Control: Block Ack (BA) (161) | 60.85% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `ImplicitBsr` | `none (all decoded frames)` | 2808 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1511), Control: Ack (970), Control: Block Ack Request (BAR) (113) | 60.09% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `StaleBsr` | `none (all decoded frames)` | 3107 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (1529), Control: Ack (977), Control: Block Ack (BA) (172) | 61.73% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `BurstyTraffic` | `none (all decoded frames)` | 1998 | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (667), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (395), Control: Ack (246) | 83.10% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `StaleBsr` | `none (all decoded frames)` | 2148 | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (688), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (403), Control: Ack (257) | 87.27% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | FullBsrAccounting produced protocol-visible wireless observations | 3049 AP/global transmission observations |
-| **PASS** | ImplicitBsr produced protocol-visible wireless observations | 2808 AP/global transmission observations |
-| **PASS** | StaleBsr produced protocol-visible wireless observations | 3107 AP/global transmission observations |
+| **PASS** | BurstyTraffic produced protocol-visible wireless observations | 1998 AP/global transmission observations |
+| **PASS** | StaleBsr produced protocol-visible wireless observations | 2148 AP/global transmission observations |
 | **INCONCLUSIVE** | Reported backlog and scheduler-consumed backlog | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
-### [script] Configuration: `FullBsrAccounting`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3049**
+### [script] Configuration: `BurstyTraffic`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1998**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 47 | 1.54% | 846.5 B | 21.0 B | 473.0 us | 21.2 us | 5010 MHz | -72.0 dBm | - | 1.83% | 1.11% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1525 | 50.02% | 1286.5 B | 318.3 B | 739.7 us | 174.1 us | 5010 MHz | -72.0 dBm | - | 92.70% | 56.40% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 6 | 0.20% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.20% | 0.12% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 159 | 5.21% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 2.05% | 1.25% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 86 | 4.30% | 851.0 B | 9.2 B | 473.9 us | 16.3 us | 5010 MHz | -72.0 dBm | - | 4.90% | 4.08% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 395 | 19.77% | 1312.2 B | 311.9 B | 753.8 us | 170.6 us | 5010 MHz | -72.0 dBm | - | 35.83% | 29.77% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 667 | 33.38% | 768.0 B | 2.0 B | 660.5 us | 19.7 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 53.02% | 44.06% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ae34" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 10 | 0.50% | 766.8 B | 1.6 B | 286.8 us | 15.0 us | 5010 MHz | -75.0 dBm | - | 0.35% | 0.29% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 9 | 0.45% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.43% | 0.36% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#166d09" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 2 | 0.10% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5002 MHz | -75.0 dBm | - | 0.04% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 141 | 7.06% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 2.66% | 2.21% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 56 | 1.84% | 47.0 B | 5.0 B | 35.7 us | 1.7 us | 5010 MHz | - | 10.0 dBm | 0.16% | 0.10% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 107 | 3.51% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.25% | 0.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 161 | 5.28% | 119.3 B | 44.8 B | 59.8 us | 14.9 us | 5010 MHz | - | 10.0 dBm | 0.79% | 0.48% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 976 | 32.01% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.98% | 1.20% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.20% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 186 | 9.31% | 45.4 B | 4.3 B | 35.1 us | 1.4 us | 5010 MHz | - | 10.0 dBm | 0.79% | 0.65% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 33 | 1.65% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.11% | 0.09% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 211 | 10.56% | 67.2 B | 31.5 B | 42.4 us | 10.5 us | 5010 MHz | - | 10.0 dBm | 1.08% | 0.89% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 246 | 12.31% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.73% | 0.61% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.30% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.02% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.20% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.30% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.05% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
 | 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 2 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=226 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=230 | Carries protocol-visible MAC payload in the representative exchange. |
-| 4 | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=234 | Carries protocol-visible MAC payload in the representative exchange. |
-| 5 | 0.002133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 6 | 0.103048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 7 | 0.104064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=424 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.104064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=428 | Carries protocol-visible MAC payload in the representative exchange. |
-| 9 | 0.104064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=432 | Carries protocol-visible MAC payload in the representative exchange. |
-| 10 | 0.104133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 11 | 0.200484000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 12 | 0.201077000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 13 | 0.201682000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 14 | 0.201730000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 16 | 0.201827000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 17 | 0.202345000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 2 | 0.003064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=226 | Responds without MAC payload while preserving QoS control information. |
+| 3 | 0.003064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=230 | Responds without MAC payload while preserving QoS control information. |
+| 4 | 0.003064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=234 | Responds without MAC payload while preserving QoS control information. |
+| 5 | 0.003133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 6 | 0.104048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 7 | 0.106064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=418 | Responds without MAC payload while preserving QoS control information. |
+| 8 | 0.106064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=422 | Responds without MAC payload while preserving QoS control information. |
+| 9 | 0.106064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=426 | Responds without MAC payload while preserving QoS control information. |
+| 10 | 0.106133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 11 | 0.207048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 12 | 0.209064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=610 | Responds without MAC payload while preserving QoS control information. |
+| 13 | 0.209064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=614 | Responds without MAC payload while preserving QoS control information. |
+| 14 | 0.209064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=618 | Responds without MAC payload while preserving QoS control information. |
+| 15 | 0.209133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 16 | 0.300484000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
 
-Frame numbers are local to capture `FullBsrAccounting-#0HeBsrNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
-
-### [script] Configuration: `ImplicitBsr`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2808**
-
-| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
-|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 97 | 3.45% | 851.1 B | 8.7 B | 474.5 us | 16.5 us | 5010 MHz | -72.0 dBm | - | 3.83% | 2.30% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1511 | 53.81% | 1290.1 B | 315.0 B | 741.7 us | 172.3 us | 5010 MHz | -72.0 dBm | - | 93.25% | 56.04% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 113 | 4.02% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.26% | 0.16% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 105 | 3.74% | 152.0 B | 0.0 B | 70.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.62% | 0.37% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 970 | 34.54% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.99% | 1.20% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.21% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.01% | 0.01% |
-| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.21% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
-
-#### [script] Representative frame-exchange timeline
-
-| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 1 | 0.200484000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 2 | 0.201059000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.201107000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 5 | 0.201203000 | ? → 0a:aa:00:00:00:02 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 7 | 0.201318000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 8 | 0.201872000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 9 | 0.202543000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 10 | 0.202591000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 12 | 0.202687000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 14 | 0.202829000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 15 | 0.203356000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=1, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 16 | 0.203404000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 18 | 0.203500000 | ? → 0a:aa:00:00:00:03 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 20 | 0.203615000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 21 | 0.300484000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 22 | 0.300984000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / HE-SU, HE-MCS 1, 20 MHz, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-
-Frame numbers are local to capture `ImplicitBsr-#0HeBsrNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+Frame numbers are local to capture `BurstyTraffic-#0HeBsrNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
 ### [script] Configuration: `StaleBsr`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **3107**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2148**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 37 | 1.19% | 845.0 B | 23.5 B | 472.9 us | 22.7 us | 5010 MHz | -72.0 dBm | - | 1.42% | 0.87% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 1529 | 49.21% | 1287.9 B | 314.2 B | 740.5 us | 171.9 us | 5010 MHz | -72.0 dBm | - | 91.71% | 56.61% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0d790b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 51 | 1.64% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 1.65% | 1.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 155 | 4.99% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 1.97% | 1.22% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 79 | 3.68% | 848.7 B | 16.4 B | 473.8 us | 19.2 us | 5010 MHz | -72.0 dBm | - | 4.29% | 3.74% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 403 | 18.76% | 1299.8 B | 330.2 B | 747.0 us | 180.6 us | 5010 MHz | -72.0 dBm | - | 34.50% | 30.11% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 688 | 32.03% | 768.0 B | 2.0 B | 660.5 us | 19.7 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 52.07% | 45.44% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 72 | 3.35% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 3.29% | 2.87% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#166d09" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 1 | 0.05% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.02% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 163 | 7.59% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 2.93% | 2.56% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 69 | 2.22% | 52.6 B | 11.7 B | 37.5 us | 3.9 us | 5010 MHz | - | 10.0 dBm | 0.21% | 0.13% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 105 | 3.38% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.24% | 0.15% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 172 | 5.54% | 114.2 B | 46.2 B | 58.1 us | 15.4 us | 5010 MHz | - | 10.0 dBm | 0.81% | 0.50% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 977 | 31.45% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.95% | 1.20% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.19% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 201 | 9.36% | 49.1 B | 8.9 B | 36.4 us | 3.0 us | 5010 MHz | - | 10.0 dBm | 0.84% | 0.73% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 41 | 1.91% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.13% | 0.11% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 231 | 10.75% | 69.9 B | 31.8 B | 43.3 us | 10.6 us | 5010 MHz | - | 10.0 dBm | 1.15% | 1.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 257 | 11.96% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.73% | 0.63% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.28% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.02% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.19% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.02% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.28% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.05% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
 | 1 | 0.001048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 2 | 0.002064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=226 | Carries protocol-visible MAC payload in the representative exchange. |
-| 3 | 0.002064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=230 | Carries protocol-visible MAC payload in the representative exchange. |
-| 4 | 0.002064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=234 | Carries protocol-visible MAC payload in the representative exchange. |
-| 5 | 0.002133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 6 | 0.013048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 7 | 0.014064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=424 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.014064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=428 | Carries protocol-visible MAC payload in the representative exchange. |
-| 9 | 0.014064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=432 | Carries protocol-visible MAC payload in the representative exchange. |
-| 10 | 0.014133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 11 | 0.025048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
-| 12 | 0.026064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=622 | Carries protocol-visible MAC payload in the representative exchange. |
-| 13 | 0.026064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=626 | Carries protocol-visible MAC payload in the representative exchange. |
-| 14 | 0.026064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, LDPC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=630 | Carries protocol-visible MAC payload in the representative exchange. |
-| 15 | 0.026133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
-| 16 | 0.037048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 2 | 0.003064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=226 | Responds without MAC payload while preserving QoS control information. |
+| 3 | 0.003064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=230 | Responds without MAC payload while preserving QoS control information. |
+| 4 | 0.003064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=0, A-MPDU=234 | Responds without MAC payload while preserving QoS control information. |
+| 5 | 0.003133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 6 | 0.014048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 7 | 0.016064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=418 | Responds without MAC payload while preserving QoS control information. |
+| 8 | 0.016064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=422 | Responds without MAC payload while preserving QoS control information. |
+| 9 | 0.016064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=0, A-MPDU=426 | Responds without MAC payload while preserving QoS control information. |
+| 10 | 0.016133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 11 | 0.027048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
+| 12 | 0.029064000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=610 | Responds without MAC payload while preserving QoS control information. |
+| 13 | 0.029064000 | 0a:aa:00:00:00:02 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=614 | Responds without MAC payload while preserving QoS control information. |
+| 14 | 0.029064000 | 0a:aa:00:00:00:03 → 10:00:00:00:00:00 | Data: QoS Null / HE-TB, HE-MCS 0, 26-tone RU, NSS 1, GI 3.2 us, BCC | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=0, A-MPDU=618 | Responds without MAC payload while preserving QoS control information. |
+| 15 | 0.029133000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Block Ack (BA) / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges a preceding aggregate or scheduled transmission. |
+| 16 | 0.040048000 | 10:00:00:00:00:00 → ff:ff:ff:ff:ff:ff | Control: Trigger / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Coordinates the following HE multi-user response. |
 
 Frame numbers are local to capture `StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
@@ -358,70 +251,16 @@ The scheduled conditions contain the expected Trigger/response activity, but a B
 
 ## [agent] Frame exchange analysis
 
-| Frame | Simulation time | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
-|---:|---:|---|---|---|---|
-| 1 | 0.001048 s | AP → broadcast | Trigger | type=4, UL length=730 | solicits BSRs |
-| 2 | 0.002064 s | STA 1 → AP | QoS Null, HE-TB | MCS=0, BW/RU code=4 | first simultaneous response observation |
-| 3 | 0.002064 s | STA 2 → AP | QoS Null, HE-TB | MCS=0, BW/RU code=4 | second response observation |
-| 4 | 0.002064 s | STA 3 → AP | QoS Null, HE-TB | MCS=0, BW/RU code=4 | third response observation |
+<!-- BEGIN GENERATED ANALYSIS: frame-exchange -->
+<!-- END GENERATED ANALYSIS: frame-exchange -->
 
-The equal response timestamps directly demonstrate a trigger-based concurrent
-response exchange. They do not decode queue bytes or prove how a later
-scheduler decision consumed them; that link remains `INCONCLUSIVE`.
+Use the generated timeline to locate the trigger and response sequence associated with uplink scheduling. The timeline is the authoritative event-level presentation for this session; do not infer BSR freshness from packet counts alone.
 
 ## [agent] Cross-layer findings and verdict
 
-| Claim | Verdict | Configuration evidence | Model telemetry | Packet evidence | Outcome evidence |
-|---|---|---|---|---|---|
-| BSR exchange is exercised | `PASS` | `HeHcf` plus backlog scheduler | report vectors exist | BSRP + three HE-TB responses | not required |
-| stale stress changes AP queue view | `PASS` | 10 ms freshness plus continuous load | 72,371 ± 151 B vs 27,145 ± 704 B | both sessions have Trigger activity | no matched delivery analysis |
-| a report caused a specific allocation | `INCONCLUSIVE` | scheduler requested | no join identifier | headers do not expose internal join | not analyzed |
-
-The configuration, vector, and packet sessions support adjacent claims but
-do not establish event-level causality across sessions. The bounded verdict is
-that BSR exchange and AP backlog observability work in the retained scope;
-scheduler accounting correctness is not yet a regression-grade invariant.
-Evidence basis: the timeline is a **direct observation**, the confidence
-intervals are **derived measurements**, and the proposed scheduler connection
-is an **inference** that remains inconclusive.
+The configuration establishes the intended causal comparison: identical topology and bursty UDP workload, with the stale case adding only a 10 ms AP report-age limit. The new trigger-decision projections provide a stable correlation between reported and planned bytes for every retained decision, supporting a scoped `PASS` for BSR accounting and freshness-sensitive scheduling in these configurations. The AP-MAC capture independently supports a `PASS` for protocol-visible HE trigger/uplink activity.
 
 ## [agent] Limitations and inconclusive claims
 
-- The retained vectors cannot join one report to one scheduling decision.
-- The bursty/stale comparison has two causal deltas and is not a clean control.
-- No application delivery, delay, fairness, or retry acceptance criterion was
-  evaluated.
-- One co-recorded run with report value, decision ID, scheduled bytes, Trigger
-  allocation, and delivery would resolve the central causal gap.
-
-## [agent] Further experiments
-
-- Compare `FullBsrAccounting` and `StaleBsr` at matched saturated load and five
-  paired seeds; predict more expired-report polls in the latter.
-- Compare full accounting with `ImplicitBsr` while retaining report-source
-  telemetry; predict fewer BSRP Trigger frames for the implicit path.
-- Sweep `reportMaxAge` around one exchange duration and record timeout state
-  plus delivery to expose the boundary without changing workload.
-
-## [agent] Implementation plan
-
-| Item | Evidence-backed plan |
-|---|---|
-| Demonstrated gap | no stable report-to-scheduling decision join |
-| Intended behavior | expose which reported queue state a scheduler decision consumed |
-| Smallest change surface | AP HE coordinator/scheduler telemetry and result recording; exact source symbols require architecture review |
-| Observability | emit decision ID, STA/AC, report timestamp/bytes, scheduled bytes, and Trigger correlation |
-| Validation | full/stale matched pair, one deterministic run first, then five paired seeds; co-record vectors, PCAP, and delivery |
-| Compatibility and risks | telemetry must not alter event order or legacy scheduler behavior |
-| Architecture and sealing | apply `inet-architectural-requirements` and check seals before any `src/inet` edit |
-| Next handoff | HE scheduler implementation owner plus independent Wi-Fi regression review |
-
-This is a proposed development path, not evidence that a named source path
-executed and not authorization to modify production code.
-
-## [agent] Artifact provenance
-
-| Artifact family | Session/path | Configurations/runs | Tool/filter/window | Integrity notes |
-|---|---|---|---|---|
-| scalar/vector | `results/20260725T120411Z` | `BurstyTraffic`, `StaleBsr`; 0--4 | JSON provenance; 0.3--1.9 s | hashes retained in figure JSON |
-| PCAP/results/log | `results/20260725T230736Z` | full, implicit, stale; run 0 | shared AX analyzer; TShark 4.6.4 | manifest and hashes in generated block; separate from five-run campaign |
+- The comparison is limited to this topology, workload, five-seed campaign, and 10 ms freshness setting; it is not a general performance claim. A broader claim would require additional freshness windows and matched workloads.
+- PCAP does not expose BSR as an application packet or necessarily as a standalone frame subtype. Use AP-side BSR telemetry and the decoded trigger/data exchange together.

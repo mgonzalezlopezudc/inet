@@ -521,6 +521,99 @@ def _trigger_decision_rows(
     ]
 
 
+def _bsr_decision_rows(
+    condition: Condition, evaluation: dict[str, Any]
+) -> dict[int, list[dict[str, Any]]]:
+    """Load the aligned per-user scheduler decision projections for every run."""
+    rows_by_run: dict[int, list[dict[str, Any]]] = {}
+    for run_number in sorted({item.run_number for item in condition.result_files}):
+        columns = {}
+        for key, name in evaluation["vectors"].items():
+            expression = f'module =~ "{evaluation["module"]}" AND name =~ "{name}"'
+            frame = scave_results.get_vectors(
+                condition._read(expression),
+                omit_empty_vectors=True,
+                **QUERY_OPTIONS,
+            )
+            frame = frame[frame.runnumber.astype(int) == run_number]
+            if frame.empty:
+                raise MissingDiagnosticTelemetryError(condition.config, name, run_number)
+            if len(frame) != 1:
+                raise RuntimeError(
+                    f"{condition.config}/{name}: expected one decision vector "
+                    f"for run {run_number}, found {len(frame)}"
+                )
+            row = frame.iloc[0]
+            columns[key] = (
+                np.asarray(row.vectime, dtype=float),
+                np.asarray(row.vecvalue, dtype=float),
+            )
+        reference_times = columns["trigger_id"][0]
+        if any(
+            len(times) != len(reference_times)
+            or not np.array_equal(times, reference_times)
+            for times, _ in columns.values()
+        ):
+            raise RuntimeError(
+                f"{condition.config} run {run_number}: BSR decision vectors are not aligned"
+            )
+        rows_by_run[run_number] = [
+            {
+                "simulation_time": float(reference_times[index]),
+                **{
+                    key: values[index]
+                    for key, (_, values) in columns.items()
+                },
+            }
+            for index in range(len(reference_times))
+        ]
+    return rows_by_run
+
+
+def evaluate_bsr_decision_join(
+    model_rows: dict[str, dict[int, list[dict[str, Any]]]],
+) -> Evaluation:
+    """Verify that reported and planned bytes share aligned trigger decisions."""
+    observations = []
+    failures = []
+    for config, runs in sorted(model_rows.items()):
+        for run_number, rows in sorted(runs.items()):
+            if not rows:
+                failures.append(f"{config} run {run_number}: no BSR decisions")
+                continue
+            grouped: dict[tuple[float, int], list[dict[str, Any]]] = {}
+            for row in rows:
+                key = (float(row["simulation_time"]), int(row["trigger_id"]))
+                grouped.setdefault(key, []).append(row)
+            for (timestamp, trigger_id), users in sorted(grouped.items()):
+                if any(
+                    not all(math.isfinite(float(row[key])) for key in ("reported_bytes", "planned_bytes"))
+                    for row in users
+                ):
+                    failures.append(
+                        f"{config} run {run_number} trigger {trigger_id}: non-finite backlog projection"
+                    )
+                    continue
+                observations.append({
+                    "config": config,
+                    "run_number": run_number,
+                    "simulation_time": timestamp,
+                    "trigger_id": trigger_id,
+                    "user_count": len(users),
+                    "reported_bytes": int(sum(float(row["reported_bytes"]) for row in users)),
+                    "planned_bytes": int(sum(float(row["planned_bytes"]) for row in users)),
+                })
+    if failures:
+        return Evaluation("FAIL", "; ".join(failures[:8]), observations)
+    if not observations:
+        return Evaluation("INCONCLUSIVE", "No aligned BSR scheduler decisions were retained.", [])
+    return Evaluation(
+        "PASS",
+        "Reported and planned backlog bytes are aligned to a trigger decision ID for every retained decision.",
+        observations,
+    )
+
+
 def _packet_trigger_rows(
     evaluation: dict[str, Any], requested_session_id: str,
 ) -> dict[str, list[dict[str, Any]]]:
@@ -612,6 +705,25 @@ def evaluate_contract(
             ),
             "run": str(evaluation["diagnostic_run"]),
         })
+        return result, filters
+    if handler == "bsr_decision_join":
+        selected = {
+            config: _single_condition(conditions, config)
+            for config in evaluation["configs"]
+        }
+        model_rows = {
+            config: _bsr_decision_rows(condition, evaluation)
+            for config, condition in selected.items()
+        }
+        result = evaluate_bsr_decision_join(model_rows)
+        filters = [
+            {
+                "type": "vector",
+                "module": evaluation["module"],
+                "name": name,
+            }
+            for name in evaluation["vectors"].values()
+        ]
         return result, filters
     raise RuntimeError(f"Unknown evidence handler {handler!r}")
 

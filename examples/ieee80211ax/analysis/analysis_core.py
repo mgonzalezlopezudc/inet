@@ -64,6 +64,7 @@ EVIDENCE_HANDLERS = {
     "mimo_disjoint_streams",
     "matched_delivery_ratio",
     "ul_trigger_allocation_join",
+    "bsr_decision_join",
 }
 
 QUERY_OPTIONS = {
@@ -199,6 +200,22 @@ def validate_evidence_contracts(manifest: dict[str, Any]) -> None:
                     "association_id", "backlog_bytes", "reported_bytes",
                     "planned_bytes", "tid", "access_category", "selected",
                     "ru_index", "ru_tone_size", "ru_tone_offset",
+                }
+                if set(evaluation["vectors"]) != required_vectors:
+                    raise RuntimeError(
+                        f"{identifier}: vectors must define "
+                        f"{sorted(required_vectors)}"
+                    )
+            elif handler == "bsr_decision_join":
+                required = {"configs", "module", "vectors"}
+                missing = required - evaluation.keys()
+                if missing:
+                    raise RuntimeError(
+                        f"{identifier}: missing parameters {sorted(missing)}"
+                    )
+                required_vectors = {
+                    "trigger_id", "trigger_type", "user_ordinal",
+                    "association_id", "reported_bytes", "planned_bytes",
                 }
                 if set(evaluation["vectors"]) != required_vectors:
                     raise RuntimeError(

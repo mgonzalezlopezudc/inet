@@ -150,6 +150,32 @@ def render_evidence_markdown(
                 f"\nShowing 12 of {len(observations)} joined users; the "
                 "session-bound evidence ledger retains every observation.\n"
             )
+    bsr_check = next(
+        (
+            check for check in group_evidence.get("checks", [])
+            if check.get("handler") == "bsr_decision_join"
+        ),
+        None,
+    )
+    if bsr_check is not None:
+        lines.extend([
+            "\n#### [script] Joined BSR scheduler-decision evidence\n\n",
+            "| Config | Run | Time (s) / Trigger | Users | Reported bytes | Planned bytes |\n",
+            "|---|---:|---:|---:|---:|---:|\n",
+        ])
+        observations = bsr_check.get("observations", [])
+        for row in observations[:12]:
+            lines.append(
+                f"| {escape_cell(row['config'])} | {row['run_number']} | "
+                f"{row['simulation_time']} / {row['trigger_id']} | "
+                f"{row['user_count']} | {row['reported_bytes']} | "
+                f"{row['planned_bytes']} |\n"
+            )
+        if len(observations) > 12:
+            lines.append(
+                f"\nShowing 12 of {len(observations)} joined decisions; the "
+                "session-bound evidence ledger retains every observation.\n"
+            )
     return "".join(lines)
 
 
