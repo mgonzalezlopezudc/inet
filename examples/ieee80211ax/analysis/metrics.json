@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-30T10:38:42.420634+00:00",
+    "generated_at_utc": "2026-07-30T10:52:38.376726+00:00",
     "groups": {
       "bsr": {
         "conditions": [
@@ -16,44 +16,44 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#0.sca",
-                "sha256": "79ebfdef25533a1412891fbbac4d27935d7974ae47830240b52970392ed40ca8"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#0.sca",
+                "sha256": "162acf4f0b3f5df7bbff17aa91d95117b26bdb0ad0604cd254f78b2d701778ca"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#0.vec",
-                "sha256": "90a58e9ddf0d6f90c7628b32564641d4153518caf7a2b42feb56f7eec28008f0"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#0.vec",
+                "sha256": "3e5a7a7821d3a669bf51d713c1a70503c874bfbe66df9122e207a6590c164670"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#1.sca",
-                "sha256": "32a41391c9c36549659f4d3a9bf30d38609d68d878e830ce374fccb12f4f6830"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#1.sca",
+                "sha256": "6ba8c7f721e5e2fbfa9c9057eccf3f4e82d102467f1a5eb30e8886facd3d1480"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#1.vec",
-                "sha256": "97a6bf8574f93ad007354ad257c7391576249c49e89c5d70dcb8a1e79e65b198"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#1.vec",
+                "sha256": "3896258155713dbe3497821f507d638170e14c8b55ecfcbb43df2b3246215152"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#2.sca",
-                "sha256": "599c3c707549db16bf0e8f070db8540fb2c946541e2752b634c2145557e8e8f6"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#2.sca",
+                "sha256": "15de101d6c99f1537eaa3d66479c9f2b8c1b5d7f1d2d1581609d8868817551a6"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#2.vec",
-                "sha256": "1c35ad9b53e75bcbf00c7698133e94fc26395154ab4ec6e76fe968e8b51f45fc"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#2.vec",
+                "sha256": "1c9091f4fe758ac3b39516983a00f00892b15726ea3a8a6d96d775585452d2ac"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#3.sca",
-                "sha256": "00bf0405aac9109e47c78206a76bcabe2106babbab404223ca33338883965b2f"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#3.sca",
+                "sha256": "d72150cfecba1e5e80c650f66291cfd3456590e69e5a621fa89a8314ed47643d"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#3.vec",
-                "sha256": "835017ea7c45eeede87cf167d06472adfafdb0724097c190398f62339e7f5aa0"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#3.vec",
+                "sha256": "ea63675fdf68dd23d80c878afff478da12799145b59d9a9e2f6a9e439fa075a0"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#4.sca",
-                "sha256": "efa0fa63ce399d71359e9a26bf2246d4fc3c09bfb8cac8b26c0fbe93ed712d80"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#4.sca",
+                "sha256": "dfef82aeb9a07db7b70754ecb7cda1fc52fefdbf207fb7c554ce392471e9ee47"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/BurstyTraffic/BurstyTraffic-#4.vec",
-                "sha256": "6f8cbf5fbb4e136262bfb9e05d23c0fe5660d6d7c812c802eba75e3cfa009d23"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/BurstyTraffic/BurstyTraffic-#4.vec",
+                "sha256": "06aad638d75a6c6bbce9aa4d3e103ed0881e86fbd0afd2df9347f1aef17a2528"
               }
             ]
           },
@@ -69,54 +69,54 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#0.sca",
-                "sha256": "87d6e81e7f8ae532190796c5b7cce3e879c7d5252706cf2572fc4c1ee0cdfcc4"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#0.sca",
+                "sha256": "e27e4d96a46574a30e7c7a7f2fc861f309a9e9c8d57fb4a41d350331a500ea1d"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#0.vec",
-                "sha256": "e0ed09934d10674f5af48bad8881fc0729755f4ef2fc1511ced3799430057069"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#0.vec",
+                "sha256": "ac1a6781ace1cd3615de38f9bb4fd3333a19d79fb97a3d1716e8800d4773bf68"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#1.sca",
-                "sha256": "c14d425cfd93ab6e8dfb61ea011ec50065a4f8bf02053bd05001e49780c507ae"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#1.sca",
+                "sha256": "ca0031de5ced983aa87bfcc2633bf7d002a008630bc090840c35f68f14b05c02"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#1.vec",
-                "sha256": "3143708a1f09dcb35b39da4a00565a055ee80728d222940fe51d5ca4b8418b78"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#1.vec",
+                "sha256": "c91161c29da548937afbe4b6f2e77f9ffaeacff9974beaa86d8aa6d2eba49111"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#2.sca",
-                "sha256": "e81e29c4f5d10e89345acdd214ae4192eaffbdcdc7c3b30bdbdc289afc4ed94f"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#2.sca",
+                "sha256": "9ecd4eb8557b3356cc07b98c78ed9b5b0346ce1d1641197fbdedb77f60c510d2"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#2.vec",
-                "sha256": "dfcb6e4ce2fb93a88e55dc1aea04a7ad5d4e2353d80195c2836640f7e6a9a5dc"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#2.vec",
+                "sha256": "1a44938f55754a1a1a28eaa1587c47f46b6fba6afccb4ceb9c23fa3859a5e8c2"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#3.sca",
-                "sha256": "63ac685d8ca4a7c6e5466867995da03f6a2335783e7504d1ebe5d1b8acf4254c"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#3.sca",
+                "sha256": "b73f4e11c9fd2b3b00c1350e82ab77e49138e9695d333e68b459015d831dab32"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#3.vec",
-                "sha256": "de71f90053128404506635ce8b827212b5e632a240e87133a34f93daab857efd"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#3.vec",
+                "sha256": "4a9b813533d8873081c4e82742af6d5e4c5bdbd2cc4f565b211e0d8262e7be2f"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#4.sca",
-                "sha256": "675e7d2a1ddccd99040ba8333e29549fd34c2749795fdc9f6c1c67ed725c9de6"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#4.sca",
+                "sha256": "eb2d98a743483ffcd62ac5e30477c7d60e3b910b7deba4d11e9ecda28df2791b"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T130100Z/StaleBsr/StaleBsr-#4.vec",
-                "sha256": "b82d01e5412d555f74c68f01cb19342674a9312febc0f2e094c0d78eb1344d9c"
+                "path": "examples/ieee80211ax/bsr/results/20260730T105223Z/StaleBsr/StaleBsr-#4.vec",
+                "sha256": "ed261d36f2714e3ac28094ef5036e2f7f555d4071a804e60bdef1c42beab81ef"
               }
             ]
           }
         ],
-        "session_id": "20260730T130100Z",
+        "session_id": "20260730T105223Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "c42de8a157645ab665b847542b8db95fc0a69994",
-    "requested_session_id": "20260730T130100Z",
+    "repository_revision": "a5725691d452c566664847b3880d27afe119e579",
+    "requested_session_id": "20260730T105223Z",
     "schema_version": 1
   },
   "bsr": {

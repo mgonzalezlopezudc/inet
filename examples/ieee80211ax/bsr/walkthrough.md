@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260730T130100Z`
-- PCAP: `20260730T130100Z`
+- Scalar/vector: `20260730T105223Z`
+- PCAP: `20260730T105223Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `NOT RECORDED`.
@@ -13,43 +13,43 @@ This example shows how an AP can use uplink Buffer Status Reports (BSRs) to allo
 
 ## [agent] Learning objectives and feature primer
 
-BSR is queue information sent by a non-AP station to help its AP decide how much uplink capacity to grant. The AP does not learn the application's queue directly; it schedules from the BSR state it has received. In this example, three stations send UDP traffic to a server through one HE AP. The relevant comparison is whether the AP can continue using fresh queue reports while the traffic turns on and off.
+BSR is queue information sent by a non-AP station to help its AP decide how much uplink capacity to grant. The AP schedules from the report state it has received, which may differ from the station's current queue. Three stations send UDP traffic through one HE AP while the workload turns on, off, and on again.
 
-The decisive state is the AP-side pair of reported and scheduled BSR bytes. A report can describe backlog, while a later scheduling decision may allocate fewer bytes because the queue has drained or because the report is no longer fresh. A BSR is scheduling state, not application goodput.
+The decisive evidence is the AP-side reported/planned-byte pair keyed by `heUlTriggerDecisionId`. A report may exceed the bytes planned for one trigger because the scheduler is allocating one transmission opportunity, not copying the entire queue. BSR is scheduling state, not application goodput.
 
 ## [agent] Scenario description
 
-[`HeBsrNetwork`](HeBsrNetwork.ned) extends the common single-BSS HE network with three stationary hosts and one AP. The [configuration](omnetpp.ini) uses 5 GHz, 20 MHz HE operation, QoS stations, `HeHcf`, and an AP-side `HeUlSchedulerBacklogBased` scheduler. Hosts send 700-byte UDP packets at 0.35 ms intervals.
+[`HeBsrNetwork`](HeBsrNetwork.ned) extends the common single-BSS HE network with three stationary hosts and one AP. The [configuration](omnetpp.ini) selects 5 GHz, 20 MHz HE operation, QoS stations, `HeHcf`, and the AP-side `HeUlSchedulerBacklogBased` scheduler. Hosts generate 700-byte UDP packets every 0.35 ms.
 
-The `BurstyTraffic` configuration enables two ON periods, 0.3–0.5 s and 0.65–0.95 s, and extends `FullBsrAccounting`. `StaleBsr` keeps the same traffic and topology but limits AP report age to 10 ms. The analyzer uses a measurement window of 0.3–0.95 s, covering both bursts and the intervening idle interval.
+`BurstyTraffic` enables ON periods 0.3–0.5 s and 0.65–0.95 s and extends `FullBsrAccounting`. `StaleBsr` keeps the same topology and traffic but sets `reportMaxAge = 10ms`. The analyzer's measurement window is 0.3–0.95 s, so it includes both bursts and the idle interval between them.
 
 ## [agent] Standards and INET model boundary
 
-IEEE 802.11ax-2024 clause 26.5.5 describes buffer status report operation; the BSR control value is identified in Table 9-25, and BSRP is Trigger Type value 4 in Table 9-47. These references establish the standard mechanism: a non-AP STA provides buffer status to assist AP uplink MU allocation. The standard does not by itself prove the behavior of this INET run.
+IEEE 802.11ax-2024 clause 26.5.5 describes buffer status report operation. Table 9-25 identifies the BSR control value, and Table 9-47 identifies BSRP as Trigger Type 4. These references define the standard mechanism; they do not prove the behavior of this INET run.
 
-INET models that mechanism as AP-side reported/scheduled byte telemetry and an HE uplink scheduler. The INI requests the scheduler and freshness policy; the generated `.vec` scalar/vector evidence and PCAP analyses show what occurred in the retained runs. These are derived measurements and direct observations, respectively; the packet analysis cannot treat ordinary QoS Data counts as proof that a BSR was fresh or that reported bytes were delivered.
+INET exposes the mechanism through AP-side report/planning telemetry and an HE uplink scheduler. The INI is requested behavior; the generated `.vec` results are derived measurements, and the PCAP is a direct observation of the MAC exchange. QoS Data counts alone do not prove BSR freshness or application delivery of the reported bytes.
 
 ## [agent] Evidence status
 
 | Claim | Status | Script-generated evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
 | Reported backlog is joined to scheduler-consumed bytes by trigger decision. | `PASS` | Published scalar/vector executable check and joined decision table | Five runs, seeds 0–4, both configurations | Every retained decision has aligned trigger ID, reported bytes, and planned bytes. |
-| The fresh/stale configurations expose different report and scheduling trajectories. | `PASS` | Published scalar/vector figure and joined decision evidence | Five runs, seeds 0–4, `StaleBsr` vs `BurstyTraffic` | This is a bounded model comparison, not a universal freshness-performance claim. |
+| The fresh/stale configurations expose different report and planning trajectories. | `PASS` | Published scalar/vector figure and joined decision evidence | Five runs, seeds 0–4, `StaleBsr` vs `BurstyTraffic` | This is a bounded model comparison, not a universal freshness-performance claim. |
 | The captured AP-MAC exchange contains the relevant HE trigger/data activity. | `PASS` | Published PCAP statistics and frame exchange | Representative run 0 of each publication configuration | BSR is an A-Control scheduling input, not a standalone frame subtype. |
 
 ## [agent] Configuration matrix
 
 | Configuration | Role | Causal delta | Runs/seeds | Expected invariant |
 |---|---|---|---|---|
-| `BurstyTraffic` | Fresh-report treatment | Extends `FullBsrAccounting`; two traffic bursts | 0–4 | Reported and scheduled byte traces respond to both ON periods. |
-| `StaleBsr` | Freshness control | `reportMaxAge = 10ms` | 0–4 | The AP must account for older reports differently when the freshness window expires. |
+| `BurstyTraffic` | Fresh-report treatment | Extends `FullBsrAccounting`; two traffic bursts | 0–4 | Trigger decisions contain aligned reported and planned bytes. |
+| `StaleBsr` | Freshness control | `reportMaxAge = 10ms` | 0–4 | Trigger decisions remain aligned while the AP applies the shorter freshness window. |
 
 ## [agent] Expected invariants and diagnostic map
 
 | Invariant | Script-generated evidence | Failure symptom | First diagnostic |
 |---|---|---|---|
-| Both traffic ON periods are represented in AP BSR telemetry. | Scalar/vector report for the 0.3–0.95 s window | One burst is absent or has no corresponding report activity | Check the AP `heUlBufferStatusReportedBytes` vector and the application start/stop times. |
-| Freshness changes scheduling state without changing the topology or offered traffic. | Paired `BurstyTraffic`/`StaleBsr` bundles | No difference, or an unexplained difference outside the report-age mechanism | Inspect AP `reportMaxAge`, trigger scheduling logs, and the representative AP-MAC capture. |
+| Each retained trigger decision has correlated report and plan values. | Joined decision evidence | Missing, misaligned, or non-finite decision fields | Check the six `heUlTriggerDecision*` vectors at the AP coordinator. |
+| The traffic bursts are present in the analysis window. | Reported-backlog plot and AP telemetry | No report activity during an ON period | Check application start/stop times and `heUlBufferStatusReportedBytes`. |
 
 ## [agent] Reproduction
 
@@ -72,14 +72,14 @@ The retained session is `20260730T130100Z`. It ran `BurstyTraffic` and `StaleBsr
 <!-- BEGIN GENERATED ANALYSIS: scalar-vector -->
 <!-- END GENERATED ANALYSIS: scalar-vector -->
 
-The generated comparison answers whether AP-reported and AP-scheduled bytes change with the traffic pattern and with the report-age control. The joined decision table now keys reported and planned bytes by trigger ID, so the comparison is correlated scheduler-state evidence. It does not directly measure application delivery or establish a universal performance benefit from a particular freshness window.
+The generated comparison shows the AP's reported backlog and planned bytes over the two configurations. The joined decision table keys both values by trigger ID, making each comparison a correlated scheduler-state observation. It does not measure application goodput or establish a universal benefit for a 10 ms freshness window.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bsr -->
 ### [script] Generated scalar/vector plot and table
 
-![bsr scalar/vector analysis](results/20260730T130100Z/bsr-reported-vs-scheduled.png)
+![bsr scalar/vector analysis](results/20260730T105223Z/bsr-reported-vs-scheduled.png)
 
-Figure provenance: [`results/20260730T130100Z/bsr-reported-vs-scheduled.png.json`](results/20260730T130100Z/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260730T105223Z/bsr-reported-vs-scheduled.png.json`](results/20260730T105223Z/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -125,17 +125,17 @@ Showing 12 of 1947 joined decisions; the session-bound evidence ledger retains e
 <!-- BEGIN GENERATED ANALYSIS: pcap -->
 <!-- END GENERATED ANALYSIS: pcap -->
 
-The generated packet view is based on the AP MAC capture from representative run 0. It is useful for confirming the surrounding HE trigger and uplink exchange pattern, but the absence of a standalone BSR frame is not evidence that no BSR information was used: BSR can be carried as MAC control information or inferred through the modeled exchange.
+The generated packet view uses the AP MAC capture from representative run 0. It confirms the surrounding HE Trigger and HE-TB response activity. BSR is scheduling information carried in the MAC exchange, not necessarily a standalone frame subtype, so packet counts do not replace the AP decision telemetry.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260730T130100Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260730T105223Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260730T130100Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260730T105223Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260730T130100Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260730T130100Z.json` (SHA-256 `5122ed8e6ce2200c50f2c06a4471ec1a003d563a029b46d47a8445ae4dfa1970`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260730T105223Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260730T105223Z.json` (SHA-256 `adfbd7122ba2dafbd77d2bead8a2e2ab044c8f633486ce66668b44f692e8aa85`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -156,7 +156,6 @@ Observation point: Access Point (AP) wireless interfaces.
 |---|---|---|
 | **PASS** | BurstyTraffic produced protocol-visible wireless observations | 1998 AP/global transmission observations |
 | **PASS** | StaleBsr produced protocol-visible wireless observations | 2148 AP/global transmission observations |
-| **INCONCLUSIVE** | Reported backlog and scheduler-consumed backlog | The packet-type table is exchange evidence only; use the recorded feature vectors/results |
 
 ### [script] Configuration: `BurstyTraffic`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1998**
@@ -254,13 +253,13 @@ The scheduled conditions contain the expected Trigger/response activity, but a B
 <!-- BEGIN GENERATED ANALYSIS: frame-exchange -->
 <!-- END GENERATED ANALYSIS: frame-exchange -->
 
-Use the generated timeline to locate the trigger and response sequence associated with uplink scheduling. The timeline is the authoritative event-level presentation for this session; do not infer BSR freshness from packet counts alone.
+The generated timeline begins with AP Trigger frames followed by HE-TB station responses and acknowledgments. This is the protocol exchange in which the AP applies its uplink schedule; the trigger-decision vectors provide the corresponding BSR values. The timeline is local to the representative capture and is not an event-log reconstruction.
 
 ## [agent] Cross-layer findings and verdict
 
-The configuration establishes the intended causal comparison: identical topology and bursty UDP workload, with the stale case adding only a 10 ms AP report-age limit. The new trigger-decision projections provide a stable correlation between reported and planned bytes for every retained decision, supporting a scoped `PASS` for BSR accounting and freshness-sensitive scheduling in these configurations. The AP-MAC capture independently supports a `PASS` for protocol-visible HE trigger/uplink activity.
+The two configurations hold topology and offered traffic constant and change only the AP's report freshness policy. Across five seeds, every retained trigger decision has an aligned ID, reported backlog, and planned bytes; this supports a scoped `PASS` for BSR accounting and the configured freshness comparison. The AP-MAC capture independently supports a `PASS` for protocol-visible HE trigger/uplink activity.
 
 ## [agent] Limitations and inconclusive claims
 
-- The comparison is limited to this topology, workload, five-seed campaign, and 10 ms freshness setting; it is not a general performance claim. A broader claim would require additional freshness windows and matched workloads.
-- PCAP does not expose BSR as an application packet or necessarily as a standalone frame subtype. Use AP-side BSR telemetry and the decoded trigger/data exchange together.
+- The comparison is limited to this topology, workload, five seeds, and 10 ms freshness setting; it is not a general performance claim. Broader claims require additional freshness windows and matched workloads.
+- PCAP does not expose BSR as an application packet or necessarily as a standalone frame subtype. Use AP decision telemetry and the decoded trigger/data exchange together.

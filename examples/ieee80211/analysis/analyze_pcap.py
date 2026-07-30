@@ -2268,8 +2268,6 @@ def evaluate_evidence(config_results, subdir):
         "multi_user/mu_mimo": ("mu-mimo-streams", "Multiple users with disjoint stream allocations in one PPDU"),
         "ndp_feedback": ("ndp-trigger-type", "Trigger Type 7 and matching NDP feedback allocation"),
         "multi_user/ndp_feedback": ("ndp-trigger-type", "Trigger Type 7 and matching NDP feedback allocation"),
-        "bsr": ("bsr-backlog", "Reported backlog and scheduler-consumed backlog"),
-        "he_bsr": ("bsr-backlog", "Reported backlog and scheduler-consumed backlog"),
         "dynamic_frag": ("fragmentation-fields", "Capability gate, fragment numbers, sizes, More Fragments and acknowledgment"),
         "mac_features/dynamic_fragmentation": ("fragmentation-fields", "Capability gate, fragment numbers, sizes, More Fragments and acknowledgment"),
         "frequency_selective_channel": ("per-ru-channel-evidence", "Per-RU SNIR/reception outcome and sink delivery"),
@@ -2282,7 +2280,12 @@ def evaluate_evidence(config_results, subdir):
             "id": check_id,
             "status": "INCONCLUSIVE",
             "requirement": requirement,
-            "evidence": "The packet-type table is exchange evidence only; use the recorded feature vectors/results",
+            "evidence": (
+                "BSR accounting is validated by the scalar/vector evidence; "
+                "this PCAP table only shows the surrounding HE trigger/uplink exchange"
+                if subdir in ("bsr", "he_bsr")
+                else "The packet-type table is exchange evidence only; use the recorded feature vectors/results"
+            ),
         })
     return checks
 
