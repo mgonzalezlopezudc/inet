@@ -59,6 +59,7 @@ EVIDENCE_STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT RUN"}
 TIMELINE_LIMIT = 16
 
 subdirs_configs = {}
+CONFIG_ORDER = {}
 DL_OFDMA_SUBDIRS = {"dl_ofdma_sched", "dl_ofdma_asym"}
 DL_OFDMA_ASYM_CONFIGS = {
     "BacklogBased", "HoLMinDelay", "BacklogBased2_0ms", "HoLMinDelay2_0ms",
@@ -73,6 +74,7 @@ def configure_suite(suite, output_dir):
     global MANIFEST_HISTORY_DIR, GENERATED_MARKER, GENERATED_BEGIN
     global GENERATED_END, SUITE_SCENARIOS
     global SUITE_NAME, SUITE_DESCRIPTOR_PATH
+    global CONFIG_ORDER
     global subdirs_configs
     EXAMPLE_ROOT = Path(suite.example_root)
     ANALYSIS_OUTPUT_DIR = Path(output_dir)
@@ -84,6 +86,12 @@ def configure_suite(suite, output_dir):
     GENERATED_BEGIN = f"<!-- BEGIN GENERATED: {GENERATED_MARKER} -->"
     GENERATED_END = f"<!-- END GENERATED: {GENERATED_MARKER} -->"
     SUITE_SCENARIOS = dict(suite.scenarios)
+    CONFIG_ORDER = {
+        config: index
+        for index, config in enumerate(
+            suite.scenarios.get("bsr", {}).get("configurations", [])
+        )
+    }
     subdirs_configs = {
         name: list(scenario["configurations"])
         for name, scenario in suite.scenarios.items()
@@ -1951,7 +1959,8 @@ def get_packet_color(pt):
 
 def config_sort_key(config_name: str) -> list[object]:
     """Sort configuration names naturally (e.g., Width20MHz < Width40MHz < Width80MHz < Width160MHz)."""
-    return [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(config_name))]
+    natural = [int(text) if text.isdigit() else text for text in re.split(r'(\d+)', str(config_name))]
+    return [CONFIG_ORDER.get(str(config_name), len(CONFIG_ORDER))] + natural
 
 def generate_stacked_bar_plot(config_results, subdir, color_map, output_dir):
     # Filter configs that have global stats

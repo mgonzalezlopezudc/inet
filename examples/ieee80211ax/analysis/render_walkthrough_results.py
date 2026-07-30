@@ -59,6 +59,14 @@ def natural_sort_key(s: str) -> list[object]:
 
 def condition_sort_key(s: str) -> list[object]:
     name = str(s)
+    bsr_order = {
+        "FreshBsr": 0,
+        "StaleBsr": 1,
+        "ImplicitBsr": 2,
+        "BurstyTraffic": 3,
+    }
+    if name in bsr_order:
+        return [bsr_order[name]]
     if "2.5ms" in name:
         rank = 1
     elif "2.0ms" in name or "2ms" in name:
@@ -159,7 +167,7 @@ def render_evidence_markdown(
     )
     if bsr_check is not None:
         observations = bsr_check.get("observations", [])
-        for config in sorted({row["config"] for row in observations}):
+        for config in sorted({row["config"] for row in observations}, key=condition_sort_key):
             config_observations = [
                 row for row in observations if row["config"] == config
             ]

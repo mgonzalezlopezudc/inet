@@ -1,11 +1,11 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-30T11:26:09.720511+00:00",
+    "generated_at_utc": "2026-07-30T12:00:35.198112+00:00",
     "groups": {
       "bsr": {
         "conditions": [
           {
-            "configuration": "BurstyTraffic",
+            "configuration": "FreshBsr",
             "group": "bsr",
             "ini": "examples/ieee80211ax/bsr/omnetpp.ini",
             "label": "Fresh BSR",
@@ -16,44 +16,44 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#0.sca",
-                "sha256": "fd3614222eae3b32911a5412d78854032f2d9e1d729b9e9dc76c5294e36cf798"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#0.sca",
+                "sha256": "52aedbf4d01d7b88a4c2c9281856e38b39b7d21b32f66727880630232764646a"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#0.vec",
-                "sha256": "862a793e003454ba85bddc8c8a6b46065bb8d5b1d5063f8c27de8dfe85dfd74e"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#0.vec",
+                "sha256": "4dcb1cf23ac227229f70d8b5daff7f909ad343b76f37abb2f63d1c6ac7561524"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#1.sca",
-                "sha256": "dfa3aea7a8bbe78fa9f2ec8be9111baf7c21ca1d9d5448bc7c8a4343e511263c"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#1.sca",
+                "sha256": "e0abde55f7508e71504237c453a93002dc0bee72b10381fd85b8629f4ac59fbf"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#1.vec",
-                "sha256": "ec6d8a1253cba895355602217953a8fa332e057032eb5d04303d10d78f072f91"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#1.vec",
+                "sha256": "4bb0cfd9d9b29f1c0c68249698e012275a87d2ccf056664050dd516316dc3138"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#2.sca",
-                "sha256": "09ed7e194bf9ddd70262d3402a228e7c4c0377ef3a51f86d386e93bf84ad53f8"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#2.sca",
+                "sha256": "4884a379c2da89222815e609502f9cac5c4f6595169f19e12769fb04e5c9ba20"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#2.vec",
-                "sha256": "a00a60f33ebbd868e0b6669684d3537a68cbe1af884a03c0e50281b24adab3ac"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#2.vec",
+                "sha256": "890c84fa2dc7f3a1e3519d019724d8a818d45b4cb0bacbece22faebe9a48e2d4"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#3.sca",
-                "sha256": "ef40bf7772d47436ae91fc126acb5fda64378a171c76d894abfb2dec9f8b98d0"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#3.sca",
+                "sha256": "2ebcbb8a49dd4213d087a9c000d5acb8b4fe5dff5734d0473ae8f170078818d8"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#3.vec",
-                "sha256": "e407724c5ad8d602f263547d8b021a952ede0bbbded658fce07de0df25edee32"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#3.vec",
+                "sha256": "ab8491d52de4a2b9d118979da4583ccd28f750fd168d8d9f1a05635f8c2ecd8f"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#4.sca",
-                "sha256": "b38a4969cca2563b2187872affa8efa1dae6ef81e23051a201bc545231c67daf"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#4.sca",
+                "sha256": "6ad6faecc0f7b11671d8d24658e55b37e27e2d5f7068aabc94b8b3d7fe6d56a0"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/BurstyTraffic/BurstyTraffic-#4.vec",
-                "sha256": "d3b83700be212aba5cdd0aa647c716694b6edf46012d6f73ee1279fe995cccfd"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/FreshBsr/FreshBsr-#4.vec",
+                "sha256": "4a65b72e525009d4ddb2c21f988b0862e39dd1890e4c8d1c4bfecc732e1d0723"
               }
             ]
           },
@@ -69,62 +69,182 @@
             "metadata": {},
             "result_files": [
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#0.sca",
-                "sha256": "b70b0670a3d32874feeb01c0e96e2594c361c852fa1e18030a86e61f831ed611"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#0.sca",
+                "sha256": "30276ebb437475e17272961fa577e0f01ebceaedab61c2505ddc7969feb8b1cc"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#0.vec",
-                "sha256": "639d7b0b91193e6961708d94506ec187d134132bb2a7368dc9d6be172cb48cf4"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#0.vec",
+                "sha256": "693e1305be6bb677556609601be5c7c909607222e51371f93cebf0d7e3633c04"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#1.sca",
-                "sha256": "f01b6901f8b64fba955fcafc7e25b73b974c679aeaeec1dddc323a27f0fe8258"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#1.sca",
+                "sha256": "5a5126ba7a2e405252b1363f86402bcc8ffac5f13b764a6e73a2219d6ed0ee5e"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#1.vec",
-                "sha256": "3f972b8994e4908d8b55c7fbd866249ebcccd9c4dca93316a9a848523cac0ec2"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#1.vec",
+                "sha256": "9b7ec1aa5313fd6fb5350cd977060b5e1fb4854a88204eaf8c98191363fbd703"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#2.sca",
-                "sha256": "8947fc1e22d1123b3956e9206ae8b49c410dddec00f82f6c44c2a45c4670e709"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#2.sca",
+                "sha256": "71850c6883a2bf1d7d798ea8c2e899fa4256f0e254f4ab791fdb024b406a3eea"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#2.vec",
-                "sha256": "606ffe7c06d69387dba90c89808472d48445689894add023525388e31964b2af"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#2.vec",
+                "sha256": "5377bed6f80b114b9da93573f0cf08c3f9c0c9f66fee062a6f7a179934ae1004"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#3.sca",
-                "sha256": "59d5374e50ff4ceeb15010d843d6e516239954752f7c110a2b31b5173c80de61"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#3.sca",
+                "sha256": "0fef41db789d547560f27d038d3dd0baaf82918bc6c91ee1bb4200b49f5adf72"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#3.vec",
-                "sha256": "28e5ff1fa4d6e734fcbee0afd75d75465ebb01b482929cf6f3f29e8eb0ee9d2e"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#3.vec",
+                "sha256": "25caf80100ef6dbcd56e22f9aaeb0c2edb1273a6033cfa76af4ad6d1b8c49a30"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#4.sca",
-                "sha256": "6d972509faeb5b66fe968fc775cbdfa98887f3012f1735f969f7962afef1c27a"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#4.sca",
+                "sha256": "65867a3063a8480ca38fdfa029d3ced7ecb3ae297c87c9e745c293eeced597e5"
               },
               {
-                "path": "examples/ieee80211ax/bsr/results/20260730T112541Z/StaleBsr/StaleBsr-#4.vec",
-                "sha256": "090cc7550b0d6db60b50b157db4c1c88d4f60fd6c2b42c2dc4dd7af7c0dfc667"
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/StaleBsr/StaleBsr-#4.vec",
+                "sha256": "f9121596299d9dd1fcc3927b0fa4e2865e69b4eafd2831bf314a8d98a2ec1c2c"
+              }
+            ]
+          },
+          {
+            "configuration": "ImplicitBsr",
+            "group": "bsr",
+            "ini": "examples/ieee80211ax/bsr/omnetpp.ini",
+            "label": "Implicit BSR",
+            "measurement": {
+              "end_s": 0.95,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#0.sca",
+                "sha256": "c515c5d69cdf7f6f286e0e00769e707ad9b1319ebb7a0f40a4af850beaa18229"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#0.vec",
+                "sha256": "68826044e00e253a3257cbc4891fce243e3544bf25dc5f14e8b1faa27d92f744"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#1.sca",
+                "sha256": "462228325f58efca36e21883795f5752b70a3dcee310c656bee4aae7eb4824b0"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#1.vec",
+                "sha256": "72e60f9498860b041f1ae277c7cecb555281e276ebc7eba66d0ca6046431da9c"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#2.sca",
+                "sha256": "c979b10cd120af163dc067a4b6694111425988e20c62b02a9256ef2659dbc303"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#2.vec",
+                "sha256": "f885fb602eb769e6fde7a44e0082872c59b4b589f8efbe9b59b0a53ab6ac6b66"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#3.sca",
+                "sha256": "e2b6909ffd31dae68164c311a85d287bdf7dc9bb18c332c4540ffa5a43c4ac95"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#3.vec",
+                "sha256": "5959f3417f07e750dd3ba7729ff5d3ce271c550239498b7714e3d01fc7491417"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#4.sca",
+                "sha256": "e045d2b6b4350c280a8bd5183ed47fca2c00e0464a9c5db473f391a5e42d9415"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/ImplicitBsr/ImplicitBsr-#4.vec",
+                "sha256": "23706496b5ecabaa928b59b8a9550f4ff43f54ec440e92219c567709ac669008"
+              }
+            ]
+          },
+          {
+            "configuration": "BurstyTraffic",
+            "group": "bsr",
+            "ini": "examples/ieee80211ax/bsr/omnetpp.ini",
+            "label": "Bursty traffic",
+            "measurement": {
+              "end_s": 0.95,
+              "start_s": 0.3
+            },
+            "metadata": {},
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#0.sca",
+                "sha256": "440f9579a7ee9b74242e38958b76fca5affe58b9dfd301f867231bde6dec358c"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#0.vec",
+                "sha256": "3309514bc33958d271e6e17a639363340ae60412ab1a98d0aab4b7d514b07858"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#1.sca",
+                "sha256": "f017b3b1dc4e3d6d7bbccfc47efbb9fb9d5201014915ae1b6a55a3487be362af"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#1.vec",
+                "sha256": "8ffe346df1fffc05ff2ef75aba06641e3e6a8a4b2d9a82c633d77a8cf8dc68b3"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#2.sca",
+                "sha256": "e7a408fd6f14acdc529af121f5dcf1e112e86fc2c3b6a4932efae4f1c54403ff"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#2.vec",
+                "sha256": "8c9c4e066dae24b8b0f8b8b6a38ade3629929f6b1d2ace0a6d5abbb646651006"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#3.sca",
+                "sha256": "4a2596546468178238407e02ead46db442e6bea198bd4cb9d8ff45c28d0c7493"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#3.vec",
+                "sha256": "54785204acdde87cd8b111d9da5eafbdf753f681d70d782811c302d13aa80b0a"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#4.sca",
+                "sha256": "15286a8bd9a59d27958678e09b16fb803b33312e2224d4ce7057ca8fb2b7a054"
+              },
+              {
+                "path": "examples/ieee80211ax/bsr/results/20260730T166000Z/BurstyTraffic/BurstyTraffic-#4.vec",
+                "sha256": "603acad6b6d5e65bd3c2a61e5902a887de9f90b3214ed18525d781a1f8b94860"
               }
             ]
           }
         ],
-        "session_id": "20260730T112541Z",
+        "session_id": "20260730T166000Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "032b4904d013ac13f18e359ec68628b17a005262",
-    "requested_session_id": "20260730T112541Z",
+    "repository_revision": "73a7355e59088c1f4f1be52b4ae76ec58d964517",
+    "requested_session_id": "20260730T166000Z",
     "schema_version": 1
   },
   "bsr": {
-    "Fresh BSR": {
+    "Bursty traffic": {
       "reported_backlog_time_weighted_mean_bytes": {
         "ci95": 258.1532666007957,
         "count": 5,
         "mean": 1011.3480709721911
+      }
+    },
+    "Fresh BSR": {
+      "reported_backlog_time_weighted_mean_bytes": {
+        "ci95": 333.3749388136605,
+        "count": 5,
+        "mean": 1474.899750471625
+      }
+    },
+    "Implicit BSR": {
+      "reported_backlog_time_weighted_mean_bytes": {
+        "ci95": 259.61899192818976,
+        "count": 5,
+        "mean": 1159.7937246041552
       }
     },
     "Stale BSR": {

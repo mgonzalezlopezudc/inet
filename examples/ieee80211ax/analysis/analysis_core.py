@@ -391,6 +391,7 @@ class Condition:
         module: str = "**",
         expected_unit: str | None = None,
         required: bool = True,
+        allow_missing_runs: bool = False,
     ) -> pd.DataFrame:
         expression = f'module =~ "{module}" AND name =~ "{name}"'
         frame = results.get_vectors(
@@ -398,7 +399,7 @@ class Condition:
             omit_empty_vectors=True,
             **QUERY_OPTIONS,
         )
-        self._validate_common(frame, name, required)
+        self._validate_common(frame, name, required, allow_missing_runs)
         if frame.empty:
             return frame
         required_columns = {"vectime", "vecvalue"}
@@ -440,7 +441,8 @@ class Condition:
         return frame
 
     def _validate_common(
-        self, frame: pd.DataFrame, name: str, required: bool
+        self, frame: pd.DataFrame, name: str, required: bool,
+        allow_missing_runs: bool = False,
     ) -> None:
         if frame.empty:
             if required:
@@ -457,7 +459,9 @@ class Condition:
             )
         run_numbers = set(pd.to_numeric(frame["runnumber"], errors="raise").astype(int))
         expected = {pair.run_number for pair in self.result_files}
-        if run_numbers != expected:
+        if (not allow_missing_runs and run_numbers != expected) or (
+            allow_missing_runs and not run_numbers.issubset(expected)
+        ):
             raise RuntimeError(
                 f"{self.config}/{name}: matched runs {sorted(run_numbers)}, "
                 f"expected {sorted(expected)}"

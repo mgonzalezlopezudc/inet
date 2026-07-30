@@ -638,13 +638,23 @@ def plot_bsr(conditions: list[Condition], output: Path) -> None:
     axes = np.atleast_1d(axes)
     for axis, condition in zip(axes, conditions):
         reported = representative_run(condition.vectors("heUlBufferStatusReportedBytes:vector"))
-        scheduled = representative_run(condition.vectors("heUlBufferStatusScheduledBytes:vector"))
+        scheduled_vectors = condition.vectors(
+            "heUlBufferStatusScheduledBytes:vector",
+            required=False,
+            allow_missing_runs=True,
+        )
+        scheduled = representative_run(scheduled_vectors) if not scheduled_vectors.empty else scheduled_vectors
         for _, row in reported.iterrows():
             times, values = crop_vector(row.vectime, row.vecvalue, condition.measurement)
             axis.step(times, values, where="post", label="reported", alpha=0.8)
         for _, row in scheduled.iterrows():
             times, values = crop_vector(row.vectime, row.vecvalue, condition.measurement)
             axis.step(times, values, where="post", label="scheduled", alpha=0.8)
+        if scheduled.empty:
+            axis.text(
+                0.5, 0.5, "No scheduled bytes observed in run 0",
+                transform=axis.transAxes, ha="center", va="center",
+            )
         axis.set(ylabel="Backlog [bytes]", title=f"{condition.label} (run 0)")
         axis.grid(alpha=0.3)
         axis.legend(fontsize="small")

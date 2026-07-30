@@ -114,7 +114,7 @@
     "bsr": {
       "scalar_vector_group": "bsr",
       "ini": "bsr/omnetpp.ini",
-      "configurations": ["ImplicitBsr", "StaleBsr", "FullBsrAccounting", "BurstyTraffic"],
+      "configurations": ["FreshBsr", "StaleBsr", "ImplicitBsr", "BurstyTraffic"],
       "phy_profiles": ["legacy", "he"],
       "feature_plugins": ["buffer-status"]
     },
