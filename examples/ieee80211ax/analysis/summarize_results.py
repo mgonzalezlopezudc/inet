@@ -152,7 +152,7 @@ def main() -> None:
                 item["goodput_mbps"] = ci(goodput.goodput_bps / 1e6)
             except RuntimeError:
                 pass
-            if group_name in {"uora", "width", "dl_sched", "dl_asym", "ul_ofdma"}:
+            if group_name in {"uora", "width", "dl_sched", "dl_asym", "ul_ofdma", "dl_ul_ofdma"}:
                 item["delay_p95_ms"] = ci(per_run_delay_percentile(condition, 95).delay_s * 1e3)
             if group_name in {"bss", "dl_sched", "dl_asym"}:
                 normalized = group_name == "dl_asym" or condition.condition_metadata.get("workload") == "asymmetric"

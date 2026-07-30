@@ -1054,7 +1054,7 @@ def timeline_filter_for_subdir(subdir):
             "wlan.fc.subtype == 13))"
         )
     if subdir in {
-        "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
+        "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
         "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
     }:
         return data_and_responses
@@ -1094,7 +1094,7 @@ def select_representative_timeline(rows, subdir, limit=TIMELINE_LIMIT):
             # signal and the following acknowledgment fit in the same window.
             return row["frame_name"].startswith("Data:")
         if subdir in {
-            "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
+            "dl_ofdma_sched", "dl_ofdma_asym", "ul_ofdma", "dl_ul_ofdma", "dl_mu_mimo", "ul_mu_mimo",
             "ndp_feedback", "bsr", "multi_user/mu_mimo", "multi_user/ndp_feedback", "he_bsr",
         }:
             return "Trigger" in row["frame_name"]
@@ -2505,6 +2505,12 @@ def generate_markdown_tables(
             "(IEEE Std 802.11-2024, Table 9-347 and Clause 10.46). Unannounced TWT does not require that presence signal. "
             "The QoS Data totals are transmitted MPDU observations, not delivered application-packet counts; aggregation and repeated sequence numbers "
             "can make them much larger than the workload. Validate TWT delivery with sink scalars and energy with the recorded radio-power vectors."
+        )
+    elif subdir == "dl_ul_ofdma":
+        analysis_text = (
+            "The OFDMA condition is expected to show both downlink HE-MU payloads and scheduled uplink HE-TB responses, "
+            "while the matched SU control disables both multi-user paths. These packet observations establish the exchange "
+            "structure; use the paired scalar/vector delivery results for application-level comparison."
         )
     elif "ul_ofdma" in subdir:
         analysis_text = (

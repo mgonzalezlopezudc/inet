@@ -137,6 +137,16 @@
         "interface_patterns": ["**.ap.wlan[*]"]
       }
     },
+    "dl_ul_ofdma": {
+      "scalar_vector_group": "dl_ul_ofdma",
+      "ini": "dl_ul_ofdma/omnetpp.ini",
+      "configurations": ["Ofdma", "Su"],
+      "phy_profiles": ["legacy", "he"],
+      "feature_plugins": ["ofdma"],
+      "capture": {
+        "interface_patterns": ["**.ap.wlan[*]"]
+      }
+    },
     "ul_uora": {
       "scalar_vector_group": "uora",
       "ini": "ul_uora/omnetpp.ini",

@@ -816,6 +816,7 @@ def plot_delivery(conditions: list[Condition], output: Path) -> None:
 
 def plot_ul_ofdma(conditions: list[Condition], output: Path) -> None:
     """Compare UL-OFDMA and EDCA using delivery and tail delay."""
+    bidirectional = conditions and conditions[0].group == "dl_ul_ofdma"
     goodputs = [per_run_goodput(condition) for condition in conditions]
     delays = [per_run_delay_percentile(condition, 95) for condition in conditions]
     labels = [condition.label for condition in conditions]
@@ -828,14 +829,17 @@ def plot_ul_ofdma(conditions: list[Condition], output: Path) -> None:
     axes[1].set_title("Tail delay")
     for axis in axes:
         axis.grid(axis="y", alpha=0.3)
-    fig.suptitle("UL-OFDMA contention and delivery comparison")
+    fig.suptitle(
+        "Bidirectional OFDMA and SU delivery comparison"
+        if bidirectional else "UL-OFDMA contention and delivery comparison"
+    )
     save(fig, output)
     write_provenance(
         output,
         conditions=conditions,
         result_filters=[
-            {"type": "vector", "module": "**.server.app[*]", "name": "packetReceived:vector(packetBytes)", "value_semantics": "delivered application bytes"},
-            {"type": "vector", "module": "**.server.app[*]", "name": "endToEndDelay:vector", "unit": "s"},
+            {"type": "vector", "module": "**.app[*]", "name": "packetReceived:vector(packetBytes)", "value_semantics": "delivered application bytes"},
+            {"type": "vector", "module": "**.app[*]", "name": "endToEndDelay:vector", "unit": "s"},
         ],
         aggregation={
             "goodput": "sum delivered application bytes over each manifest measurement window, convert to bit/s; one value per run",
@@ -865,4 +869,5 @@ PLOTS: dict[str, Callable[[list[Condition], Path], None]] = {
     "bcc_ldpc": plot_delivery,
     "ul_mu_mimo": plot_delivery,
     "ul_ofdma": plot_ul_ofdma,
+    "dl_ul_ofdma": plot_ul_ofdma,
 }

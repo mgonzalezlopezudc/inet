@@ -75,6 +75,10 @@
       {"id": "ul-ofdma-trigger-allocation-join", "kind": "model", "requirement": "Every committed Basic Trigger per-user allocation matches the decoded PCAP AID and RU allocation", "results": ["heUlTriggerDecisionTriggerId", "heUlTriggerDecisionAssociationId", "heUlTriggerDecisionReportedBytes", "heUlTriggerDecisionPlannedBytes", "heUlTriggerDecisionRuToneSize", "heUlTriggerDecisionRuToneOffset", "wlan.trigger.he.user_info.aid12", "wlan.trigger.he.ru_allocation"], "evaluation": {"handler": "ul_trigger_allocation_join", "configs": ["BacklogBased", "EqualSizedRUs", "AsymmetricBacklog"], "diagnostic_run": 0, "module": "**.ap.wlan[0].mac.hcf.ulCoordinator", "packet_metrics": "examples/ieee80211/analysis/generated/ax/packet_metrics.json", "vectors": {"trigger_id": "heUlTriggerDecisionTriggerId:vector", "trigger_type": "heUlTriggerDecisionTriggerType:vector", "user_ordinal": "heUlTriggerDecisionUserOrdinal:vector", "association_id": "heUlTriggerDecisionAssociationId:vector", "backlog_bytes": "heUlTriggerDecisionBacklogBytes:vector", "reported_bytes": "heUlTriggerDecisionReportedBytes:vector", "planned_bytes": "heUlTriggerDecisionPlannedBytes:vector", "tid": "heUlTriggerDecisionTid:vector", "access_category": "heUlTriggerDecisionAccessCategory:vector", "selected": "heUlTriggerDecisionSelected:vector", "ru_index": "heUlTriggerDecisionRuIndex:vector", "ru_tone_size": "heUlTriggerDecisionRuToneSize:vector", "ru_tone_offset": "heUlTriggerDecisionRuToneOffset:vector"}}},
       {"id": "ul-ofdma-scheduled-delivery", "kind": "metric", "requirement": "Scheduled uplink OFDMA and EDCA are compared using delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The five-run delivery comparison has no manifest-defined acceptance threshold."}}
     ],
+    "dl_ul_ofdma": [
+      {"id": "dl-ul-ofdma-bidirectional-delivery", "kind": "metric", "requirement": "Bidirectional OFDMA and matched single-user control are compared using delivered application bytes", "results": ["packetReceived", "endToEndDelay"], "evaluation": {"handler": "unimplemented", "reason": "The five-run bidirectional delivery comparison has no manifest-defined acceptance threshold."}},
+      {"id": "dl-ul-ofdma-exchange-structure", "kind": "model", "requirement": "The OFDMA condition contains both downlink MU and scheduled uplink trigger exchanges while the single-user control does not", "results": ["HE-MU payloads", "Basic Trigger", "HE-TB responses"], "evaluation": {"handler": "unimplemented", "reason": "The decisive per-exchange PPDU and RU attribution remains packet evidence without an executable evaluator."}}
+    ],
     "eht_features": [
       {"id": "eht-features-delivery-comparison", "kind": "metric", "requirement": "The EHT and HE baselines are compared using delivered application bytes", "results": ["packetReceived"], "evaluation": {"handler": "unimplemented", "reason": "The five-run delivery comparison has no manifest-defined acceptance threshold."}}
     ]
@@ -311,6 +315,16 @@
         {"label": "Equal-sized RUs", "config": "EqualSizedRUs", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
         {"label": "EDCA baseline", "config": "EdcaBaseline", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
         {"label": "Asymmetric backlog", "config": "AsymmetricBacklog", "measurement": {"start": 0.3, "end": 0.8}, "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
+      ]
+    },
+    "dl_ul_ofdma": {
+      "walkthrough": "examples/ieee80211ax/dl_ul_ofdma/README.md",
+      "ini": "examples/ieee80211ax/dl_ul_ofdma/omnetpp.ini",
+      "expected_repetitions": 5,
+      "measurement": {"start": 0.3, "end": 1.95},
+      "conditions": [
+        {"label": "Bidirectional OFDMA", "config": "Ofdma", "metadata": {"sink_module_regex": "\\.(?:host\\[\\d+\\]|server)\\.app\\["}},
+        {"label": "Single-user baseline", "config": "Su", "metadata": {"sink_module_regex": "\\.(?:host\\[\\d+\\]|server)\\.app\\["}}
       ]
     },
     "eht_features": {
