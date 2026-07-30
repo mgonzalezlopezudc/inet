@@ -318,7 +318,7 @@
       ]
     },
     "dl_ul_ofdma": {
-      "walkthrough": "examples/ieee80211ax/dl_ul_ofdma/README.md",
+      "walkthrough": "examples/ieee80211ax/dl_ul_ofdma/walkthrough.md",
       "ini": "examples/ieee80211ax/dl_ul_ofdma/omnetpp.ini",
       "expected_repetitions": 5,
       "measurement": {"start": 0.3, "end": 1.95},

@@ -1,285 +1,151 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-29T23:29:01.947137+00:00",
+    "generated_at_utc": "2026-07-30T08:47:54.167163+00:00",
     "groups": {
-      "ul_ofdma": {
+      "dl_ul_ofdma": {
         "conditions": [
           {
-            "configuration": "BacklogBased",
-            "group": "ul_ofdma",
-            "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
-            "label": "Backlog scheduler",
+            "configuration": "Ofdma",
+            "group": "dl_ul_ofdma",
+            "ini": "examples/ieee80211ax/dl_ul_ofdma/omnetpp.ini",
+            "label": "Bidirectional OFDMA",
             "measurement": {
-              "end_s": 0.95,
+              "end_s": 1.95,
               "start_s": 0.3
             },
             "metadata": {
-              "sink_module_regex": "\\.server\\.app\\["
+              "sink_module_regex": "\\.(?:host\\[\\d+\\]|server)\\.app\\["
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#0.sca",
-                "sha256": "e647084d0513e1857e0307494e9a72666289a54a0d16c88c95270ed12f1bf651"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#0.sca",
+                "sha256": "c28a487da610d4014c31223bf9aeb9f49e999299a0da6419395cfc3df87d5b33"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#0.vec",
-                "sha256": "3a8165d3564b7199ab88b1a72377f47ded00fc1ed64b257ef4f6dd586526ca27"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#0.vec",
+                "sha256": "8bd9ee963409e62e24ad2922d66f6d9d36b359213c9df4796503e0d12e377112"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#1.sca",
-                "sha256": "82d7fb1ca8e5f77490653b92cb2d45204adb11613356f33d62f8c4e3f246eeba"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#1.sca",
+                "sha256": "3f849662bf26631a1f53f0850faf4835523021d8eb3b33a8510baf2b81d1e289"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#1.vec",
-                "sha256": "fe2709f607ab31259f6f54920b6d831b4bfdc02332994f4d00ff6e6fb2142855"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#1.vec",
+                "sha256": "78f7c0eeb7c729e5b027f81d310a777c76d5c529c2aec6373c0e65698b2143d3"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#2.sca",
-                "sha256": "0679515109268ff946c13d602be2627564a4f561257a1d7c0138ac49c8e86f64"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#2.sca",
+                "sha256": "b17a78ce5fb078790a13f3ff5b0daeea56cc48e665150feec67010eec186598c"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#2.vec",
-                "sha256": "3bdc435556bc16afb88e2cdd920155ba3b25ad2cca625d09d7a28cf3fa143429"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#2.vec",
+                "sha256": "683ffd371b66f020bba07bbdb24c8295379d0ebfbccff35b5f4e6aa4ea112d2b"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#3.sca",
-                "sha256": "dbb0352069e21f0ee228f8f7a719a1d13a271b9f3319a16995f24d3a4ef4c0b3"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#3.sca",
+                "sha256": "ae9b74717ab042d0ee8f7c50006d33235cc749380f70933d3e99fd9420bfdf2c"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#3.vec",
-                "sha256": "609c799bb89587e10e66197f6dee237f6865b53623a6034743879f127b7ac70e"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#3.vec",
+                "sha256": "d470fe4b8e7d8afb4dbfbb0e448c8ae7977034ade2a3efa3273502fba8296404"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#4.sca",
-                "sha256": "ce2306baa728593e9c4cc72dc14f9085fefb8b1d73a57b01a86c6f581845a1b9"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#4.sca",
+                "sha256": "5b5047ff5351ac3be479e70e780f6f53d3c0dfd505855a299487f0638ec01d67"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/BacklogBased/BacklogBased-#4.vec",
-                "sha256": "ef66b7356f095203d54ba26b8fed896537b5bbec725b016121bc185a6b7b2147"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Ofdma/Ofdma-#4.vec",
+                "sha256": "97553885670c883aa0b449e80a9984fbfbd3fa64ea3affa611a2496f79a92348"
               }
             ]
           },
           {
-            "configuration": "EqualSizedRUs",
-            "group": "ul_ofdma",
-            "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
-            "label": "Equal-sized RUs",
+            "configuration": "Su",
+            "group": "dl_ul_ofdma",
+            "ini": "examples/ieee80211ax/dl_ul_ofdma/omnetpp.ini",
+            "label": "Single-user baseline",
             "measurement": {
-              "end_s": 0.95,
+              "end_s": 1.95,
               "start_s": 0.3
             },
             "metadata": {
-              "sink_module_regex": "\\.server\\.app\\["
+              "sink_module_regex": "\\.(?:host\\[\\d+\\]|server)\\.app\\["
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#0.sca",
-                "sha256": "f99bac3f959daf8911f368eebd4ed06ac33f4ef52a58aa1595b32b0b97c5b400"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#0.sca",
+                "sha256": "5749726bde17198dd54fbe4d13244c9758373506bedcf3f06670153d8702bf0a"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#0.vec",
-                "sha256": "fdeb8ac20872e7a478969c2ddc81511857daabe69743fcb585f696241f4021bd"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#0.vec",
+                "sha256": "5525bdc5e09ef5a760b8988c53d8a237afd5ab6a9959a7427867152317e399ec"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#1.sca",
-                "sha256": "f763f56b935756867f2dd29ddc7bfb5874071db1013bf1df7ef04ed60331e708"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#1.sca",
+                "sha256": "f89cc2cdb90f6a4825716184f05ebc624a430a245c69337b3985efb488283b51"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#1.vec",
-                "sha256": "ebfd403335f8b4e44ec991a79c03589de656dac7a5f92654ef6fef61d6a12196"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#1.vec",
+                "sha256": "9f137d4585263b86c17889d72ec7a10b368a6259ec6b3e588d2adf771050f828"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#2.sca",
-                "sha256": "fd183a620e389d793c59eb78877d44c0afb2eed26868a4a37e957a167eae7d92"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#2.sca",
+                "sha256": "4fd5d15ad0d501ed3b1777e3a836730fa2c39eaec8bd407c37c57debb0a4b781"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#2.vec",
-                "sha256": "f39c10079d7eabfc2672298e62f974452ca06ef336a736926c22536ae5ddf8c4"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#2.vec",
+                "sha256": "648f75c7bbd432fbe4f5d7dfc8f89af03e06e7f8ee0e7a7464ced9910b3d90cc"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#3.sca",
-                "sha256": "9430211ad0cf2585699cd7ed06a06820c12d7aabde510ce110531b6640e46fa5"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#3.sca",
+                "sha256": "ab90a1586d82df6391879d82bf478fd59b851be28d9f277f957bea451299e0ae"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#3.vec",
-                "sha256": "82aa75c0bda009ffbb7cf2d5c2c46138e060a07e808bfaeb326c4ee5f74cbc8c"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#3.vec",
+                "sha256": "ddf720f999c854d63cde59f3f2e3f3ac77792e690ac90c39f6751f2ddbdea6ba"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#4.sca",
-                "sha256": "2040966a5139c70cd15813d48e7cf3d8b6c5db9a30233907d107c2c060a4fbc9"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#4.sca",
+                "sha256": "cc567f281880c12fddd043a7cb36be131bd7877af7eb6334b0485d5bd9e8550b"
               },
               {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EqualSizedRUs/EqualSizedRUs-#4.vec",
-                "sha256": "949c2f72ea37a0c2a27a3fff7f40518267094c1ced568c51595ce2091e59e89e"
-              }
-            ]
-          },
-          {
-            "configuration": "EdcaBaseline",
-            "group": "ul_ofdma",
-            "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
-            "label": "EDCA baseline",
-            "measurement": {
-              "end_s": 0.95,
-              "start_s": 0.3
-            },
-            "metadata": {
-              "sink_module_regex": "\\.server\\.app\\["
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#0.sca",
-                "sha256": "6f972f7fa85a97ad9216baf4a5b4771ab3268ccedfa077b45987e3d7d26f1a24"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#0.vec",
-                "sha256": "757fa82bc88974fa80c958082a099f1a2eaf3f57e2f69194a71121b494a59ed4"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#1.sca",
-                "sha256": "7bd02be3d8d9e6464a09bc07663bd5b62e84691d2926c6aea8fac0cc010b0b58"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#1.vec",
-                "sha256": "c8c20864b905c999aa3524b247a562b4701aa68669e2f993d9d1b502d9b100ac"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#2.sca",
-                "sha256": "7bcfe558621383b39b6b67553d2068f99d37216e5de96cd91eed7af147078795"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#2.vec",
-                "sha256": "453f795943259cdfd9693b065ea90fc4defee30b810c114c6113c97d443bfbeb"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#3.sca",
-                "sha256": "54ac54d2e4e29e6afc76e2fbf8fb32d26582b30cc016447d2549a893ddbd8ec1"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#3.vec",
-                "sha256": "93804b9f681096c35b7b5c8599e7ef72134aba259d0254a81a443b1f67071b8d"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#4.sca",
-                "sha256": "a2372de49538d50acdd6b98653f6c3c9d8c91eb802543e3d919e6773e8203b31"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/EdcaBaseline/EdcaBaseline-#4.vec",
-                "sha256": "217288d4ac23772135e7e91760b3c6915a5047b3dc505c54ac60c3d53d550b78"
-              }
-            ]
-          },
-          {
-            "configuration": "AsymmetricBacklog",
-            "group": "ul_ofdma",
-            "ini": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
-            "label": "Asymmetric backlog",
-            "measurement": {
-              "end_s": 0.8,
-              "start_s": 0.3
-            },
-            "metadata": {
-              "sink_module_regex": "\\.server\\.app\\["
-            },
-            "result_files": [
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#0.sca",
-                "sha256": "47ef514bd8f5f77fb6701c022b6a50fd0bc13c173d817d78ea8fef99734a8ce5"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#0.vec",
-                "sha256": "5facabd318f4213336fab6cda5fb96b739abd455e1ee801b6f5e199bbeb4d89c"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#1.sca",
-                "sha256": "4b68a12dfc604ce9f16618aa8f839b09280cf42e75d386681b31c17c551194ce"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#1.vec",
-                "sha256": "4a08c3b16bcf35b1ddbb1f20e01d63d32b03085402e9b38d871298f624c133b4"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#2.sca",
-                "sha256": "3911a91024f98d1d6a874552d5d9f4cc936f394ada88d692b2260777271b54f7"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#2.vec",
-                "sha256": "79af700d2414670d3e5d4fc38146c4a866686010b247ee084038912a45a59323"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#3.sca",
-                "sha256": "cba2c7ff405dc6dba663750a5df1e5396366c44023fe30e224dea3544cc16292"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#3.vec",
-                "sha256": "f370f47ce2e977eb62ba5db2e4db94277880f394106c84f9cb33fbff837dd83e"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#4.sca",
-                "sha256": "797ce6673ec0abbecd47476b703282ff4da5a95e44edb2c5a1ab96e46909c225"
-              },
-              {
-                "path": "examples/ieee80211ax/ul_ofdma/results/20260729T232803Z/AsymmetricBacklog/AsymmetricBacklog-#4.vec",
-                "sha256": "59bc2c272d9397b99395c7021f574cdcce3b013d228efb036f706c724664b4a9"
+                "path": "examples/ieee80211ax/dl_ul_ofdma/results/20260730T083856Z/Su/Su-#4.vec",
+                "sha256": "6797454c89adb5f7dd90afac9535cef0e8e438911a4e05344af2b120691c83ef"
               }
             ]
           }
         ],
-        "session_id": "20260729T232803Z",
+        "session_id": "20260730T083856Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "15921a2bfa5ae8a089f96a744144c17ff2001bf7",
-    "requested_session_id": "20260729T232803Z",
+    "repository_revision": "e922770dc8422ff9ed85ad00275fa957991253f4",
+    "requested_session_id": "20260730T083856Z",
     "schema_version": 1
   },
-  "ul_ofdma": {
-    "Asymmetric backlog": {
+  "dl_ul_ofdma": {
+    "Bidirectional OFDMA": {
       "delay_p95_ms": {
-        "ci95": 68.79394932469557,
+        "ci95": 7.011943854073779,
         "count": 5,
-        "mean": 235.24192212995985
+        "mean": 123.96498100899001
       },
       "goodput_mbps": {
-        "ci95": 0.9016291343810187,
+        "ci95": 0.10195879389749449,
         "count": 5,
-        "mean": 3.0040064
+        "mean": 2.5791030303030302
       }
     },
-    "Backlog scheduler": {
+    "Single-user baseline": {
       "delay_p95_ms": {
-        "ci95": 5.567578009025178,
+        "ci95": 464.6396966742892,
         "count": 5,
-        "mean": 29.37405450999999
+        "mean": 422.85335332076994
       },
       "goodput_mbps": {
-        "ci95": 0.009844751715863114,
+        "ci95": 0.6579196904095113,
         "count": 5,
-        "mean": 1.2529230769230773
-      }
-    },
-    "EDCA baseline": {
-      "delay_p95_ms": {
-        "ci95": 1.1752376412227579,
-        "count": 5,
-        "mean": 26.499950895709993
-      },
-      "goodput_mbps": {
-        "ci95": 0.01206215049501027,
-        "count": 5,
-        "mean": 1.2573538461538465
-      }
-    },
-    "Equal-sized RUs": {
-      "delay_p95_ms": {
-        "ci95": 40.21933220835965,
-        "count": 5,
-        "mean": 42.10301244230999
-      },
-      "goodput_mbps": {
-        "ci95": 0.04926644020275104,
-        "count": 5,
-        "mean": 1.2398769230769233
+        "mean": 1.462690909090909
       }
     }
   }
