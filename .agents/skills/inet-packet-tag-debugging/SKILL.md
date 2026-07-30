@@ -1,6 +1,6 @@
 ---
 name: inet-packet-tag-debugging
-description: Debug INET Packet, Chunk, and tag behavior. Use when Codex needs to inspect packet ownership, encapsulation/decapsulation, protocol dispatch, request/indication tags, region tags, header chunks, metadata propagation, duplication, popping/peeking, or why packet metadata is missing or changed across INET modules, including MAC/PHY and IEEE 802.11 paths.
+description: Debug INET Packet, Chunk, and tag behavior. Use inspect packet ownership, encapsulation/decapsulation, protocol dispatch, request/indication tags, region tags, header chunks, metadata propagation, duplication, popping/peeking, or why packet metadata is missing or changed across INET modules, including MAC/PHY and IEEE 802.11 paths.
 ---
 
 # INET packet, chunk, and tag debugging

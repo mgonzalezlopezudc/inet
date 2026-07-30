@@ -1,6 +1,6 @@
 ---
 name: inet-build-debug-modes
-description: Diagnose INET build modes, generated code, and model libraries. Use when Codex needs to build or troubleshoot INET release/debug artifacts, stale objects, generated message code, opp_makemake or make issues, library naming, custom project libraries, or release/debug mismatches before running tests or LLDB.
+description: Diagnose INET build modes, generated code, and model libraries. Use to build or troubleshoot INET release/debug artifacts, stale objects, generated message code, opp_makemake or make issues, library naming, custom project libraries, or release/debug mismatches before running tests or LLDB.
 ---
 
 # INET build and debug modes

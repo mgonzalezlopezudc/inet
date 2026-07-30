@@ -1,6 +1,6 @@
 ---
 name: omnetpp-eventlog-analysis
-description: Reconstruct OMNeT++ simulator-level message and event causality from event logs. Use when Codex needs to trace scheduling, sending, delivery, cancellation, timer behavior, self-messages, or event ordering that Cmdenv logs and packet captures do not explain.
+description: Reconstruct OMNeT++ simulator-level message and event causality from event logs. Use to trace scheduling, sending, delivery, cancellation, timer behavior, self-messages, or event ordering that Cmdenv logs and packet captures do not explain.
 ---
 
 # Analyzing OMNeT++ event logs

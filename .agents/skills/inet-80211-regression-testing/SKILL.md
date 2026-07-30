@@ -1,6 +1,6 @@
 ---
 name: inet-80211-regression-testing
-description: Design, run, and interpret focused IEEE 802.11 regression tests in INET. Use when Codex needs to create or diagnose deterministic Wi-Fi reproductions, choose seeds, compare before/after behavior, validate HE/EHT or MAC/PHY fixes, add unit or simulation coverage, or avoid overfitting an 802.11 change to one run.
+description: Design, run, and interpret focused IEEE 802.11 regression tests in INET. Use to create or diagnose deterministic Wi-Fi reproductions, choose seeds, compare before/after behavior, validate HE/EHT or MAC/PHY fixes, add unit or simulation coverage, or avoid overfitting an 802.11 change to one run.
 ---
 
 # IEEE 802.11 regression testing in INET

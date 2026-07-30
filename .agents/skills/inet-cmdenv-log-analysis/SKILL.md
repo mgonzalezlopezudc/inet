@@ -1,6 +1,6 @@
 ---
 name: inet-cmdenv-log-analysis
-description: Analyze INET and OMNeT++ Cmdenv logs. Use when Codex needs to find module behavior, packet-processing decisions, drops, errors, warnings, event numbers, simulation times, or targeted log context in saved Cmdenv output.
+description: Analyze INET and OMNeT++ Cmdenv logs. Use to find module behavior, packet-processing decisions, drops, errors, warnings, event numbers, simulation times, or targeted log context in saved Cmdenv output.
 ---
 
 # Analyzing Cmdenv logs

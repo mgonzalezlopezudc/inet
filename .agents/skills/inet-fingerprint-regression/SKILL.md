@@ -1,6 +1,6 @@
 ---
 name: inet-fingerprint-regression
-description: Diagnose and manage INET fingerprint regression tests. Use when Codex needs to run fingerprint tests, interpret fingerprint mismatches, decide whether changed fingerprints are expected, update fingerprints with evidence, or distinguish harmless simulation-event changes from behavioral regressions.
+description: Diagnose and manage INET fingerprint regression tests. Use to run fingerprint tests, interpret fingerprint mismatches, decide whether changed fingerprints are expected, update fingerprints with evidence, or distinguish harmless simulation-event changes from behavioral regressions.
 ---
 
 # INET fingerprint regression work

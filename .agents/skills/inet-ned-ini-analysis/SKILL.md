@@ -1,6 +1,6 @@
 ---
 name: inet-ned-ini-analysis
-description: Analyze INET NED and omnetpp.ini configuration behavior. Use when Codex needs to trace module types, NED inheritance, INI config inheritance, wildcard precedence, parameter overrides, effective module paths, typename selection, radio/medium pairing, recorder paths, or configuration bugs before running or debugging simulations.
+description: Analyze INET NED and omnetpp.ini configuration behavior. Use to trace module types, NED inheritance, INI config inheritance, wildcard precedence, parameter overrides, effective module paths, typename selection, radio/medium pairing, recorder paths, or configuration bugs before running or debugging simulations.
 ---
 
 # INET NED and INI analysis

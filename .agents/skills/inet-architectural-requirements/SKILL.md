@@ -1,6 +1,6 @@
 ---
 name: inet-architectural-requirements
-description: Apply INET architectural requirements, naming conventions, exception ledgers, enforcement checks, and source-file sealing policy. Use when Codex designs, implements, refactors, audits, or reviews C++, NED, MSG, configuration, build, or package changes under src/inet; evaluates INET dependency direction, contracts, composition, protocol interaction, packet representation, observability, extensibility, determinism, testing, or naming; or checks, proposes, grants, or removes a seal.
+description: Apply INET architectural requirements, naming conventions, exception ledgers, enforcement checks, and source-file sealing policy. Use to design, implement, refactor, audit, or review C++, NED, MSG, configuration, build, or package changes under src/inet; evaluate INET dependency direction, contracts, composition, protocol interaction, packet representation, observability, extensibility, determinism, testing, or naming; or check, propose, grant, or remove a seal.
 ---
 
 # INET architectural requirements
