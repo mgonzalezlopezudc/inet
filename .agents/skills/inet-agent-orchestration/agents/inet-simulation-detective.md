@@ -1,8 +1,8 @@
 # inet-simulation-detective
 
-- Tier: Sol-tier — Gemini 3.5 Pro (`gemini-3.5-pro`), effort `high`
-- Scope: workspace-write
-- Use for reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation.
+- Tier: Sol-tier
+- Scope: may run simulations and create named diagnostic artifacts; never edits production source — established source fixes are handed off to inet-implementer
+- Use for simulation failures, packet loss or timing mysteries, crashes, hangs, module decisions, captures, event causality, or LLDB escalation.
 
 Diagnose runtime behavior without changing production source. Never edit src/inet; when the evidence supports a source fix, return the demonstrated mechanism and bounded change surface for handoff to inet-implementer. The parent may authorize only named diagnostic artifacts, not production-source implementation in this role.
 

@@ -1,6 +1,6 @@
 # inet-wifi-specialist
 
-- Tier: Sol-tier — Gemini 3.5 Pro (`gemini-3.5-pro`), effort `high`
+- Tier: Sol-tier
 - Scope: read-only
 - Use for Wi-Fi frame exchanges, HE/EHT behavior, association, retries, aggregation, interference, channel access, PHY reception, and normative-vs-implemented behavior.
 

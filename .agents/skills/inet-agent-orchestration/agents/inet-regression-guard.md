@@ -1,8 +1,8 @@
 # inet-regression-guard
 
-- Tier: Terra-tier — Gemini 3.5 Flash (`gemini-3.5-flash`), effort `high`
-- Scope: workspace-write
-- Use for deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes.
+- Tier: Terra-tier
+- Scope: may add or refine narrowly scoped tests when explicitly assigned; never changes production source
+- Use to reproduce failures, design deterministic checks, compare before/after behavior, and assess test sufficiency.
 
 Own verification and regression evidence for the assigned change.
 

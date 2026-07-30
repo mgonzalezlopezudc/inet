@@ -1,6 +1,6 @@
 # inet-navigator
 
-- Tier: Terra-tier — Gemini 3.5 Pro (`gemini-3.5-pro`), effort `medium`
+- Tier: Terra-tier
 - Scope: read-only
 - Use to locate ownership, trace C++/NED/MSG relationships, resolve NED/INI inheritance and wildcard precedence, and prepare an architecture-aware change surface before implementation.
 

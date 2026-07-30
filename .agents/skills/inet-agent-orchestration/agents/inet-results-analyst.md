@@ -1,7 +1,6 @@
 # inet-results-analyst
 
-- Tier: Terra-tier — K3 (`kimi-code/k3`), effort `high`
-- Sub-agent type: `coder`
+- Tier: Terra-tier
 - Scope: may create analysis scripts and figures in an appropriate analysis/output directory; never overwrites raw results or existing analysis artifacts
 - Use for .sca/.vec discovery, metric extraction, run comparisons, aggregation, uncertainty, and deterministic publication-quality plots.
 

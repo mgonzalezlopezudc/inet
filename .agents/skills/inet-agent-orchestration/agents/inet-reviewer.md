@@ -1,7 +1,6 @@
 # inet-reviewer
 
-- Tier: Sol-tier — K3 (`kimi-code/k3`), effort `max`
-- Sub-agent type: `explore`
+- Tier: Sol-tier
 - Scope: read-only; does not fix findings or modify the worktree
 - Use after implementation or when a compliance verdict is required: correctness, ownership, configuration, model-fidelity, compatibility, missing-test risks, and formal architecture, naming, and sealing audits.
 

@@ -1,15 +1,15 @@
 ---
 name: inet-agent-orchestration
-description: Route and coordinate project-scoped GPT-5.6 Sol, Terra, and Luna agents for nontrivial OMNeT++/INET and IEEE 802.11 work. Use for multi-stage debugging, standards-to-implementation analysis, C++/NED/MSG changes, Wi-Fi packet or PHY/MAC investigations, regression design, result analysis, patch review, or any task with multiple independent evidence lanes or specialist handoffs.
+description: Route and coordinate project-scoped specialist agents across Codex, Antigravity, and Kimi for nontrivial OMNeT++/INET and IEEE 802.11 work. Use for multi-stage debugging, standards-to-implementation analysis, C++/NED/MSG changes, Wi-Fi packet or PHY/MAC investigations, regression design, result analysis, patch review, or any task with multiple independent evidence lanes or specialist handoffs.
 ---
 
 # INET Agent Orchestration
 
-Preserve correctness while limiting duplicate work and model cost. Keep requirements and synthesis in the root thread, delegate narrow evidence or execution outcomes, and use the cheapest model that is reliable for each bounded assignment.
+Preserve correctness while limiting duplicate work and model cost. Keep requirements and synthesis in the root thread, delegate narrow evidence or execution outcomes, and use the cheapest model tier that is reliable for each bounded assignment. Apply the same roles, evidence lanes, and gates on every supported runtime; only the tier-to-model binding changes.
 
 ## Apply hard constraints
 
-- Never select reasoning effort above `high`.
+- Use the effort specified by the runtime equivalence table. Do not exceed `high` on Codex or Antigravity, or `max` on Kimi.
 - Keep delegation depth at one. Specialists must not spawn children.
 - Allow only one production-code writer at a time.
 - Do not delegate a simple lookup, one-command check, or obvious one-file edit when orchestration overhead exceeds the task.
@@ -22,26 +22,39 @@ Select models for the judgment required, not the amount of text or number of fil
 
 | Tier | Use | Do not use |
 | --- | --- | --- |
-| Sol, `medium` or `high` | Ambiguous 802.11 MAC/PHY or standards reasoning; difficult event causality; risky production implementation; final correctness review | Mechanical inventory or bulk extraction |
-| Terra, `medium` or `high` | Architecture and NED/INI tracing; established build/test workflows; deterministic regression work; result analysis with known semantics | Resolving genuinely ambiguous normative or causal questions without Sol review |
-| Luna, `low` or `medium` | Exact searches, artifact inventory, fixed-filter log/PCAP/result extraction, structured summaries, mechanical checks | Causality, standards interpretation, fix design, statistical judgment, or approval decisions |
+| Sol-tier | Ambiguous 802.11 MAC/PHY or standards reasoning; difficult event causality; risky production implementation; final correctness review | Mechanical inventory or bulk extraction |
+| Terra-tier | Architecture and NED/INI tracing; established build/test workflows; deterministic regression work; result analysis with known semantics | Resolving genuinely ambiguous normative or causal questions without Sol-tier review |
+| Luna-tier | Exact searches, artifact inventory, fixed-filter log/PCAP/result extraction, structured summaries, mechanical checks | Causality, standards interpretation, fix design, statistical judgment, or approval decisions |
 
-Prefer `medium` for bounded analysis and `high` for work where a missed edge case could invalidate the result. Use `low` only when the output is directly and independently checkable.
+Bind each tier to the current runtime:
 
-If a model is unavailable, move upward in capability: Luna to Terra, then Terra to Sol. Do not silently move Sol work downward. If Sol is unavailable, keep the work in a capable root thread or use Terra at `high` plus an independent verification lane and disclose the substitution.
+| Tier | Codex | Antigravity | Kimi Code CLI |
+| --- | --- | --- | --- |
+| Sol-tier | GPT-5.6 Sol, `medium`; raise to `high` for correctness-critical work | Gemini 3.6 Flash (`gemini-3.6-flash`), `high` | K3 (`kimi-code/k3`), `max` |
+| Terra-tier | GPT-5.6 Terra, `medium`; use `high` for regression and result-analysis lanes | Gemini 3.6 Flash (`gemini-3.6-flash`), `medium`; use `high` for regression and result-analysis lanes | K3 (`kimi-code/k3`), `high` |
+| Luna-tier | GPT-5.6 Luna, `low` or `medium` | Gemini 3.6 Flash (`gemini-3.6-flash`), `low` | K2.7 (`kimi-code/kimi-for-coding`), thinking on |
+
+If a binding is unavailable, move upward in capability: Luna-tier to Terra-tier, then Terra-tier to Sol-tier. Do not silently move Sol-tier work downward. If the Sol-tier binding is unavailable, keep the work in a capable root thread or use the strongest available Terra-tier binding plus an independent verification lane and disclose the substitution.
+
+### Adapt to the runtime
+
+- On Codex, invoke the named project agent role directly; its registered role definition supplies the persona.
+- On prompt-persona runtimes, read `agents/<agent-name>.md` next to this file and inject it verbatim at the top of the delegated prompt.
+- On Kimi Code CLI, use `explore` for read-only roles and `coder` for roles that run simulations, create artifacts, or edit files. Kimi sub-agents inherit the session model and effort, so run the root session on K3 when Sol-tier or Terra-tier lanes are planned. Use a separate K2.7 headless session for a true Luna-tier lane when practical; otherwise report the actual inherited model.
+- Whenever the runtime cannot select the requested model or effort per agent, report the actual setting instead of claiming the intended tier.
 
 ## Route to project agents
 
-| Agent | Model | Assign |
+| Agent | Tier | Assign |
 | --- | --- | --- |
-| `inet-navigator` | Terra, `medium` | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing, and architecture-aware pre-change mapping |
-| `inet-evidence-miner` | Luna, `medium` | Bounded artifact discovery and exact extraction from source, logs, PCAPs, event logs, scalars, and vectors; facts only |
-| `inet-wifi-specialist` | Sol, `medium` | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
-| `inet-simulation-detective` | Sol, `medium` | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
-| `inet-implementer` | Sol, `medium` | Focused production C++/NED/MSG patch after mechanism and change surface are established |
-| `inet-regression-guard` | Terra, `high` | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
-| `inet-results-analyst` | Terra, `high` | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
-| `inet-reviewer` | Sol, `medium` | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
+| `inet-navigator` | Terra-tier | Read-only source ownership, C++/NED/MSG relationships, NED/INI inheritance, typename and feature-gate tracing, and architecture-aware pre-change mapping |
+| `inet-evidence-miner` | Luna-tier | Bounded artifact discovery and exact extraction from source, logs, PCAPs, event logs, scalars, and vectors; facts only |
+| `inet-wifi-specialist` | Sol-tier | IEEE 802.11 normative behavior, MAC/PHY exchanges, HE/EHT, aggregation, interference, and normative-versus-implemented analysis |
+| `inet-simulation-detective` | Sol-tier | Reproduction, runtime divergence, packet/timing mysteries, event causality, crashes, hangs, and LLDB escalation |
+| `inet-implementer` | Sol-tier | Focused production C++/NED/MSG patch after mechanism and change surface are established |
+| `inet-regression-guard` | Terra-tier | Deterministic unit/simulation/fingerprint/Wi-Fi regression evidence and narrowly assigned test changes |
+| `inet-results-analyst` | Terra-tier | Semantically correct `.sca`/`.vec` querying, aggregation, uncertainty, and plots |
+| `inet-reviewer` | Sol-tier | Independent post-implementation correctness review and formal architecture, naming, and sealing audits |
 
 Use the relevant repository workflow skills inside each lane. An agent role does not replace `inet-simulation-run`, `inet-80211-packet-debugging`, `ieee80211-standards`, testing, build, or result-analysis skills.
 
@@ -79,6 +92,7 @@ Assign `inet-results-analyst`. Use `inet-evidence-miner` only for bounded discov
 
 Include all of the following in each delegated task:
 
+- For prompt-persona runtimes, the assigned role's persona file content verbatim at the top, with an explicit instruction not to spawn further sub-agents.
 - One concrete question or deliverable.
 - Relevant paths, symbols, INI configuration, run number/seed, and existing artifact paths.
 - Explicit inclusions and exclusions.
