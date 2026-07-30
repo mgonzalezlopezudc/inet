@@ -1,0 +1,368 @@
+{
+  "analysis_script_sha256": "b4ef24dcf64670c422779d704a04f7eb325746719bd67076ba78e9b4315ab76c",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "349d2ee888736dc37a4e4acfc786bc7edd499701122423ebc30c01e778284090",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 879802,
+            "duration_seconds": 0.798461,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.998625,
+            "file_size_bytes": 1088308,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 4541,
+            "snapshot_length": null,
+            "start_seconds": 0.200164,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EdcaBaline5ms/EdcaBaline5ms-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "63bf40763872054ff4dcf6b1e5619c768588c176b77c422da667e12df212fa1c",
+          "size_bytes": 1088308
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "EdcaBaline5ms",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "a4b50b070c8a1e14a4dec7d795e95f3bf4a9d1f49fd33cae404a45a5c3f56ca2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EdcaBaline5ms",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EdcaBaline5ms/EdcaBaline5ms-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "15203118f2682cbbb4bf6da76939e14d93a744cc67e7faf931369fc270ddb64d"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 471074,
+            "duration_seconds": 0.998609,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 642568,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3747,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EqualSizedRUs5ms/EqualSizedRUs5ms-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "648e178cfb778ef822055e68d611febc13a484d2433585d555f4e75b0c0c007d",
+          "size_bytes": 642568
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "EqualSizedRUs5ms",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "a4b50b070c8a1e14a4dec7d795e95f3bf4a9d1f49fd33cae404a45a5c3f56ca2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EqualSizedRUs5ms",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EqualSizedRUs5ms/EqualSizedRUs5ms-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "e4a064b030394d28ef27c70b0839a257b65159db0a2dd16bf9b171457bf8bd2d"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 467929,
+            "duration_seconds": 0.998609,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 642388,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3811,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/BacklogBased5ms/BacklogBased5ms-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "aa930c417af6440f66ba675d30d0b6566fc90e90050a9a8c92a543704a9ec0a2",
+          "size_bytes": 642388
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "BacklogBased5ms",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "a4b50b070c8a1e14a4dec7d795e95f3bf4a9d1f49fd33cae404a45a5c3f56ca2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "BacklogBased5ms",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/BacklogBased5ms/BacklogBased5ms-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "54a868e8a21e0bc327f01537f7356649741cd12adac173d47a50c2d99aeff89b"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 930424,
+            "duration_seconds": 0.798974,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999138,
+            "file_size_bytes": 1166988,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 5171,
+            "snapshot_length": null,
+            "start_seconds": 0.200164,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EdcaBaline2_5ms/EdcaBaline2_5ms-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "e50646f8ebcdaa839fa27dcdeb64d576af5c77454eaa57a0d74cfb444d32daba",
+          "size_bytes": 1166988
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "EdcaBaline2_5ms",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "a4b50b070c8a1e14a4dec7d795e95f3bf4a9d1f49fd33cae404a45a5c3f56ca2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EdcaBaline2_5ms",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EdcaBaline2_5ms/EdcaBaline2_5ms-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "7be8dffed52a7db53e26a6827c70369f2599585d635745523d74a25ba5ee36b9"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 618774,
+            "duration_seconds": 0.998,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999048,
+            "file_size_bytes": 792548,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3797,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EqualSizedRUs2_5ms/EqualSizedRUs2_5ms-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "23e8f332196ea2ff621cdefa408a1ad32e01e09e3fa56a134a706f3ef9dfe6ff",
+          "size_bytes": 792548
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "EqualSizedRUs2_5ms",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "a4b50b070c8a1e14a4dec7d795e95f3bf4a9d1f49fd33cae404a45a5c3f56ca2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EqualSizedRUs2_5ms",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/EqualSizedRUs2_5ms/EqualSizedRUs2_5ms-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "85e76ac35ca8a927de57cece7363d49148913afad6992b7d4a7a52d33e658ddb"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 621211,
+            "duration_seconds": 0.998609,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999657,
+            "file_size_bytes": 797440,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3849,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/BacklogBased2_5ms/BacklogBased2_5ms-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "a8ae1ca5459ca1f6bf1b4b49b90cf6d985be86bf07fa5d1fa78b58bb0fd77b98",
+          "size_bytes": 797440
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "BacklogBased2_5ms",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "a4b50b070c8a1e14a4dec7d795e95f3bf4a9d1f49fd33cae404a45a5c3f56ca2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "BacklogBased2_5ms",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/BacklogBased2_5ms/BacklogBased2_5ms-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "47b8fb52c4bebb9a3aad7234080a380ab0da6b2d1c6e8948c58c2a3bc857d698"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    },
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 888798,
+            "duration_seconds": 0.998824,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999872,
+            "file_size_bytes": 1049336,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 3513,
+            "snapshot_length": null,
+            "start_seconds": 0.001048,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/AsymmetricBacklog/AsymmetricBacklog-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "3945fb8227f010926b295044c529fecaca24154afb23bce7d8b2254041d22e92",
+          "size_bytes": 1049336
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "AsymmetricBacklog",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "a4b50b070c8a1e14a4dec7d795e95f3bf4a9d1f49fd33cae404a45a5c3f56ca2",
+      "run_number": 0,
+      "scalar": {
+        "configname": "AsymmetricBacklog",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190100Z/AsymmetricBacklog/AsymmetricBacklog-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "f966a8e5db55189fdfda479d4571ac1092608f86fe016b04c49c19f59364c5fc"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    }
+  ],
+  "generated_at_utc": "2026-07-30T18:55:53.799045+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "c0cd7b48cbfb20ed3312c3594cddfec7122f6cb4b6695f73529384cfaf259095",
+  "repository_revision": "bdaaeecdc923f16abf10f39c2c8cfe10b851d5b1",
+  "session_id": "20260730T190100Z",
+  "suite": "ax",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ax.json",
+    "sha256": "7a64f8027256b72e1339d00b69d0e2fef73335aefb6840fe0887e3ce2eb7f7e2"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

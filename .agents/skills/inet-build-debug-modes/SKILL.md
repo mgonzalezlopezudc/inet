@@ -19,7 +19,7 @@ Match the runner, libraries, and build mode. Do not debug C++ behavior with stal
 4. If the project has custom C++ modules, load matching release/debug project libraries as well.
 5. When source changes affect messages, packets, or NED-generated artifacts, check whether generated code and dependent objects were rebuilt.
 6. If LLDB cannot resolve source lines, locals, or breakpoints, verify debug symbols, optimization level, loaded image path, and source/binary commit match.
-7. Run the smallest build or test command that proves the artifact is fresh; use `inet-unit-tests` for unit-test execution and `inet-simulation-run` for simulation validation.
+7. After changing compiled source or generated-code inputs, explicitly rebuild the affected library in the selected mode before running a test or simulation. A test command does not by itself prove that `libINET.so` or `libINET_dbg.so` is fresh. Use `inet-unit-tests` for the required build-before-test sequence and unit-test execution, and `inet-simulation-run` for simulation validation.
 
 Inspect repository state and the relevant `libINET*.so` artifacts when freshness or mode is disputed.
 
@@ -38,6 +38,7 @@ For loaded-library suspicion under LLDB, inspect:
 * Generated message or NED-related code was not regenerated after definition changes.
 * Breakpoints bind to a different source copy or remain unresolved because the wrong library was loaded.
 * A previous build artifact masks a source change.
+* A freshly generated unit-test executable links against a stale INET library because INET was not rebuilt first.
 * ccache or incremental build behavior obscures whether a file was rebuilt; follow repository-specific test guidance when present.
 
 ## Do not

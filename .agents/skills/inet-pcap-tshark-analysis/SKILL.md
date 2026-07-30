@@ -20,6 +20,7 @@ Use this skill for protocol-visible packets exchanged by an INET simulation. A c
 
 * Use PCAPng unless compatibility requires legacy PCAP.
 * Configure temporary packet recording with command-line overrides; do not edit `omnetpp.ini` solely for diagnostics.
+* On the first diagnostic capture run, add `--**.checksumMode="computed"` and `--**.fcsMode="computed"` unless the effective configuration already sets both. Treat these as part of capture setup, not as a retry after packet serialization or recording fails.
 * Capture only the needed nodes, interfaces, protocols, and time interval.
 * Use unique filenames that encode configuration, run, node, interface, and recorder.
 * Use `tshark -n` for reproducible automated analysis.
@@ -33,7 +34,7 @@ Use this skill for protocol-visible packets exchanged by an INET simulation. A c
 
 1. Start from a known-good `opp_run -u Cmdenv` command.
 2. Inspect the NED and INI configuration to find the real node path, interface module, and whether `numPcapRecorders` is supported.
-3. Add the narrowest useful PcapRecorder command-line overrides.
+3. Add the narrowest useful PcapRecorder command-line overrides together with computed checksum and FCS overrides.
 4. Run one configuration and one run number.
 5. Verify the capture exists, is nonempty, and decodes with `tshark -n -r "$PCAP" -c 10`.
 6. Use `-T fields` exports for timelines and exact header values.
@@ -50,6 +51,8 @@ Use this skill for protocol-visible packets exchanged by an INET simulation. A c
 `frame.time_epoch` represents the recorded simulation timestamp. `frame.time_relative` is relative to the capture and is usually wrong for direct Cmdenv correlation.
 
 A successful simulation does not guarantee that a configured recorder captured packets. Always validate the output file before reasoning from it.
+
+Computed checksum and FCS modes may change the simulated packet-processing path. Preserve the exact overrides in the report and, when that distinction could affect the issue, compare the diagnostic capture run with the unmodified baseline.
 
 ## Read references on demand
 

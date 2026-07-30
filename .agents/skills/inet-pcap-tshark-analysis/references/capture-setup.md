@@ -35,12 +35,16 @@ PCAP="logs/${CONFIG}-${RUN}-host0-eth0.pcapng"
   "--${NODE}.pcapRecorder[0].timePrecision=9" \
   "--${NODE}.pcapRecorder[0].moduleNamePatterns=\"eth[0]\"" \
   "--${NODE}.pcapRecorder[0].alwaysFlush=true" \
-  "--${NODE}.pcapRecorder[0].verbose=false"
+  "--${NODE}.pcapRecorder[0].verbose=false" \
+  '--**.checksumMode="computed"' \
+  '--**.fcsMode="computed"'
 ```
 
 Use unique filenames that identify configuration, run, node, interface, and recorder. `alwaysFlush=true` is useful for diagnostic runs that may abort; disable it for long performance-sensitive runs only when losing the last buffered packets is acceptable.
 
 Use several recorders and separate files when capture points must remain distinguishable.
+
+Always include the two global computed-mode overrides on the first diagnostic capture run unless the effective configuration already sets both. They make packet serialization capture-ready and avoid rerunning a simulation after the recorder encounters declared or unavailable checksum/FCS data. The INI values are the string `"computed"`; `CHECKSUM_COMPUTED` and `FCS_COMPUTED` are C++ enum names, not command-line values.
 
 ## Select the recorded representation
 
@@ -52,7 +56,7 @@ Use several recorders and separate files when capture points must remain disting
 
 For native Wi-Fi analysis, select the installed model's IEEE 802.11 MAC representation. If INET cannot determine or convert the link type, inspect the capture module, `dumpProtocols`, packet protocol tags, and available recorder helpers.
 
-When exact computed checksum or FCS fields matter, add supported `checksumMode="computed"` or `fcsMode="computed"` overrides and record that they may change model behavior. Do not change these modes silently.
+Record the computed checksum and FCS overrides with the run command because they may change model behavior. If the investigation depends on the difference between declared and computed modes, preserve an unmodified baseline run for comparison, but keep the capture run serialization-ready from its first attempt.
 
 ## Bound capture cost
 

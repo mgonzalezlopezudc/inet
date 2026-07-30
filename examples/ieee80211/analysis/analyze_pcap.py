@@ -2529,7 +2529,7 @@ def generate_markdown_tables(
         )
     elif "ul_ofdma" in subdir:
         analysis_text = (
-            "`EdcaBaseline` provides the non-triggered control. The three scheduled configurations contain repeated **Trigger** frames, "
+            "The EDCA configurations provide non-triggered controls. The scheduled configurations contain repeated **Trigger** frames, "
             "solicited HE-TB observations, and AP **Block Ack** responses, which is the expected HE UL-MU exchange structure "
             "(IEEE Std 802.11-2024, Clause 26.5.2; see informative Annex G.5). Frame-subtype totals alone do not establish that queued payload "
             "was carried in the solicited responses or distinguish the two scheduler policies. Use decoded Trigger user allocations, "

@@ -753,7 +753,7 @@ def requirements_for_job(
         or job.run != diagnostic_run(group)
     ):
         return requirements
-    if job.config == "EdcaBaseline":
+    if job.config in {"EdcaBaseline5ms", "EdcaBaseline2_5ms", "EdcaBaseline1ms"}:
         return requirements + (
             UL_OFDMA_DIAGNOSTIC_REQUIREMENTS[0],
         ) + UL_OFDMA_EDCA_INACTIVE_REQUIREMENTS

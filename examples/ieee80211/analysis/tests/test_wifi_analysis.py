@@ -175,7 +175,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 scenario="ul_ofdma",
                 evidence="scalar-vector",
                 runs=5,
-                config=["BacklogBased", "EdcaBaseline"],
+                config=["BacklogBased5ms", "EdcaBaseline5ms"],
                 jobs=2,
                 session_id=SESSION,
                 exhaustive_vectors=True,
@@ -205,7 +205,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 scenario="ul_ofdma",
                 evidence="scalar-vector",
                 runs=5,
-                config=["BacklogBased"],
+                config=["BacklogBased5ms"],
                 jobs=2,
                 session_id=SESSION,
                 exhaustive_vectors=False,
@@ -266,7 +266,7 @@ class WifiAnalysisCliTest(unittest.TestCase):
                 "evidence": "both",
                 "runs": 5,
                 "pcap_run": 0,
-                "configurations": ["BacklogBased"],
+                "configurations": ["BacklogBased5ms"],
                 "scalar_vector_manifest": str(filtered),
             }))
             args = SimpleNamespace(

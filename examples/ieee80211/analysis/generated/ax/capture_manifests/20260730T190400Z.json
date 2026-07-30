@@ -1,0 +1,68 @@
+{
+  "analysis_script_sha256": "b4ef24dcf64670c422779d704a04f7eb325746719bd67076ba78e9b4315ab76c",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "200826b46fd4b310612d8ac3f8d25d55acf290b7d3b2a8de3223ddb4635996e5",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 930424,
+            "duration_seconds": 0.798974,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.999138,
+            "file_size_bytes": 1166988,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 5171,
+            "snapshot_length": null,
+            "start_seconds": 0.200164,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190400Z/EdcaBaseline2_5ms/EdcaBaseline2_5ms-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "e50646f8ebcdaa839fa27dcdeb64d576af5c77454eaa57a0d74cfb444d32daba",
+          "size_bytes": 1166988
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "EdcaBaseline2_5ms",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_ofdma/omnetpp.ini",
+      "ini_sha256": "7634d3e00ecc6a61ece747beca830921c13751fce30e61805e5a5f1bc3e54221",
+      "run_number": 0,
+      "scalar": {
+        "configname": "EdcaBaseline2_5ms",
+        "path": "examples/ieee80211ax/ul_ofdma/results/20260730T190400Z/EdcaBaseline2_5ms/EdcaBaseline2_5ms-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "226a2b0eae43445d31c7ba832fb422b834464849baf0adc65128b081bbde0caf"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_ofdma"
+    }
+  ],
+  "generated_at_utc": "2026-07-30T18:58:56.221970+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "c0cd7b48cbfb20ed3312c3594cddfec7122f6cb4b6695f73529384cfaf259095",
+  "repository_revision": "bdaaeecdc923f16abf10f39c2c8cfe10b851d5b1",
+  "session_id": "20260730T190400Z",
+  "suite": "ax",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ax.json",
+    "sha256": "c84be6a8a29b0f14204c32b513a87f895166ff6b6cc9cfeab57e43e91f628c20"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

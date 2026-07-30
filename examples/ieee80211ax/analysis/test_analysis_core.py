@@ -493,9 +493,9 @@ class CampaignRunnerTest(unittest.TestCase):
             }
         }
         scheduled = CampaignJob(
-            "ul_ofdma", "BacklogBased", 0, Path(), ()
+            "ul_ofdma", "BacklogBased5ms", 0, Path(), ()
         )
-        edca = replace(scheduled, config="EdcaBaseline")
+        edca = replace(scheduled, config="EdcaBaseline5ms")
         lean = replace(scheduled, run=1)
 
         scheduled_requirements = requirements_for_job(

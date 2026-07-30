@@ -93,7 +93,7 @@ The debug runner and debug INET library must be used together. Do not mix releas
 ## Diagnostic routing
 
 * Use `inet-cmdenv-log-analysis` for module decisions and runtime context.
-* Use `inet-pcap-tshark-analysis` for protocol-visible packets.
+* Use `inet-pcap-tshark-analysis` for protocol-visible packets. For a diagnostic PCAP run, make the first command capture-ready with `--**.checksumMode="computed"` and `--**.fcsMode="computed"` unless both are already effective.
 * Use `omnetpp-eventlog-analysis` for scheduling and message causality.
 * Use `omnetpp-result-analysis` for recorded statistics.
 * Use `inet-lldb-debugging` for source-level state.

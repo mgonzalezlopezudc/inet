@@ -21,9 +21,8 @@
 //   - Trigger-type selection (Basic / BSRP) via a pluggable policy.
 //   - Uplink OFDMA Random Access (UORA) state machine (Clause 26.5.4).
 //
-// The UORA model keeps per-AC OFDMA contention window (OCW) and backoff (OBO)
-// state.  The OCW update rule (reset on success, double on failure) follows
-// Clause 26.5.4.3.
+// The UORA model keeps one station-scoped OFDMA contention window (OCW) and
+// backoff (OBO) state. The update rules follow Clauses 26.5.4.3 and 26.5.4.4.
 
 namespace inet {
 namespace ieee80211 {
@@ -40,11 +39,8 @@ void HeUlCoordinator::initialize(int stage)
         ocwMax = par("ocwMax");
         ASSERT(ocwMin >= 0);
         ASSERT(ocwMin <= ocwMax);
-        for (int ac = AC_BK; ac <= AC_VO; ac++) {
-            int index = getAccessCategoryIndex(static_cast<AccessCategory>(ac));
-            ofdmaContentionWindows[index] = ocwMin;
-            ofdmaBackoffs[index] = intuniform(0, ocwMin);
-        }
+        ofdmaContentionWindow = ocwMin;
+        ofdmaBackoff = intuniform(0, ocwMin);
         scheduler = check_and_cast<IIeee80211HeUlScheduler *>(getParentModule()->getSubmodule("ulScheduler"));
         triggerPolicy = check_and_cast<IIeee80211HeUlTriggerPolicy *>(getParentModule()->getSubmodule("ulTriggerPolicy"));
         basicTriggerSentSignal = registerSignal("heUlBasicTriggerSent");
@@ -68,12 +64,6 @@ void HeUlCoordinator::initialize(int stage)
         WATCH_EXPR("elapsedSinceLastTrigger", hasSentTrigger ? simTime() - lastTriggerTime : SIMTIME_MAX);
         WATCH_EXPR("bufferStatusSummary", getBufferStatusSummary());
     }
-}
-
-int HeUlCoordinator::getAccessCategoryIndex(AccessCategory ac)
-{
-    ASSERT(ac >= AC_BK && ac <= AC_VO);
-    return static_cast<int>(ac);
 }
 
 int HeUlCoordinator::getFreshReportCount() const
@@ -109,14 +99,8 @@ std::string HeUlCoordinator::getBufferStatusSummary() const
     stream << "reports=" << bufferStatusByAid.size()
            << ", fresh=" << getFreshReportCount()
            << ", backlogged=" << getBackloggedReportCount()
-           << ", ocw=[" << ofdmaContentionWindows[AC_BK] << ","
-                         << ofdmaContentionWindows[AC_BE] << ","
-                         << ofdmaContentionWindows[AC_VI] << ","
-                         << ofdmaContentionWindows[AC_VO] << "]"
-           << ", obo=[" << ofdmaBackoffs[AC_BK] << ","
-                         << ofdmaBackoffs[AC_BE] << ","
-                         << ofdmaBackoffs[AC_VI] << ","
-                         << ofdmaBackoffs[AC_VO] << "]";
+           << ", ocw=" << ofdmaContentionWindow
+           << ", obo=" << ofdmaBackoff;
     return stream.str();
 }
 
@@ -444,9 +428,7 @@ HeUlCoordinator::PreparedRandomAccessSelection HeUlCoordinator::prepareRandomAcc
     selection.randomAccessRuCount = randomAccessRuCount;
     if (randomAccessRuCount <= 0)
         return selection;
-    int acIndex = getAccessCategoryIndex(ac);
-    int ofdmaContentionWindow = ofdmaContentionWindows[acIndex];
-    int ofdmaBackoff = ofdmaBackoffs[acIndex];
+    ASSERT(ac >= AC_BK && ac <= AC_VO);
     ASSERT(ofdmaContentionWindow >= ocwMin && ofdmaContentionWindow <= ocwMax);
     ASSERT(ofdmaBackoff >= 0 && ofdmaBackoff <= ofdmaContentionWindow);
     selection.originalBackoff = ofdmaBackoff;
@@ -466,10 +448,9 @@ int HeUlCoordinator::commitRandomAccessRu(
 {
     if (selection.randomAccessRuCount <= 0)
         return -1;
-    int acIndex = getAccessCategoryIndex(selection.accessCategory);
-    if (ofdmaBackoffs[acIndex] != selection.originalBackoff)
+    if (ofdmaBackoff != selection.originalBackoff)
         throw cRuntimeError("HE UORA backoff changed between preparation and commit");
-    ofdmaBackoffs[acIndex] = selection.resultingBackoff;
+    ofdmaBackoff = selection.resultingBackoff;
     if (selection.attempt) {
         int selectedRu = intuniform(0, selection.randomAccessRuCount - 1);
         emit(randomAccessAttemptSignal, 1L);
@@ -493,13 +474,9 @@ int HeUlCoordinator::selectRandomAccessRu(AccessCategory ac, int randomAccessRuC
 
 void HeUlCoordinator::reportRandomAccessResult(AccessCategory ac, bool success)
 {
-    // IEEE 802.11-2024 Clause 26.5.4.3 ("OFDMA contention window (OCW) update").
-    // If the transmission succeeds, OCW is reset to OCW_min.
-    // If the transmission fails (collision/no ACK), OCW is doubled (OCW = min(OCW_max, 2 * OCW + 1)).
-    // A new random OBO is then selected in [0, OCW].
-    int acIndex = getAccessCategoryIndex(ac);
-    int& ofdmaContentionWindow = ofdmaContentionWindows[acIndex];
-    int& ofdmaBackoff = ofdmaBackoffs[acIndex];
+    // IEEE 802.11-2024 Clauses 26.5.4.3 and 26.5.4.4 define one OCW and OBO
+    // for the non-AP STA, irrespective of the pending frame's access category.
+    ASSERT(ac >= AC_BK && ac <= AC_VO);
     if (success)
         ofdmaContentionWindow = ocwMin;
     else

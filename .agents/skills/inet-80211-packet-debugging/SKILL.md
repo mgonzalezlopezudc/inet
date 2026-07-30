@@ -41,7 +41,7 @@ Use `inet-cmdenv-log-analysis` for module decisions and `omnetpp-eventlog-analys
 Prefer the cheapest evidence that can answer the question:
 
 1. Inspect the actual NED types and INI overrides for the instantiated station, AP, MAC, management, radio, and radio medium.
-2. Run one configuration and one run number in Cmdenv with command-line diagnostic overrides.
+2. Run one configuration and one run number in Cmdenv with command-line diagnostic overrides. When recording PCAPng, include `--**.checksumMode="computed"` and `--**.fcsMode="computed"` on the first attempt unless both are already effective.
 3. Capture at sender, receiver, AP, and relevant intermediate interfaces when delivery, loss, or retransmission is disputed.
 4. Decode frame type, address fields, retry bit, sequence/fragment numbers, TID, timing, and PHY metadata when available.
 5. Add selective Cmdenv logs for the suspected 802.11 component.

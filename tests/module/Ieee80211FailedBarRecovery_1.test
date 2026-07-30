@@ -17,7 +17,7 @@ record-vector-results = false
 
 include ../../../../examples/ieee80211ax/ul_ofdma/omnetpp.ini
 
-%extraargs: -c BacklogBased -r 1
+%extraargs: -c BacklogBased5ms -r 1
 
 %contains: stdout
 Simulation time limit reached -- at t=1s

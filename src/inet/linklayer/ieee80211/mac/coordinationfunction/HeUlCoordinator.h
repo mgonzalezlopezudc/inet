@@ -93,8 +93,8 @@ class INET_API HeUlCoordinator : public SimpleModule
     simtime_t reportMaxAge;
     int ocwMin = 7;
     int ocwMax = 31;
-    std::array<int, 4> ofdmaContentionWindows = {};
-    std::array<int, 4> ofdmaBackoffs = {};
+    int ofdmaContentionWindow = 0;
+    int ofdmaBackoff = 0;
     simtime_t lastTriggerTime = SIMTIME_ZERO;
     bool hasSentTrigger = false;
     std::map<uint16_t, BufferStatus> bufferStatusByAid;
@@ -116,7 +116,6 @@ class INET_API HeUlCoordinator : public SimpleModule
 
   protected:
     virtual void initialize(int stage) override;
-    static int getAccessCategoryIndex(AccessCategory ac);
     virtual int getFreshReportCount() const;
     virtual int getBackloggedReportCount() const;
     virtual std::string getBufferStatusSummary() const;
