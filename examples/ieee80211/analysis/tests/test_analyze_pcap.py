@@ -43,6 +43,7 @@ from analyze_pcap import (
     extract_frame_timeline,
     extract_he_trigger_allocations,
     get_config_pcap_stats,
+    generate_markdown_tables,
     is_generated_analysis_artifact,
     replace_generated_section,
     update_walkthrough,
@@ -116,6 +117,50 @@ class TriggerAllocationDecodeTest(unittest.TestCase):
             ])
         self.assertFalse(rows[0]["field_cardinality_consistent"])
         self.assertIsNone(rows[0]["users"][1]["ru_allocation"])
+
+    def test_default_table_limit_is_100_rows(self):
+        triggers = []
+        for frame_number in range(101):
+            triggers.append({
+                "frame_number": frame_number,
+                "simulation_time": "0.0",
+                "trigger_type": 0,
+                "users": [],
+                "field_cardinality_consistent": True,
+                "user_field_cardinalities": {},
+            })
+        markdown = trigger_allocations_markdown(triggers)
+        self.assertIn("Showing the first 100 of 101 decoded Trigger frames", markdown)
+        self.assertNotIn("| 100 |", markdown)
+
+
+class PcapMarkdownTest(unittest.TestCase):
+
+    def test_bsr_includes_decoded_trigger_type_table(self):
+        config_results = {
+            "BurstyTraffic": {
+                "global": {
+                    "used_ap_only": True,
+                    "total": 1,
+                    "stats": {},
+                    "timeline": [],
+                    "he_trigger_allocations": [{"trigger_type": 0}],
+                },
+            },
+        }
+        manifest = {
+            "session_id": "test-session",
+            "tshark_version": "test-tshark",
+            "_selected_manifest": {"path": "manifest.json", "sha256": "test"},
+        }
+        with patch("analyze_pcap.make_table_md", return_value=""), \
+                patch("analyze_pcap.timeline_markdown", return_value=""), \
+                patch("analyze_pcap.trigger_allocations_markdown", return_value="trigger table\n"), \
+                patch("analyze_pcap.walkthrough_packet_plot_path", return_value="plot.png"):
+            markdown = generate_markdown_tables(
+                config_results, "bsr", [], manifest, "plot.png"
+            )
+        self.assertIn("#### [script] Decoded HE Trigger user allocations", markdown)
 
 
 class DecodeHeFieldsTest(unittest.TestCase):

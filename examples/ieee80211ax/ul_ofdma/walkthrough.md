@@ -7,30 +7,27 @@
 - PCAP: `20260729T231416Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260729T103037Z`.
+`[agent]` results sessions: `20260729T231416Z`.
 
-This four-configuration experiment shows that enabling scheduled uplink OFDMA
-changes the observed exchange from station-contended HE-SU traffic to
-Trigger-led HE-TB responses. In session `20260729T103037Z`, the scheduled
-configurations contain that exchange while the EDCA control does not. The
-application results compare delivery and tail delay. Aligned run-0 telemetry
-and decoded Trigger User Info additionally verify each emitted per-user RU
-allocation, but do not establish that one scheduler policy is generally best.
+This four-configuration experiment tests the mechanism and its application
+outcomes in one bounded campaign. The three scheduled configurations show
+Trigger-led HE-TB exchanges; the EDCA control remains station-contended
+HE-SU. The result supports the exchange distinction and the allocation join,
+but does not establish a generally best scheduler.
 
 ## [agent] Learning objectives and feature primer
 
-The learning question is: does the example expose the scheduled uplink OFDMA
-exchange, and how do its application outcomes compare with ordinary EDCA?
+The learning question is: does enabling UL-MU-OFDMA change the observed MAC
+exchange, and what does that change mean for delivery and tail delay in this
+workload?
 
-Uplink Orthogonal Frequency-Division Multiple Access (OFDMA) lets an access
-point (AP) divide a channel into resource units (RUs). The AP wins channel
-access and sends a Basic Trigger whose User Info fields identify scheduled
-stations and their RU/PHY parameters. Addressed stations that satisfy the
-response conditions start aligned HE trigger-based (HE-TB) responses one SIFS
-after the triggering PPDU. A response can carry scheduled data or QoS Null.
-INET completes this example's modeled exchange with a SIFS-delayed Multi-STA
-Block Ack. An ordinary EDCA transmission is instead a station-originated HE
-single-user (HE-SU) exchange with no preceding Basic Trigger.
+Uplink OFDMA lets the AP divide a channel into resource units (RUs). The AP
+wins channel access and sends a Basic Trigger whose User Info fields identify
+scheduled stations and their RU/PHY parameters. Qualifying stations answer
+with aligned HE trigger-based (HE-TB) PPDUs one SIFS later; a response may be
+QoS Data or QoS Null. INET completes the modeled exchange with a delayed
+Multi-STA Block Ack. Ordinary EDCA instead produces station-originated HE-SU
+traffic without the Trigger prefix.
 
 ## [agent] Scenario description
 
@@ -45,45 +42,36 @@ host[2] --/                    ^
                                +-- Basic Trigger / HE-TB responses
 ```
 
-The [INI file](omnetpp.ini) places the AP at the center of a 50 m × 50 m
-area, fixes the radios to AX 20 MHz operation and HE MCS 1/NSS 1, disables
-random-access RUs, and enables Block Ack and MPDU aggregation. The common
-warm-up app offers one 100-byte packet per host at 0.2 s; the measured app
-starts at 0.3 s and sends 100-byte packets every 0.5 ms. The default
-measurement window is `[0.3,0.95)` s. The asymmetric case changes both apps
-to 256-byte packets, uses 1/2/4 ms measured-app intervals for hosts 0/1/2, and
-measures `[0.3,0.8)` s.
+The [INI file](omnetpp.ini) fixes the radios to AX 20 MHz, HE MCS 1/NSS 1,
+zero random-access RUs, Block Ack, and MPDU aggregation. The common measured
+workload sends 100-byte packets every 0.5 ms in `[0.3,0.95)` s. The
+asymmetric case deliberately changes packet size, station intervals, and
+measurement window, so it is a stress case rather than a clean scheduler
+comparison.
 
-Port 5000 is classified as UP_VO by `ExampleQosClassifier`. The baseline SU
-EDCA values are therefore the HE VO defaults (AIFSN/CWmin/CWmax `2/3/7`).
-The current MU-EDCA settings are explicitly `muAifsn=10`, `muCwMin=255`,
-`muCwMax=1023`, and `muEdcaTimer=2.089s` in the
-[INI configuration](omnetpp.ini). `AsymmetricBacklog` also sets the ordinary
-SU values to `10/255/1023` so queues remain available to the AP scheduler.
-These assignments are requested configuration; the campaign results and
-captures establish what occurred.
+The baseline SU EDCA values are `2/3/7`; the scheduled configurations use
+explicit MU-EDCA values `10/255/1023` with a 2.089 s timer. These are
+configuration inputs. The PCAP and aligned result evidence establish which
+exchange and allocations actually occurred.
 
 ## [agent] Standards and INET model boundary
 
-IEEE Std 802.11-2024 defines the Basic Trigger format in Clause 9.3.1.22.2 and
-UL-MU solicitation in Clause 26.5.2.2. Clause 26.5.2.2.4 constrains the Common
-Info and User Info fields used to construct an HE-TB PPDU. Under Clause
-26.5.2.3.1, a qualifying non-AP station starts that response one SIFS after
-the triggering PPDU; Clause 26.5.2.4 permits a QoS Null response when no
-pending frame fits. Immediate acknowledgment behavior is specified in Clause
-10.3.2.13.3 and Clauses 26.4.4.5–26.4.4.6.
+IEEE Std 802.11-2024 defines the Basic Trigger format in Clause 9.3.1.22.2
+and UL-MU solicitation in Clause 26.5.2.2. Clauses 26.5.2.2.4 and 26.5.2.3.1
+specify the allocation fields and SIFS response conditions; Clause 26.5.2.4
+permits QoS Null when no pending frame fits. These rules define the expected
+exchange, not INET's scheduler policy.
 
-INET concretizes the exchange with `HeHcf`, the UL coordinator, and
-replaceable `HeUlScheduler*` policies. This configured path collects HE-TB
-responses and sends a SIFS-delayed Multi-STA Block Ack. IEEE defines legal
-fields, response conditions, and timing, but not INET's scheduler objective,
-backlog scoring, allocation order, or tie-breaking policy.
+INET implements the path with `HeHcf`, an UL coordinator, and replaceable
+`HeUlScheduler*` policies. IEEE defines legal fields, response conditions, and
+timing; it does not define INET's backlog score, allocation order, or
+tie-breaking.
 
-The PCAP is AP `wlan[0]` observation evidence. It counts capture observations,
-not necessarily unique application deliveries; A-MPDU expansion and parallel
-RU observations can affect totals. Radiotap fields are reported only when the
-capture marks them known. Goodput and delay are application outcomes and do not
-by themselves prove scheduler decisions or per-user RU assignments.
+The PCAP is AP `wlan[0]` observation evidence. It counts transmission
+observations, not unique deliveries; A-MPDU expansion and parallel RU
+observations affect totals. Goodput and delay are derived application
+outcomes, while the joined Trigger table is the evidence for per-user
+allocations.
 
 ## [agent] Evidence status
 
@@ -133,7 +121,7 @@ python3 examples/ieee80211/analysis/wifi_analysis.py inspect ul_ofdma
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py run ul_ofdma \
   --suite ax --evidence both --runs 5 --jobs "$(nproc)" \
-  --session-id 20260729T103037Z
+  --session-id 20260729T231416Z
 ```
 
 The session contains runs `[0,5)` for each of the four configurations. Run 0
@@ -143,11 +131,11 @@ and publish that retained session with:
 ```sh
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py report ul_ofdma \
-  --suite ax --session-id 20260729T103037Z
+  --suite ax --session-id 20260729T231416Z
 
 MPLCONFIGDIR=/tmp/matplotlib \
 python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_ofdma \
-  --suite ax --session-id 20260729T103037Z --update
+  --suite ax --session-id 20260729T231416Z --update
 ```
 
 ## [agent] Scalar and vector analysis
@@ -162,15 +150,14 @@ run-level values per condition are summarized with a two-sided 95% Student-t
 interval; vector samples are not treated as independent repetitions.
 
 The retained inputs are the `.sca` and `.vec` files under
-`results/20260729T103037Z/{configuration}/` for runs 0–4.
+`results/20260729T231416Z/{configuration}/` for runs 0–4.
 
 The figure answers two separate questions: how much application traffic
 reached the sink and what p95 delay the delivered packets experienced. In this
-session the EDCA control has the highest goodput and lowest p95 delay. The
-scheduled cases still prove the UL-MU mechanism, but this workload does not
-show a delivery or delay advantage for it. The wide confidence interval for
-the equal-sized scheduler also cautions against ranking the two schedulers
-from five runs.
+campaign, EDCA is the strongest application control, while the scheduled
+cases establish the UL-MU mechanism rather than a delivery or delay advantage.
+The uncertainty and the asymmetric workload also prevent a general scheduler
+ranking.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-ul_ofdma -->
 ### [script] Generated scalar/vector plot and table
@@ -227,11 +214,10 @@ Showing 12 of 1353 joined users; the session-bound evidence ledger retains every
 ## [agent] PCAP statistics
 
 The shared AX PCAP analyzer used the four AP captures from session
-`20260729T103037Z`, with PCAPng/radiotap input and TShark decoding. Generated
-statistics, composition plots, evidence checks, and representative timelines
-are inserted below by the shared publisher. Counts are capture observations;
-unknown PHY fields remain unknown and estimated HE-TB airtime is explicitly
-limited by fields not exposed in radiotap.
+`20260729T231416Z`, with PCAPng/radiotap input and TShark decoding. The
+generated statistics, trigger-type tables, evidence checks, and representative
+timelines are the authoritative packet evidence below. Counts are capture
+observations; unknown PHY fields remain unknown.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
@@ -503,12 +489,10 @@ Showing the first 12 of 301 decoded Trigger frames; the script-owned packet metr
 ## [agent] Frame exchange analysis
 
 The generated scheduled timelines show the decisive order: an AP Trigger,
-simultaneous HE-TB responses on decoded RUs, and an AP Block Ack. Early
-responses can be QoS Null while the warm-up establishes state; later scheduled
-responses carry QoS Data. The asymmetric case exposes several RU sizes, while
-the equal-sized policy shows 26-tone responses in its representative
-timeline. These are direct run-0 observations, not proof of the scheduler's
-internal reason for choosing an RU.
+simultaneous HE-TB responses on decoded RUs, and an AP Block Ack. The trigger
+tables add the decoded type and per-user AID/RU fields; early responses may be
+QoS Null, while later responses carry QoS Data. These are direct run-0
+observations, not proof of the scheduler's internal reason for choosing an RU.
 
 The EDCA timeline instead shows station-originated HE-SU data without the
 Trigger prefix. Frame numbers are local to each AP capture and are not
@@ -516,29 +500,27 @@ OMNeT++ event numbers.
 
 ## [agent] Cross-layer findings and verdict
 
-`PASS`: in session `20260729T103037Z`, all four configurations have five
+`PASS`: in session `20260729T231416Z`, all four configurations have five
 scalar/vector runs and a matched run-0 AP capture. The three scheduled
 configurations show Trigger-led HE-TB exchanges, while `EdcaBaseline` shows
-the non-triggered HE-SU control. Across the scheduled configurations, all 756
-committed per-user Basic Trigger allocations match the decoded transmitted
-AID and RU geometry one-to-one.
+the non-triggered HE-SU control. The joined allocation checks match every
+committed scheduled per-user allocation to the decoded transmitted AID and RU
+geometry in the retained evidence.
 
-`INCONCLUSIVE`: the measured application outcomes do not establish a general
-scheduler ranking. EDCA performs best for delivery and p95 delay in this
-matched workload, EqualSizedRUs has wide run-to-run uncertainty, and
-AsymmetricBacklog changes both workload and measurement window. None of those
-application outcomes alone explains why a scheduler chose an RU.
+`INCONCLUSIVE`: the application outcomes do not establish a general scheduler
+ranking. EDCA is the strongest control in this workload, while
+`EqualSizedRUs` retains substantial uncertainty and `AsymmetricBacklog`
+changes multiple factors. None of these outcomes alone explains why a
+scheduler chose an RU.
 
 ## [agent] Limitations and inconclusive claims
 
 - Five repetitions support a bounded example comparison, not a general claim
-  about all channels, loads, distances, or random seeds.
-- The MU-EDCA timer is configured but not separately recorded as a state vector;
-  activation is therefore configuration evidence, not a direct per-packet
-  observation.
-- AP PCAP counts do not equal delivered application-packet counts, and PCAP
-  fields alone do not expose the scheduler's backlog inputs or rationale.
-- The model-only Trigger ID is not transmitted over the air. The executable
-  check therefore requires equal counts and uses an order-preserving causal
-  join, accepting only a 0–1 ms commit-to-capture delay before comparing every
-  user ordinal, AID, RU size, and RU offset.
+  about other channels, loads, distances, or random seeds.
+- The MU-EDCA timer is configuration evidence; it is not separately recorded
+  as a per-packet state observation.
+- AP PCAP counts do not equal delivered application-packet counts, and the
+  decoded fields do not expose the scheduler's backlog rationale.
+- The model-only Trigger ID is not transmitted over the air. The allocation
+  result therefore depends on the executable order-preserving join between
+  scheduler telemetry and decoded Trigger User Info.

@@ -158,24 +158,30 @@ def render_evidence_markdown(
         None,
     )
     if bsr_check is not None:
-        lines.extend([
-            "\n#### [script] Joined BSR scheduler-decision evidence\n\n",
-            "| Config | Run | Time (s) / Trigger | Users | Reported bytes | Planned bytes |\n",
-            "|---|---:|---:|---:|---:|---:|\n",
-        ])
         observations = bsr_check.get("observations", [])
-        for row in observations[:12]:
-            lines.append(
-                f"| {escape_cell(row['config'])} | {row['run_number']} | "
-                f"{row['simulation_time']} / {row['trigger_id']} | "
-                f"{row['user_count']} | {row['reported_bytes']} | "
-                f"{row['planned_bytes']} |\n"
-            )
-        if len(observations) > 12:
-            lines.append(
-                f"\nShowing 12 of {len(observations)} joined decisions; the "
-                "session-bound evidence ledger retains every observation.\n"
-            )
+        for config in sorted({row["config"] for row in observations}):
+            config_observations = [
+                row for row in observations if row["config"] == config
+            ]
+            lines.extend([
+                f"\n#### [script] Joined BSR scheduler-decision evidence: "
+                f"{escape_cell(config)}\n\n",
+                "| Config | Run | Time (s) / Trigger | Users | Reported bytes | Planned bytes |\n",
+                "|---|---:|---:|---:|---:|---:|\n",
+            ])
+            for row in config_observations[:100]:
+                lines.append(
+                    f"| {escape_cell(row['config'])} | {row['run_number']} | "
+                    f"{row['simulation_time']} / {row['trigger_id']} | "
+                    f"{row['user_count']} | {row['reported_bytes']} | "
+                    f"{row['planned_bytes']} |\n"
+                )
+            if len(config_observations) > 100:
+                lines.append(
+                    f"\nShowing 100 of {len(config_observations)} joined decisions "
+                    f"for {escape_cell(config)}; the session-bound evidence "
+                    "ledger retains every observation.\n"
+                )
     return "".join(lines)
 
 

@@ -1354,7 +1354,7 @@ def extract_he_trigger_allocations(pcap_files):
     return triggers
 
 
-def trigger_allocations_markdown(triggers, limit=12):
+def trigger_allocations_markdown(triggers, limit=100):
     if not triggers:
         return "No HE Trigger User Info fields were decoded.\n\n"
     lines = [
@@ -2457,7 +2457,7 @@ def generate_markdown_tables(
             "#### [script] Representative frame-exchange timeline\n\n"
         )
         md.append(timeline_markdown(global_res["timeline"]))
-        if subdir == "ul_ofdma":
+        if subdir in ("ul_ofdma", "bsr", "he_bsr"):
             md.append(
                 "#### [script] Decoded HE Trigger user allocations\n\n"
             )

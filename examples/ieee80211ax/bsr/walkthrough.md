@@ -3,39 +3,65 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260730T105223Z`
-- PCAP: `20260730T105223Z`
+- Scalar/vector: `20260730T112541Z`
+- PCAP: `20260730T112541Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `NOT RECORDED`.
+`[agent]` results sessions: `20260730T112541Z`.
 
-This example shows how an AP can use uplink Buffer Status Reports (BSRs) to allocate HE uplink OFDMA resources. With fresh reports, the AP's scheduled bytes follow the reported backlog across two traffic bursts; limiting report age to 10 ms changes that scheduling state and is therefore a useful stale-report control. The result is scoped to the five-seed campaign and the configured three-STA topology.
+This example tests whether AP-side BSR accounting remains aligned with the
+uplink schedule when the accepted report age is changed. The result is a
+bounded comparison of two configurations, five runs each, and is not a claim
+about BSR performance in general.
 
 ## [agent] Learning objectives and feature primer
 
-BSR is queue information sent by a non-AP station to help its AP decide how much uplink capacity to grant. The AP schedules from the report state it has received, which may differ from the station's current queue. Three stations send UDP traffic through one HE AP while the workload turns on, off, and on again.
+BSR is queue information sent by a non-AP station to help its AP decide how
+much uplink capacity to grant. The AP schedules from the report state it has
+received, which may differ from the station's current queue. The learning
+question is whether the reported bytes and the bytes selected for a trigger
+remain correlated under the fresh and stale-report treatments.
 
-The decisive evidence is the AP-side reported/planned-byte pair keyed by `heUlTriggerDecisionId`. A report may exceed the bytes planned for one trigger because the scheduler is allocating one transmission opportunity, not copying the entire queue. BSR is scheduling state, not application goodput.
+The decisive evidence is the AP-side reported/planned-byte pair keyed by
+`heUlTriggerDecisionId`. A report may exceed the bytes planned for one trigger
+because the scheduler is allocating one transmission opportunity, not copying
+the entire queue. BSR is scheduling state, not application goodput.
 
 ## [agent] Scenario description
 
-[`HeBsrNetwork`](HeBsrNetwork.ned) extends the common single-BSS HE network with three stationary hosts and one AP. The [configuration](omnetpp.ini) selects 5 GHz, 20 MHz HE operation, QoS stations, `HeHcf`, and the AP-side `HeUlSchedulerBacklogBased` scheduler. Hosts generate 700-byte UDP packets every 0.35 ms.
+[`HeBsrNetwork`](HeBsrNetwork.ned) contains one HE AP and three stationary
+stations. The [configuration](omnetpp.ini) selects 5 GHz, 20 MHz HE operation,
+QoS stations, `HeHcf`, and the AP-side `HeUlSchedulerBacklogBased` scheduler.
+Each station offers 700-byte UDP packets every 2 ms during the active periods.
+The warm-up traffic runs before the measurement window and is excluded from
+the burst comparison.
 
-`BurstyTraffic` enables ON periods 0.3–0.5 s and 0.65–0.95 s and extends `FullBsrAccounting`. `StaleBsr` keeps the same topology and traffic but sets `reportMaxAge = 10ms`. The analyzer's measurement window is 0.3–0.95 s, so it includes both bursts and the idle interval between them.
+`BurstyTraffic` uses active periods 0.3–0.5 s and 0.65–0.95 s and extends
+`FullBsrAccounting`. `StaleBsr` keeps the topology and offered traffic but
+sets `reportMaxAge = 10ms`. The analysis window is 0.3–0.95 s and therefore
+includes both bursts and the gap between them.
 
 ## [agent] Standards and INET model boundary
 
-IEEE 802.11ax-2024 clause 26.5.5 describes buffer status report operation. Table 9-25 identifies the BSR control value, and Table 9-47 identifies BSRP as Trigger Type 4. These references define the standard mechanism; they do not prove the behavior of this INET run.
+IEEE Std 802.11-2024 Clause 26.5.5 describes buffer status reporting. The
+standard identifies BSRP as Trigger Type 4. The decoded Trigger table shows
+the trigger types observed in the representative AP capture, but the fields
+and the standard do not by themselves prove that the AP used a report
+correctly.
 
-INET exposes the mechanism through AP-side report/planning telemetry and an HE uplink scheduler. The INI is requested behavior; the generated `.vec` results are derived measurements, and the PCAP is a direct observation of the MAC exchange. QoS Data counts alone do not prove BSR freshness or application delivery of the reported bytes.
+INET exposes the mechanism through AP-side report/planning telemetry and an HE
+uplink scheduler. The INI is requested behavior; the generated vectors are
+derived measurements; and the AP PCAP directly observes the surrounding MAC
+exchange. QoS Data counts alone do not prove BSR freshness or delivery of the
+reported bytes.
 
 ## [agent] Evidence status
 
 | Claim | Status | Script-generated evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
 | Reported backlog is joined to scheduler-consumed bytes by trigger decision. | `PASS` | Published scalar/vector executable check and joined decision table | Five runs, seeds 0–4, both configurations | Every retained decision has aligned trigger ID, reported bytes, and planned bytes. |
-| The fresh/stale configurations expose different report and planning trajectories. | `PASS` | Published scalar/vector figure and joined decision evidence | Five runs, seeds 0–4, `StaleBsr` vs `BurstyTraffic` | This is a bounded model comparison, not a universal freshness-performance claim. |
-| The captured AP-MAC exchange contains the relevant HE trigger/data activity. | `PASS` | Published PCAP statistics and frame exchange | Representative run 0 of each publication configuration | BSR is an A-Control scheduling input, not a standalone frame subtype. |
+| The fresh/stale configurations expose different report and planning trajectories. | `PASS` | Published scalar/vector figure and joined decision evidence | Five runs, seeds 0–4, `StaleBsr` vs `BurstyTraffic` | Bounded model comparison; not a universal freshness-performance claim. |
+| The captured AP-MAC exchange contains the relevant HE trigger/data activity. | `PASS` | Published PCAP statistics, decoded trigger-type table, and frame exchange | Representative run 0 of each configuration | BSR is an A-Control scheduling input, not a standalone frame subtype. |
 
 ## [agent] Configuration matrix
 
@@ -48,7 +74,7 @@ INET exposes the mechanism through AP-side report/planning telemetry and an HE u
 
 | Invariant | Script-generated evidence | Failure symptom | First diagnostic |
 |---|---|---|---|
-| Each retained trigger decision has correlated report and plan values. | Joined decision evidence | Missing, misaligned, or non-finite decision fields | Check the six `heUlTriggerDecision*` vectors at the AP coordinator. |
+| Each retained trigger decision has correlated report and plan values. | Joined decision evidence | Missing, misaligned, or non-finite decision fields | Check the `heUlTriggerDecision*` vectors at the AP coordinator. |
 | The traffic bursts are present in the analysis window. | Reported-backlog plot and AP telemetry | No report activity during an ON period | Check application start/stop times and `heUlBufferStatusReportedBytes`. |
 
 ## [agent] Reproduction
@@ -58,28 +84,34 @@ Run from the INET repository root:
 ```sh
 python3 examples/ieee80211/analysis/wifi_analysis.py inspect bsr
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211/analysis/wifi_analysis.py run bsr \
-  --evidence both --runs 5 --session-id 20260730T130100Z
+  --evidence both --runs 5 --session-id 20260730T112541Z
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211/analysis/wifi_analysis.py report bsr \
-  --session-id 20260730T130100Z
+  --session-id 20260730T112541Z
 MPLCONFIGDIR=/tmp/matplotlib python3 examples/ieee80211/analysis/wifi_analysis.py publish bsr \
-  --session-id 20260730T130100Z --update
+  --session-id 20260730T112541Z --update
 ```
 
-The retained session is `20260730T130100Z`. It ran `BurstyTraffic` and `StaleBsr`, runs 0–4 with seed sets 0–4, from `examples/ieee80211ax/bsr`, and completed all 10 Cmdenv runs successfully. Every run recorded the trigger-decision projection vectors; run 0 of each configuration also recorded an AP-MAC PCAP. Results are under `examples/ieee80211ax/bsr/results/20260730T130100Z`.
+The retained session is `20260730T112541Z`: five runs for each
+configuration, with trigger-decision vectors on every run and an AP-MAC PCAP
+on representative run 0. Results are under
+`examples/ieee80211ax/bsr/results/20260730T112541Z`.
 
 ## [agent] Scalar and vector analysis
 
 <!-- BEGIN GENERATED ANALYSIS: scalar-vector -->
 <!-- END GENERATED ANALYSIS: scalar-vector -->
 
-The generated comparison shows the AP's reported backlog and planned bytes over the two configurations. The joined decision table keys both values by trigger ID, making each comparison a correlated scheduler-state observation. It does not measure application goodput or establish a universal benefit for a 10 ms freshness window.
+The generated comparison answers the accounting question: for each retained
+decision, are the AP's reported and planned bytes aligned to the same trigger
+ID? It does not measure application goodput or establish a universal benefit
+for a 10 ms freshness window.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bsr -->
 ### [script] Generated scalar/vector plot and table
 
-![bsr scalar/vector analysis](results/20260730T105223Z/bsr-reported-vs-scheduled.png)
+![bsr scalar/vector analysis](results/20260730T112541Z/bsr-reported-vs-scheduled.png)
 
-Figure provenance: [`results/20260730T105223Z/bsr-reported-vs-scheduled.png.json`](results/20260730T105223Z/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260730T112541Z/bsr-reported-vs-scheduled.png.json`](results/20260730T112541Z/bsr-reported-vs-scheduled.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -89,8 +121,8 @@ Common table provenance:
 
 | Configuration / observation | Mean or direct value | 95% CI half-width |
 |---|---:|---:|
-| Fresh BSR / reported backlog time weighted mean bytes | 58642.8 | 1061.25 |
-| Stale BSR / reported backlog time weighted mean bytes | 68531.9 | 844.686 |
+| Fresh BSR / reported backlog time weighted mean bytes | 1011.35 | 258.153 |
+| Stale BSR / reported backlog time weighted mean bytes | 1518.6 | 98.1539 |
 
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
 
@@ -100,24 +132,219 @@ The table is a presentation view of the session-bound run-level summary; the com
 |---|---|---|
 | **PASS** | Reported backlog is joined to scheduler-consumed backlog | Reported and planned backlog bytes are aligned to a trigger decision ID for every retained decision. |
 
-#### [script] Joined BSR scheduler-decision evidence
+#### [script] Joined BSR scheduler-decision evidence: BurstyTraffic
 
 | Config | Run | Time (s) / Trigger | Users | Reported bytes | Planned bytes |
 |---|---:|---:|---:|---:|---:|
 | BurstyTraffic | 0 | 0.10400000000000001 / 2 | 3 | 0 | 0 |
 | BurstyTraffic | 0 | 0.20700000000000002 / 3 | 3 | 0 | 0 |
-| BurstyTraffic | 0 | 0.3052344009660001 / 4 | 1 | 30640 | 30640 |
-| BurstyTraffic | 0 | 0.30896820151800003 / 5 | 1 | 18384 | 18384 |
-| BurstyTraffic | 0 | 0.3122950020700001 / 6 | 2 | 24512 | 13608 |
-| BurstyTraffic | 0 | 0.31560920289800004 / 7 | 2 | 220608 | 13608 |
-| BurstyTraffic | 0 | 0.31824860317400006 / 8 | 2 | 226704 | 13608 |
-| BurstyTraffic | 0 | 0.3220076867650001 / 9 | 3 | 410544 | 27216 |
-| BurstyTraffic | 0 | 0.32581548731700005 / 10 | 3 | 330880 | 27216 |
-| BurstyTraffic | 0 | 0.32917668814500006 / 11 | 3 | 851728 | 30352 |
-| BurstyTraffic | 0 | 0.3324804886970001 / 12 | 3 | 1011088 | 30352 |
-| BurstyTraffic | 0 | 0.33723785532700007 / 13 | 3 | 1145904 | 30352 |
+| BurstyTraffic | 0 | 0.33537273533500006 / 4 | 2 | 12256 | 12256 |
+| BurstyTraffic | 0 | 0.3412431019650001 / 5 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.343 / 6 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.34660180055200007 / 7 | 1 | 30640 | 30640 |
+| BurstyTraffic | 0 | 0.3559666846950001 / 8 | 2 | 18384 | 18384 |
+| BurstyTraffic | 0 | 0.35874508497100005 / 9 | 1 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.36568936732000007 / 10 | 1 | 42896 | 31336 |
+| BurstyTraffic | 0 | 0.3813836531240001 / 11 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.3852682542280001 / 12 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.38761793754300006 / 13 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.3916876208580001 / 14 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.40032998748900006 / 15 | 1 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.40201698748900005 / 16 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.40602447135600006 / 17 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.4099848716320001 / 18 | 1 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.4154936385380001 / 19 | 1 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.4295936413010001 / 20 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.4363218421290001 / 21 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.4380088421290001 / 22 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.44176064268100007 / 23 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.44592844323300007 / 24 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.4576906454410001 / 25 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.4612920457170001 / 26 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.4654508462690001 / 27 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.46938064682100006 / 28 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.4735304473730001 / 29 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.4830783315160001 / 30 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.485 / 31 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.48918780055200006 / 32 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.4955084016560001 / 33 | 1 | 12256 | 12256 |
+| BurstyTraffic | 0 | 0.512 / 34 | 1 | 116432 | 31336 |
+| BurstyTraffic | 0 | 0.514 / 35 | 1 | 116432 | 31336 |
+| BurstyTraffic | 0 | 0.516 / 36 | 1 | 116432 | 31336 |
+| BurstyTraffic | 0 | 0.518 / 37 | 1 | 116432 | 31336 |
+| BurstyTraffic | 0 | 0.52 / 38 | 1 | 116432 | 31336 |
+| BurstyTraffic | 0 | 0.522 / 39 | 1 | 116432 | 31336 |
+| BurstyTraffic | 0 | 0.524 / 40 | 1 | 116432 | 31336 |
+| BurstyTraffic | 0 | 0.646 / 41 | 3 | 0 | 0 |
+| BurstyTraffic | 0 | 0.6741880520180001 / 42 | 3 | 18384 | 18384 |
+| BurstyTraffic | 0 | 0.6801701356090001 / 43 | 3 | 30608 | 25832 |
+| BurstyTraffic | 0 | 0.682 / 44 | 1 | 18352 | 18352 |
+| BurstyTraffic | 0 | 0.6887458841430001 / 45 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.6963310849720001 / 46 | 2 | 24512 | 19736 |
+| BurstyTraffic | 0 | 0.7000438518790001 / 47 | 2 | 18384 | 18384 |
+| BurstyTraffic | 0 | 0.7036706524310001 / 48 | 2 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.7070134529830001 / 49 | 2 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.7118889368500002 / 50 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.7175805379550001 / 51 | 1 | 18384 | 18384 |
+| BurstyTraffic | 0 | 0.7226666215460001 / 52 | 1 | 73536 | 31336 |
+| BurstyTraffic | 0 | 0.7296152226500002 / 53 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.7351594234790001 / 54 | 2 | 30640 | 25864 |
+| BurstyTraffic | 0 | 0.7393342240310001 / 55 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.7506951917670002 / 56 | 1 | 18384 | 18384 |
+| BurstyTraffic | 0 | 0.7565497928720002 / 57 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.7630626770160002 / 58 | 2 | 24512 | 19736 |
+| BurstyTraffic | 0 | 0.7664054775680001 / 59 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.769 / 60 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.7736340835910002 / 61 | 1 | 49024 | 31336 |
+| BurstyTraffic | 0 | 0.7768144838670001 / 62 | 1 | 18352 | 18352 |
+| BurstyTraffic | 0 | 0.7804612844190001 / 63 | 1 | 30640 | 30640 |
+| BurstyTraffic | 0 | 0.7866187682860002 / 64 | 1 | 12256 | 12256 |
+| BurstyTraffic | 0 | 0.7908949691150001 / 65 | 2 | 67408 | 25864 |
+| BurstyTraffic | 0 | 0.7935763693910002 / 66 | 1 | 48992 | 31336 |
+| BurstyTraffic | 0 | 0.7971961699430001 / 67 | 2 | 85760 | 27216 |
+| BurstyTraffic | 0 | 0.8009459704950002 / 68 | 1 | 24480 | 24480 |
+| BurstyTraffic | 0 | 0.8048227710470002 / 69 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.8107728546380002 / 70 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.8215653398860001 / 71 | 1 | 18384 | 18384 |
+| BurstyTraffic | 0 | 0.8253191404380001 / 72 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.8319407415420002 / 73 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.8355511418180002 / 74 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.8402872254090001 / 75 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.8438456256850001 / 76 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.8471678265130002 / 77 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.8509150273410001 / 78 | 2 | 30640 | 19736 |
+| BurstyTraffic | 0 | 0.8550988278930002 / 79 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.874 / 80 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.8781768005520002 / 81 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.8819286011040002 / 82 | 1 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.8859078019320001 / 83 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.9005472871800002 / 84 | 1 | 122560 | 31336 |
+| BurstyTraffic | 0 | 0.9034624880080002 / 85 | 1 | 98016 | 31336 |
+| BurstyTraffic | 0 | 0.9072232885600002 / 86 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.9110610891120001 / 87 | 1 | 6128 | 6128 |
+| BurstyTraffic | 0 | 0.9156681727030002 / 88 | 1 | 55152 | 31336 |
+| BurstyTraffic | 0 | 0.9198359732550002 / 89 | 1 | 24480 | 24480 |
+| BurstyTraffic | 0 | 0.9245236565700002 / 90 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.9271890568460002 / 91 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.93 / 92 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.9336018005520001 / 93 | 2 | 79632 | 27216 |
+| BurstyTraffic | 0 | 0.9377946011040001 / 94 | 2 | 18352 | 18352 |
+| BurstyTraffic | 0 | 0.9419514016560002 / 95 | 2 | 18352 | 18352 |
+| BurstyTraffic | 0 | 0.9452892022080002 / 96 | 1 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.9475036024840001 / 97 | 1 | 12224 | 12224 |
+| BurstyTraffic | 0 | 0.9501270027600003 / 98 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.9530000000000001 / 99 | 1 | 6096 | 6096 |
+| BurstyTraffic | 0 | 0.9566288005520002 / 100 | 1 | 6128 | 6128 |
+| BurstyTraffic | 1 | 0.10400000000000001 / 2 | 3 | 0 | 0 |
 
-Showing 12 of 1947 joined decisions; the session-bound evidence ledger retains every observation.
+Showing 100 of 628 joined decisions for BurstyTraffic; the session-bound evidence ledger retains every observation.
+
+#### [script] Joined BSR scheduler-decision evidence: StaleBsr
+
+| Config | Run | Time (s) / Trigger | Users | Reported bytes | Planned bytes |
+|---|---:|---:|---:|---:|---:|
+| StaleBsr | 0 | 0.014 / 2 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.027 / 3 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.04 / 4 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.053 / 5 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.066 / 6 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.079 / 7 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.092 / 8 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.105 / 9 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.11800000000000001 / 10 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.131 / 11 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.14400000000000002 / 12 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.157 / 13 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.17 / 14 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.183 / 15 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.196 / 16 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.212 / 17 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.225 / 18 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.23800000000000002 / 19 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.251 / 20 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.264 / 21 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.277 / 22 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.29 / 23 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.303 / 24 | 3 | 0 | 0 |
+| StaleBsr | 0 | 0.32125396704500003 / 25 | 3 | 6128 | 0 |
+| StaleBsr | 0 | 0.32518116787300005 / 26 | 3 | 42896 | 29000 |
+| StaleBsr | 0 | 0.3302963687020001 / 27 | 3 | 42864 | 29000 |
+| StaleBsr | 0 | 0.3344661692540001 / 28 | 1 | 6096 | 6096 |
+| StaleBsr | 0 | 0.33778596980600006 / 29 | 1 | 12224 | 12224 |
+| StaleBsr | 0 | 0.3411127703580001 / 30 | 1 | 6128 | 6128 |
+| StaleBsr | 0 | 0.34372717063400005 / 31 | 2 | 6128 | 6128 |
+| StaleBsr | 0 | 0.34717613698800004 / 32 | 1 | 0 | 0 |
+| StaleBsr | 0 | 0.35383102113200005 / 33 | 2 | 55152 | 19736 |
+| StaleBsr | 0 | 0.35746682168400007 / 34 | 2 | 67376 | 25864 |
+| StaleBsr | 0 | 0.3611026222360001 / 35 | 2 | 67408 | 13608 |
+| StaleBsr | 0 | 0.36734210610300005 / 36 | 3 | 12256 | 12256 |
+| StaleBsr | 0 | 0.3743324727330001 / 37 | 3 | 49024 | 0 |
+| StaleBsr | 0 | 0.3783152732850001 / 38 | 2 | 24512 | 19736 |
+| StaleBsr | 0 | 0.3800182732850001 / 39 | 2 | 30576 | 25832 |
+| StaleBsr | 0 | 0.3841930738370001 / 40 | 2 | 18320 | 18320 |
+| StaleBsr | 0 | 0.38793387438900007 / 41 | 2 | 24448 | 24448 |
+| StaleBsr | 0 | 0.39276307521700005 / 42 | 2 | 12192 | 12192 |
+| StaleBsr | 0 | 0.39692627604600006 / 43 | 2 | 42864 | 27216 |
+| StaleBsr | 0 | 0.4008054768740001 / 44 | 1 | 18352 | 18352 |
+| StaleBsr | 0 | 0.4072779607410001 / 45 | 3 | 12256 | 0 |
+| StaleBsr | 0 | 0.41262676129400006 / 46 | 3 | 42896 | 25864 |
+| StaleBsr | 0 | 0.41630316157000014 / 47 | 2 | 12192 | 12192 |
+| StaleBsr | 0 | 0.42212204571300005 / 48 | 2 | 24480 | 24480 |
+| StaleBsr | 0 | 0.42533284626500006 / 49 | 2 | 24480 | 19736 |
+| StaleBsr | 0 | 0.4270358462650001 / 50 | 2 | 18352 | 18352 |
+| StaleBsr | 0 | 0.4345233301330001 / 51 | 2 | 6128 | 6128 |
+| StaleBsr | 0 | 0.43967173179000013 / 52 | 2 | 49024 | 19736 |
+| StaleBsr | 0 | 0.45024633289400007 / 53 | 1 | 0 | 0 |
+| StaleBsr | 0 | 0.4559282992480001 / 54 | 3 | 6128 | 0 |
+| StaleBsr | 0 | 0.4614473828390001 / 55 | 3 | 12256 | 12256 |
+| StaleBsr | 0 | 0.46563318339100007 / 56 | 1 | 36768 | 31336 |
+| StaleBsr | 0 | 0.4714928667060001 / 57 | 2 | 24480 | 19736 |
+| StaleBsr | 0 | 0.4752650675340001 / 58 | 2 | 36736 | 25864 |
+| StaleBsr | 0 | 0.47987915112500007 / 59 | 3 | 49024 | 25864 |
+| StaleBsr | 0 | 0.48407395167700007 / 60 | 2 | 6128 | 6128 |
+| StaleBsr | 0 | 0.4873867522290001 / 61 | 2 | 18384 | 13608 |
+| StaleBsr | 0 | 0.4916658358200001 / 62 | 1 | 67408 | 31336 |
+| StaleBsr | 0 | 0.4958479194110001 / 63 | 2 | 55120 | 19736 |
+| StaleBsr | 0 | 0.5000227199630001 / 64 | 1 | 6128 | 6128 |
+| StaleBsr | 0 | 0.5032175205150001 / 65 | 2 | 6128 | 6128 |
+| StaleBsr | 0 | 0.5070967213430001 / 66 | 3 | 12256 | 12256 |
+| StaleBsr | 0 | 0.511291521895 / 67 | 3 | 61248 | 25832 |
+| StaleBsr | 0 | 0.513005521895 / 68 | 2 | 61216 | 25832 |
+| StaleBsr | 0 | 0.5229638063150001 / 69 | 2 | 48992 | 19736 |
+| StaleBsr | 0 | 0.5268250071430001 / 70 | 1 | 61248 | 31336 |
+| StaleBsr | 0 | 0.530028807695 / 71 | 1 | 42864 | 31336 |
+| StaleBsr | 0 | 0.538707691838 / 72 | 1 | 6128 | 6128 |
+| StaleBsr | 0 | 0.5424354923900001 / 73 | 3 | 6128 | 0 |
+| StaleBsr | 0 | 0.5486861757050001 / 74 | 3 | 36768 | 29000 |
+| StaleBsr | 0 | 0.5534746595720001 / 75 | 2 | 36736 | 25864 |
+| StaleBsr | 0 | 0.5579789089650001 / 76 | 1 | 24480 | 24480 |
+| StaleBsr | 0 | 0.5621417095170002 / 77 | 2 | 24480 | 13608 |
+| StaleBsr | 0 | 0.5648721097930001 / 78 | 2 | 67376 | 27216 |
+| StaleBsr | 0 | 0.5670000000000001 / 79 | 2 | 67376 | 27216 |
+| StaleBsr | 0 | 0.5699312008280001 / 80 | 2 | 67344 | 27216 |
+| StaleBsr | 0 | 0.5726706011040001 / 81 | 2 | 55088 | 27216 |
+| StaleBsr | 0 | 0.5750000000000001 / 82 | 2 | 55088 | 27216 |
+| StaleBsr | 0 | 0.5778038005520001 / 83 | 2 | 67344 | 27216 |
+| StaleBsr | 0 | 0.5819626011040001 / 84 | 1 | 18352 | 18352 |
+| StaleBsr | 0 | 0.5911054516010001 / 85 | 1 | 6128 | 6128 |
+| StaleBsr | 0 | 0.594461252153 / 86 | 3 | 36768 | 0 |
+| StaleBsr | 0 | 0.5977716524290001 / 87 | 3 | 42896 | 29000 |
+| StaleBsr | 0 | 0.6015594529810001 / 88 | 3 | 42896 | 29000 |
+| StaleBsr | 0 | 0.6052152535330001 / 89 | 1 | 12256 | 12256 |
+| StaleBsr | 0 | 0.6091560540850001 / 90 | 1 | 6128 | 6128 |
+| StaleBsr | 0 | 0.6156452549140001 / 91 | 3 | 12256 | 12256 |
+| StaleBsr | 0 | 0.6194370554660001 / 92 | 2 | 49024 | 19736 |
+| StaleBsr | 0 | 0.6227518560180001 / 93 | 1 | 42864 | 31336 |
+| StaleBsr | 0 | 0.6256286565700002 / 94 | 1 | 24480 | 24480 |
+| StaleBsr | 0 | 0.6326588573980001 / 95 | 1 | 6128 | 6128 |
+| StaleBsr | 0 | 0.6384940006900002 / 96 | 3 | 12256 | 12256 |
+| StaleBsr | 0 | 0.6421678012420001 / 97 | 2 | 55120 | 19704 |
+| StaleBsr | 0 | 0.6463516017940001 / 98 | 2 | 18352 | 18352 |
+| StaleBsr | 0 | 0.6480546017940001 / 99 | 2 | 18320 | 18320 |
+| StaleBsr | 0 | 0.6556120856620001 / 100 | 3 | 18352 | 18352 |
+| StaleBsr | 0 | 0.6598068862140001 / 101 | 1 | 12224 | 12224 |
+
+Showing 100 of 940 joined decisions for StaleBsr; the session-bound evidence ledger retains every observation.
 <!-- END GENERATED: ieee80211-scalar-vector-bsr -->
 
 ## [agent] PCAP statistics
@@ -125,17 +352,21 @@ Showing 12 of 1947 joined decisions; the session-bound evidence ledger retains e
 <!-- BEGIN GENERATED ANALYSIS: pcap -->
 <!-- END GENERATED ANALYSIS: pcap -->
 
-The generated packet view uses the AP MAC capture from representative run 0. It confirms the surrounding HE Trigger and HE-TB response activity. BSR is scheduling information carried in the MAC exchange, not necessarily a standalone frame subtype, so packet counts do not replace the AP decision telemetry.
+The generated packet view uses the AP-MAC capture from representative run 0.
+The trigger-type table distinguishes the decoded Trigger records, while the
+timeline shows their HE-TB responses. Together they establish the surrounding
+exchange; the AP decision telemetry remains the authoritative evidence for
+reported and planned BSR bytes.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260730T105223Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260730T112541Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260730T105223Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260730T112541Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260730T105223Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260730T105223Z.json` (SHA-256 `adfbd7122ba2dafbd77d2bead8a2e2ab044c8f633486ce66668b44f692e8aa85`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260730T112541Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260730T112541Z.json` (SHA-256 `e7fd17f62a3d99e7ed72ba782e15121b4286809410bab540f5cadcf9d8440370`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -147,36 +378,35 @@ Observation point: Access Point (AP) wireless interfaces.
 
 | Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---:|---|---:|---|
-| `BurstyTraffic` | `none (all decoded frames)` | 1998 | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (667), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (395), Control: Ack (246) | 83.10% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `StaleBsr` | `none (all decoded frames)` | 2148 | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (688), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (403), Control: Ack (257) | 87.27% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `BurstyTraffic` | `none (all decoded frames)` | 1311 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (380), Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] (233), Control: Ack (208) | 47.95% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `StaleBsr` | `none (all decoded frames)` | 1905 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (402), Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] (246), Control: Block Ack (BA) (239) | 72.20% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
-| **PASS** | BurstyTraffic produced protocol-visible wireless observations | 1998 AP/global transmission observations |
-| **PASS** | StaleBsr produced protocol-visible wireless observations | 2148 AP/global transmission observations |
+| **PASS** | BurstyTraffic produced protocol-visible wireless observations | 1311 AP/global transmission observations |
+| **PASS** | StaleBsr produced protocol-visible wireless observations | 1905 AP/global transmission observations |
 
 ### [script] Configuration: `BurstyTraffic`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1998**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1311**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 86 | 4.30% | 851.0 B | 9.2 B | 473.9 us | 16.3 us | 5010 MHz | -72.0 dBm | - | 4.90% | 4.08% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 395 | 19.77% | 1312.2 B | 311.9 B | 753.8 us | 170.6 us | 5010 MHz | -72.0 dBm | - | 35.83% | 29.77% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 667 | 33.38% | 768.0 B | 2.0 B | 660.5 us | 19.7 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 53.02% | 44.06% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ae34" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 10 | 0.50% | 766.8 B | 1.6 B | 286.8 us | 15.0 us | 5010 MHz | -75.0 dBm | - | 0.35% | 0.29% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 9 | 0.45% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 0.43% | 0.36% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#166d09" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 2 | 0.10% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5002 MHz | -75.0 dBm | - | 0.04% | 0.03% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 141 | 7.06% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 2.66% | 2.21% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 233 | 17.77% | 642.1 B | 283.0 B | 360.5 us | 150.9 us | 5010 MHz | -72.0 dBm | - | 17.52% | 8.40% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 380 | 28.99% | 1132.2 B | 521.2 B | 655.3 us | 285.1 us | 5010 MHz | -72.0 dBm | - | 51.93% | 24.90% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 40 | 3.05% | 768.1 B | 2.0 B | 661.5 us | 19.6 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 5.52% | 2.65% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ae34" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 63 | 4.81% | 767.0 B | 1.7 B | 288.9 us | 16.3 us | 5010 MHz | -75.0 dBm | - | 3.79% | 1.82% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#37b52c" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 57 | 4.35% | 770.0 B | 0.0 B | 1404.9 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz | -75.0 dBm | - | 16.70% | 8.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 12 | 0.92% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 1.00% | 0.48% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 186 | 9.31% | 45.4 B | 4.3 B | 35.1 us | 1.4 us | 5010 MHz | - | 10.0 dBm | 0.79% | 0.65% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 33 | 1.65% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.11% | 0.09% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 211 | 10.56% | 67.2 B | 31.5 B | 42.4 us | 10.5 us | 5010 MHz | - | 10.0 dBm | 1.08% | 0.89% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 246 | 12.31% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.73% | 0.61% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.30% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 100 | 7.63% | 36.6 B | 7.9 B | 32.2 us | 2.6 us | 5010 MHz | - | 10.0 dBm | 0.67% | 0.32% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 59 | 4.50% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.34% | 0.17% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 147 | 11.21% | 71.4 B | 53.0 B | 43.8 us | 17.7 us | 5010 MHz | - | 10.0 dBm | 1.34% | 0.64% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 208 | 15.87% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 1.07% | 0.51% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.46% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.03% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.30% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.05% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.46% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.09% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -201,25 +431,133 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1998*
 
 Frame numbers are local to capture `BurstyTraffic-#0HeBsrNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
+#### [script] Decoded HE Trigger user allocations
+
+| Frame | Simulation time (s) | Trigger type | Ordered user allocations |
+|---:|---:|---:|---|
+| 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 6 | 0.104048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 11 | 0.207048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 100 | 0.335408000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35 |
+| 117 | 0.341279000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 120 | 0.343036000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 127 | 0.346637000 | 0 | #0: AID=1, RU=61, MCS=2, target RSSI=35 |
+| 156 | 0.356002000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 164 | 0.358781000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35 |
+| 179 | 0.365725000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 219 | 0.381419000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 233 | 0.385304000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 238 | 0.387653000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 243 | 0.391723000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 259 | 0.400365000 | 0 | #0: AID=3, RU=53, MCS=2, target RSSI=35 |
+| 263 | 0.402052000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 274 | 0.406060000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 283 | 0.410020000 | 0 | #0: AID=3, RU=53, MCS=2, target RSSI=35 |
+| 298 | 0.415529000 | 0 | #0: AID=3, RU=53, MCS=2, target RSSI=35 |
+| 329 | 0.429629000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 342 | 0.436357000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 345 | 0.438044000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 353 | 0.441796000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 361 | 0.445964000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 389 | 0.457726000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 396 | 0.461328000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 404 | 0.465486000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 417 | 0.469416000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 425 | 0.473566000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 443 | 0.483114000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 446 | 0.485036000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 454 | 0.489223000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 467 | 0.495544000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35 |
+| 494 | 0.512036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 497 | 0.514036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 500 | 0.516036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 503 | 0.518036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 506 | 0.520036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 509 | 0.522036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 512 | 0.524036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 556 | 0.646048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 619 | 0.674228000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=38, MCS=2, target RSSI=35; #2: AID=3, RU=39, MCS=2, target RSSI=35 |
+| 635 | 0.680210000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35; #2: AID=1, RU=54, MCS=2, target RSSI=35 |
+| 641 | 0.682036000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 661 | 0.688781000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 677 | 0.696367000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=1, RU=54, MCS=2, target RSSI=35 |
+| 685 | 0.700079000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=1, RU=54, MCS=2, target RSSI=35 |
+| 693 | 0.703706000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35 |
+| 701 | 0.707049000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35 |
+| 712 | 0.711924000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 725 | 0.717616000 | 0 | #0: AID=1, RU=61, MCS=2, target RSSI=35 |
+| 735 | 0.722702000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 754 | 0.729651000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 767 | 0.735195000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 779 | 0.739370000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 809 | 0.750731000 | 0 | #0: AID=1, RU=61, MCS=2, target RSSI=35 |
+| 825 | 0.756585000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 837 | 0.763098000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=1, RU=54, MCS=2, target RSSI=35 |
+| 846 | 0.766441000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 849 | 0.769036000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 857 | 0.773670000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 865 | 0.776850000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 872 | 0.780497000 | 0 | #0: AID=1, RU=61, MCS=2, target RSSI=35 |
+| 890 | 0.786654000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35 |
+| 898 | 0.790930000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 905 | 0.793612000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 916 | 0.797232000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 927 | 0.800981000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 940 | 0.804858000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 952 | 0.810808000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 975 | 0.821601000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 985 | 0.825355000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 1004 | 0.831976000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 1011 | 0.835587000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 1021 | 0.840323000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 1025 | 0.843881000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 1034 | 0.847203000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 1043 | 0.850951000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 1053 | 0.855134000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1090 | 0.874036000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1098 | 0.878212000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1106 | 0.881964000 | 0 | #0: AID=3, RU=53, MCS=2, target RSSI=35 |
+| 1118 | 0.885943000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1149 | 0.900583000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 1161 | 0.903498000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 1173 | 0.907259000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 1182 | 0.911097000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 1190 | 0.915704000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 1202 | 0.919871000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 1214 | 0.924559000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1218 | 0.927225000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1221 | 0.930036000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1228 | 0.933637000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 1239 | 0.937830000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 1249 | 0.941987000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 1260 | 0.945325000 | 0 | #0: AID=3, RU=53, MCS=2, target RSSI=35 |
+| 1265 | 0.947539000 | 0 | #0: AID=3, RU=53, MCS=2, target RSSI=35 |
+| 1270 | 0.950163000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1273 | 0.953036000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 1280 | 0.956664000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+
 ### [script] Configuration: `StaleBsr`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2148**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1905**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 79 | 3.68% | 848.7 B | 16.4 B | 473.8 us | 19.2 us | 5010 MHz | -72.0 dBm | - | 4.29% | 3.74% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 403 | 18.76% | 1299.8 B | 330.2 B | 747.0 us | 180.6 us | 5010 MHz | -72.0 dBm | - | 34.50% | 30.11% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 688 | 32.03% | 768.0 B | 2.0 B | 660.5 us | 19.7 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 52.07% | 45.44% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 72 | 3.35% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 3.29% | 2.87% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#166d09" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 1 | 0.05% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.02% | 0.02% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 163 | 7.59% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 2.93% | 2.56% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#17cf23" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC, A-MPDU] | 234 | 12.28% | 606.4 B | 310.2 B | 341.9 us | 166.3 us | 5010 MHz | -72.0 dBm | - | 11.08% | 8.00% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2cce3f" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 402 | 21.10% | 1188.1 B | 486.0 B | 685.9 us | 265.9 us | 5010 MHz | -72.0 dBm | - | 38.19% | 27.57% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#31d62e" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 246 | 12.91% | 768.0 B | 2.0 B | 661.0 us | 19.7 us | 5005 MHz, 5015 MHz | -75.0 dBm | - | 22.52% | 16.26% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#24ae34" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 242-tone RU, GI 3.2 us, LDPC, A-MPDU] | 59 | 3.10% | 766.8 B | 1.6 B | 287.0 us | 15.1 us | 5010 MHz | -75.0 dBm | - | 2.34% | 1.69% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#37b52c" /></svg> | Data: QoS Data [HE-TB, HE-MCS 2, 52-tone RU, GI 3.2 us, LDPC, A-MPDU] | 80 | 4.20% | 770.0 B | 0.0 B | 1404.9 us | 0.0 us | 5003 MHz, 5007 MHz, 5013 MHz | -75.0 dBm | - | 15.57% | 11.24% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0c420b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 0, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 102 | 5.35% | 34.0 B | 0.0 B | 398.7 us | 0.0 us | 5002 MHz, 5004 MHz, 5006 MHz | -75.0 dBm | - | 5.63% | 4.07% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#166d09" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, BCC, A-MPDU] | 44 | 2.31% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5002 MHz | -75.0 dBm | - | 0.96% | 0.69% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13560b" /></svg> | Data: QoS Null [HE-TB, HE-MCS 2, 26-tone RU, GI 3.2 us, LDPC, A-MPDU] | 14 | 0.73% | 34.0 B | 0.0 B | 156.9 us | 0.0 us | 5010 MHz | -75.0 dBm | - | 0.30% | 0.22% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 201 | 9.36% | 49.1 B | 8.9 B | 36.4 us | 3.0 us | 5010 MHz | - | 10.0 dBm | 0.84% | 0.73% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 41 | 1.91% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.13% | 0.11% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 231 | 10.75% | 69.9 B | 31.8 B | 43.3 us | 10.6 us | 5010 MHz | - | 10.0 dBm | 1.15% | 1.00% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 257 | 11.96% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.73% | 0.63% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.28% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f99406" /></svg> | Control: Trigger | 191 | 10.03% | 45.8 B | 13.4 B | 35.3 us | 4.5 us | 5010 MHz | - | 10.0 dBm | 0.93% | 0.67% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 57 | 2.99% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -72.0 dBm | - | 0.22% | 0.16% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#946833" /></svg> | Control: Block Ack Request (BAR) [HE-TB, HE-MCS 2, 106-tone RU, GI 3.2 us, LDPC, A-MPDU] | 1 | 0.05% | 24.0 B | 0.0 B | 56.1 us | 0.0 us | 5005 MHz | -75.0 dBm | - | 0.01% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 239 | 12.55% | 66.7 B | 42.6 B | 42.2 us | 14.2 us | 5010 MHz | - | 10.0 dBm | 1.40% | 1.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 224 | 11.76% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.77% | 0.55% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 6 | 0.31% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.02% | 0.01% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.28% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.05% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 6 | 0.31% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -72.0 dBm | 10.0 dBm | 0.06% | 0.04% |
 
 #### [script] Representative frame-exchange timeline
 
@@ -244,6 +582,113 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **2148*
 
 Frame numbers are local to capture `StaleBsr-#0HeBsrNetwork.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
+#### [script] Decoded HE Trigger user allocations
+
+| Frame | Simulation time (s) | Trigger type | Ordered user allocations |
+|---:|---:|---:|---|
+| 1 | 0.001048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 6 | 0.014048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 11 | 0.027048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 16 | 0.040048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 21 | 0.053048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 26 | 0.066048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 31 | 0.079048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 36 | 0.092048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 41 | 0.105048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 46 | 0.118048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 51 | 0.131048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 56 | 0.144048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 61 | 0.157048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 66 | 0.170048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 71 | 0.183048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 76 | 0.196048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 101 | 0.212048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 106 | 0.225048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 111 | 0.238048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 116 | 0.251048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 121 | 0.264048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 126 | 0.277048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 131 | 0.290048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 138 | 0.303048000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 177 | 0.321301000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 187 | 0.325221000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=4, MCS=2, target RSSI=35; #2: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 197 | 0.330336000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=2, RU=4, MCS=2, target RSSI=35; #2: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 209 | 0.334502000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 216 | 0.337821000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35 |
+| 225 | 0.341148000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 229 | 0.343763000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=1, RU=38, MCS=2, target RSSI=35 |
+| 236 | 0.347212000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35 |
+| 251 | 0.353867000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 259 | 0.357502000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 269 | 0.361138000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 285 | 0.367382000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=2, RU=38, MCS=2, target RSSI=35; #2: AID=3, RU=39, MCS=2, target RSSI=35 |
+| 300 | 0.374380000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 310 | 0.378351000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 315 | 0.380054000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 326 | 0.384229000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 336 | 0.387969000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 351 | 0.392799000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35 |
+| 360 | 0.396962000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 373 | 0.400841000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 391 | 0.407325000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 403 | 0.412666000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=38, MCS=2, target RSSI=35; #2: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 412 | 0.416339000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=38, MCS=2, target RSSI=35 |
+| 427 | 0.422158000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 437 | 0.425368000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=1, RU=54, MCS=2, target RSSI=35 |
+| 441 | 0.427071000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=1, RU=54, MCS=2, target RSSI=35 |
+| 459 | 0.434559000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35 |
+| 475 | 0.439707000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 496 | 0.450282000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35 |
+| 509 | 0.455976000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 525 | 0.461487000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=1, RU=38, MCS=2, target RSSI=35; #2: AID=2, RU=39, MCS=2, target RSSI=35 |
+| 535 | 0.465669000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 553 | 0.471528000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 564 | 0.475301000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 573 | 0.479919000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=0, RU=4, MCS=2, target RSSI=35; #2: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 584 | 0.484109000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35 |
+| 593 | 0.487422000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 604 | 0.491701000 | 0 | #0: AID=1, RU=61, MCS=2, target RSSI=35 |
+| 616 | 0.495883000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=1, RU=54, MCS=2, target RSSI=35 |
+| 625 | 0.500058000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 632 | 0.503253000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35 |
+| 643 | 0.507136000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=1, RU=38, MCS=2, target RSSI=35; #2: AID=3, RU=39, MCS=2, target RSSI=35 |
+| 653 | 0.511331000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=38, MCS=2, target RSSI=35; #2: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 659 | 0.513041000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 685 | 0.522999000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 697 | 0.526861000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 707 | 0.530064000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 728 | 0.538743000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35 |
+| 735 | 0.542483000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 749 | 0.548726000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=2, RU=4, MCS=2, target RSSI=35; #2: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 763 | 0.553510000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 771 | 0.558014000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 784 | 0.562177000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 791 | 0.564908000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 794 | 0.567036000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 805 | 0.569967000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 813 | 0.572706000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 816 | 0.575036000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 825 | 0.577839000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 836 | 0.581998000 | 0 | #0: AID=3, RU=61, MCS=2, target RSSI=35 |
+| 859 | 0.591141000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 867 | 0.594509000 | 4 | #0: AID=1, RU=0, MCS=0, target RSSI=35; #1: AID=2, RU=1, MCS=0, target RSSI=35; #2: AID=3, RU=2, MCS=0, target RSSI=35; #3: AID=0, RU=3, MCS=0, target RSSI=35; #4: AID=0, RU=4, MCS=0, target RSSI=35; #5: AID=0, RU=5, MCS=0, target RSSI=35; #6: AID=0, RU=6, MCS=0, target RSSI=35; #7: AID=0, RU=7, MCS=0, target RSSI=35; #8: AID=0, RU=8, MCS=0, target RSSI=35 |
+| 873 | 0.597811000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=1, RU=4, MCS=2, target RSSI=35; #2: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 881 | 0.601599000 | 0 | #0: AID=2, RU=53, MCS=2, target RSSI=35; #1: AID=1, RU=4, MCS=2, target RSSI=35; #2: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 891 | 0.605251000 | 0 | #0: AID=1, RU=53, MCS=2, target RSSI=35 |
+| 904 | 0.609192000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35 |
+| 917 | 0.615685000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=1, RU=38, MCS=2, target RSSI=35; #2: AID=3, RU=39, MCS=2, target RSSI=35 |
+| 928 | 0.619473000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 938 | 0.622787000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 949 | 0.625664000 | 0 | #0: AID=2, RU=61, MCS=2, target RSSI=35 |
+| 966 | 0.632694000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35 |
+| 980 | 0.638534000 | 0 | #0: AID=0, RU=0, MCS=2, target RSSI=35; #1: AID=1, RU=38, MCS=2, target RSSI=35; #2: AID=3, RU=39, MCS=2, target RSSI=35 |
+| 989 | 0.642203000 | 0 | #0: AID=3, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=54, MCS=2, target RSSI=35 |
+| 999 | 0.646387000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 1004 | 0.648090000 | 0 | #0: AID=2, RU=37, MCS=2, target RSSI=35; #1: AID=3, RU=54, MCS=2, target RSSI=35 |
+| 1024 | 0.655652000 | 0 | #0: AID=1, RU=37, MCS=2, target RSSI=35; #1: AID=2, RU=38, MCS=2, target RSSI=35; #2: AID=3, RU=39, MCS=2, target RSSI=35 |
+
+Showing the first 100 of 191 decoded Trigger frames; the script-owned packet metrics JSON preserves every row.
+
 ### [script] Analysis of Packet Distribution
 The scheduled conditions contain the expected Trigger/response activity, but a BSR is an A-Control scheduling input rather than a frame subtype. IEEE Std 802.11-2024 Clause 26.5.5 requires the report contents and capability conditions; use the AP-reported and scheduled-backlog telemetry documented above. QoS Data counts are not evidence that a BSR was fresh or that the reported bytes were delivered.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
@@ -253,13 +698,31 @@ The scheduled conditions contain the expected Trigger/response activity, but a B
 <!-- BEGIN GENERATED ANALYSIS: frame-exchange -->
 <!-- END GENERATED ANALYSIS: frame-exchange -->
 
-The generated timeline begins with AP Trigger frames followed by HE-TB station responses and acknowledgments. This is the protocol exchange in which the AP applies its uplink schedule; the trigger-decision vectors provide the corresponding BSR values. The timeline is local to the representative capture and is not an event-log reconstruction.
+The generated timeline begins with an AP Trigger, continues with HE-TB station
+responses, and ends with acknowledgment activity. The decoded trigger-type
+table shows both the periodic scheduling triggers and the triggers associated
+with the observed uplink exchange. These PCAP rows show what was transmitted;
+the trigger-decision vectors provide the corresponding BSR accounting. The
+timeline is local to representative run 0, not an event-log reconstruction.
 
 ## [agent] Cross-layer findings and verdict
 
-The two configurations hold topology and offered traffic constant and change only the AP's report freshness policy. Across five seeds, every retained trigger decision has an aligned ID, reported backlog, and planned bytes; this supports a scoped `PASS` for BSR accounting and the configured freshness comparison. The AP-MAC capture independently supports a `PASS` for protocol-visible HE trigger/uplink activity.
+The two configurations hold topology and offered traffic constant and change
+the AP's report freshness policy. Across seeds 0–4, every retained trigger
+decision has an aligned ID, reported backlog, and planned bytes. This supports
+a scoped `PASS` for BSR accounting and for the configured comparison. The
+representative AP-MAC captures independently support a `PASS` for
+protocol-visible Trigger/HE-TB activity. The evidence does not show that the
+reported bytes were all delivered or that the 10 ms policy is generally
+better.
 
 ## [agent] Limitations and inconclusive claims
 
-- The comparison is limited to this topology, workload, five seeds, and 10 ms freshness setting; it is not a general performance claim. Broader claims require additional freshness windows and matched workloads.
-- PCAP does not expose BSR as an application packet or necessarily as a standalone frame subtype. Use AP decision telemetry and the decoded trigger/data exchange together.
+- The comparison is limited to this topology, workload, five seeds, and one
+  10 ms freshness setting. Broader claims require additional freshness windows
+  and matched workloads.
+- BSR is not an application packet and is not necessarily a standalone frame
+  subtype. Use AP decision telemetry together with the decoded trigger/data
+  exchange.
+- The PCAP capture is representative run-0 mechanism evidence; it does not
+  replace the five-run scalar/vector evidence.
