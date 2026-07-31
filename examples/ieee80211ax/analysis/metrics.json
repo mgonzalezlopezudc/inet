@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-31T20:53:50.839847+00:00",
+    "generated_at_utc": "2026-07-31T21:22:17.350918+00:00",
     "groups": {
       "multi_tid": {
         "conditions": [
@@ -18,44 +18,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.sca",
-                "sha256": "1f4c6d55489539c59f5d93ad6bae8fe9192066e5ff9134cc641cb6695eba7ab4"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.sca",
+                "sha256": "068bf4b8bd54c257095dd5c22280a8a2f7504a470c9ac6a4fd253c8209be5302"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.vec",
-                "sha256": "c50e3e97501a390c9a14e121e7b86fdd058002e7671e27be78fb91c1ae7e2398"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.vec",
+                "sha256": "69137be9a787a7db9a40dff8577203b30346efaf7cdb0a0e70203af64e39afce"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.sca",
-                "sha256": "eaf3f8716f527104219b34561b2be073415716a3fd7b8f8450b05c9af15017b4"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.sca",
+                "sha256": "69d8d83134f9fc4e4f9e6eff9532d5d18ab028d43b76d246fcba64b5d4cf4c10"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.vec",
-                "sha256": "71d5fd2f6f299e7a2d8ef500baaa9670dfc9a43cba7ade33a01810933bb3031a"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.vec",
+                "sha256": "b372a701aa9eef9b1919aab0da28dfb56b582e9137a505fa8a53206362a1bd59"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.sca",
-                "sha256": "eec3884118a96f7d829acd5b71b198f69940cc24944d292802c690212d38e42a"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.sca",
+                "sha256": "3f5b79582a5b83614da566183360194cb0312a8fd19baa837419ad75ebce0fb7"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.vec",
-                "sha256": "a8476ab4c04a7462d849f0722589d1bb11b4217059b276cbee347e77b756a704"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.vec",
+                "sha256": "a217e93a39a9373463a381f69a89d663b0bbdd49f0459d405440c960217ef8c9"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.sca",
-                "sha256": "146b86e00e90300f6ba8d2fe9c12f866e4b1cf84f9ad8069b16f5fac342d2224"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.sca",
+                "sha256": "08744b7862fc8a50e2923974e6ca38d6be08e398b50a73e15a2e202f13407215"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.vec",
-                "sha256": "8a725741b3aeed21e4a6b892d23d518b309cf02f52b37bef424be775d33fb448"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.vec",
+                "sha256": "6446f2bbaae6a61c8cbfa8b8e227bbc62a1f18f1182d726780da8b0c805cedc7"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.sca",
-                "sha256": "1f74137a748a81959b05ffed4ded7c8995fcb66edda1c79a8e4173f6c660f4e4"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.sca",
+                "sha256": "daa1c87357e3393675afc67564df3955c3b175da6259646df53a04eb180157d6"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.vec",
-                "sha256": "68f1cfea3d1370e4907a6dc1e418c293ed5592ccd7acd4cf4a2107269c9a7a3c"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.vec",
+                "sha256": "60894d1e9748c9090c24ebe918e105a40aac6d0f55177d4536a77e96976657a4"
               }
             ]
           },
@@ -73,44 +73,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.sca",
-                "sha256": "cfc4a55c61910ac23625d3db8887897505e217a184b4321e35b88eeaa43a61a9"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.sca",
+                "sha256": "97396488cec7e5c4ce0e0b6520d4566ed3a2f458a1678560d299ef6720c0bb39"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.vec",
-                "sha256": "a399647af5de954d68616233c8bfd58c5bddfe2e20abf4b3226cc07efc60b404"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.vec",
+                "sha256": "d3fd4977ce24b3011796b2e54243f005035dc46c201fbd87d1b51d54c1904ac2"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.sca",
-                "sha256": "71de0e1ddae5c2df52fa9d14a2acd2d7e3484f0cb352909e7da36baaa8605541"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.sca",
+                "sha256": "fb2b063b188f96ad6f34891a587f8b611f7ce21ad07991aaf0727d297d15e447"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.vec",
-                "sha256": "78f2ccc07fda0effdd74a74547424dd51e7aee87aadbd0cde07847149b51ffcf"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.vec",
+                "sha256": "2885acbdd9b19933bc2fe25fa201e044e4a25b797a86bd989c60113cb3ee4c14"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.sca",
-                "sha256": "889eceb979dbd23f814d9e1442820fd518a446901336e03c39fb0d33f2ed142b"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.sca",
+                "sha256": "513d06d95c736beb36cbdd259d067b0095dca49cb57ddc16a915d3e72aca5b71"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.vec",
-                "sha256": "e6bfa68c1d109040c1c829fde8959b26ab7777d0f955f923f12113dec31ba0c6"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.vec",
+                "sha256": "06fed4cb8e8720ff67f8c08b1a2d7d559d3328cb29de1b54eb6a7c39b63829db"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.sca",
-                "sha256": "838513393e80060fed12e048cb0db549adcd521ba33820656b05f7f71be6d942"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.sca",
+                "sha256": "259fcb74a483c084c618bae3292c8839d1d20cee194a338d193daa52a4a380ed"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.vec",
-                "sha256": "38621d5adbbd6856cfd56d00cbaee4943fa3f09797cd8eab0eee37194707c116"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.vec",
+                "sha256": "d780746ee40cf4fb71d0d4b34f306b8b08dc29ce3c8af41af833f47f7bcd6bcc"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.sca",
-                "sha256": "408bf63702f267aab98f73bc89d605b0b18c576db976902d9b29fa0a26980f0b"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.sca",
+                "sha256": "15a1144789d3bcbbc7ea8c3b94c3eac51e59521a16fc36fe6ef719931f518fcf"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.vec",
-                "sha256": "8f3ad0ed98baaa8978428ced626c21320bc7e836bf711fdddd88d32fc6aa12b2"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.vec",
+                "sha256": "bb3e1bfe9c8371b9254978fd7fd435ee16bd8b5cfb3d59a8b9e5714cc60b2fdf"
               }
             ]
           },
@@ -128,54 +128,54 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.sca",
-                "sha256": "c4539b50e91381d1ad982b2b7bbbab735635657239e22f9768d7491141436e2a"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.sca",
+                "sha256": "6c1ef5b68a82440d87f2ffbf667ab5faaeab83263f00b9c2122bef974000ac14"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.vec",
-                "sha256": "436efc023eb380d98bba1ff8baabf9060a72f3c8ada96bae3b11e1b9f9640137"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.vec",
+                "sha256": "8c69c5e96b7d84fa8cc1c9a3f1ce8d61de0c81681a382b4079078813f41ca947"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.sca",
-                "sha256": "f7786187711fa29fe7eaa4ae7481957f2083536cc98b253f7f0f38c6c390d78d"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.sca",
+                "sha256": "e2758ac98bac3a9678eceb0a6b2a4c828e188a262e53651b39284224138ed9a2"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.vec",
-                "sha256": "b73d1a9c4e48b1bc1ecf5705605f204561e02098222cfa91fa4397420c18de4a"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.vec",
+                "sha256": "56bad83be2f5fd919efefdedd0a1fb267e6ac5e53d85912d6a3432b1ad88c48d"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.sca",
-                "sha256": "8f5f1807a52d9ba90bd9eee5ba8df99ce45cc7fd8fe3dbce8ffb19774b6a45b3"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.sca",
+                "sha256": "02b1bb7318b13c06e107fc62535b7de54ec52306036255e16978b444511be601"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.vec",
-                "sha256": "9de274c0c5c4d37f2c188c242b0e215ae9bd22b9c9af8e26c3870ac09c680ab4"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.vec",
+                "sha256": "b2ae6911694125bc7e8595418b51cc74f3950968a27ecdea1bda86f4e1fb0efc"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.sca",
-                "sha256": "acd40b4d8085b03d4720906ee2fc1d9000295e56ad6bf1c689d812e8593d68be"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.sca",
+                "sha256": "93a9509c7f6916cd8413dfc8f4c2bd93c8d9d7765b7dea8c65f5db4bc7d598f6"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.vec",
-                "sha256": "bf47d352556aecdf1df47a72519e79429df0997eaf69b73c8afccaea0cd4bb63"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.vec",
+                "sha256": "ed5338615a32e1229db1f75444e5c74339ee86389b9609addf97bd8daab0f0c7"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.sca",
-                "sha256": "799a66e737ae7ee757a194cbe412101ed334d1f3e5527bd2e2e0baf89296ef0d"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.sca",
+                "sha256": "9409ec61f419b6fa1fd50a87d2a7c824a9e3ab7e45e40755edb1bf46706347eb"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.vec",
-                "sha256": "df3604930619a1e7e00d327467aa3bc856c4c7780ce59f27a2e364e142788524"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.vec",
+                "sha256": "10d006fea2f52f552085b4080d79e37be6c4be6bc96d8efa24ff89d4f6111ffe"
               }
             ]
           }
         ],
-        "session_id": "20260731T211000Z",
+        "session_id": "20260731T211915Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "53d5f3e4adab2083281f66e941e47337d2610e5c",
-    "requested_session_id": "20260731T211000Z",
+    "repository_revision": "678465cc16ac236ff884a72423fc3b497cf834c3",
+    "requested_session_id": "20260731T211915Z",
     "schema_version": 1
   },
   "multi_tid": {
@@ -188,9 +188,9 @@
     },
     "Uplink SU HT A-MPDU compressed BA": {
       "goodput_mbps": {
-        "ci95": 0.0,
+        "ci95": 0.0030636635643562908,
         "count": 5,
-        "mean": 0.09103448275862068
+        "mean": 9.154206896551722
       }
     },
     "Uplink SU Multi-TID BA": {
