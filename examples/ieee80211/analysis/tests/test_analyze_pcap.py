@@ -136,6 +136,23 @@ class TriggerAllocationDecodeTest(unittest.TestCase):
 
 class PcapMarkdownTest(unittest.TestCase):
 
+    def test_ht_implicit_block_ack_check_requires_block_ack_without_bar(self):
+        config_results = {
+            "UlSUHTAMpduCompressedBlockAck": {
+                "global": {
+                    "total": 2,
+                    "stats": {
+                        ("1", "9"): {"count": 1},
+                    },
+                    "multi_sta_block_ack_records": [],
+                },
+            },
+        }
+        checks = evaluate_evidence(config_results, "ul_multitid")
+        ht_check = next(check for check in checks if check["id"] == "ht-implicit-compressed-ba")
+        self.assertEqual(ht_check["status"], "PASS")
+        self.assertIn("0 BAR", ht_check["evidence"])
+
     def test_bsr_includes_decoded_trigger_type_table(self):
         config_results = {
             "BurstyTraffic": {

@@ -26,8 +26,8 @@
     "ul_multitid": {
       "scalar_vector_group": "multi_tid",
       "ini": "ul_multitid/omnetpp.ini",
-      "configurations": ["UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck"],
-      "phy_profiles": ["legacy", "he"],
+      "configurations": ["UlMuMultiTidBlockAck", "UlSuMultiTidBlockAck", "UlSUHTAMpduCompressedBlockAck"],
+      "phy_profiles": ["legacy", "ht", "he"],
       "feature_plugins": ["block-ack"]
     },
     "opmode_indication": {

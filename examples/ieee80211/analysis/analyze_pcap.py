@@ -66,6 +66,7 @@ DL_OFDMA_ASYM_CONFIGS = {
     "BacklogBased4ms", "HoLMinDelay4ms", "BacklogBased3ms", "HoLMinDelay3ms",
     "BacklogBased2_5ms", "HoLMinDelay2_5ms", "BacklogBased1_5ms", "HoLMinDelay1_5ms",
 }
+HT_IMPLICIT_BLOCK_ACK_CONFIG = "UlSUHTAMpduCompressedBlockAck"
 
 
 def configure_suite(suite, output_dir):
@@ -1867,6 +1868,7 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                 "multi_sta_block_ack_records": (
                     extract_multi_sta_block_ack_records(target_pcaps)
                     if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
+                    and config_name != HT_IMPLICIT_BLOCK_ACK_CONFIG
                     else []
                 ),
             }
@@ -2370,6 +2372,28 @@ def evaluate_evidence(config_results, subdir):
             "requirement": "BA Type 11 and per-AID/TID entries are decoded from Multi-STA Block Ack frames",
             "evidence": evidence or "No BA Type 11 frame with multiple decoded AID/TID entries was observed",
         })
+        ht_result = config_results.get(HT_IMPLICIT_BLOCK_ACK_CONFIG)
+        if ht_result is not None:
+            ht_stats = ht_result.get("global", {}).get("stats", {})
+            compressed_ba_count = sum(
+                values["count"]
+                for key, values in ht_stats.items()
+                if key[:2] == ("1", "9")
+            )
+            bar_count = sum(
+                values["count"]
+                for key, values in ht_stats.items()
+                if key[:2] == ("1", "8")
+            )
+            checks.append({
+                "id": "ht-implicit-compressed-ba",
+                "status": "PASS" if compressed_ba_count and not bar_count else "FAIL",
+                "requirement": "HT implicit Block Ack has Block Ack observations and no on-air BAR",
+                "evidence": (
+                    f"{HT_IMPLICIT_BLOCK_ACK_CONFIG}: {compressed_ba_count} Block Ack "
+                    f"observation(s), {bar_count} BAR observation(s)"
+                ),
+            })
 
     direct_evidence_requirements = {
         "opmode_indication": ("operating-mode-fields", "OM Control value and receiver-applied width/NSS"),
@@ -2568,7 +2592,10 @@ def generate_markdown_tables(
             "#### [script] Representative frame-exchange timeline\n\n"
         )
         md.append(timeline_markdown(global_res["timeline"]))
-        if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack"):
+        if (
+            subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
+            and config_name != HT_IMPLICIT_BLOCK_ACK_CONFIG
+        ):
             md.append(
                 "#### [script] Decoded Multi-STA Block Ack records\n\n"
             )

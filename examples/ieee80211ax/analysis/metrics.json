@@ -1,6 +1,6 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-31T00:20:26.875308+00:00",
+    "generated_at_utc": "2026-07-31T10:21:00.684338+00:00",
     "groups": {
       "multi_tid": {
         "conditions": [
@@ -18,44 +18,44 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.sca",
-                "sha256": "6d8b7220c0d263a6913d78aa2cc390fbdfc03ee422a2a29f7c5df98ab154cd4a"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.sca",
+                "sha256": "4cf88a0f4f93b2fb58c406d0221877040bb4c7cbd8994bdc33439007fadc1ec9"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.vec",
-                "sha256": "0e7163d652b64db233f4dfbc2833137a5de24e6273acbaf4cfa3abeca30e2d73"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.vec",
+                "sha256": "d736c2345ef349cf8057128d0c3e5dc604002463e758bee65b5bb824351b334a"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.sca",
-                "sha256": "9ecb6c9b15f9af8e41b2585d92132237f9ac0947ed284fe37b7af6fe50e34deb"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.sca",
+                "sha256": "2c5d633cc2966a2041a31f8169cbb20e89f5bc4b1fc013c2748da9a776edf275"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.vec",
-                "sha256": "fbacc3381c278e92d31bb0dab670a76e85d788418937caa9add743e86a6aeb38"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.vec",
+                "sha256": "08430c4fcf8e841e30757d52b128bbfad53795c197dce56740d311631def9447"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.sca",
-                "sha256": "f8702bfd9a92901fa040af6565de4cd3ed6ce794d13ecd9393837e3261058599"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.sca",
+                "sha256": "b7b484dbf21977d8dc09c733560e7074ac740c843819b38c40193207ecfc57f8"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.vec",
-                "sha256": "2e4830ae9c4835454dfe93c855a2ff9727a02c43011f8e331830370aabcf5d79"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.vec",
+                "sha256": "a0228115d6680d6107180aa55c844c3ee93f3721208d17c775c0ba55dded760f"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.sca",
-                "sha256": "28929d53bdddd4cc42bc641663cd51f33f7d71e5f197e599860cf06a42142b79"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.sca",
+                "sha256": "b830ebb44d95293460117109552a384e1716254e79902847166fe1a935932219"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.vec",
-                "sha256": "c61102530b088ea74deefc4d2e065fd239c8cd4bd49dc4bdc51c7d6ca1c1c413"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.vec",
+                "sha256": "409d2537d7a07f5638bd2135eb279b2443f5a15bf47b61129c215e4530ca431d"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.sca",
-                "sha256": "5b9160a6926c9e6f73e158384c2f7df090c02f1d192734d475fe1ff048c43aee"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.sca",
+                "sha256": "4b7a7bbffc6a23b01832d67df798241ae7b663a443fb38e0fe63ff0d7b52e796"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.vec",
-                "sha256": "50ba55341412f960e22c40d24be066257adf41d4331ecabc236c8ba927fe4ad4"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.vec",
+                "sha256": "2ae84e7f730e6ea5abf950f742eedc227db49006a3403d0133b466fbe12decf7"
               }
             ]
           },
@@ -73,54 +73,109 @@
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.sca",
-                "sha256": "7fd8ac4d4d04b8289f7113be71223da893cfce034038e0e2d7fa1ae54827a24a"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.sca",
+                "sha256": "0e521b3966f170fc59471b450ea4faa23b1138b96f2bbad398a980aad7a397d3"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.vec",
-                "sha256": "a1587dd57cd0948d61b4ed03677e55d3fc8641d3c1f61f2882f53af15bb42eb0"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.vec",
+                "sha256": "b8c2d897b99ff6a5bca92fb10b9fd60d3fd3b2999aac7a809a0ec18ce56472f8"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.sca",
-                "sha256": "bc98252c72cc3ac40557e735ea74461ed2b764a9eb2273276433faec5c2725ed"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.sca",
+                "sha256": "268d32a5725282cdd875cfe6dc34d387a0e7662850d0ada39fc96896860942ad"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.vec",
-                "sha256": "b303f5f7e947c9bdbe7e2525bf4b26b715591f49624fb84c286496fd9c322e29"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.vec",
+                "sha256": "7be41934e69b535a158f96b2fc125385991378da1d1e44673d6ffe228e2ba7e8"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.sca",
-                "sha256": "5314269d7f7db1f1b89ebebd0a2db9da70febfe5745e59443736e50e9433b091"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.sca",
+                "sha256": "8eb838787fcaab1efafe8e20d86ba42eef47fcfda0205c571d97af3d513ba917"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.vec",
-                "sha256": "9753354846707e09984cb2c8c06f2f3251ca47eb8fd2bdce19fbb091dcb0c301"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.vec",
+                "sha256": "b96c7735b4e13cccd945cec18c5ff381a49092eae3fdb9917724807431dc7e6a"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.sca",
-                "sha256": "adadca36798f2511d148af485cd1de85ab5774dff6696497e216a15c5ae356fb"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.sca",
+                "sha256": "11b1296f5eb907ab5305b73a6e97a67f4b08dd11b2ce311961339cb89ad6251d"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.vec",
-                "sha256": "65a171a162162312476406875eeac6a344e4ebd116830a5f2bdd2ec62736be60"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.vec",
+                "sha256": "646a0ff9af1287445cbda337521ddc9595ed0f55bfabf1756306a42548cc5d8c"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.sca",
-                "sha256": "97f22eb8b1a8725a21060d261eb20027f81566c8ec07c31fdf3ef29722d5c16b"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.sca",
+                "sha256": "8ea2e129003e4ff64670bcb69299dbbeef7ec24df849321559108942a2100f68"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T002013Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.vec",
-                "sha256": "71c414e27c59bdfc5532997b76273ddf280552d09b170b79ac8abce07377b16b"
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.vec",
+                "sha256": "ea042ab5440084adef28bd96b3e1d87b413fedbe562655aacae4ea1e1e51b13a"
+              }
+            ]
+          },
+          {
+            "configuration": "UlSUHTAMpduCompressedBlockAck",
+            "group": "multi_tid",
+            "ini": "examples/ieee80211ax/ul_multitid/omnetpp.ini",
+            "label": "Uplink SU HT A-MPDU compressed BA",
+            "measurement": {
+              "end_s": 0.88,
+              "start_s": 0.3
+            },
+            "metadata": {
+              "sink_module_regex": "\\.server\\.app\\["
+            },
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.sca",
+                "sha256": "ade87d09b01e496b6be7d4e21c9ab3cc31d2050ff1329ac2bbb957ff36dc0af4"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.vec",
+                "sha256": "9efbb29f07c74f795482bf314cc4b8b84da938bee48a3cd92505cf449f51d941"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.sca",
+                "sha256": "8cb7527eb1d54f72269211daaadaf6ec57f5db767101381eab5c3585b86bd1f7"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.vec",
+                "sha256": "b0aa146b7479cb1af31d29cd184ece85e86fa08b56ff0f8bb8d7affd2c6514cd"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.sca",
+                "sha256": "3a63b97603a6aeac1987716ba077792a6df40fc6e5293930ee6bff4991847ede"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.vec",
+                "sha256": "cb8204f120f7ad735b4489891e10f07f2c1c97b1559364259d3c804634a65633"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.sca",
+                "sha256": "d0930353b07ea7751597ca9bf46cf9e3cb141425ce43c89b3223033b223cada9"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.vec",
+                "sha256": "1726a6b502b5bded90cfec6a335b4896e94739ad2fb697ce3be7d177b4995a6c"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.sca",
+                "sha256": "6ec3be30e78aaa73731921baa2a1413920865093c2a57e307e327353ddf0909e"
+              },
+              {
+                "path": "examples/ieee80211ax/ul_multitid/results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.vec",
+                "sha256": "5623c25ccca676abcb40013d6e212c496bc1156ec7c029c6505bf021c8ba515c"
               }
             ]
           }
         ],
-        "session_id": "20260731T002013Z",
+        "session_id": "20260731T102044Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "dba71f2629fd1ca1153d755bf5725129e7472eff",
-    "requested_session_id": "20260731T002013Z",
+    "repository_revision": "ec45c56c16a7f52cbd17c41f5f12cc061bcd4379",
+    "requested_session_id": "20260731T102044Z",
     "schema_version": 1
   },
   "multi_tid": {
@@ -129,6 +184,13 @@
         "ci95": 0.0,
         "count": 5,
         "mean": 3.1999999999999997
+      }
+    },
+    "Uplink SU HT A-MPDU compressed BA": {
+      "goodput_mbps": {
+        "ci95": 0.011165046791092984,
+        "count": 5,
+        "mean": 39.96689655172413
       }
     },
     "Uplink SU Multi-TID BA": {

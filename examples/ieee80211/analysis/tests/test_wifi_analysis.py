@@ -26,6 +26,8 @@ class WifiAnalysisCliTest(unittest.TestCase):
     def test_configuration_ini_mapping_preserves_ax_and_eht_examples(self):
         ax = wifi_analysis.load_suite(AX_SUITE, wifi_analysis.REPOSITORY_ROOT)
         multi_tid = ax.scenarios["ul_multitid"]
+        self.assertIn("UlSUHTAMpduCompressedBlockAck", multi_tid["configurations"])
+        self.assertIn("ht", multi_tid["phy_profiles"])
         self.assertEqual(
             scenario_configuration_ini(
                 ax.example_root, multi_tid, "UlMuMultiTidBlockAck"

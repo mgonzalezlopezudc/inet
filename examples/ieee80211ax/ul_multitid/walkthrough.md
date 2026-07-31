@@ -3,18 +3,17 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260731T002013Z`
-- PCAP: `20260731T002013Z`
+- Scalar/vector: `20260731T102044Z`
+- PCAP: `20260731T102044Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
-`[agent]` results sessions: `20260730T233917Z`.
+`[agent]` results sessions: `20260731T102044Z`.
 
-The fresh five-run uplink session shows reliable application delivery, and its
-representative run-0 capture shows UL-SU and Trigger-based UL-MU exchanges.
-For UL-MU, it directly decodes Multi-STA Block Ack BA Type 11 and its repeated
-per-AID/TID entries, including the two traffic TIDs after application traffic
-starts. The decoded frame contents establish that UL-MU acknowledgment context;
-they do not turn the separate UL-SU exchange into a Multi-STA Block Ack.
+The fresh five-run uplink session shows application delivery for two HE cases
+and an HT implicit-BlockAck case. Its representative run-0 capture directly
+decodes UL-MU Multi-STA Block Ack BA Type 11 entries and, for the HT case,
+Block Ack observations with no on-air BAR. The Type 11 fields establish only
+the UL-MU acknowledgment context.
 
 ## [agent] Learning objectives and feature primer
 
@@ -22,9 +21,10 @@ A traffic identifier (TID) distinguishes QoS traffic streams. An ack-enabled
 multi-TID A-MPDU can carry frames from several TIDs; its receiver must respond
 in a way that identifies the acknowledged contexts. In an uplink multi-user
 exchange, the AP first sends a Trigger and then acknowledges station responses
-with a Multi-STA Block Ack. The learning question is whether the configured
-UL-SU and UL-MU cases deliver their offered traffic while exposing the required
-acknowledgment context.
+with a Multi-STA Block Ack. HT can instead use an implicit Block Ack exchange
+after an A-MPDU. The learning question is whether the configured HE UL-SU,
+HE UL-MU, and HT UL-SU cases deliver their offered traffic while exposing their
+respective acknowledgment evidence.
 
 ## [agent] Scenario description
 
@@ -33,8 +33,10 @@ HE basic service set: stations send UDP to the wired server through the AP.
 `UlSuMultiTidBlockAck` runs two offered flows from `host[0]` with UL MU
 disabled. `UlMuMultiTidBlockAck` enables the backlog-based UL scheduler and
 offers one flow from each of `host[0]` and `host[1]`; `host[2]` is idle. Both
-start their traffic at 0.3 s in a 1 s simulation, so the shared analysis uses
-the `[0.3,0.88)` s traffic window.
+start their traffic at 0.3 s in a 1 s simulation. The HT
+`UlSUHTAMpduCompressedBlockAck` condition inherits the UL-SU topology, selects
+mixed 2.4 GHz HT mode, uses one flow, and enables HT implicit Block Ack. The
+shared analysis uses the `[0.3,0.88)` s traffic window.
 
 ## [agent] Standards and INET model boundary
 
@@ -52,10 +54,11 @@ information.
 
 | Claim | Status | Script-generated evidence | Runs | Scope or gap |
 |---|---|---|---|---|
-| The two uplink configurations deliver application traffic | `PASS` | scalar/vector goodput table | 0–4 | delivery outcome, not BA contents |
+| All three uplink configurations deliver application traffic | `PASS` | scalar/vector goodput table | 0–4 | delivery outcome, not BA contents |
 | UL-SU carries the two offered QoS TIDs | `PASS` | representative frame timeline | 0 | TIDs 6 and 7 are directly decoded |
 | UL-MU has Trigger and Block Ack exchanges | `PASS` | representative frame timeline and PCAP table | 0 | observations are not de-duplicated transmissions |
 | A UL-MU response acknowledges multiple AID/TID contexts | `PASS` | decoded BA Type 11 table and executable evidence check | 0 | direct frame evidence; not an end-to-end delivery claim |
+| HT implicit Block Ack has Block Ack observations and no on-air BAR | `PASS` | PCAP evidence check | 0 | control-observation evidence, not a decoded compressed-BA field |
 
 The goodput rows are derived measurements; the timeline fields are direct
 observations; the Multi-STA Block Ack table is direct frame-field evidence.
@@ -66,6 +69,7 @@ observations; the Multi-STA Block Ack table is direct frame-field evidence.
 |---|---|---|---|---|
 | `UlSuMultiTidBlockAck` | UL-SU | UL MU OFDMA disabled; two ports/TIDs at one station | 0–4 | two TIDs are offered by one transmitter |
 | `UlMuMultiTidBlockAck` | UL-MU | scheduler and UL MU OFDMA enabled; one port/TID at each of two stations | 0–4 | Trigger precedes scheduled station responses |
+| `UlSUHTAMpduCompressedBlockAck` | HT UL-SU | mixed 2.4 GHz HT mode, one flow, implicit Block Ack enabled | 0–4 | Block Ack observations occur without an on-air BAR |
 
 Both configurations enable HE Multi-TID aggregation transmit and receive
 capability at all listed AP and station WLAN interfaces.
@@ -77,6 +81,7 @@ capability at all listed AP and station WLAN interfaces.
 | UL-SU exposes both offered TIDs | UL-SU frame timeline | only one decoded TID | inspect the QoS classifier and per-AC queues |
 | UL-MU schedules a response | UL-MU Trigger/response timeline | no Trigger or HE-TB response | inspect the UL scheduler decision |
 | UL-MU Block Ack has multiple AID/TID contexts | decoded BA Type 11 table | no Type 11 record or fewer than two entries | inspect the MAC header serializer and capture decoder |
+| HT implicit Block Ack avoids an on-air BAR | HT PCAP evidence check | BAR observed or no Block Ack observed | inspect the HT block-ack policy and control-frame serialization |
 
 ## [agent] Reproduction
 
@@ -88,33 +93,33 @@ this revision; `publish` refreshes the generated blocks.
 The retained PCAP is run 0 with seed set 0. The suite does not publish a seed
 mapping for scalar/vector runs 1–4, so this walkthrough makes no seed claim
 for them. Session inputs include
-[`UlMuMultiTidBlockAck-#0.sca`](results/20260730T233917Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.sca)
+[`UlMuMultiTidBlockAck-#0.sca`](results/20260731T102044Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.sca)
 and
-[`UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`](results/20260730T233917Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap).
+[`UlSUHTAMpduCompressedBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`](results/20260731T102044Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap).
 
 ```sh
 python3 examples/ieee80211/analysis/wifi_analysis.py inspect ul_multitid \
-  --session-id 20260730T233917Z
+  --session-id 20260731T102044Z
 python3 examples/ieee80211/analysis/wifi_analysis.py report ul_multitid \
-  --session-id 20260730T233917Z
+  --session-id 20260731T102044Z
 python3 examples/ieee80211/analysis/wifi_analysis.py publish ul_multitid \
-  --session-id 20260730T233917Z --update
+  --session-id 20260731T102044Z --update
 ```
 
 ## [agent] Scalar and vector analysis
 
 The generated five-run table answers whether offered uplink traffic reaches
-the receiver over the shared measurement window. Both configurations have a
-zero reported 95% CI half-width in this deterministic session. This is useful
-outcome evidence. Goodput itself does not identify the Block Ack variant or
-the TIDs it covers; that claim comes from the companion decoded PCAP table.
+the receiver over the shared measurement window. All three configurations have
+small reported 95% CI half-widths in this deterministic session. This is useful
+outcome evidence. Goodput itself does not identify the Block Ack variant or the
+TIDs it covers; those claims come from the companion PCAP evidence.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-multi_tid -->
 ### [script] Generated scalar/vector plot and table
 
-![multi_tid scalar/vector analysis](results/20260731T002013Z/multi-tid-delivery.png)
+![multi_tid scalar/vector analysis](results/20260731T102044Z/multi-tid-delivery.png)
 
-Figure provenance: [`results/20260731T002013Z/multi-tid-delivery.png.json`](results/20260731T002013Z/multi-tid-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260731T102044Z/multi-tid-delivery.png.json`](results/20260731T102044Z/multi-tid-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -125,6 +130,7 @@ Common table provenance:
 | Configuration / observation | Mean or direct value | 95% CI half-width |
 |---|---:|---:|
 | Uplink MU Multi-TID BA / goodput mbps | 3.2 | 0 |
+| Uplink SU HT A-MPDU compressed BA / goodput mbps | 39.9669 | 0.011165 |
 | Uplink SU Multi-TID BA / goodput mbps | 1.76 | 0 |
 
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
@@ -140,19 +146,20 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 The script analyzes AP `wlan[0]` PCAPng from representative run 0. Its counts
 are capture observations, not de-duplicated transmissions or delivered
-packets. Read the UL-MU Trigger/HE-TB/Block Ack pattern and the UL-SU BAR/Block
-Ack rows as exchange evidence. The dedicated decoded Multi-STA Block Ack table
-then supplies the BA Type 11 and per-AID/TID fields for the UL-MU claim.
+packets. Read the UL-MU Trigger/HE-TB/Block Ack pattern and the HE UL-SU
+BAR/Block Ack rows as exchange evidence. The HT condition instead has Block Ack
+observations and no BAR. The dedicated decoded Multi-STA Block Ack table then
+supplies the BA Type 11 and per-AID/TID fields for the UL-MU claim.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260731T002013Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260731T102044Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260731T002013Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260731T102044Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260731T002013Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260731T002013Z.json` (SHA-256 `58f7db1a3a7bab40e0b91f3cf79dc5a05e991052e0c0fe71fe9a59b3487a78cb`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260731T102044Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260731T102044Z.json` (SHA-256 `bbfabdf8a3476217047f279dabf9fa82cb0dde39258786ef8e4b99853494ee0f`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -166,14 +173,17 @@ Observation point: Access Point (AP) wireless interfaces.
 |---|---|---:|---|---:|---|
 | `UlMuMultiTidBlockAck` | `none (all decoded frames)` | 1231 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (292), Control: Ack (280), Control: Trigger (279) | 22.24% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `UlSuMultiTidBlockAck` | `none (all decoded frames)` | 381 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (210), Control: Ack (141), Control: Block Ack Request (BAR) (13) | 10.44% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlSUHTAMpduCompressedBlockAck` | `none (all decoded frames)` | 8724 | Data: QoS Data [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC, A-MPDU] (6986), Control: Block Ack (BA) [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] (1716), Control: Ack [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] (11) | 79.30% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
 | **PASS** | UlMuMultiTidBlockAck produced protocol-visible wireless observations | 1231 AP/global transmission observations |
+| **PASS** | UlSUHTAMpduCompressedBlockAck produced protocol-visible wireless observations | 8724 AP/global transmission observations |
 | **PASS** | UlSuMultiTidBlockAck produced protocol-visible wireless observations | 381 AP/global transmission observations |
 | **PASS** | BA Type 11 and per-AID/TID entries are decoded from Multi-STA Block Ack frames | UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries, UlSuMultiTidBlockAck: 13 BA Type 11 frame(s) with multiple AID/TID entries |
+| **PASS** | HT implicit Block Ack has Block Ack observations and no on-air BAR | UlSUHTAMpduCompressedBlockAck: 1716 Block Ack observation(s), 0 BAR observation(s) |
 
 ### [script] Configuration: `UlMuMultiTidBlockAck`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1231**
@@ -298,6 +308,42 @@ Frame numbers are local to capture `UlSuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.
 | 330 | 0.900316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
 | 357 | 0.950316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
 
+### [script] Configuration: `UlSUHTAMpduCompressedBlockAck`
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **8724**
+
+| Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
+|:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13aa1d" /></svg> | Data: QoS Data [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC, A-MPDU] | 6986 | 80.08% | 567.0 B | 1.7 B | 105.8 us | 0.2 us | 5010 MHz | -60.0 dBm | - | 93.19% | 73.90% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3ad440" /></svg> | Data: QoS Data [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 9 | 0.10% | 570.0 B | 0.0 B | 106.2 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.12% | 0.10% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1537a8" /></svg> | Control: Block Ack (BA) [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 1716 | 19.67% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 6.64% | 5.26% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#71a9ea" /></svg> | Control: Ack [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 11 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.03% | 0.03% |
+| <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e9453f" /></svg> | Management: Action [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 2 | 0.02% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.02% | 0.01% |
+
+#### [script] Representative frame-exchange timeline
+
+| Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
+|---:|---:|---|---|---|---|
+| 1 | 0.300108000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 2 | 0.300158000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 3 | 0.300212000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| 4 | 0.300262000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 5 | 0.300380000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 6 | 0.300430000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 7 | 0.300548000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 8 | 0.300598000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 9 | 0.300716000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 10 | 0.300766000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 11 | 0.300884000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=4, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 12 | 0.300934000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 13 | 0.301052000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=5, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 14 | 0.301102000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 15 | 0.301220000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=6, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 16 | 0.301270000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+
+Frame numbers are local to capture `UlSUHTAMpduCompressedBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
+
 ### [script] Analysis of Packet Distribution
 **PASS: decoded Multi-STA Block Ack fields.** UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries, UlSuMultiTidBlockAck: 13 BA Type 11 frame(s) with multiple AID/TID entries. The table above is direct TShark decoding of BA Control Type 11 and its per-AID/TID entries, as specified by IEEE Std 802.11-2024 Clause 9.3.1.8.6. It establishes the acknowledged recipient/TID identities in the captured frames, not payload delivery or end-to-end reliability.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
@@ -317,13 +363,17 @@ The configuration requests Multi-TID capability, five independent runs retain
 application delivery, and the representative captures show the expected
 uplink control/data patterns. The UL-MU capture additionally contains 278
 decoded BA Type 11 frames with multiple AID/TID entries, resolving the
-Multi-STA acknowledgment-context claim for that configuration. These fields
-identify acknowledged contexts, not successful application delivery.
+Multi-STA acknowledgment-context claim for that configuration. The HT capture
+has 1,716 Block Ack observations and zero BAR observations, supporting its
+configured implicit Block Ack exchange. These fields and counts do not prove
+successful application delivery.
 
 ## [agent] Limitations and inconclusive claims
 
 - The decoded Multi-STA Block Ack fields are direct representative run-0
   evidence for `UlMuMultiTidBlockAck`; they do not establish an analogous
   Multi-STA form for the UL-SU control configuration.
+- The HT result establishes observed Block Ack and absent BAR control frames;
+  it does not decode a compressed-BlockAck-specific field.
 - PCAP is representative run-0 mechanism evidence; it does not make a
   population claim across the five scalar/vector runs.

@@ -237,7 +237,8 @@
       "measurement": {"start": 0.3, "end": 0.88},
       "conditions": [
         {"label": "Uplink MU Multi-TID BA", "config": "UlMuMultiTidBlockAck", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
-        {"label": "Uplink SU Multi-TID BA", "config": "UlSuMultiTidBlockAck", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
+        {"label": "Uplink SU Multi-TID BA", "config": "UlSuMultiTidBlockAck", "metadata": {"sink_module_regex": "\\.server\\.app\\["}},
+        {"label": "Uplink SU HT A-MPDU compressed BA", "config": "UlSUHTAMpduCompressedBlockAck", "metadata": {"sink_module_regex": "\\.server\\.app\\["}}
       ]
     },
     "operating_mode": {
