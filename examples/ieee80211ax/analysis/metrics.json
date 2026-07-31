@@ -1,203 +1,380 @@
 {
   "_provenance": {
-    "generated_at_utc": "2026-07-31T21:22:17.350918+00:00",
+    "generated_at_utc": "2026-07-31T21:44:36.348889+00:00",
     "groups": {
-      "multi_tid": {
+      "bss": {
         "conditions": [
           {
-            "configuration": "UlMuMultiTidBlockAck",
-            "group": "multi_tid",
-            "ini": "examples/ieee80211ax/ul_multitid/omnetpp.ini",
-            "label": "Uplink MU Multi-TID BA",
+            "configuration": "BssColoringDisabled",
+            "group": "bss",
+            "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
+            "label": "Disabled",
             "measurement": {
-              "end_s": 0.88,
+              "end_s": 0.95,
               "start_s": 0.3
             },
             "metadata": {
-              "sink_module_regex": "\\.server\\.app\\["
+              "spatial_reuse_evidence": "disabled"
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.sca",
-                "sha256": "068bf4b8bd54c257095dd5c22280a8a2f7504a470c9ac6a4fd253c8209be5302"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#0.sca",
+                "sha256": "5ef74c2e4ce0ed49fe50c9b87cde5bab21a78fd86a48b2ae3e24cd2e43616b15"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#0.vec",
-                "sha256": "69137be9a787a7db9a40dff8577203b30346efaf7cdb0a0e70203af64e39afce"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#0.vec",
+                "sha256": "907755a158e9580c00857561b9a734780d80b5a8aa8f700bce3ba4307375fb1f"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.sca",
-                "sha256": "69d8d83134f9fc4e4f9e6eff9532d5d18ab028d43b76d246fcba64b5d4cf4c10"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#1.sca",
+                "sha256": "c00a52c1f8048822dbffb58850c3b0f0408ecdbcec2f11801d4e8caca68eb5aa"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#1.vec",
-                "sha256": "b372a701aa9eef9b1919aab0da28dfb56b582e9137a505fa8a53206362a1bd59"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#1.vec",
+                "sha256": "af5b9cf2c44814186a1683e5081883c4298f81b853e8cbcdd1dbd81316334b0a"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.sca",
-                "sha256": "3f5b79582a5b83614da566183360194cb0312a8fd19baa837419ad75ebce0fb7"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#2.sca",
+                "sha256": "dc27eac083ff90966ba1c2842cf4eef51facce1f2462816ea0982a0ad56afb9c"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#2.vec",
-                "sha256": "a217e93a39a9373463a381f69a89d663b0bbdd49f0459d405440c960217ef8c9"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#2.vec",
+                "sha256": "aa257b9151f4a0013b95adc0c03a8d266cb10c2378046a8c8794119b44b089cf"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.sca",
-                "sha256": "08744b7862fc8a50e2923974e6ca38d6be08e398b50a73e15a2e202f13407215"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#3.sca",
+                "sha256": "6e7f8a455e4b28e8805e6ae613e346ddba85a5d5079c237447b6b59c70c63276"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#3.vec",
-                "sha256": "6446f2bbaae6a61c8cbfa8b8e227bbc62a1f18f1182d726780da8b0c805cedc7"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#3.vec",
+                "sha256": "ddde934ead0ea0b556148a2357304c95fb9f250c0ffe74ccc48b69dd44344081"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.sca",
-                "sha256": "daa1c87357e3393675afc67564df3955c3b175da6259646df53a04eb180157d6"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#4.sca",
+                "sha256": "4af1da5cd75f3df8765a411e86c5aa1b7b82a278a8de67a260ef7ae8f5003f6d"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlMuMultiTidBlockAck/UlMuMultiTidBlockAck-#4.vec",
-                "sha256": "60894d1e9748c9090c24ebe918e105a40aac6d0f55177d4536a77e96976657a4"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringDisabled/BssColoringDisabled-#4.vec",
+                "sha256": "45bab61dcbdaa28355ff8bc30af86bfec7cd2aaa990402f0c51c4c2096e42312"
               }
             ]
           },
           {
-            "configuration": "UlSuMultiTidBlockAck",
-            "group": "multi_tid",
-            "ini": "examples/ieee80211ax/ul_multitid/omnetpp.ini",
-            "label": "Uplink SU Multi-TID BA",
+            "configuration": "ObssPdConservative",
+            "group": "bss",
+            "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
+            "label": "Conservative",
             "measurement": {
-              "end_s": 0.88,
+              "end_s": 0.95,
               "start_s": 0.3
             },
             "metadata": {
-              "sink_module_regex": "\\.server\\.app\\["
+              "obss_pd_dbm": -81,
+              "spatial_reuse_evidence": "enabled"
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.sca",
-                "sha256": "97396488cec7e5c4ce0e0b6520d4566ed3a2f458a1678560d299ef6720c0bb39"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#0.sca",
+                "sha256": "45c8e2ee6c624676441c7b111e12a9f4fb6a3767d94303cb56d0f95e9ddc9831"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#0.vec",
-                "sha256": "d3fd4977ce24b3011796b2e54243f005035dc46c201fbd87d1b51d54c1904ac2"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#0.vec",
+                "sha256": "0cdbbee68440d2f92f16ec23a2680a9b8987ff5813f7f5c04a25cd46c4a1847d"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.sca",
-                "sha256": "fb2b063b188f96ad6f34891a587f8b611f7ce21ad07991aaf0727d297d15e447"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#1.sca",
+                "sha256": "6334621dbc3e4bd9df254bb7bdd651fde8a13cbff11bb235f5b81f60febb3915"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#1.vec",
-                "sha256": "2885acbdd9b19933bc2fe25fa201e044e4a25b797a86bd989c60113cb3ee4c14"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#1.vec",
+                "sha256": "b81067608ab877c84a2347fd39037b533556ce6c3630a72ac1e5f3f3ba81ab0e"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.sca",
-                "sha256": "513d06d95c736beb36cbdd259d067b0095dca49cb57ddc16a915d3e72aca5b71"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#2.sca",
+                "sha256": "376427d21cac26ffdf45314e2cdc0bcdcc3c6f8a1c10c0d92d88ceafc8f736d0"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#2.vec",
-                "sha256": "06fed4cb8e8720ff67f8c08b1a2d7d559d3328cb29de1b54eb6a7c39b63829db"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#2.vec",
+                "sha256": "975c50d9b262d08d5c8367eb56844829374f6ebaff3c881eceba827c675719ff"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.sca",
-                "sha256": "259fcb74a483c084c618bae3292c8839d1d20cee194a338d193daa52a4a380ed"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#3.sca",
+                "sha256": "9623867c633c0157e9957fbaebfbfb1303fc40f11919cc8e9fbc2360f9f96ec2"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#3.vec",
-                "sha256": "d780746ee40cf4fb71d0d4b34f306b8b08dc29ce3c8af41af833f47f7bcd6bcc"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#3.vec",
+                "sha256": "b2b8e14c6d3c90edb22b5d3c3c589938b0a68e8f97085721b05cd5ccdb2d8f0f"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.sca",
-                "sha256": "15a1144789d3bcbbc7ea8c3b94c3eac51e59521a16fc36fe6ef719931f518fcf"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#4.sca",
+                "sha256": "fcee674fccb467961e78f563a9644d0888ca231b9334ffd00046b02c758857ad"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSuMultiTidBlockAck/UlSuMultiTidBlockAck-#4.vec",
-                "sha256": "bb3e1bfe9c8371b9254978fd7fd435ee16bd8b5cfb3d59a8b9e5714cc60b2fdf"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdConservative/ObssPdConservative-#4.vec",
+                "sha256": "422c024962db4dbd9637104eebf8464d7a1649f5990412182b496ea8959bb710"
               }
             ]
           },
           {
-            "configuration": "UlSUHTAMpduCompressedBlockAck",
-            "group": "multi_tid",
-            "ini": "examples/ieee80211ax/ul_multitid/omnetpp.ini",
-            "label": "Uplink SU HT A-MPDU compressed BA",
+            "configuration": "BssColoringEnabled",
+            "group": "bss",
+            "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
+            "label": "Enabled",
             "measurement": {
-              "end_s": 0.88,
+              "end_s": 0.95,
               "start_s": 0.3
             },
             "metadata": {
-              "sink_module_regex": "\\.server\\.app\\["
+              "obss_pd_dbm": -79,
+              "spatial_reuse_evidence": "enabled"
             },
             "result_files": [
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.sca",
-                "sha256": "6c1ef5b68a82440d87f2ffbf667ab5faaeab83263f00b9c2122bef974000ac14"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#0.sca",
+                "sha256": "c048c8e09bec4b54f5c5e2dcc86e75209d7db93c4b1206855f83c4801d6408d6"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.vec",
-                "sha256": "8c69c5e96b7d84fa8cc1c9a3f1ce8d61de0c81681a382b4079078813f41ca947"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#0.vec",
+                "sha256": "8bb73ed17ea10ddea8c578b19d112bf3d2207db3ca254565a908803242053eed"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.sca",
-                "sha256": "e2758ac98bac3a9678eceb0a6b2a4c828e188a262e53651b39284224138ed9a2"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#1.sca",
+                "sha256": "337e8f6db293a4f346e35adfaa8a7e69439688a04f5cc4e9ad63fb006dea9755"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#1.vec",
-                "sha256": "56bad83be2f5fd919efefdedd0a1fb267e6ac5e53d85912d6a3432b1ad88c48d"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#1.vec",
+                "sha256": "2e699315af99bffb5635a05838d05fac204792e543ae511692187e8a03c910ee"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.sca",
-                "sha256": "02b1bb7318b13c06e107fc62535b7de54ec52306036255e16978b444511be601"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#2.sca",
+                "sha256": "99e3e499e8e9cff4492b83b27cf9ac15102cdb38dd19e6f7789ed134cdea6c42"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#2.vec",
-                "sha256": "b2ae6911694125bc7e8595418b51cc74f3950968a27ecdea1bda86f4e1fb0efc"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#2.vec",
+                "sha256": "b887ae32065a3a524d4c72fa0c4565261275ba78129c8b2010f8c372d3067fde"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.sca",
-                "sha256": "93a9509c7f6916cd8413dfc8f4c2bd93c8d9d7765b7dea8c65f5db4bc7d598f6"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#3.sca",
+                "sha256": "e31c70814f6578045e41997449b8ef4da86ff504b091294cb214ed93b8a24a8a"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#3.vec",
-                "sha256": "ed5338615a32e1229db1f75444e5c74339ee86389b9609addf97bd8daab0f0c7"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#3.vec",
+                "sha256": "b54656870c7c4de88894cbeac75bb5fced5c0ec4582013d8a683947f33fca239"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.sca",
-                "sha256": "9409ec61f419b6fa1fd50a87d2a7c824a9e3ab7e45e40755edb1bf46706347eb"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#4.sca",
+                "sha256": "566206a47b0da72174d09118af8159668cb38a17929b4ed023231771be20f51a"
               },
               {
-                "path": "examples/ieee80211ax/ul_multitid/results/20260731T211915Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#4.vec",
-                "sha256": "10d006fea2f52f552085b4080d79e37be6c4be6bc96d8efa24ff89d4f6111ffe"
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringEnabled/BssColoringEnabled-#4.vec",
+                "sha256": "ff4602f6b8525408492d855ae27b26ba7d70e693e3586ffe1d82855dc35079d9"
+              }
+            ]
+          },
+          {
+            "configuration": "ObssPdAggressive",
+            "group": "bss",
+            "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
+            "label": "Aggressive",
+            "measurement": {
+              "end_s": 0.95,
+              "start_s": 0.3
+            },
+            "metadata": {
+              "obss_pd_dbm": -78,
+              "spatial_reuse_evidence": "enabled"
+            },
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#0.sca",
+                "sha256": "a277c28938e524981b077620fd8eec2e9665ff51b9b96bd1402c3df4395daa51"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#0.vec",
+                "sha256": "1500764408a2c550282bd5657f904f0e1a3cf6b50aca7a32260cbfa662081f39"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#1.sca",
+                "sha256": "87ed783b8ca3dcec4de5b7f364a0a876e38dcf22853d71bd2c4a9db3a2987887"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#1.vec",
+                "sha256": "4ef566043cea7a66d4f2b15ec958159a43b72960dd3ed336671e79cfa9d7dee2"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#2.sca",
+                "sha256": "97929e92983d9425130200c307bf24f93d0ee5fd2624d86c238b9efc50317631"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#2.vec",
+                "sha256": "cf8ec8223a06e9588e9cf2b9fe7bb80c088826f44cec1b8be0798f1273130c95"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#3.sca",
+                "sha256": "49070a11195ce94fa13461741d32a1816ebbc52313707ea49e870407cadab0ad"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#3.vec",
+                "sha256": "9b760b3138d3c54c7b069b72091c5f2a74111c58bae5a323a9328f92cd1570ba"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#4.sca",
+                "sha256": "0a4f7aa970f080a023ec143058862a9f87376c36329c74429415e378e4cfce42"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/ObssPdAggressive/ObssPdAggressive-#4.vec",
+                "sha256": "beb5bf40a5dc95b35684fbcbca26127cadfe7a0fc88fb3e6ffbbb27671817287"
+              }
+            ]
+          },
+          {
+            "configuration": "BssColoringCollision",
+            "group": "bss",
+            "ini": "examples/ieee80211ax/bss_coloring/omnetpp.ini",
+            "label": "Color collision",
+            "measurement": {
+              "end_s": 0.95,
+              "start_s": 0.3
+            },
+            "metadata": {
+              "spatial_reuse_evidence": "collision"
+            },
+            "result_files": [
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#0.sca",
+                "sha256": "2618a250097205996de350210ccb54dcffb96bbeee1af58d29873b41b674b063"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#0.vec",
+                "sha256": "e81d26dbd9807a15af37db06d747a3199b957b3bd258088d9fa74babb841aac0"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#1.sca",
+                "sha256": "79239995499b792296435abde19bab064fcf9b1078abb029bc33e28cd2070d63"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#1.vec",
+                "sha256": "d2b705ab915e7800ac9a84e2fbf03f6970820dbcef90eb4a66fa769aa24a2b2d"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#2.sca",
+                "sha256": "97619dba688c779a401dd3185a1c411dd27b9066e7f33926fb19ef28123df441"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#2.vec",
+                "sha256": "f04c47778ff8aa8f71432456da92d98c54c07f127cce913c238548c14c5661e5"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#3.sca",
+                "sha256": "bfee015864270a2c1f4a254c702ff938ec9d65d8dfa7d001e75cc057c1b5ed1e"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#3.vec",
+                "sha256": "bf9472ac650fef0982d29060e31f987e9891a00d3cda5f9daf7137fe78aec0a4"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#4.sca",
+                "sha256": "82f1b793a7ced85b95b6a2d5eb31487af1882393fbbb92c4cd678591ca9c6986"
+              },
+              {
+                "path": "examples/ieee80211ax/bss_coloring/results/20260731T214358Z/BssColoringCollision/BssColoringCollision-#4.vec",
+                "sha256": "e52eab0dddbf988f3938ba8773a3b6cd8dcae984a309bb1fbd2cc39979444b93"
               }
             ]
           }
         ],
-        "session_id": "20260731T211915Z",
+        "session_id": "20260731T214358Z",
         "status": "PASS"
       }
     },
-    "repository_revision": "678465cc16ac236ff884a72423fc3b497cf834c3",
-    "requested_session_id": "20260731T211915Z",
+    "repository_revision": "fae68b95986b5e27e056b361f6b886dd3069de47",
+    "requested_session_id": "20260731T214358Z",
     "schema_version": 1
   },
-  "multi_tid": {
-    "Uplink MU Multi-TID BA": {
-      "goodput_mbps": {
-        "ci95": 0.0,
+  "bss": {
+    "Aggressive": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 2.6410779917138787,
         "count": 5,
-        "mean": 3.1999999999999997
+        "mean": 30.674
+      },
+      "goodput_mbps": {
+        "ci95": 0.17874082908325442,
+        "count": 5,
+        "mean": 9.619692307692308
+      },
+      "jain_fairness": {
+        "ci95": 0.00032603400888559756,
+        "count": 5,
+        "mean": 0.9996476270014721
       }
     },
-    "Uplink SU HT A-MPDU compressed BA": {
-      "goodput_mbps": {
-        "ci95": 0.0030636635643562908,
+    "Color collision": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 0.15764732566427492,
         "count": 5,
-        "mean": 9.154206896551722
+        "mean": 1.4280000000000002
+      },
+      "goodput_mbps": {
+        "ci95": 0.44338927110098164,
+        "count": 5,
+        "mean": 6.663384615384617
+      },
+      "jain_fairness": {
+        "ci95": 0.030315209446364306,
+        "count": 5,
+        "mean": 0.97613211239611
       }
     },
-    "Uplink SU Multi-TID BA": {
-      "goodput_mbps": {
-        "ci95": 0.0,
+    "Conservative": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 1.67990760739226,
         "count": 5,
-        "mean": 1.7599999999999998
+        "mean": 7.728
+      },
+      "goodput_mbps": {
+        "ci95": 0.3495876540043141,
+        "count": 5,
+        "mean": 7.241846153846154
+      },
+      "jain_fairness": {
+        "ci95": 0.03170931469129587,
+        "count": 5,
+        "mean": 0.9853353652549182
+      }
+    },
+    "Disabled": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 0.15764732566427492,
+        "count": 5,
+        "mean": 1.4280000000000002
+      },
+      "goodput_mbps": {
+        "ci95": 0.44338927110098164,
+        "count": 5,
+        "mean": 6.663384615384617
+      },
+      "jain_fairness": {
+        "ci95": 0.030315209446364306,
+        "count": 5,
+        "mean": 0.97613211239611
+      }
+    },
+    "Enabled": {
+      "concurrent_ap_airtime_percent": {
+        "ci95": 2.2033956518000735,
+        "count": 5,
+        "mean": 25.706
+      },
+      "goodput_mbps": {
+        "ci95": 0.1417196088484134,
+        "count": 5,
+        "mean": 9.132307692307695
+      },
+      "jain_fairness": {
+        "ci95": 0.004854981266865058,
+        "count": 5,
+        "mean": 0.9976750313834165
       }
     }
   }
