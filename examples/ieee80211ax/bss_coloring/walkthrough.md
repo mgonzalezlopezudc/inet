@@ -9,39 +9,44 @@
 
 `[agent]` results sessions: `NOT RECORDED`.
 
-This walkthrough evaluates HE BSS coloring and OBSS/PD spatial reuse with a
-disabled control, three thresholds, and a same-color control. The current
-five-run, co-recorded session joins every retained receiver decision to its
-classification, eligibility, threshold, power limit, reason, and ignore
-outcome. It passes the modeled receiver-mechanism check; a separate outcome
-advantage across the threshold sweep remains `INCONCLUSIVE`.
+This example shows that the INET HE receiver distinguishes own-BSS and
+overlapping-BSS PPDUs, then applies the configured OBSS/PD threshold to the
+latter. The current five-run session passes that receiver-mechanism check.
+It does not establish that any threshold produces a general performance
+advantage, so that outcome claim remains `INCONCLUSIVE`.
 
 ## [agent] Learning objectives and feature primer
 
-An HE receiver uses BSS color to distinguish its own BSS from an overlapping
-BSS (OBSS). When an OBSS PPDU meets the OBSS/PD condition, the receiver may
-reuse the channel. A less-negative threshold admits more reuse, but can also
-increase interference. This is a receiver/carrier-sense decision: delivery,
-airtime, and packet counts cannot prove it without correlated receiver
-telemetry.
+Can a receiver use BSS color and OBSS/PD to reuse the channel only for
+eligible overlapping-BSS traffic? HE BSS color identifies a BSS; an HE
+receiver can classify a different color as overlapping-BSS (OBSS). When the
+received OBSS PPDU satisfies the OBSS/PD condition, the receiver can ignore
+it for carrier sensing and continue contention. A less-negative threshold
+permits more candidate reuse and can also admit more interference.
+
+This is a receiver decision, not a conclusion that follows from throughput or
+packet counts. The decisive evidence is therefore the receiver telemetry that
+correlates classification, eligibility, threshold, power limit, reason, and
+ignore outcome for each retained reception.
 
 ## [agent] Scenario description
 
-[BssColoringNetwork.ned](BssColoringNetwork.ned) contains two APs, two
-stations per AP, and separate wired servers. BSS 1 is stationary; BSS 2 moves
-as a rigid group along the x axis. During the `[0.3, 0.95) s` measurement
-window, AP separation grows from 120 m to 250 m, sweeping received OBSS power
-through the configured thresholds. Both servers send jittered downlink UDP
-traffic after a Block Ack warm-up. The material configuration is in
-[omnetpp.ini](omnetpp.ini).
+[BssColoringNetwork.ned](BssColoringNetwork.ned) has two APs, two stations per
+AP, and one wired server per BSS. BSS 1 stays fixed. BSS 2 moves as a group,
+increasing AP separation from 120 m to 250 m during the `[0.3, 0.95) s`
+measurement window. The movement sweeps received OBSS power across the
+configured thresholds while both servers send matched, jittered downlink UDP
+traffic. The relevant configuration is in [omnetpp.ini](omnetpp.ini).
 
 ```text
 server1 -- AP1 ~~ sta1[0..1]     sta2[0..1] ~~ AP2 -- server2
                   stationary       moving BSS 2 →
 ```
 
-The threshold sweep changes only `obssPdThreshold`; the same-color case is the
-negative control for inter-BSS classification.
+The threshold sweep changes only `obssPdThreshold`. The disabled configuration
+keeps ordinary energy detection, while the same-color configuration prevents
+inter-BSS classification. Together these controls isolate the modeled BSS
+color and OBSS/PD decision.
 
 ## [agent] Standards and INET model boundary
 
@@ -50,29 +55,29 @@ defines OBSS/PD-based operation, and Clause 26.2.3 defines spatial-reuse-group
 PPDU identification. These references were verified in corpus chunks
 `80211ax-2024:chunk:09886`, `09890`, and `09741`.
 
-INET configures the colors in the MIB and requests the receiver behavior with
-`enableSpatialReuse` and `obssPdThreshold`. The movement, traffic, scalar radio
-medium, and concurrent-start setting are experiment choices. The simulation is
-an INET model demonstration, not a standards-conformance certification.
+INET sets the colors in the MIB and enables the modeled receiver behavior with
+`enableSpatialReuse` and `obssPdThreshold`. Mobility, traffic, scalar radio
+medium, and concurrent-start behavior are experiment choices. This is an INET
+model demonstration, not standards-conformance certification.
 
 ## [agent] Evidence status
 
 | Claim or check | Status | Authoritative evidence | Runs/seeds | Scope or gap |
 |---|---|---|---|---|
-| Receiver mechanism is correlated per reception | `PASS` | generated scalar/vector checks | runs/seeds `0–4` | joined receiver-decision telemetry |
-| Outcomes differ across the threshold sweep | `INCONCLUSIVE` | generated scalar/vector checks | runs/seeds `0–4` | no manifest-defined multi-condition threshold |
-| MAC traffic is present in every condition | `PASS` | generated PCAP checks | run/seed `0` | capture observations, not deliveries |
-| Packet distributions differ by condition | `PASS` | generated PCAP checks | run/seed `0` | a screening signal, not proof of reuse |
+| Receiver applies the modeled BSS-color and OBSS/PD decision | `PASS` | generated scalar/vector checks | runs/seeds `0-4` | every retained decision is joined to its inputs and outcome |
+| A threshold has a defined outcome advantage | `INCONCLUSIVE` | generated scalar/vector checks | runs/seeds `0-4` | no manifest-defined multi-condition outcome criterion |
+| Every condition has visible MAC traffic | `PASS` | generated PCAP checks | run/seed `0` | capture observations, not deliveries |
+| Captured frame distributions differ | `PASS` | generated PCAP checks | run/seed `0` | screening signal only; does not prove reuse |
 
 ## [agent] Configuration matrix
 
 | Configuration | Role | Feature gate/delta | Workload/channel | Runs/seeds | Expected invariant |
 |---|---|---|---|---|---|
-| `BssColoringDisabled` | Control | spatial reuse off, ED `-82 dBm` | matched two-BSS downlink | `0–4` | no OBSS/PD ignores |
-| `ObssPdConservative` | Treatment | enabled, `-81 dBm` | matched | `0–4` | least treatment reuse |
-| `BssColoringEnabled` | Treatment | enabled, `-79 dBm` | matched | `0–4` | intermediate reuse |
-| `ObssPdAggressive` | Stress | enabled, `-78 dBm` | matched | `0–4` | greatest reuse |
-| `BssColoringCollision` | Negative | enabled, both BSSs use color 1 | matched | `0–4` | resembles disabled control |
+| `BssColoringDisabled` | Control | spatial reuse off; ED `-82 dBm` | matched two-BSS downlink | `0-4` | no OBSS/PD ignores |
+| `ObssPdConservative` | Treatment | enabled; `-81 dBm` | matched | `0-4` | fewest treatment ignores |
+| `BssColoringEnabled` | Treatment | enabled; `-79 dBm` | matched | `0-4` | intermediate ignores |
+| `ObssPdAggressive` | Stress | enabled; `-78 dBm` | matched | `0-4` | most treatment ignores |
+| `BssColoringCollision` | Negative control | enabled; both BSSs use color 1 | matched | `0-4` | no inter-BSS reuse |
 
 Each threshold condition extends `BssColoringEnabled`. The negative control
 sets all local colors to 1; all other material settings are matched.
@@ -81,37 +86,38 @@ sets all local colors to 1; all other material settings are matched.
 
 | Invariant | Evidence and observation point | Failure symptom | Likely subsystem | Next diagnostic |
 |---|---|---|---|---|
-| Every decision has a matching classification and threshold | joined receiver-decision telemetry | missing or misaligned fields | HE receiver observability | inspect the failed vector join by run and receiver |
-| Threshold sweep has a declared pass rule | generated scalar/vector checks | outcome-only comparison | suite manifest | define and test a bounded ordering or effect size |
-| Same color suppresses inter-BSS reuse | joined receiver-decision telemetry | ignored PPDUs in the color-collision control | color configuration | inspect all AP/STA effective colors |
+| Every retained decision has aligned inputs and outcome | joined receiver-decision telemetry | missing or misaligned samples | HE receiver observability | inspect the failed vector join by run and receiver |
+| Same color suppresses OBSS/PD reuse | joined receiver-decision telemetry | ignored PPDUs in the color-collision control | effective color configuration | inspect AP and station MIB colors |
+| Outcome comparison has an executable rule | generated scalar/vector checks | an outcome claim remains `INCONCLUSIVE` | suite manifest | define and test a bounded effect or ordering |
 
 ## [agent] Reproduction
 
-The published session is `20260731T220129Z`, with five independent runs per
-condition and PCAPng from representative run 0. From the repository root:
+The published session is `20260731T222028Z`: five independent runs per
+condition plus PCAPng from representative run 0. From the repository root:
 
 ```sh
 python3 examples/ieee80211/analysis/wifi_analysis.py inspect bss_coloring \
-  --session-id 20260731T220129Z
+  --session-id 20260731T222028Z
 python3 examples/ieee80211/analysis/wifi_analysis.py report bss_coloring \
-  --session-id 20260731T220129Z
+  --session-id 20260731T222028Z
 python3 examples/ieee80211/analysis/wifi_analysis.py publish bss_coloring \
-  --session-id 20260731T220129Z --update
+  --session-id 20260731T222028Z --update
 ```
 
 ## [agent] Scalar and vector analysis
 
-The generated bundle reports goodput, Jain fairness, and concurrent AP airtime
-over `[0.3, 0.95) s`, with run-level 95% Student-t CIs. Its executable check
-joins receiver BSS type, eligibility, OBSS/PD threshold, power limit, reason,
-and ignore outcome for every retained decision. It records no ignored PPDUs in
-the disabled or same-color controls, then `4,435`, `10,188`, and `13,059`
-ignored PPDUs for the conservative, enabled, and aggressive treatments. This
-is direct evidence that the modeled receiver applies the configured OBSS/PD
-decision. Goodput and airtime vary across the sweep, but the absence of a
-manifest-defined multi-condition outcome rule keeps any performance ordering
-`INCONCLUSIVE`. The direct observations are the session's `.vec` artifacts;
-the published metrics and CIs are derived measurements.
+The session's `.vec` artifacts answer the learning question directly. The
+generated scalar/vector bundle joins every retained receiver decision with BSS type,
+eligibility, OBSS/PD threshold, power limit, reason, and ignore outcome.
+The controls record no ignored PPDUs. The conservative, enabled, and
+aggressive treatments record `4,435`, `10,188`, and `13,059` ignores,
+respectively. This supports a `PASS` for the modeled receiver mechanism.
+
+The bundle also reports goodput, Jain fairness, and concurrent AP airtime over
+`[0.3, 0.95) s`, with run-level 95% Student-t confidence intervals. Those
+derived measurements vary across the sweep, but the manifest defines no
+multi-condition effect or ordering to test. They therefore do not support a
+performance ranking.
 
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-bss -->
 ### [script] Generated scalar/vector plot and table
@@ -156,11 +162,15 @@ The table is a presentation view of the session-bound run-level summary; the com
 
 ## [agent] PCAP statistics
 
-The same published session provides representative run-0 MAC PCAPng captures.
-The generated summary confirms protocol-visible traffic in every condition and
-different frame-distribution signatures. Capture observations are neither
-application deliveries nor de-duplicated medium transmissions, so they screen
-for a changed on-air exchange but do not prove a receiver decision.
+The same session provides representative run-0 PCAPng captures at the AP
+wireless interfaces. The generated tables now preserve the HE BSS color as a
+packet-statistics dimension, so otherwise matching PHY rows retain independent
+mean received-signal values for colors `0x0001` and `0x0002`.
+
+The captures confirm protocol-visible traffic in every configuration and
+different frame-distribution signatures. They are AP observations, not
+application deliveries or de-duplicated medium transmissions; the PCAP result
+is useful context for the exchange but cannot itself prove a receiver decision.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
