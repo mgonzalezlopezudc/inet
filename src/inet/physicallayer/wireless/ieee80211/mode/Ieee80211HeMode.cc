@@ -201,15 +201,24 @@ const simtime_t Ieee80211HePreambleMode::getDuration() const
     // - HE-SIG-A: 8 µs
     // - HE-STF: 4 µs
     // - HE-LTFs: numberOfHELongTrainings * 4 µs (each symbol duration under 1x HE-LTF mode)
+    Ieee80211HeGuardInterval guardInterval;
+    switch (highEfficiencySignalMode->getGuardIntervalType()) {
+        case Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT: guardInterval = HE_GI_0_8_US; break;
+        case Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM: guardInterval = HE_GI_1_6_US; break;
+        case Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG: guardInterval = HE_GI_3_2_US; break;
+        default: throw cRuntimeError("Unknown HE guard interval");
+    }
     auto erSuRepeatedHeSigA = preambleFormat == HE_PREAMBLE_ER_SU ?
             getHeSignalFieldA() : SIMTIME_ZERO;
     return getNonHTShortTrainingSequenceDuration() + // L-STF (8 µs)
            getNonHTLongTrainingFieldDuration() +     // L-LTF (8 µs)
            getNonHTSignalField() +                   // L-SIG (4 µs)
-           getHeSignalFieldA() +                     // Existing RL-SIG + HE-SIG-A model
+           getLSIGDuration() +                       // RL-SIG (4 µs)
+           getHeSignalFieldA() +                     // HE-SIG-A (8 µs)
            erSuRepeatedHeSigA +                      // Duplicated HE-SIG-A for ER SU
            getHeShortTrainingFieldDuration() +       // HE-STF (4 µs)
-           numberOfHELongTrainings * 4E-6;           // HE-LTFs
+           numberOfHELongTrainings *
+           getHeLtfSymbolDuration(getHeDefaultLtfType(guardInterval), guardInterval);
 }
 
 static int getNumberOfTotalSubcarriers(Hz bandwidth) {
