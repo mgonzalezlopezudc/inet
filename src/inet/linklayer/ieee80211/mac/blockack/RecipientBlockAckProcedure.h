@@ -34,8 +34,14 @@ class INET_API RecipientBlockAckProcedure : public IRecipientBlockAckProcedure
             IRecipientQosAckPolicy *ackPolicy,
             IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
             IProcedureCallback *callback,
-            bool heMultiTidAggregation = false,
+            MultiTidBlockAckResponseFormat multiTidResponseFormat = MultiTidBlockAckResponseFormat::NONE,
             uint16_t responseAid = 0) override;
+    virtual bool processReceivedHtImplicitBlockAckRequest(
+            Packet *ampduPacket,
+            const std::vector<Ptr<const Ieee80211DataHeader>>& dataHeaders,
+            IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
+            IBlockAckAgreementHandlerCallback *agreementHandlerCallback,
+            IProcedureCallback *procedureCallback) override;
     virtual void processTransmittedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck) override;
 };
 

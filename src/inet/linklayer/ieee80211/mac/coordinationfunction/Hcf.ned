@@ -29,6 +29,16 @@ module Hcf extends Module like IHcf
 {
     parameters:
         bool isBlockAckSupported = default(false);
+        // Experimental INET extension modeling the historical IEEE 802.11n
+        // Multi-TID BAR/BlockAck exchange; it is not a current 802.11 format.
+        // It is neither advertised nor negotiated, and is effective only
+        // with modeSet n(mixed-2.4Ghz).
+        bool useLegacyHtMultiTidBlockAck = default(false);
+        // Enables the IEEE 802.11 HT implicit Block Ack exchange for
+        // non-single-MPDU, same-TID A-MPDUs. This local capability switch is
+        // not yet advertised or negotiated and is effective only with
+        // modeSet n(mixed-2.4Ghz).
+        bool useHtImplicitBlockAck = default(false);
 
         string rxModule;
         string txModule;
@@ -137,4 +147,3 @@ module Hcf extends Module like IHcf
                 @display("p=550,600");
         }
 }
-

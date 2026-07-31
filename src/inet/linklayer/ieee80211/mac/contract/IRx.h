@@ -16,6 +16,11 @@
 namespace inet {
 namespace ieee80211 {
 
+enum class AggregateReceptionContext {
+    ORDINARY_FRAME,
+    INTACT_AMPDU,
+};
+
 /**
  * Abstract interface for Rx processes. The Rx process checks received frames for
  * errors, manages the NAV, and notifies Tx processes about the channel state
@@ -45,7 +50,9 @@ class INET_API IRx
     virtual void receptionStateChanged(physicallayer::IRadio::ReceptionState state) = 0;
     virtual void transmissionStateChanged(physicallayer::IRadio::TransmissionState state) = 0;
     virtual void receivedSignalPartChanged(physicallayer::IRadioSignal::SignalPart part) = 0;
-    virtual bool lowerFrameReceived(Packet *packet) = 0;
+    virtual bool lowerFrameReceived(Packet *packet,
+            AggregateReceptionContext aggregateContext =
+                    AggregateReceptionContext::ORDINARY_FRAME) = 0;
 };
 
 } // namespace ieee80211

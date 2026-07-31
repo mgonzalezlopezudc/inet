@@ -260,6 +260,34 @@ void QosAckHandler::processTransmittedDataOrMgmtFrame(const Ptr<const Ieee80211D
         mgmtAckStatuses[std::make_pair(header->getReceiverAddress(), SequenceControlField(header->getSequenceNumber().get(), header->getFragmentNumber()))] = Status::WAITING_FOR_NORMAL_ACK;
 }
 
+void QosAckHandler::processTransmittedHtImplicitBlockAckFrame(
+        const Ptr<const Ieee80211DataHeader>& header)
+{
+    ASSERT(header->getType() == ST_DATA_WITH_QOS);
+    ASSERT(header->getAckPolicy() == NORMAL_ACK);
+    auto id = std::make_pair(header->getReceiverAddress(),
+            std::make_pair(header->getTid(),
+                    SequenceControlField(header->getSequenceNumber().get(),
+                            header->getFragmentNumber())));
+    ackStatuses[id] = Status::WAITING_FOR_BLOCK_ACK;
+}
+
+std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>>
+QosAckHandler::processFailedHtImplicitBlockAck(
+        const MacAddress& receiverAddress, Tid tid)
+{
+    std::set<QoSKey> failedFrames;
+    for (auto& entry : ackStatuses) {
+        if (entry.first.first == receiverAddress &&
+                entry.first.second.first == tid &&
+                entry.second == Status::WAITING_FOR_BLOCK_ACK) {
+            entry.second = Status::BLOCK_ACK_NOT_ARRIVED;
+            failedFrames.insert(entry.first);
+        }
+    }
+    return failedFrames;
+}
+
 void QosAckHandler::processTransmittedBlockAckReq(const Ptr<const Ieee80211BlockAckReq>& blockAckReq)
 {
     for (auto& ackStatus : ackStatuses) {
@@ -367,11 +395,9 @@ void QosAckHandler::transitionToWaitingForBlockAck(const Ptr<const Ieee80211Data
 {
     auto id = std::make_pair(header->getReceiverAddress(), std::make_pair(header->getTid(), SequenceControlField(header->getSequenceNumber().get(), header->getFragmentNumber())));
     auto it = ackStatuses.find(id);
-    if (it != ackStatuses.end() && it->second == Status::BLOCK_ACK_NOT_YET_REQUESTED) {
+    if (it != ackStatuses.end() && it->second == Status::BLOCK_ACK_NOT_YET_REQUESTED)
         it->second = Status::WAITING_FOR_BLOCK_ACK;
-    }
 }
-
 
 void QosAckHandler::frameGotInProgress(const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtHeader)
 {

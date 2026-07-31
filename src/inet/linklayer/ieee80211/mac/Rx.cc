@@ -98,7 +98,8 @@ void Rx::handleMessage(cMessage *msg)
         throw cRuntimeError("Unexpected self message");
 }
 
-bool Rx::lowerFrameReceived(Packet *packet)
+bool Rx::lowerFrameReceived(Packet *packet,
+        AggregateReceptionContext aggregateContext)
 {
     Enter_Method("lowerFrameReceived(\"%s\")", packet->getName());
     take(packet);
@@ -120,13 +121,17 @@ bool Rx::lowerFrameReceived(Packet *packet)
         }
     }
 
-    bool isFrameOk = isFcsOk(packet) && !selfInterference;
+    bool isFrameOk = isFcsOk(packet, aggregateContext) &&
+            !selfInterference;
     if (isFrameOk) {
         EV_INFO << "Received frame from PHY: " << packet << endl;
-        const bool outcomeAmpdu = packet->getDataLength() > b(0) &&
-                packet->findTag<Ieee80211MpduReceiveInd>() != nullptr &&
-                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr;
-        if (packet->getDataLength() > b(0) && !outcomeAmpdu) {
+        const bool intactAmpdu = packet->getDataLength() > b(0) &&
+                dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
+                        packet->peekAtFront()) != nullptr &&
+                (packet->findTag<Ieee80211MpduReceiveInd>() != nullptr ||
+                        aggregateContext ==
+                                AggregateReceptionContext::INTACT_AMPDU);
+        if (packet->getDataLength() > b(0) && !intactAmpdu) {
             const auto& header = packet->peekAtFront<Ieee80211MacHeader>();
             if (header->getReceiverAddress() != address)
                 setOrExtendNav(header->getDurationField(), isIntraBssFrame(header));
@@ -169,12 +174,16 @@ bool Rx::isReceptionInProgress() const
            (receivedPart == IRadioSignal::SIGNAL_PART_WHOLE || receivedPart == IRadioSignal::SIGNAL_PART_DATA);
 }
 
-bool Rx::isFcsOk(Packet *packet) const
+bool Rx::isFcsOk(Packet *packet,
+        AggregateReceptionContext aggregateContext) const
 {
     if (packet->getDataLength() == b(0))
         return !packet->hasBitError();
-    if (packet->findTag<Ieee80211MpduReceiveInd>() != nullptr &&
-            dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr)
+    if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
+                packet->peekAtFront()) != nullptr &&
+            (packet->findTag<Ieee80211MpduReceiveInd>() != nullptr ||
+                    aggregateContext ==
+                            AggregateReceptionContext::INTACT_AMPDU))
         // The aggregate has no single MAC FCS. Common/physical failure is
         // still carried by bitError; delimiter and MPDU FCS outcomes are
         // applied individually by HCF from Ieee80211MpduReceiveInd.

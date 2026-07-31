@@ -156,11 +156,37 @@ class INET_API LastFrameAckFs : public IFrameSequence
     virtual std::string getHistory() const override { return std::string("LAST-FRAME") + (step == 2 ? " ACK" : ""); } // TODO completeStep = true?
 };
 
-class INET_API BlockAckReqBlockAckFs : public IFrameSequence
+/**
+ * Transmits a non-single-MPDU HT A-MPDU whose QoS Ack Policy bits are 00,
+ * then waits for the immediate Compressed BlockAck elicited by that implicit
+ * Block Ack request.
+ */
+class INET_API HtAmpduBlockAckFs : public IFrameSequence
 {
   protected:
     int firstStep = -1;
     int step = -1;
+
+  public:
+    virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
+    virtual IFrameSequenceStep *prepareStep(FrameSequenceContext *context) override;
+    virtual bool completeStep(FrameSequenceContext *context) override;
+
+    virtual std::string getHistory() const override { return std::string("HT-A-MPDU") + (step == 2 ? " COMPRESSED-BLOCKACK" : ""); }
+};
+
+class INET_API BlockAckReqBlockAckFs : public IFrameSequence
+{
+  protected:
+    enum class ExpectedMultiTidResponseFormat {
+        UNKNOWN,
+        LEGACY_MULTI_TID,
+        HE_MULTI_STA,
+    };
+
+    int firstStep = -1;
+    int step = -1;
+    ExpectedMultiTidResponseFormat expectedMultiTidResponseFormat = ExpectedMultiTidResponseFormat::UNKNOWN;
 
   public:
     virtual void startSequence(FrameSequenceContext *context, int firstStep) override;
@@ -174,4 +200,3 @@ class INET_API BlockAckReqBlockAckFs : public IFrameSequence
 } // namespace inet
 
 #endif
-

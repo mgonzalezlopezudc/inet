@@ -64,12 +64,15 @@ class INET_API FrameSequenceContext : public cObject
 
     NonQoSContext *nonQoSContext = nullptr;
     QoSContext *qosContext = nullptr;
+    const bool useLegacyHtMultiTidBlockAck = false;
+    const bool useHtImplicitBlockAck = false;
 
   public:
-    FrameSequenceContext(MacAddress address, physicallayer::Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQosContext, QoSContext *qosContext);
+    FrameSequenceContext(MacAddress address, physicallayer::Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQosContext, QoSContext *qosContext, bool useLegacyHtMultiTidBlockAck = false, bool useHtImplicitBlockAck = false);
     virtual ~FrameSequenceContext();
 
     virtual simtime_t getDuration() const { return simTime() - startTime; }
+    virtual const MacAddress& getAddress() const { return address; }
 
     virtual void addStep(IFrameSequenceStep *step) { steps.push_back(step); }
     virtual int getNumSteps() const { return steps.size(); }
@@ -83,6 +86,8 @@ class INET_API FrameSequenceContext : public cObject
 
     virtual NonQoSContext *getNonQoSContext() const { return nonQoSContext; }
     virtual QoSContext *getQoSContext() const { return qosContext; }
+    virtual bool getUseLegacyHtMultiTidBlockAck() const { return useLegacyHtMultiTidBlockAck; }
+    virtual bool getUseHtImplicitBlockAck() const { return useHtImplicitBlockAck; }
 
     virtual simtime_t getAckTimeout(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& dataOrMgmtframe) const;
     virtual simtime_t getCtsTimeout(Packet *packet, const Ptr<const Ieee80211RtsFrame>& rtsFrame) const;
@@ -110,4 +115,3 @@ class INET_API FrameSequenceNumPacketsFilter : public cObjectResultFilter
 } // namespace inet
 
 #endif
-

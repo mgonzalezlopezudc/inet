@@ -42,6 +42,9 @@ class INET_API RecipientBlockAckAgreementHandler : public IRecipientBlockAckAgre
     virtual void processReceivedAddbaRequest(const Ptr<const Ieee80211AddbaRequest>& addbaRequest, IRecipientBlockAckAgreementPolicy *blockAckAgreementPolicy, IProcedureCallback *callback) override;
     virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba, IRecipientBlockAckAgreementPolicy *blockAckAgreementPolicy) override;
     virtual void qosFrameReceived(const Ptr<const Ieee80211DataHeader>& qosHeader, IBlockAckAgreementHandlerCallback *callback) override;
+    virtual bool implicitBlockAckRequestFrameReceived(
+            const Ptr<const Ieee80211DataHeader>& qosHeader,
+            IBlockAckAgreementHandlerCallback *callback) override;
     virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>& delba) override;
     virtual void blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback) override;
 
@@ -52,4 +55,3 @@ class INET_API RecipientBlockAckAgreementHandler : public IRecipientBlockAckAgre
 } // namespace inet
 
 #endif
-

@@ -12,14 +12,16 @@ namespace ieee80211 {
 
 using namespace inet::physicallayer;
 
-FrameSequenceContext::FrameSequenceContext(MacAddress address, Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQoSContext, QoSContext *qosContext) :
+FrameSequenceContext::FrameSequenceContext(MacAddress address, Ieee80211ModeSet *modeSet, InProgressFrames *inProgressFrames, IRtsProcedure *rtsProcedure, IRtsPolicy *rtsPolicy, NonQoSContext *nonQoSContext, QoSContext *qosContext, bool useLegacyHtMultiTidBlockAck, bool useHtImplicitBlockAck) :
     address(address),
     modeSet(modeSet),
     inProgressFrames(inProgressFrames),
     rtsProcedure(rtsProcedure),
     rtsPolicy(rtsPolicy),
     nonQoSContext(nonQoSContext),
-    qosContext(qosContext)
+    qosContext(qosContext),
+    useLegacyHtMultiTidBlockAck(useLegacyHtMultiTidBlockAck),
+    useHtImplicitBlockAck(useHtImplicitBlockAck)
 {
 }
 
@@ -78,4 +80,3 @@ void FrameSequenceNumPacketsFilter::receiveSignal(cResultFilter *prev, simtime_t
 
 } // namespace ieee80211
 } // namespace inet
-

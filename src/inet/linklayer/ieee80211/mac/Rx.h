@@ -46,7 +46,8 @@ class INET_API Rx : public SimpleModule, public IRx
     virtual void setOrExtendNav(simtime_t navInterval);
     virtual void setOrExtendNav(simtime_t navInterval, bool intraBss);
     virtual bool isIntraBssFrame(const Ptr<const Ieee80211MacHeader>& header) const;
-    virtual bool isFcsOk(Packet *packet) const;
+    virtual bool isFcsOk(Packet *packet,
+            AggregateReceptionContext aggregateContext) const;
     std::string getRxStatusTxt() const;
 
   public:
@@ -59,7 +60,9 @@ class INET_API Rx : public SimpleModule, public IRx
     virtual void receptionStateChanged(physicallayer::IRadio::ReceptionState newReceptionState) override;
     virtual void transmissionStateChanged(physicallayer::IRadio::TransmissionState transmissionState) override;
     virtual void receivedSignalPartChanged(physicallayer::IRadioSignal::SignalPart part) override;
-    virtual bool lowerFrameReceived(Packet *packet) override;
+    virtual bool lowerFrameReceived(Packet *packet,
+            AggregateReceptionContext aggregateContext =
+                    AggregateReceptionContext::ORDINARY_FRAME) override;
     virtual void frameTransmitted(simtime_t durationField) override;
     virtual void legacySignalReceived(simtime_t durationField) override;
     virtual void registerContention(IContention *contention) override;

@@ -16,6 +16,12 @@
 namespace inet {
 namespace ieee80211 {
 
+enum class MultiTidBlockAckResponseFormat {
+    NONE,
+    LEGACY_MULTI_TID,
+    HE_MULTI_STA,
+};
+
 class INET_API IRecipientBlockAckProcedure
 {
   public:
@@ -33,8 +39,14 @@ class INET_API IRecipientBlockAckProcedure
             IRecipientQosAckPolicy *ackPolicy,
             IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
             IProcedureCallback *callback,
-            bool heMultiTidAggregation = false,
+            MultiTidBlockAckResponseFormat multiTidResponseFormat = MultiTidBlockAckResponseFormat::NONE,
             uint16_t responseAid = 0) = 0;
+    virtual bool processReceivedHtImplicitBlockAckRequest(
+            Packet *ampduPacket,
+            const std::vector<Ptr<const Ieee80211DataHeader>>& dataHeaders,
+            IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
+            IBlockAckAgreementHandlerCallback *agreementHandlerCallback,
+            IProcedureCallback *procedureCallback) = 0;
     virtual void processTransmittedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck) = 0;
 };
 

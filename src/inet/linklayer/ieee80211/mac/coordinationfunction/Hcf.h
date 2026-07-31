@@ -61,6 +61,11 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     static simsignal_t blockAckAgreementDeletedSignal;
 
   protected:
+    enum class HtAmpduAckContext {
+        ORDINARY,
+        IMPLICIT_BLOCK_ACK,
+    };
+
     Ieee80211Mac *mac = nullptr;
     IRateControl *dataAndMgmtRateControl = nullptr;
 
@@ -117,6 +122,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     double lastSelectedModeBandwidth = -1;
     int lastSelectedModeNumSpatialStreams = -1;
     std::map<Packet *, std::vector<Packet *>> pendingAmpduSubframes;
+    std::set<Packet *> pendingHtImplicitBlockAckAmpdus;
 
   protected:
     virtual int numInitStages() const override { return NUM_INIT_STAGES; }
@@ -126,6 +132,15 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual void refreshDisplay() const override;
     void handleDeferredStartRxTimeout();
     void processResponseAndCancelStartRxTimerIfCompleted(Packet *packet, IReceiveStep *receiveStep);
+    static std::vector<Packet *> recoverHtImplicitBlockAckTimeout(
+            InProgressFrames *inProgressFrames, QosAckHandler *ackHandler,
+            QosRecoveryProcedure *recoveryProcedure,
+            IRateControl *rateControl,
+            const std::set<std::pair<MacAddress,
+                    std::pair<Tid, SequenceControlField>>>& failedFrameIds);
+    static HtAmpduAckContext classifyHtAmpduAckContext(
+            unsigned int numAggregateMembers,
+            const std::vector<Ptr<const Ieee80211MacHeader>>& headers);
 
     virtual void startFrameSequence(AccessCategory ac);
     void resumeContention();
@@ -136,6 +151,7 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
     virtual bool hasFrameToTransmit();
     virtual bool hasFrameToTransmit(AccessCategory ac);
     virtual bool isReceptionInProgress();
+    virtual bool isLegacyHtMultiTidBlockAckEnabled() const;
 
     // Recipient
     virtual void recipientProcessReceivedFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header);
@@ -198,6 +214,13 @@ class INET_API Hcf : public ICoordinationFunction, public IFrameSequenceHandler:
 
   public:
     virtual ~Hcf();
+
+    /**
+     * Returns true when the local, non-negotiated HT implicit Block Ack
+     * feature is enabled. Ieee80211Mac uses this at the deaggregation boundary
+     * so HCF can inspect the complete A-MPDU.
+     */
+    virtual bool isHtImplicitBlockAckEnabled() const;
 
     IOriginatorMacDataService *getOriginatorMacDataService() const { return originatorDataService; }
     IOriginatorBlockAckAgreementHandler *getOriginatorBlockAckAgreementHandler() const { return originatorBlockAckAgreementHandler; }

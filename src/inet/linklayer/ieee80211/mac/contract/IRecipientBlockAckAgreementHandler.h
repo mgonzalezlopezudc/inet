@@ -29,6 +29,9 @@ class INET_API IRecipientBlockAckAgreementHandler
     virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>& delba, IRecipientBlockAckAgreementPolicy *blockAckAgreementPolicy) = 0;
     virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>& delba) = 0;
     virtual void qosFrameReceived(const Ptr<const Ieee80211DataHeader>& qosHeader, IBlockAckAgreementHandlerCallback *callback) = 0;
+    virtual bool implicitBlockAckRequestFrameReceived(
+            const Ptr<const Ieee80211DataHeader>& qosHeader,
+            IBlockAckAgreementHandlerCallback *callback) = 0;
     virtual void blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback) = 0;
 
     virtual RecipientBlockAckAgreement *getAgreement(Tid tid, MacAddress originatorAddr) = 0;
@@ -38,4 +41,3 @@ class INET_API IRecipientBlockAckAgreementHandler
 } // namespace inet
 
 #endif
-

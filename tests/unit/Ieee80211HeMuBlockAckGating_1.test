@@ -33,6 +33,7 @@ module TestHcf
 {
     parameters:
         @class(TestHcf);
+        bool useHtImplicitBlockAck = default(false);
 }
 
 network TestNetwork
@@ -187,6 +188,10 @@ class MockRecipientBlockAckAgreementHandler : public IRecipientBlockAckAgreement
         qosFrameReceivedCount++;
         agreement->blockAckPolicyFrameReceived(qosHeader);
     }
+    virtual bool implicitBlockAckRequestFrameReceived(const Ptr<const Ieee80211DataHeader>& qosHeader, IBlockAckAgreementHandlerCallback *callback) override {
+        agreement->getBlockAckRecord()->blockAckPolicyFrameReceived(qosHeader);
+        return true;
+    }
     virtual void blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback) override {}
 
     virtual RecipientBlockAckAgreement *getAgreement(Tid tid, MacAddress originatorAddr) override {
@@ -226,11 +231,12 @@ class TestHcf : public Hcf
         recipientProcessReceivedControlFrame(packet, header);
     }
 
-    void receiveMultiTidControl(Packet *packet, bool heMultiTidAggregation, uint16_t responseAid) {
+    void receiveMultiTidControl(Packet *packet,
+            MultiTidBlockAckResponseFormat responseFormat, uint16_t responseAid) {
         auto header = packet->peekAtFront<Ieee80211MultiTidBlockAckReq>();
         recipientBlockAckProcedure->processReceivedBlockAckReq(packet, header,
                 recipientAckPolicy, recipientBlockAckAgreementHandler, this,
-                heMultiTidAggregation, responseAid);
+                responseFormat, responseAid);
     }
 };
 
@@ -407,7 +413,8 @@ EV << "STA1 BlockAck count after BAR: " << tx.transmitCount << "\n";
 delete barPacket;
 
 auto heMultiTidBarPacket = makeMultiTidBarPacket(sta, ap, tid, 0);
-hcf->receiveMultiTidControl(heMultiTidBarPacket, true, 0);
+hcf->receiveMultiTidControl(heMultiTidBarPacket,
+        MultiTidBlockAckResponseFormat::HE_MULTI_STA, 0);
 REQUIRE(tx.lastPacketName == "MultiStaBlockAck");
 auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(tx.lastBlockAck);
 REQUIRE(multiStaBlockAck != nullptr);
@@ -425,7 +432,8 @@ EV << "HE Multi-TID BAR from AP returns Multi-STA BlockAck with AID 0.\n";
 delete heMultiTidBarPacket;
 
 auto apRecipientBarPacket = makeMultiTidBarPacket(ap, sta, tid, 0);
-hcf->receiveMultiTidControl(apRecipientBarPacket, true, 7);
+hcf->receiveMultiTidControl(apRecipientBarPacket,
+        MultiTidBlockAckResponseFormat::HE_MULTI_STA, 7);
 multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(tx.lastBlockAck);
 REQUIRE(multiStaBlockAck != nullptr);
 REQUIRE(multiStaBlockAck->getRecords(0).aid == 7);
@@ -433,7 +441,8 @@ EV << "HE Multi-TID BAR from associated STA returns its AID.\n";
 delete apRecipientBarPacket;
 
 auto legacyMultiTidBarPacket = makeMultiTidBarPacket(sta, ap, tid, 0);
-hcf->receiveMultiTidControl(legacyMultiTidBarPacket, false, 0);
+hcf->receiveMultiTidControl(legacyMultiTidBarPacket,
+        MultiTidBlockAckResponseFormat::LEGACY_MULTI_TID, 0);
 REQUIRE(tx.lastPacketName == "MultiTidBlockAck");
 auto multiTidBlockAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(tx.lastBlockAck);
 REQUIRE(multiTidBlockAck != nullptr);
@@ -442,8 +451,17 @@ REQUIRE(multiTidBlockAck->getRecords(0).tid == tid);
 REQUIRE(multiTidBlockAck->getRecords(0).startingSequenceNumber == 0);
 REQUIRE(multiTidBlockAck->getRecords(0).bitmap & 1);
 REQUIRE(multiTidBlockAck->getChunkLength() == B(30));
+REQUIRE(tx.lastIfs == SimTime(16, SIMTIME_US));
 EV << "Legacy Multi-TID BAR response remains Multi-TID BlockAck.\n";
 delete legacyMultiTidBarPacket;
+
+int transmitCountBeforeUnsupportedBar = tx.transmitCount;
+auto unsupportedMultiTidBarPacket = makeMultiTidBarPacket(sta, ap, tid, 0);
+hcf->receiveMultiTidControl(unsupportedMultiTidBarPacket,
+        MultiTidBlockAckResponseFormat::NONE, 0);
+REQUIRE(tx.transmitCount == transmitCountBeforeUnsupportedBar);
+EV << "Unsupported Multi-TID BAR produces no BlockAck response.\n";
+delete unsupportedMultiTidBarPacket;
 
 %contains: stdout
 STA0 immediate BlockAck count: 0
@@ -477,3 +495,6 @@ HE Multi-TID BAR from associated STA returns its AID.
 
 %contains: stdout
 Legacy Multi-TID BAR response remains Multi-TID BlockAck.
+
+%contains: stdout
+Unsupported Multi-TID BAR produces no BlockAck response.

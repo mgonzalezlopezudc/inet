@@ -1,0 +1,162 @@
+%description:
+Verify that one historical Multi-TID BAR independently advances and flushes
+the receiver reorder windows for two TIDs, including when both TIDs use the
+same sequence number.
+
+%includes:
+#include <set>
+
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/recipient/RecipientQosMacDataService.h"
+
+%file: TestNetwork.ned
+import inet.linklayer.ieee80211.mac.recipient.RecipientQosMacDataService;
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        dataService: RecipientQosMacDataService;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestRecipientBlockAckAgreementHandler :
+        public IRecipientBlockAckAgreementHandler
+{
+  protected:
+    std::map<std::pair<Tid, MacAddress>, RecipientBlockAckAgreement *> agreements;
+
+  public:
+    virtual ~TestRecipientBlockAckAgreementHandler() {
+        for (const auto& entry : agreements)
+            delete entry.second;
+    }
+
+    void addAgreement(Tid tid, const MacAddress& originatorAddress,
+            uint16_t startingSequenceNumber) {
+        agreements[std::make_pair(tid, originatorAddress)] =
+                new RecipientBlockAckAgreement(originatorAddress, tid,
+                        SequenceNumberCyclic(startingSequenceNumber), 64,
+                        SIMTIME_ZERO);
+    }
+
+    virtual RecipientBlockAckAgreement *getAgreement(
+            Tid tid, MacAddress originatorAddress) override {
+        auto it = agreements.find(std::make_pair(tid, originatorAddress));
+        return it == agreements.end() ? nullptr : it->second;
+    }
+
+    virtual void processTransmittedAddbaResp(
+            const Ptr<const Ieee80211AddbaResponse>&,
+            IBlockAckAgreementHandlerCallback *) override {}
+    virtual void processReceivedAddbaRequest(
+            const Ptr<const Ieee80211AddbaRequest>&,
+            IRecipientBlockAckAgreementPolicy *,
+            IProcedureCallback *) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>&,
+            IRecipientBlockAckAgreementPolicy *) override {}
+    virtual void processTransmittedDelba(
+            const Ptr<const Ieee80211Delba>&) override {}
+    virtual void qosFrameReceived(const Ptr<const Ieee80211DataHeader>&,
+            IBlockAckAgreementHandlerCallback *) override {}
+    virtual bool implicitBlockAckRequestFrameReceived(
+            const Ptr<const Ieee80211DataHeader>&,
+            IBlockAckAgreementHandlerCallback *) override { return false; }
+    virtual void blockAckAgreementExpired(IProcedureCallback *,
+            IBlockAckAgreementHandlerCallback *) override {}
+};
+
+static Packet *makeQosData(const char *name,
+        const MacAddress& receiverAddress,
+        const MacAddress& originatorAddress, Tid tid,
+        uint16_t sequenceNumber)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiverAddress);
+    header->setTransmitterAddress(originatorAddress);
+    header->setTid(tid);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setFragmentNumber(0);
+    header->setMoreFragments(false);
+    header->setAckPolicy(BLOCK_ACK);
+    return new Packet(name, header);
+}
+
+%activity:
+auto dataService = check_and_cast<RecipientQosMacDataService *>(
+        getParentModule()->getSubmodule("dataService"));
+MacAddress receiverAddress("02:00:00:00:00:07");
+MacAddress originatorAddress("02:00:00:00:00:01");
+Tid firstTid = 3;
+Tid secondTid = 5;
+uint16_t sharedSequenceNumber = 100;
+
+TestRecipientBlockAckAgreementHandler agreementHandler;
+agreementHandler.addAgreement(firstTid, originatorAddress, 90);
+agreementHandler.addAgreement(secondTid, originatorAddress, 90);
+
+auto firstPacket = makeQosData("tid3-seq100", receiverAddress,
+        originatorAddress, firstTid, sharedSequenceNumber);
+auto firstHeader = firstPacket->peekAtFront<Ieee80211DataHeader>();
+auto secondPacket = makeQosData("tid5-seq100", receiverAddress,
+        originatorAddress, secondTid, sharedSequenceNumber);
+auto secondHeader = secondPacket->peekAtFront<Ieee80211DataHeader>();
+
+REQUIRE(dataService->dataFrameReceived(firstPacket, firstHeader,
+        &agreementHandler).empty());
+REQUIRE(dataService->dataFrameReceived(secondPacket, secondHeader,
+        &agreementHandler).empty());
+
+auto request = makeShared<Ieee80211MultiTidBlockAckReq>();
+request->setReceiverAddress(receiverAddress);
+request->setTransmitterAddress(originatorAddress);
+request->setRecordsArraySize(2);
+Ieee80211MultiTidBlockAckReqRecord firstRecord;
+firstRecord.tid = firstTid;
+firstRecord.startingSequenceNumber = sharedSequenceNumber;
+request->setRecords(0, firstRecord);
+Ieee80211MultiTidBlockAckReqRecord secondRecord;
+secondRecord.tid = secondTid;
+secondRecord.startingSequenceNumber = sharedSequenceNumber;
+request->setRecords(1, secondRecord);
+auto requestPacket = new Packet("MultiTidBlockAckReq", request);
+
+auto delivered = dataService->controlFrameReceived(requestPacket, request,
+        &agreementHandler);
+REQUIRE(delivered.size() == 2);
+std::set<std::pair<Tid, uint16_t>> deliveredIdentities;
+std::set<std::string> deliveredNames;
+for (auto packet : delivered) {
+    auto header = packet->peekAtFront<Ieee80211DataHeader>();
+    deliveredIdentities.emplace(header->getTid(),
+            header->getSequenceNumber().get());
+    deliveredNames.emplace(packet->getName());
+}
+std::set<std::pair<Tid, uint16_t>> expectedIdentities({
+        {firstTid, sharedSequenceNumber},
+        {secondTid, sharedSequenceNumber}});
+std::set<std::string> expectedNames({"tid3-seq100", "tid5-seq100"});
+REQUIRE(deliveredIdentities == expectedIdentities);
+REQUIRE(deliveredNames == expectedNames);
+
+REQUIRE(dataService->controlFrameReceived(requestPacket, request,
+        &agreementHandler).empty());
+
+for (auto packet : delivered)
+    delete packet;
+delete requestPacket;
+
+EV << "One Multi-TID BAR independently delivered both equal-sequence TIDs.\n";
+
+%contains: stdout
+One Multi-TID BAR independently delivered both equal-sequence TIDs.

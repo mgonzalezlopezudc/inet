@@ -44,6 +44,7 @@ class INET_API RecipientQosMacDataService : public IRecipientQosMacDataService, 
 
     virtual Packet *defragment(std::vector<Packet *> completeFragments);
     virtual Packet *defragment(Packet *mgmtFragment);
+    virtual std::vector<Packet *> processReorderBuffer(const BlockAckReordering::ReorderBuffer& frames);
 
   public:
     virtual std::vector<Packet *> dataFrameReceived(Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler) override;
@@ -55,4 +56,3 @@ class INET_API RecipientQosMacDataService : public IRecipientQosMacDataService, 
 } /* namespace inet */
 
 #endif
-

@@ -56,19 +56,25 @@ BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedBlockAckReq
     // The originator shall use the Block Ack starting sequence control to signal the first MPDU in the block for
     // which an acknowledgment is expected.
     SequenceNumberCyclic startingSequenceNumber;
-    Tid tid = -1;
     if (auto basicReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq)) {
-        tid = basicReq->getTidInfo();
         startingSequenceNumber = basicReq->getStartingSequenceNumber();
     }
     else if (auto compressedReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq)) {
-        tid = compressedReq->getTidInfo();
         startingSequenceNumber = compressedReq->getStartingSequenceNumber();
     }
-    else {
-        throw cRuntimeError("Multi-Tid BlockAckReq is currently an unimplemented feature");
-    }
-    auto id = std::make_pair(tid, blockAckReq->getTransmitterAddress());
+    else
+        throw cRuntimeError("Unsupported BlockAckReq format");
+    return processReceivedBlockAckReq(agreement, startingSequenceNumber);
+}
+
+BlockAckReordering::ReorderBuffer BlockAckReordering::processReceivedBlockAckReq(
+        RecipientBlockAckAgreement *agreement,
+        SequenceNumberCyclic startingSequenceNumber)
+{
+    ASSERT(agreement != nullptr);
+    auto blockAckRecord = agreement->getBlockAckRecord();
+    auto id = std::make_pair(blockAckRecord->getTid(),
+            blockAckRecord->getOriginatorAddress());
     auto it = receiveBuffers.find(id);
     if (it != receiveBuffers.end()) {
         ReceiveBuffer *receiveBuffer = it->second;
@@ -207,7 +213,10 @@ void BlockAckReordering::passedUp(RecipientBlockAckAgreement *agreement, Receive
     receiveBuffer->setNextExpectedSequenceNumber(sequenceNumber + 1);
     receiveBuffer->dropFramesUntil(sequenceNumber);
     receiveBuffer->removeFrame(sequenceNumber);
-    agreement->getBlockAckRecord()->removeAckStates(sequenceNumber);
+    // IEEE Std 802.11-2024, 10.25.6.3: once the oldest consecutively
+    // received MPDU leaves the receive buffer, advance the independently
+    // owned recipient scoreboard window past it as well.
+    agreement->getBlockAckRecord()->advanceWindow(sequenceNumber + 1);
 }
 
 std::vector<Packet *> BlockAckReordering::getEarliestCompleteMsduOrAMsduIfExists(ReceiveBuffer *receiveBuffer)

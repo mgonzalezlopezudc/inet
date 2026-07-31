@@ -1,0 +1,395 @@
+%description:
+Verify the standards-valid HT implicit Block Ack exchange: a same-TID
+non-single-MPDU A-MPDU carries QoS Ack Policy 00, transmits no BAR, elicits
+one Compressed BlockAck, and uses its bitmap for sender acknowledgment state.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/RecipientBlockAckProcedure.h"
+#include "inet/linklayer/ieee80211/mac/blockackreordering/BlockAckReordering.h"
+#include "inet/linklayer/ieee80211/mac/coordinationfunction/Hcf.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
+#include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class TestInProgressFrames : public InProgressFrames
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+    virtual bool isEligibleToTransmit(Packet *) const override { return true; }
+};
+
+class MockOriginatorAckPolicy : public IOriginatorQoSAckPolicy
+{
+  public:
+    virtual bool isAckNeeded(const Ptr<const Ieee80211MgmtHeader>&) const override { return false; }
+    virtual AckPolicy computeAckPolicy(Packet *, const Ptr<const Ieee80211DataHeader>&,
+            OriginatorBlockAckAgreement *) const override { return BLOCK_ACK; }
+    virtual bool isBlockAckReqNeeded(InProgressFrames *, TxopProcedure *) const override { return false; }
+    virtual bool isBlockAckPolicyEligibleFrame(Packet *, const Ptr<const Ieee80211DataHeader>&) const override { return true; }
+    virtual std::tuple<MacAddress, SequenceNumberCyclic, Tid>
+            computeBlockAckReqParameters(InProgressFrames *, TxopProcedure *) const override {
+        return {};
+    }
+    virtual simtime_t getAckTimeout(Packet *, const Ptr<const Ieee80211DataOrMgmtHeader>&) const override {
+        return SimTime(1, SIMTIME_MS);
+    }
+    virtual simtime_t getBlockAckTimeout(Packet *, const Ptr<const Ieee80211BlockAckReq>&) const override {
+        return SimTime(1, SIMTIME_MS);
+    }
+};
+
+class MockRecipientAgreementHandler : public IRecipientBlockAckAgreementHandler
+{
+  public:
+    RecipientBlockAckAgreement agreement;
+    int implicitFrameCount = 0;
+    bool hasAgreement = true;
+
+    MockRecipientAgreementHandler(const MacAddress& originator, Tid tid) :
+        agreement(originator, tid, SequenceNumberCyclic(10), 64, SIMTIME_ZERO)
+    {}
+
+    virtual void processTransmittedAddbaResp(const Ptr<const Ieee80211AddbaResponse>&, IBlockAckAgreementHandlerCallback *) override {}
+    virtual void processReceivedAddbaRequest(const Ptr<const Ieee80211AddbaRequest>&, IRecipientBlockAckAgreementPolicy *, IProcedureCallback *) override {}
+    virtual void processReceivedDelba(const Ptr<const Ieee80211Delba>&, IRecipientBlockAckAgreementPolicy *) override {}
+    virtual void processTransmittedDelba(const Ptr<const Ieee80211Delba>&) override {}
+    virtual void qosFrameReceived(const Ptr<const Ieee80211DataHeader>&, IBlockAckAgreementHandlerCallback *) override {}
+    virtual bool implicitBlockAckRequestFrameReceived(
+            const Ptr<const Ieee80211DataHeader>& header,
+            IBlockAckAgreementHandlerCallback *) override {
+        implicitFrameCount++;
+        agreement.getBlockAckRecord()->blockAckPolicyFrameReceived(header);
+        return true;
+    }
+    virtual void blockAckAgreementExpired(IProcedureCallback *, IBlockAckAgreementHandlerCallback *) override {}
+    virtual RecipientBlockAckAgreement *getAgreement(Tid tid, MacAddress originator) override {
+        auto record = agreement.getBlockAckRecord();
+        return hasAgreement && tid == record->getTid() &&
+                originator == record->getOriginatorAddress() ?
+                &agreement : nullptr;
+    }
+};
+
+class MockCwCalculator : public IRecoveryProcedure::ICwCalculator
+{
+  public:
+    int cw = 15;
+    virtual void incrementCw() override { cw = 2 * cw + 1; }
+    virtual void resetCw() override { cw = 15; }
+    virtual int getCw() override { return cw; }
+};
+
+class TestQosRecoveryProcedure : public QosRecoveryProcedure
+{
+  public:
+    int failureCount = 0;
+    int retryLimitCount = 0;
+
+    void configure(MockCwCalculator *calculator, int retryLimit) {
+        cwCalculator = calculator;
+        shortRetryLimit = retryLimit;
+        longRetryLimit = retryLimit;
+        rtsThreshold = 1000000;
+    }
+    virtual void dataFrameTransmissionFailed(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header) override {
+        failureCount++;
+        QosRecoveryProcedure::dataFrameTransmissionFailed(packet, header);
+    }
+    virtual void retryLimitReached(Packet *packet,
+            const Ptr<const Ieee80211DataHeader>& header) override {
+        retryLimitCount++;
+        QosRecoveryProcedure::retryLimitReached(packet, header);
+    }
+};
+
+class TestHcf : public Hcf
+{
+  public:
+    using Hcf::recoverHtImplicitBlockAckTimeout;
+    static bool isImplicitAggregate(unsigned int numAggregateMembers,
+            const std::vector<Ptr<const Ieee80211MacHeader>>& headers) {
+        return classifyHtAmpduAckContext(numAggregateMembers, headers) ==
+                HtAmpduAckContext::IMPLICIT_BLOCK_ACK;
+    }
+};
+
+class MockProcedureCallback : public IProcedureCallback, public IBlockAckAgreementHandlerCallback
+{
+  public:
+    int responseCount = 0;
+    Ptr<const Ieee80211CompressedBlockAck> response;
+
+    virtual void transmitControlResponseFrame(Packet *packet,
+            const Ptr<const Ieee80211MacHeader>& header, Packet *,
+            const Ptr<const Ieee80211MacHeader>&) override {
+        responseCount++;
+        response = dynamicPtrCast<const Ieee80211CompressedBlockAck>(header);
+        delete packet;
+    }
+    virtual void processMgmtFrame(Packet *, const Ptr<const Ieee80211MgmtHeader>&) override {}
+    virtual void scheduleInactivityTimer(simtime_t) override {}
+};
+
+static Ptr<Ieee80211DataHeader> makeHeader(const MacAddress& receiver,
+        const MacAddress& transmitter, Tid tid, int sequenceNumber)
+{
+    auto header = makeShared<Ieee80211DataHeader>();
+    header->setType(ST_DATA_WITH_QOS);
+    header->setReceiverAddress(receiver);
+    header->setTransmitterAddress(transmitter);
+    header->setTid(tid);
+    header->setSequenceNumber(SequenceNumberCyclic(sequenceNumber));
+    header->setAckPolicy(NORMAL_ACK);
+    return header;
+}
+
+%activity:
+MacAddress originator("02:00:00:00:00:01");
+MacAddress recipient("02:00:00:00:00:02");
+Tid tid = 5;
+
+auto firstHeader = makeHeader(recipient, originator, tid, 10);
+auto secondHeader = makeHeader(recipient, originator, tid, 11);
+
+TestInProgressFrames inProgress;
+auto firstPacket = new Packet("first", firstHeader);
+inProgress.addInProgressFrame(firstPacket);
+MockOriginatorAckPolicy ackPolicy;
+auto qosContext = new QoSContext(&ackPolicy, nullptr, nullptr, nullptr);
+FrameSequenceContext context(originator,
+        const_cast<physicallayer::Ieee80211ModeSet *>(
+                physicallayer::Ieee80211ModeSet::getModeSet(
+                        "n(mixed-2.4Ghz)")),
+        &inProgress, nullptr, nullptr, nullptr, qosContext, false, true);
+
+HtAmpduBlockAckFs sequence;
+sequence.startSequence(&context, 0);
+auto transmitStep = check_and_cast<ITransmitStep *>(
+        sequence.prepareStep(&context));
+REQUIRE(transmitStep->getFrameToTransmit() == firstPacket);
+REQUIRE(dynamicPtrCast<const Ieee80211BlockAckReq>(
+        transmitStep->getFrameToTransmit()->peekAtFront()) == nullptr);
+context.addStep(transmitStep);
+REQUIRE(sequence.completeStep(&context));
+auto receiveStep = check_and_cast<IReceiveStep *>(
+        sequence.prepareStep(&context));
+auto response = makeShared<Ieee80211CompressedBlockAck>();
+response->setReceiverAddress(originator);
+response->setTransmitterAddress(recipient);
+response->setTidInfo(tid);
+response->setStartingSequenceNumber(SequenceNumberCyclic(10));
+receiveStep->setFrameToReceive(new Packet("CompressedBlockAck", response));
+context.addStep(receiveStep);
+REQUIRE(sequence.completeStep(&context));
+EV << "HT A-MPDU sequence transmits data then accepts one matching Compressed BlockAck without a BAR.\n";
+
+RecipientBlockAckProcedure recipientProcedure;
+MockRecipientAgreementHandler agreementHandler(originator, tid);
+MockProcedureCallback callback;
+auto ampdu = new Packet("HT-A-MPDU");
+REQUIRE(recipientProcedure.processReceivedHtImplicitBlockAckRequest(
+        ampdu, {firstHeader, secondHeader}, &agreementHandler, &callback,
+        &callback));
+REQUIRE(callback.responseCount == 1);
+REQUIRE(callback.response != nullptr);
+REQUIRE(callback.response->getReceiverAddress() == originator);
+REQUIRE(callback.response->getTidInfo() == tid);
+REQUIRE(callback.response->getStartingSequenceNumber() ==
+        SequenceNumberCyclic(10));
+REQUIRE(callback.response->getBlockAckBitmap().getBit(0));
+REQUIRE(callback.response->getBlockAckBitmap().getBit(1));
+REQUIRE(agreementHandler.implicitFrameCount == 2);
+delete ampdu;
+EV << "Recipient records both MPDUs and emits exactly one Compressed BlockAck bitmap.\n";
+
+MockRecipientAgreementHandler partialAgreementHandler(originator, tid);
+MockProcedureCallback partialCallback;
+auto partialAmpdu = new Packet("Partial-HT-A-MPDU");
+REQUIRE(recipientProcedure.processReceivedHtImplicitBlockAckRequest(
+        partialAmpdu, {secondHeader}, &partialAgreementHandler,
+        &partialCallback, &partialCallback));
+REQUIRE(partialCallback.responseCount == 1);
+REQUIRE(partialCallback.response->getStartingSequenceNumber() ==
+        SequenceNumberCyclic(10));
+REQUIRE(!partialCallback.response->getBlockAckBitmap().getBit(0));
+REQUIRE(partialCallback.response->getBlockAckBitmap().getBit(1));
+delete partialAmpdu;
+EV << "Partial reception anchors the bitmap at WinStartR and leaves the failed first MPDU unacknowledged.\n";
+
+MockRecipientAgreementHandler missingAgreementHandler(originator, tid);
+missingAgreementHandler.hasAgreement = false;
+MockProcedureCallback invalidCallback;
+auto invalidAmpdu = new Packet("Invalid-HT-A-MPDU");
+REQUIRE(!recipientProcedure.processReceivedHtImplicitBlockAckRequest(
+        invalidAmpdu, {firstHeader, secondHeader},
+        &missingAgreementHandler, &invalidCallback, &invalidCallback));
+REQUIRE(invalidCallback.responseCount == 0);
+auto mixedTidHeader = makeHeader(recipient, originator, tid + 1, 11);
+REQUIRE(!recipientProcedure.processReceivedHtImplicitBlockAckRequest(
+        invalidAmpdu, {firstHeader, mixedTidHeader}, &agreementHandler,
+        &invalidCallback, &invalidCallback));
+REQUIRE(invalidCallback.responseCount == 0);
+delete invalidAmpdu;
+EV << "Missing-agreement and structurally invalid implicit requests produce no BlockAck response.\n";
+
+RecipientBlockAckAgreement wrapAgreement(originator, tid,
+        SequenceNumberCyclic(4094), 4, SIMTIME_ZERO);
+auto wrapOne = makeHeader(recipient, originator, tid, 1);
+auto wrapTwo = makeHeader(recipient, originator, tid, 2);
+wrapAgreement.getBlockAckRecord()->blockAckPolicyFrameReceived(wrapOne);
+REQUIRE(wrapAgreement.getBlockAckRecord()->getWinStartR() ==
+        SequenceNumberCyclic(4094));
+wrapAgreement.getBlockAckRecord()->blockAckPolicyFrameReceived(wrapTwo);
+REQUIRE(wrapAgreement.getBlockAckRecord()->getWinStartR() ==
+        SequenceNumberCyclic(4095));
+REQUIRE(wrapAgreement.getBlockAckRecord()->getAckState(
+        SequenceNumberCyclic(1), 0));
+REQUIRE(wrapAgreement.getBlockAckRecord()->getAckState(
+        SequenceNumberCyclic(2), 0));
+EV << "The recipient scoreboard advances correctly across sequence-number wrap-around.\n";
+
+MockRecipientAgreementHandler reorderedAgreementHandler(originator, tid);
+BlockAckReordering reordering;
+for (int sequenceNumber = 10; sequenceNumber <= 12; sequenceNumber++) {
+    auto reorderedHeader = makeHeader(recipient, originator, tid,
+            sequenceNumber);
+    reorderedAgreementHandler.agreement.getBlockAckRecord()->
+            blockAckPolicyFrameReceived(reorderedHeader);
+    auto released = reordering.processReceivedQoSFrame(
+            &reorderedAgreementHandler.agreement,
+            new Packet("reordered", reorderedHeader), reorderedHeader);
+    REQUIRE(released.size() == 1);
+    for (const auto& entry : released)
+        for (auto frame : entry.second)
+            delete frame;
+}
+REQUIRE(reorderedAgreementHandler.agreement.getBlockAckRecord()->
+        getWinStartR() == SequenceNumberCyclic(13));
+MockProcedureCallback reorderedCallback;
+auto sequenceThirteen = makeHeader(recipient, originator, tid, 13);
+auto reorderedAmpdu = new Packet("Reordered-HT-A-MPDU");
+REQUIRE(recipientProcedure.processReceivedHtImplicitBlockAckRequest(
+        reorderedAmpdu, {sequenceThirteen}, &reorderedAgreementHandler,
+        &reorderedCallback, &reorderedCallback));
+REQUIRE(reorderedCallback.response->getStartingSequenceNumber() ==
+        SequenceNumberCyclic(13));
+REQUIRE(reorderedCallback.response->getBlockAckBitmap().getBit(0));
+delete reorderedAmpdu;
+EV << "Sequential reorder delivery advances WinStartR and the next implicit BlockAck starts at sequence 13.\n";
+
+auto nonDataHeader = makeShared<Ieee80211AckFrame>();
+nonDataHeader->setReceiverAddress(recipient);
+REQUIRE(TestHcf::isImplicitAggregate(2,
+        {firstHeader, nonDataHeader}));
+REQUIRE(TestHcf::isImplicitAggregate(2,
+        {nonDataHeader, firstHeader}));
+REQUIRE(!TestHcf::isImplicitAggregate(1, {firstHeader}));
+EV << "Aggregate Ack context recognizes the implicit marker in either mixed-member ordering.\n";
+
+QosAckHandler senderAckHandler;
+senderAckHandler.processTransmittedHtImplicitBlockAckFrame(firstHeader);
+senderAckHandler.processTransmittedHtImplicitBlockAckFrame(secondHeader);
+REQUIRE(senderAckHandler.getQoSDataAckStatus(firstHeader) ==
+        QosAckHandler::Status::WAITING_FOR_BLOCK_ACK);
+REQUIRE(senderAckHandler.getQoSDataAckStatus(secondHeader) ==
+        QosAckHandler::Status::WAITING_FOR_BLOCK_ACK);
+auto partialResponse = makeShared<Ieee80211CompressedBlockAck>();
+partialResponse->setTransmitterAddress(recipient);
+partialResponse->setTidInfo(tid);
+partialResponse->setStartingSequenceNumber(SequenceNumberCyclic(10));
+std::vector<uint8_t> bytes(8, 0);
+BitVector partialBitmap(bytes);
+partialBitmap.setBit(0, true);
+partialResponse->setBlockAckBitmap(partialBitmap);
+auto acknowledged = senderAckHandler.processReceivedBlockAck(partialResponse);
+REQUIRE(acknowledged.size() == 1);
+REQUIRE(senderAckHandler.getQoSDataAckStatus(firstHeader) ==
+        QosAckHandler::Status::BLOCK_ACK_ARRIVED_ACKED);
+REQUIRE(senderAckHandler.getQoSDataAckStatus(secondHeader) ==
+        QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED);
+EV << "Sender applies the Compressed BlockAck bitmap to every original aggregate constituent.\n";
+
+QosAckHandler timeoutAckHandler;
+TestInProgressFrames timeoutFrames;
+auto timeoutFirst = new Packet("timeout-first",
+        makeHeader(recipient, originator, tid, 20));
+auto timeoutSecond = new Packet("timeout-second",
+        makeHeader(recipient, originator, tid, 21));
+timeoutFrames.addInProgressFrame(timeoutFirst);
+timeoutFrames.addInProgressFrame(timeoutSecond);
+auto timeoutFirstHeader = timeoutFirst->peekAtFront<Ieee80211DataHeader>();
+auto timeoutSecondHeader = timeoutSecond->peekAtFront<Ieee80211DataHeader>();
+timeoutAckHandler.processTransmittedHtImplicitBlockAckFrame(
+        timeoutFirstHeader);
+timeoutAckHandler.processTransmittedHtImplicitBlockAckFrame(
+        timeoutSecondHeader);
+auto timedOutIds = timeoutAckHandler.processFailedHtImplicitBlockAck(
+        recipient, tid);
+MockCwCalculator terminalCw;
+TestQosRecoveryProcedure terminalRecovery;
+terminalRecovery.configure(&terminalCw, 1);
+auto retired = TestHcf::recoverHtImplicitBlockAckTimeout(&timeoutFrames,
+        &timeoutAckHandler, &terminalRecovery, nullptr, timedOutIds);
+REQUIRE(retired.size() == 2);
+REQUIRE(timeoutFrames.getLength() == 0);
+REQUIRE(terminalRecovery.failureCount == 2);
+REQUIRE(terminalRecovery.retryLimitCount == 2);
+EV << "A suppressed BlockAck at retry limit 1 retires every aggregate member after one failed attempt.\n";
+
+QosAckHandler survivorAckHandler;
+TestInProgressFrames survivorFrames;
+auto survivorFirst = new Packet("survivor-first",
+        makeHeader(recipient, originator, tid, 30));
+auto survivorSecond = new Packet("survivor-second",
+        makeHeader(recipient, originator, tid, 31));
+survivorFrames.addInProgressFrame(survivorFirst);
+survivorFrames.addInProgressFrame(survivorSecond);
+survivorAckHandler.processTransmittedHtImplicitBlockAckFrame(
+        survivorFirst->peekAtFront<Ieee80211DataHeader>());
+survivorAckHandler.processTransmittedHtImplicitBlockAckFrame(
+        survivorSecond->peekAtFront<Ieee80211DataHeader>());
+auto survivorIds = survivorAckHandler.processFailedHtImplicitBlockAck(
+        recipient, tid);
+MockCwCalculator survivorCw;
+TestQosRecoveryProcedure survivorRecovery;
+survivorRecovery.configure(&survivorCw, 2);
+REQUIRE(TestHcf::recoverHtImplicitBlockAckTimeout(&survivorFrames,
+        &survivorAckHandler, &survivorRecovery, nullptr,
+        survivorIds).empty());
+REQUIRE(survivorFrames.getLength() == 2);
+REQUIRE(survivorFirst->peekAtFront<Ieee80211DataHeader>()->getRetry());
+REQUIRE(survivorSecond->peekAtFront<Ieee80211DataHeader>()->getRetry());
+REQUIRE(survivorAckHandler.isEligibleToTransmit(
+        survivorFirst->peekAtFront<Ieee80211DataHeader>()));
+REQUIRE(survivorAckHandler.isEligibleToTransmit(
+        survivorSecond->peekAtFront<Ieee80211DataHeader>()));
+EV << "Below the retry limit, all timed-out members survive with Retry=1 and remain eligible.\n";
+
+%contains: stdout
+HT A-MPDU sequence transmits data then accepts one matching Compressed BlockAck without a BAR.
+
+%contains: stdout
+Recipient records both MPDUs and emits exactly one Compressed BlockAck bitmap.
+
+%contains: stdout
+Sender applies the Compressed BlockAck bitmap to every original aggregate constituent.
+
+%contains: stdout
+A suppressed BlockAck at retry limit 1 retires every aggregate member after one failed attempt.
+
+%contains: stdout
+Sequential reorder delivery advances WinStartR and the next implicit BlockAck starts at sequence 13.
+
+%contains: stdout
+Aggregate Ack context recognizes the implicit marker in either mixed-member ordering.

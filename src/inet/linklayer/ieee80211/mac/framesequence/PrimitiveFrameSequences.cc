@@ -428,10 +428,84 @@ bool LastFrameAckFs::completeStep(FrameSequenceContext *context)
     }
 }
 
+void HtAmpduBlockAckFs::startSequence(FrameSequenceContext *context, int firstStep)
+{
+    this->firstStep = firstStep;
+    step = 0;
+}
+
+IFrameSequenceStep *HtAmpduBlockAckFs::prepareStep(FrameSequenceContext *context)
+{
+    switch (step) {
+        case 0:
+            return new TransmitStep(
+                    context->getInProgressFrames()->getFrameToTransmit(),
+                    context->getIfs());
+        case 1: {
+            auto transmitStep = check_and_cast<ITransmitStep *>(
+                    context->getStep(firstStep));
+            auto packet = transmitStep->getFrameToTransmit();
+            auto dataHeader = packet->peekAtFront<Ieee80211DataHeader>();
+            auto blockAckReq = makeShared<Ieee80211CompressedBlockAckReq>();
+            blockAckReq->setReceiverAddress(dataHeader->getReceiverAddress());
+            blockAckReq->setTidInfo(dataHeader->getTid());
+            blockAckReq->setStartingSequenceNumber(dataHeader->getSequenceNumber());
+            // The BAR object is only a typed timeout descriptor; it is never
+            // inserted into a packet or transmitted over the medium.
+            return new ReceiveStep(
+                    context->getQoSContext()->ackPolicy->getBlockAckTimeout(
+                            packet, blockAckReq),
+                    IReceiveStep::TimeoutHandling::ABORT_SEQUENCE,
+                    expectedResponse(ST_BLOCKACK));
+        }
+        case 2:
+            return nullptr;
+        default:
+            throw cRuntimeError("Unknown step");
+    }
+}
+
+bool HtAmpduBlockAckFs::completeStep(FrameSequenceContext *context)
+{
+    switch (step) {
+        case 0:
+            step++;
+            return true;
+        case 1: {
+            auto receiveStep = check_and_cast<IReceiveStep *>(
+                    context->getStep(firstStep + step));
+            step++;
+            auto blockAck = dynamicPtrCast<const Ieee80211CompressedBlockAck>(
+                    receiveStep->getReceivedFrame()->
+                    peekAtFront<Ieee80211MacHeader>());
+            auto dataHeader = check_and_cast<ITransmitStep *>(
+                    context->getStep(firstStep))->getFrameToTransmit()->
+                    peekAtFront<Ieee80211DataHeader>();
+            if (blockAck == nullptr ||
+                    blockAck->getReceiverAddress() != context->getAddress() ||
+                    blockAck->getTransmitterAddress() !=
+                            dataHeader->getReceiverAddress() ||
+                    blockAck->getTidInfo() != dataHeader->getTid())
+                return false;
+            auto startingSequenceNumber =
+                    blockAck->getStartingSequenceNumber();
+            auto sequenceNumber = dataHeader->getSequenceNumber();
+            // IEEE Std 802.11-2024 Table 9-13 and 10.25.6.5: Ack Policy 00
+            // in a non-single-MPDU A-MPDU is an implicit BAR and elicits one
+            // immediate Compressed BlockAck after SIFS.
+            return sequenceNumber >= startingSequenceNumber &&
+                    sequenceNumber < startingSequenceNumber + 64;
+        }
+        default:
+            throw cRuntimeError("Unknown step");
+    }
+}
+
 void BlockAckReqBlockAckFs::startSequence(FrameSequenceContext *context, int firstStep)
 {
     this->firstStep = firstStep;
     step = 0;
+    expectedMultiTidResponseFormat = ExpectedMultiTidResponseFormat::UNKNOWN;
 }
 
 IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *context)
@@ -451,9 +525,11 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
             auto negotiated = mib->findNegotiatedHeCapabilities(receiverAddr);
             Packet *blockAckPacket = nullptr;
 
-            if (negotiated != nullptr &&
+            bool useHeMultiTidBlockAck = negotiated != nullptr &&
                     negotiated->localTxPeerRx.valid &&
-                    negotiated->localTxPeerRx.multiTidAggregation) {
+                    negotiated->localTxPeerRx.multiTidAggregation;
+            if (useHeMultiTidBlockAck ||
+                    context->getUseLegacyHtMultiTidBlockAck()) {
                 // Collect starting sequence numbers by TID from in-progress frames for receiverAddr
                 std::map<Tid, SequenceNumberCyclic> recordsByTid;
                 for (int i = 0; i < inProgress->getLength(); i++) {
@@ -464,7 +540,7 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
                             auto t = dataHdr->getTid();
                             auto seqNum = dataHdr->getSequenceNumber();
                             auto it = recordsByTid.find(t);
-                            if (it == recordsByTid.end() || seqNum.get() < it->second.get()) {
+                            if (it == recordsByTid.end() || seqNum < it->second) {
                                 recordsByTid[t] = seqNum;
                             }
                         }
@@ -486,6 +562,9 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
                 }
                 multiTidReq->setChunkLength(B(18 + 4 * recordsByTid.size()));
                 blockAckPacket = new Packet("MultiTidBlockAckReq", multiTidReq);
+                expectedMultiTidResponseFormat = useHeMultiTidBlockAck ?
+                        ExpectedMultiTidResponseFormat::HE_MULTI_STA :
+                        ExpectedMultiTidResponseFormat::LEGACY_MULTI_TID;
             }
             else {
                 auto blockAckReq = canUseCompressedBlockAckReq(context, receiverAddr, tid) ?
@@ -513,9 +592,22 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
 bool BlockAckReqBlockAckFs::completeStep(FrameSequenceContext *context)
 {
     switch (step) {
-        case 0:
+        case 0: {
+            if (expectedMultiTidResponseFormat ==
+                    ExpectedMultiTidResponseFormat::UNKNOWN) {
+                auto transmitStep = check_and_cast<ITransmitStep *>(
+                        context->getStep(firstStep));
+                if (dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(
+                        transmitStep->getFrameToTransmit()->
+                        peekAtFront<Ieee80211BlockAckReq>()))
+                    expectedMultiTidResponseFormat =
+                            context->getUseLegacyHtMultiTidBlockAck() ?
+                            ExpectedMultiTidResponseFormat::LEGACY_MULTI_TID :
+                            ExpectedMultiTidResponseFormat::HE_MULTI_STA;
+            }
             step++;
             return true;
+        }
         case 1: {
             auto receiveStep = check_and_cast<IReceiveStep *>(context->getStep(firstStep + step));
             step++;
@@ -533,6 +625,47 @@ bool BlockAckReqBlockAckFs::completeStep(FrameSequenceContext *context)
                             blockAckReq);
             if (multiTidBlockAckReq == nullptr)
                 return true;
+
+            std::set<std::pair<Tid, uint16_t>> requestedRecords;
+            for (unsigned int i = 0;
+                    i < multiTidBlockAckReq->getRecordsArraySize(); ++i) {
+                const auto& record = multiTidBlockAckReq->getRecords(i);
+                if (!requestedRecords.emplace(record.tid,
+                            record.startingSequenceNumber).second)
+                    return false;
+            }
+
+            if (expectedMultiTidResponseFormat ==
+                    ExpectedMultiTidResponseFormat::LEGACY_MULTI_TID) {
+                auto multiTidBlockAck =
+                        dynamicPtrCast<const Ieee80211MultiTidBlockAck>(
+                                receivedHeader);
+                if (multiTidBlockAck == nullptr ||
+                        multiTidBlockAck->getBlockAckPolicy() ||
+                        multiTidBlockAck->getReceiverAddress() !=
+                                multiTidBlockAckReq->getTransmitterAddress() ||
+                        multiTidBlockAck->getTransmitterAddress() !=
+                                multiTidBlockAckReq->getReceiverAddress() ||
+                        multiTidBlockAck->getRecordsArraySize() !=
+                                multiTidBlockAckReq->getRecordsArraySize())
+                    return false;
+
+                std::set<std::pair<Tid, uint16_t>> responseRecords;
+                for (unsigned int i = 0;
+                        i < multiTidBlockAck->getRecordsArraySize(); ++i) {
+                    const auto& record = multiTidBlockAck->getRecords(i);
+                    auto key = std::make_pair(static_cast<Tid>(record.tid),
+                            record.startingSequenceNumber);
+                    if (requestedRecords.count(key) != 1 ||
+                            !responseRecords.insert(key).second)
+                        return false;
+                }
+                // This INET extension models the historical IEEE 802.11n
+                // Multi-TID BlockAck, which is not a current 802.11 BA format.
+                // Accept only an exact immediate per-TID response to the BAR.
+                return responseRecords == requestedRecords;
+            }
+
             auto multiStaBlockAck =
                     dynamicPtrCast<const Ieee80211MultiStaBlockAck>(
                             receivedHeader);
@@ -561,14 +694,6 @@ bool BlockAckReqBlockAckFs::completeStep(FrameSequenceContext *context)
                     Ieee80211Mib::ACCESS_POINT)
                 return false;
 
-            std::set<std::pair<Tid, uint16_t>> requestedRecords;
-            for (unsigned int i = 0;
-                    i < multiTidBlockAckReq->getRecordsArraySize(); ++i) {
-                const auto& record = multiTidBlockAckReq->getRecords(i);
-                if (!requestedRecords.emplace(record.tid,
-                            record.startingSequenceNumber).second)
-                    return false;
-            }
             std::set<std::pair<Tid, uint16_t>> responseRecords;
             for (unsigned int i = 0;
                     i < multiStaBlockAck->getRecordsArraySize(); ++i) {

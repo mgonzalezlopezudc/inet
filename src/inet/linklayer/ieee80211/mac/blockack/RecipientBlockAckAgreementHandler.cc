@@ -44,6 +44,21 @@ void RecipientBlockAckAgreementHandler::qosFrameReceived(const Ptr<const Ieee802
     }
 }
 
+bool RecipientBlockAckAgreementHandler::implicitBlockAckRequestFrameReceived(
+        const Ptr<const Ieee80211DataHeader>& qosHeader,
+        IBlockAckAgreementHandlerCallback *callback)
+{
+    ASSERT(qosHeader->getAckPolicy() == AckPolicy::NORMAL_ACK);
+    auto agreement = getAgreement(qosHeader->getTid(),
+            qosHeader->getTransmitterAddress());
+    if (agreement == nullptr)
+        return false;
+    agreement->getBlockAckRecord()->blockAckPolicyFrameReceived(qosHeader);
+    agreement->calculateExpirationTime();
+    scheduleInactivityTimer(callback);
+    return true;
+}
+
 void RecipientBlockAckAgreementHandler::blockAckAgreementExpired(IProcedureCallback *procedureCallback, IBlockAckAgreementHandlerCallback *agreementHandlerCallback)
 {
     // When a timeout of BlockAckTimeout is detected, the STA shall send a DELBA frame to the
@@ -185,4 +200,3 @@ RecipientBlockAckAgreementHandler::~RecipientBlockAckAgreementHandler()
 
 } // namespace ieee80211
 } // namespace inet
-

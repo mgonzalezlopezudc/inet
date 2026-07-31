@@ -38,7 +38,7 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
         IRecipientQosAckPolicy *ackPolicy,
         IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
         IProcedureCallback *callback,
-        bool heMultiTidAggregation,
+        MultiTidBlockAckResponseFormat multiTidResponseFormat,
         uint16_t responseAid)
 {
     numReceivedBlockAckReq++;
@@ -65,6 +65,10 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
         }
     }
     else if (auto multiTidBlockAckReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+        if (multiTidResponseFormat == MultiTidBlockAckResponseFormat::NONE) {
+            EV_WARN << "Ignoring a Multi-TID BlockAckReq because no enabled response format applies.\n";
+            return;
+        }
         if (ackPolicy->isBlockAckNeeded(multiTidBlockAckReq, nullptr)) {
             unsigned int numRecords = multiTidBlockAckReq->getRecordsArraySize();
             std::vector<uint64_t> bitmaps(numRecords, 0);
@@ -85,7 +89,7 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
             const char *packetName = nullptr;
             // IEEE Std 802.11-2024, 10.25.5 and 26.4.5: an HE Multi-TID
             // BlockAckReq solicits a Multi-STA BlockAck response.
-            if (heMultiTidAggregation) {
+            if (multiTidResponseFormat == MultiTidBlockAckResponseFormat::HE_MULTI_STA) {
                 auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
                 multiStaBlockAck->setBlockAckPolicy(false);
                 multiStaBlockAck->setRecordsArraySize(numRecords);
@@ -103,7 +107,12 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
                 packetName = "MultiStaBlockAck";
             }
             else {
+                ASSERT(multiTidResponseFormat == MultiTidBlockAckResponseFormat::LEGACY_MULTI_TID);
+                // This explicitly enabled INET extension models the historical
+                // IEEE 802.11n Multi-TID BlockAck response; BA Type 3 is
+                // reserved by IEEE Std 802.11-2024 Table 9-37.
                 auto multiTidBlockAck = makeShared<Ieee80211MultiTidBlockAck>();
+                multiTidBlockAck->setBlockAckPolicy(false);
                 multiTidBlockAck->setRecordsArraySize(numRecords);
                 for (unsigned int i = 0; i < numRecords; ++i) {
                     const auto& reqRec = multiTidBlockAckReq->getRecords(i);
@@ -130,6 +139,67 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
         throw cRuntimeError("Unsupported BlockAckReq");
 }
 
+bool RecipientBlockAckProcedure::processReceivedHtImplicitBlockAckRequest(
+        Packet *ampduPacket,
+        const std::vector<Ptr<const Ieee80211DataHeader>>& dataHeaders,
+        IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
+        IBlockAckAgreementHandlerCallback *agreementHandlerCallback,
+        IProcedureCallback *procedureCallback)
+{
+    if (dataHeaders.empty())
+        return false;
+    const auto& firstHeader = dataHeaders.front();
+    const auto originatorAddress = firstHeader->getTransmitterAddress();
+    const auto recipientAddress = firstHeader->getReceiverAddress();
+    const auto tid = firstHeader->getTid();
+    if (originatorAddress.isUnspecified() ||
+            recipientAddress.isMulticast() ||
+            firstHeader->getAckPolicy() != NORMAL_ACK)
+        return false;
+    auto agreement = blockAckAgreementHandler->getAgreement(
+            tid, originatorAddress);
+    if (agreement == nullptr)
+        return false;
+    for (const auto& header : dataHeaders) {
+        if (header->getType() != ST_DATA_WITH_QOS ||
+                header->getAckPolicy() != NORMAL_ACK ||
+                header->getTransmitterAddress() != originatorAddress ||
+                header->getReceiverAddress() != recipientAddress ||
+                header->getTid() != tid ||
+                header->getFragmentNumber() != 0 ||
+                header->getMoreFragments())
+            return false;
+    }
+    for (const auto& header : dataHeaders)
+        if (!blockAckAgreementHandler->
+                    implicitBlockAckRequestFrameReceived(
+                            header, agreementHandlerCallback))
+            return false;
+
+    // IEEE Std 802.11-2024, 10.25.6.3 and 10.25.6.5: anchor the
+    // Compressed BlockAck bitmap at the recipient scoreboard's WinStartR,
+    // not at the first MPDU that happened to decode successfully.
+    auto startingSequenceNumber =
+            agreement->getBlockAckRecord()->getWinStartR();
+    std::vector<uint8_t> bytes(8, 0);
+    BitVector bitmap(bytes);
+    for (int i = 0; i < 64; i++)
+        bitmap.setBit(i, agreement->getBlockAckRecord()->getAckState(
+                startingSequenceNumber + i, 0));
+    auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
+    blockAck->setReceiverAddress(originatorAddress);
+    blockAck->setStartingSequenceNumber(startingSequenceNumber);
+    blockAck->setTidInfo(tid);
+    blockAck->setBlockAckBitmap(bitmap);
+    auto blockAckPacket = new Packet("CompressedBlockAck", blockAck);
+    // IEEE Std 802.11-2024 Table 9-13 and 10.25.6.5: Ack Policy 00
+    // in a non-single-MPDU A-MPDU is an implicit BAR; the recipient sends
+    // one Compressed BlockAck after SIFS without an on-air BAR.
+    procedureCallback->transmitControlResponseFrame(blockAckPacket, blockAck,
+            ampduPacket, firstHeader);
+    return true;
+}
+
 void RecipientBlockAckProcedure::processTransmittedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck)
 {
     numSentBlockAck++;
@@ -147,6 +217,8 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
         ASSERT(agreement != nullptr);
         auto blockAck = makeShared<Ieee80211BasicBlockAck>();
         auto startingSequenceNumber = basicBlockAckReq->getStartingSequenceNumber();
+        agreement->getBlockAckRecord()->advanceWindow(
+                startingSequenceNumber);
         for (int i = 0; i < 64; i++) {
             BitVector& bitmap = blockAck->getBlockAckBitmapForUpdate(i);
             for (FragmentNumber fragNum = 0; fragNum < 16; fragNum++) {
@@ -164,6 +236,8 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(const Ptr
         ASSERT(agreement != nullptr);
         auto blockAck = makeShared<Ieee80211CompressedBlockAck>();
         auto startingSequenceNumber = compressedBlockAckReq->getStartingSequenceNumber();
+        agreement->getBlockAckRecord()->advanceWindow(
+                startingSequenceNumber);
         std::vector<uint8_t> bytes(8, 0);
         BitVector bitmap(bytes);
         for (int i = 0; i < 64; i++) {

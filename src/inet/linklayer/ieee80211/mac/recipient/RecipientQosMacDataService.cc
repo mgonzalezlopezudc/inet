@@ -55,6 +55,45 @@ Packet *RecipientQosMacDataService::defragment(Packet *mgmtFragment)
         return nullptr;
 }
 
+std::vector<Packet *> RecipientQosMacDataService::processReorderBuffer(
+        const BlockAckReordering::ReorderBuffer& frames)
+{
+    std::vector<Packet *> defragmentedFrames;
+    if (basicReassembly) { // FIXME defragmentation
+        for (const auto& entry : frames) {
+            auto frame = defragment(entry.second);
+            if (frame != nullptr)
+                defragmentedFrames.push_back(frame);
+        }
+    }
+    else {
+        for (const auto& entry : frames) {
+            const auto& fragments = entry.second;
+            if (fragments.size() == 1)
+                defragmentedFrames.push_back(fragments.at(0));
+            else ; // TODO drop?
+        }
+    }
+
+    std::vector<Packet *> deaggregatedFrames;
+    if (aMsduDeaggregation) {
+        for (auto frame : defragmentedFrames) {
+            if (frame->peekAtFront<Ieee80211DataHeader>()->getAMsduPresent()) {
+                emit(packetDeaggregatedSignal, frame);
+                auto subframes = aMsduDeaggregation->deaggregateFrame(frame);
+                deaggregatedFrames.insert(deaggregatedFrames.end(),
+                        subframes->begin(), subframes->end());
+                delete subframes;
+            }
+            else
+                deaggregatedFrames.push_back(frame);
+        }
+    }
+    else
+        deaggregatedFrames = defragmentedFrames;
+    return deaggregatedFrames;
+}
+
 std::vector<Packet *> RecipientQosMacDataService::dataFrameReceived(Packet *dataPacket, const Ptr<const Ieee80211DataHeader>& dataHeader, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler)
 {
     Enter_Method("dataFrameReceived");
@@ -77,41 +116,8 @@ std::vector<Packet *> RecipientQosMacDataService::dataFrameReceived(Packet *data
         if (agreement)
             frames = blockAckReordering->processReceivedQoSFrame(agreement, dataPacket, dataHeader);
     }
-    std::vector<Packet *> defragmentedFrames;
-    if (basicReassembly) { // FIXME defragmentation
-        for (auto it : frames) {
-            auto fragments = it.second;
-            Packet *frame = defragment(fragments);
-            // TODO revise
-            if (frame)
-                defragmentedFrames.push_back(frame);
-        }
-    }
-    else {
-        for (auto it : frames) {
-            auto fragments = it.second;
-            if (fragments.size() == 1)
-                defragmentedFrames.push_back(fragments.at(0));
-            else ; // TODO drop?
-        }
-    }
-    std::vector<Packet *> deaggregatedFrames;
-    if (aMsduDeaggregation) {
-        for (auto defragmentedFrame : defragmentedFrames) {
-            auto defragmentedHeader = defragmentedFrame->peekAtFront<Ieee80211DataHeader>();
-            if (defragmentedHeader->getAMsduPresent()) {
-                emit(packetDeaggregatedSignal, defragmentedFrame);
-                auto subframes = aMsduDeaggregation->deaggregateFrame(defragmentedFrame);
-                for (auto subframe : *subframes)
-                    deaggregatedFrames.push_back(subframe);
-                delete subframes;
-            }
-            else
-                deaggregatedFrames.push_back(defragmentedFrame);
-        }
-    }
     // TODO MSDU Integrity, Replay Detection, RX MSDU Rate Limiting
-    return deaggregatedFrames;
+    return processReorderBuffer(frames);
 }
 
 std::vector<Packet *> RecipientQosMacDataService::managementFrameReceived(Packet *mgmtPacket, const Ptr<const Ieee80211MgmtHeader>& mgmtHeader)
@@ -142,53 +148,48 @@ std::vector<Packet *> RecipientQosMacDataService::controlFrameReceived(Packet *c
 {
     Enter_Method("controlFrameReceived");
     if (auto blockAckReq = dynamicPtrCast<const Ieee80211BlockAckReq>(controlHeader)) {
-        BlockAckReordering::ReorderBuffer frames;
-        if (blockAckReordering) {
-            Tid tid = -1;
-            if (auto basicReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq))
-                tid = basicReq->getTidInfo();
-            else if (auto compressedReq = dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq))
-                tid = compressedReq->getTidInfo();
-            else
-                return std::vector<Packet *>();
-            MacAddress originatorAddr = blockAckReq->getTransmitterAddress();
-            RecipientBlockAckAgreement *agreement = blockAckAgreementHandler->getAgreement(tid, originatorAddr);
-            if (agreement)
-                frames = blockAckReordering->processReceivedBlockAckReq(agreement, blockAckReq);
-            else
-                return std::vector<Packet *>();
-        }
-        std::vector<Packet *> defragmentedFrames;
-        if (basicReassembly) { // FIXME defragmentation
-            for (auto it : frames) {
-                auto fragments = it.second;
-                defragmentedFrames.push_back(defragment(fragments));
+        if (blockAckReordering == nullptr || blockAckAgreementHandler == nullptr)
+            return {};
+
+        MacAddress originatorAddr = blockAckReq->getTransmitterAddress();
+        std::vector<Packet *> deaggregatedFrames;
+        if (auto multiTidReq =
+                dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
+            // Multi-TID BAR processing uses one independent Block Ack agreement
+            // and reorder window per record. Process each result separately so
+            // equal sequence numbers from different TIDs cannot be merged in
+            // the sequence-number-keyed ReorderBuffer.
+            for (unsigned int i = 0; i < multiTidReq->getRecordsArraySize(); ++i) {
+                const auto& record = multiTidReq->getRecords(i);
+                auto agreement = blockAckAgreementHandler->getAgreement(
+                        record.tid, originatorAddr);
+                if (agreement == nullptr)
+                    continue;
+                auto frames = blockAckReordering->processReceivedBlockAckReq(
+                        agreement,
+                        SequenceNumberCyclic(record.startingSequenceNumber));
+                auto delivered = processReorderBuffer(frames);
+                deaggregatedFrames.insert(deaggregatedFrames.end(),
+                        delivered.begin(), delivered.end());
             }
         }
         else {
-            for (auto it : frames) {
-                auto fragments = it.second;
-                if (fragments.size() == 1) {
-                    defragmentedFrames.push_back(fragments.at(0));
-                }
-                else {
-                    // TODO drop?
-                }
-            }
-        }
-        std::vector<Packet *> deaggregatedFrames;
-        if (aMsduDeaggregation) {
-            for (auto frame : defragmentedFrames) {
-                if (frame->peekAtFront<Ieee80211DataHeader>()->getAMsduPresent()) {
-                    emit(packetDeaggregatedSignal, frame);
-                    auto subframes = aMsduDeaggregation->deaggregateFrame(frame);
-                    for (auto subframe : *subframes)
-                        deaggregatedFrames.push_back(subframe);
-                    delete subframes;
-                }
-                else
-                    deaggregatedFrames.push_back(frame);
-            }
+            Tid tid = -1;
+            if (auto basicReq =
+                    dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq))
+                tid = basicReq->getTidInfo();
+            else if (auto compressedReq =
+                    dynamicPtrCast<const Ieee80211CompressedBlockAckReq>(blockAckReq))
+                tid = compressedReq->getTidInfo();
+            else
+                return {};
+            auto agreement = blockAckAgreementHandler->getAgreement(
+                    tid, originatorAddr);
+            if (agreement == nullptr)
+                return {};
+            auto frames = blockAckReordering->processReceivedBlockAckReq(
+                    agreement, blockAckReq);
+            deaggregatedFrames = processReorderBuffer(frames);
         }
         // TODO MSDU Integrity, Replay Detection, RX MSDU Rate Limiting
         return deaggregatedFrames;

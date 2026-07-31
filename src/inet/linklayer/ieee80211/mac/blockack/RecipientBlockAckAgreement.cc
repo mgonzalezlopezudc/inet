@@ -18,7 +18,8 @@ RecipientBlockAckAgreement::RecipientBlockAckAgreement(MacAddress originatorAddr
     blockAckTimeoutValue(lastUsedTime)
 {
     calculateExpirationTime();
-    blockAckRecord = new BlockAckRecord(originatorAddress, tid);
+    blockAckRecord = new BlockAckRecord(originatorAddress, tid,
+            startingSequenceNumber, bufferSize);
 }
 
 void RecipientBlockAckAgreement::blockAckPolicyFrameReceived(const Ptr<const Ieee80211DataHeader>& header)
@@ -39,4 +40,3 @@ std::ostream& operator<<(std::ostream& os, const RecipientBlockAckAgreement& agr
 
 } /* namespace ieee80211 */
 } /* namespace inet */
-

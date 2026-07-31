@@ -12,6 +12,49 @@
 namespace inet {
 namespace ieee80211 {
 
+namespace {
+
+bool canUseHtImplicitBlockAck(FrameSequenceContext *context,
+        Packet *frameToTransmit,
+        const Ptr<const Ieee80211DataHeader>& dataHeader)
+{
+    if (!context->getUseHtImplicitBlockAck() ||
+            dataHeader == nullptr ||
+            dataHeader->getType() != ST_DATA_WITH_QOS ||
+            dataHeader->getReceiverAddress().isMulticast() ||
+            dataHeader->getFragmentNumber() != 0 ||
+            dataHeader->getMoreFragments() ||
+            context->getRtsPolicy()->isRtsNeeded(frameToTransmit, dataHeader))
+        return false;
+    auto agreement = context->getQoSContext()->blockAckAgreementHandler == nullptr ?
+            nullptr :
+            context->getQoSContext()->blockAckAgreementHandler->getAgreement(
+                    dataHeader->getReceiverAddress(), dataHeader->getTid());
+    if (context->getQoSContext()->ackPolicy->computeAckPolicy(
+                frameToTransmit, dataHeader, agreement) != BLOCK_ACK)
+        return false;
+    // HT's maximum A-MPDU length is 65,535 octets. Asking for two matching
+    // eligible frames here makes the sequence choice agree with Hcf's
+    // actual aggregate-construction gate.
+    auto frames = context->getInProgressFrames()->getEligibleFramesLike(
+            frameToTransmit, 2, 65535);
+    if (frames.size() < 2)
+        return false;
+    for (auto frame : frames) {
+        auto header = frame->peekAtFront<Ieee80211DataHeader>();
+        auto frameAgreement =
+                context->getQoSContext()->blockAckAgreementHandler->
+                getAgreement(header->getReceiverAddress(), header->getTid());
+        if (header->getFragmentNumber() != 0 || header->getMoreFragments() ||
+                context->getQoSContext()->ackPolicy->computeAckPolicy(
+                        frame, header, frameAgreement) != BLOCK_ACK)
+            return false;
+    }
+    return true;
+}
+
+} // namespace
+
 /*
  * TODO add [ RTS CTS ] (txop-part-requiring-ack txop-part-providing-ack )|
  */
@@ -33,7 +76,8 @@ TxOpFs::TxOpFs() :
                     new SequentialFs({new OptionalFs(new RtsCtsFs(), OPTIONALFS_PREDICATE(isRtsCtsNeeded)),
                                       new AlternativesFs({new ManagementAckFs(),
                                                           /* TODO DATA + QAP*/},
-                                                         ALTERNATIVESFS_SELECTOR(selectMgmtOrDataQap))})},
+                                                         ALTERNATIVESFS_SELECTOR(selectMgmtOrDataQap))}),
+                    new HtAmpduBlockAckFs()},
                    ALTERNATIVESFS_SELECTOR(selectTxOpSequence))
 {
 }
@@ -53,6 +97,9 @@ int TxOpFs::selectTxOpSequence(AlternativesFs *frameSequence, FrameSequenceConte
         return 3;
     else {
         auto dataHeaderToTransmit = dynamicPtrCast<const Ieee80211DataHeader>(macHeader);
+        if (canUseHtImplicitBlockAck(context, frameToTransmit,
+                    dataHeaderToTransmit))
+            return 4;
         OriginatorBlockAckAgreement *agreement = nullptr;
         if (context->getQoSContext()->blockAckAgreementHandler)
             agreement = context->getQoSContext()->blockAckAgreementHandler->getAgreement(dataHeaderToTransmit->getReceiverAddress(), dataHeaderToTransmit->getTid());
@@ -79,4 +126,3 @@ bool TxOpFs::isBlockAckReqRtsCtsNeeded(OptionalFs *frameSequence, FrameSequenceC
 
 } // namespace ieee80211
 } // namespace inet
-

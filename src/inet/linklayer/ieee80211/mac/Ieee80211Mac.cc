@@ -222,10 +222,16 @@ void Ieee80211Mac::handleUpperPacket(Packet *packet)
 
 void Ieee80211Mac::handleLowerPacket(Packet *packet)
 {
+    const bool keepHtAmpduIntact =
+            packet->getDataLength() > b(0) &&
+            dynamicPtrCast<const Ieee80211MpduSubframeHeader>(
+                    packet->peekAtFront()) != nullptr &&
+            hcf != nullptr && hcf->isHtImplicitBlockAckEnabled();
     if (packet->getDataLength() > b(0)) {
         const auto& frontChunk = packet->peekAtFront();
         if (dynamicPtrCast<const Ieee80211MpduSubframeHeader>(frontChunk) != nullptr &&
-                packet->findTag<Ieee80211MpduReceiveInd>() == nullptr) {
+                packet->findTag<Ieee80211MpduReceiveInd>() == nullptr &&
+                !keepHtAmpduIntact) {
             MpduDeaggregation deaggregation;
             auto frames = deaggregation.deaggregateFrame(packet);
             for (auto frame : *frames)
@@ -242,14 +248,18 @@ void Ieee80211Mac::handleLowerPacket(Packet *packet)
         delete packet;
         return;
     }
-    if (rx->lowerFrameReceived(packet)) {
+    auto aggregateContext = keepHtAmpduIntact ?
+            AggregateReceptionContext::INTACT_AMPDU :
+            AggregateReceptionContext::ORDINARY_FRAME;
+    if (rx->lowerFrameReceived(packet, aggregateContext)) {
         if (packet->getDataLength() > b(0) &&
                 dynamicPtrCast<const Ieee80211MpduSubframeHeader>(packet->peekAtFront()) != nullptr &&
-                packet->findTag<Ieee80211MpduReceiveInd>() != nullptr) {
-            // HE packet-level reception has already produced ordered
-            // delimiter/MPDU outcomes. Keep the A-MPDU intact until HCF so an
-            // active UL collection and ordinary recipient processing consume
-            // the same status ledger; generic deaggregation would discard it.
+                (packet->findTag<Ieee80211MpduReceiveInd>() != nullptr ||
+                        keepHtAmpduIntact)) {
+            // Packet-level reception may have produced ordered delimiter/MPDU
+            // outcomes. The explicitly enabled HT implicit-BlockAck path also
+            // needs the intact A-MPDU so Ack Policy 00 is interpreted once for
+            // the aggregate instead of once per deaggregated MPDU.
             processLowerFrame(packet, nullptr);
             return;
         }
