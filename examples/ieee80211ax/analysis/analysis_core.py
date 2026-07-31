@@ -65,6 +65,7 @@ EVIDENCE_HANDLERS = {
     "matched_delivery_ratio",
     "ul_trigger_allocation_join",
     "bsr_decision_join",
+    "bss_spatial_reuse_join",
 }
 
 QUERY_OPTIONS = {

@@ -10,6 +10,7 @@ from evaluate_evidence import (
     _trigger_decision_rows,
     build_ledger,
     decode_he_trigger_ru,
+    evaluate_contract,
     evaluate_matched_delivery,
     evaluate_mimo_triplets,
     evaluate_ul_trigger_allocation_join,
@@ -32,6 +33,31 @@ class MimoEvidenceTest(unittest.TestCase):
         self.assertEqual(overlap.status, "FAIL")
         single_user = evaluate_mimo_triplets({0: [(0.5, 1, 2, 0)]})
         self.assertEqual(single_user.status, "FAIL")
+
+
+class BssEvidenceTest(unittest.TestCase):
+    def test_contract_uses_joined_receiver_decisions(self):
+        condition = SimpleNamespace(config="BssColoringEnabled")
+        contract = {
+            "evaluation": {"handler": "bss_spatial_reuse_join"},
+        }
+        decisions = pd.DataFrame([{
+            "reason": 11,
+            "ignored_ppdu": 1,
+        }])
+        with (
+            patch("evaluate_evidence._validate_bss_spatial_reuse"),
+            patch(
+                "evaluate_evidence._spatial_reuse_decisions",
+                return_value=decisions,
+            ),
+        ):
+            result, filters = evaluate_contract(contract, [condition])
+
+        self.assertEqual(result.status, "PASS")
+        self.assertEqual(result.observations[0]["decision_count"], 1)
+        self.assertEqual(result.observations[0]["ignored_ppdu_count"], 1)
+        self.assertEqual(len(filters), 8)
 
 
 class MatchedDeliveryEvidenceTest(unittest.TestCase):

@@ -454,13 +454,92 @@ def _measurement_vector_values(condition: Condition, name: str) -> np.ndarray:
     return np.concatenate(values) if values else np.array([], dtype=float)
 
 
+SPATIAL_REUSE_DECISION_VECTORS = {
+    "bss_type": "heSpatialReuseBssType:vector",
+    "received_bss_color": "heSpatialReuseReceivedBssColor:vector",
+    "local_bss_color": "heSpatialReuseLocalBssColor:vector",
+    "eligible": "heSpatialReuseEligible:vector",
+    "ignored_ppdu": "heSpatialReuseIgnoredPpdu:vector",
+    "threshold": "heSpatialReuseObssPdThreshold:vector",
+    "power_limit": "heSpatialReuseTransmitPowerLimit:vector",
+    "reason": "heSpatialReuseReason:vector",
+}
+
+
+def _spatial_reuse_decisions(condition: Condition) -> pd.DataFrame:
+    """Join receiver-emitted spatial-reuse decision vectors by their common sample."""
+    indexed_vectors: dict[str, pd.DataFrame] = {}
+    expected_keys: set[tuple[str, str]] | None = None
+    for column, name in SPATIAL_REUSE_DECISION_VECTORS.items():
+        frame = condition.vectors(name, module="**.receiver")
+        required_columns = {"runID", "module", "vectime", "vecvalue"}
+        missing_columns = required_columns - set(frame.columns)
+        if missing_columns:
+            raise RuntimeError(
+                f"{condition.config}/{name}: missing {sorted(missing_columns)}"
+            )
+        try:
+            indexed = frame.set_index(["runID", "module"], verify_integrity=True)
+        except ValueError as error:
+            raise RuntimeError(
+                f"{condition.config}/{name}: duplicate receiver vector rows"
+            ) from error
+        keys = set(indexed.index.tolist())
+        if expected_keys is None:
+            expected_keys = keys
+        elif keys != expected_keys:
+            raise RuntimeError(
+                f"{condition.config}: spatial-reuse vectors have different receiver rows"
+            )
+        indexed_vectors[column] = indexed
+
+    records: list[dict[str, Any]] = []
+    for run_id, module in sorted(expected_keys or set()):
+        reference_times = np.asarray(
+            indexed_vectors["reason"].loc[(run_id, module), "vectime"], dtype=float
+        )
+        values_by_column: dict[str, np.ndarray] = {}
+        for column, frame in indexed_vectors.items():
+            row = frame.loc[(run_id, module)]
+            times = np.asarray(row.vectime, dtype=float)
+            values = np.asarray(row.vecvalue, dtype=float)
+            if not np.array_equal(times, reference_times):
+                raise RuntimeError(
+                    f"{condition.config}/{module}/{run_id}: unaligned "
+                    f"spatial-reuse timestamps for {SPATIAL_REUSE_DECISION_VECTORS[column]}"
+                )
+            if len(values) != len(reference_times):
+                raise RuntimeError(
+                    f"{condition.config}/{module}/{run_id}: unaligned "
+                    f"spatial-reuse values for {SPATIAL_REUSE_DECISION_VECTORS[column]}"
+                )
+            values_by_column[column] = values
+        sample_indices = np.flatnonzero(
+            (reference_times >= condition.measurement.start) &
+            (reference_times < condition.measurement.end)
+        )
+        for sample_index in sample_indices:
+            records.append({
+                "runID": run_id,
+                "module": module,
+                "sample_index": int(sample_index),
+                "time": reference_times[sample_index],
+                **{
+                    column: values[sample_index]
+                    for column, values in values_by_column.items()
+                },
+            })
+    return pd.DataFrame.from_records(records)
+
+
 def _validate_bss_spatial_reuse(condition: Condition) -> None:
     expectation = condition.condition_metadata["spatial_reuse_evidence"]
-    reasons = _measurement_vector_values(condition, "heSpatialReuseReason:vector").astype(int)
-    eligible = _measurement_vector_values(condition, "heSpatialReuseEligible:vector").astype(int)
-    bss_types = _measurement_vector_values(condition, "heSpatialReuseBssType:vector").astype(int)
-    if len(reasons) == 0 or len(eligible) == 0:
+    decisions = _spatial_reuse_decisions(condition)
+    if decisions.empty:
         raise RuntimeError(f"{condition.config}: missing HE spatial-reuse decision telemetry")
+    reasons = decisions.reason.to_numpy(dtype=int)
+    eligible = decisions.eligible.to_numpy(dtype=int)
+    bss_types = decisions.bss_type.to_numpy(dtype=int)
 
     if expectation == "disabled":
         if np.any(eligible != 0):
@@ -476,16 +555,21 @@ def _validate_bss_spatial_reuse(condition: Condition) -> None:
 
     # Reason 11/12 means an eligible inter-BSS PPDU was respectively below or
     # at/above OBSS/PD. BSS type 2/3 is non-SRG/SRG inter-BSS.
-    if not np.any(np.isin(reasons, [11, 12])) or not np.any(eligible == 1):
+    candidate_decisions = decisions[decisions.reason.isin([11, 12])]
+    if candidate_decisions.empty:
         raise RuntimeError(f"{condition.config}: no eligible inter-BSS OBSS/PD decision was observed")
-    if not np.any(np.isin(bss_types, [2, 3])):
-        raise RuntimeError(f"{condition.config}: no inter-BSS color classification was observed")
+    if (
+        np.any(~candidate_decisions.bss_type.isin([2, 3])) or
+        np.any(candidate_decisions.eligible != 1) or
+        np.any(candidate_decisions.ignored_ppdu != (candidate_decisions.reason == 11))
+    ):
+        raise RuntimeError(
+            f"{condition.config}: OBSS/PD decision does not match its classification or outcome"
+        )
 
-    thresholds = _measurement_vector_values(condition, "heSpatialReuseObssPdThreshold:vector")
-    power_limits = _measurement_vector_values(condition, "heSpatialReuseTransmitPowerLimit:vector")
-    thresholds = thresholds[np.isfinite(thresholds)]
-    power_limits = power_limits[np.isfinite(power_limits)]
-    if len(thresholds) == 0 or len(power_limits) == 0:
+    thresholds = candidate_decisions.threshold.to_numpy(dtype=float)
+    power_limits = candidate_decisions.power_limit.to_numpy(dtype=float)
+    if not np.all(np.isfinite(thresholds)) or not np.all(np.isfinite(power_limits)):
         raise RuntimeError(f"{condition.config}: OBSS/PD threshold or coupled TX-power telemetry is missing")
     expected_threshold = float(condition.condition_metadata["obss_pd_dbm"])
     expected_power_limit = 21.0 - max(0.0, expected_threshold - (-82.0))
@@ -533,7 +617,7 @@ def plot_bss(conditions: list[Condition], output: Path) -> None:
         aggregation={
             "observation": "per-run measurement-window aggregate",
             "uncertainty": "95% Student-t CI",
-            "validation": "requires inter-BSS OBSS/PD decisions and validates the 21 dBm/-82 dBm threshold-to-power relation",
+            "validation": "joins each receiver decision by run, module, and aligned vector sample; requires inter-BSS OBSS/PD decisions and validates the 21 dBm/-82 dBm threshold-to-power relation",
         },
     )
 

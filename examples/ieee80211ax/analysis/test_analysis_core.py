@@ -49,9 +49,62 @@ from run_campaign import (
     validate_requirement,
 )
 import summarize_results
+from analysis_plots import _spatial_reuse_decisions
 
 
 class AnalysisCoreTest(unittest.TestCase):
+    def test_spatial_reuse_decisions_join_aligned_receiver_vectors(self):
+        condition = unittest.mock.Mock()
+        condition.config = "BssColoringEnabled"
+        condition.measurement = MeasurementWindow(0.3, 0.95)
+        vector_names = {
+            "heSpatialReuseBssType:vector": [2, 2, 2],
+            "heSpatialReuseReceivedBssColor:vector": [2, 2, 2],
+            "heSpatialReuseLocalBssColor:vector": [1, 1, 1],
+            "heSpatialReuseEligible:vector": [1, 1, 1],
+            "heSpatialReuseIgnoredPpdu:vector": [0, 1, 0],
+            "heSpatialReuseObssPdThreshold:vector": [1e-8, 1e-8, 1e-8],
+            "heSpatialReuseTransmitPowerLimit:vector": [1e-7, 1e-7, 1e-7],
+            "heSpatialReuseReason:vector": [12, 11, 12],
+        }
+
+        def vectors(name, **_kwargs):
+            return __import__("pandas").DataFrame([{
+                "runID": "run-0",
+                "module": "Network.ap1.wlan[0].radio.receiver",
+                "vectime": [0.2, 0.4, 0.6],
+                "vecvalue": vector_names[name],
+            }])
+
+        condition.vectors.side_effect = vectors
+
+        decisions = _spatial_reuse_decisions(condition)
+
+        self.assertEqual(decisions.sample_index.tolist(), [1, 2])
+        self.assertEqual(decisions.reason.tolist(), [11, 12])
+        self.assertEqual(decisions.ignored_ppdu.tolist(), [1, 0])
+
+    def test_spatial_reuse_decisions_reject_misaligned_receiver_vectors(self):
+        condition = unittest.mock.Mock()
+        condition.config = "BssColoringEnabled"
+        condition.measurement = MeasurementWindow(0.3, 0.95)
+
+        def vectors(name, **_kwargs):
+            times = [0.2, 0.4, 0.6]
+            if name == "heSpatialReuseReason:vector":
+                times = [0.2, 0.45, 0.6]
+            return __import__("pandas").DataFrame([{
+                "runID": "run-0",
+                "module": "Network.ap1.wlan[0].radio.receiver",
+                "vectime": times,
+                "vecvalue": [1, 1, 1],
+            }])
+
+        condition.vectors.side_effect = vectors
+
+        with self.assertRaisesRegex(RuntimeError, "unaligned spatial-reuse timestamps"):
+            _spatial_reuse_decisions(condition)
+
     def test_condition_accepts_iteration_suffixes_in_result_filenames(self):
         with tempfile.TemporaryDirectory() as directory:
             result_dir = Path(directory)

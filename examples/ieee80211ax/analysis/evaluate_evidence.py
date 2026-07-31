@@ -30,6 +30,11 @@ from analysis_core import (
     load_manifest,
     resolve_session_id,
 )
+from analysis_plots import (
+    SPATIAL_REUSE_DECISION_VECTORS,
+    _spatial_reuse_decisions,
+    _validate_bss_spatial_reuse,
+)
 
 STATUSES = {"PASS", "FAIL", "INCONCLUSIVE", "NOT RUN"}
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "evidence-ledger.json"
@@ -614,6 +619,26 @@ def evaluate_bsr_decision_join(
     )
 
 
+def evaluate_bss_spatial_reuse_join(conditions: list[Condition]) -> Evaluation:
+    """Verify that each retained BSS spatial-reuse decision has aligned fields."""
+    observations = []
+    for condition in conditions:
+        _validate_bss_spatial_reuse(condition)
+        decisions = _spatial_reuse_decisions(condition)
+        candidate_decisions = decisions[decisions.reason.isin([11, 12])]
+        observations.append({
+            "config": condition.config,
+            "decision_count": len(decisions),
+            "inter_bss_candidate_count": len(candidate_decisions),
+            "ignored_ppdu_count": int(np.count_nonzero(decisions.ignored_ppdu)),
+        })
+    return Evaluation(
+        "PASS",
+        "Every retained receiver decision has aligned BSS classification, eligibility, OBSS/PD threshold, power limit, reason, and ignore outcome.",
+        observations,
+    )
+
+
 def _packet_trigger_rows(
     evaluation: dict[str, Any], requested_session_id: str,
 ) -> dict[str, list[dict[str, Any]]]:
@@ -725,6 +750,16 @@ def evaluate_contract(
             for name in evaluation["vectors"].values()
         ]
         return result, filters
+    if handler == "bss_spatial_reuse_join":
+        result = evaluate_bss_spatial_reuse_join(conditions)
+        return result, [
+            {
+                "type": "vector",
+                "module": "**.receiver",
+                "name": name,
+            }
+            for name in SPATIAL_REUSE_DECISION_VECTORS.values()
+        ]
     raise RuntimeError(f"Unknown evidence handler {handler!r}")
 
 

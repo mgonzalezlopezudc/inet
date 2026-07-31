@@ -32,7 +32,7 @@
       {"id": "mimo-one-antenna-stas-disjoint-multi-user-streams", "kind": "normative", "requirement": "The one-antenna-STA 24 Mbit/s MU-MIMO PPDU serves multiple users with disjoint spatial streams", "results": ["heStaId", "heSpatialStreams", "heStreamStartIndex"], "evaluation": {"handler": "mimo_disjoint_streams", "config": "DlMuMimo24MbpsLeakage001Sta1Antenna", "module": "**.ap.wlan[0].radio", "station_id": "heStaId:vector", "stream_count": "heSpatialStreams:vector", "stream_start": "heStreamStartIndex:vector"}}
     ],
     "bss": [
-      {"id": "bss-obss-decision-observability", "kind": "normative", "requirement": "OBSS classification, OBSS/PD threshold, CCA, and power-limit decisions are observable", "results": ["OBSS classification", "OBSS/PD threshold", "reuse decision", "transmit power limit"], "evaluation": {"handler": "unimplemented", "reason": "The retained telemetry does not expose a correlated per-reception OBSS classification and reuse decision."}},
+      {"id": "bss-obss-decision-observability", "kind": "normative", "requirement": "OBSS classification, OBSS/PD threshold, CCA, and power-limit decisions are observable", "results": ["OBSS classification", "OBSS/PD threshold", "reuse decision", "transmit power limit"], "evaluation": {"handler": "bss_spatial_reuse_join"}},
       {"id": "bss-reuse-outcome-comparison", "kind": "metric", "requirement": "Reuse comparison reports delivery, fairness, and concurrent airtime", "results": ["packetReceived", "transmissionState"], "evaluation": {"handler": "unimplemented", "reason": "The multi-condition delivery, fairness, and airtime ordering lacks a manifest-defined executable threshold."}}
     ],
     "width": [
