@@ -34,6 +34,7 @@ from analyze_pcap import (
     capture_map_from_manifest,
     capture_source_state,
     calculate_phy_rate,
+    compressed_block_ack_records_markdown,
     compact_statistics_markdown,
     decode_eht_fields,
     decode_he_fields,
@@ -41,6 +42,7 @@ from analyze_pcap import (
     estimate_airtime,
     evaluate_evidence,
     extract_frame_timeline,
+    extract_compressed_block_ack_records,
     extract_he_trigger_allocations,
     get_config_pcap_stats,
     generate_markdown_tables,
@@ -135,6 +137,33 @@ class TriggerAllocationDecodeTest(unittest.TestCase):
 
 
 class PcapMarkdownTest(unittest.TestCase):
+
+    def test_extracts_acknowledged_sequences_from_compressed_block_ack_bitmap(self):
+        result = SimpleNamespace(
+            returncode=0,
+            stdout="42\t0.300100000\t0x0004\t4094\t05:00:00:00:00:00:00:00\n",
+            stderr="",
+        )
+        with patch("analyze_pcap.subprocess.run", return_value=result):
+            rows = extract_compressed_block_ack_records([
+                analyze_pcap.REPOSITORY_ROOT / "capture.pcapng"
+            ])
+        self.assertEqual(rows[0]["acknowledged_sequence_numbers"], [4094, 0])
+
+    def test_compressed_block_ack_table_is_limited_to_100_rows(self):
+        records = [
+            {
+                "frame_number": frame_number,
+                "simulation_time_s": 0.3,
+                "starting_sequence_number": frame_number,
+                "bitmap": "01:00:00:00:00:00:00:00",
+                "acknowledged_sequence_numbers": [frame_number],
+            }
+            for frame_number in range(101)
+        ]
+        markdown = compressed_block_ack_records_markdown(records)
+        self.assertIn("Showing the first 100 of 101 decoded HT Compressed Block Ack frames", markdown)
+        self.assertNotIn("| 100 |", markdown)
 
     def test_ht_implicit_block_ack_check_requires_block_ack_without_bar(self):
         config_results = {

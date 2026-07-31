@@ -1417,6 +1417,33 @@ def multi_sta_block_ack_records_markdown(records, limit=25):
     return "".join(lines)
 
 
+def compressed_block_ack_records_markdown(records, limit=100):
+    if not records:
+        return "No HT Compressed Block Ack records were decoded.\n\n"
+    lines = [
+        "| Frame | Simulation time (s) | Starting sequence | Bitmap | Acknowledged MPDU sequence numbers |\n",
+        "|---:|---:|---:|---|---|\n",
+    ]
+    for record in records[:limit]:
+        acknowledged = ", ".join(
+            str(sequence_number)
+            for sequence_number in record["acknowledged_sequence_numbers"]
+        ) or "none"
+        lines.append(
+            f"| {record['frame_number']} | {record['simulation_time_s']:.9f} | "
+            f"{record['starting_sequence_number']} | {record['bitmap']} | "
+            f"{acknowledged} |\n"
+        )
+    if len(records) > limit:
+        lines.append(
+            f"\nShowing the first {limit} of {len(records)} decoded HT Compressed Block Ack frames; "
+            "the script-owned packet metrics JSON preserves every row.\n\n"
+        )
+    else:
+        lines.append("\n")
+    return "".join(lines)
+
+
 def get_config_pcap_stats(pcap_files, config_name, subdir, display_filter=None):
     total_sim_time = get_sim_time_limit(subdir, config_name)
     stats = {}
@@ -1833,6 +1860,55 @@ def extract_multi_sta_block_ack_records(pcap_files):
             })
     return records
 
+
+def extract_compressed_block_ack_records(pcap_files):
+    """Return HT Compressed Block Ack bitmaps and their acknowledged MPDUs."""
+    fields = [
+        "frame.number", "frame.time_epoch", "wlan.ba.control",
+        "wlan.fixed.ssc.sequence", "wlan.ba.bm",
+    ]
+    records = []
+    for path in pcap_files:
+        command = [
+            "tshark", "-n", "-r", str(path),
+            "-Y", "wlan.fc.type_subtype == 0x19", "-T", "fields",
+        ]
+        for field in fields:
+            command.extend(["-e", field])
+        proc = subprocess.run(
+            command, check=False, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, text=True,
+        )
+        if proc.returncode != 0:
+            detail = proc.stderr.strip() or "no decoder diagnostic"
+            raise RuntimeError(
+                f"TShark Compressed Block Ack decode failed for {path}: "
+                f"exit {proc.returncode}: {detail}"
+            )
+        for line in proc.stdout.splitlines():
+            values = line.split("\t")
+            values += [""] * (len(fields) - len(values))
+            frame_number, timestamp, control, starting_sequence, bitmap = values[:len(fields)]
+            if not frame_number or not timestamp or not control or not starting_sequence or not bitmap:
+                continue
+            if not (int(control, 0) & 0x0004):
+                continue
+            bitmap_bytes = bytes.fromhex(bitmap.replace(":", ""))
+            acknowledged_sequence_numbers = [
+                (int(starting_sequence, 0) + bit_index) % 4096
+                for bit_index in range(len(bitmap_bytes) * 8)
+                if bitmap_bytes[bit_index // 8] & (1 << (bit_index % 8))
+            ]
+            records.append({
+                "capture": str(path.relative_to(REPOSITORY_ROOT)),
+                "frame_number": int(frame_number),
+                "simulation_time_s": float(timestamp),
+                "starting_sequence_number": int(starting_sequence, 0),
+                "bitmap": bitmap,
+                "acknowledged_sequence_numbers": acknowledged_sequence_numbers,
+            })
+    return records
+
 def analyze_subdirectory(subdir, considered, config_pcaps):
     dir_path = EXAMPLE_ROOT / subdir
     if not dir_path.exists():
@@ -1869,6 +1945,12 @@ def analyze_subdirectory(subdir, considered, config_pcaps):
                     extract_multi_sta_block_ack_records(target_pcaps)
                     if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
                     and config_name != HT_IMPLICIT_BLOCK_ACK_CONFIG
+                    else []
+                ),
+                "compressed_block_ack_records": (
+                    extract_compressed_block_ack_records(target_pcaps)
+                    if subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
+                    and config_name == HT_IMPLICIT_BLOCK_ACK_CONFIG
                     else []
                 ),
             }
@@ -2601,6 +2683,16 @@ def generate_markdown_tables(
             )
             md.append(multi_sta_block_ack_records_markdown(
                 global_res["multi_sta_block_ack_records"]
+            ))
+        if (
+            subdir in ("ul_multitid", "mac_features/multi_tid_block_ack")
+            and config_name == HT_IMPLICIT_BLOCK_ACK_CONFIG
+        ):
+            md.append(
+                "#### [script] Decoded HT Compressed Block Ack records\n\n"
+            )
+            md.append(compressed_block_ack_records_markdown(
+                global_res["compressed_block_ack_records"]
             ))
         if subdir in ("ul_ofdma", "bsr", "he_bsr"):
             md.append(
