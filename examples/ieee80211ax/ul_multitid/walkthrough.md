@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260731T104140Z`
-- PCAP: `20260731T104140Z`
+- Scalar/vector: `20260731T211000Z`
+- PCAP: `20260731T211000Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `20260731T102044Z`.
@@ -117,9 +117,9 @@ TIDs it covers; those claims come from the companion PCAP evidence.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-multi_tid -->
 ### [script] Generated scalar/vector plot and table
 
-![multi_tid scalar/vector analysis](results/20260731T104140Z/multi-tid-delivery.png)
+![multi_tid scalar/vector analysis](results/20260731T211000Z/multi-tid-delivery.png)
 
-Figure provenance: [`results/20260731T104140Z/multi-tid-delivery.png.json`](results/20260731T104140Z/multi-tid-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260731T211000Z/multi-tid-delivery.png.json`](results/20260731T211000Z/multi-tid-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -130,7 +130,7 @@ Common table provenance:
 | Configuration / observation | Mean or direct value | 95% CI half-width |
 |---|---:|---:|
 | Uplink MU Multi-TID BA / goodput mbps | 3.2 | 0 |
-| Uplink SU HT A-MPDU compressed BA / goodput mbps | 39.9669 | 0.011165 |
+| Uplink SU HT A-MPDU compressed BA / goodput mbps | 0.0910345 | 0 |
 | Uplink SU Multi-TID BA / goodput mbps | 1.76 | 0 |
 
 The table is a presentation view of the session-bound run-level summary; the common provenance applies to every row.
@@ -153,13 +153,13 @@ supplies the BA Type 11 and per-AID/TID fields for the UL-MU claim.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260731T104140Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260731T211000Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260731T104140Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260731T211000Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260731T104140Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260731T104140Z.json` (SHA-256 `ee48d96c67abc0f68531c4b45a4062b1b36e2b711ce4e15479e7b8baaa1bf27d`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260731T211000Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260731T211000Z.json` (SHA-256 `7d10419c7d23290b306fd31f419377cf650f8a3c1830b7ae5f19d4f33c221ba3`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -173,17 +173,17 @@ Observation point: Access Point (AP) wireless interfaces.
 |---|---|---:|---|---:|---|
 | `UlMuMultiTidBlockAck` | `none (all decoded frames)` | 1231 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (292), Control: Ack (280), Control: Trigger (279) | 22.24% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 | `UlSuMultiTidBlockAck` | `none (all decoded frames)` | 381 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (210), Control: Ack (141), Control: Block Ack Request (BAR) (13) | 10.44% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlSUHTAMpduCompressedBlockAck` | `none (all decoded frames)` | 8724 | Data: QoS Data [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC, A-MPDU] (6986), Control: Block Ack (BA) [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] (1716), Control: Ack [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] (11) | 79.30% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlSUHTAMpduCompressedBlockAck` | `none (all decoded frames)` | 45 | Data: QoS Data [HT, HT-MCS 8, 20 MHz, GI 0.4 us, NSS 2, BCC, A-MPDU] (27), Data: QoS Data [HT, HT-MCS 8, 20 MHz, GI 0.4 us, NSS 2, BCC] (6), Control: Ack [HT, HT-MCS 1, 20 MHz, GI 0.8 us, BCC] (6) | 0.65% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
 | Status | Requirement | Observed evidence |
 |---|---|---|
 | **PASS** | UlMuMultiTidBlockAck produced protocol-visible wireless observations | 1231 AP/global transmission observations |
-| **PASS** | UlSUHTAMpduCompressedBlockAck produced protocol-visible wireless observations | 8724 AP/global transmission observations |
+| **PASS** | UlSUHTAMpduCompressedBlockAck produced protocol-visible wireless observations | 45 AP/global transmission observations |
 | **PASS** | UlSuMultiTidBlockAck produced protocol-visible wireless observations | 381 AP/global transmission observations |
 | **PASS** | BA Type 11 and per-AID/TID entries are decoded from Multi-STA Block Ack frames | UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries, UlSuMultiTidBlockAck: 13 BA Type 11 frame(s) with multiple AID/TID entries |
-| **PASS** | HT implicit Block Ack has Block Ack observations and no on-air BAR | UlSUHTAMpduCompressedBlockAck: 1716 Block Ack observation(s), 0 BAR observation(s) |
+| **PASS** | HT implicit Block Ack has Block Ack observations and no on-air BAR | UlSUHTAMpduCompressedBlockAck: 2 Block Ack observation(s), 0 BAR observation(s) |
 
 ### [script] Configuration: `UlMuMultiTidBlockAck`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1231**
@@ -309,38 +309,39 @@ Frame numbers are local to capture `UlSuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.
 | 357 | 0.950316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
 
 ### [script] Configuration: `UlSUHTAMpduCompressedBlockAck`
-Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **8724**
+Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **45**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#13aa1d" /></svg> | Data: QoS Data [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC, A-MPDU] | 6986 | 80.08% | 567.0 B | 1.7 B | 105.8 us | 0.2 us | 5010 MHz | -60.0 dBm | - | 93.19% | 73.90% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#3ad440" /></svg> | Data: QoS Data [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 9 | 0.10% | 570.0 B | 0.0 B | 106.2 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.12% | 0.10% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#2ca626" /></svg> | Data: QoS Data [HT, HT-MCS 8, 20 MHz, GI 0.4 us, NSS 2, BCC, A-MPDU] | 27 | 60.00% | 266.3 B | 1.0 B | 183.5 us | 0.6 us | 5010 MHz | -60.0 dBm | - | 76.63% | 0.50% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#26b823" /></svg> | Data: QoS Data [HT, HT-MCS 8, 20 MHz, GI 0.4 us, NSS 2, BCC] | 6 | 13.33% | 270.0 B | 0.0 B | 185.5 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 17.22% | 0.11% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#1537a8" /></svg> | Control: Block Ack (BA) [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 1716 | 19.67% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 6.64% | 5.26% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#71a9ea" /></svg> | Control: Ack [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 11 | 0.13% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.03% | 0.03% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0a2799" /></svg> | Control: Block Ack (BA) [HT, HT-MCS 8, 20 MHz, GI 0.4 us, NSS 2, BCC] | 2 | 4.44% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.95% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#59b8f3" /></svg> | Control: Ack [HT, HT-MCS 1, 20 MHz, GI 0.8 us, BCC] | 6 | 13.33% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 2.29% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#71a9ea" /></svg> | Control: Ack [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 2 | 4.44% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.76% | 0.00% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e9453f" /></svg> | Management: Action [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 2 | 0.02% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.02% | 0.01% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#e9453f" /></svg> | Management: Action [HT, HT-MCS 7, 20 MHz, GI 0.8 us, BCC] | 2 | 4.44% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 2.14% | 0.01% |
 
 #### [script] Representative frame-exchange timeline
 
 | Frame | Simulation time (s) | Transmitter → receiver | Type/PHY | Decisive fields | Role in exchange |
 |---:|---:|---|---|---|---|
-| 1 | 0.300108000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 2 | 0.300158000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 3 | 0.300212000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
-| 4 | 0.300262000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 5 | 0.300380000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 6 | 0.300430000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 7 | 0.300548000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 8 | 0.300598000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 9 | 0.300716000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 10 | 0.300766000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 11 | 0.300884000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=4, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 12 | 0.300934000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 13 | 0.301052000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=5, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 14 | 0.301102000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
-| 15 | 0.301220000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=6, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
-| 16 | 0.301270000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 1 | 0.300208000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=0, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 2 | 0.300266000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 3 | 0.300320000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| 4 | 0.300370000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 5 | 0.300588000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=1, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 6 | 0.300646000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 7 | 0.300864000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=2, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 8 | 0.300922000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 9 | 0.301140000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=3, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 10 | 0.301198000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 11 | 0.301416000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=4, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 12 | 0.301474000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 13 | 0.301692000 | 0a:aa:00:00:00:01 → 10:00:00:00:00:00 | Data: QoS Data / Legacy/HT/VHT | direction=to DS, retry=0, seq=5, frag=0, more-frag=0, TID=6 | Carries protocol-visible MAC payload in the representative exchange. |
+| 14 | 0.301750000 | ? → 0a:aa:00:00:00:01 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
+| 15 | 0.301884000 | 10:00:00:00:00:00 → 0a:aa:00:00:00:01 | Management: Action / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=0, frag=0, more-frag=0, TID=- | Provides frame-order context for the representative exchange. |
+| 16 | 0.301934000 | ? → 10:00:00:00:00:00 | Control: Ack / Legacy/HT/VHT | direction=direct/IBSS, retry=0, seq=-, frag=-, more-frag=0, TID=- | Acknowledges the preceding unicast frame. |
 
 Frame numbers are local to capture `UlSUHTAMpduCompressedBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap`, not OMNeT++ event numbers. For readability, the table collapses observations with the same timestamp and MAC identity across capture interfaces; aggregate PCAP statistics retain the original observation counts.
 
@@ -348,108 +349,8 @@ Frame numbers are local to capture `UlSUHTAMpduCompressedBlockAck-#0Lan80211AxUl
 
 | Frame | Simulation time (s) | Starting sequence | Bitmap | Acknowledged MPDU sequence numbers |
 |---:|---:|---:|---|---|
-| 33 | 0.302682000 | 9 | ff03000000000000 | 9, 10, 11, 12, 13, 14, 15, 16, 17, 18 |
-| 42 | 0.303347000 | 19 | ff00000000000000 | 19, 20, 21, 22, 23, 24, 25, 26 |
-| 50 | 0.303943000 | 27 | 7f00000000000000 | 27, 28, 29, 30, 31, 32, 33 |
-| 58 | 0.304639000 | 34 | 7f00000000000000 | 34, 35, 36, 37, 38, 39, 40 |
-| 65 | 0.305163000 | 41 | 3f00000000000000 | 41, 42, 43, 44, 45, 46 |
-| 71 | 0.305619000 | 47 | 1f00000000000000 | 47, 48, 49, 50, 51 |
-| 77 | 0.306115000 | 52 | 1f00000000000000 | 52, 53, 54, 55, 56 |
-| 83 | 0.306571000 | 57 | 1f00000000000000 | 57, 58, 59, 60, 61 |
-| 88 | 0.306955000 | 62 | 0f00000000000000 | 62, 63, 64, 65 |
-| 93 | 0.307339000 | 66 | 0f00000000000000 | 66, 67, 68, 69 |
-| 99 | 0.307876000 | 70 | 1f00000000000000 | 70, 71, 72, 73, 74 |
-| 104 | 0.308260000 | 75 | 0f00000000000000 | 75, 76, 77, 78 |
-| 109 | 0.308644000 | 79 | 0f00000000000000 | 79, 80, 81, 82 |
-| 114 | 0.309028000 | 83 | 0f00000000000000 | 83, 84, 85, 86 |
-| 120 | 0.309584000 | 87 | 1f00000000000000 | 87, 88, 89, 90, 91 |
-| 125 | 0.309968000 | 92 | 0f00000000000000 | 92, 93, 94, 95 |
-| 130 | 0.310352000 | 96 | 0f00000000000000 | 96, 97, 98, 99 |
-| 135 | 0.310736000 | 100 | 0f00000000000000 | 100, 101, 102, 103 |
-| 141 | 0.311252000 | 104 | 1f00000000000000 | 104, 105, 106, 107, 108 |
-| 146 | 0.311636000 | 109 | 0f00000000000000 | 109, 110, 111, 112 |
-| 151 | 0.312021000 | 113 | 0f00000000000000 | 113, 114, 115, 116 |
-| 156 | 0.312405000 | 117 | 0f00000000000000 | 117, 118, 119, 120 |
-| 162 | 0.312961000 | 121 | 1f00000000000000 | 121, 122, 123, 124, 125 |
-| 167 | 0.313345000 | 126 | 0f00000000000000 | 126, 127, 128, 129 |
-| 172 | 0.313729000 | 130 | 0f00000000000000 | 130, 131, 132, 133 |
-| 177 | 0.314113000 | 134 | 0f00000000000000 | 134, 135, 136, 137 |
-| 183 | 0.314669000 | 138 | 1f00000000000000 | 138, 139, 140, 141, 142 |
-| 188 | 0.315053000 | 143 | 0f00000000000000 | 143, 144, 145, 146 |
-| 193 | 0.315437000 | 147 | 0f00000000000000 | 147, 148, 149, 150 |
-| 198 | 0.315822000 | 151 | 0f00000000000000 | 151, 152, 153, 154 |
-| 204 | 0.316378000 | 155 | 1f00000000000000 | 155, 156, 157, 158, 159 |
-| 209 | 0.316762000 | 160 | 0f00000000000000 | 160, 161, 162, 163 |
-| 214 | 0.317146000 | 164 | 0f00000000000000 | 164, 165, 166, 167 |
-| 219 | 0.317530000 | 168 | 0f00000000000000 | 168, 169, 170, 171 |
-| 225 | 0.318046000 | 172 | 1f00000000000000 | 172, 173, 174, 175, 176 |
-| 230 | 0.318430000 | 177 | 0f00000000000000 | 177, 178, 179, 180 |
-| 235 | 0.318814000 | 181 | 0f00000000000000 | 181, 182, 183, 184 |
-| 240 | 0.319198000 | 185 | 0f00000000000000 | 185, 186, 187, 188 |
-| 246 | 0.319754000 | 189 | 1f00000000000000 | 189, 190, 191, 192, 193 |
-| 251 | 0.320139000 | 194 | 0f00000000000000 | 194, 195, 196, 197 |
-| 256 | 0.320523000 | 198 | 0f00000000000000 | 198, 199, 200, 201 |
-| 261 | 0.320907000 | 202 | 0f00000000000000 | 202, 203, 204, 205 |
-| 266 | 0.321351000 | 206 | 0f00000000000000 | 206, 207, 208, 209 |
-| 271 | 0.321735000 | 210 | 0f00000000000000 | 210, 211, 212, 213 |
-| 276 | 0.322119000 | 214 | 0f00000000000000 | 214, 215, 216, 217 |
-| 281 | 0.322503000 | 218 | 0f00000000000000 | 218, 219, 220, 221 |
-| 286 | 0.322967000 | 222 | 0f00000000000000 | 222, 223, 224, 225 |
-| 291 | 0.323351000 | 226 | 0f00000000000000 | 226, 227, 228, 229 |
-| 296 | 0.323736000 | 230 | 0f00000000000000 | 230, 231, 232, 233 |
-| 301 | 0.324120000 | 234 | 0f00000000000000 | 234, 235, 236, 237 |
-| 306 | 0.324564000 | 238 | 0f00000000000000 | 238, 239, 240, 241 |
-| 311 | 0.324948000 | 242 | 0f00000000000000 | 242, 243, 244, 245 |
-| 316 | 0.325332000 | 246 | 0f00000000000000 | 246, 247, 248, 249 |
-| 321 | 0.325716000 | 250 | 0f00000000000000 | 250, 251, 252, 253 |
-| 327 | 0.326252000 | 254 | 1f00000000000000 | 254, 255, 256, 257, 258 |
-| 332 | 0.326636000 | 259 | 0f00000000000000 | 259, 260, 261, 262 |
-| 337 | 0.327020000 | 263 | 0f00000000000000 | 263, 264, 265, 266 |
-| 342 | 0.327404000 | 267 | 0f00000000000000 | 267, 268, 269, 270 |
-| 348 | 0.327961000 | 271 | 1f00000000000000 | 271, 272, 273, 274, 275 |
-| 353 | 0.328345000 | 276 | 0f00000000000000 | 276, 277, 278, 279 |
-| 358 | 0.328729000 | 280 | 0f00000000000000 | 280, 281, 282, 283 |
-| 363 | 0.329113000 | 284 | 0f00000000000000 | 284, 285, 286, 287 |
-| 369 | 0.329649000 | 288 | 1f00000000000000 | 288, 289, 290, 291, 292 |
-| 374 | 0.330033000 | 293 | 0f00000000000000 | 293, 294, 295, 296 |
-| 379 | 0.330417000 | 297 | 0f00000000000000 | 297, 298, 299, 300 |
-| 384 | 0.330801000 | 301 | 0f00000000000000 | 301, 302, 303, 304 |
-| 389 | 0.331225000 | 305 | 0f00000000000000 | 305, 306, 307, 308 |
-| 394 | 0.331610000 | 309 | 0f00000000000000 | 309, 310, 311, 312 |
-| 399 | 0.331994000 | 313 | 0f00000000000000 | 313, 314, 315, 316 |
-| 403 | 0.332306000 | 317 | 0700000000000000 | 317, 318, 319 |
-| 408 | 0.332690000 | 320 | 0f00000000000000 | 320, 321, 322, 323 |
-| 413 | 0.333114000 | 324 | 0f00000000000000 | 324, 325, 326, 327 |
-| 418 | 0.333498000 | 328 | 0f00000000000000 | 328, 329, 330, 331 |
-| 422 | 0.333810000 | 332 | 0700000000000000 | 332, 333, 334 |
-| 427 | 0.334194000 | 335 | 0f00000000000000 | 335, 336, 337, 338 |
-| 431 | 0.334506000 | 339 | 0700000000000000 | 339, 340, 341 |
-| 436 | 0.334950000 | 342 | 0f00000000000000 | 342, 343, 344, 345 |
-| 441 | 0.335335000 | 346 | 0f00000000000000 | 346, 347, 348, 349 |
-| 446 | 0.335719000 | 350 | 0f00000000000000 | 350, 351, 352, 353 |
-| 451 | 0.336103000 | 354 | 0f00000000000000 | 354, 355, 356, 357 |
-| 456 | 0.336567000 | 358 | 0f00000000000000 | 358, 359, 360, 361 |
-| 461 | 0.336951000 | 362 | 0f00000000000000 | 362, 363, 364, 365 |
-| 466 | 0.337335000 | 366 | 0f00000000000000 | 366, 367, 368, 369 |
-| 471 | 0.337719000 | 370 | 0f00000000000000 | 370, 371, 372, 373 |
-| 476 | 0.338143000 | 374 | 0f00000000000000 | 374, 375, 376, 377 |
-| 481 | 0.338527000 | 378 | 0f00000000000000 | 378, 379, 380, 381 |
-| 486 | 0.338912000 | 382 | 0f00000000000000 | 382, 383, 384, 385 |
-| 491 | 0.339296000 | 386 | 0f00000000000000 | 386, 387, 388, 389 |
-| 496 | 0.339720000 | 390 | 0f00000000000000 | 390, 391, 392, 393 |
-| 501 | 0.340104000 | 394 | 0f00000000000000 | 394, 395, 396, 397 |
-| 506 | 0.340488000 | 398 | 0f00000000000000 | 398, 399, 400, 401 |
-| 510 | 0.340800000 | 402 | 0700000000000000 | 402, 403, 404 |
-| 515 | 0.341184000 | 405 | 0f00000000000000 | 405, 406, 407, 408 |
-| 520 | 0.341608000 | 409 | 0f00000000000000 | 409, 410, 411, 412 |
-| 525 | 0.341992000 | 413 | 0f00000000000000 | 413, 414, 415, 416 |
-| 529 | 0.342304000 | 417 | 0700000000000000 | 417, 418, 419 |
-| 534 | 0.342689000 | 420 | 0f00000000000000 | 420, 421, 422, 423 |
-| 538 | 0.343001000 | 424 | 0700000000000000 | 424, 425, 426 |
-| 543 | 0.343425000 | 427 | 0f00000000000000 | 427, 428, 429, 430 |
-| 548 | 0.343809000 | 431 | 0f00000000000000 | 431, 432, 433, 434 |
-
-Showing the first 100 of 1716 decoded HT Compressed Block Ack frames; the script-owned packet metrics JSON preserves every row.
+| 32 | 0.304706000 | 6 | ff7f000000000000 | 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 |
+| 45 | 0.306942000 | 21 | ff0f000000000000 | 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32 |
 
 ### [script] Analysis of Packet Distribution
 **PASS: decoded Multi-STA Block Ack fields.** UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries, UlSuMultiTidBlockAck: 13 BA Type 11 frame(s) with multiple AID/TID entries. The table above is direct TShark decoding of BA Control Type 11 and its per-AID/TID entries, as specified by IEEE Std 802.11-2024 Clause 9.3.1.8.6. It establishes the acknowledged recipient/TID identities in the captured frames, not payload delivery or end-to-end reliability.

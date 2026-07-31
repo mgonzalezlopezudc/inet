@@ -106,6 +106,59 @@ Ieee80211PhyFamily classifyPhyFamily(const IIeee80211Mode *mode)
 
 } // namespace
 
+std::vector<Ieee80211ModeSet::Entry> Ieee80211ModeSet::completeGuardIntervalVariants(
+        const char *profileName, const std::vector<Entry>& entries)
+{
+    std::vector<Entry> completeEntries = entries;
+    if (!strcmp(profileName, "n(mixed-2.4Ghz)")) {
+        for (const auto& entry : entries) {
+            auto mode = dynamic_cast<const Ieee80211HtMode *>(entry.mode);
+            if (mode == nullptr)
+                continue;
+            auto dataMode = mode->getDataMode();
+            auto guardIntervalType = dataMode->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG ?
+                    Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT : Ieee80211HtModeBase::HT_GUARD_INTERVAL_LONG;
+            completeEntries.push_back({entry.isMandatory, Ieee80211HtCompliantModes::getCompliantMode(
+                    dataMode->getModulationAndCodingScheme(), mode->getCenterFrequencyMode(),
+                    mode->getPreambleMode()->getPreambleFormat(), guardIntervalType),
+                    entry.phyFamily, entry.supportRequirement});
+        }
+    }
+    else if (!strcmp(profileName, "ac")) {
+        for (const auto& entry : entries) {
+            auto mode = dynamic_cast<const Ieee80211VhtMode *>(entry.mode);
+            if (mode == nullptr)
+                continue;
+            auto dataMode = mode->getDataMode();
+            auto guardIntervalType = dataMode->getGuardIntervalType() == Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG ?
+                    Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT : Ieee80211VhtModeBase::HT_GUARD_INTERVAL_LONG;
+            completeEntries.push_back({entry.isMandatory, Ieee80211VhtCompliantModes::getCompliantMode(
+                    dataMode->getModulationAndCodingScheme(), mode->getCenterFrequencyMode(),
+                    mode->getPreambleMode()->getPreambleFormat(), guardIntervalType),
+                    entry.phyFamily, entry.supportRequirement});
+        }
+    }
+    else if (!strcmp(profileName, "ax-catalog")) {
+        for (const auto& entry : entries) {
+            auto mode = dynamic_cast<const Ieee80211HeMode *>(entry.mode);
+            if (mode == nullptr)
+                continue;
+            auto dataMode = mode->getDataMode();
+            for (auto guardIntervalType : {Ieee80211HeModeBase::HE_GUARD_INTERVAL_SHORT,
+                                           Ieee80211HeModeBase::HE_GUARD_INTERVAL_MEDIUM,
+                                           Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG}) {
+                if (guardIntervalType == dataMode->getGuardIntervalType())
+                    continue;
+                completeEntries.push_back({entry.isMandatory, Ieee80211HeCompliantModes::getCompliantMode(
+                        dataMode->getModulationAndCodingScheme(), mode->getCenterFrequencyMode(),
+                        mode->getPreambleMode()->getPreambleFormat(), guardIntervalType, dataMode->isLdpc()),
+                        entry.phyFamily, entry.supportRequirement});
+            }
+        }
+    }
+    return completeEntries;
+}
+
 Ieee80211ModeSet Ieee80211ModeSet::createHeProfile(const char *profileName,
         Ieee80211OperatingBand operatingBand, const std::vector<Ieee80211ModeSet>& baseModeSets)
 {
@@ -199,7 +252,7 @@ Ieee80211ModeSet Ieee80211ModeSet::createHeProfile(const char *profileName,
         auto mode = Ieee80211HeCompliantModes::getCompliantMode(
                 dataMode->getModulationAndCodingScheme(), bandMode,
                 Ieee80211HePreambleMode::HE_PREAMBLE_SU,
-                Ieee80211HeModeBase::HE_GUARD_INTERVAL_LONG, requiresLdpc);
+            dataMode->getGuardIntervalType(), requiresLdpc);
         bool mandatoryHeMode = nss == 1 && mcs <= 7;
         entries.push_back({false, mode, Ieee80211PhyFamily::HE,
                 mandatoryHeMode ? Ieee80211SupportRequirement::MANDATORY : Ieee80211SupportRequirement::OPTIONAL});
@@ -1059,7 +1112,7 @@ const DelayedInitializer<std::vector<Ieee80211ModeSet>> Ieee80211ModeSet::modeSe
 Ieee80211ModeSet::Ieee80211ModeSet(const char *name, const std::vector<Entry> entries) :
     name(name),
     profileName(name),
-    entries(entries)
+    entries(completeGuardIntervalVariants(name, entries))
 {
     std::vector<Entry> *nonConstEntries = const_cast<std::vector<Entry> *>(&this->entries);
     std::stable_sort(nonConstEntries->begin(), nonConstEntries->end(), EntryNetBitrateComparator());
@@ -1079,7 +1132,7 @@ Ieee80211ModeSet::Ieee80211ModeSet(const char *profileName, const char *name,
         Ieee80211OperatingBand operatingBand, const std::vector<Entry> entries) :
     name(name),
     profileName(profileName),
-    entries(entries),
+    entries(completeGuardIntervalVariants(profileName, entries)),
     operatingBand(operatingBand)
 {
     std::vector<Entry> *nonConstEntries = const_cast<std::vector<Entry> *>(&this->entries);

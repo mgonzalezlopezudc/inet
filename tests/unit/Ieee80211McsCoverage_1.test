@@ -29,22 +29,30 @@ static Ieee80211HeUserPhyParameters makeHeCoverageUser(int toneSize, int mcs, in
 // IEEE Std 802.11-2024, 19.3.5 and Tables 19-35..19-41:
 // MCS 0..31 use EQM, MCS 32 is 40 MHz/NSS=1, and MCS 33..76 use UEQM.
 auto htSet = Ieee80211ModeSet::getModeSet("n(mixed-2.4Ghz)");
-REQUIRE(htSet->getNumModes() == 153);
-bool htReachable[2][77] = {};
+REQUIRE(htSet->getNumModes() == 306);
+bool htReachable[2][77][2] = {};
 for (int i = 0; i < htSet->getNumModes(); ++i) {
     auto mode = check_and_cast<const Ieee80211HtMode *>(htSet->getMode(i));
     auto dataMode = mode->getDataMode();
     int widthIndex = dataMode->getBandwidth() == MHz(20) ? 0 : 1;
+    int guardIntervalIndex = dataMode->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT ? 0 : 1;
     REQUIRE(dataMode->getBandwidth() == MHz(20) || dataMode->getBandwidth() == MHz(40));
     REQUIRE(dataMode->getMcsIndex() <= 76);
-    REQUIRE(!htReachable[widthIndex][dataMode->getMcsIndex()]);
-    htReachable[widthIndex][dataMode->getMcsIndex()] = true;
+    REQUIRE(!htReachable[widthIndex][dataMode->getMcsIndex()][guardIntervalIndex]);
+    htReachable[widthIndex][dataMode->getMcsIndex()][guardIntervalIndex] = true;
 }
 for (int mcs = 0; mcs <= 31; ++mcs)
-    REQUIRE(htReachable[0][mcs] && htReachable[1][mcs]);
-REQUIRE(!htReachable[0][32] && htReachable[1][32]);
+    for (int guardInterval = 0; guardInterval < 2; ++guardInterval)
+        REQUIRE(htReachable[0][mcs][guardInterval] && htReachable[1][mcs][guardInterval]);
+for (int guardInterval = 0; guardInterval < 2; ++guardInterval)
+    REQUIRE(!htReachable[0][32][guardInterval] && htReachable[1][32][guardInterval]);
 for (int mcs = 33; mcs <= 76; ++mcs)
-    REQUIRE(htReachable[0][mcs] && htReachable[1][mcs]);
+    for (int guardInterval = 0; guardInterval < 2; ++guardInterval)
+        REQUIRE(htReachable[0][mcs][guardInterval] && htReachable[1][mcs][guardInterval]);
+
+auto htMcs1Short = check_and_cast<const Ieee80211HtMode *>(htSet->getMode(Mbps(14.4444), MHz(20), 1));
+REQUIRE(htMcs1Short->getDataMode()->getMcsIndex() == 1);
+REQUIRE(htMcs1Short->getDataMode()->getGuardIntervalType() == Ieee80211HtModeBase::HT_GUARD_INTERVAL_SHORT);
 
 auto htMcs32 = Ieee80211HtCompliantModes::getCompliantMode(
         &Ieee80211HtmcsTable::htMcs32BW40MHz, Ieee80211HtMode::BAND_2_4GHZ,
@@ -78,7 +86,17 @@ REQUIRE(htMcs76Bw40->getDataMode()->getNetBitrate() == Mbps(445.5));
 // IEEE Std 802.11-2024, 21.5, Table 21-30: the ac catalog contains all
 // 310 valid tuples and excludes all ten N/A combinations.
 auto vhtSet = Ieee80211ModeSet::getModeSet("ac");
-REQUIRE(vhtSet->getNumModes() == 310);
+REQUIRE(vhtSet->getNumModes() == 620);
+bool vhtReachable[4][8][10][2] = {};
+for (int i = 0; i < vhtSet->getNumModes(); ++i) {
+    auto mode = check_and_cast<const Ieee80211VhtMode *>(vhtSet->getMode(i));
+    auto dataMode = mode->getDataMode();
+    int widthIndex = dataMode->getBandwidth() == MHz(20) ? 0 :
+            dataMode->getBandwidth() == MHz(40) ? 1 : dataMode->getBandwidth() == MHz(80) ? 2 : 3;
+    int guardIntervalIndex = dataMode->getGuardIntervalType() == Ieee80211VhtModeBase::HT_GUARD_INTERVAL_SHORT ? 0 : 1;
+    REQUIRE(!vhtReachable[widthIndex][dataMode->getNumberOfSpatialStreams() - 1][dataMode->getMcsIndex()][guardIntervalIndex]);
+    vhtReachable[widthIndex][dataMode->getNumberOfSpatialStreams() - 1][dataMode->getMcsIndex()][guardIntervalIndex] = true;
+}
 REQUIRE(&Ieee80211VhtmcsTable::vhtMcs9BW20MHzNss1 == nullptr);
 REQUIRE(&Ieee80211VhtmcsTable::vhtMcs9BW20MHzNss2 == nullptr);
 REQUIRE(&Ieee80211VhtmcsTable::vhtMcs9BW20MHzNss4 == nullptr);
@@ -93,7 +111,7 @@ REQUIRE(&Ieee80211VhtmcsTable::vhtMcs9BW160MHzNss3 == nullptr);
 // IEEE Std 802.11-2024, 27.3.7 and 27.5.1: every ordinary full-bandwidth
 // MCS0..11/NSS1..8 tuple is present at 20/40/80/160 MHz.
 auto heSet = Ieee80211ModeSet::getModeSet("ax-5GHz");
-bool heReachable[4][8][12] = {};
+bool heReachable[4][8][12][3] = {};
 int heCount = 0;
 for (int i = 0; i < heSet->getNumModes(); ++i) {
     auto mode = dynamic_cast<const Ieee80211HeMode *>(heSet->getMode(i));
@@ -103,15 +121,17 @@ for (int i = 0; i < heSet->getNumModes(); ++i) {
     int widthIndex = dataMode->getBandwidth() == MHz(20) ? 0 :
             dataMode->getBandwidth() == MHz(40) ? 1 :
             dataMode->getBandwidth() == MHz(80) ? 2 : 3;
-    REQUIRE(!heReachable[widthIndex][dataMode->getNumberOfSpatialStreams() - 1][dataMode->getMcsIndex()]);
-    heReachable[widthIndex][dataMode->getNumberOfSpatialStreams() - 1][dataMode->getMcsIndex()] = true;
+    int guardIntervalIndex = dataMode->getGuardIntervalType();
+    REQUIRE(!heReachable[widthIndex][dataMode->getNumberOfSpatialStreams() - 1][dataMode->getMcsIndex()][guardIntervalIndex]);
+    heReachable[widthIndex][dataMode->getNumberOfSpatialStreams() - 1][dataMode->getMcsIndex()][guardIntervalIndex] = true;
     heCount++;
 }
-REQUIRE(heCount == 384);
+REQUIRE(heCount == 1152);
 for (int width = 0; width < 4; ++width)
     for (int nss = 0; nss < 8; ++nss)
         for (int mcs = 0; mcs < 12; ++mcs)
-            REQUIRE(heReachable[width][nss][mcs]);
+            for (int guardInterval = 0; guardInterval < 3; ++guardInterval)
+                REQUIRE(heReachable[width][nss][mcs][guardInterval]);
 
 // Tables 27-64 and 27-69 show these ordinary combinations are valid;
 // only their DCM variants have N/A restrictions.

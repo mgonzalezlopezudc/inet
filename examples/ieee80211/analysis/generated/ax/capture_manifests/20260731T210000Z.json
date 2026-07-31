@@ -1,0 +1,96 @@
+{
+  "analysis_script_sha256": "deaf9e753349a5a0294fd7c751a967152bde7337277643b714135219c29d3dc7",
+  "capinfos_version": "Capinfos (Wireshark) 4.6.4.",
+  "capture_source_diff_sha256": "0bd017b9239538f9a7196a836751b19400b1b818b84ddba7f017182066577948",
+  "entries": [
+    {
+      "captures": [
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 10302,
+            "duration_seconds": 0.006734,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.306942,
+            "file_size_bytes": 12468,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "ap.wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 45,
+            "snapshot_length": null,
+            "start_seconds": 0.300208,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_multitid/results/20260731T210000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0Lan80211AxUlOfdma.ap.wlan[0].pcap",
+          "sha256": "e3b8e411b7e414bc74591d4e7800e6fbded3a0476e8b44637029e59691c35e76",
+          "size_bytes": 12468
+        },
+        {
+          "format": "pcapng",
+          "metadata": {
+            "data_size_bytes": 10302,
+            "duration_seconds": 0.006734,
+            "encapsulation": "ieee-802-11-radiotap",
+            "end_seconds": 0.306942,
+            "file_size_bytes": 12476,
+            "file_type": "pcapng",
+            "interfaces": [
+              {
+                "description": "host[0].wlan0",
+                "interface_id": 0,
+                "name": "wlan0",
+                "snapshot_length": 0,
+                "time_precision": "microseconds (6)"
+              }
+            ],
+            "packet_count": 45,
+            "snapshot_length": null,
+            "start_seconds": 0.300208,
+            "strict_time_order": true,
+            "time_precision": "microseconds"
+          },
+          "path": "examples/ieee80211ax/ul_multitid/results/20260731T210000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0Lan80211AxUlOfdma.host[0].wlan[0].pcap",
+          "sha256": "a13f2af3c7ca5c9f66091d47cfc4935bed43ae580854e4b70a3d78ba3383aa03",
+          "size_bytes": 12476
+        }
+      ],
+      "command": null,
+      "command_shell": null,
+      "config": "UlSUHTAMpduCompressedBlockAck",
+      "exit_status": 0,
+      "ini_file": "examples/ieee80211ax/ul_multitid/omnetpp.ini",
+      "ini_sha256": "1cede6de035af9e08fdd8be10665027bbff8a97ed1b9e7c73ec7592211933db1",
+      "run_number": 0,
+      "scalar": {
+        "configname": "UlSUHTAMpduCompressedBlockAck",
+        "path": "examples/ieee80211ax/ul_multitid/results/20260731T210000Z/UlSUHTAMpduCompressedBlockAck/UlSUHTAMpduCompressedBlockAck-#0.sca",
+        "replication": "#0",
+        "runnumber": 0,
+        "seedset": 0,
+        "sha256": "986e37d5218264262a51185a4b75a0369160cd83bdf9c26da1a2e8f65acc8f2a"
+      },
+      "seed_set": 0,
+      "simulation_time_limit_s": 1.0,
+      "subdir": "ul_multitid"
+    }
+  ],
+  "generated_at_utc": "2026-07-31T20:52:48.569017+00:00",
+  "inet_library": "out/clang-release/src/libINET.so",
+  "inet_library_sha256": "cfa90de5742a36a585b8d39d705d6ecba256a22628a9535ab8a8af69ea132aec",
+  "repository_revision": "53d5f3e4adab2083281f66e941e47337d2610e5c",
+  "session_id": "20260731T210000Z",
+  "suite": "ax",
+  "suite_descriptor": {
+    "path": "examples/ieee80211/analysis/suites/ax.json",
+    "sha256": "62e1afef3ea1b1ca99f3986dbae950c9b31ac49f0a3d541e06cdacbe9a48e28d"
+  },
+  "tshark_version": "TShark (Wireshark) 4.6.4."
+}

@@ -74,6 +74,8 @@ class INET_API Ieee80211ModeSet : public IPrintableObject, public cObject
 
     static Ieee80211ModeSet createHeProfile(const char *profileName, Ieee80211OperatingBand operatingBand,
             const std::vector<Ieee80211ModeSet>& baseModeSets);
+        static std::vector<Entry> completeGuardIntervalVariants(const char *profileName,
+          const std::vector<Entry>& entries);
     static const DelayedInitializer<std::vector<Ieee80211ModeSet>> modeSets;
 
   protected:
