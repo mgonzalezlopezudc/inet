@@ -7,6 +7,7 @@
 #include "inet/linklayer/ieee80211/mac/coordinationfunction/HeHcf.h"
 
 #include <algorithm>
+#include <set>
 #include <sstream>
 
 #include "inet/common/INETMath.h"
@@ -285,10 +286,73 @@ void HeHcf::originatorProcessReceivedFrame(Packet *receivedPacket, Packet *lastT
 {
     Enter_Method("originatorProcessReceivedFrame");
     auto receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
-    // Triggered UL has its own packet ledger and exact Trigger correlation.
-    // Do not project a Multi-STA BA into the legacy single-frame originator
-    // state machine: that would bypass the transaction that owns the MPDUs.
     if (auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(receivedHeader)) {
+        // Triggered UL has its own packet ledger and exact Trigger correlation.
+        // Preserve that owner before considering the UL-SU BlockAck path.
+        if (receivedPacket->findTag<physicallayer::Ieee80211HeTriggerCorrelationTag>() != nullptr) {
+            processReceivedMultiStaBlockAck(receivedPacket->dup(), multiStaBlockAck);
+            return;
+        }
+        auto lastTransmittedHeader = lastTransmittedPacket == nullptr ? nullptr :
+                dynamicPtrCast<const Ieee80211MacHeader>(
+                        lastTransmittedPacket->peekAtFront());
+        auto multiTidBlockAckReq =
+                dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(
+                        lastTransmittedHeader);
+        bool validUlSuResponse = multiTidBlockAckReq != nullptr;
+        uint16_t expectedAid = 0;
+        auto mib = mac->getMib();
+        if (validUlSuResponse &&
+                mib->bssStationData.stationType == Ieee80211Mib::STATION) {
+            auto associationId = mib->bssStationData.associationId;
+            validUlSuResponse = associationId > 0 && associationId <= 2007;
+            if (validUlSuResponse)
+                expectedAid = associationId;
+        }
+        else if (validUlSuResponse &&
+                mib->bssStationData.stationType != Ieee80211Mib::ACCESS_POINT)
+            validUlSuResponse = false;
+        if (validUlSuResponse) {
+            validUlSuResponse =
+                    multiStaBlockAck->getReceiverAddress() ==
+                            multiTidBlockAckReq->getTransmitterAddress() &&
+                    multiStaBlockAck->getTransmitterAddress() ==
+                            multiTidBlockAckReq->getReceiverAddress() &&
+                    multiStaBlockAck->getRecordsArraySize() ==
+                            multiTidBlockAckReq->getRecordsArraySize();
+        }
+        std::set<std::pair<Tid, uint16_t>> requestedRecords;
+        if (validUlSuResponse) {
+            for (unsigned int i = 0;
+                    i < multiTidBlockAckReq->getRecordsArraySize(); ++i) {
+                const auto& record = multiTidBlockAckReq->getRecords(i);
+                validUlSuResponse &= requestedRecords.emplace(record.tid,
+                        record.startingSequenceNumber).second;
+            }
+        }
+        std::set<std::pair<Tid, uint16_t>> responseRecords;
+        if (validUlSuResponse) {
+            for (unsigned int i = 0;
+                    i < multiStaBlockAck->getRecordsArraySize(); ++i) {
+                const auto& record = multiStaBlockAck->getRecords(i);
+                auto key = std::make_pair(static_cast<Tid>(record.tid),
+                        record.startingSequenceNumber);
+                validUlSuResponse &= record.aid == expectedAid &&
+                        requestedRecords.count(key) == 1 &&
+                        responseRecords.insert(key).second;
+            }
+            validUlSuResponse &= responseRecords == requestedRecords;
+        }
+        // IEEE Std 802.11-2024, 10.25.5, 26.4.2 and 26.4.5:
+        // only a matching per-AID/TID Multi-STA response to the preceding
+        // HE Multi-TID BAR completes the ordinary originator exchange.
+        if (validUlSuResponse) {
+            Hcf::originatorProcessReceivedFrame(receivedPacket,
+                    lastTransmittedPacket);
+            return;
+        }
+        if (multiTidBlockAckReq != nullptr)
+            EV_WARN << "Discarding invalid UL-SU Multi-STA Block Ack response\n";
         // FrameSequenceHandler owns the received frame on the originator path;
         // the transaction processor consumes its argument.
         processReceivedMultiStaBlockAck(receivedPacket->dup(), multiStaBlockAck);

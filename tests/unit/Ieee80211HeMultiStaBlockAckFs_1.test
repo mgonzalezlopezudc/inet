@@ -1,0 +1,183 @@
+%description:
+Verify that the primitive Multi-TID BAR frame sequence accepts only an exact
+Multi-STA BlockAck response and rejects malformed responses for retry recovery.
+
+%includes:
+#include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceContext.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/FrameSequenceStep.h"
+#include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
+#include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
+#include "inet/linklayer/ieee80211/mib/Ieee80211Mib.h"
+
+%file: TestNetwork.ned
+import inet.networklayer.common.NetworkInterface;
+
+simple MockMib
+{
+    parameters:
+        @class(MockMib);
+}
+
+simple MockMac
+{
+    parameters:
+        @class(MockMac);
+}
+
+simple TestInProgressFrames
+{
+    parameters:
+        @class(TestInProgressFrames);
+}
+
+module TestNic extends NetworkInterface
+{
+    parameters:
+        string interfaceTableModule = "";
+    gates:
+        input upperLayerIn @loose;
+        output upperLayerOut @loose;
+    submodules:
+        mib: MockMib;
+        mac: MockMac;
+        inProgress: TestInProgressFrames;
+}
+
+network TestNetwork
+{
+    submodules:
+        test: Test;
+        nic: TestNic;
+}
+
+%inifile: omnetpp.ini
+[General]
+network = TestNetwork
+
+%global:
+using namespace inet;
+using namespace inet::ieee80211;
+
+#define REQUIRE(...) do { if (!(__VA_ARGS__)) throw cRuntimeError("REQUIRE failed at line %d: %s", __LINE__, #__VA_ARGS__); } while (false)
+
+class MockMib : public Ieee80211Mib
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+};
+
+Define_Module(MockMib);
+
+class MockMac : public Ieee80211Mac
+{
+  protected:
+    Ieee80211Mib *testMib = nullptr;
+    MacAddress testAddress = MacAddress("02:00:00:00:00:07");
+
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {
+        testMib = check_and_cast<Ieee80211Mib *>(
+                getParentModule()->getSubmodule("mib"));
+    }
+    virtual const MacAddress& getAddress() const override {
+        return testAddress;
+    }
+    virtual Ieee80211Mib *getMib() const override {
+        return testMib;
+    }
+};
+
+Define_Module(MockMac);
+
+class TestInProgressFrames : public InProgressFrames
+{
+  public:
+    virtual int numInitStages() const override { return 1; }
+    virtual void initialize(int stage) override {}
+};
+
+Define_Module(TestInProgressFrames);
+
+static Packet *makeMultiTidBar(const MacAddress& localAddress,
+        const MacAddress& peerAddress)
+{
+    auto request = makeShared<Ieee80211MultiTidBlockAckReq>();
+    request->setReceiverAddress(peerAddress);
+    request->setTransmitterAddress(localAddress);
+    request->setRecordsArraySize(2);
+    Ieee80211MultiTidBlockAckReqRecord first;
+    first.tid = 3;
+    first.startingSequenceNumber = 100;
+    request->setRecords(0, first);
+    Ieee80211MultiTidBlockAckReqRecord second;
+    second.tid = 5;
+    second.startingSequenceNumber = 200;
+    request->setRecords(1, second);
+    return new Packet("MultiTidBlockAckReq", request);
+}
+
+static Packet *makeMultiStaBlockAck(const MacAddress& localAddress,
+        const MacAddress& peerAddress, uint16_t aid,
+        const std::vector<std::pair<Tid, uint16_t>>& tuples)
+{
+    auto response = makeShared<Ieee80211MultiStaBlockAck>();
+    response->setReceiverAddress(localAddress);
+    response->setTransmitterAddress(peerAddress);
+    response->setBlockAckPolicy(false);
+    response->setRecordsArraySize(tuples.size());
+    for (size_t i = 0; i < tuples.size(); ++i) {
+        Ieee80211MultiStaBlockAckRecord record;
+        record.aid = aid;
+        record.tid = tuples[i].first;
+        record.startingSequenceNumber = tuples[i].second;
+        record.responseReceived = true;
+        response->setRecords(i, record);
+    }
+    return new Packet("MultiStaBlockAck", response);
+}
+
+%activity:
+auto nic = getParentModule()->getSubmodule("nic");
+auto mac = check_and_cast<MockMac *>(nic->getSubmodule("mac"));
+auto mib = check_and_cast<MockMib *>(nic->getSubmodule("mib"));
+auto inProgress = check_and_cast<TestInProgressFrames *>(
+        nic->getSubmodule("inProgress"));
+MacAddress localAddress = mac->getAddress();
+MacAddress peerAddress("02:00:00:00:00:01");
+mib->bssStationData.stationType = Ieee80211Mib::STATION;
+mib->bssStationData.associationId = 7;
+
+auto completesExchange = [&] (Packet *response) {
+    FrameSequenceContext context(localAddress, nullptr, inProgress,
+            nullptr, nullptr, nullptr, nullptr);
+    BlockAckReqBlockAckFs sequence;
+    sequence.startSequence(&context, 0);
+    context.addStep(new TransmitStep(
+            makeMultiTidBar(localAddress, peerAddress), SIMTIME_ZERO, true));
+    REQUIRE(sequence.completeStep(&context));
+    auto receiveStep = new ReceiveStep();
+    receiveStep->setFrameToReceive(response);
+    context.addStep(receiveStep);
+    return sequence.completeStep(&context);
+};
+
+REQUIRE(completesExchange(makeMultiStaBlockAck(localAddress, peerAddress, 7,
+        {{3, 100}, {5, 200}})));
+REQUIRE(!completesExchange(makeMultiStaBlockAck(localAddress, peerAddress, 8,
+        {{3, 100}, {5, 200}})));
+REQUIRE(!completesExchange(makeMultiStaBlockAck(localAddress, peerAddress, 7,
+        {{3, 100}})));
+REQUIRE(!completesExchange(makeMultiStaBlockAck(localAddress, peerAddress, 7,
+        {{3, 100}, {3, 100}})));
+
+EV << "Primitive Multi-TID BAR accepts exact Multi-STA response.\n";
+EV << "Primitive Multi-TID BAR rejects wrong-AID, missing, and duplicate records.\n";
+
+%contains: stdout
+Primitive Multi-TID BAR accepts exact Multi-STA response.
+
+%contains: stdout
+Primitive Multi-TID BAR rejects wrong-AID, missing, and duplicate records.

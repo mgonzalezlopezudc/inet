@@ -102,6 +102,18 @@ void OriginatorBlockAckAgreementHandler::processReceivedBlockAck(const Ptr<const
         }
         scheduleInactivityTimer(callback);
     }
+    else if (auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(blockAck)) {
+        unsigned int numRecords = multiStaBlockAck->getRecordsArraySize();
+        for (unsigned int i = 0; i < numRecords; ++i) {
+            const auto& rec = multiStaBlockAck->getRecords(i);
+            auto agreement = getAgreement(multiStaBlockAck->getTransmitterAddress(), rec.tid);
+            if (agreement) {
+                agreement->setStartingSequenceNumber(SequenceNumberCyclic(rec.startingSequenceNumber));
+                agreement->calculateExpirationTime();
+            }
+        }
+        scheduleInactivityTimer(callback);
+    }
     else
         throw cRuntimeError("Unsupported BlockAck");
 }

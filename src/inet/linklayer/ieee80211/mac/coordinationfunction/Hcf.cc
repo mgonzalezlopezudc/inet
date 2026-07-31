@@ -732,8 +732,35 @@ void Hcf::recipientProcessReceivedControlFrame(Packet *packet, const Ptr<const I
     else if (auto blockAckRequest = dynamicPtrCast<const Ieee80211BlockAckReq>(header)) {
         // IEEE Std 802.11-2024, 10.25.3 and 10.25.6: a BlockAckReq solicits
         // an immediate BlockAck for frames in the negotiated block ack window.
-        if (recipientBlockAckProcedure)
-            recipientBlockAckProcedure->processReceivedBlockAckReq(packet, blockAckRequest, recipientAckPolicy, recipientBlockAckAgreementHandler, this);
+        if (recipientBlockAckProcedure) {
+            bool heMultiTidAggregation = false;
+            uint16_t responseAid = 0;
+            if (dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckRequest)) {
+                auto mib = mac->getMib();
+                auto negotiated = mib->findNegotiatedHeCapabilities(
+                        blockAckRequest->getTransmitterAddress());
+                bool validResponseAid =
+                        mib->bssStationData.stationType == Ieee80211Mib::STATION;
+                if (mib->bssStationData.stationType == Ieee80211Mib::ACCESS_POINT) {
+                    auto associationId = mib->getAssociationId(
+                            blockAckRequest->getTransmitterAddress());
+                    validResponseAid = associationId > 0 && associationId <= 2007;
+                    if (validResponseAid)
+                        responseAid = associationId;
+                }
+                // IEEE Std 802.11-2024, 10.25.5, 26.4.2 and 26.4.5:
+                // negotiated HE Multi-TID BARs receive Multi-STA BAs; AID 0
+                // identifies an AP originator, otherwise use the STA's AID.
+                heMultiTidAggregation = validResponseAid &&
+                        negotiated != nullptr &&
+                        negotiated->localRxPeerTx.valid &&
+                        negotiated->localRxPeerTx.multiTidAggregation;
+            }
+            recipientBlockAckProcedure->processReceivedBlockAckReq(packet,
+                    blockAckRequest, recipientAckPolicy,
+                    recipientBlockAckAgreementHandler, this,
+                    heMultiTidAggregation, responseAid);
+        }
     }
     else if (dynamicPtrCast<const Ieee80211AckFrame>(header))
         EV_WARN << "ACK frame received after timeout, ignoring it.\n"; // drop it, it is an ACK frame that is received after the ACKTimeout

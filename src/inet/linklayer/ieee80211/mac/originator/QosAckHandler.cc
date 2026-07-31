@@ -169,6 +169,24 @@ std::set<std::pair<MacAddress, std::pair<Tid, SequenceControlField>>> QosAckHand
             }
         }
     }
+    else if (auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(blockAck)) {
+        unsigned int numRecords = multiStaBlockAck->getRecordsArraySize();
+        for (unsigned int i = 0; i < numRecords; ++i) {
+            const auto& rec = multiStaBlockAck->getRecords(i);
+            auto startingSeqNum = SequenceNumberCyclic(rec.startingSequenceNumber);
+            for (int seqNum = 0; seqNum < 64; seqNum++) {
+                auto id = std::make_pair(receiverAddr, std::make_pair(rec.tid, SequenceControlField((startingSeqNum + seqNum).get(), 0)));
+                auto status = getQoSDataAckStatus(id);
+                if (status == Status::WAITING_FOR_BLOCK_ACK) {
+                    bool acked = ((rec.bitmap >> seqNum) & 1ULL) == 1ULL;
+                    ackStatuses[id] = acked ? Status::BLOCK_ACK_ARRIVED_ACKED : Status::BLOCK_ACK_ARRIVED_UNACKED;
+                    if (acked)
+                        ackedFrames.insert(id);
+                }
+                else ; // TODO erroneous BlockAck
+            }
+        }
+    }
     else {
         throw cRuntimeError("Unsupported BlockAck type");
     }

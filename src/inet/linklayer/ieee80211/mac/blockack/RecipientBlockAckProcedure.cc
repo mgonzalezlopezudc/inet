@@ -33,7 +33,13 @@ const Ptr<Ieee80211BlockAck> RecipientBlockAckProcedure::buildBlockAck(
 // STA shall transmit a BlockAck frame after a SIFS period, without regard to the busy/idle state of the medium.
 // The rules that specify the contents of this BlockAck frame are defined in 9.21.
 //
-void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPacketReq, const Ptr<const Ieee80211BlockAckReq>& blockAckReq, IRecipientQosAckPolicy *ackPolicy, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler, IProcedureCallback *callback)
+void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPacketReq,
+        const Ptr<const Ieee80211BlockAckReq>& blockAckReq,
+        IRecipientQosAckPolicy *ackPolicy,
+        IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
+        IProcedureCallback *callback,
+        bool heMultiTidAggregation,
+        uint16_t responseAid)
 {
     numReceivedBlockAckReq++;
     if (auto singleTidBlockAckReq = dynamicPtrCast<const Ieee80211BasicBlockAckReq>(blockAckReq)) {
@@ -60,35 +66,64 @@ void RecipientBlockAckProcedure::processReceivedBlockAckReq(Packet *blockAckPack
     }
     else if (auto multiTidBlockAckReq = dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq)) {
         if (ackPolicy->isBlockAckNeeded(multiTidBlockAckReq, nullptr)) {
-            auto multiTidBlockAck = makeShared<Ieee80211MultiTidBlockAck>();
-            multiTidBlockAck->setReceiverAddress(multiTidBlockAckReq->getTransmitterAddress());
-            multiTidBlockAck->setTransmitterAddress(blockAckReq->getReceiverAddress());
             unsigned int numRecords = multiTidBlockAckReq->getRecordsArraySize();
-            multiTidBlockAck->setRecordsArraySize(numRecords);
+            std::vector<uint64_t> bitmaps(numRecords, 0);
             for (unsigned int i = 0; i < numRecords; ++i) {
                 const auto& reqRec = multiTidBlockAckReq->getRecords(i);
                 auto agreement = blockAckAgreementHandler->getAgreement(reqRec.tid, multiTidBlockAckReq->getTransmitterAddress());
-                Ieee80211MultiTidBlockAckRecord ackRec;
-                ackRec.tid = reqRec.tid;
-                ackRec.startingSequenceNumber = reqRec.startingSequenceNumber;
-                ackRec.bitmap = 0;
                 if (agreement != nullptr) {
                     SequenceNumberCyclic startingSequenceNumber(reqRec.startingSequenceNumber);
                     for (int j = 0; j < 64; ++j) {
                         bool ackState = agreement->getBlockAckRecord()->getAckState(startingSequenceNumber + j, 0);
-                        if (ackState) {
-                            ackRec.bitmap |= (1ULL << j);
-                        }
+                        if (ackState)
+                            bitmaps[i] |= (1ULL << j);
                     }
                 }
-                multiTidBlockAck->setRecords(i, ackRec);
             }
-            multiTidBlockAck->setChunkLength(B(18 + numRecords * 12));
+
+            Ptr<Ieee80211BlockAck> blockAck;
+            const char *packetName = nullptr;
+            // IEEE Std 802.11-2024, 10.25.5 and 26.4.5: an HE Multi-TID
+            // BlockAckReq solicits a Multi-STA BlockAck response.
+            if (heMultiTidAggregation) {
+                auto multiStaBlockAck = makeShared<Ieee80211MultiStaBlockAck>();
+                multiStaBlockAck->setBlockAckPolicy(false);
+                multiStaBlockAck->setRecordsArraySize(numRecords);
+                for (unsigned int i = 0; i < numRecords; ++i) {
+                    const auto& reqRec = multiTidBlockAckReq->getRecords(i);
+                    Ieee80211MultiStaBlockAckRecord ackRec;
+                    ackRec.aid = responseAid;
+                    ackRec.tid = reqRec.tid;
+                    ackRec.startingSequenceNumber = reqRec.startingSequenceNumber;
+                    ackRec.bitmap = bitmaps[i];
+                    ackRec.responseReceived = true;
+                    multiStaBlockAck->setRecords(i, ackRec);
+                }
+                blockAck = multiStaBlockAck;
+                packetName = "MultiStaBlockAck";
+            }
+            else {
+                auto multiTidBlockAck = makeShared<Ieee80211MultiTidBlockAck>();
+                multiTidBlockAck->setRecordsArraySize(numRecords);
+                for (unsigned int i = 0; i < numRecords; ++i) {
+                    const auto& reqRec = multiTidBlockAckReq->getRecords(i);
+                    Ieee80211MultiTidBlockAckRecord ackRec;
+                    ackRec.tid = reqRec.tid;
+                    ackRec.startingSequenceNumber = reqRec.startingSequenceNumber;
+                    ackRec.bitmap = bitmaps[i];
+                    multiTidBlockAck->setRecords(i, ackRec);
+                }
+                blockAck = multiTidBlockAck;
+                packetName = "MultiTidBlockAck";
+            }
+            blockAck->setReceiverAddress(multiTidBlockAckReq->getTransmitterAddress());
+            blockAck->setTransmitterAddress(blockAckReq->getReceiverAddress());
+            blockAck->setChunkLength(B(18 + numRecords * 12));
             auto duration = ackPolicy->computeBasicBlockAckDurationField(blockAckPacketReq, multiTidBlockAckReq);
-            multiTidBlockAck->setDurationField(duration);
-            auto blockAckPacket = new Packet("MultiTidBlockAck", multiTidBlockAck);
+            blockAck->setDurationField(duration);
+            auto blockAckPacket = new Packet(packetName, blockAck);
             EV_DEBUG << "Duration for " << blockAckPacket->getName() << " is set to " << duration << " s.\n";
-            callback->transmitControlResponseFrame(blockAckPacket, multiTidBlockAck, blockAckPacketReq, multiTidBlockAckReq);
+            callback->transmitControlResponseFrame(blockAckPacket, blockAck, blockAckPacketReq, multiTidBlockAckReq);
         }
     }
     else

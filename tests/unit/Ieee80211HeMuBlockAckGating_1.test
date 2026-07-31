@@ -95,6 +95,7 @@ class MockTx : public ITx
     int transmitCount = 0;
     std::string lastPacketName;
     simtime_t lastIfs = -1;
+    Ptr<const Ieee80211BlockAck> lastBlockAck;
 
     virtual bool isBusy() const override { return false; }
     virtual void transmitFrame(Packet *packet, const Ptr<const Ieee80211MacHeader>& header, ICallback *callback) override {
@@ -104,6 +105,7 @@ class MockTx : public ITx
         transmitCount++;
         lastPacketName = packet->getName();
         lastIfs = ifs;
+        lastBlockAck = dynamicPtrCast<const Ieee80211BlockAck>(header);
         packet->removeFromOwnershipTree();
         EV << "TX " << transmitCount << ": " << lastPacketName << " ifs=" << ifs << "\n";
     }
@@ -137,7 +139,8 @@ class MockRecipientAckPolicy : public IRecipientQosAckPolicy
         return !header->getReceiverAddress().isMulticast();
     }
     virtual bool isBlockAckNeeded(const Ptr<const Ieee80211BlockAckReq>& blockAckReq, RecipientBlockAckAgreement *agreement) const override {
-        return agreement != nullptr;
+        return agreement != nullptr ||
+                dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(blockAckReq) != nullptr;
     }
     virtual simtime_t computeAckDurationField(Packet *packet, const Ptr<const Ieee80211DataOrMgmtHeader>& header) const override {
         return SIMTIME_ZERO;
@@ -222,6 +225,13 @@ class TestHcf : public Hcf
         auto header = packet->peekAtFront<Ieee80211MacHeader>();
         recipientProcessReceivedControlFrame(packet, header);
     }
+
+    void receiveMultiTidControl(Packet *packet, bool heMultiTidAggregation, uint16_t responseAid) {
+        auto header = packet->peekAtFront<Ieee80211MultiTidBlockAckReq>();
+        recipientBlockAckProcedure->processReceivedBlockAckReq(packet, header,
+                recipientAckPolicy, recipientBlockAckAgreementHandler, this,
+                heMultiTidAggregation, responseAid);
+    }
 };
 
 Define_Module(TestHcf);
@@ -279,6 +289,21 @@ static Packet *makeBarPacket(const MacAddress& receiver, const MacAddress& trans
     blockAckReq->setStartingSequenceNumber(SequenceNumberCyclic(0));
     blockAckReq->setDurationField(SimTime(1, SIMTIME_MS));
     return new Packet("BasicBlockAckReq", blockAckReq);
+}
+
+static Packet *makeMultiTidBarPacket(const MacAddress& receiver,
+        const MacAddress& transmitter, Tid tid, uint16_t startingSequenceNumber)
+{
+    auto blockAckReq = makeShared<Ieee80211MultiTidBlockAckReq>();
+    blockAckReq->setReceiverAddress(receiver);
+    blockAckReq->setTransmitterAddress(transmitter);
+    blockAckReq->setRecordsArraySize(1);
+    Ieee80211MultiTidBlockAckReqRecord record;
+    record.tid = tid;
+    record.startingSequenceNumber = startingSequenceNumber;
+    blockAckReq->setRecords(0, record);
+    blockAckReq->setChunkLength(B(22));
+    return new Packet("MultiTidBlockAckReq", blockAckReq);
 }
 
 static Packet *makePartialAmpdu(const MacAddress& receiver, const MacAddress& transmitter, Tid tid)
@@ -381,6 +406,45 @@ ASSERT(tx.lastPacketName == "BasicBlockAck");
 EV << "STA1 BlockAck count after BAR: " << tx.transmitCount << "\n";
 delete barPacket;
 
+auto heMultiTidBarPacket = makeMultiTidBarPacket(sta, ap, tid, 0);
+hcf->receiveMultiTidControl(heMultiTidBarPacket, true, 0);
+REQUIRE(tx.lastPacketName == "MultiStaBlockAck");
+auto multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(tx.lastBlockAck);
+REQUIRE(multiStaBlockAck != nullptr);
+REQUIRE(multiStaBlockAck->getReceiverAddress() == ap);
+REQUIRE(multiStaBlockAck->getTransmitterAddress() == sta);
+REQUIRE(!multiStaBlockAck->getBlockAckPolicy());
+REQUIRE(multiStaBlockAck->getRecordsArraySize() == 1);
+REQUIRE(multiStaBlockAck->getRecords(0).aid == 0);
+REQUIRE(multiStaBlockAck->getRecords(0).tid == tid);
+REQUIRE(multiStaBlockAck->getRecords(0).startingSequenceNumber == 0);
+REQUIRE(multiStaBlockAck->getRecords(0).bitmap & 1);
+REQUIRE(multiStaBlockAck->getRecords(0).responseReceived);
+REQUIRE(multiStaBlockAck->getChunkLength() == B(30));
+EV << "HE Multi-TID BAR from AP returns Multi-STA BlockAck with AID 0.\n";
+delete heMultiTidBarPacket;
+
+auto apRecipientBarPacket = makeMultiTidBarPacket(ap, sta, tid, 0);
+hcf->receiveMultiTidControl(apRecipientBarPacket, true, 7);
+multiStaBlockAck = dynamicPtrCast<const Ieee80211MultiStaBlockAck>(tx.lastBlockAck);
+REQUIRE(multiStaBlockAck != nullptr);
+REQUIRE(multiStaBlockAck->getRecords(0).aid == 7);
+EV << "HE Multi-TID BAR from associated STA returns its AID.\n";
+delete apRecipientBarPacket;
+
+auto legacyMultiTidBarPacket = makeMultiTidBarPacket(sta, ap, tid, 0);
+hcf->receiveMultiTidControl(legacyMultiTidBarPacket, false, 0);
+REQUIRE(tx.lastPacketName == "MultiTidBlockAck");
+auto multiTidBlockAck = dynamicPtrCast<const Ieee80211MultiTidBlockAck>(tx.lastBlockAck);
+REQUIRE(multiTidBlockAck != nullptr);
+REQUIRE(multiTidBlockAck->getRecordsArraySize() == 1);
+REQUIRE(multiTidBlockAck->getRecords(0).tid == tid);
+REQUIRE(multiTidBlockAck->getRecords(0).startingSequenceNumber == 0);
+REQUIRE(multiTidBlockAck->getRecords(0).bitmap & 1);
+REQUIRE(multiTidBlockAck->getChunkLength() == B(30));
+EV << "Legacy Multi-TID BAR response remains Multi-TID BlockAck.\n";
+delete legacyMultiTidBarPacket;
+
 %contains: stdout
 STA0 immediate BlockAck count: 0
 
@@ -404,3 +468,12 @@ TX 1: BasicBlockAck ifs=0.000016
 
 %contains: stdout
 STA1 BlockAck count after BAR: 1
+
+%contains: stdout
+HE Multi-TID BAR from AP returns Multi-STA BlockAck with AID 0.
+
+%contains: stdout
+HE Multi-TID BAR from associated STA returns its AID.
+
+%contains: stdout
+Legacy Multi-TID BAR response remains Multi-TID BlockAck.

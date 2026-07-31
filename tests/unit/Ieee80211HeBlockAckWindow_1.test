@@ -9,6 +9,8 @@ materialization after failed and partially acknowledged BlockAck exchanges.
 #include <string>
 #include <vector>
 
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreement.h"
+#include "inet/linklayer/ieee80211/mac/blockack/OriginatorBlockAckAgreementHandler.h"
 #include "inet/linklayer/ieee80211/mac/originator/QosAckHandler.h"
 #include "inet/linklayer/ieee80211/mac/queue/InProgressFrames.h"
 
@@ -45,6 +47,27 @@ class TestInProgressFrames : public InProgressFrames
         return std::find(droppedFrames.begin(), droppedFrames.end(), packet) != droppedFrames.end();
     }
     size_t getDroppedCount() const { return droppedFrames.size(); }
+};
+
+class TestOriginatorBlockAckAgreementHandler : public OriginatorBlockAckAgreementHandler
+{
+  public:
+    void addAgreement(const MacAddress& receiver, Tid tid,
+            int startingSequenceNumber)
+    {
+        auto agreement = new OriginatorBlockAckAgreement(receiver, tid,
+                SequenceNumberCyclic(startingSequenceNumber), 64,
+                false, false);
+        agreement->setIsAddbaResponseReceived(true);
+        agreement->setBlockAckTimeoutValue(0);
+        blockAckAgreements[std::make_pair(receiver, tid)] = agreement;
+    }
+};
+
+class TestBlockAckAgreementHandlerCallback : public IBlockAckAgreementHandlerCallback
+{
+  public:
+    virtual void scheduleInactivityTimer(simtime_t timeout) override {}
 };
 
 static Ptr<Ieee80211DataHeader> makeHeader(const MacAddress& receiver, Tid tid,
@@ -168,6 +191,54 @@ ackHandler->dropFrame(ackedPacket->peekAtFront<Ieee80211DataHeader>());
 ackHandler->dropFrame(unackedPacket->peekAtFront<Ieee80211DataHeader>());
 delete ackedPacket;
 delete unackedPacket;
+
+// IEEE Std 802.11-2024, 10.25.5 and 26.4.5: the Multi-STA BA
+// elicited by an HE Multi-TID BAR uses the same per-TID SSN/bitmap
+// originator accounting and agreement-window advancement.
+{
+    auto ackedPacket = makeHeader(sta1, tid, 700);
+    auto unackedPacket = makeHeader(sta1, tid, 701);
+    for (const auto& header : {ackedPacket, unackedPacket}) {
+        ackHandler->frameGotInProgress(header);
+        ackHandler->processTransmittedDataOrMgmtFrame(header);
+    }
+    auto request = makeShared<Ieee80211MultiTidBlockAckReq>();
+    request->setReceiverAddress(sta1);
+    request->setRecordsArraySize(1);
+    Ieee80211MultiTidBlockAckReqRecord requestRecord;
+    requestRecord.tid = tid;
+    requestRecord.startingSequenceNumber = 700;
+    request->setRecords(0, requestRecord);
+    ackHandler->processTransmittedBlockAckReq(request);
+
+    auto response = makeShared<Ieee80211MultiStaBlockAck>();
+    response->setTransmitterAddress(sta1);
+    response->setRecordsArraySize(1);
+    Ieee80211MultiStaBlockAckRecord responseRecord;
+    responseRecord.aid = 7;
+    responseRecord.tid = tid;
+    responseRecord.startingSequenceNumber = 700;
+    responseRecord.bitmap = 1;
+    responseRecord.responseReceived = true;
+    response->setRecords(0, responseRecord);
+    auto identities = ackHandler->processReceivedBlockAck(response);
+    REQUIRE(identities.size() == 1);
+    REQUIRE(identities.count(std::make_pair(sta1,
+            std::make_pair(tid, SequenceControlField(700, 0)))) == 1);
+    REQUIRE(ackHandler->getQoSDataAckStatus(ackedPacket) ==
+            QosAckHandler::Status::BLOCK_ACK_ARRIVED_ACKED);
+    REQUIRE(ackHandler->getQoSDataAckStatus(unackedPacket) ==
+            QosAckHandler::Status::BLOCK_ACK_ARRIVED_UNACKED);
+    ackHandler->dropFrame(ackedPacket);
+    ackHandler->dropFrame(unackedPacket);
+
+    TestOriginatorBlockAckAgreementHandler agreementHandler;
+    TestBlockAckAgreementHandlerCallback callback;
+    agreementHandler.addAgreement(sta1, tid, 699);
+    agreementHandler.processReceivedBlockAck(response, &callback);
+    REQUIRE(agreementHandler.getAgreement(sta1, tid)->
+            getStartingSequenceNumber() == SequenceNumberCyclic(700));
+}
 
 // Identity ledger: a partial BA moves only the acknowledged packet to the
 // terminal dropped/acknowledged owner and leaves the original unacknowledged

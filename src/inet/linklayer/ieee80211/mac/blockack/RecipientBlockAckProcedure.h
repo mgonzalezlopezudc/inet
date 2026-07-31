@@ -29,7 +29,13 @@ class INET_API RecipientBlockAckProcedure : public IRecipientBlockAckProcedure
     virtual const Ptr<Ieee80211BlockAck> buildBlockAck(
             const Ptr<const Ieee80211BlockAckReq>& blockAckReq,
             IRecipientBlockAckAgreementHandler *blockAckAgreementHandler) const override;
-    virtual void processReceivedBlockAckReq(Packet *blockAckPacket, const Ptr<const Ieee80211BlockAckReq>& blockAckReq, IRecipientQosAckPolicy *ackPolicy, IRecipientBlockAckAgreementHandler *blockAckAgreementHandler, IProcedureCallback *callback) override;
+    virtual void processReceivedBlockAckReq(Packet *blockAckPacket,
+            const Ptr<const Ieee80211BlockAckReq>& blockAckReq,
+            IRecipientQosAckPolicy *ackPolicy,
+            IRecipientBlockAckAgreementHandler *blockAckAgreementHandler,
+            IProcedureCallback *callback,
+            bool heMultiTidAggregation = false,
+            uint16_t responseAid = 0) override;
     virtual void processTransmittedBlockAck(const Ptr<const Ieee80211BlockAck>& blockAck) override;
 };
 

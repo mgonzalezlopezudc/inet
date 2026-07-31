@@ -6,6 +6,10 @@
 
 
 #include "inet/linklayer/ieee80211/mac/framesequence/PrimitiveFrameSequences.h"
+
+#include <set>
+
+#include "inet/common/ModuleAccess.h"
 #include "inet/linklayer/ieee80211/mac/Ieee80211Mac.h"
 
 namespace inet {
@@ -440,14 +444,16 @@ IFrameSequenceStep *BlockAckReqBlockAckFs::prepareStep(FrameSequenceContext *con
             auto tid = std::get<2>(blockAckReqParams);
 
             auto inProgress = context->getInProgressFrames();
-            auto hcfModule = inProgress != nullptr ? inProgress->getParentModule() : nullptr;
-            auto macModule = hcfModule != nullptr ? dynamic_cast<Ieee80211Mac *>(hcfModule->getParentModule()) : nullptr;
-            auto mib = macModule != nullptr ? macModule->getMib() : nullptr;
+            auto nicModule = getContainingNicModule(inProgress);
+            auto macModule = check_and_cast<Ieee80211Mac *>(nicModule->getSubmodule("mac"));
+            auto mib = macModule->getMib();
 
-            auto negotiated = mib != nullptr ? mib->findNegotiatedHeCapabilities(receiverAddr) : nullptr;
+            auto negotiated = mib->findNegotiatedHeCapabilities(receiverAddr);
             Packet *blockAckPacket = nullptr;
 
-            if (negotiated != nullptr && negotiated->localTxPeerRx.multiTidAggregation) {
+            if (negotiated != nullptr &&
+                    negotiated->localTxPeerRx.valid &&
+                    negotiated->localTxPeerRx.multiTidAggregation) {
                 // Collect starting sequence numbers by TID from in-progress frames for receiverAddr
                 std::map<Tid, SequenceNumberCyclic> recordsByTid;
                 for (int i = 0; i < inProgress->getLength(); i++) {
@@ -515,7 +521,70 @@ bool BlockAckReqBlockAckFs::completeStep(FrameSequenceContext *context)
             step++;
             auto receivedPacket = receiveStep->getReceivedFrame();
             const auto& receivedHeader = receivedPacket->peekAtFront<Ieee80211MacHeader>();
-            return context->isForUs(receivedHeader) && receivedHeader->getType() == ST_BLOCKACK;
+            if (!context->isForUs(receivedHeader) ||
+                    receivedHeader->getType() != ST_BLOCKACK)
+                return false;
+            auto transmitStep = check_and_cast<ITransmitStep *>(
+                    context->getStep(firstStep));
+            auto blockAckReq = transmitStep->getFrameToTransmit()->
+                    peekAtFront<Ieee80211BlockAckReq>();
+            auto multiTidBlockAckReq =
+                    dynamicPtrCast<const Ieee80211MultiTidBlockAckReq>(
+                            blockAckReq);
+            if (multiTidBlockAckReq == nullptr)
+                return true;
+            auto multiStaBlockAck =
+                    dynamicPtrCast<const Ieee80211MultiStaBlockAck>(
+                            receivedHeader);
+            if (multiStaBlockAck == nullptr ||
+                    multiStaBlockAck->getBlockAckPolicy() ||
+                    multiStaBlockAck->getReceiverAddress() !=
+                            multiTidBlockAckReq->getTransmitterAddress() ||
+                    multiStaBlockAck->getTransmitterAddress() !=
+                            multiTidBlockAckReq->getReceiverAddress() ||
+                    multiStaBlockAck->getRecordsArraySize() !=
+                            multiTidBlockAckReq->getRecordsArraySize())
+                return false;
+
+            auto inProgress = context->getInProgressFrames();
+            auto macModule = check_and_cast<Ieee80211Mac *>(
+                    getContainingNicModule(inProgress)->getSubmodule("mac"));
+            auto mib = macModule->getMib();
+            uint16_t expectedAid = 0;
+            if (mib->bssStationData.stationType == Ieee80211Mib::STATION) {
+                auto associationId = mib->bssStationData.associationId;
+                if (associationId <= 0 || associationId > 2007)
+                    return false;
+                expectedAid = associationId;
+            }
+            else if (mib->bssStationData.stationType !=
+                    Ieee80211Mib::ACCESS_POINT)
+                return false;
+
+            std::set<std::pair<Tid, uint16_t>> requestedRecords;
+            for (unsigned int i = 0;
+                    i < multiTidBlockAckReq->getRecordsArraySize(); ++i) {
+                const auto& record = multiTidBlockAckReq->getRecords(i);
+                if (!requestedRecords.emplace(record.tid,
+                            record.startingSequenceNumber).second)
+                    return false;
+            }
+            std::set<std::pair<Tid, uint16_t>> responseRecords;
+            for (unsigned int i = 0;
+                    i < multiStaBlockAck->getRecordsArraySize(); ++i) {
+                const auto& record = multiStaBlockAck->getRecords(i);
+                auto key = std::make_pair(static_cast<Tid>(record.tid),
+                        record.startingSequenceNumber);
+                if (record.aid != expectedAid || !record.responseReceived ||
+                        requestedRecords.count(key) != 1 ||
+                        !responseRecords.insert(key).second)
+                    return false;
+            }
+            // IEEE Std 802.11-2024, 10.25.5, 26.4.2 and 26.4.5:
+            // only an exact per-AID/TID Multi-STA response completes an HE
+            // Multi-TID BAR exchange; malformed responses follow timeout
+            // recovery.
+            return responseRecords == requestedRecords;
         }
         default:
             throw cRuntimeError("Unknown step");

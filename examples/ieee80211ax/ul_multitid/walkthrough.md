@@ -3,8 +3,8 @@
 <!-- BEGIN SCRIPT RESULTS SESSIONS -->
 `[script]` results sessions:
 
-- Scalar/vector: `20260730T233917Z`
-- PCAP: `20260730T233917Z`
+- Scalar/vector: `20260731T002013Z`
+- PCAP: `20260731T002013Z`
 <!-- END SCRIPT RESULTS SESSIONS -->
 
 `[agent]` results sessions: `20260730T233917Z`.
@@ -112,9 +112,9 @@ the TIDs it covers; that claim comes from the companion decoded PCAP table.
 <!-- BEGIN GENERATED: ieee80211-scalar-vector-multi_tid -->
 ### [script] Generated scalar/vector plot and table
 
-![multi_tid scalar/vector analysis](results/20260730T233917Z/multi-tid-delivery.png)
+![multi_tid scalar/vector analysis](results/20260731T002013Z/multi-tid-delivery.png)
 
-Figure provenance: [`results/20260730T233917Z/multi-tid-delivery.png.json`](results/20260730T233917Z/multi-tid-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
+Figure provenance: [`results/20260731T002013Z/multi-tid-delivery.png.json`](results/20260731T002013Z/multi-tid-delivery.png.json). Run-level metric source: [`../analysis/metrics.json`](../analysis/metrics.json).
 
 Common table provenance:
 
@@ -146,13 +146,13 @@ then supplies the BA Type 11 and per-AID/TID fields for the UL-MU claim.
 
 <!-- BEGIN GENERATED: ieee80211ax-pcap-statistics -->
 ### [script] Generated PCAP plots and tables
-![802.11 Packet Type Statistics](results/20260730T233917Z/packet_statistics.png)
+![802.11 Packet Type Statistics](results/20260731T002013Z/packet_statistics.png)
 
-Figure provenance: [`packet_statistics.png.json`](results/20260730T233917Z/packet_statistics.png.json).
+Figure provenance: [`packet_statistics.png.json`](results/20260731T002013Z/packet_statistics.png.json).
 
 This section provides a statistical overview of the 802.11 frames transmitted over the wireless medium during the simulation. The packet counts were gathered from AP wireless-interface observation points. With multiple AP captures, one medium transmission may be observed at more than one AP; counts and airtime therefore represent recorded transmission observations, not de-duplicated application packets.
 
-Capture session `20260730T233917Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260730T233917Z.json` (SHA-256 `4b28c67e73ed7a421ca13696b5875ff8ce526296d87b5d38b57465c523d963eb`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
+Capture session `20260731T002013Z` was generated from fresh PCAPng input with `TShark (Wireshark) 4.6.4.`. The selected manifest is `examples/ieee80211/analysis/generated/ax/capture_manifests/20260731T002013Z.json` (SHA-256 `58f7db1a3a7bab40e0b91f3cf79dc5a05e991052e0c0fe71fe9a59b3487a78cb`). HE PPDU format, MCS, coding, bandwidth/RU, GI, and NSTS are decoded directly from standards-compliant radiotap HE fields; values not marked known by the recorder are omitted.
 
 Two estimated airtime occupancy percentages are provided. HE-SU and HE-ER-SU use the modeled 36/44 µs preambles; a dissector-expanded A-MPDU is charged one shared preamble. HE MU/TB user-dependent signaling not exposed by radiotap remains approximate.
 - **Air Time %**: This frame type's share of the sum of all estimated frame airtimes.
@@ -165,7 +165,7 @@ Observation point: Access Point (AP) wireless interfaces.
 | Configuration | Selection/filter | Observations | Dominant decoded frame/PHY evidence | Estimated airtime / sim time | Limits |
 |---|---|---:|---|---:|---|
 | `UlMuMultiTidBlockAck` | `none (all decoded frames)` | 1231 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (292), Control: Ack (280), Control: Trigger (279) | 22.24% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
-| `UlSuMultiTidBlockAck` | `none (all decoded frames)` | 381 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (210), Control: Ack (141), Control: Block Ack Request (BAR) (13) | 10.43% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
+| `UlSuMultiTidBlockAck` | `none (all decoded frames)` | 381 | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] (210), Control: Ack (141), Control: Block Ack Request (BAR) (13) | 10.44% | Not delivery or de-duplicated transmissions; unknown PHY fields stay unknown |
 
 ### [script] Evidence checks
 
@@ -173,7 +173,7 @@ Observation point: Access Point (AP) wireless interfaces.
 |---|---|---|
 | **PASS** | UlMuMultiTidBlockAck produced protocol-visible wireless observations | 1231 AP/global transmission observations |
 | **PASS** | UlSuMultiTidBlockAck produced protocol-visible wireless observations | 381 AP/global transmission observations |
-| **PASS** | BA Type 11 and per-AID/TID entries are decoded from Multi-STA Block Ack frames | UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries |
+| **PASS** | BA Type 11 and per-AID/TID entries are decoded from Multi-STA Block Ack frames | UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries, UlSuMultiTidBlockAck: 13 BA Type 11 frame(s) with multiple AID/TID entries |
 
 ### [script] Configuration: `UlMuMultiTidBlockAck`
 Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **1231**
@@ -248,11 +248,11 @@ Total over-the-air frame/MPDU transmission observations (Global BSS/AP): **381**
 
 | Color | Frame Type & Subtype | Count | Percentage | Mean Size | Std Dev | Mean Duration | Std Dev Duration | Freq | Mean RX Sig | Mean TX Pwr | Air Time % | Air Time (Sim Time) % |
 |:---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 210 | 55.12% | 803.3 B | 377.1 B | 475.4 us | 206.3 us | 5010 MHz | -60.0 dBm | - | 95.75% | 9.98% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#f3e816" /></svg> | Data: QoS Data [HE-SU, HE-MCS 1, 20 MHz, GI 3.2 us, LDPC] | 210 | 55.12% | 803.3 B | 377.1 B | 475.4 us | 206.3 us | 5010 MHz | -60.0 dBm | - | 95.67% | 9.98% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 13 | 3.41% | 24.0 B | 0.0 B | 28.0 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.35% | 0.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 13 | 3.41% | 32.0 B | 0.0 B | 30.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.38% | 0.04% |
-| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 141 | 37.01% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.34% | 0.35% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ab6c30" /></svg> | Control: Block Ack Request (BAR) | 13 | 3.41% | 30.0 B | 0.0 B | 30.0 us | 0.0 us | 5010 MHz | -60.0 dBm | - | 0.37% | 0.04% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#0946c8" /></svg> | Control: Block Ack (BA) | 13 | 3.41% | 46.0 B | 0.0 B | 35.3 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 0.44% | 0.05% |
+| <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 141 | 37.01% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | - | 10.0 dBm | 3.33% | 0.35% |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#4799eb" /></svg> | Control: Ack | 2 | 0.52% | 14.0 B | 0.0 B | 24.7 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.05% | 0.00% |
 | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> | <hr> |
 | <svg width="16" height="16"><rect width="16" height="16" rx="3" fill="#ec1313" /></svg> | Management: Action | 2 | 0.52% | 37.0 B | 0.0 B | 69.3 us | 0.0 us | 5010 MHz | -60.0 dBm | 10.0 dBm | 0.13% | 0.01% |
@@ -282,10 +282,24 @@ Frame numbers are local to capture `UlSuMultiTidBlockAck-#0Lan80211AxUlOfdma.ap.
 
 #### [script] Decoded Multi-STA Block Ack records
 
-No Multi-STA Block Ack BA Type 11 records were decoded.
+| Frame | Simulation time (s) | BA Control | Decoded per-AID/TID entries |
+|---:|---:|---|---|
+| 33 | 0.350316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 60 | 0.400316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 87 | 0.450316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 114 | 0.500316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 141 | 0.550316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 168 | 0.600316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 195 | 0.650316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 222 | 0.700316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 249 | 0.750316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 276 | 0.800316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 303 | 0.850316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 330 | 0.900316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
+| 357 | 0.950316000 | 0x0016 (type 0x000b) | AID=1, TID=6; AID=1, TID=7 |
 
 ### [script] Analysis of Packet Distribution
-**PASS: decoded Multi-STA Block Ack fields.** UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries. The table above is direct TShark decoding of BA Control Type 11 and its per-AID/TID entries, as specified by IEEE Std 802.11-2024 Clause 9.3.1.8.6. It establishes the acknowledged recipient/TID identities in the captured frames, not payload delivery or end-to-end reliability.
+**PASS: decoded Multi-STA Block Ack fields.** UlMuMultiTidBlockAck: 278 BA Type 11 frame(s) with multiple AID/TID entries, UlSuMultiTidBlockAck: 13 BA Type 11 frame(s) with multiple AID/TID entries. The table above is direct TShark decoding of BA Control Type 11 and its per-AID/TID entries, as specified by IEEE Std 802.11-2024 Clause 9.3.1.8.6. It establishes the acknowledged recipient/TID identities in the captured frames, not payload delivery or end-to-end reliability.
 <!-- END GENERATED: ieee80211ax-pcap-statistics -->
 
 ## [agent] Frame exchange analysis
